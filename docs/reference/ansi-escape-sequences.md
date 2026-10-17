@@ -2,13 +2,14 @@
 
 Standard escape codes are prefixed with `Escape`:
 
--   Ctrl-Key: `^[`
--   Octal: `\033`
--   Unicode: `\u001b`
--   Hexadecimal: `\x1B`
--   Decimal: `27`
+- Ctrl-Key: `^[`
+- Octal: `\033`
+- Unicode: `\u001b`
+- Hexadecimal: `\x1B`
+- Decimal: `27`
 
-Followed by the command, sometimes delimited by opening square bracket (`[`), known as a Control Sequence Introducer (CSI), optionally followed by arguments and the command itself.
+Followed by the command, sometimes delimited by opening square bracket (`[`), known as a Control Sequence Introducer
+(CSI), optionally followed by arguments and the command itself.
 
 Arguments are delimited by semi colon (`;`).
 
@@ -20,10 +21,10 @@ For example:
 
 ## Sequences
 
--   `ESC` - sequence starting with `ESC` (`\x1B`)
--   `CSI` - Control Sequence Introducer: sequence starting with `ESC [` or CSI (`\x9B`)
--   `DCS` - Device Control String: sequence starting with `ESC P` or DCS (`\x90`)
--   `OSC` - Operating System Command: sequence starting with `ESC ]` or OSC (`\x9D`)
+- `ESC` - sequence starting with `ESC` (`\x1B`)
+- `CSI` - Control Sequence Introducer: sequence starting with `ESC [` or CSI (`\x9B`)
+- `DCS` - Device Control String: sequence starting with `ESC P` or DCS (`\x90`)
+- `OSC` - Operating System Command: sequence starting with `ESC ]` or OSC (`\x9D`)
 
 Any whitespaces between sequences and arguments should be ignored. They are present for improved readability.
 
@@ -31,11 +32,12 @@ Any whitespaces between sequences and arguments should be ignored. They are pres
 
 For parser behavior and recovery on malformed input, VT100 Chapter 3 is the reference:
 
--   Control characters may appear inside control sequences and are executed immediately.
--   `ESC` inside a control sequence aborts the current sequence and starts a new one.
--   `CAN` (`0x18`) and `SUB` (`0x1A`) abort the current sequence.
+- Control characters may appear inside control sequences and are executed immediately.
+- `ESC` inside a control sequence aborts the current sequence and starts a new one.
+- `CAN` (`0x18`) and `SUB` (`0x1A`) abort the current sequence.
 
-VT Code's shared ANSI stripper follows these rules to avoid over-consuming text when streams contain broken or partial escape sequences.
+VT Code's shared ANSI stripper follows these rules to avoid over-consuming text when streams contain broken or partial
+escape sequences.
 
 ### CSI Byte Classes (ECMA-48 / ANSI)
 
@@ -45,7 +47,8 @@ For `CSI` (`ESC [`), VT Code follows the standard byte classes:
 - Intermediate bytes: `0x20`–`0x2F`
 - Final byte: `0x40`–`0x7E`
 
-This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article and helps keep parsing predictable on malformed streams.
+This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article and helps keep parsing predictable on
+malformed streams.
 
 ## General ASCII Codes
 
@@ -63,9 +66,13 @@ This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article an
 
 <div id="escape"></div>
 
-> **Note:** Some control escape sequences, like `\e` for `ESC`, are not guaranteed to work in all languages and compilers. It is recommended to use the decimal, octal or hex representation as escape code.
-
-> **Note:** The **Ctrl-Key** representation is simply associating the non-printable characters from ASCII code 1 with the printable (letter) characters from ASCII code 65 ("A"). ASCII code 1 would be `^A` (Ctrl-A), while ASCII code 7 (BEL) would be `^G` (Ctrl-G). This is a common representation (and input method) and historically comes from one of the VT series of terminals.
+> **Note:** Some control escape sequences, like `\e` for `ESC`, are not guaranteed to work in all languages and
+> compilers. It is recommended to use the decimal, octal or hex representation as escape code.
+>
+> **Note:** The **Ctrl-Key** representation is simply associating the non-printable characters from ASCII code 1 with
+> the printable (letter) characters from ASCII code 65 ("A"). ASCII code 1 would be `^A` (Ctrl-A), while ASCII code 7
+> (BEL) would be `^G` (Ctrl-G). This is a common representation (and input method) and historically comes from one of
+> the VT series of terminals.
 
 ## Cursor Controls
 
@@ -87,7 +94,9 @@ This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article an
 | `ESC[s`                                            | save cursor position (SCO)                             |
 | `ESC[u`                                            | restores the cursor to the last saved position (SCO)   |
 
-> **Note:** Some sequences, like saving and restoring cursors, are private sequences and are not standardized. While some terminal emulators (i.e. xterm and derived) support both SCO and DEC sequences, they are likely to have different functionality. It is therefore recommended to use DEC sequences.
+> **Note:** Some sequences, like saving and restoring cursors, are private sequences and are not standardized. While
+> some terminal emulators (i.e. xterm and derived) support both SCO and DEC sequences, they are likely to have different
+> functionality. It is therefore recommended to use DEC sequences.
 
 ## Erase Functions
 
@@ -103,7 +112,8 @@ This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article an
 | `ESC[1K`          | erase start of line to the cursor        |
 | `ESC[2K`          | erase the entire line                    |
 
-> Note: Erasing the line won't move the cursor, meaning that the cursor will stay at the last position it was at before the line was erased. You can use `\r` after erasing the line, to return the cursor to the start of the current line.
+> Note: Erasing the line won't move the cursor, meaning that the cursor will stay at the last position it was at before
+> the line was erased. You can use `\r` after erasing the line, to return the cursor to the start of the current line.
 
 ## Colors / Graphics Mode
 
@@ -121,12 +131,14 @@ This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article an
 | `ESC[9m`          | `ESC[29m`      | set strikethrough mode.                                    |
 
 > **Note:** Some terminals may not support some of the graphic mode sequences listed above.
-
-> **Note:** Both dim and bold modes are reset with the `ESC[22m` sequence. The `ESC[21m` sequence is a non-specified sequence for double underline mode and only work in some terminals and is reset with `ESC[24m`.
+>
+> **Note:** Both dim and bold modes are reset with the `ESC[22m` sequence. The `ESC[21m` sequence is a non-specified
+> sequence for double underline mode and only work in some terminals and is reset with `ESC[24m`.
 
 ### Color codes
 
-Most terminals support 8 and 16 colors, as well as 256 (8-bit) colors. These colors are set by the user, but have commonly defined meanings.
+Most terminals support 8 and 16 colors, as well as 256 (8-bit) colors. These colors are set by the user, but have
+commonly defined meanings.
 
 #### 8-16 Colors
 
@@ -142,7 +154,8 @@ Most terminals support 8 and 16 colors, as well as 256 (8-bit) colors. These col
 | White      | `37`                  | `47`                  |
 | Default    | `39`                  | `49`                  |
 
-Most terminals, apart from the basic set of 8 colors, also support the "bright" or "bold" colors. These have their own set of codes, mirroring the normal colors, but with an additional `;1` in their codes:
+Most terminals, apart from the basic set of 8 colors, also support the "bright" or "bold" colors. These have their own
+set of codes, mirroring the normal colors, but with an additional `;1` in their codes:
 
 ```sh
 # Set style to bold, red foreground.
@@ -151,7 +164,9 @@ Most terminals, apart from the basic set of 8 colors, also support the "bright" 
 \x1b[2;37;41mWorld
 ```
 
-Terminals that support the [aixterm specification](https://sites.ualberta.ca/dept/chemeng/AIX-43/share/man/info/C/a_doc_lib/cmds/aixcmds1/aixterm.htm) provides bright versions of the ISO colors, without the need to use the bold modifier:
+Terminals that support the
+[aixterm specification](https://sites.ualberta.ca/dept/chemeng/AIX-43/share/man/info/C/a_doc_lib/cmds/aixcmds1/aixterm.htm)
+provides bright versions of the ISO colors, without the need to use the bold modifier:
 
 | Color Name     | Foreground Color Code | Background Color Code |
 | :------------- | :-------------------- | :-------------------- |
@@ -177,15 +192,17 @@ Where `{ID}` should be replaced with the color index from 0 to 255 of the follow
 
 ![256 Color table](https://user-images.githubusercontent.com/995050/47952855-ecb12480-df75-11e8-89d4-ac26c50e80b9.png)
 
--   `0-7`: standard colors (as in `ESC [ 30–37 m`)
--   `8–15`: high intensity colors (as in `ESC [ 90–97 m`)
--   `16-231`: 6 × 6 × 6 cube (216 colors): `16 + 36 × r + 6 × g + b` (`0 ≤ r, g, b ≤ 5`)
-    > Some emulators interpret these steps as linear increments (`256 / 24`) on all three channels while others may explicitly define these values.
--   `232-255`: grayscale from dark to light in 24 steps.
+- `0-7`: standard colors (as in `ESC [ 30–37 m`)
+- `8–15`: high intensity colors (as in `ESC [ 90–97 m`)
+- `16-231`: 6 × 6 × 6 cube (216 colors): `16 + 36 × r + 6 × g + b` (`0 ≤ r, g, b ≤ 5`)
+  > Some emulators interpret these steps as linear increments (`256 / 24`) on all three channels while others may
+  > explicitly define these values.
+- `232-255`: grayscale from dark to light in 24 steps.
 
 #### RGB Colors
 
-More modern terminals supports [Truecolor](https://en.wikipedia.org/wiki/Color_depth#True_color_.2824-bit.29) (24-bit RGB), which allows you to set foreground and background colors using RGB.
+More modern terminals supports [Truecolor](https://en.wikipedia.org/wiki/Color_depth#True_color_.2824-bit.29) (24-bit
+RGB), which allows you to set foreground and background colors using RGB.
 
 These escape sequences are usually not well documented.
 
@@ -194,7 +211,8 @@ These escape sequences are usually not well documented.
 | `ESC[38;2;{r};{g};{b}m` | Set foreground color as RGB. |
 | `ESC[48;2;{r};{g};{b}m` | Set background color as RGB. |
 
-> Note that `;38` and `;48` corresponds to the 16 color sequence and is interpreted by the terminal to set the foreground and background color respectively. Where as `;2` and `;5` sets the color format.
+> Note that `;38` and `;48` corresponds to the 16 color sequence and is interpreted by the terminal to set the
+> foreground and background color respectively. Where as `;2` and `;5` sets the color format.
 
 ## Screen Modes
 
@@ -222,7 +240,8 @@ These escape sequences are usually not well documented.
 
 ### Common Private Modes
 
-These are some examples of private modes, which are not defined by the specification, but are implemented in most terminals.
+These are some examples of private modes, which are not defined by the specification, but are implemented in most
+terminals.
 
 | ESC Code Sequence | Description                     |
 | :---------------- | :------------------------------ |
@@ -233,7 +252,8 @@ These are some examples of private modes, which are not defined by the specifica
 | `ESC[?1049h`      | enables the alternative buffer  |
 | `ESC[?1049l`      | disables the alternative buffer |
 
-Refer to the [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) for a more in-depth list of private modes defined by XTerm.
+Refer to the [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html) for a more in-depth list
+of private modes defined by XTerm.
 
 > Note: While these modes may be supported by the most terminals, some may not work in multiplexers like tmux.
 
@@ -247,11 +267,17 @@ Redefines a keyboard key to a specified string.
 
 The parameters for this escape sequence are defined as follows:
 
--   `code` is one or more of the values listed in the following table. These values represent keyboard keys and key combinations. When using these values in a command, you must type the semicolons shown in this table in addition to the semicolons required by the escape sequence. The codes in parentheses are not available on some keyboards. `ANSI.SYS` will not interpret the codes in parentheses for those keyboards unless you specify the `/X` switch in the `DEVICE` command for `ANSI.SYS`.
+- `code` is one or more of the values listed in the following table. These values represent keyboard keys and key
+  combinations. When using these values in a command, you must type the semicolons shown in this table in addition to
+  the semicolons required by the escape sequence. The codes in parentheses are not available on some keyboards.
+  `ANSI.SYS` will not interpret the codes in parentheses for those keyboards unless you specify the `/X` switch in the
+  `DEVICE` command for `ANSI.SYS`.
 
--   `string` is either the ASCII code for a single character or a string contained in quotation marks. For example, both 65 and "A" can be used to represent an uppercase A.
+- `string` is either the ASCII code for a single character or a string contained in quotation marks. For example, both
+  65 and "A" can be used to represent an uppercase A.
 
-> **IMPORTANT:** Some of the values in the following table are not valid for all computers. Check your computer's documentation for values that are different.
+> **IMPORTANT:** Some of the values in the following table are not valid for all computers. Check your computer's
+> documentation for values that are different.
 
 #### List of keyboard strings
 
@@ -363,10 +389,10 @@ When processing PTY output in VT Code, we need to handle ANSI escape sequences p
 
 The TUI uses ANSI sequences for:
 
--   Cursor positioning during updates
--   Color-coded output (errors in red, success in green)
--   Progress indicators and spinners
--   Status bar formatting
+- Cursor positioning during updates
+- Color-coded output (errors in red, success in green)
+- Progress indicators and spinners
+- Status bar formatting
 
 ### Common Patterns in VT Code
 
@@ -378,15 +404,16 @@ let clean = strip_ansi(raw);
 assert_eq!(clean, "ok green red");
 ```
 
-The shared parser handles both 7-bit (`ESC` prefixed) and 8-bit C1 control forms (`CSI`/`OSC`/`DCS`), including `BEL`, `ESC \`, and C1 `ST` terminators.
+The shared parser handles both 7-bit (`ESC` prefixed) and 8-bit C1 control forms (`CSI`/`OSC`/`DCS`), including `BEL`,
+`ESC \`, and C1 `ST` terminators.
 
 ## Resources
 
--   [Wikipedia: ANSI escape code](https://en.wikipedia.org/wiki/ANSI_escape_code)
--   [Build your own Command Line with ANSI escape codes](http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html)
--   [ascii-table: ANSI Escape sequences](http://ascii-table.com/ansi-escape-sequences.php)
--   [bluesock: ansi codes](https://bluesock.org/~willkg/dev/ansi.html)
--   [bash-hackers: Terminal Codes (ANSI/VT100) introduction](http://wiki.bash-hackers.org/scripting/terminalcodes)
--   [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
--   [VT100 – Various terminal manuals](https://vt100.net/)
--   [xterm.js – Supported Terminal Sequences](https://xtermjs.org/docs/api/vtfeatures/)
+- [Wikipedia: ANSI escape code](https://en.wikipedia.org/wiki/ANSI_escape_code)
+- [Build your own Command Line with ANSI escape codes](http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html)
+- [ascii-table: ANSI Escape sequences](http://ascii-table.com/ansi-escape-sequences.php)
+- [bluesock: ansi codes](https://bluesock.org/~willkg/dev/ansi.html)
+- [bash-hackers: Terminal Codes (ANSI/VT100) introduction](http://wiki.bash-hackers.org/scripting/terminalcodes)
+- [XTerm Control Sequences](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+- [VT100 – Various terminal manuals](https://vt100.net/)
+- [xterm.js – Supported Terminal Sequences](https://xtermjs.org/docs/api/vtfeatures/)

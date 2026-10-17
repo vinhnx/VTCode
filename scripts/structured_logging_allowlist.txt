@@ -13,7 +13,7 @@ crates/codegen/vtcode-core/src/marketplace/installer.rs | Marketplace installati
 crates/codegen/vtcode-core/src/marketplace/testing.rs | Marketplace smoke-test helper prints human-readable status.
 crates/codegen/vtcode-core/src/mcp/cli.rs | MCP CLI entrypoint prints user-facing status and result output.
 crates/codegen/vtcode-core/src/plugins/validation.rs | Plugin validation output is intentionally formatted for direct terminal display.
-crates/codegen/vtcode-core/src/tool_policy.rs | Tool policy summaries are intentionally rendered for the user.
+crates/codegen/vtcode-core/src/tool_policy/manager.rs | Tool policy summaries are intentionally rendered for the user.
 crates/codegen/vtcode-core/src/tools/ripgrep_installer/mod.rs | Dependency installer progress and remediation are intentionally terminal-facing.
 crates/codegen/vtcode-core/src/tools/ripgrep_installer/platform.rs | Dependency installer fallback messaging is intentionally terminal-facing.
 crates/codegen/vtcode-core/src/ui/** | UI helpers intentionally print prompts and formatted terminal output.
@@ -23,5 +23,6 @@ crates/codegen/vtcode-core/src/utils/safety.rs | Safety summaries are direct use
 crates/codegen/vtcode-ui/src/tui/core_tui/mod.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
 crates/codegen/vtcode-ui/src/tui/core_tui/panic_hook/** | Panic-hook crash reports and setup failures must reach stderr before tracing is initialized.
 crates/codegen/vtcode-ui/src/tui/session_options.rs | TUI startup errors are reported via eprintln! before the UI loop is available.
+crates/codegen/vtcode-ui/src/tui/core_tui/runner/signal.rs | Emergency SIGTERM cleanup notice must reach the terminal after restore_tui(), outside the TUI render loop.
 crates/codegen/vtcode-bash-runner/src/process.rs | Output stream lag warnings are user-facing diagnostics from the pty runner.
 crates/common/vtcode-commons/src/startup_trace.rs | Pre-tracing startup phase recorder; tracing is not initialized at this point, so phases are reported via eprintln!.

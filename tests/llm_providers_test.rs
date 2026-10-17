@@ -56,6 +56,7 @@ fn test_vercel_provider_creation() {
                 timeouts: None,
                 openai: None,
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::Serialize;
 use tokio::sync::RwLock;
+use vtcode_macros::DebugNoInline;
 
 use crate::exec_policy::default_exec_approval_requirement as canonical_default_exec_approval_requirement;
 pub use crate::exec_policy::{AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig};
@@ -324,7 +325,10 @@ pub struct ToolCtx {
 // ============================================================================
 
 /// Error from tool runtime execution (from Codex)
-#[derive(Debug, thiserror::Error)]
+///
+/// `Debug` via [`DebugNoInline`]: `Codex(anyhow::Error)` nests an arbitrary source
+/// chain on the tool-failure path.
+#[derive(DebugNoInline, thiserror::Error)]
 pub enum ToolError {
     #[error("Tool rejected: {0}")]
     Rejected(String),

@@ -265,6 +265,21 @@ mod tests {
     }
 
     #[test]
+    fn compat_payload_forwards_ultrafast_service_tier() {
+        let provider = XAIProvider::new("test-key".to_string());
+
+        let mut request = base_request();
+        request.service_tier = Some("ultrafast".to_string());
+        let payload = provider.core.convert_request(&request).unwrap();
+        assert_eq!(payload["service_tier"], "ultrafast");
+
+        let mut blank = base_request();
+        blank.service_tier = Some("   ".to_string());
+        let payload = provider.core.convert_request(&blank).unwrap();
+        assert!(payload.get("service_tier").is_none(), "blank tier must be omitted");
+    }
+
+    #[test]
     fn compaction_support_is_curated_grok_models_on_xai_api_only() {
         use crate::provider::LLMProvider;
 

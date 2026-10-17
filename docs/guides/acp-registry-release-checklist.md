@@ -1,7 +1,6 @@
 # ACP Registry Release Checklist
 
-This checklist covers the exact steps to publish VTCode assets that pass
-`agentclientprotocol/registry` validation.
+This checklist covers the exact steps to publish VTCode assets that pass `agentclientprotocol/registry` validation.
 
 ## Preconditions
 

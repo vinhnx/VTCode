@@ -5,6 +5,8 @@ use ratatui::layout::Rect;
 #[derive(Debug, Default)]
 pub(super) struct SessionAreas {
     transcript: Option<Rect>,
+    progress: Option<Rect>,
+    progress_feedback: Option<Rect>,
     input: Option<Rect>,
     bottom_panel: Option<Rect>,
     modal_list: Option<Rect>,
@@ -12,6 +14,22 @@ pub(super) struct SessionAreas {
 }
 
 impl SessionAreas {
+    pub(super) fn progress(&self) -> Option<Rect> {
+        self.progress
+    }
+
+    pub(super) fn set_progress(&mut self, area: Option<Rect>) {
+        self.progress = area;
+    }
+
+    pub(super) fn progress_feedback(&self) -> Option<Rect> {
+        self.progress_feedback
+    }
+
+    pub(super) fn set_progress_feedback(&mut self, area: Option<Rect>) {
+        self.progress_feedback = area;
+    }
+
     pub(super) fn transcript(&self) -> Option<Rect> {
         self.transcript
     }

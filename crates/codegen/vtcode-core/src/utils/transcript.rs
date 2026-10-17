@@ -209,12 +209,14 @@ pub fn clear() {
 /// Set the inline handle for immediate message display.
 ///
 /// Any messages enqueued while no handle was attached are replayed FIFO
-/// exactly once, in order, so none are lost.
+/// exactly once, in order, so none are lost. The handle is captured before
+/// the drain so a concurrent `clear_inline_handle` cannot drop already-taken
+/// pending messages.
 pub fn set_inline_handle(handle: Arc<InlineHandle>) {
-    *INLINE_HANDLE.write() = Some(handle);
+    *INLINE_HANDLE.write() = Some(handle.clone());
     let pending: Vec<QueuedMessage> = PENDING_QUEUE.write().drain(..).collect();
     for msg in pending {
-        display_message_now(&msg.text, msg.kind, &msg.style);
+        display_message_to(&handle, &msg.text, msg.kind, &msg.style);
     }
 }
 
@@ -263,10 +265,10 @@ pub fn enqueue_message_with_kind(message: &str, kind: InlineMessageKind, text_st
         }
         pending.push_back(queued);
     }
-    if INLINE_HANDLE.read().is_some() {
+    if let Some(handle) = INLINE_HANDLE.read().clone() {
         let pending: Vec<QueuedMessage> = PENDING_QUEUE.write().drain(..).collect();
         for msg in pending {
-            display_message_now(&msg.text, msg.kind, &msg.style);
+            display_message_to(&handle, &msg.text, msg.kind, &msg.style);
         }
     }
 
@@ -288,14 +290,20 @@ pub fn display_info(message: &str) {
 /// Display a message immediately without queuing (low-level function)
 fn display_message_now(text: &str, kind: InlineMessageKind, style: &InlineTextStyle) {
     if let Some(handle) = INLINE_HANDLE.read().as_ref() {
-        handle.append_line(
-            kind,
-            vec![InlineSegment {
-                text: text.to_string(),
-                style: Arc::new(style.clone()),
-            }],
-        );
+        display_message_to(handle, text, kind, style);
     }
+}
+
+/// Append one message to a specific handle. Used by drain paths that already
+/// captured the handle so a concurrent detach cannot swallow the message.
+fn display_message_to(handle: &InlineHandle, text: &str, kind: InlineMessageKind, style: &InlineTextStyle) {
+    handle.append_line(
+        kind,
+        vec![InlineSegment {
+            text: text.to_string(),
+            style: Arc::new(style.clone()),
+        }],
+    );
 }
 
 /// Enqueue a message and display it immediately (defaults to Output/Pty style)

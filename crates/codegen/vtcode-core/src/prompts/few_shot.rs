@@ -38,12 +38,11 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use compact_str::CompactString;
 use serde::Deserialize;
 use tracing::warn;
-use vtcode_commons::VtCodePaths;
 use vtcode_commons::tokens::estimate_tokens;
 
 use super::resource_cache::{ResourceCache, canonical_cache_path, fingerprint_markdown_directories};
@@ -53,13 +52,7 @@ const PROMPTS_PARENT: &str = ".vtcode/prompts";
 const MIN_TOKEN_BUDGET: usize = 16;
 
 fn user_examples_dir(home: &Path) -> PathBuf {
-    if dirs::home_dir().as_deref() == Some(home)
-        && let Ok(paths) = VtCodePaths::resolve()
-        && let Ok(prompt_dir) = paths.config_path("prompts")
-    {
-        return prompt_dir.join(EXAMPLES_DIR);
-    }
-    home.join(PROMPTS_PARENT).join(EXAMPLES_DIR)
+    super::resources::user_prompts_dir(home).join(EXAMPLES_DIR)
 }
 
 /// Default token budget for the `[Few-Shot Examples]` block. ~10% of an 8K
@@ -119,7 +112,10 @@ impl FewShotStore {
     /// Pass `workspace_root = Some("/path")` and `home_dir = None` to
     /// load only the workspace; pass `home_dir = Some("/home/user")` to
     /// also pull user-global examples.
-    pub fn load(workspace_root: Option<&Path>, home_dir: Option<&Path>) -> Self {
+    ///
+    /// The returned store shares the cached allocation: warm loads bump a
+    /// refcount instead of cloning every example body.
+    pub fn load(workspace_root: Option<&Path>, home_dir: Option<&Path>) -> Arc<Self> {
         let key = FewShotCacheKey::new(workspace_root, home_dir);
         load_cached_sync(key, workspace_root.map(Path::to_path_buf), home_dir.map(Path::to_path_buf))
     }
@@ -127,7 +123,7 @@ impl FewShotStore {
     /// Load examples without performing cache-key or cache-miss filesystem
     /// work on a Tokio worker. Warm loads still use the blocking pool because
     /// canonicalizing a new source path may touch the filesystem.
-    pub async fn load_async(workspace_root: Option<&Path>, home_dir: Option<&Path>) -> Self {
+    pub async fn load_async(workspace_root: Option<&Path>, home_dir: Option<&Path>) -> Arc<Self> {
         let workspace_root = workspace_root.map(Path::to_path_buf);
         let home_dir = home_dir.map(Path::to_path_buf);
         match tokio::task::spawn_blocking(move || {
@@ -141,7 +137,7 @@ impl FewShotStore {
             Ok(store) => store,
             Err(error) => {
                 warn!(%error, "few-shot resource load task failed");
-                Self::default()
+                Arc::new(Self::default())
             }
         }
     }
@@ -276,14 +272,18 @@ fn few_shot_cache() -> &'static ResourceCache<FewShotCacheKey, FewShotStore> {
     FEW_SHOT_CACHE.get_or_init(ResourceCache::default)
 }
 
-fn load_cached_sync(key: FewShotCacheKey, workspace_root: Option<PathBuf>, home_dir: Option<PathBuf>) -> FewShotStore {
+fn load_cached_sync(
+    key: FewShotCacheKey,
+    workspace_root: Option<PathBuf>,
+    home_dir: Option<PathBuf>,
+) -> Arc<FewShotStore> {
     if let Some(cached) = few_shot_cache().fast_get(&key) {
-        return (*cached).clone();
+        return cached;
     }
 
     few_shot_cache().with_load_gate(|| {
         if let Some(cached) = few_shot_cache().fast_get(&key) {
-            return (*cached).clone();
+            return cached;
         }
 
         let source_dirs = key
@@ -294,12 +294,12 @@ fn load_cached_sync(key: FewShotCacheKey, workspace_root: Option<PathBuf>, home_
             .collect::<Vec<_>>();
         let fingerprint = fingerprint_markdown_directories(&source_dirs);
         if let Some(cached) = few_shot_cache().get_if_unchanged(&key, &fingerprint) {
-            return (*cached).clone();
+            return cached;
         }
 
         let store = load_uncached(workspace_root.as_deref(), home_dir.as_deref());
         few_shot_cache().insert(key, store.clone(), fingerprint);
-        store
+        Arc::new(store)
     })
 }
 
@@ -590,6 +590,27 @@ mod tests {
         // No directories exist; load must succeed with zero examples.
         let store = FewShotStore::load(Some(Path::new("/does/not/exist/anywhere")), None);
         assert!(store.is_empty());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn warm_loads_share_the_cached_store_without_cloning() {
+        // Asymmetric: the cold load parses (its Arc is fresh), but consecutive
+        // warm loads must hand out the same allocation (ptr_eq), not a deep
+        // clone of every example body. The per-turn caller only borrows a
+        // budgeted selection, so sharing is the whole point of the cache.
+        few_shot_cache().clear();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let examples_dir = workspace.path().join(PROMPTS_PARENT).join(EXAMPLES_DIR);
+        std::fs::create_dir_all(&examples_dir).expect("mkdir");
+        std::fs::write(examples_dir.join("demo.md"), "---\ntags: [demo]\n---\nDemo body\n").expect("write");
+
+        let first = FewShotStore::load(Some(workspace.path()), None);
+        assert_eq!(first.len(), 1);
+        let second = FewShotStore::load(Some(workspace.path()), None);
+        let third = FewShotStore::load(Some(workspace.path()), None);
+        assert_eq!(second.len(), 1);
+        assert!(Arc::ptr_eq(&second, &third), "warm loads must share the cached store");
     }
 
     #[test]

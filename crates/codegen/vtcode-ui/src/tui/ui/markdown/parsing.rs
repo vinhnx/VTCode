@@ -5,21 +5,13 @@ use super::links::{
 use super::tables::{TableBuffer, render_table};
 use super::{LIST_INDENT_WIDTH, MarkdownLine};
 use crate::tui::ui::theme::ThemeStyles;
+use crate::tui::utils::transcript::{
+    NON_WHITESPACE_TOKEN_PATTERN, QUOTED_PATH_PATTERN, has_explicit_path_syntax, trim_transcript_token_bounds,
+};
 use anstyle::Style;
 use pulldown_cmark::{CodeBlockKind, HeadingLevel, Tag, TagEnd};
-use regex::Regex;
 use std::cmp::max;
-use std::sync::LazyLock;
 use vtcode_commons::parse_editor_target;
-
-static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
-static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r#"`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'"#,
-    )
-    .expect("valid quoted transcript path regex")
-});
 
 const COMMON_FILE_EXTENSIONS: &[&str] = &[
     "rs", "toml", "md", "json", "yaml", "yml", "js", "jsx", "ts", "tsx", "py", "go", "java", "kt", "swift", "c", "h",
@@ -424,39 +416,6 @@ fn build_file_link_match(text: &str, token_start: usize, token_end: usize) -> Op
     Some(FileLinkMatch { start, end, target })
 }
 
-fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
-    let mut start = 0usize;
-    let mut end = token.len();
-
-    while start < end {
-        let Some(ch) = token[start..end].chars().next() else {
-            break;
-        };
-        if matches!(ch, '(' | '[' | '{' | '<' | '"' | '\'' | '`') {
-            start += ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    while start < end {
-        let Some(ch) = token[start..end].chars().next_back() else {
-            break;
-        };
-        if matches!(ch, ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?') {
-            // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
-            if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
-                break;
-            }
-            end -= ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    (start, end)
-}
-
 fn looks_like_markdown_path(token: &str) -> bool {
     let token = token.trim();
     if token.is_empty() {
@@ -470,24 +429,10 @@ fn looks_like_markdown_path(token: &str) -> bool {
         return false;
     }
 
-    if token.starts_with("./")
-        || token.starts_with("../")
-        || token.starts_with('/')
-        || token.starts_with("~/")
-        || token.starts_with("file://")
-    {
-        return true;
-    }
-
-    if token.len() >= 3
-        && token.as_bytes()[0].is_ascii_alphabetic()
-        && token.as_bytes()[1] == b':'
-        && matches!(token.as_bytes()[2], b'\\' | b'/')
-    {
-        return true;
-    }
-
-    if token.contains('/') || token.contains('\\') {
+    // Explicit prefixes, drive letters, and separators are shared with the
+    // transcript detector; URL rejection above stays first so `http://`
+    // never reaches the shared check.
+    if has_explicit_path_syntax(token) {
         return true;
     }
 
@@ -509,18 +454,6 @@ fn looks_like_markdown_path(token: &str) -> bool {
     }
 
     false
-}
-
-fn location_paren_suffix_start(token: &str) -> Option<usize> {
-    let paren_start = token.rfind('(')?;
-    let inner = token[paren_start + 1..].strip_suffix(')')?;
-    // Accept `(digits)` or `(digits,digits)` — reject empty or malformed like `(,)` `(10,,5)`
-    let valid = !inner.is_empty()
-        && !inner.starts_with(',')
-        && !inner.ends_with(',')
-        && !inner.contains(",,")
-        && inner.chars().all(|c| c.is_ascii_digit() || c == ',');
-    valid.then_some(paren_start)
 }
 
 fn append_text_segment(segment: &str, ctx: &mut MarkdownContext<'_>, style: Style, link_target: Option<String>) {

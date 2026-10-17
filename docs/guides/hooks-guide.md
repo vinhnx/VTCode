@@ -1,12 +1,12 @@
 # VT Code Hooks System Documentation
 
-This document describes VT Code's command-based lifecycle hooks. The system is
-inspired by Claude Code hooks, but this phase supports shell-command hooks in
-`vtcode.toml` only.
+This document describes VT Code's command-based lifecycle hooks. The system is inspired by Claude Code hooks, but this
+phase supports shell-command hooks in `vtcode.toml` only.
 
 ## Overview
 
-VT Code hooks enable automation by running shell commands in response to specific events. The system supports various lifecycle events and provides a flexible matching mechanism to target specific tools or events.
+VT Code hooks enable automation by running shell commands in response to specific events. The system supports various
+lifecycle events and provides a flexible matching mechanism to target specific tools or events.
 
 ## Configuration
 
@@ -64,25 +64,26 @@ hooks = [
 
 ### PreToolUse
 
--   Runs after VT Code creates tool parameters and before processing the tool call
--   Can allow, deny, or force a human approval prompt
--   Common matchers: builtin tool names like `exec_command`, `write_stdin`, `apply_patch`, `code_search`, or MCP tool names
+- Runs after VT Code creates tool parameters and before processing the tool call
+- Can allow, deny, or force a human approval prompt
+- Common matchers: builtin tool names like `exec_command`, `write_stdin`, `apply_patch`, `code_search`, or MCP tool
+  names
 
 ### PostToolUse
 
--   Runs immediately after a tool completes successfully
--   Can provide feedback or perform follow-up actions
--   Uses same matchers as PreToolUse
+- Runs immediately after a tool completes successfully
+- Can provide feedback or perform follow-up actions
+- Uses same matchers as PreToolUse
 
 ### UserPromptSubmit
 
--   Runs when the user submits a prompt, before VT Code processes it
--   Can validate prompts, add context, or block certain types of prompts
+- Runs when the user submits a prompt, before VT Code processes it
+- Can validate prompts, add context, or block certain types of prompts
 
 ### SessionStart
 
--   Runs when VT Code starts a new session
--   Useful for loading development context, installing dependencies, or setting up environment variables
+- Runs when VT Code starts a new session
+- Useful for loading development context, installing dependencies, or setting up environment variables
 
 Example:
 
@@ -92,8 +93,7 @@ cat >/dev/null
 vtcode notify --title "VT Code" "Session started"
 ```
 
-If you want a visible TUI line as part of `SessionStart`, emit structured JSON
-instead of plain stdout:
+If you want a visible TUI line as part of `SessionStart`, emit structured JSON instead of plain stdout:
 
 ```bash
 #!/bin/sh
@@ -111,57 +111,57 @@ hooks = [
 
 ### SessionEnd
 
--   Runs when a VT Code session ends
--   Useful for cleanup tasks, logging session statistics, or saving session state
+- Runs when a VT Code session ends
+- Useful for cleanup tasks, logging session statistics, or saving session state
 
 ### PermissionRequest
 
--   Runs only when VT Code is about to show a human approval prompt
--   Receives `tool_name`, `tool_input`, the normalized permission summary, and `permission_suggestions`
--   Can allow, deny, update tool input, or persist session/project permission rules
+- Runs only when VT Code is about to show a human approval prompt
+- Receives `tool_name`, `tool_input`, the normalized permission summary, and `permission_suggestions`
+- Can allow, deny, update tool input, or persist session/project permission rules
 
 ### Stop
 
--   Runs after VT Code drafts the assistant reply but before the turn is finalized
--   Can block stop and feed a reason back into the same turn so the agent keeps going
+- Runs after VT Code drafts the assistant reply but before the turn is finalized
+- Can block stop and feed a reason back into the same turn so the agent keeps going
 
 ### PreCompact
 
--   Runs before VT Code compresses/summarizes the conversation context
--   Can influence compression behavior or save important context before it's compressed
--   Receives current conversation state and compression parameters
+- Runs before VT Code compresses/summarizes the conversation context
+- Can influence compression behavior or save important context before it's compressed
+- Receives current conversation state and compression parameters
 
 ### Notification
 
--   Runs when VT Code sends a notification (desktop, terminal, or hybrid)
--   Receives notification type, title, and message
--   Can filter, modify, or suppress notifications
+- Runs when VT Code sends a notification (desktop, terminal, or hybrid)
+- Receives notification type, title, and message
+- Can filter, modify, or suppress notifications
 
 ### SubagentStart
 
--   Runs when a subagent is spawned as a child thread
--   Receives subagent name, configuration, and parent context
--   Can modify subagent setup or block spawning
+- Runs when a subagent is spawned as a child thread
+- Receives subagent name, configuration, and parent context
+- Can modify subagent setup or block spawning
 
 ### SubagentStop
 
--   Runs when a subagent completes or is terminated
--   Receives subagent results and exit status
--   Can post-process subagent output or trigger follow-up actions
+- Runs when a subagent completes or is terminated
+- Receives subagent results and exit status
+- Can post-process subagent output or trigger follow-up actions
 
 ### Deprecated aliases
 
--   `task_completion` and `task_completed` still parse, but VT Code normalizes them into `stop`
--   New configurations should use `stop`
+- `task_completion` and `task_completed` still parse, but VT Code normalizes them into `stop`
+- New configurations should use `stop`
 
 ## Hook Matching
 
 The `matcher` field supports:
 
--   Simple strings that match exactly: `Write` matches only the Write tool
--   Regex patterns: `Edit|Write` or `.*` (match all)
--   Use `.*` to match all tools for a specific event type
--   Empty string or no matcher field matches all events of that type
+- Simple strings that match exactly: `Write` matches only the Write tool
+- Regex patterns: `Edit|Write` or `.*` (match all)
+- Use `.*` to match all tools for a specific event type
+- Empty string or no matcher field matches all events of that type
 
 ## Hook Scripts
 
@@ -183,21 +183,21 @@ Hook scripts receive JSON data via stdin containing session information and even
 
 ## Exit Code Semantics
 
--   **Exit code 0**: Success - hook completed normally
--   **Exit code 2**: Blocking error - prevents the action from proceeding
--   **Other exit codes**: Non-blocking error - logs error but continues
+- **Exit code 0**: Success - hook completed normally
+- **Exit code 2**: Blocking error - prevents the action from proceeding
+- **Other exit codes**: Non-blocking error - logs error but continues
 
 ## Environment Variables
 
 Hook scripts have access to these environment variables:
 
--   `VT_PROJECT_DIR`: Path to the project root directory
--   `CLAUDE_PROJECT_DIR`: Same as VT_PROJECT_DIR (for compatibility)
--   `VT_SESSION_ID`: Current session ID
--   `CLAUDE_SESSION_ID`: Same as VT_SESSION_ID (for compatibility)
--   `VT_HOOK_EVENT`: Name of the hook event being executed
--   `VT_TRANSCRIPT_PATH`: Path to the current transcript file
--   `CLAUDE_TRANSCRIPT_PATH`: Same as VT_TRANSCRIPT_PATH (for compatibility)
+- `VT_PROJECT_DIR`: Path to the project root directory
+- `CLAUDE_PROJECT_DIR`: Same as VT_PROJECT_DIR (for compatibility)
+- `VT_SESSION_ID`: Current session ID
+- `CLAUDE_SESSION_ID`: Same as VT_SESSION_ID (for compatibility)
+- `VT_HOOK_EVENT`: Name of the hook event being executed
+- `VT_TRANSCRIPT_PATH`: Path to the current transcript file
+- `CLAUDE_TRANSCRIPT_PATH`: Same as VT_TRANSCRIPT_PATH (for compatibility)
 
 ## JSON Output Format
 
@@ -222,9 +222,8 @@ Hooks can return structured JSON in stdout for advanced control:
 }
 ```
 
-`PreToolUse` hooks may also return `updatedInput` (without a decision) to
-rewrite tool arguments before execution. Rewritten arguments pass through all
-permission checks, and later hooks receive them in their payloads:
+`PreToolUse` hooks may also return `updatedInput` (without a decision) to rewrite tool arguments before execution.
+Rewritten arguments pass through all permission checks, and later hooks receive them in their payloads:
 
 ```json
 {
@@ -238,26 +237,26 @@ permission checks, and later hooks receive them in their payloads:
 }
 ```
 
-For `SessionStart`, plain stdout is added to hidden model context. Use
-`systemMessage` when you want a visible line in the TUI.
+For `SessionStart`, plain stdout is added to hidden model context. Use `systemMessage` when you want a visible line in
+the TUI.
 
 ## Security Considerations
 
 **USE AT YOUR OWN RISK**: VT Code hooks execute arbitrary shell commands on your system automatically. Always:
 
--   Validate and sanitize inputs
--   Quote shell variables properly: `"$VAR"` not `$VAR`
--   Block path traversal by checking for `..` in file paths
--   Use absolute paths for scripts
--   Review all hook commands before adding them to your configuration
+- Validate and sanitize inputs
+- Quote shell variables properly: `"$VAR"` not `$VAR`
+- Block path traversal by checking for `..` in file paths
+- Use absolute paths for scripts
+- Review all hook commands before adding them to your configuration
 
 ## Example Hook Scripts
 
 The example hook scripts provided demonstrate common use cases:
 
--   `bash-validator.sh`: Validates bash commands for safety
--   `file-protection.sh`: Protects sensitive files from modification
--   `code-formatter.sh`: Formats code after file operations
--   `prompt-validator.sh`: Validates user prompts for sensitive information
--   `session-setup.sh`: Sets up environment at session start
--   `session-cleanup.sh`: Performs cleanup at session end
+- `bash-validator.sh`: Validates bash commands for safety
+- `file-protection.sh`: Protects sensitive files from modification
+- `code-formatter.sh`: Formats code after file operations
+- `prompt-validator.sh`: Validates user prompts for sensitive information
+- `session-setup.sh`: Sets up environment at session start
+- `session-cleanup.sh`: Performs cleanup at session end

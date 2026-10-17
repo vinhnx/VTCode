@@ -195,9 +195,13 @@ pub(crate) async fn handle_copy_latest_assistant_reply(ctx: SlashCommandContext<
     });
 
     if let Some(reply) = latest_reply {
+        let char_count = reply.chars().count();
+        let unit = if char_count == 1 { "char" } else { "chars" };
         if vtcode_ui::tui::core::MouseSelectionState::copy_to_clipboard(&reply) {
-            ctx.renderer
-                .line(MessageStyle::Info, "Copied latest assistant reply to clipboard.")?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Copied latest assistant reply ({char_count} {unit}) to clipboard."),
+            )?;
         } else {
             ctx.renderer.line(MessageStyle::Warning, "Failed to copy to clipboard.")?;
         }

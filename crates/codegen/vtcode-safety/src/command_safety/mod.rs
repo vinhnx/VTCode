@@ -126,7 +126,7 @@ pub fn validate_command_argv(command: &[String]) -> anyhow::Result<()> {
         bail!("empty command");
     }
     if command_might_be_dangerous(command) {
-        bail!("Potential dangerous command detected");
+        return Err(dangerous_command_rejection(command));
     }
 
     let Some(unwrapped) = dangerous_commands::unwrap_command_prefix(command) else {
@@ -162,7 +162,7 @@ pub fn validate_shell_script(script: &str) -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("invalid explicit shell script: {error}"))?;
     for command in commands {
         if command_might_be_dangerous(&command) {
-            bail!("Potential dangerous command detected");
+            return Err(dangerous_command_rejection(&command));
         }
         let display = command.join(" ");
         if let Some(pattern) = shell_parser::additional_dangerous_pattern(&display) {
@@ -170,6 +170,16 @@ pub fn validate_shell_script(script: &str) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Preflight rejection for classified-dangerous commands. When the command
+/// matches a guarded git pattern, name the pattern and the remedy so the
+/// caller can correct course instead of retrying the identical invocation.
+fn dangerous_command_rejection(command: &[String]) -> anyhow::Error {
+    match dangerous_commands::dangerous_command_reason(command) {
+        Some(reason) => anyhow::anyhow!("Potential dangerous command detected: {reason}"),
+        None => anyhow::anyhow!("Potential dangerous command detected"),
+    }
 }
 
 fn contains_command_substitution(script: &str) -> bool {
@@ -268,6 +278,21 @@ mod tests {
     #[test]
     fn shell_string_detects_dangerous_sequence() {
         assert!(shell_string_might_be_dangerous("echo ok && git reset --hard HEAD~1"));
+    }
+
+    #[test]
+    fn preflight_rejection_names_remedy_for_guarded_git_patterns() {
+        let err = validate_shell_script("git reset --hard HEAD~1").expect_err("hard reset is preflight-blocked");
+        let message = format!("{err:#}");
+        assert!(message.contains("git reset"), "rejection must name the pattern: {message}");
+
+        // Recoverable modes pass preflight and proceed to policy routing.
+        assert!(validate_shell_script("git reset --soft HEAD~1").is_ok());
+        assert!(validate_shell_script("git rm --cached src/main.rs").is_ok());
+        assert!(validate_shell_script("git rm src/main.rs").is_err());
+        // `--cached` after `--` is a path, not the index-only flag: the
+        // working-tree deletion must stay blocked in script form too.
+        assert!(validate_shell_script("git rm --ignore-unmatch -- --cached src/main.rs").is_err());
     }
 
     #[test]

@@ -321,14 +321,7 @@ pub fn detect_misconfiguration_in_anyhow(error: &anyhow::Error) -> Option<Config
 #[must_use]
 pub fn detect_misconfiguration_in_llm_error(error: &crate::llm::LLMError) -> Option<ConfigGuidance> {
     let mut message = error.to_string();
-    let metadata = match error {
-        crate::llm::LLMError::Authentication { metadata, .. }
-        | crate::llm::LLMError::RateLimit { metadata }
-        | crate::llm::LLMError::InvalidRequest { metadata, .. }
-        | crate::llm::LLMError::Network { metadata, .. }
-        | crate::llm::LLMError::Provider { metadata, .. } => metadata.as_deref(),
-    };
-    if let Some(metadata) = metadata {
+    if let Some(metadata) = error.metadata() {
         if let Some(code) = metadata.code.as_deref() {
             message.push(' ');
             message.push_str(code);

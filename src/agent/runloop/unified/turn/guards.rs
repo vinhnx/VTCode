@@ -304,7 +304,7 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
 
 /// Shared plan-format suffix for planning synthesis recovery reasons.
 ///
-/// All three planning convergence guards (low-signal, preview-budget,
+/// Planning convergence guards (low-signal,
 /// repeated-navigation) schedule the same single tool-free synthesis pass, so
 /// they must instruct the same `<proposed_plan>` contract. Without the format
 /// the model emits research prose that fails validation and the turn ends
@@ -338,6 +338,26 @@ fn churn_line_label(churn: Option<&(String, usize)>) -> String {
         .map_or(String::new(), |(family, count)| format!(" ({family} ×{count})"))
 }
 
+/// Keep navigation recovery distinct from policy/budget synthesis.
+fn activate_navigation_recovery(ctx: &mut TurnProcessingContext<'_>, reason: String) -> bool {
+    if ctx.is_recovery_active() {
+        return false;
+    }
+    if !ctx.is_planning_active()
+        && ctx.session_stats.navigation_recovery == crate::agent::runloop::unified::state::NavigationRecovery::Consumed
+    {
+        ctx.session_stats.navigation_recovery.arm();
+        return false;
+    }
+    if !ctx.activate_recovery(reason) {
+        return false;
+    }
+    if !ctx.is_planning_active() {
+        ctx.session_stats.navigation_recovery.arm();
+    }
+    true
+}
+
 /// Arm the early tool-free synthesis pass and, only when actually armed,
 /// announce it in the UI, history, and decision ledger. Returns `false` when
 /// a recovery was already armed (e.g. by the blocked-tool fuse in the same
@@ -347,7 +367,7 @@ async fn arm_and_announce_early_recovery(
     recovery_reason: String,
     churn: Option<&(String, usize)>,
 ) -> bool {
-    if !ctx.activate_recovery(recovery_reason.clone()) {
+    if !activate_navigation_recovery(ctx, recovery_reason.clone()) {
         return false;
     }
     ctx.renderer
@@ -399,10 +419,28 @@ pub(crate) async fn handle_turn_balancer(
             ctx.renderer
                 .line(MessageStyle::Warning, ANTI_BLIND_EDITING_WARNING)
                 .unwrap_or(());
-            ctx.working_history
-                .push(uni::Message::system(ANTI_BLIND_EDITING_DIRECTIVE.to_string()));
+            let directive = if ctx.tool_registry.completion_verification_pending() {
+                ctx.tool_registry.unverified_completion_reason()
+            } else {
+                ANTI_BLIND_EDITING_DIRECTIVE.to_string()
+            };
+            ctx.working_history.push(uni::Message::system(directive));
             repeated_tool_attempts.verification_warning_emitted = true;
         }
+        return TurnHandlerOutcome::Continue;
+    }
+
+    if !ctx.is_planning_active() && repeated_tool_attempts.tracker_observations_stalled() {
+        if repeated_tool_attempts.tracker_observation_warning_emitted {
+            return TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                reason: Some("Tracker observation stalled after one bounded correction. Repeated unchanged lists or rejected polls do not advance the task; the latest tracker and tool evidence are retained.".to_string()),
+            });
+        }
+        repeated_tool_attempts.tracker_observation_warning_emitted = true;
+        repeated_tool_attempts.reset_after_balancer_recovery();
+        ctx.working_history.push(uni::Message::system(
+            "Tracker observation repeated unchanged state. Use the latest result; do not list again. Perform the next incomplete task or its missing verification, then call task_tracker action=update with that item's index and actual status. If its work and checks already passed, mark it completed now. Do not repeat inspections or announce the same next action. One tool-enabled correction remains before a blocked handoff.".to_string(),
+        ));
         return TurnHandlerOutcome::Continue;
     }
 
@@ -423,7 +461,7 @@ pub(crate) async fn handle_turn_balancer(
         // Only claim the intervention when a pass was actually armed: a
         // recovery already pending from another guard or the blocked-tool
         // fuse would make the "[!]" line and duplicate reason a lie.
-        if ctx.activate_recovery(recovery_reason.clone()) {
+        if activate_navigation_recovery(ctx, recovery_reason.clone()) {
             repeated_tool_attempts.planning_low_signal_synthesis_triggered = true;
             ctx.renderer
                 .line(
@@ -433,36 +471,7 @@ pub(crate) async fn handle_turn_balancer(
                 .unwrap_or(());
             ctx.working_history.push(uni::Message::system(recovery_reason));
         }
-        return apply_balancer_recovery(repeated_tool_attempts);
-    }
-
-    // Planning preview blindness: once the per-turn model-visible preview
-    // budget is exhausted, every further tool response is stored as a metadata
-    // stub without body content (spool pointers aside, the model cannot see
-    // new evidence). Blind retries only inflate the request — observed as a
-    // ~360k-token turn of contentless grep stubs ending in an empty synthesis.
-    // Converge on the same single tool-free synthesis pass instead, while the
-    // evidence gathered before exhaustion is still fresh. Execution mode is
-    // untouched: verifier exit codes survive in stub metadata, so builds and
-    // checks remain meaningful after exhaustion.
-    if ctx.is_planning_active()
-        && !repeated_tool_attempts.planning_low_signal_synthesis_triggered
-        && ctx.harness_state.model_visible_preview_budget_exhausted()
-    {
-        let recovery_reason = format!(
-            "Planning tool preview budget exhausted the model-visible allowance; further inspection returns metadata stubs without content. Tools are disabled on the next pass. Trust preserved outcome metadata (tool, spool_path, byte_count, completion_state); re-reading or repeating exhausted calls only returns more stubs. Verification, task_tracker, session polling, spool paging, and plan-draft re-reads stay open until the synthesis pass. {PLANNING_SYNTHESIS_FORMAT_HINT}"
-        );
-        if ctx.activate_recovery(recovery_reason.clone()) {
-            repeated_tool_attempts.planning_low_signal_synthesis_triggered = true;
-            ctx.renderer
-                .line(
-                    MessageStyle::Info,
-                    "[!] Planning recovery: tool preview budget exhausted; synthesizing plan from collected evidence.",
-                )
-                .unwrap_or(());
-            ctx.working_history.push(uni::Message::system(recovery_reason));
-        }
-        return apply_balancer_recovery(repeated_tool_attempts);
+        return navigation_balancer_outcome(ctx, repeated_tool_attempts);
     }
 
     // NL2Repo-Bench: Navigation Loop Detection
@@ -484,7 +493,7 @@ pub(crate) async fn handle_turn_balancer(
             "Navigation loop detected after {} consecutive read/search steps (recurrence #{recurrence}). Tools are disabled on the next pass; summarize findings and propose the next concrete action.",
             repeated_tool_attempts.consecutive_navigations
         );
-        if ctx.activate_recovery(recovery_reason.clone()) {
+        if activate_navigation_recovery(ctx, recovery_reason.clone()) {
             ctx.renderer
                 .line(MessageStyle::Warning, "[!] Navigation Loop: scheduling a recovery synthesis pass.")
                 .unwrap_or(());
@@ -494,7 +503,7 @@ pub(crate) async fn handle_turn_balancer(
                 navigation_loop_guidance(ctx.is_planning_active(), recurrence)
             )));
         }
-        return apply_balancer_recovery(repeated_tool_attempts);
+        return navigation_balancer_outcome(ctx, repeated_tool_attempts);
     }
 
     // --- Turn balancer: cap low-signal churn ---
@@ -541,7 +550,7 @@ pub(crate) async fn handle_turn_balancer(
         if armed && planning_active {
             repeated_tool_attempts.planning_low_signal_synthesis_triggered = true;
         }
-        return apply_balancer_recovery(repeated_tool_attempts);
+        return navigation_balancer_outcome(ctx, repeated_tool_attempts);
     }
 
     // Execution-mode total low-signal guard: diverse churn (a new query each
@@ -550,7 +559,9 @@ pub(crate) async fn handle_turn_balancer(
     // window. The counter's window resets on any mutation or verification,
     // so this fires only for churn uninterrupted by productive work.
     if !planning_active
-        && !repeated_tool_attempts.execution_total_low_signal_triggered
+        && (!repeated_tool_attempts.execution_total_low_signal_triggered
+            || ctx.session_stats.navigation_recovery
+                == crate::agent::runloop::unified::state::NavigationRecovery::Consumed)
         && repeated_tool_attempts.total_low_signal_navigations >= EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD
     {
         let churn = repeated_tool_attempts.dominant_churn();
@@ -563,7 +574,7 @@ pub(crate) async fn handle_turn_balancer(
         if armed {
             repeated_tool_attempts.execution_total_low_signal_triggered = true;
         }
-        return apply_balancer_recovery(repeated_tool_attempts);
+        return navigation_balancer_outcome(ctx, repeated_tool_attempts);
     }
 
     if !step_count.is_multiple_of(check_interval) {
@@ -593,7 +604,7 @@ pub(crate) async fn handle_turn_balancer(
                 churn_reason_note(churn.as_ref())
             )
         };
-        if ctx.activate_recovery(recovery_reason.clone()) {
+        if activate_navigation_recovery(ctx, recovery_reason.clone()) {
             if planning_active {
                 repeated_tool_attempts.planning_low_signal_synthesis_triggered = true;
             }
@@ -621,10 +632,22 @@ pub(crate) async fn handle_turn_balancer(
                 );
             }
         }
-        return apply_balancer_recovery(repeated_tool_attempts);
+        return navigation_balancer_outcome(ctx, repeated_tool_attempts);
     }
 
     TurnHandlerOutcome::Continue
+}
+
+fn navigation_balancer_outcome(
+    ctx: &TurnProcessingContext<'_>,
+    tracker: &mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
+) -> TurnHandlerOutcome {
+    if ctx.session_stats.navigation_recovery.blocked() {
+        return TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+            reason: Some(crate::agent::runloop::unified::state::NAVIGATION_RECOVERY_BLOCK_REASON.to_string()),
+        });
+    }
+    apply_balancer_recovery(tracker)
 }
 
 fn apply_balancer_recovery(
@@ -721,6 +744,16 @@ mod tests {
         assert!(guidance.contains("task_tracker"));
     }
 
+    fn assert_recovery_expires_at_fresh_turn(history: &[vtcode_core::llm::provider::Message]) {
+        use crate::agent::runloop::unified::turn::turn_loop_helpers::restore_fresh_turn_tool_guidance;
+
+        let mut restored = history.to_vec();
+        restore_fresh_turn_tool_guidance(&mut restored, false);
+        assert_eq!(restored.len(), history.len() + 1, "the guard's emitted directive must be superseded");
+        restore_fresh_turn_tool_guidance(&mut restored, false);
+        assert_eq!(restored.len(), history.len() + 1, "restoration must not duplicate itself");
+    }
+
     #[test]
     fn navigation_loop_guidance_uses_generic_text_outside_planning_workflow() {
         let guidance = navigation_loop_guidance(false, 1);
@@ -774,6 +807,7 @@ mod tests {
                 || message.content.as_text().contains("synthesize the plan")
                 || message.content.as_text().contains("<proposed_plan>")
         }));
+        assert_recovery_expires_at_fresh_turn(ctx.working_history);
     }
 
     #[tokio::test]
@@ -792,6 +826,46 @@ mod tests {
                 .iter()
                 .any(|message| { message.content.as_text().contains(ANTI_BLIND_EDITING_DIRECTIVE) })
         );
+    }
+
+    #[tokio::test]
+    async fn unchanged_tracker_polls_get_one_correction_then_terminal_handoff() {
+        let mut backing = TestTurnProcessingBacking::new(20).await;
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        for round in 0..2 {
+            let status = if round == 0 {
+                ToolExecutionStatus::Success {
+                    output: json!({"status":"ok", "checklist":{"items":[{"index":3,"status":"in_progress"}]}}),
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                }
+            } else {
+                ToolExecutionStatus::Failure {
+                    error: vtcode_core::tools::registry::ToolExecutionError::new(
+                        tool_names::TASK_TRACKER,
+                        vtcode_core::tools::registry::ToolErrorType::PolicyViolation,
+                        "identical tracker polls blocked",
+                    ),
+                }
+            };
+            let outcome = ToolPipelineOutcome::from_status(status);
+            for _ in 0..2 {
+                update_repetition_tracker(&mut tracker, &outcome, tool_names::TASK_TRACKER, &json!({"action":"list"}));
+            }
+            let result = super::handle_turn_balancer(&mut ctx, 2 + round * 2, &mut tracker, 20, 3).await;
+            if round == 0 {
+                assert!(matches!(result, TurnHandlerOutcome::Continue));
+                assert!(!ctx.is_recovery_active(), "correction must retain usable tools");
+                assert!(tracker.tracker_observation_warning_emitted);
+            } else {
+                let TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }) = result else {
+                    panic!("unchanged polls must not schedule another correction");
+                };
+                assert!(!crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_auto_continue_is_recoverable_block(Some(&reason)));
+            }
+        }
     }
 
     #[tokio::test]
@@ -854,66 +928,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn planning_preview_exhaustion_schedules_synthesis_once() {
-        use vtcode_config::constants::output_limits::TURN_PREVIEW_BUDGET_BYTES_PLANNING;
-        use vtcode_core::llm::provider as uni;
-
+    async fn many_productive_planning_previews_do_not_force_recovery() {
         let mut backing = TestTurnProcessingBacking::new(120).await;
         backing.activate_planning_for_test();
         let mut ctx = backing.turn_processing_context();
-        // Blind the model: one over-budget response flips the per-turn
-        // preview budget, so every later inspection is a contentless stub.
-        ctx.push_tool_response("call-blind", Some("exec_command"), "x".repeat(TURN_PREVIEW_BUDGET_BYTES_PLANNING + 1));
-        assert!(ctx.harness_state.model_visible_preview_budget_exhausted());
-
+        for index in 0..24 {
+            ctx.push_tool_response(
+                format!("call-{index}"),
+                Some("exec_command"),
+                format!("evidence-{index} {}", "x".repeat(8_000)),
+            );
+        }
         let mut tracker = LoopTracker::new();
-        let first = super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
-        assert!(matches!(first, TurnHandlerOutcome::Continue));
-        assert!(ctx.is_recovery_active());
-        assert!(tracker.planning_low_signal_synthesis_triggered);
-
-        // Even with low-signal counters also at threshold, the shared
-        // once-per-turn flag must prevent a second recovery scheduling.
-        tracker.consecutive_low_signal_navigations = PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD;
-        tracker.total_low_signal_navigations = PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD;
-        let second = super::handle_turn_balancer(&mut ctx, 12, &mut tracker, 120, usize::MAX).await;
-        assert!(matches!(second, TurnHandlerOutcome::Continue));
-        let synthesis_messages = ctx
-            .working_history
-            .iter()
-            .filter(|message| {
-                message.role == uni::MessageRole::System && message.content.as_text().contains("preview budget")
-            })
-            .count();
-        assert_eq!(synthesis_messages, 1, "preview-exhaustion synthesis must fire exactly once per turn");
+        let result = super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, usize::MAX).await;
+        assert!(matches!(result, TurnHandlerOutcome::Continue));
+        assert!(!ctx.is_recovery_active());
+        assert!(!tracker.planning_low_signal_synthesis_triggered);
         assert!(
-            ctx.working_history.iter().any(|message| {
-                message.role == uni::MessageRole::System
-                    && message.content.as_text().contains("<proposed_plan>")
-                    && message.content.as_text().contains("Action -> files")
-            }),
-            "preview-exhaustion recovery must instruct plan-format synthesis from preserved metadata"
+            ctx.working_history
+                .iter()
+                .any(|message| message.content.as_text().contains("evidence-23"))
         );
-        let recovery_prompt = ctx
-            .working_history
-            .iter()
-            .find(|message| {
-                message.role == uni::MessageRole::System && message.content.as_text().contains("preview budget")
-            })
-            .expect("preview exhaustion must record one recovery prompt")
-            .content
-            .as_text();
-        assert!(recovery_prompt.contains("Valid examples: `verify: [cargo nextest run -p vtcode]`"));
         assert!(
-            recovery_prompt.contains("verify: [sed -n '1,40p' docs/file.md]")
-                && recovery_prompt.contains("verify: [grep -n 'symbol' src/file.rs]"),
-            "synthesis hint must include inspection-command valid examples: {recovery_prompt}"
+            !ctx.working_history
+                .iter()
+                .any(|message| message.content.as_text().contains("preview_budget_exhausted"))
         );
-        assert!(recovery_prompt.contains("git diff --check"));
-        assert!(recovery_prompt.contains("Invalid examples: `verify: [run checks]`"));
-        assert!(recovery_prompt.contains("observable check"));
-        assert_eq!(tracker.consecutive_low_signal_navigations, PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD);
-        assert_eq!(tracker.total_low_signal_navigations, PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD);
     }
 
     #[tokio::test]
@@ -1040,13 +1080,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preview_exhaustion_does_not_trigger_synthesis_outside_planning() {
+    async fn oversized_preview_does_not_trigger_synthesis_outside_planning() {
         use vtcode_config::constants::output_limits::TURN_PREVIEW_BUDGET_BYTES;
 
         let mut backing = TestTurnProcessingBacking::new(120).await;
         let mut ctx = backing.turn_processing_context();
         ctx.push_tool_response("call-blind", Some("exec_command"), "x".repeat(TURN_PREVIEW_BUDGET_BYTES + 1));
-        assert!(ctx.harness_state.model_visible_preview_budget_exhausted());
+        assert!(!ctx.harness_state.model_visible_preview_budget_exhausted());
 
         let mut tracker = LoopTracker::new();
         let outcome = super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
@@ -1173,6 +1213,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn planning_empty_search_pipelines_schedule_bounded_synthesis() {
+        let mut backing = TestTurnProcessingBacking::new(120).await;
+        backing.activate_planning_for_test();
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        let empty = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: json!({"exit_code": 0, "output": "", "total_output_bytes": 0}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+        for index in 0..PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD {
+            let command = format!("rg --files --hidden | rg 'optional-lint-{index}' | head -10");
+            update_repetition_tracker(&mut tracker, &empty, tool_names::EXEC_COMMAND, &json!({"cmd": command}));
+            if index + 1 < PLANNING_CONSECUTIVE_LOW_SIGNAL_THRESHOLD {
+                let outcome = super::handle_turn_balancer(&mut ctx, index as usize + 1, &mut tracker, 120, 3).await;
+                assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+                assert!(!ctx.is_recovery_active());
+            }
+        }
+        assert_eq!(tracker.max_low_signal_count(), 1);
+        let outcome = super::handle_turn_balancer(&mut ctx, 6, &mut tracker, 120, 3).await;
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        assert!(ctx.is_recovery_active());
+        assert!(tracker.planning_low_signal_synthesis_triggered);
+        assert!(ctx.working_history.iter().any(|message| {
+            let text = message.content.as_text();
+            text.contains("<proposed_plan>") && text.contains("Action -> files")
+        }));
+    }
+
+    #[tokio::test]
     async fn planning_listing_triplet_stays_below_early_recovery() {
         // Planning owns dedicated convergence guards (6/10 low-signal, 12-step
         // nav synthesis), so three successful same-base listings are legitimate
@@ -1239,6 +1311,7 @@ mod tests {
                 .iter()
                 .any(|message| { message.content.as_text().contains("Navigation loop detected") })
         );
+        assert_recovery_expires_at_fresh_turn(ctx.working_history);
         assert!(ctx.consume_recovery_pass());
 
         let recovery_outcome = ctx
@@ -1322,6 +1395,7 @@ mod tests {
                 .as_text()
                 .contains("Repeated low-signal navigation calls reached the per-turn fast-path cap")
         }));
+        assert_recovery_expires_at_fresh_turn(ctx.working_history);
     }
 
     #[tokio::test]
@@ -1486,6 +1560,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retained_search_results_converge_before_the_loop_budget() {
+        let mut backing = TestTurnProcessingBacking::new(32).await;
+        let mut ctx = backing.turn_processing_context();
+        let mut tracker = LoopTracker::new();
+        let hit = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: json!({"results":[{"result_type":"text","path":"README.md","line":10,"snippet":"## Overview"}]}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+        });
+        for step in 0..4 {
+            update_repetition_tracker(
+                &mut tracker,
+                &hit,
+                tool_names::CODE_SEARCH,
+                &json!({"query":format!("query{step}"),"path":"README.md"}),
+            );
+            let outcome = super::handle_turn_balancer(&mut ctx, step + 1, &mut tracker, 60, 3).await;
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+            assert_eq!(ctx.is_recovery_active(), step == 3);
+        }
+        assert!(ctx.recovery_reason().unwrap().contains("low-signal"));
+        assert!(!tracker.verification_is_pending());
+        assert_eq!(tracker.fix_edits_remaining, 0);
+    }
+
+    #[tokio::test]
     async fn execution_total_low_signal_guard_trips_at_threshold() {
         // Diverse empty searches (a new query each time) never trip the
         // per-family fast-path; the execution-mode total guard converges the
@@ -1523,6 +1624,7 @@ mod tests {
         assert!(ctx.is_recovery_active());
         let reason = ctx.recovery_reason().unwrap_or_default();
         assert!(reason.contains("Diverse low-signal navigation reached 12"));
+        assert_recovery_expires_at_fresh_turn(ctx.working_history);
     }
 
     #[tokio::test]

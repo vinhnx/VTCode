@@ -28,8 +28,11 @@ baseline_cold_source = baseline.get("cold_startup_source", "unknown")
 current_cold_source = current.get("cold_startup_source", "unknown")
 baseline_interactive_source = baseline.get("interactive_first_render_source", "unknown")
 current_interactive_source = current.get("interactive_first_render_source", "unknown")
+baseline_environment = baseline.get("startup_environment", "unknown")
+current_environment = current.get("startup_environment", "unknown")
 
 keys = [
+    "release_build_ms",
     "cargo_check_ms",
     "tool_pipeline_bench_ms",
     "agent_harness_bench_ms",
@@ -50,7 +53,12 @@ for key in keys:
         pct = 0.0
     else:
         pct = ((float(c) - float(b)) / float(b)) * 100.0
-    direction = "faster" if pct < 0 else "slower" if pct > 0 else "no change"
+    if key in {"release_build_ms", "cargo_check_ms", "tool_pipeline_bench_ms", "agent_harness_bench_ms"}:
+        direction = "command wall time (includes build/setup)"
+    elif key == "release_binary_bytes":
+        direction = "smaller" if pct < 0 else "larger" if pct > 0 else "no change"
+    else:
+        direction = "faster" if pct < 0 else "slower" if pct > 0 else "no change"
     rows.append((key, b, c, pct, direction))
 
 lines = [
@@ -66,6 +74,8 @@ lines = [
     f"Current cold startup source: `{current_cold_source}`",
     f"Baseline interactive source: `{baseline_interactive_source}`",
     f"Current interactive source: `{current_interactive_source}`",
+    f"Baseline startup environment: `{baseline_environment}`",
+    f"Current startup environment: `{current_environment}`",
     "",
     "| Metric | Baseline | Current | Delta | Interpretation |",
     "|---|---:|---:|---:|---|",
@@ -104,6 +114,9 @@ if baseline_interactive_source != current_interactive_source:
             "> Warning: interactive sources differ, so `interactive_first_render_ms` is not directly comparable.",
         ]
     )
+
+if baseline_environment != current_environment:
+    lines.extend(["", "> Warning: startup environments differ; historical startup measurements may not be comparable."])
 
 out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print("\n".join(lines))

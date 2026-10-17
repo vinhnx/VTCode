@@ -355,18 +355,11 @@ pub(crate) fn handle_history_picker_key(
 ///
 /// Returns strings like `"just now"`, `"5m ago"`, `"3h ago"`, `"2d ago"`.
 fn format_time_ago(elapsed: Duration) -> String {
-    if elapsed < Duration::zero() {
-        return "just now".to_string();
-    }
     let seconds = elapsed.num_seconds();
     if seconds < 60 {
         "just now".to_string()
-    } else if seconds < 3600 {
-        format!("{}m ago", seconds / 60)
-    } else if seconds < 86400 {
-        format!("{}h ago", seconds / 3600)
     } else {
-        format!("{}d ago", seconds / 86400)
+        format!("{} ago", vtcode_commons::formatting::humanize_duration_compact(seconds as u64))
     }
 }
 

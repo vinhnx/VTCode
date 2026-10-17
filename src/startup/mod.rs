@@ -26,7 +26,7 @@ use vtcode_config::workspace_env::read_workspace_env_value;
 use vtcode_config::{OpenAIPreferredMethod, PromptCacheRetention};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::models::{Provider, ProviderModelSupport, model_catalog_entry};
+use vtcode_core::config::models::{Provider, model_catalog_entry};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::config::validator::{check_openai_hosted_shell_compat, check_prompt_cache_retention_compat};
 use vtcode_core::copilot::{CopilotAuthStatusKind, probe_auth_status};
@@ -87,6 +87,20 @@ pub(crate) enum StartupCommandKind {
     CommandOwned,
     /// Unknown commands retain the conservative historical startup behavior.
     Conservative,
+}
+
+/// Whether provider auth may be missing for this invocation.
+///
+/// Interactive and ACP sessions resolve auth later. `--print` with empty text
+/// and a TTY stdin cannot call the model (no piped prompt), so auth is
+/// irrelevant and `build_print_prompt` fails with "No prompt provided".
+/// A real `--print` prompt (inline or piped) still requires credentials.
+fn allow_missing_provider_auth_for(print: Option<&str>, empty_print_on_tty: bool, command: Option<&Commands>) -> bool {
+    let no_command = command.is_none() || matches!(command, Some(Commands::AgentClientProtocol { .. }));
+    if !no_command {
+        return false;
+    }
+    print.is_none() || empty_print_on_tty
 }
 
 /// Central startup policy for one parsed CLI invocation.
@@ -158,8 +172,21 @@ impl StartupPolicy {
             }
         };
 
-        let allow_missing_provider_auth = args.print.is_none()
-            && (args.command.is_none() || matches!(args.command, Some(Commands::AgentClientProtocol { .. })));
+        // `--print` with empty text and a TTY stdin cannot call the model (no
+        // piped prompt): it will fail in `build_print_prompt` with "No prompt
+        // provided" before any LLM call. Requiring provider auth first turns
+        // that into a misleading "Authentication not found". Piped stdin may
+        // still carry a prompt, so only the TTY case skips auth.
+        let print_has_empty_prompt = args.print.as_ref().is_some_and(|prompt| prompt.trim().is_empty());
+        let stdin_is_tty = {
+            use vtcode_core::utils::tty::TtyExt;
+            std::io::stdin().is_tty_ext()
+        };
+        let allow_missing_provider_auth = allow_missing_provider_auth_for(
+            args.print.as_deref(),
+            print_has_empty_prompt && stdin_is_tty,
+            args.command.as_ref(),
+        );
 
         Self { kind, allow_missing_provider_auth }
     }
@@ -593,7 +620,15 @@ async fn persist_runtime_selection(
     config.agent.provider = selection.provider.clone();
     config.agent.default_model = selection.model.clone();
     config.agent.api_key_env = selection.api_key_env.clone();
-    if !selection.provider.eq_ignore_ascii_case("openai") || !Provider::OpenAI.supports_service_tier(&selection.model) {
+    let tier_supported = selection
+        .provider
+        .parse::<Provider>()
+        .map(|provider| {
+            use vtcode_core::config::models::ProviderModelSupport;
+            provider.supports_service_tier(&selection.model)
+        })
+        .unwrap_or(false);
+    if !tier_supported {
         config.provider.openai.service_tier = None;
     }
 
@@ -1062,6 +1097,21 @@ mod validation_tests {
 
         let ask = command_startup_policy(&Cli::parse_from(["vtcode", "ask", "hello"]));
         assert!(!ask.allow_missing_provider_auth());
+    }
+
+    #[test]
+    fn startup_policy_allows_missing_auth_for_empty_print_prompt() {
+        // Empty `--print` on a TTY cannot call the model: "No prompt provided"
+        // is the right error, not an auth failure.
+        assert!(allow_missing_provider_auth_for(Some(""), true, None));
+        assert!(allow_missing_provider_auth_for(Some("   "), true, None));
+        // Piped stdin may carry a prompt — require auth.
+        assert!(!allow_missing_provider_auth_for(Some(""), false, None));
+        // A real prompt always requires credentials (empty_print_on_tty is
+        // false whenever the inline text is non-empty).
+        assert!(!allow_missing_provider_auth_for(Some("hello"), false, None));
+        // Interactive (no --print) resolves auth later.
+        assert!(allow_missing_provider_auth_for(None, false, None));
     }
 
     #[test]

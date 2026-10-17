@@ -204,6 +204,38 @@ impl ProviderBuildProvider<OpenAIProviderConfig> for OpenAIProviderBuild {
     }
 }
 
+/// Build implementation for the OpenRouter provider with attribution config handling.
+pub struct OpenRouterProviderBuild;
+
+impl ProviderBuildProvider<OpenRouterProviderConfig> for OpenRouterProviderBuild {
+    fn build_provider(config: FactoryProviderConfig) -> Box<dyn LLMProvider> {
+        let FactoryProviderConfig {
+            api_key,
+            openai_chatgpt_auth: _,
+            base_url,
+            model,
+            prompt_cache,
+            timeouts,
+            openai: _,
+            anthropic,
+            openrouter,
+            model_behavior,
+            ..
+        } = config;
+
+        Box::new(OpenRouterProvider::from_config_with_attribution(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+            timeouts,
+            anthropic,
+            model_behavior,
+            openrouter,
+        ))
+    }
+}
+
 /// Build implementation for the GitHub Copilot provider.
 pub struct CopilotProviderBuild;
 
@@ -251,7 +283,6 @@ impl_standard_provider_constructor!(
     DeepSeekProvider,
     MetaProvider,
     MistralProvider,
-    OpenRouterProvider,
     OpenResponsesProvider,
     MoonshotProvider,
     OllamaProvider,
@@ -308,7 +339,7 @@ crate::delegate_components!(MinimaxProviderConfig {
 });
 crate::delegate_components!(OpenRouterProviderConfig {
     ProviderMetadataComponent => OpenRouterProviderConfig,
-    ProviderBuildComponent => StandardProviderBuild<OpenRouterProvider>,
+    ProviderBuildComponent => OpenRouterProviderBuild,
 });
 crate::delegate_components!(OpenResponsesProviderConfig {
     ProviderMetadataComponent => OpenResponsesProviderConfig,
@@ -447,6 +478,7 @@ mod tests {
             timeouts: None,
             openai: None,
             anthropic: None,
+            openrouter: None,
             model_behavior: None,
             workspace_root: None,
         });
@@ -466,6 +498,7 @@ mod tests {
             timeouts: None,
             openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
             anthropic: Some(AnthropicConfig::default()),
+            openrouter: None,
             model_behavior: None,
             workspace_root: None,
         });
@@ -488,6 +521,7 @@ mod tests {
                 count_tokens_enabled: true,
                 ..AnthropicConfig::default()
             }),
+            openrouter: None,
             model_behavior: None,
             workspace_root: None,
         });

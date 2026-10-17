@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
-pub const NEXT_CONTINUE_PROMPT: &str = "Reuse `next_continue_args`.";
-pub const NEXT_READ_PROMPT: &str = "Reuse `next_read_args`.";
+pub const NEXT_CONTINUE_PROMPT: &str = "Still running — check again for more output.";
+pub const NEXT_READ_PROMPT: &str = "More output available — read the next chunk.";
 pub const DEFAULT_NEXT_READ_LIMIT: usize = 40;
 
 const SESSION_ID_KEY: &str = "session_id";

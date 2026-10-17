@@ -1,12 +1,13 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 
-use vtcode_ui::tui::app::{InlineHandle, SubmittedInput};
+use vtcode_ui::tui::app::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, SubmittedInput};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct QueuedInput {
     pub(crate) input: SubmittedInput,
     pub(crate) primary_agent: Option<String>,
-    /// Only Ctrl+Enter submissions are batchable; plain-Enter slash commands
+    /// Only Ctrl+Enter submissions are batchable; plain-Enter submissions
     /// queued while busy must dispatch as their own turn.
     pub(crate) batchable: bool,
 }
@@ -28,10 +29,25 @@ impl QueuedInput {
     }
 }
 
+/// Soft cap on concurrently queued user inputs. Under a paste-storm the
+/// oldest entry is dropped once the cap is exceeded so the authoritative
+/// VecDeque cannot grow without bound; the newest submissions are kept.
+/// Drops are coalesced into one visible warning per `flush_sync` so the
+/// discard is never silent.
+pub(crate) const MAX_QUEUED_INPUTS: usize = 256;
+
 pub(crate) struct InlineQueueState<'a> {
     handle: &'a InlineHandle,
     queued_inputs: &'a mut VecDeque<QueuedInput>,
     prefer_latest_once: &'a mut bool,
+    /// When true, the TUI overlay is stale relative to `queued_inputs` and
+    /// needs `flush_sync`. Deferred so a drain of N QueueSubmit events does
+    /// not publish N partial snapshots that make optimistic UI entries
+    /// flicker out of existence between acknowledgements.
+    sync_dirty: bool,
+    /// Oldest inputs discarded by the soft cap since the last warning.
+    /// Coalesced so a paste-storm emits one notice, not one per drop.
+    dropped_since_notice: usize,
 }
 
 impl<'a> InlineQueueState<'a> {
@@ -40,12 +56,24 @@ impl<'a> InlineQueueState<'a> {
         queued_inputs: &'a mut VecDeque<QueuedInput>,
         prefer_latest_once: &'a mut bool,
     ) -> Self {
-        Self { handle, queued_inputs, prefer_latest_once }
+        Self {
+            handle,
+            queued_inputs,
+            prefer_latest_once,
+            sync_dirty: false,
+            dropped_since_notice: 0,
+        }
     }
 
     pub(crate) fn push(&mut self, input: SubmittedInput, primary_agent: Option<String>) {
         self.queued_inputs.push_back(QueuedInput::new(input, primary_agent));
-        self.sync_handle_queue();
+        // Enforce a soft FIFO cap: drop the oldest only after the newest has
+        // been accepted so rapid influx cannot grow the queue without bound.
+        while self.queued_inputs.len() > MAX_QUEUED_INPUTS {
+            self.queued_inputs.pop_front();
+            self.dropped_since_notice += 1;
+        }
+        self.mark_sync_dirty();
     }
 
     pub(crate) fn take_next_submission(&mut self) -> Option<QueuedInput> {
@@ -55,7 +83,7 @@ impl<'a> InlineQueueState<'a> {
         } else {
             self.queued_inputs.pop_front()
         };
-        self.sync_handle_queue();
+        self.mark_sync_dirty();
         result
     }
 
@@ -81,7 +109,7 @@ impl<'a> InlineQueueState<'a> {
                 text_bytes = batch.input.text.len(),
                 "queue submission drained (single, non-batchable)"
             );
-            self.sync_handle_queue();
+            self.mark_sync_dirty();
             return Some(batch);
         }
         let primary_agent = batch.primary_agent.clone();
@@ -119,7 +147,7 @@ impl<'a> InlineQueueState<'a> {
             text_bytes = batch.input.text.len(),
             "queue submission drained"
         );
-        self.sync_handle_queue();
+        self.mark_sync_dirty();
         Some(batch)
     }
 
@@ -132,7 +160,7 @@ impl<'a> InlineQueueState<'a> {
         if result.is_some() {
             *self.prefer_latest_once = false;
         }
-        self.sync_handle_queue();
+        self.mark_sync_dirty();
         result
     }
 
@@ -143,7 +171,7 @@ impl<'a> InlineQueueState<'a> {
     pub(crate) fn clear(&mut self) {
         self.queued_inputs.clear();
         *self.prefer_latest_once = false;
-        self.sync_handle_queue();
+        self.mark_sync_dirty();
     }
 
     /// Preserve queued inputs across an interrupt: reset any one-shot
@@ -152,8 +180,46 @@ impl<'a> InlineQueueState<'a> {
     /// silently clearing the queue.
     pub(crate) fn preserve_on_interrupt(&mut self) -> usize {
         *self.prefer_latest_once = false;
-        self.sync_handle_queue();
+        self.mark_sync_dirty();
         self.queued_inputs.len()
+    }
+
+    /// Publish the authoritative FIFO to the TUI overlay if it is stale.
+    ///
+    /// Call this once after a drain batch (and before dispatching a queued
+    /// submission) so the overlay sees one consistent snapshot instead of
+    /// N partial ones that race against optimistic UI entries. Also emits one
+    /// coalesced warning when the soft cap discarded older inputs.
+    pub(crate) fn flush_sync(&mut self) {
+        self.notice_dropped_inputs();
+        if !self.sync_dirty {
+            return;
+        }
+        self.sync_dirty = false;
+        self.sync_handle_queue();
+    }
+
+    fn notice_dropped_inputs(&mut self) {
+        if self.dropped_since_notice == 0 {
+            return;
+        }
+        let dropped = self.dropped_since_notice;
+        self.dropped_since_notice = 0;
+        let message = format!(
+            "Queue full (cap {MAX_QUEUED_INPUTS}): dropped {dropped} older queued input(s); kept the newest {kept}.",
+            kept = self.queued_inputs.len()
+        );
+        self.handle.append_line(
+            InlineMessageKind::Warning,
+            vec![InlineSegment {
+                text: message,
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+
+    fn mark_sync_dirty(&mut self) {
+        self.sync_dirty = true;
     }
 
     fn sync_handle_queue(&self) {
@@ -422,5 +488,108 @@ mod tests {
         assert_eq!(queue.take_next_submission().map(|q| q.input.text).as_deref(), Some("first"));
         assert_eq!(queue.take_next_submission().map(|q| q.input.text).as_deref(), Some("second"));
         assert!(queue.take_next_submission().is_none());
+    }
+
+    #[test]
+    fn flush_sync_publishes_one_snapshot_after_drain() {
+        use vtcode_ui::tui::app::InlineCommand;
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut queued_inputs = VecDeque::new();
+        let mut prefer_latest_once = false;
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+        // Rapid influx: three pushes, no intermediate overlay publishes.
+        queue.push("first".into(), None);
+        queue.push("second".into(), None);
+        queue.push("third".into(), None);
+        assert!(rx.try_recv().is_err(), "push must not publish partial overlay snapshots");
+
+        queue.flush_sync();
+        match rx.try_recv() {
+            Ok(InlineCommand::SetQueuedInputs { entries }) => {
+                assert_eq!(entries, vec!["first".to_string(), "second".to_string(), "third".to_string()]);
+            }
+            Ok(_) => panic!("expected SetQueuedInputs snapshot"),
+            Err(err) => panic!("expected one SetQueuedInputs snapshot, got {err:?}"),
+        }
+        assert!(rx.try_recv().is_err(), "flush must publish exactly one snapshot");
+    }
+
+    #[test]
+    fn push_caps_fifo_and_keeps_newest() {
+        use vtcode_ui::tui::app::InlineCommand;
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut queued_inputs = VecDeque::new();
+        let mut prefer_latest_once = false;
+
+        {
+            let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+            for index in 0..(MAX_QUEUED_INPUTS + 10) {
+                queue.push(format!("msg {index}").into(), None);
+            }
+            queue.flush_sync();
+        }
+        assert_eq!(queued_inputs.len(), MAX_QUEUED_INPUTS);
+        assert_eq!(queued_inputs.front().map(|q| q.input.text.as_str()), Some("msg 10"));
+        assert_eq!(
+            queued_inputs.back().map(|q| q.input.text.as_str()),
+            Some(format!("msg {}", MAX_QUEUED_INPUTS + 9).as_str())
+        );
+
+        // Drops must be visible: one coalesced warning plus one overlay snapshot.
+        let mut warnings = Vec::new();
+        let mut snapshots = 0usize;
+        while let Ok(command) = rx.try_recv() {
+            match command {
+                InlineCommand::AppendLine { kind: InlineMessageKind::Warning, segments } => {
+                    warnings.push(segments.into_iter().map(|s| s.text).collect::<String>());
+                }
+                InlineCommand::SetQueuedInputs { .. } => snapshots += 1,
+                _ => {}
+            }
+        }
+        assert_eq!(snapshots, 1, "flush must publish one overlay snapshot");
+        assert_eq!(warnings.len(), 1, "dropped inputs must emit exactly one coalesced warning");
+        assert!(
+            warnings[0].contains("dropped 10 older queued input(s)"),
+            "warning must name the drop count: {}",
+            warnings[0]
+        );
+        assert!(
+            warnings[0].contains(&format!("cap {MAX_QUEUED_INPUTS}")),
+            "warning must name the cap: {}",
+            warnings[0]
+        );
+    }
+
+    #[test]
+    fn flush_without_drops_emits_no_warning() {
+        use vtcode_ui::tui::app::InlineCommand;
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let mut queued_inputs = VecDeque::new();
+        let mut prefer_latest_once = false;
+        {
+            let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+            queue.push("only".into(), None);
+            queue.flush_sync();
+        }
+
+        while let Ok(command) = rx.try_recv() {
+            match command {
+                InlineCommand::AppendLine { kind, .. } => {
+                    panic!("no warning expected without drops, got {kind:?}");
+                }
+                InlineCommand::SetQueuedInputs { entries } => {
+                    assert_eq!(entries, vec!["only".to_string()]);
+                }
+                _ => {}
+            }
+        }
     }
 }

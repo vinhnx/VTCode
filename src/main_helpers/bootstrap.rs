@@ -9,15 +9,8 @@ use vtcode_core::cli::args::Cli;
 
 use crate::startup::StartupContext;
 
-fn env_flag_enabled(var_name: &str) -> bool {
-    std::env::var(var_name)
-        .ok()
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on" | "debug"))
-        .unwrap_or(false)
-}
-
 pub(crate) fn debug_runtime_flag_enabled(debug_arg_enabled: bool, env_var: &str) -> bool {
-    cfg!(debug_assertions) && (debug_arg_enabled || env_flag_enabled(env_var))
+    cfg!(debug_assertions) && (debug_arg_enabled || vtcode_commons::utils::env_flag_enabled(env_var))
 }
 
 pub(crate) fn resolve_runtime_color_policy(args: &Cli) -> ColorOutputPolicy {
@@ -73,7 +66,7 @@ pub(crate) fn build_augmented_cli_command() -> clap::Command {
     };
     cmd = cmd.long_version(version_leak);
 
-    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections\n  /status   - Show current configuration\n  /checkup  - Diagnose setup & clean the workspace (alias: /doctor)\n  /update   - Check for VT Code updates, or run `vtcode update` from the CLI (use --list, --pin, --channel)\n  /plan     - Start or finish the Planning workflow\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands\n\nTips:\n  Mistyped commands show suggestions (e.g., vtcode ch -> chat).\n  Use --continue to resume the most recent session.\n  Use --resume to pick a session interactively.";
+    let after_help = "\nSlash commands (type / in chat):\n  /init     - Guided AGENTS.md + workspace setup\n  /config   - Browse settings sections and workspace panels (memory, model, checkup, tasks, jobs, log, ...)\n  /status   - Show current configuration\n  /model    - Switch model and reasoning effort\n  /update   - Check for VT Code updates, or run `vtcode update` from the CLI (use --list, --pin, --channel)\n  /plan     - Start or finish the Planning workflow\n  /theme    - Switch UI theme\n  /title    - Configure terminal title items\n  /history  - Open command history picker\n  /help     - Show all slash commands\n\nTips:\n  Mistyped commands show suggestions (e.g., vtcode ch -> chat).\n  Use --continue to resume the most recent session.\n  Use --resume to pick a session interactively.";
     cmd.after_help(after_help)
 }
 

@@ -67,6 +67,14 @@ impl ToolAssembly {
     }
 
     pub(super) fn resolve_public_tool(&self, requested_name: &str) -> Result<PublicToolResolution, ToolCallError> {
+        // Match the first candidate before allocating fallback name variants.
+        // Candidate construction unwraps once at entry and again on insertion.
+        let first_candidate = strip_wrapping_quotes(strip_wrapping_quotes(requested_name));
+        if !first_candidate.is_empty()
+            && let Some(resolution) = self.public_routes.get(first_candidate)
+        {
+            return Ok(resolution.clone());
+        }
         public_tool_name_candidates(requested_name)
             .into_iter()
             .find_map(|candidate| self.public_routes.get(&candidate).cloned())
@@ -120,22 +128,24 @@ fn build_public_routes(catalog: &SessionToolCatalog) -> FxHashMap<String, Public
 }
 
 fn is_removed_public_tool_name(name: &str) -> bool {
-    matches!(
-        name.trim().to_ascii_lowercase().as_str(),
-        tools::UNIFIED_EXEC
-            | tools::UNIFIED_FILE
-            | tools::UNIFIED_SEARCH
-            | tools::LIST_FILES
-            | tools::READ_FILE
-            | tools::WRITE_FILE
-            | tools::EDIT_FILE
-            | tools::CREATE_FILE
-            | tools::DELETE_FILE
-            | tools::MOVE_FILE
-            | tools::COPY_FILE
-            | tools::SEARCH_REPLACE
-            | tools::FILE_OP
-    )
+    let name = name.trim();
+    [
+        tools::UNIFIED_EXEC,
+        tools::UNIFIED_FILE,
+        tools::UNIFIED_SEARCH,
+        tools::LIST_FILES,
+        tools::READ_FILE,
+        tools::WRITE_FILE,
+        tools::EDIT_FILE,
+        tools::CREATE_FILE,
+        tools::DELETE_FILE,
+        tools::MOVE_FILE,
+        tools::COPY_FILE,
+        tools::SEARCH_REPLACE,
+        tools::FILE_OP,
+    ]
+    .iter()
+    .any(|removed| removed.eq_ignore_ascii_case(name))
 }
 
 fn strip_wrapping_quotes(value: &str) -> &str {
@@ -198,6 +208,131 @@ mod tests {
         _args: Value,
     ) -> BoxFuture<'a, anyhow::Result<Value>> {
         Box::pin(async move { Ok(json!({"success": true})) })
+    }
+
+    #[test]
+    fn public_lookup_preserves_first_candidate_precedence_and_permissions() {
+        let literal = ToolRegistration::new("literal_tool", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Literal aliases")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Prompt)
+            .with_aliases([
+                "Read action",
+                "read_action",
+                "functions.fallback_tool",
+                "left<|channel|>right",
+                "prefix:suffix",
+            ]);
+        let fallback = ToolRegistration::new("fallback_tool", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Fallback aliases")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Deny)
+            .with_aliases(["read action", "right", "suffix", r#""literal_tool""#]);
+        let assembly = ToolAssembly::from_registrations(vec![literal, fallback]);
+
+        for name in [
+            "literal_tool",
+            " \tliteral_tool\u{2003}",
+            "\"literal_tool\"",
+            "'literal_tool'",
+            "`literal_tool`",
+            r#"`"literal_tool"`"#,
+            "Read action",
+            "read_action",
+            "functions.fallback_tool",
+            "left<|channel|>right",
+            "prefix:suffix",
+        ] {
+            let resolution = assembly.resolve_public_tool(name).unwrap();
+            assert_eq!(resolution.registration_name(), "literal_tool", "{name}");
+            assert_eq!(resolution.default_permission(), &ToolPolicy::Prompt, "{name}");
+        }
+        for name in [
+            "fallback_tool",
+            "READ ACTION",
+            "functions.FALLBACK_TOOL",
+            "unknown<|channel|>right",
+            "unknown:suffix",
+            "right",
+            "suffix",
+        ] {
+            let resolution = assembly.resolve_public_tool(name).unwrap();
+            assert_eq!(resolution.registration_name(), "fallback_tool", "{name}");
+            assert_eq!(resolution.default_permission(), &ToolPolicy::Deny, "{name}");
+        }
+        for name in ["", " \t\u{2003}", "functions.not_registered", "READ ACTİON"] {
+            let error = assembly.resolve_public_tool(name).unwrap_err();
+            assert!(error.to_string().contains(&format!("Unknown tool: {name}")), "{error}");
+        }
+    }
+
+    #[test]
+    fn removed_public_names_preserve_ascii_case_and_whitespace_boundaries() {
+        for name in [
+            "command_session_internal",
+            "file_operation_internal",
+            "search_dispatch_internal",
+            "list_files",
+            "read_file",
+            "write_file",
+            "edit_file",
+            "create_file",
+            "delete_file",
+            "move_file",
+            "copy_file",
+            "search_replace",
+            "file_op",
+        ] {
+            assert!(is_removed_public_tool_name(name), "{name}");
+            let padded_uppercase = format!("\u{2003}{}\t", name.to_ascii_uppercase());
+            assert!(is_removed_public_tool_name(&padded_uppercase), "{padded_uppercase:?}");
+        }
+        for name in [
+            "",
+            "read_file_extra",
+            "files_read",
+            "'read_file'",
+            "read-file",
+            "unifiedexec",
+            "read_fİle",
+            "file_ops",
+            "unified_exec",
+            "unified_file",
+            "unified_search",
+        ] {
+            assert!(!is_removed_public_tool_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn public_lookup_keeps_padded_mixed_case_retired_aliases_hidden() {
+        let registration = ToolRegistration::new("visible_tool", CapabilityLevel::Bash, true, noop_executor)
+            .with_description("Visible tool with retired aliases")
+            .with_parameter_schema(json!({"type": "object"}))
+            .with_permission(ToolPolicy::Allow)
+            .with_aliases([
+                "  READ_FILE  ",
+                "Edit_File",
+                "file_operation_internal",
+                " FILE_OP ",
+                "custom_alias",
+            ]);
+        let assembly = ToolAssembly::from_registrations(vec![registration]);
+        for name in [
+            "  READ_FILE  ",
+            "READ_FILE",
+            "read_file",
+            "Edit_File",
+            "edit_file",
+            "file_operation_internal",
+            " FILE_OP ",
+            "file_op",
+        ] {
+            assert!(assembly.resolve_public_tool(name).is_err(), "{name}");
+        }
+        let resolution = assembly.resolve_public_tool("custom_alias").unwrap();
+        assert_eq!(resolution.registration_name(), "visible_tool");
+        assert_eq!(resolution.default_permission(), &ToolPolicy::Allow);
     }
 
     #[test]

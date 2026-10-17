@@ -45,7 +45,11 @@ const ACTION_PREFIX_ARRAY_ADD: &str = "settings:array_add:";
 const ACTION_PREFIX_ARRAY_POP: &str = "settings:array_pop:";
 const ACTION_PREFIX_SET: &str = "settings:set:";
 pub(crate) const ACTION_PREFIX_EDIT: &str = "settings:edit:";
-const OPTIONAL_DOC_FIELDS: &[&str] = &["provider.anthropic.thinking_display", "provider.openai.service_tier"];
+const OPTIONAL_DOC_FIELDS: &[&str] = &[
+    "provider.anthropic.thinking_display",
+    "provider.anthropic.speed",
+    "provider.openai.service_tier",
+];
 pub(crate) const SETTINGS_MODEL_CONFIG_PATH: &str = "model_config";
 pub(crate) const SETTINGS_MODEL_CONFIG_MAIN_PATH: &str = "model_config.main";
 pub(crate) const ACTION_PICK_MAIN_MODEL: &str = "settings:pick_main_model";
@@ -70,6 +74,8 @@ pub(crate) struct SettingsPaletteState {
     pub(crate) selection_by_view: BTreeMap<String, InlineListSelection>,
     /// Path currently being edited in the settings value wizard.
     pub(crate) pending_edit_path: Option<String>,
+    /// Last apply/save feedback shown as the modal status strip.
+    pub(crate) status: Option<vtcode_commons::ui_protocol::InlineStatus>,
 }
 
 impl SettingsPaletteState {
@@ -91,6 +97,8 @@ impl SettingsPaletteState {
 pub(crate) struct SettingsApplyOutcome {
     pub(crate) message: Option<String>,
     pub(crate) saved: bool,
+    /// Tone for the in-modal status strip (`None` maps to Success when saved).
+    pub(crate) tone: Option<vtcode_commons::ui_protocol::InlineTone>,
 }
 
 pub(crate) fn create_settings_palette_state(
@@ -121,6 +129,7 @@ pub(crate) fn create_settings_palette_state(
         last_selection: None,
         selection_by_view: BTreeMap::new(),
         pending_edit_path: None,
+        status: None,
     })
 }
 
@@ -144,6 +153,7 @@ pub(crate) fn apply_string_edit(
     Ok(SettingsApplyOutcome {
         message: Some(format!("Updated {}.", change_title(path))),
         saved: true,
+        tone: Some(vtcode_commons::ui_protocol::InlineTone::Success),
     })
 }
 
@@ -162,7 +172,17 @@ pub(crate) fn show_settings_palette(
     }
 
     let selected = preferred_settings_selection(state, &items, selected);
-    renderer.show_list_modal(SETTINGS_TITLE, lines, items, selected, Some(settings_search_config(state)));
+    // ConfigAction lists are FixedComfortable and render the shared
+    // navigation hint; an explicit footer is ignored.
+    renderer.show_list_modal_with_status(
+        SETTINGS_TITLE,
+        lines,
+        items,
+        selected,
+        Some(settings_search_config(state)),
+        None,
+        state.status.clone(),
+    );
 
     Ok(true)
 }
@@ -196,7 +216,8 @@ fn preferred_settings_selection(
     selected: Option<InlineListSelection>,
 ) -> Option<InlineListSelection> {
     let selected = if state.view_path.as_deref() == Some(RESET_CONFIRMATION_VIEW) {
-        Some(InlineListSelection::ConfigAction(ACTION_RESET_CONFIRM.to_string()))
+        // Safer default: Keep settings is preselected on the reset confirm view.
+        Some(InlineListSelection::ConfigAction(ACTION_RESET_CANCEL.to_string()))
     } else if matches!(
         selected.as_ref(),
         Some(InlineListSelection::ConfigAction(action)) if action == ACTION_BACK
@@ -259,22 +280,22 @@ fn short_display_path(path: &Path, workspace: &Path) -> String {
 }
 
 fn settings_header_lines(state: &SettingsPaletteState) -> Vec<String> {
-    let mut lines = vec![format!(
-        "Write target: {}.",
-        short_display_path(&state.source_path, &state.workspace)
-    )];
-    if let Some(label) = state.source_label.as_deref() {
-        lines.push(label.to_string());
-    }
+    let write_target = format!("Writing to {}", short_display_path(&state.source_path, &state.workspace));
 
     if state.view_path.as_deref() == Some(RESET_CONFIRMATION_VIEW) {
-        lines.push("Settings > Reset.".to_string());
-        lines.push("This clears every setting in the target layer. Credentials are preserved.".to_string());
+        let mut lines = vec![
+            "Settings › Reset.".to_string(),
+            "Clears every setting in this file. Credentials are kept.".to_string(),
+            write_target,
+        ];
+        if let Some(label) = state.source_label.as_deref() {
+            lines.push(label.to_string());
+        }
         return lines;
     }
     if let Some(view_path) = state.view_path.as_deref() {
         let (breadcrumb, mut detail) = settings_breadcrumb_and_detail(view_path);
-        lines.push(format!("{breadcrumb}."));
+        let mut lines = vec![format!("{breadcrumb}.")];
         if view_path == "permissions" {
             let counts = format_permission_summary(&state.draft);
             if detail.is_empty() {
@@ -287,26 +308,32 @@ fn settings_header_lines(state: &SettingsPaletteState) -> Vec<String> {
         if !detail.is_empty() {
             lines.push(detail);
         }
+        lines.push(write_target);
+        if let Some(label) = state.source_label.as_deref() {
+            lines.push(label.to_string());
+        }
         return lines;
     }
-    lines.push("Settings.".to_string());
-    lines.push("Choose a settings group to edit.".to_string());
+    let mut lines = vec!["Pick a group to edit.".to_string(), write_target];
+    if let Some(label) = state.source_label.as_deref() {
+        lines.push(label.to_string());
+    }
     lines
 }
 
 fn settings_breadcrumb_and_detail(view_path: &str) -> (String, String) {
     if view_path == SETTINGS_ADVANCED_VIEW_PATH {
         return (
-            "Settings > Advanced settings".to_string(),
+            "Settings › Advanced settings".to_string(),
             "Search the complete configuration by path, label, description, current value, or option.".to_string(),
         );
     }
     if let Some(path) = view_path.strip_prefix(SETTINGS_ADVANCED_NESTED_PREFIX) {
-        return (format!("Settings > Advanced settings > {path}"), "Editing a nested advanced setting.".to_string());
+        return (format!("Settings › Advanced settings › {path}"), "Editing a nested advanced setting.".to_string());
     }
     if let Some(path) = view_path.strip_prefix("advanced.") {
         return (
-            format!("Settings > Advanced settings > {path}"),
+            format!("Settings › Advanced settings › {path}"),
             "Editing a documented advanced setting.".to_string(),
         );
     }
@@ -315,21 +342,21 @@ fn settings_breadcrumb_and_detail(view_path: &str) -> (String, String) {
             let group = items::curated_group(group_id);
             return match group {
                 Some(group) => (
-                    format!("Settings > {} > {nested_path}", group.title),
+                    format!("Settings › {} › {nested_path}", group.title),
                     "Editing a setting in this group.".to_string(),
                 ),
-                None => (format!("Settings > {} > {nested_path}", humanize_identifier(group_id)), String::new()),
+                None => (format!("Settings › {} › {nested_path}", humanize_identifier(group_id)), String::new()),
             };
         }
         let group = items::curated_group(group_id);
         return match group {
-            Some(group) => (format!("Settings > {}", group.title), group.description.to_string()),
-            None => (format!("Settings > {}", humanize_identifier(group_id)), String::new()),
+            Some(group) => (format!("Settings › {}", group.title), group.description.to_string()),
+            None => (format!("Settings › {}", humanize_identifier(group_id)), String::new()),
         };
     }
 
     let heading = heading_for_path(view_path);
-    (format!("Settings > {}", heading.title), heading.summary.into_owned())
+    (format!("Settings › {}", heading.title), heading.summary.into_owned())
 }
 
 pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &str) -> Result<SettingsApplyOutcome> {
@@ -343,16 +370,21 @@ pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &s
         ACTION_RELOAD => {
             reload_state_from_disk(state)?;
             outcome.message = Some("Reloaded settings from disk.".to_string());
+            outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Success);
             return Ok(outcome);
         }
         ACTION_RESET => {
             state.view_path = Some(RESET_CONFIRMATION_VIEW.to_string());
-            outcome.message = Some("Confirm reset to clear all settings in the current write target.".to_string());
+            outcome.message = Some(
+                "Confirm reset: this clears every setting in the write target. Credentials are preserved.".to_string(),
+            );
+            outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Warning);
             return Ok(outcome);
         }
         ACTION_RESET_CANCEL => {
             state.view_path = None;
             outcome.message = Some("Configuration reset cancelled.".to_string());
+            outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Accent);
             return Ok(outcome);
         }
         ACTION_RESET_CONFIRM => {
@@ -367,6 +399,7 @@ pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &s
             state.view_path = None;
             state.source_label = None;
             outcome.saved = true;
+            outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Success);
             outcome.message =
                 Some(format!("Reset configuration at {}.", short_display_path(&response.path, &state.workspace)));
             return Ok(outcome);
@@ -395,6 +428,7 @@ pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &s
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_ADD) {
         mutate_draft_and_persist(state, path, |draft| add_array_item(draft, path))?;
         outcome.saved = true;
+        outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Success);
         outcome.message = Some(describe_array_change(path, true));
         return Ok(outcome);
     }
@@ -402,6 +436,7 @@ pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &s
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_POP) {
         mutate_draft_and_persist(state, path, |draft| pop_array_item(draft, path))?;
         outcome.saved = true;
+        outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Success);
         outcome.message = Some(describe_array_change(path, false));
         return Ok(outcome);
     }
@@ -422,6 +457,7 @@ pub(crate) fn apply_settings_action(state: &mut SettingsPaletteState, action: &s
 
         mutate_draft_and_persist(state, path, |draft| apply_scalar_operation(draft, path, operation))?;
         outcome.saved = true;
+        outcome.tone = Some(vtcode_commons::ui_protocol::InlineTone::Success);
         outcome.message = Some(describe_scalar_change(state, path, operation));
         return Ok(outcome);
     }
@@ -444,7 +480,7 @@ pub(crate) fn resolve_settings_view_path(path: &str) -> String {
 /// Human-readable label for a settings path, used in change feedback messages.
 ///
 /// For generic boolean leaf names (`enabled`, `show`, ...) the parent section is
-/// used instead so feedback reads naturally (e.g. "Disabled IDE Context" rather
+/// used instead so feedback reads naturally (e.g. "Disabled Todo Planning Mode" rather
 /// than "Disabled Enabled").
 fn change_title(path: &str) -> String {
     let last_segment = path
@@ -548,6 +584,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let root_selection = InlineListSelection::ConfigAction("settings:open:group:agent_automation".to_string());
         let nested_selection =
@@ -598,6 +635,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
 
@@ -630,6 +668,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
 
@@ -642,9 +681,14 @@ mod tests {
             item.selection,
             Some(InlineListSelection::ConfigAction("settings:set:ui.tool_display_mode:cycle".to_string()))
         );
-        assert_eq!(item.badge.as_deref(), Some("Pick"));
-        assert!(item.subtitle.as_deref().is_some_and(|subtitle| subtitle.contains("expanded")));
-        assert!(item.subtitle.as_deref().is_some_and(|subtitle| subtitle.contains("compact")));
+        assert_eq!(item.badge.as_deref(), None, "setting rows carry value, not action badges");
+        assert!(
+            item.value
+                .as_deref()
+                .is_some_and(|value| value.contains("compact") || value.contains("expanded")),
+            "live value should render in the value slot: {:?}",
+            item.value
+        );
     }
 
     #[test]
@@ -660,6 +704,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
 
         let outcome = apply_settings_action(&mut state, "settings:set:ui.tool_display_mode:cycle")
@@ -673,6 +718,53 @@ mod tests {
     }
 
     #[test]
+    fn decisions_probe_toggle_persists_reloads_and_survives_provider_changes() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source_path = temp.path().join("vtcode.toml");
+        let mut state = SettingsPaletteState {
+            workspace: temp.path().to_path_buf(),
+            source_path: source_path.clone(),
+            source_label: None,
+            draft: VTCodeConfig::default(),
+            view_path: Some("group:approvals_security".into()),
+            last_selection: None,
+            selection_by_view: BTreeMap::new(),
+            pending_edit_path: None,
+            status: None,
+        };
+        let draft = TomlValue::try_from(state.draft.clone()).expect("serialize config");
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.selection.as_ref()
+            == Some(&InlineListSelection::ConfigAction(
+                "settings:set:permissions.auto.use_decisions_probe:toggle".into()
+            ))));
+        assert!(
+            apply_settings_action(&mut state, "settings:set:permissions.auto.use_decisions_probe:toggle")
+                .expect("toggle")
+                .saved
+        );
+        assert!(state.draft.permissions.auto_permission.use_decisions_probe);
+        let persisted = std::fs::read_to_string(&source_path).expect("read config");
+        assert!(persisted.contains("use_decisions_probe = true"));
+        state.draft.permissions.auto_permission.use_decisions_probe = false;
+        reload_state_from_disk(&mut state).expect("reload settings");
+        assert!(state.draft.permissions.auto_permission.use_decisions_probe);
+        let mut reloaded: VTCodeConfig = toml::from_str(&persisted).expect("reload config");
+        for provider in ["anthropic", "openai"] {
+            reloaded.agent.provider = provider.into();
+            let roundtrip: VTCodeConfig =
+                toml::from_str(&toml::to_string(&reloaded).expect("serialize")).expect("reload");
+            assert!(roundtrip.permissions.auto_permission.use_decisions_probe);
+        }
+        assert!(
+            apply_settings_action(&mut state, "settings:set:permissions.auto.use_decisions_probe:toggle")
+                .expect("toggle off")
+                .saved
+        );
+        assert!(!state.draft.permissions.auto_permission.use_decisions_probe);
+    }
+
+    #[test]
     fn interface_terminal_group_exposes_copy_on_select_toggle() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
@@ -683,6 +775,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
 
@@ -696,7 +789,8 @@ mod tests {
                 })
             })
             .expect("copy on select entry in Interface & Terminal");
-        assert_eq!(item.badge.as_deref(), Some("On/Off"));
+        assert_eq!(item.badge.as_deref(), None, "boolean state lives in the value slot");
+        assert_eq!(item.kind, vtcode_commons::ui_protocol::InlineItemKind::Setting);
     }
 
     #[test]
@@ -712,6 +806,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         assert!(state.draft.ui.fullscreen.copy_on_select);
 
@@ -775,6 +870,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -791,15 +887,18 @@ mod tests {
                 "Interface & Terminal",
                 "Performance & Diagnostics",
                 "Advanced settings",
+                "Actions",
                 "Reload configuration",
                 "Reset configuration",
             ]
         );
-        assert!(items.iter().all(|item| item.selection.is_some()));
+        assert!(items.iter().all(|item| item.selection.is_some() || item.title == "Actions"));
         assert!(items.iter().all(|item| {
-            item.subtitle
-                .as_deref()
-                .is_some_and(|subtitle| subtitle.contains("editable setting"))
+            item.title == "Actions"
+                || item
+                    .subtitle
+                    .as_deref()
+                    .is_some_and(|subtitle| subtitle.contains("editable setting"))
                 || matches!(item.title.as_str(), "Advanced settings" | "Reload configuration" | "Reset configuration")
         }));
     }
@@ -815,6 +914,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft: TomlValue = toml::from_str(
             r#"
@@ -859,6 +959,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -877,6 +978,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft: TomlValue = toml::from_str(
             r#"
@@ -904,6 +1006,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -922,6 +1025,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -957,8 +1061,13 @@ mod tests {
         assert!(reparsed.mcp.allowlist.providers.contains_key("provider.with.dot"));
     }
 
-    #[test]
-    fn missing_service_tier_cycle_creates_value() {
+    /// Drive one `CycleNext` on `provider.openai.service_tier` from `preset` and
+    /// return the resulting tier. One helper covers the whole ring
+    /// (missing→flex→priority→ultrafast→flex) so each test only names its
+    /// fixture and oracle.
+    fn cycle_service_tier_from(
+        preset: Option<vtcode_config::OpenAIServiceTier>,
+    ) -> Option<vtcode_config::OpenAIServiceTier> {
         let mut state = SettingsPaletteState {
             workspace: PathBuf::from("."),
             source_path: PathBuf::from("vtcode.toml"),
@@ -968,36 +1077,45 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
-
-        mutate_draft(&mut state, |draft| {
-            apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
-        })
-        .expect("service tier should be inserted");
-
-        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Flex));
-    }
-
-    #[test]
-    fn service_tier_cycle_advances_from_flex_to_priority() {
-        let mut state = SettingsPaletteState {
-            workspace: PathBuf::from("."),
-            source_path: PathBuf::from("vtcode.toml"),
-            source_label: None,
-            draft: VTCodeConfig::default(),
-            view_path: Some("provider.openai".to_string()),
-            last_selection: None,
-            selection_by_view: BTreeMap::new(),
-            pending_edit_path: None,
-        };
-        state.draft.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Flex);
+        state.draft.provider.openai.service_tier = preset;
 
         mutate_draft(&mut state, |draft| {
             apply_scalar_operation(draft, "provider.openai.service_tier", ScalarOperation::CycleNext)
         })
         .expect("service tier should advance");
 
-        assert_eq!(state.draft.provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Priority));
+        state.draft.provider.openai.service_tier
+    }
+
+    #[test]
+    fn missing_service_tier_cycle_creates_value() {
+        assert_eq!(cycle_service_tier_from(None), Some(vtcode_config::OpenAIServiceTier::Flex));
+    }
+
+    #[test]
+    fn service_tier_cycle_advances_from_flex_to_priority() {
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Flex)),
+            Some(vtcode_config::OpenAIServiceTier::Priority)
+        );
+    }
+
+    #[test]
+    fn service_tier_cycle_advances_from_priority_to_ultrafast() {
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Priority)),
+            Some(vtcode_config::OpenAIServiceTier::Ultrafast)
+        );
+    }
+
+    #[test]
+    fn service_tier_cycle_wraps_from_ultrafast_to_flex() {
+        assert_eq!(
+            cycle_service_tier_from(Some(vtcode_config::OpenAIServiceTier::Ultrafast)),
+            Some(vtcode_config::OpenAIServiceTier::Flex)
+        );
     }
 
     #[test]
@@ -1011,6 +1129,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1059,6 +1178,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1107,6 +1227,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1134,6 +1255,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1161,6 +1283,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
 
@@ -1195,6 +1318,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(state.draft.clone()).expect("default config should serialize");
 
@@ -1232,6 +1356,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft: TomlValue = toml::from_str(
             r#"
@@ -1265,6 +1390,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1292,6 +1418,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft: TomlValue = toml::from_str(
             r#"
@@ -1323,6 +1450,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1342,6 +1470,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1358,26 +1487,6 @@ mod tests {
     }
 
     #[test]
-    fn ide_context_view_includes_provider_section_navigation() {
-        let state = SettingsPaletteState {
-            workspace: PathBuf::from("."),
-            source_path: PathBuf::from("vtcode.toml"),
-            source_label: None,
-            draft: VTCodeConfig::default(),
-            view_path: Some("ide_context.providers".to_string()),
-            last_selection: None,
-            selection_by_view: BTreeMap::new(),
-            pending_edit_path: None,
-        };
-        let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
-
-        let items = build_settings_items(&state, &draft).expect("settings items");
-        assert!(items.iter().any(|item| item.title == "VS Code Family"));
-        assert!(items.iter().any(|item| item.title == "Zed Family"));
-        assert!(items.iter().any(|item| item.title == "Generic Bridge"));
-    }
-
-    #[test]
     fn tools_view_routes_external_editor_to_configure_action() {
         let state = SettingsPaletteState {
             workspace: PathBuf::from("."),
@@ -1388,6 +1497,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1410,6 +1520,7 @@ mod tests {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
         let draft = TomlValue::try_from(VTCodeConfig::default()).expect("default config should serialize");
 
@@ -1422,29 +1533,6 @@ mod tests {
             default_model.selection,
             Some(InlineListSelection::ConfigAction(ACTION_PICK_MAIN_MODEL.to_string()))
         );
-    }
-
-    #[test]
-    fn ide_context_toggle_action_persists_to_disk() {
-        let temp = tempfile::tempdir().expect("temp dir");
-        let source_path = temp.path().join("vtcode.toml");
-        let mut state = SettingsPaletteState {
-            workspace: temp.path().to_path_buf(),
-            source_path: source_path.clone(),
-            source_label: None,
-            draft: VTCodeConfig::default(),
-            view_path: Some("ide_context".to_string()),
-            last_selection: None,
-            selection_by_view: BTreeMap::new(),
-            pending_edit_path: None,
-        };
-
-        apply_settings_action(&mut state, "settings:set:ide_context.enabled:toggle").expect("toggle ide context");
-
-        assert!(!state.draft.ide_context.enabled);
-        let persisted = std::fs::read_to_string(&source_path).expect("persisted config");
-        assert!(persisted.contains("[ide_context]"));
-        assert!(persisted.contains("enabled = false"));
     }
 
     #[test]
@@ -1468,6 +1556,7 @@ mod tests {
                 last_selection: None,
                 selection_by_view: BTreeMap::new(),
                 pending_edit_path: None,
+                status: None,
             };
 
             let outcome = apply_settings_action(&mut state, "settings:array_add:custom_providers")
@@ -1574,18 +1663,19 @@ api_key_env = "TRUSTED_API_KEY"
             source_path: source_path.clone(),
             source_label: None,
             draft: VTCodeConfig::default(),
-            view_path: Some("ide_context".to_string()),
+            view_path: None,
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         };
 
-        let outcome =
-            apply_settings_action(&mut state, "settings:set:ide_context.enabled:toggle").expect("toggle ide context");
+        let outcome = apply_settings_action(&mut state, "settings:set:agent.todo_planning_mode:toggle")
+            .expect("toggle planning mode");
 
-        assert_eq!(outcome.message.as_deref(), Some("Disabled Ide Context"));
+        assert_eq!(outcome.message.as_deref(), Some("Disabled Todo Planning Mode"));
         assert!(outcome.saved);
-        assert!(!state.draft.ide_context.enabled);
+        assert!(!state.draft.agent.todo_planning_mode);
     }
 
     #[test]
@@ -1664,6 +1754,7 @@ api_key_env = "TRUSTED_API_KEY"
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         }
     }
 
@@ -1679,12 +1770,12 @@ api_key_env = "TRUSTED_API_KEY"
         ] {
             let state = header_test_state(view);
             let lines = settings_header_lines(&state);
-            assert!(lines.iter().any(|line| line.contains("Write target: vtcode.toml.")));
+            assert!(lines.iter().any(|line| line.contains("Writing to vtcode.toml")));
             assert!(lines.iter().any(|line| line == "test"));
             assert!(lines.iter().all(|line| !line.contains("Enter") && !line.contains("Esc")));
         }
         let root = settings_header_lines(&header_test_state(None));
-        assert_eq!(root.last().map(String::as_str), Some("Choose a settings group to edit."));
+        assert_eq!(root.first().map(String::as_str), Some("Pick a group to edit."));
         let advanced = settings_header_lines(&header_test_state(Some(SETTINGS_ADVANCED_VIEW_PATH)));
         assert!(advanced.iter().any(|line| line.contains("Advanced settings")));
     }
@@ -1694,8 +1785,9 @@ api_key_env = "TRUSTED_API_KEY"
         let mut state = header_test_state(None);
         state.source_label = None;
         let lines = settings_header_lines(&state);
-        assert_eq!(lines.len(), 3);
-        assert!(lines[0].starts_with("Write target: "));
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines.first().map(String::as_str), Some("Pick a group to edit."));
+        assert!(lines[1].starts_with("Writing to "));
         assert!(lines.iter().all(|line| !line.contains("Configuration source")));
     }
 

@@ -15,6 +15,7 @@
 )]
 mod cache;
 mod config;
+pub(crate) mod frame_metrics;
 mod options;
 pub mod ui;
 pub mod utils;

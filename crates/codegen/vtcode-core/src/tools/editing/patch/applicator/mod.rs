@@ -13,6 +13,7 @@ mod planner;
 mod progress;
 mod runner;
 mod text;
+pub(crate) use text::inspection_replacements;
 
 pub(crate) use planner::PreparedOperation;
 

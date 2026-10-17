@@ -9,6 +9,26 @@ use vtcode_core::notifications::set_global_terminal_focused;
 /// Owned signal-handler task handle; aborts on drop via the shared guard.
 pub(crate) type SignalHandlerGuard = vtcode_commons::TaskGuard;
 
+/// Set once the runloop has committed to the graceful exit and is emitting the
+/// exit postamble.
+///
+/// Teardown takes seconds (MCP shutdown, session-end hooks, TUI join), and the
+/// signal handler stays alive until the runloop returns. A double Ctrl+C in
+/// that window used to `process::exit(130)` between postamble writes, which
+/// truncated the exit summary to its first line. The flag is armed only
+/// microseconds before the process exits, so a genuinely hung teardown still
+/// honors the emergency exit guarantee.
+static EXIT_POSTAMBLE_ARMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Arm the graceful-exit window that suppresses the emergency hard exit.
+pub(crate) fn mark_exit_postamble_armed() {
+    EXIT_POSTAMBLE_ARMED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn is_exit_postamble_armed() -> bool {
+    EXIT_POSTAMBLE_ARMED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Spawn a signal handler task that listens for SIGINT and SIGTERM.
 ///
 /// # Priority Guarantees
@@ -68,6 +88,15 @@ pub(crate) fn spawn_signal_handler(
                     let signal = request_local_stop(&ctrl_c_state, &ctrl_c_notify);
 
                     if matches!(signal, CtrlCSignal::Exit) {
+                        if is_exit_postamble_armed() {
+                            // The graceful exit is already writing its
+                            // postamble; hard-exiting here would truncate the
+                            // summary. The process is microseconds from exit.
+                            tracing::debug!(
+                                "double interrupt during graceful exit postamble; letting the exit summary finish"
+                            );
+                            continue;
+                        }
                         // Await the bounded shutdown inline: the spawned variant
                         // never ran, because emergency_terminal_cleanup() calls
                         // std::process::exit(130) before the task could make
@@ -112,5 +141,12 @@ fn emergency_terminal_cleanup() {
     set_global_terminal_focused(false);
     let _ = vtcode_ui::tui::panic_hook::restore_tui();
     vtcode_commons::trace_flush::flush_trace_log();
+    // Clear feedback for the double-Ctrl+C path: the graceful postamble in
+    // `postamble::print_exit_summary` never runs here because `exit()` skips
+    // async teardown. Without this the shell shows only a bare prompt and the
+    // user cannot tell the terminal was restored cleanly.
+    eprintln!("\r\nInterrupted — exiting (Ctrl+C pressed twice). Terminal restored.");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    let _ = std::io::Write::flush(&mut std::io::stderr());
     std::process::exit(130);
 }

@@ -10,6 +10,8 @@ pub struct GeminiProvider {
     pub(super) prompt_cache_settings: GeminiPromptCacheSettings,
     pub(super) timeouts: TimeoutsConfig,
     pub(super) model_behavior: Option<ModelConfig>,
+    /// Live `cachedContents` slot for explicit prompt-cache mode.
+    pub(super) explicit_cache: explicit_cache::ExplicitCacheState,
 }
 
 impl GeminiProvider {
@@ -46,6 +48,7 @@ impl GeminiProvider {
             prompt_cache_settings,
             timeouts,
             model_behavior: None,
+            explicit_cache: explicit_cache::ExplicitCacheState::default(),
         }
     }
 
@@ -100,6 +103,7 @@ impl GeminiProvider {
             prompt_cache_settings,
             timeouts,
             model_behavior,
+            explicit_cache: explicit_cache::ExplicitCacheState::default(),
         }
     }
 

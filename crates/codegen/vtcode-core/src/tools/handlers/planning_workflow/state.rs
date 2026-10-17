@@ -70,9 +70,7 @@ impl PlanningWorkflowState {
     /// Get the default plans directory path.
     pub fn plans_dir(&self) -> PathBuf {
         if self.workspace_root.as_os_str().is_empty() {
-            std::env::temp_dir()
-                .join("vtcode-plans")
-                .join(workspace_slug_for_tmp(&self.workspace_root))
+            crate::tools::tool_intent::tmp_plans_dir().join(workspace_slug_for_tmp(&self.workspace_root))
         } else {
             self.workspace_root.join(".vtcode").join("plans")
         }

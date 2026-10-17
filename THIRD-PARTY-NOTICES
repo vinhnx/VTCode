@@ -17,6 +17,10 @@ OpenAI Codex
   - Ollama provider integration (vtcode-llm/src/providers/ollama/)
   - LM Studio provider integration (vtcode-llm/src/providers/lmstudio/)
   - Tool handler patterns (vtcode-core/src/tools/handlers/)
+  - Sticky prompt navigation (vtcode-ui/src/tui/core_tui/session/sticky_prompt.rs)
+    Reference: codex-rs/tui/src/transcript_view.rs
+    Commit: 7219fd735bef2f9cfd0363fecdbbb212e3df5255
+    Copyright 2025 OpenAI
 
   vtcode's implementations are original works that follow Codex
   architectural patterns; they are not direct copies of Codex source.
@@ -1421,68 +1425,71 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode-a2a 0.169.3
+  vtcode-a2a 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-acp 0.169.3
+  vtcode-acp 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-auth 0.169.3
+  vtcode-auth 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-bash-runner 0.169.3
+  vtcode-bash-runner 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-config 0.169.3
+  vtcode-config 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-core 0.169.3
+  vtcode-core 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-eval 0.169.3
+  vtcode-eval 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-indexer 0.169.3
+  vtcode-indexer 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-llm 0.169.3
+  vtcode-llm 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-mcp 0.169.3
+  vtcode-mcp 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-memory 0.169.3
+  vtcode-memory 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-safety 0.169.3
+  vtcode-safety 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-skills 0.169.3
+  vtcode-skills 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-ui 0.169.3
+  vtcode-ui 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-webmcp 0.169.3
+  vtcode-webmcp 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-agent-plugins 0.169.3
+  vtcode-agent-plugins 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-commons 0.169.3
+  vtcode-commons 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-diff 0.169.3
+  vtcode-diff 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-exec-events 0.169.3
+  vtcode-exec-events 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-macros 0.169.3
+  vtcode-macros 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
-  vtcode-utility-tool-specs 0.169.3
+  vtcode-utility-tool-specs 0.171.1
     Source: https://github.com/vinhnx/vtcode
+    License: MIT OR Apache-2.0
+  mac-notification-sys 0.6.15
+    Source: https://github.com/h4llow3En/mac-notification-sys
     License: MIT OR Apache-2.0
   agent-client-protocol-derive 2.0.0
     Source: https://github.com/agentclientprotocol/rust-sdk
@@ -1712,9 +1719,6 @@ Apache License 2.0 — SPDX: Apache-2.0
   litrs 1.0.0
     Source: https://github.com/LukasKalbertodt/litrs
     License: MIT OR Apache-2.0
-  mac-notification-sys 0.6.15
-    Source: https://github.com/h4llow3En/mac-notification-sys
-    License: MIT OR Apache-2.0
   miniz_oxide 0.8.9
     Source: https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
     License: MIT OR Zlib OR Apache-2.0
@@ -1930,7 +1934,7 @@ Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
 Apache License 2.0 — SPDX: Apache-2.0
 --------------------------------------------------------------------------------
-  vtcode 0.169.3
+  vtcode 0.171.1
     Source: https://github.com/vinhnx/vtcode
     License: MIT OR Apache-2.0
 --------------------------------------------------------------------------------

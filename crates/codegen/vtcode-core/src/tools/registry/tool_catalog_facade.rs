@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::RwLock;
 
-use crate::core::agent::harness_kernel::{SessionToolCatalogSnapshot, filter_tool_definitions_for_mode};
+use crate::core::agent::harness_kernel::{
+    SessionToolCatalogSnapshot, filter_tool_definitions_for_mode, filter_tool_definitions_for_mode_with_stability,
+};
 use crate::llm::provider::ToolDefinition;
 use crate::prompts::sort_tool_definitions;
 
@@ -244,7 +246,23 @@ impl SessionToolCatalogState {
         planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
+        self.filtered_snapshot_with_stats_ex(tools, planning_active, request_user_input_enabled, false)
+            .await
+    }
+
+    /// Same as [`Self::filtered_snapshot_with_stats`] but can keep a
+    /// cache-stable tool catalog across planning/execution toggles.
+    pub async fn filtered_snapshot_with_stats_ex(
+        &self,
+        tools: &Arc<RwLock<Vec<ToolDefinition>>>,
+        planning_active: bool,
+        request_user_input_enabled: bool,
+        stable_catalog: bool,
+    ) -> SessionToolCatalogSnapshot {
         let version = self.current_version();
+        // Stable catalog is identified separately so planning toggles reuse
+        // the same filtered snapshot instead of swapping tool arrays.
+        let cache_planning_key = if stable_catalog { false } else { planning_active };
 
         if let Some(entry) = {
             let cache_guard = self.cached_filtered.read().await;
@@ -252,18 +270,22 @@ impl SessionToolCatalogState {
                 .iter()
                 .find(|entry| {
                     entry.version == version
-                        && entry.planning_active == planning_active
+                        && entry.planning_active == cache_planning_key
                         && entry.request_user_input_enabled == request_user_input_enabled
                 })
                 .cloned()
         } {
-            return entry.snapshot.with_cache_hit(true);
+            let mut snapshot = entry.snapshot.with_cache_hit(true);
+            // Stable catalogs share definitions across modes, not turn state.
+            snapshot.planning_active = planning_active;
+            return snapshot;
         }
 
-        let filtered = filter_tool_definitions_for_mode(
+        let filtered = filter_tool_definitions_for_mode_with_stability(
             self.sorted_snapshot(tools).await,
             planning_active,
             request_user_input_enabled,
+            stable_catalog,
         );
         let snapshot = SessionToolCatalogSnapshot::new(
             version,
@@ -278,7 +300,7 @@ impl SessionToolCatalogState {
         cache_guard.retain(|entry| entry.version == version);
         cache_guard.push(FilteredCacheEntry {
             version,
-            planning_active,
+            planning_active: cache_planning_key,
             request_user_input_enabled,
             snapshot: snapshot.clone(),
         });
@@ -291,7 +313,7 @@ impl SessionToolCatalogState {
         planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
-        let defs = sort_snapshot_definitions(defs);
+        let defs = sort_tool_definitions(defs);
         let filtered = filter_tool_definitions_for_mode(
             (!defs.is_empty()).then(|| Arc::new(defs)),
             planning_active,
@@ -314,7 +336,7 @@ impl SessionToolCatalogState {
         planning_active: bool,
         request_user_input_enabled: bool,
     ) -> SessionToolCatalogSnapshot {
-        let defs = sort_snapshot_definitions(defs);
+        let defs = sort_tool_definitions(defs);
         let requested_active_tool_names: BTreeSet<String> = active_tool_names.into_iter().collect();
         let active_tool_names = defs
             .iter()
@@ -365,7 +387,7 @@ impl SessionToolCatalogState {
                         }
                     }
                 }
-                Some(Arc::new(sort_snapshot_definitions(snapshot)))
+                Some(Arc::new(sort_tool_definitions(snapshot)))
             }
         };
 
@@ -373,10 +395,6 @@ impl SessionToolCatalogState {
         *cache_guard = next_snapshot.as_ref().map(|snapshot| (version, Arc::clone(snapshot)));
         next_snapshot
     }
-}
-
-fn sort_snapshot_definitions(defs: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
-    sort_tool_definitions(defs)
 }
 
 impl super::ToolRegistry {
@@ -419,6 +437,44 @@ mod tests {
 
     fn function_tool(name: &str) -> ToolDefinition {
         ToolDefinition::function(name.to_string(), name.to_string(), serde_json::json!({}))
+    }
+
+    #[tokio::test]
+    async fn stable_catalog_cache_rebinds_live_planning_state_without_rebuilding_definitions() {
+        for initial_planning in [false, true] {
+            let state = SessionToolCatalogState::new();
+            let tools = Arc::new(RwLock::new(vec![
+                function_tool(tools::EXEC_COMMAND),
+                function_tool(tools::APPLY_PATCH),
+                function_tool(tools::REQUEST_USER_INPUT),
+            ]));
+            let first = state
+                .filtered_snapshot_with_stats_ex(&tools, initial_planning, true, true)
+                .await;
+            for planning in [!initial_planning, initial_planning] {
+                let next = state.filtered_snapshot_with_stats_ex(&tools, planning, true, true).await;
+                assert!(next.cache_hit);
+                assert_eq!(next.planning_active, planning);
+                assert_eq!(next.tool_catalog_hash, first.tool_catalog_hash);
+                assert_eq!(next.epoch, first.epoch);
+                assert!(Arc::ptr_eq(next.snapshot.as_ref().unwrap(), first.snapshot.as_ref().unwrap()));
+                let prompt = crate::prompts::system::PLANNING_WORKFLOW_INTERVIEW_POLICY_LINE;
+                assert!(
+                    crate::core::agent::runner::prompt_alignment::validate_prompt_catalog_alignment(
+                        prompt, &next, planning, true
+                    )
+                    .is_ok()
+                );
+            }
+            let disabled = state
+                .filtered_snapshot_with_stats_ex(&tools, !initial_planning, false, true)
+                .await;
+            assert!(!disabled.cache_hit);
+            assert_eq!(disabled.planning_active, !initial_planning);
+            assert!(!disabled.request_user_input_enabled);
+            assert!(!disabled.active_tool_names.iter().any(|name| name == tools::REQUEST_USER_INPUT));
+            assert_ne!(disabled.tool_catalog_hash, first.tool_catalog_hash);
+        }
     }
 
     #[tokio::test]

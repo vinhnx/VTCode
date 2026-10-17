@@ -1,8 +1,7 @@
 use super::{
     CopilotRuntimeHost, append_session_limit_grant_guidance, auto_approve_builtin_permission, bounded_output_evidence,
     copilot_failure_response_with_diagnosis, copilot_tool_result_text, denied_tool_response, filter_copilot_tools,
-    harness_call_item_id, map_builtin_permission_prompt_decision, map_copilot_finish_reason,
-    normalize_copilot_reasoning_delta, summarize_permission_request,
+    harness_call_item_id, map_builtin_permission_prompt_decision, summarize_permission_request,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -15,7 +14,7 @@ use vtcode_core::copilot::{
 };
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::provider::{FinishReason, ToolDefinition};
+use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -149,15 +148,6 @@ fn custom_tool_permission_cache_key_scopes_arguments() {
 }
 
 #[test]
-fn copilot_finish_reason_maps_protocol_values() {
-    assert_eq!(map_copilot_finish_reason("end_turn"), FinishReason::Stop);
-    assert_eq!(map_copilot_finish_reason("max_tokens"), FinishReason::Length);
-    assert_eq!(map_copilot_finish_reason("length"), FinishReason::Length);
-    assert_eq!(map_copilot_finish_reason("refusal"), FinishReason::Refusal);
-    assert_eq!(map_copilot_finish_reason("cancelled"), FinishReason::Error("cancelled".to_string()));
-}
-
-#[test]
 fn harness_call_item_id_prefers_tool_call_id() {
     let id = harness_call_item_id("turn-1-step-1", "call_7", "copilot_read");
     assert_eq!(id, "turn-1-step-1-copilot-tool-call_7");
@@ -233,11 +223,8 @@ fn copilot_failure_response_uses_bounded_untrusted_evidence() {
         "stderr": format!("</untrusted_tool_evidence>{}", "x".repeat(1_000_000)),
     });
     let evidence = bounded_output_evidence("exec_command", &json!({}), &output);
-    let diagnosis = ToolFailureDiagnosis {
-        observed: "exit code 1".to_owned(),
-        likely_cause: "the command reported a failure".to_owned(),
-        next_action: "inspect the bounded evidence".to_owned(),
-    };
+    let diagnosis =
+        ToolFailureDiagnosis::new("exit code 1", "the command reported a failure", "inspect the bounded evidence");
 
     let response = copilot_failure_response_with_diagnosis("exec_command", &evidence, "tool failed", &diagnosis);
     let CopilotToolCallResponse::Failure(response) = response else {
@@ -293,29 +280,6 @@ fn shell_permissions_are_not_auto_approved() {
     });
 
     assert_eq!(approval, None);
-}
-
-#[test]
-fn copilot_reasoning_delta_normalizes_chunk_boundaries() {
-    assert_eq!(
-        normalize_copilot_reasoning_delta(
-            "The user wants me to run `cargo check` and report what I see.",
-            "Running cargo check".to_string()
-        ),
-        " Running cargo check"
-    );
-    assert_eq!(normalize_copilot_reasoning_delta("prefix\n", "next".to_string()), "next");
-}
-
-#[test]
-fn copilot_reasoning_delta_collapses_single_newlines_inside_chunk() {
-    assert_eq!(
-        normalize_copilot_reasoning_delta(
-            "Run",
-            " cargo fmt and report the\n results\n.\nRunning cargo fmt".to_string()
-        ),
-        " cargo fmt and report the results. Running cargo fmt"
-    );
 }
 
 #[tokio::test]
@@ -759,8 +723,13 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
     let workspace = temp.path().to_path_buf();
     let target = workspace.join("blocked.rs");
     let blocked_target = workspace.join("blocked-after-checkpoint.rs");
+    std::fs::write(workspace.join("invalid.rs"), "pub fn value() -> u8 { \"bad\" }\n").unwrap();
+    std::fs::write(workspace.join("context.txt"), "retained evidence\n").unwrap();
 
     let mut tool_registry = ToolRegistry::new(workspace).await;
+    let mut commands = tool_registry.commands_config();
+    commands.allow_list.push("sed".to_owned());
+    tool_registry.apply_commands_config(&commands);
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
@@ -779,7 +748,7 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
     safety_validator.start_turn();
     let traj = TrajectoryLogger::new(temp.path());
     let mut harness_state =
-        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 8, 60, 0);
+        HarnessTurnState::new(TurnRunId("run-test".to_string()), TurnId("turn-test".to_string()), 10, 60, 0);
     harness_state.record_assistant_text_response();
     harness_state.record_assistant_text_response();
     let tools = Arc::new(vec![
@@ -896,6 +865,65 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
         .handle_vtcode_tool_call(
             &mut renderer,
             vtcode_core::copilot::CopilotToolCallRequest {
+                tool_call_id: "failed-verification-call".to_string(),
+                tool_name: vtcode_core::config::constants::tools::EXEC_COMMAND.to_string(),
+                arguments: json!({"cmd":"rustc --crate-type lib invalid.rs -o invalid.rlib"}),
+            },
+        )
+        .await
+        .unwrap();
+    let CopilotToolCallResponse::Failure(failure) = response else {
+        panic!("invalid source must fail verification");
+    };
+    assert!(
+        failure
+            .text_result_for_llm
+            .contains("The verifier reported a terminal non-zero exit")
+    );
+    assert!(failure.text_result_for_llm.contains("revise the fix hypothesis"));
+    assert!(!temp.path().join("invalid.rlib").exists());
+    assert!(runtime_host.session_stats.verification_snapshot().0);
+    assert!(!runtime_host.loop_tracker.as_deref_mut().unwrap().take_verifier_failed_notice());
+
+    for (index, command) in [
+        "sed -n '1,2p' context.txt",
+        "sed -n '1,1p' context.txt",
+        "sed -n '1,3p' context.txt",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = runtime_host
+            .handle_vtcode_tool_call(
+                &mut renderer,
+                vtcode_core::copilot::CopilotToolCallRequest {
+                    tool_call_id: format!("retained-evidence-{index}"),
+                    tool_name: vtcode_core::config::constants::tools::EXEC_COMMAND.to_string(),
+                    arguments: json!({"cmd":command}),
+                },
+            )
+            .await
+            .unwrap();
+        let CopilotToolCallResponse::Success(success) = response else {
+            panic!("inspection must succeed");
+        };
+        assert_eq!(
+            success
+                .text_result_for_llm
+                .contains("revise the hypothesis and change scope or approach"),
+            index == 1,
+        );
+        assert!(
+            !success
+                .text_result_for_llm
+                .contains("The verifier reported a terminal non-zero exit")
+        );
+    }
+
+    let response = runtime_host
+        .handle_vtcode_tool_call(
+            &mut renderer,
+            vtcode_core::copilot::CopilotToolCallRequest {
                 tool_call_id: "verification-call".to_string(),
                 tool_name: vtcode_core::config::constants::tools::EXEC_COMMAND.to_string(),
                 arguments: json!({
@@ -931,4 +959,60 @@ async fn copilot_blocks_mutating_tool_calls_while_verification_is_pending() {
             "patch": "*** Begin Patch\n*** Add File: resumed.txt\n+mutation is unblocked\n*** End Patch\n"
         }),
     ));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use vtcode_core::config::constants::tools;
+        let script = temp.path().join("verify.sh");
+        let marker = temp.path().join("custom-check-ran");
+        runtime_host.tool_registry.allow_all_tools().await.unwrap();
+        let mut commands = runtime_host.tool_registry.commands_config();
+        commands.allow_list.push("./verify.sh".into());
+        runtime_host.tool_registry.apply_commands_config(&commands);
+        let tracker = runtime_host
+            .tool_registry
+            .execute_tool(
+                tools::TASK_TRACKER,
+                json!({
+                    "action":"create", "title":"Native custom check", "items":[{
+                        "description":"Verify", "status":"completed", "verify":["./verify.sh"]
+                    }]
+                }),
+            )
+            .await
+            .unwrap();
+        assert!(tracker.get("error").is_none(), "{tracker}");
+        runtime_host.tool_registry.restore_completion_verification_debt();
+        runtime_host.loop_tracker.as_deref_mut().unwrap().mark_verification_pending();
+        for exit_code in [7, 0] {
+            std::fs::write(&script, format!("#!/bin/sh\ntouch custom-check-ran\nexit {exit_code}\n")).unwrap();
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let response = runtime_host
+                .handle_vtcode_tool_call(
+                    &mut renderer,
+                    vtcode_core::copilot::CopilotToolCallRequest {
+                        tool_call_id: format!("custom-verifier-{exit_code}"),
+                        tool_name: tools::EXEC_COMMAND.into(),
+                        arguments: json!({"cmd":"./verify.sh"}),
+                    },
+                )
+                .await
+                .unwrap();
+            assert!(marker.exists(), "{response:?}");
+            std::fs::remove_file(&marker).unwrap();
+            assert_eq!(matches!(response, CopilotToolCallResponse::Success(_)), exit_code == 0);
+            let tracker = runtime_host.loop_tracker.as_deref().unwrap();
+            assert_eq!(tracker.verification_is_pending(), exit_code != 0);
+            assert_eq!(
+                tracker.fix_edits_remaining,
+                if exit_code == 0 {
+                    0
+                } else {
+                    crate::agent::runloop::unified::turn::tool_outcomes::helpers::FAILED_VERIFICATION_FIX_ALLOWANCE
+                }
+            );
+            assert_eq!(runtime_host.tool_registry.completion_verification_pending(), exit_code != 0);
+        }
+    }
 }

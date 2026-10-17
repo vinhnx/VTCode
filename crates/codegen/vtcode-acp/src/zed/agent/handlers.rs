@@ -34,8 +34,10 @@ use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
 use agent_client_protocol::schema::v1::{
-    AuthenticateRequest, AuthenticateResponse, CancelNotification, InitializeRequest, InitializeResponse,
-    LoadSessionRequest, LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
+    AuthenticateRequest, AuthenticateResponse, CancelNotification, CloseSessionRequest, CloseSessionResponse,
+    DeleteSessionRequest, DeleteSessionResponse, InitializeRequest, InitializeResponse, ListSessionsRequest,
+    ListSessionsResponse, LoadSessionRequest, LoadSessionResponse, LogoutRequest, LogoutResponse, NewSessionRequest,
+    NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
@@ -116,6 +118,54 @@ where
         .on_receive_request(
             {
                 let agent = Arc::clone(&agent);
+                move |req: ListSessionsRequest, request_cx: Responder<ListSessionsResponse>, _cx| {
+                    let agent = Arc::clone(&agent);
+                    async move { handle_list_sessions(agent, req, request_cx).await }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let agent = Arc::clone(&agent);
+                move |req: ResumeSessionRequest, request_cx: Responder<ResumeSessionResponse>, _cx| {
+                    let agent = Arc::clone(&agent);
+                    async move { handle_resume_session(agent, req, request_cx).await }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let agent = Arc::clone(&agent);
+                move |req: CloseSessionRequest, request_cx: Responder<CloseSessionResponse>, _cx| {
+                    let agent = Arc::clone(&agent);
+                    async move { handle_close_session(agent, req, request_cx).await }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let agent = Arc::clone(&agent);
+                move |req: DeleteSessionRequest, request_cx: Responder<DeleteSessionResponse>, _cx| {
+                    let agent = Arc::clone(&agent);
+                    async move { handle_delete_session(agent, req, request_cx).await }
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                move |_req: LogoutRequest, request_cx: Responder<LogoutResponse>, _cx| async move {
+                    handle_logout(request_cx).await
+                }
+            },
+            on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let agent = Arc::clone(&agent);
                 move |req: PromptRequest, request_cx: Responder<PromptResponse>, cx| {
                     let agent = Arc::clone(&agent);
                     async move { handle_prompt(agent, req, request_cx, cx).await }
@@ -158,6 +208,12 @@ async fn handle_initialize(
     capabilities.mcp_capabilities.http = true;
     capabilities.mcp_capabilities.sse = false;
     capabilities.load_session = true;
+    capabilities.session_capabilities = acp::SessionCapabilities::new()
+        .list(acp::SessionListCapabilities::new())
+        .resume(acp::SessionResumeCapabilities::new())
+        .close(acp::SessionCloseCapabilities::new())
+        .delete(acp::SessionDeleteCapabilities::new());
+    capabilities.auth = acp::AgentAuthCapabilities::new().logout(acp::LogoutCapabilities::new());
 
     let auth_methods = build_auth_methods();
     let response = InitializeResponse::new(acp::ProtocolVersion::V1)
@@ -280,6 +336,49 @@ async fn handle_set_session_config_option(
 ) -> Result<(), SdkError> {
     let response = agent.set_session_config_option(req).await?;
     request_cx.respond(response)
+}
+
+async fn handle_list_sessions(
+    agent: Arc<ZedAgent>,
+    req: ListSessionsRequest,
+    request_cx: Responder<ListSessionsResponse>,
+) -> Result<(), SdkError> {
+    let response = agent.list_sessions(req).await?;
+    request_cx.respond(response)
+}
+
+async fn handle_resume_session(
+    agent: Arc<ZedAgent>,
+    req: ResumeSessionRequest,
+    request_cx: Responder<ResumeSessionResponse>,
+) -> Result<(), SdkError> {
+    let response = agent.resume_session(req).await?;
+    request_cx.respond(response)
+}
+
+async fn handle_close_session(
+    agent: Arc<ZedAgent>,
+    req: CloseSessionRequest,
+    request_cx: Responder<CloseSessionResponse>,
+) -> Result<(), SdkError> {
+    let response = agent.close_session(req).await?;
+    request_cx.respond(response)
+}
+
+async fn handle_delete_session(
+    agent: Arc<ZedAgent>,
+    req: DeleteSessionRequest,
+    request_cx: Responder<DeleteSessionResponse>,
+) -> Result<(), SdkError> {
+    let response = agent.delete_session(req).await?;
+    request_cx.respond(response)
+}
+
+async fn handle_logout(request_cx: Responder<LogoutResponse>) -> Result<(), SdkError> {
+    // No server-side auth token is issued (`handle_authenticate` returns the
+    // default success without a token; credentials live in the client's env /
+    // terminal login flow), so logout is a no-op success consistent with it.
+    request_cx.respond(LogoutResponse::new())
 }
 
 async fn handle_cancel(agent: Arc<ZedAgent>, notif: CancelNotification) -> Result<(), SdkError> {
@@ -634,6 +733,7 @@ pub(super) fn build_session_provider(
             timeouts: None,
             openai: None,
             anthropic: None,
+            openrouter: None,
             model_behavior: agent.config.model_behavior.clone(),
             workspace_root: Some(agent.config.workspace.clone()),
         },

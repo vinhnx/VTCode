@@ -13,6 +13,7 @@ fn make_list_item(title: &str, cmd: &str) -> InlineListItem {
         indent: 0,
         selection: Some(InlineListSelection::SlashCommand(cmd.to_string())),
         search_value: Some(title.to_string()),
+        ..Default::default()
     }
 }
 
@@ -26,6 +27,7 @@ fn show_list_modal(session: &mut AppSession, title: &str, lines: Vec<&str>, item
             selected: None,
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 }
@@ -71,6 +73,7 @@ fn show_overlay_with_hint(
             selected,
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 }
@@ -91,6 +94,7 @@ fn show_list_modal_with_hint(
             selected: None,
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 }
@@ -242,6 +246,7 @@ fn floating_modal_clears_stale_buffer_content_before_painting() {
             indent: 0,
             selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
             search_value: Some("Clapre".to_string()),
+            ..Default::default()
         }],
     );
 
@@ -288,10 +293,12 @@ fn selected_modal_row_uses_primary_foreground() {
                 indent: 0,
                 selection: Some(selection.clone()),
                 search_value: Some("Option A".to_string()),
+                ..Default::default()
             }],
             selected: Some(selection),
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 
@@ -328,6 +335,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
                 indent: 0,
                 selection: None,
                 search_value: Some("Built-in themes".to_string()),
+                ..Default::default()
             },
             InlineListItem {
                 title: "Clapre".to_string(),
@@ -336,6 +344,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
                 indent: 0,
                 selection: Some(InlineListSelection::SlashCommand("theme".to_string())),
                 search_value: Some("Clapre".to_string()),
+                ..Default::default()
             },
         ],
     );
@@ -362,6 +371,109 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
     assert_eq!(header_cell.style().fg, Some(Color::Rgb(0x7A, 0x8F, 0xFF)));
     assert_eq!(header_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
     assert!(header_cell.style().add_modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn floating_modal_renders_approval_text_without_dim_modifier() {
+    // Regression: the modal background used to be painted with
+    // `Modifier::DIM` (via `styles.selectable`). ratatui's `Cell::set_style`
+    // only *inserts* modifiers, so that DIM stuck to every glyph drawn on
+    // top of it — the whole HITL approval popup rendered dimmed and the
+    // command under review was hard to read. Popup text must recede only
+    // via explicit muted colors, never via DIM.
+    let theme = InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
+        background: Some(AnsiColorEnum::Rgb(RgbColor(0x10, 0x14, 0x1A))),
+        primary: Some(AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56))),
+        secondary: Some(AnsiColorEnum::Rgb(RgbColor(0x8A, 0x93, 0xA3))),
+        ..InlineTheme::default()
+    };
+    let mut session = AppSession::new(theme, None, 30);
+    let approval = |title: &str, subtitle: &str, badge: &str, selection: InlineListSelection| InlineListItem {
+        title: title.to_string(),
+        subtitle: Some(subtitle.to_string()),
+        badge: Some(badge.to_string()),
+        indent: 0,
+        selection: Some(selection),
+        search_value: Some(title.to_string()),
+        ..Default::default()
+    };
+    session.handle_command(app_types::InlineCommand::ShowTransient {
+        request: Box::new(app_types::TransientRequest::List(app_types::ListOverlayRequest {
+            title: "Would you like to run the following command?".to_string(),
+            lines: vec![
+                "Environment: default policy".to_string(),
+                "`$ cargo nextest run`".to_string(),
+                "Choose how to handle this run:".to_string(),
+            ],
+            footer_hint: Some("Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string()),
+            items: vec![
+                approval("Approve Once", "Allow this time only", "Permanent", InlineListSelection::ToolApproval(true)),
+                approval(
+                    "Allow for Session",
+                    "For the current session",
+                    "Session",
+                    InlineListSelection::ToolApprovalSession,
+                ),
+                approval("Deny Once", "Ask again next time", "Persistent", InlineListSelection::ToolApprovalDenyOnce),
+            ],
+            selected: Some(InlineListSelection::ToolApproval(true)),
+            search: None,
+            hotkeys: Vec::new(),
+            status: None,
+        })),
+    });
+
+    let terminal = render_session_to_terminal(&mut session, 30);
+    let buffer = terminal.backend().buffer();
+
+    let mut dimmed_popup_text = String::new();
+    for row in 15..30u16 {
+        for column in 0..VIEW_WIDTH {
+            let cell = buffer.cell((column, row)).expect("modal cell");
+            if cell.symbol() != " " && cell.style().add_modifier.contains(Modifier::DIM) {
+                dimmed_popup_text.push_str(cell.symbol());
+            }
+        }
+    }
+    assert!(
+        dimmed_popup_text.trim().is_empty(),
+        "approval popup text must not render dimmed, got: {dimmed_popup_text:?}"
+    );
+
+    // Emphasis stays intact: the selected row is bold and accent-colored,
+    // while unselected option titles keep the full theme foreground so every
+    // choice is readable.
+    let modal_area = session.core.modal_list_area().expect("modal list area");
+    let row_text = |row: u16| -> String {
+        (0..VIEW_WIDTH)
+            .filter_map(|column| buffer.cell((column, row)))
+            .map(|cell| cell.symbol().to_owned())
+            .collect::<String>()
+    };
+    let text_column =
+        |row: u16, needle: &str| -> u16 { row_text(row).find(needle).expect("approval text in row") as u16 };
+    let find_row = |needle: &str| -> u16 {
+        (modal_area.y..modal_area.y.saturating_add(modal_area.height))
+            .find(|row| row_text(*row).contains(needle))
+            .unwrap_or_else(|| panic!("{needle} row in modal area {modal_area:?}"))
+    };
+
+    let selected_row = find_row("Approve Once");
+    let selected_cell = buffer
+        .cell((text_column(selected_row, "Approve Once"), selected_row))
+        .expect("selected row title cell");
+    assert_eq!(selected_cell.style().fg, Some(Color::Rgb(0x12, 0x34, 0x56)));
+    assert!(selected_cell.style().add_modifier.contains(Modifier::BOLD));
+    assert!(!selected_cell.style().add_modifier.contains(Modifier::DIM));
+
+    let unselected_row = find_row("Allow for Session");
+    assert_ne!(selected_row, unselected_row, "selected and unselected rows must differ");
+    let unselected_cell = buffer
+        .cell((text_column(unselected_row, "Allow for Session"), unselected_row))
+        .expect("unselected row title cell");
+    assert_eq!(unselected_cell.style().fg, Some(Color::Rgb(0xEE, 0xEE, 0xEE)));
+    assert!(!unselected_cell.style().add_modifier.contains(Modifier::DIM));
 }
 
 #[test]
@@ -398,10 +510,10 @@ fn inline_modal_height_budgets_list_divider_without_search() {
     use super::super::render::split_inline_modal_area;
 
     let mut session = Session::new(InlineTheme::default(), None, 30);
-    // Sixteen two-line items saturate the 20-row multiline cap, so the exact
+    // Sixteen three-line items saturate the 20-row multiline cap, so the exact
     // height below is sensitive to the divider row: 1 instructions +
-    // 20 list (16 items × 2 rows, capped) + 1 divider + 0 summary + 3 title
-    // chrome = 25.
+    // 20 list (16 items × title/subtitle/gap, capped) + 1 divider + 0 summary
+    // + 3 title chrome = 25.
     let items = (0..16)
         .map(|index| InlineListItem {
             title: format!("Option {index}"),
@@ -410,6 +522,7 @@ fn inline_modal_height_budgets_list_divider_without_search() {
             indent: 0,
             selection: Some(InlineListSelection::SlashCommand(format!("cmd{index}"))),
             search_value: Some(format!("option {index}")),
+            ..Default::default()
         })
         .collect::<Vec<_>>();
     show_overlay(&mut session, "Pick", vec!["Choose"], items, None);
@@ -428,8 +541,8 @@ fn plan_approval_modal_height_hugs_wrapped_header_without_gap() {
     // Plan-approval header: 6 raw lines where the Summary wraps to 2 visual
     // rows at 80 columns, so the wrapped instruction estimate is 7 rows
     // (not the raw count of 6). Expected height: 7 instructions + 1 divider
-    // + 8 list (4 items × title/subtitle) + 1 footer-hint summary + 3 title
-    // chrome = 20. Any blank gap or clipped summary changes this height.
+    // + 12 list (4 items × title/subtitle/gap) + 1 footer-hint summary
+    // + 3 title chrome = 24. Any blank gap or clipped summary changes this height.
     let lines = vec![
         "A plan is ready to execute. Would you like to proceed?",
         "Summary: Fix vtcode analyze so it runs non-interactively with auto-allowed tools",
@@ -459,6 +572,7 @@ fn plan_approval_modal_height_hugs_wrapped_header_without_gap() {
         indent: 0,
         selection: Some(InlineListSelection::SlashCommand(format!("plan{index}"))),
         search_value: Some(title.to_string()),
+        ..Default::default()
     })
     .collect::<Vec<_>>();
     show_overlay_with_hint(
@@ -473,7 +587,7 @@ fn plan_approval_modal_height_hugs_wrapped_header_without_gap() {
     let area = Rect::new(0, 0, 80, 40);
     let (_transcript_area, modal_area) = split_inline_modal_area(&session, area);
     let modal_area = modal_area.expect("plan modal should claim a bottom panel area");
-    assert_eq!(modal_area.height, 20, "plan modal must hug wrapped content with no blank gap");
+    assert_eq!(modal_area.height, 24, "plan modal must hug wrapped content with no blank gap");
 }
 
 #[test]
@@ -573,7 +687,7 @@ fn modal_click_on_summary_row_keeps_selection() {
             modal
                 .list
                 .as_ref()
-                .map(|list| list.summary_line_rows(modal.footer_hint.as_deref()))
+                .map(|list| list.summary_line_rows(modal.footer_hint.as_deref(), modal.status.is_some()))
         })
         .unwrap_or(0);
     assert_eq!(info_rows, 1, "footer hint should render one summary row above the list");
@@ -662,6 +776,7 @@ fn wizard_click_below_inline_editor_selects_correct_item() {
                             other: Some(String::new()),
                         }),
                         search_value: Some("other".to_string()),
+                        ..Default::default()
                     },
                     make_list_item("Scope", "scope"),
                     make_list_item("Priority", "priority"),

@@ -52,6 +52,7 @@ fn overlay_owns_paste_after_input_is_reenabled() {
                         indent: 0,
                         selection: Some(InlineListSelection::SlashCommand(title.to_string())),
                         search_value: Some(title.to_string()),
+                        ..Default::default()
                     })
                     .collect(),
                 selected: None,
@@ -61,6 +62,7 @@ fn overlay_owns_paste_after_input_is_reenabled() {
                     fuzzy: false,
                 }),
                 hotkeys: Vec::new(),
+                status: None,
             })),
         });
         session.handle_command(InlineCommand::SetInputEnabled(true));
@@ -96,10 +98,12 @@ fn modal_ctrl_c_is_not_swallowed_by_stale_composer_selection() {
                 indent: 0,
                 selection: Some(InlineListSelection::SlashCommand("alpha".to_string())),
                 search_value: Some("alpha".to_string()),
+                ..Default::default()
             }],
             selected: None,
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 

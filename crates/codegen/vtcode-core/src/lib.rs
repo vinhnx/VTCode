@@ -184,7 +184,6 @@ pub mod git_info; // Git repository information collection
 pub mod hooks;
 pub mod http_client;
 mod id_newtype;
-pub mod ide_context;
 pub mod instructions;
 pub mod llm;
 pub mod loop_memory; // Loop memory store for durable loop-engineering state
@@ -244,9 +243,8 @@ pub use config::types::{
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentConfig, IdeContextConfig, IdeContextProviderConfig,
-    IdeContextProviderFamily, IdeContextProviderMode, IdeContextProvidersConfig, PluginRuntimeConfig, PluginTrustLevel,
-    ToolProfile, VTCodeConfig, WorkspaceTrustLevel,
+    AgentClientProtocolZedToolsConfig, AgentConfig, PluginRuntimeConfig, PluginTrustLevel, ToolProfile, VTCodeConfig,
+    WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
@@ -259,10 +257,6 @@ pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, Performan
 pub use core::threads::{
     SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle, ThreadSnapshot,
     build_thread_archive_metadata, loaded_skills_from_session_listing, messages_from_session_listing,
-};
-pub use ide_context::{
-    EDITOR_CONTEXT_PROMPT_HEADER, EditorContextSnapshot, EditorFileContext, EditorLineRange, EditorSelectionContext,
-    EditorSelectionRange,
 };
 pub use primary_agent::{
     ActivePrimaryAgent, ActivePrimaryAgentSpecIdentity, ActivePrimaryAgentState, PrimaryAgentResolutionError,
@@ -354,7 +348,7 @@ pub use tools::registry::{
     ToolSecurity, tool_groups,
 };
 pub use tools::{ToolRegistration, ToolRegistry};
-pub use ui::diff_renderer::DiffRenderer;
+pub use ui::diff_renderer::{DiffRenderer, DiffRendererOptions};
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, LifecycleHookApprovalRecord, ProviderConfigs, UiConfig, UserPreferences,
     WorkspaceTrustRecord, WorkspaceTrustStore, initialize_dot_folder, load_lifecycle_hook_approval, load_user_config,

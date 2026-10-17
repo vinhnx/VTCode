@@ -43,6 +43,7 @@ pub(crate) struct HarnessEventEmitter {
 }
 
 struct HarnessEventEmitterInner {
+    context: Mutex<vtcode_core::core::agent::events::ExecutionContextTracker>,
     path: PathBuf,
     session_id: Option<String>,
     canonical: Option<CanonicalEventSink>,
@@ -56,6 +57,47 @@ struct HarnessEventEmitterInner {
 }
 
 impl HarnessEventEmitter {
+    pub(crate) fn matrix_persistence(&self) -> Option<vtcode_core::subagents::matrix::MatrixPersistence> {
+        self.inner.canonical.as_ref().map(CanonicalEventSink::matrix_persistence)
+    }
+    pub(crate) fn decision_validator(&self) -> Option<vtcode_core::core::agent::events::DecisionEvidenceValidator> {
+        self.inner.canonical.as_ref().map(CanonicalEventSink::decision_validator)
+    }
+    pub(crate) async fn explanation(
+        &self,
+        scope: vtcode_memory::explanation::ExplanationScope,
+    ) -> Result<vtcode_memory::explanation::ExplanationModel> {
+        self.inner
+            .canonical
+            .as_ref()
+            .context("canonical evidence is unavailable")?
+            .explanation(scope)
+            .await
+    }
+    pub(crate) async fn explanation_page(
+        &self,
+        scope: vtcode_memory::explanation::ExplanationScope,
+        offset: usize,
+    ) -> Result<vtcode_memory::explanation::ExplanationPage> {
+        self.inner
+            .canonical
+            .as_ref()
+            .context("canonical evidence is unavailable")?
+            .explanation_page(scope, offset)
+            .await
+    }
+    pub(crate) async fn evidence(
+        &self,
+        reference: vtcode_memory::explanation::EvidenceRef,
+        offset: usize,
+    ) -> Result<vtcode_memory::explanation::EvidencePage> {
+        self.inner
+            .canonical
+            .as_ref()
+            .context("canonical evidence is unavailable")?
+            .evidence(reference, offset)
+            .await
+    }
     /// Construct a compatibility-only emitter for tests and explicit legacy
     /// integrations. Interactive production sessions use [`Self::new_async`]
     /// so canonical persistence is opened before the session starts.
@@ -64,6 +106,7 @@ impl HarnessEventEmitter {
         let legacy = LegacyWriter::new_sync(&path)?;
         Ok(Self {
             inner: Arc::new(HarnessEventEmitterInner {
+                context: Mutex::new(Default::default()),
                 path,
                 session_id: None,
                 canonical: None,
@@ -102,6 +145,7 @@ impl HarnessEventEmitter {
 
         Ok(Self {
             inner: Arc::new(HarnessEventEmitterInner {
+                context: Mutex::new(Default::default()),
                 path: session_path.join("events.jsonl"),
                 session_id: Some(session_id.to_string()),
                 canonical: Some(canonical),
@@ -181,7 +225,22 @@ impl HarnessEventEmitter {
         state.finish().await
     }
 
-    pub(crate) fn emit(&self, event: ThreadEvent) -> Result<()> {
+    pub(crate) fn begin_task_turn(
+        &self,
+        turn: &str,
+        input: &str,
+        origin: vtcode_core::exec::events::InputOrigin,
+    ) -> Result<String> {
+        let mut tracker = self
+            .inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?;
+        let context = tracker.begin(self.inner.session_id.as_deref().unwrap_or("root"), turn, input, origin);
+        Ok(context.task_id)
+    }
+
+    pub(crate) fn emit(&self, mut event: ThreadEvent) -> Result<()> {
         let _dispatch = self
             .inner
             .dispatch_gate
@@ -190,6 +249,65 @@ impl HarnessEventEmitter {
         if self.inner.finalized.load(Ordering::Acquire) {
             return Err(anyhow::anyhow!("harness emitter has already been finalized"));
         }
+        let decision = vtcode_core::core::agent::events::decision_completed_event(&event);
+        let exec_completion = self
+            .inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?
+            .background_exec_output_event(&mut event);
+        self.emit_single(event)?;
+        if let Some(decision) = decision {
+            self.emit_single(decision)?;
+        }
+        if let Some(completion) = exec_completion {
+            self.emit_single(completion)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn emit_exec_session_output(
+        &self,
+        call_item_id: &str,
+        tool_name: &str,
+        args: &Value,
+        output: &Value,
+    ) -> Result<()> {
+        let _dispatch = self
+            .inner
+            .dispatch_gate
+            .lock()
+            .map_err(|error| anyhow::anyhow!("harness dispatch gate poisoned: {error}"))?;
+        if self.inner.finalized.load(Ordering::Acquire) {
+            return Err(anyhow::anyhow!("harness emitter has already been finalized"));
+        }
+        let event = self
+            .inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?
+            .exec_session_output_event(call_item_id, tool_name, args, output);
+        if let Some(event) = event {
+            self.emit_single(event)?;
+        }
+        let delegation = self
+            .inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?
+            .delegation_status_event(call_item_id, tool_name, output);
+        if let Some(event) = delegation {
+            self.emit_single(event)?;
+        }
+        Ok(())
+    }
+
+    fn emit_single(&self, mut event: ThreadEvent) -> Result<()> {
+        self.inner
+            .context
+            .lock()
+            .map_err(|error| anyhow::anyhow!("execution context lock poisoned: {error}"))?
+            .annotate(&mut event);
 
         // Canonical persistence is the authoritative path. Its bounded handoff
         // may apply backpressure, but it never performs filesystem I/O here.
@@ -297,6 +415,7 @@ impl HarnessEventEmitter {
 
         self.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: format!("{turn_id}-assistant-final-{}", Uuid::new_v4()),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.to_string() }),
             },
@@ -313,11 +432,12 @@ impl HarnessEventEmitter {
 
         self.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: format!("{turn_id}-diagnosis-{}", Uuid::new_v4()),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: text.to_string(),
                     stage: Some("diagnosis".to_string()),
-                }),
+                })),
             },
         }))
     }
@@ -498,6 +618,7 @@ pub(crate) fn turn_completed_event(usage: Usage) -> ThreadEvent {
 
 pub(crate) fn turn_completed_event_with_sessions(usage: Usage, sessions: Vec<String>) -> ThreadEvent {
     ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        completed_at: None,
         usage,
         in_progress_exec_sessions: sessions
             .into_iter()
@@ -507,7 +628,7 @@ pub(crate) fn turn_completed_event_with_sessions(usage: Usage, sessions: Vec<Str
 }
 
 pub(crate) fn turn_failed_event(message: impl Into<String>, usage: Option<Usage>) -> ThreadEvent {
-    ThreadEvent::TurnFailed(TurnFailedEvent { message: message.into(), usage })
+    ThreadEvent::TurnFailed(TurnFailedEvent { completed_at: None, message: message.into(), usage })
 }
 
 pub(crate) fn turn_blocked_event(event: TurnBlockedEvent) -> ThreadEvent {
@@ -526,6 +647,7 @@ pub(crate) fn thread_completed_event(
     num_turns: usize,
 ) -> ThreadEvent {
     ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
+        completed_at: None,
         thread_id: thread_id.into(),
         session_id: session_id.into(),
         subtype,
@@ -599,6 +721,7 @@ fn harness_event_with_duration(
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {
+            context: None,
             id: format!("harness-{}", Uuid::new_v4()),
             details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                 event,
@@ -899,7 +1022,7 @@ mod tests {
             output_tokens: 9,
         });
 
-        let ThreadEvent::TurnCompleted(TurnCompletedEvent { usage, .. }) = event else {
+        let ThreadEvent::TurnCompleted(TurnCompletedEvent { completed_at: None, usage, .. }) = event else {
             panic!("expected turn.completed");
         };
 

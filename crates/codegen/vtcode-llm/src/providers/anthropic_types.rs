@@ -104,6 +104,13 @@ pub enum ThinkingConfig {
         display: Option<ThinkingDisplay>,
     },
     Disabled,
+    /// Claude Sonnet 5.5's lowest thinking setting: up-front thinking is off
+    /// while the short progress notes written between tool calls still come
+    /// back as `thinking` blocks. `disabled` is rejected with a 400 on that
+    /// model, and `between_tools` is itself rejected at `xhigh`/`max` effort.
+    /// Takes no other field.
+    #[serde(rename = "between_tools")]
+    BetweenTools,
     /// Catch-all for unknown thinking config types added by the Anthropic API.
     #[serde(other)]
     Unknown,
@@ -121,8 +128,8 @@ pub enum ThinkingDisplay {
     Omitted,
     /// Progress-update thinking blocks (the short notes written between tool
     /// calls) carry their text; reasoning blocks stay empty. Requires the
-    /// `thinking-display-updates-2026-08-18` beta; supported on Claude Opus
-    /// 5.5 and Claude Fable 5.x.
+    /// `thinking-display-updates-2026-08-18` beta; supported on Claude Sonnet
+    /// 5.5, Claude Opus 5.5 and Claude Fable 5.x.
     Updates,
     /// Catch-all for unknown display modes added by the Anthropic API.
     #[serde(other)]
@@ -532,6 +539,8 @@ pub struct AnthropicMessageResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicUsage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) speed: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nullable_u32")]
     pub(crate) input_tokens: u32,
     #[serde(default, deserialize_with = "deserialize_nullable_u32")]

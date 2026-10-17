@@ -92,6 +92,7 @@ impl_openai_compat_provider!(MistralProvider, MistralSpec, {
             .and_then(|b| b.model_supports_reasoning)
             .unwrap_or(false)
             || requested == models::mistral::MISTRAL_LARGE_3
+            || requested == models::mistral::MISTRAL_LARGE_4
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
@@ -102,15 +103,23 @@ impl_openai_compat_provider!(MistralProvider, MistralSpec, {
             .unwrap_or(false)
     }
 
-    fn effective_context_size(&self, _model: &str) -> usize {
-        256_000
+    fn effective_context_size(&self, model: &str) -> usize {
+        let requested = if model.trim().is_empty() {
+            &self.core.model
+        } else {
+            model
+        };
+        match requested {
+            models::mistral::MISTRAL_LARGE_4 => 1_000_000,
+            _ => 256_000,
+        }
     }
 });
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{Message, ToolChoice, ToolDefinition};
+    use crate::provider::{LLMProvider, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
     use vtcode_config::types::ReasoningEffortLevel;
 
@@ -184,6 +193,26 @@ mod tests {
         request.tool_choice = Some(ToolChoice::Any);
         let payload = provider().core.convert_request(&request).unwrap();
         assert_eq!(payload["tool_choice"], ToolChoice::Any.to_provider_format("mistral"));
+    }
+
+    #[test]
+    fn large_4_reports_1m_context_and_reasoning() {
+        let large_4 = MistralProvider::from_config(
+            Some("test-key".to_string()),
+            Some(models::mistral::MISTRAL_LARGE_4.to_string()),
+            Some("https://example.test/v1".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+        assert_eq!(large_4.effective_context_size(models::mistral::MISTRAL_LARGE_4), 1_000_000);
+        assert!(large_4.supports_reasoning(models::mistral::MISTRAL_LARGE_4));
+        // Asymmetric boundaries: Large 3 keeps 256k; empty falls back to the
+        // configured model (Large 4 here, Large 3 below).
+        assert_eq!(large_4.effective_context_size(models::mistral::MISTRAL_LARGE_3), 256_000);
+        assert_eq!(large_4.effective_context_size(""), 1_000_000);
+        assert_eq!(provider().effective_context_size(""), 256_000);
     }
 
     #[test]

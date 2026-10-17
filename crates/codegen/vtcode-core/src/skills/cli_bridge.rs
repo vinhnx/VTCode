@@ -421,14 +421,20 @@ impl Tool for CliToolBridge {
     }
 }
 
-/// Discover CLI tools in standard locations
+/// Discover CLI tools in project-local locations.
+///
+/// Only project-scoped directories are scanned (`~/.local/bin`, `./tools`,
+/// `./vendor/tools`). System directories such as `/usr/bin` and
+/// `/usr/local/bin` are intentionally excluded: treating every system
+/// executable as a skill pollutes the catalog with hundreds of unrelated
+/// binaries (`kubectl`, `binhex`, versioned `python3.12`/`python3.15` pairs
+/// that collapse to the same `file_stem` name), slows startup, and exposes
+/// system binaries as model-invocable skills.
 pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
     let mut tools = vec![];
 
-    // Standard locations to search
+    // Project-local locations to search (no system directories).
     let search_paths = vec![
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
         PathBuf::from("~/.local/bin").expand_home()?,
         PathBuf::from("./tools"),
         PathBuf::from("./vendor/tools"),
@@ -443,8 +449,64 @@ pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
         }
     }
 
-    info!("Discovered {} CLI tools", tools.len());
+    debug!("Discovered {} CLI tools", tools.len());
     Ok(tools)
+}
+
+/// Build a CLI tool config from an executable path.
+///
+/// This is the single shared predicate for "is this binary a skill": the
+/// path must be an executable file shipping with explicit per-tool metadata
+/// (`<stem>.md`, `<stem>.json`, or a sibling `tool.json`). Bare binaries
+/// without docs return `None` so system executables never pollute the skill
+/// catalog. Both directory scanners delegate here so the rule cannot drift.
+pub(crate) fn cli_tool_config_from_executable(dir: &Path, path: &Path) -> Option<CliToolConfig> {
+    if !path.is_file() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(metadata) = path.metadata() else {
+            return None;
+        };
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return None;
+        }
+    }
+    #[cfg(windows)]
+    {
+        match path.extension().and_then(|ext| ext.to_str()) {
+            Some(ext) if matches!(ext.to_lowercase().as_str(), "exe" | "bat" | "cmd") => {}
+            _ => return None,
+        }
+    }
+
+    let stem = path.file_stem().and_then(|stem| stem.to_str())?;
+    let readme_path = dir.join(format!("{stem}.md"));
+    let schema_path = dir.join(format!("{stem}.json"));
+    let tool_json_path = dir.join("tool.json");
+    if !readme_path.exists() && !schema_path.exists() && !tool_json_path.exists() {
+        return None;
+    }
+
+    Some(CliToolConfig {
+        name: stem.to_string(),
+        description: format!("CLI tool: {}", path.display()),
+        executable_path: path.to_path_buf(),
+        readme_path: readme_path.exists().then(|| readme_path.clone()),
+        schema_path: if schema_path.exists() {
+            Some(schema_path)
+        } else if tool_json_path.exists() {
+            Some(tool_json_path)
+        } else {
+            None
+        },
+        timeout_seconds: Some(30),
+        supports_json: false,
+        environment: None,
+        working_dir: Some(dir.to_path_buf()),
+    })
 }
 
 /// Discover tools in a specific directory
@@ -455,47 +517,7 @@ fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
         let entry = entry?;
         let path = entry.path();
 
-        if path.is_file() {
-            // Check if it's an executable
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let metadata = entry.metadata()?;
-                let permissions = metadata.permissions();
-                if permissions.mode() & 0o111 == 0 {
-                    continue;
-                }
-            }
-
-            #[cfg(windows)]
-            {
-                if let Some(ext) = path.extension() {
-                    if ext != "exe" && ext != "bat" && ext != "cmd" {
-                        continue;
-                    }
-                } else {
-                    continue;
-                }
-            }
-
-            // Look for accompanying README
-            let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
-                continue;
-            };
-            let readme_path = dir.join(format!("{stem}.md"));
-
-            let config = CliToolConfig {
-                name: stem.to_string(),
-                description: format!("CLI tool: {}", path.display()),
-                executable_path: path.clone(),
-                readme_path: if readme_path.exists() { Some(readme_path) } else { None },
-                schema_path: None,
-                timeout_seconds: Some(30),
-                supports_json: false,
-                environment: None,
-                working_dir: Some(dir.to_path_buf()),
-            };
-
+        if let Some(config) = cli_tool_config_from_executable(dir, &path) {
             tools.push(config);
         }
     }
@@ -521,10 +543,6 @@ impl PathExt for PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[expect(
-        unused_imports,
-        reason = "Intentional compatibility, platform, test, or API-shape suppression."
-    )]
     use tempfile::TempDir;
 
     #[test]
@@ -564,5 +582,84 @@ mod tests {
 
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("hello world"));
+    }
+
+    #[cfg(unix)]
+    fn write_executable(dir: &Path, name: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join(name);
+        std::fs::write(&path, "#!/bin/sh\necho hi\n").expect("write executable");
+        let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).expect("chmod");
+        path
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bare_executables_without_docs_are_not_skills() {
+        let temp = TempDir::new().expect("tempdir");
+        write_executable(temp.path(), "bare-tool");
+        // Versioned system-style binaries without docs must not collide either.
+        write_executable(temp.path(), "python3.12");
+        write_executable(temp.path(), "python3.15");
+
+        let tools = discover_tools_in_directory(temp.path()).expect("discover tools");
+        assert!(
+            tools.is_empty(),
+            "bare executables without <stem>.md/.json or tool.json must be skipped, got {:?}",
+            tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn documented_executables_are_discovered_as_skills() {
+        let temp = TempDir::new().expect("tempdir");
+        write_executable(temp.path(), "doc-tool");
+        std::fs::write(temp.path().join("doc-tool.md"), "# doc-tool\n").expect("write readme");
+        write_executable(temp.path(), "schema-tool");
+        std::fs::write(temp.path().join("schema-tool.json"), "{}").expect("write schema");
+
+        let tools = discover_tools_in_directory(temp.path()).expect("discover tools");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"doc-tool"), "expected doc-tool, got {names:?}");
+        assert!(names.contains(&"schema-tool"), "expected schema-tool, got {names:?}");
+        assert_eq!(tools.len(), 2, "only documented tools should load, got {names:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_executable_with_docs_is_skipped() {
+        let temp = TempDir::new().expect("tempdir");
+        let script = temp.path().join("not-executable");
+        std::fs::write(&script, "#!/bin/sh\necho hi\n").expect("write script");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&script).expect("metadata").permissions();
+            perms.set_mode(0o644);
+            std::fs::set_permissions(&script, perms).expect("chmod");
+        }
+        std::fs::write(temp.path().join("not-executable.md"), "# docs\n").expect("write readme");
+
+        let tools = discover_tools_in_directory(temp.path()).expect("discover tools");
+        assert!(
+            tools.is_empty(),
+            "non-executable files must be skipped even with docs, got {:?}",
+            tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sibling_tool_json_counts_as_docs() {
+        let temp = TempDir::new().expect("tempdir");
+        write_executable(temp.path(), "json-tool");
+        std::fs::write(temp.path().join("tool.json"), "{}").expect("write tool.json");
+
+        let tools = discover_tools_in_directory(temp.path()).expect("discover tools");
+        assert_eq!(tools.len(), 1, "sibling tool.json should qualify the executable");
+        assert_eq!(tools[0].name, "json-tool");
     }
 }

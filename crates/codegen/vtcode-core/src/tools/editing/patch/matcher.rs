@@ -118,3 +118,25 @@ pub(crate) fn normalise_text(input: &str) -> String {
     }
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PatchContextMatcher;
+
+    #[test]
+    fn matching_preserves_internal_whitespace_and_full_lines() {
+        let lines = vec!["X   Y".to_string()];
+        let matcher = PatchContextMatcher::new(&lines);
+        assert_eq!(matcher.seek(&["X   Y".to_string()], 0, false), Some(0));
+        assert_eq!(matcher.seek(&["X  Y".to_string()], 0, false), None);
+        assert_eq!(matcher.seek(&["X".to_string()], 0, false), None);
+    }
+
+    #[test]
+    fn matching_supports_boundary_whitespace_and_unicode_punctuation() {
+        let lines = vec!["  A \u{2014} B  ".to_string()];
+        let matcher = PatchContextMatcher::new(&lines);
+        assert_eq!(matcher.seek(&["A - B".to_string()], 0, false), Some(0));
+        assert_eq!(matcher.seek(&["A  - B".to_string()], 0, false), None);
+    }
+}

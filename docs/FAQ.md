@@ -1,14 +1,17 @@
 # VT Code FAQ
 
-Based on best practices from Ratatui and terminal UI development, this FAQ addresses common questions about VT Code architecture and usage.
+Based on best practices from Ratatui and terminal UI development, this FAQ addresses common questions about VT Code
+architecture and usage.
 
 ## Terminal & TUI
 
 ### Why don't I see duplicate key events on Windows?
 
-VT Code correctly filters key events to only process `KeyEventKind::Press`, avoiding duplicate events from both press and release.
+VT Code correctly filters key events to only process `KeyEventKind::Press`, avoiding duplicate events from both press
+and release.
 
 See `crates/codegen/vtcode-ui/src/tui/core_tui/runner/`:
+
 ```rust
 if key.kind == KeyEventKind::Press {
     let _ = _event_tx.send(Event::Key(key));
@@ -20,16 +23,19 @@ This pattern is **cross-platform compatible** (Windows, macOS, Linux).
 ### Why should VT Code use tokio/async?
 
 VT Code uses Tokio for:
+
 1. **Event multiplexing** - Handling terminal events, ticks, and renders concurrently without blocking
 2. **Multi-tool execution** - Running MCP tools, PTY sessions, and API calls in parallel
 3. **Lifecycle hooks** - Running shell commands asynchronously during agent events
 
 The architecture uses `tokio::select!` to multiplex:
+
 - Terminal input (blocking read in spawned task)
 - Frame rate ticks (60 FPS)
 - Event processing ticks (4 Hz)
 
 **When NOT to use async:**
+
 - Simple one-off CLI tasks (prefer synchronous main loop)
 - Tools that don't need concurrent execution
 
@@ -40,17 +46,20 @@ VT Code's multi-agent coordination and tool execution justify async.
 VT Code renders to `stderr` (via `CrosstermBackend::new(std::io::stderr())` in the TUI runner).
 
 **Rationale:**
+
 - Allows piping output: `vtcode ask "task" | jq` doesn't break the TUI
 - Makes the TUI work out-of-the-box in pipes (no special TTY detection needed)
 - Compatible with shell pipelines and CI/CD environments
 
 ### Can I run multiple terminal.draw() calls in the same loop?
 
-No. VT Code uses a single `terminal.draw()` call per frame that renders all widgets together. See `crates/codegen/vtcode-core/src/ui/tui/session.rs:render()` method, which orchestrates all UI components in one closure.
+No. VT Code uses a single `terminal.draw()` call per frame that renders all widgets together. See
+`crates/codegen/vtcode-core/src/ui/tui/session.rs:render()` method, which orchestrates all UI components in one closure.
 
 ### How do I pipe output to other tools?
 
-Because VT Code strictly separates data (`stdout`) from metadata/logging (`stderr`), you can pipe the output of commands like `ask` and `exec` directly.
+Because VT Code strictly separates data (`stdout`) from metadata/logging (`stderr`), you can pipe the output of commands
+like `ask` and `exec` directly.
 
 ```bash
 # Code goes to file, logs stay on screen
@@ -61,17 +70,20 @@ Use `vtcode exec --json` to get a pipeable stream of structured events.
 
 ### How does VT Code handle terminal resizing?
 
-VT Code listens for `Event::Resize(x, y)` events and updates the layout automatically. The TUI widgets reflow based on the new terminal dimensions—no special handling needed.
+VT Code listens for `Event::Resize(x, y)` events and updates the layout automatically. The TUI widgets reflow based on
+the new terminal dimensions—no special handling needed.
 
 ### Can I change font size in a VT Code terminal?
 
-No, VT Code can't control terminal font size. That's a terminal emulator setting. VT Code adapts to the terminal's actual size via `Event::Resize`.
+No, VT Code can't control terminal font size. That's a terminal emulator setting. VT Code adapts to the terminal's
+actual size via `Event::Resize`.
 
 **Tip:** Use `tui-big-text` or `figlet` for large ASCII art titles within the TUI.
 
 ### What characters look weird or display as ?
 
 VT Code assumes a **Nerd Font** for box-drawing and icon support. Install one of:
+
 - [Nerd Fonts](https://www.nerdfonts.com/) (recommended)
 - [Kreative Square](http://www.kreativekorp.com/software/fonts/ksquare/)
 
@@ -81,15 +93,18 @@ VT Code assumes a **Nerd Font** for box-drawing and icon support. Install one of
 
 **VT Code is a tool/agent**, not a library or framework.
 
-However, `vtcode-core` (the Rust crate) is a **library** you can use in your own Rust projects. The binary (`vtcode` CLI) uses this library to implement a coding agent.
+However, `vtcode-core` (the Rust crate) is a **library** you can use in your own Rust projects. The binary (`vtcode`
+CLI) uses this library to implement a coding agent.
 
 **Philosophy:**
+
 - **Library-like:** You control the event loop and can extend VT Code's functionality
 - **Agent-first:** The CLI provides opinionated defaults for common coding tasks
 
 ### How does VT Code differ from similar tools?
 
 VT Code is an **AI coding agent** with:
+
 - **Security-first:** Execution policies, workspace isolation, tool policies, and tree-sitter-bash command validation
 - **Multi-LLM:** OpenAI, Anthropic, Gemini, Ollama, LM Studio, etc.
 - **Semantic code understanding:** LLM-native analysis and navigation across all modern languages
@@ -99,6 +114,7 @@ VT Code is an **AI coding agent** with:
 ### Why does VT Code use async/await extensively?
 
 **Reasons:**
+
 1. **Tool execution:** MCP tools, PTY sessions, API calls run concurrently
 2. **Event handling:** Terminal input, ticks, renders multiplexed with `tokio::select!`
 3. **Streaming:** Real-time AI responses streamed without blocking
@@ -108,28 +124,32 @@ VT Code is an **AI coding agent** with:
 
 ### How does VT Code manage terminal state?
 
-The fullscreen TUI uses the shared runner in `crates/codegen/vtcode-ui/src/tui/core_tui/runner/` and writes terminal control sequences through `stderr`.
+The fullscreen TUI uses the shared runner in `crates/codegen/vtcode-ui/src/tui/core_tui/runner/` and writes terminal
+control sequences through `stderr`.
 
-1. **Enter:** Save cursor position, enable terminal modes (raw mode, bracketed paste, focus events, keyboard enhancements, optional mouse capture), then enter alternate screen.
+1. **Enter:** Save cursor position, enable terminal modes (raw mode, bracketed paste, focus events, keyboard
+   enhancements, optional mouse capture), then enter alternate screen.
 2. **Running:** Process events, update state, and render only the current viewport.
-3. **Exit:** Stop the event loop, clear the alternate viewport, finalize the terminal, leave alternate screen, restore terminal modes in reverse order, and restore the saved cursor position. A shared teardown gate prevents a forced host cleanup from racing a final frame onto the main screen.
+3. **Exit:** Stop the event loop, clear the alternate viewport, finalize the terminal, leave alternate screen, restore
+   terminal modes in reverse order, and restore the saved cursor position. A shared teardown gate prevents a forced host
+   cleanup from racing a final frame onto the main screen.
 
 The `ExternalAppLauncher` trait allows suspending the TUI to launch editors, git clients, etc.
 
 ### Why suspend the TUI to launch external apps?
 
-VT Code suspends the event loop, drains pending terminal events, leaves alternate-screen rendering, launches the external app, and then restores the fullscreen session. The same pattern is used for editor launches and for the tool-output viewer's handoff to native scrollback.
+VT Code suspends the event loop, drains pending terminal events, leaves alternate-screen rendering, launches the
+external app, and then restores the fullscreen session. The same pattern is used for editor launches and for the
+tool-output viewer's handoff to native scrollback.
 
 This prevents terminal artifacts and ensures external apps get clean input/output.
 
 ### How does fullscreen Transcript Review work?
 
-Press the configured Transcript Review shortcut (default `Ctrl+T`) to open or
-close Transcript Review. VT Code composes the ordered session conversation
-with complete command output, including PTY captures and distinguishable pipe
-stdout/stderr streams. The live view stays compact, while the review retains
-the full capture. Rich rendering is the default; press the configured render
-toggle (default `R`) for ANSI-free raw text. You can:
+Press the configured Transcript Review shortcut (default `Ctrl+T`) to open or close Transcript Review. VT Code composes
+the ordered session conversation with complete command output, including PTY captures and distinguishable pipe
+stdout/stderr streams. The live view stays compact, while the review retains the full capture. Rich rendering is the
+default; press the configured render toggle (default `R`) for ANSI-free raw text. You can:
 
 - search with `/`, `n`, and `N`
 - page through the conversation with `Ctrl+U`, `Ctrl+D`, `Ctrl+B`, and `Ctrl+F`
@@ -137,17 +157,14 @@ toggle (default `R`) for ANSI-free raw text. You can:
 - open the complete conversation in your editor with `v`
 - copy the complete ANSI-free conversation with `Ctrl+O`
 
-Successful command rows are grouped only while they are contiguous. Their
-styled shortcut and `click to expand` suffix is clickable with
-mouse capture; clicking a grouped row opens the review at its first command.
-Failures,
-warnings, stderr, diffs, and meaningful artifacts remain inline.
+Successful command rows are grouped only while they are contiguous. Their styled shortcut and `click to expand` suffix
+is clickable with mouse capture; clicking a grouped row opens the review at its first command. Failures, warnings,
+stderr, diffs, and meaningful artifacts remain inline.
 
-The Transcript Review title includes a clickable `[close]` control, and its
-footer lists the active open/close, rich/raw, search, and scrolling shortcuts.
-These hints and controls can be disabled independently in `ui.transcript_review`.
-`Alt+O` remains available as a compatibility alias. If the review action is
-explicitly unbound, `Ctrl+T` falls back to readline transpose behavior.
+The Transcript Review title includes a clickable `[close]` control, and its footer lists the active open/close,
+rich/raw, search, and scrolling shortcuts. These hints and controls can be disabled independently in
+`ui.transcript_review`. `Alt+O` remains available as a compatibility alias. If the review action is explicitly unbound,
+`Ctrl+T` falls back to readline transpose behavior.
 
 ### What should I configure for tmux?
 
@@ -157,18 +174,21 @@ If you want wheel scrolling and click support inside fullscreen rendering, enabl
 set -g mouse on
 ```
 
-VT Code's alternate-screen fullscreen mode is intended for normal tmux sessions. Avoid using it with iTerm2 control mode (`tmux -CC`), where mouse capture and alternate-screen behavior are unreliable.
+VT Code's alternate-screen fullscreen mode is intended for normal tmux sessions. Avoid using it with iTerm2 control mode
+(`tmux -CC`), where mouse capture and alternate-screen behavior are unreliable.
 
 ## Debugging & Troubleshooting
 
 ### How do I enable debug logging?
 
 Set `RUST_LOG` environment variable:
+
 ```bash
 RUST_LOG=vtcode_core=debug,vtcode=debug vtcode
 ```
 
 Or configure in `vtcode.toml`:
+
 ```toml
 [debug]
 enable_tracing = true
@@ -180,7 +200,8 @@ See `src/main.rs` for initialization.
 
 ### How does VT Code handle buffer overruns?
 
-The Ratatui FAQ recommends using `area.intersection(buf.area)` to prevent out-of-bounds rendering. This is applied in VT Code's widget implementations to clamp rendering to valid regions.
+The Ratatui FAQ recommends using `area.intersection(buf.area)` to prevent out-of-bounds rendering. This is applied in VT
+Code's widget implementations to clamp rendering to valid regions.
 
 **Best practice:** Use `Rect::intersection()` and `Rect::clamp()` when calculating layouts manually.
 
@@ -192,6 +213,7 @@ The Ratatui FAQ recommends using `area.intersection(buf.area)` to prevent out-of
 - **Tick rate:** 4 Hz (default in `vtcode-ui`)
 
 Both are configurable via builder methods:
+
 ```rust
 tui.frame_rate(60.0).tick_rate(4.0)
 ```
@@ -205,6 +227,7 @@ tui.frame_rate(60.0).tick_rate(4.0)
 ### Can I use VT Code in a pipe?
 
 Yes. VT Code detects when stdout is a pipe (not a TTY) and adapts:
+
 - **Interactive mode:** Full TUI if terminal is available
 - **Pipe mode:** Text output (if piped)
 

@@ -2,19 +2,20 @@
 
 ## Overview
 
-VT Code now supports Agent Communication Protocol (ACP) for inter-agent communication. This enables vtcode to act as an ACP client, discovering and communicating with other agents in a distributed system.
+VT Code now supports Agent Communication Protocol (ACP) for inter-agent communication. This enables vtcode to act as an
+ACP client, discovering and communicating with other agents in a distributed system.
 
 **Key Features:**
 
--   REST-based HTTP protocol (no special SDKs required)
--   Agent discovery (online and offline metadata)
--   Synchronous and asynchronous request handling
--   Health monitoring and agent registry management
--   Three MCP tools for main agent integration
+- REST-based HTTP protocol (no special SDKs required)
+- Agent discovery (online and offline metadata)
+- Synchronous and asynchronous request handling
+- Health monitoring and agent registry management
+- Three MCP tools for main agent integration
 
 ## Architecture
 
-```
+```text
 
             VT Code Main Agent
   (Primary decision-maker & orchestrator)
@@ -53,43 +54,38 @@ The ACP client library is located in `vtcode-acp/` and provides:
 #### Core Modules
 
 1. **`client.rs`** - HTTP-based ACP communication
-
-    - `AcpClient`: Main client for agent communication
-    - `AcpClientBuilder`: Fluent builder for client configuration
-    - Methods: `call_sync()`, `call_async()`, `ping()`, `discover_agent()`
+   - `AcpClient`: Main client for agent communication
+   - `AcpClientBuilder`: Fluent builder for client configuration
+   - Methods: `call_sync()`, `call_async()`, `ping()`, `discover_agent()`
 
 2. **`discovery.rs`** - Agent registry and discovery
-
-    - `AgentRegistry`: In-memory registry of available agents
-    - `AgentInfo`: Metadata about a registered agent
-    - Methods: `register()`, `find()`, `find_by_capability()`, `list_online()`
+   - `AgentRegistry`: In-memory registry of available agents
+   - `AgentInfo`: Metadata about a registered agent
+   - Methods: `register()`, `find()`, `find_by_capability()`, `list_online()`
 
 3. **`messages.rs`** - ACP message types
-
-    - `AcpMessage`: Core message envelope
-    - `AcpRequest`: Request structure
-    - `AcpResponse`: Response structure
-    - `MessageType`: Enum for message types (Request, Response, Error)
-    - `ResponseStatus`: Status codes (Success, Failed, Timeout, Partial)
+   - `AcpMessage`: Core message envelope
+   - `AcpRequest`: Request structure
+   - `AcpResponse`: Response structure
+   - `MessageType`: Enum for message types (Request, Response, Error)
+   - `ResponseStatus`: Status codes (Success, Failed, Timeout, Partial)
 
 4. **`error.rs`** - Error types
-    - `AcpError`: Comprehensive error handling
-    - `AcpResult<T>`: Standard result type for ACP operations
+   - `AcpError`: Comprehensive error handling
+   - `AcpResult<T>`: Standard result type for ACP operations
 
 ### Agent Tool Integration
 
 Three MCP tools expose ACP functionality to the main agent (now in `vtcode-core`):
 
 1. **`acp_call`** - Inter-agent RPC calls
-
-    - Params: `remote_agent_id`, `action`, `args`, `method` (sync/async)
+   - Params: `remote_agent_id`, `action`, `args`, `method` (sync/async)
 
 2. **`acp_discover`** - Agent discovery
-
-    - Modes: `list_all`, `list_online`, `by_capability`, `by_id`
+   - Modes: `list_all`, `list_online`, `by_capability`, `by_id`
 
 3. **`acp_health`** - Health monitoring
-    - Checks agent liveness via ping
+   - Checks agent liveness via ping
 
 ## Usage Examples
 
@@ -227,7 +223,8 @@ async fn main() -> anyhow::Result<()> {
 
 ### Via MCP Tools (Recommended)
 
-The main agent simply uses the three MCP tools (`acp_call`, `acp_discover`, `acp_health`) when calling remote agents. The ACP client is initialized automatically during agent startup.
+The main agent simply uses the three MCP tools (`acp_call`, `acp_discover`, `acp_health`) when calling remote agents.
+The ACP client is initialized automatically during agent startup.
 
 ## Message Protocol
 
@@ -348,31 +345,27 @@ Health check endpoint.
 
 ## VT Code Lifecycle Extensions
 
-Beyond the standard ACP methods (`session/new`, `session/load`, `session/prompt`,
-`session/cancel`), VT Code serves three **extension methods** on the same ACP
-connection for programmatic hosts that need the session-lifecycle operations
+Beyond the standard ACP methods (`session/new`, `session/load`, `session/prompt`, `session/cancel`), VT Code serves
+three **extension methods** on the same ACP connection for programmatic hosts that need the session-lifecycle operations
 Codex's proprietary app-server exposes:
 
-| Method | Params | Result |
-| --- | --- | --- |
-| `session/fork` | `{session_id}` | `{session_id}` — new independent session with copied history |
-| `session/rollback` | `{session_id, keep_last_turns}` | `{remaining_messages}` — drops trailing user turns (`0` clears) |
-| `session/compact` | `{session_id}` | `{original_messages, compacted_messages}` — LLM summarization in place |
+| Method             | Params                          | Result                                                                 |
+| ------------------ | ------------------------------- | ---------------------------------------------------------------------- |
+| `session/fork`     | `{session_id}`                  | `{session_id}` — new independent session with copied history           |
+| `session/rollback` | `{session_id, keep_last_turns}` | `{remaining_messages}` — drops trailing user turns (`0` clears)        |
+| `session/compact`  | `{session_id}`                  | `{original_messages, compacted_messages}` — LLM summarization in place |
 
-Standard ACP clients (Zed) are unaffected — they never call the extensions.
-`session/compact` fails closed (JSON-RPC internal error with reason
-`session_changed_during_operation`) if the session history changes while its
-summarization request is in flight, instead of overwriting turns processed
-concurrently.
-The machine-readable wire contract, including JSON Schemas for every request
-and response, is exportable:
+Standard ACP clients (Zed) are unaffected — they never call the extensions. `session/compact` fails closed (JSON-RPC
+internal error with reason `session_changed_during_operation`) if the session history changes while its summarization
+request is in flight, instead of overwriting turns processed concurrently. The machine-readable wire contract, including
+JSON Schemas for every request and response, is exportable:
 
 ```sh
 vtcode schema acp
 ```
 
-This is VT Code's answer to Codex's `thread/fork`/`thread/compact` RPCs: the
-same capability, on an open protocol, without a parallel app-server surface.
+This is VT Code's answer to Codex's `thread/fork`/`thread/compact` RPCs: the same capability, on an open protocol,
+without a parallel app-server surface.
 
 ## Configuration
 
@@ -401,29 +394,29 @@ capabilities = ["tensorflow", "pytorch"]
 
 ### Synchronous Calls
 
--   Blocks main agent until response received
--   Best for short-running tasks (<5 seconds)
--   Recommended for control flow decisions
+- Blocks main agent until response received
+- Best for short-running tasks (<5 seconds)
+- Recommended for control flow decisions
 
 ### Asynchronous Calls
 
--   Returns immediately with `message_id`
--   Main agent continues processing
--   Best for long-running tasks (>5 seconds)
--   Main agent must poll or subscribe for updates
+- Returns immediately with `message_id`
+- Main agent continues processing
+- Best for long-running tasks (>5 seconds)
+- Main agent must poll or subscribe for updates
 
 ### Timeout Handling
 
--   Default timeout: 30 seconds
--   Configurable per request
--   Async calls may timeout gracefully
+- Default timeout: 30 seconds
+- Configurable per request
+- Async calls may timeout gracefully
 
 ### Registry Caching
 
--   Agent registry is in-memory
--   Agents stay registered until explicitly unregistered
--   Status updates via `update_status()` method
--   Health check marks agents online/offline
+- Agent registry is in-memory
+- Agents stay registered until explicitly unregistered
+- Status updates via `update_status()` method
+- Health check marks agents online/offline
 
 ## Error Handling
 
@@ -454,17 +447,17 @@ AcpError::SerializationError("Invalid JSON".to_string())
 
 Planned enhancements:
 
--   [ ] Agent authentication (JWT/mutual TLS)
--   [ ] Message encryption
--   [ ] Decentralized agent discovery
--   [ ] Agent service mesh integration
--   [ ] Distributed tracing with OpenTelemetry
--   [ ] Agent metrics collection
--   [ ] Message queuing for resilience
--   [ ] Retry policies and circuit breakers
+- [ ] Agent authentication (JWT/mutual TLS)
+- [ ] Message encryption
+- [ ] Decentralized agent discovery
+- [ ] Agent service mesh integration
+- [ ] Distributed tracing with OpenTelemetry
+- [ ] Agent metrics collection
+- [ ] Message queuing for resilience
+- [ ] Retry policies and circuit breakers
 
 ## See Also
 
--   [ACP Official Spec](https://agentcommunicationprotocol.dev/)
--   [MCP Integration Guide](../guides/mcp-integration.md)
--   [vtcode Configuration](../config/config.md)
+- [ACP Official Spec](https://agentcommunicationprotocol.dev/)
+- [MCP Integration Guide](../guides/mcp-integration.md)
+- [vtcode Configuration](../config/config.md)

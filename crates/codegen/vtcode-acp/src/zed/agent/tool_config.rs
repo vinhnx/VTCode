@@ -186,8 +186,7 @@ impl ZedAgent {
             return (input.to_string(), false);
         }
 
-        let truncated: String = input.chars().take(MAX_TOOL_RESPONSE_CHARS).collect();
-        (truncated, true)
+        (vtcode_commons::formatting::truncate_text(input, MAX_TOOL_RESPONSE_CHARS, ""), true)
     }
 
     fn argument_message(template: &str, argument: &str) -> String {

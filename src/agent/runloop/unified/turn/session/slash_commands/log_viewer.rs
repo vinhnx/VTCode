@@ -168,6 +168,7 @@ fn read_events_from_file(path: PathBuf) -> Result<Vec<LogEntry>> {
 fn item_type_label(details: &vtcode_core::exec::events::ThreadItemDetails) -> &'static str {
     use vtcode_core::exec::events::ThreadItemDetails;
     match details {
+        ThreadItemDetails::Decision(_) => "Public decision",
         ThreadItemDetails::AgentMessage(_) => "AgentMessage",
         ThreadItemDetails::Plan(_) => "Plan",
         ThreadItemDetails::Reasoning(_) => "Reasoning",
@@ -254,6 +255,9 @@ fn describe_event(event: &vtcode_core::exec::events::ThreadEvent) -> (&'static s
         ),
         vtcode_core::exec::events::ThreadEvent::Error(e) => {
             ("error", truncate(&e.message, MAX_FIELD_DISPLAY_LEN).to_string())
+        }
+        vtcode_core::exec::events::ThreadEvent::MatrixUpdated(snapshot) => {
+            ("matrix.updated", format!("{}: {:?}", snapshot.spec.id, snapshot.lifecycle))
         }
         vtcode_core::exec::events::ThreadEvent::Unknown => ("unknown", String::new()),
     }

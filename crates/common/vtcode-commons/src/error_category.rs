@@ -340,10 +340,39 @@ impl fmt::Display for ErrorCategory {
 /// This uses string matching as a last resort when the original error type has
 /// been erased through `anyhow` wrapping. Typed conversions (e.g., `From<LLMError>`)
 /// should be preferred where the original error type is available.
+///
+/// Recovery decisions are made by *type* when it survives the `anyhow`
+/// boundary. The outermost context layer is classified first (preserving the
+/// intentional wording of a deliberate `.context(...)`), but when that layer is
+/// uninformative we consult the typed root and then the remaining cause chain.
+/// Without this, a wrapping `.context("...")` message alone would hide the
+/// underlying category — e.g. an `LLMError::RateLimit` buried under
+/// `"compaction failed"` would fall through to `ExecutionError` and lose its
+/// retry/recovery policy.
 #[must_use]
 pub fn classify_anyhow_error(err: &anyhow::Error) -> ErrorCategory {
-    let msg = err.to_string().to_ascii_lowercase();
-    classify_error_message(&msg)
+    // Fast path: the outermost message is usually the most specific context and
+    // matches the historical behavior exactly.
+    let outer = classify_error_message(&err.to_string());
+    if outer != ErrorCategory::ExecutionError {
+        return outer;
+    }
+
+    // The outer context was uninformative (or absent). Prefer the typed source
+    // of truth when it survived the boundary, then fall back to the deeper
+    // cause chain (`innermost` markers such as `connection reset`).
+    if let Some(llm_error) = err.downcast_ref::<crate::llm::LLMError>() {
+        return ErrorCategory::from(llm_error);
+    }
+
+    for cause in err.chain().skip(1) {
+        let category = classify_error_message(&cause.to_string());
+        if category != ErrorCategory::ExecutionError {
+            return category;
+        }
+    }
+
+    ErrorCategory::ExecutionError
 }
 
 /// Return whether an error explicitly reports that the provider rejected the
@@ -713,7 +742,7 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
                         404 => ErrorCategory::ResourceNotFound,
                         429 => ErrorCategory::RateLimit,
                         400 => ErrorCategory::InvalidParameters,
-                        500 | 502 | 503 | 504 => ErrorCategory::ServiceUnavailable,
+                        500 | 502 | 503 | 504 | 529 => ErrorCategory::ServiceUnavailable,
                         408 => ErrorCategory::Timeout,
                         _ => classify_error_message(message),
                     };
@@ -903,6 +932,47 @@ mod tests {
             classify_error_message("structural pattern preflight failed: pattern is not parseable as Rust syntax"),
             ErrorCategory::InvalidParameters
         );
+    }
+
+    // --- classify_anyhow_error: type-first recovery, context-aware fallback ---
+
+    #[test]
+    fn classify_anyhow_prefers_typed_llm_error_under_context() {
+        // A typed `LLMError` must win over an uninformative outer context:
+        // the outer message alone would classify as `ExecutionError`, but the
+        // error's type is the source of truth for its recovery policy.
+        let rate = anyhow::Error::new(crate::llm::LLMError::RateLimit { metadata: None }).context("compaction failed");
+        assert_eq!(classify_anyhow_error(&rate), ErrorCategory::RateLimit);
+
+        let auth = anyhow::Error::new(crate::llm::LLMError::Authentication {
+            message: "bad token".to_string(),
+            metadata: None,
+        })
+        .context("request failed");
+        assert_eq!(classify_anyhow_error(&auth), ErrorCategory::Authentication);
+    }
+
+    #[test]
+    fn classify_anyhow_reads_deeper_cause_chain() {
+        // When the outer context is uninformative and no typed error survives,
+        // the underlying cause must still be classified (`{err:#}`-style).
+        let inner = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "connection reset by peer");
+        let err = anyhow::Error::new(inner).context("failed to fetch resource");
+        assert_eq!(classify_anyhow_error(&err), ErrorCategory::Network);
+    }
+
+    #[test]
+    fn classify_anyhow_keeps_outermost_context_priority() {
+        // A deliberate, specific `.context(...)` still wins over a generic root.
+        let inner = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
+        let err = anyhow::Error::new(inner).context("tool permission denied by policy");
+        assert_eq!(classify_anyhow_error(&err), ErrorCategory::PolicyViolation);
+    }
+
+    #[test]
+    fn classify_anyhow_unknown_stays_execution_error() {
+        let err = anyhow::anyhow!("something went wrong");
+        assert_eq!(classify_anyhow_error(&err), ErrorCategory::ExecutionError);
     }
 
     // --- Retryability tests ---

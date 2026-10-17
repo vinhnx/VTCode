@@ -29,11 +29,20 @@ pub(crate) struct DragAutoScroll {
     pub(crate) last_step: Instant,
 }
 
-/// Tracks mouse-driven text selection state for the TUI transcript.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SelectionSurface {
+    #[default]
+    Transcript,
+    Overlay,
+}
+
+/// Tracks shared mouse-driven text selection for the transcript and overlays.
 #[derive(Debug, Default)]
 pub struct MouseSelectionState {
     /// Whether the user is currently dragging to select text.
     pub(crate) is_selecting: bool,
+    /// Retained after mouse-up, unlike the active drag target.
+    surface: SelectionSurface,
     /// Screen coordinates where the selection started (column, row).
     start: (u16, u16),
     /// Screen coordinates where the selection currently ends (column, row).
@@ -62,6 +71,7 @@ impl MouseSelectionState {
 
     /// Begin a new selection at the given screen position.
     pub(crate) fn start_selection(&mut self, col: u16, row: u16) {
+        self.surface = SelectionSurface::Transcript;
         self.is_selecting = true;
         self.has_selection = false;
         self.copied = false;
@@ -69,8 +79,19 @@ impl MouseSelectionState {
         self.end = (col, row);
     }
 
-    /// Set a selection directly, bypassing drag state.
+    /// Begin an overlay selection that must not move with transcript geometry.
+    pub(crate) fn start_overlay_selection(&mut self, col: u16, row: u16) {
+        self.start_selection(col, row);
+        self.surface = SelectionSurface::Overlay;
+    }
+
+    pub(crate) fn is_transcript_selection(&self) -> bool {
+        self.surface == SelectionSurface::Transcript
+    }
+
+    /// Set a transcript selection directly, bypassing drag state.
     pub(crate) fn set_selection(&mut self, start: (u16, u16), end: (u16, u16)) {
+        self.surface = SelectionSurface::Transcript;
         self.is_selecting = false;
         self.has_selection = start != end;
         self.copied = false;
@@ -96,14 +117,15 @@ impl MouseSelectionState {
         }
     }
 
-    /// Adjust selection row coordinates after a scroll event.
+    /// Adjust transcript selection coordinates when the underlying content moves.
+    /// Overlay text retains its screen position during background scrolling.
     ///
     /// `row_delta` is positive when content moves down on screen (scroll up / showing
     /// older content) and negative when content moves up (scroll down / showing newer
     /// content).  If the adjustment pushes the selection completely off-screen the
     /// selection is cleared.
     pub(crate) fn adjust_for_scroll(&mut self, row_delta: i32) {
-        if !self.has_selection && !self.is_selecting {
+        if !self.is_transcript_selection() || (!self.has_selection && !self.is_selecting) {
             return;
         }
         if row_delta == 0 {
@@ -139,6 +161,7 @@ impl MouseSelectionState {
 
     /// Clear any active selection.
     pub(crate) fn clear(&mut self) {
+        self.surface = SelectionSurface::Transcript;
         self.is_selecting = false;
         self.has_selection = false;
         self.copied = false;
@@ -366,6 +389,13 @@ fn trace_clipboard(message: &str) {
     tracing::debug!(target: "vtcode_ui::clipboard", "{message}");
 }
 
+/// Waits on `child` from a detached thread so no zombie accumulates and the caller never blocks.
+fn reap_in_background(mut child: std::process::Child) {
+    let _ = std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+}
+
 fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
     use std::process::Stdio;
 
@@ -452,22 +482,15 @@ fn spawn_clipboard_command(mut cmd: std::process::Command, text: &str) -> bool {
                         "'{program}' still running after {WAIT_BUDGET:?}; input {}",
                         if ok { "accepted" } else { "failed" }
                     ));
-                    // Fork-and-hold helpers legitimately outlive the copy call;
-                    // reap from a detached thread so no zombie accumulates.
-                    let _ = std::thread::spawn(move || {
-                        let mut child = child;
-                        let _ = child.wait();
-                    });
+                    // Fork-and-hold helpers legitimately outlive the copy call.
+                    reap_in_background(child);
                     return ok;
                 }
                 std::thread::sleep(POLL_INTERVAL);
             }
             Err(err) => {
                 trace_clipboard(&format!("'{program}' wait failed: {err}"));
-                let _ = std::thread::spawn(move || {
-                    let mut child = child;
-                    let _ = child.wait();
-                });
+                reap_in_background(child);
                 return false;
             }
         }

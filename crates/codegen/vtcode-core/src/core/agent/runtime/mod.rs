@@ -1,8 +1,8 @@
 use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::{
-    FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent,
-    SteeringMessage,
+    FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_OVERFLOW_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS,
+    QueuedFollowUpIntent, SteeringMessage,
 };
 use crate::exec::events::{ThreadEvent, ToolCallStatus, ToolOutcome};
 use crate::llm::provider::{
@@ -214,6 +214,10 @@ impl RuntimeModelAdapter for ProviderRuntimeModelAdapter<'_> {
 pub struct RuntimeSteering {
     steering_receiver: Option<UnboundedReceiver<SteeringMessage>>,
     queued_follow_up_inputs: VecDeque<QueuedFollowUpIntent>,
+    /// Overflow park for follow-ups that arrive while the primary FIFO is
+    /// full. Drained FIFO into the primary queue as space frees so a rapid
+    /// influx is never silently dropped.
+    overflow_follow_up_inputs: VecDeque<QueuedFollowUpIntent>,
     in_flight_follow_up_intents: VecDeque<QueuedFollowUpIntent>,
     applied_follow_up_intent_ids: VecDeque<String>,
 }
@@ -229,6 +233,7 @@ impl RuntimeSteering {
         Self {
             steering_receiver,
             queued_follow_up_inputs: VecDeque::new(),
+            overflow_follow_up_inputs: VecDeque::new(),
             in_flight_follow_up_intents: VecDeque::new(),
             applied_follow_up_intent_ids: VecDeque::new(),
         }
@@ -246,7 +251,7 @@ impl RuntimeSteering {
 
     #[must_use]
     pub fn has_pending_follow_up_inputs(&self) -> bool {
-        !self.queued_follow_up_inputs.is_empty()
+        !self.queued_follow_up_inputs.is_empty() || !self.overflow_follow_up_inputs.is_empty()
     }
 
     /// Dequeue the next follow-up user input, if any are pending.
@@ -255,8 +260,22 @@ impl RuntimeSteering {
     }
 
     /// Dequeue the next identified follow-up intent.
+    ///
+    /// Refills the primary FIFO from overflow first so an empty primary with
+    /// parked overflow still yields (`has_pending_follow_up_inputs` staying
+    /// true must not race a `None` pop).
     pub fn pop_follow_up_intent(&mut self) -> Option<QueuedFollowUpIntent> {
+        self.drain_overflow_into_primary();
         self.queued_follow_up_inputs.pop_front()
+    }
+
+    /// Move overflow-parked intents into free primary-FIFO slots.
+    fn drain_overflow_into_primary(&mut self) {
+        while self.queued_follow_up_inputs.len() < MAX_QUEUED_FOLLOW_UP_INTENTS
+            && let Some(intent) = self.overflow_follow_up_inputs.pop_front()
+        {
+            self.queued_follow_up_inputs.push_back(intent);
+        }
     }
 
     /// Queue a follow-up user input. The boolean is `false` when the FIFO is
@@ -277,12 +296,22 @@ impl RuntimeSteering {
     }
 
     /// Queue a recovered intent without changing its stable identity.
+    ///
+    /// Primary FIFO first; when it is full the intent parks in a bounded
+    /// overflow buffer so rapid influx is preserved rather than dropped.
+    /// Only when both buffers are full does the call fail.
     pub fn try_queue_follow_up_intent(&mut self, intent: QueuedFollowUpIntent) -> Result<(), FollowUpQueueFull> {
-        if self.queued_follow_up_inputs.len() + self.in_flight_follow_up_intents.len() >= MAX_QUEUED_FOLLOW_UP_INTENTS {
-            return Err(FollowUpQueueFull { capacity: MAX_QUEUED_FOLLOW_UP_INTENTS });
+        if self.queued_follow_up_inputs.len() + self.in_flight_follow_up_intents.len() < MAX_QUEUED_FOLLOW_UP_INTENTS {
+            self.queued_follow_up_inputs.push_back(intent);
+            return Ok(());
         }
-        self.queued_follow_up_inputs.push_back(intent);
-        Ok(())
+        if self.overflow_follow_up_inputs.len() < MAX_OVERFLOW_FOLLOW_UP_INTENTS {
+            self.overflow_follow_up_inputs.push_back(intent);
+            return Ok(());
+        }
+        Err(FollowUpQueueFull {
+            capacity: MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS,
+        })
     }
 
     /// Mark an intent as applied after its tagged user message is stored.
@@ -298,17 +327,22 @@ impl RuntimeSteering {
         &self.applied_follow_up_intent_ids
     }
 
+    /// Primary-FIFO view of pending follow-ups (excludes overflow park and
+    /// in-flight). Prefer [`Self::pending_follow_up_intents_snapshot`] when
+    /// the complete unwritten set matters.
     #[must_use]
     pub fn pending_follow_up_intents(&self) -> &VecDeque<QueuedFollowUpIntent> {
         &self.queued_follow_up_inputs
     }
 
     /// Return all accepted intents that are not yet represented by durable
-    /// session history, including the intent currently being processed.
+    /// session history, including the intent currently being processed and
+    /// any parked in the overflow buffer.
     #[must_use]
     pub fn pending_follow_up_intents_snapshot(&self) -> Vec<QueuedFollowUpIntent> {
         self.queued_follow_up_inputs
             .iter()
+            .chain(self.overflow_follow_up_inputs.iter())
             .chain(self.in_flight_follow_up_intents.iter())
             .cloned()
             .collect()
@@ -320,6 +354,7 @@ impl RuntimeSteering {
     /// the moved intents stay in the pending snapshot exactly like
     /// turn-boundary delivery.
     pub fn drain_follow_up_intents_to_in_flight(&mut self) -> Vec<QueuedFollowUpIntent> {
+        self.drain_overflow_into_primary();
         let drained: Vec<_> = self.queued_follow_up_inputs.drain(..).collect();
         self.in_flight_follow_up_intents.extend(drained.iter().cloned());
         drained
@@ -344,6 +379,7 @@ impl RuntimeSteering {
 
     pub fn clear_pending_follow_up_inputs(&mut self) {
         self.queued_follow_up_inputs.clear();
+        self.overflow_follow_up_inputs.clear();
         self.in_flight_follow_up_intents.clear();
     }
 
@@ -1218,19 +1254,68 @@ mod tests {
     #[test]
     fn follow_up_queue_has_bounded_identity_preserving_fifo() {
         let mut steering = RuntimeSteering::default();
-        for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
-            assert!(steering.try_queue_follow_up_input(format!("input-{index}")).is_ok());
+        let total_capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
+        for index in 0..total_capacity {
+            assert!(
+                steering.try_queue_follow_up_input(format!("input-{index}")).is_ok(),
+                "input {index} must be accepted within the combined capacity"
+            );
         }
         let error = steering
             .try_queue_follow_up_input("overflow".to_string())
-            .expect_err("overflow must be reported");
-        assert_eq!(error.capacity, MAX_QUEUED_FOLLOW_UP_INTENTS);
+            .expect_err("overflow must be reported once both buffers are full");
+        assert_eq!(error.capacity, total_capacity);
 
+        // Primary FIFO drains first in order; overflow parks then refill.
         let first = steering.pop_follow_up_intent().expect("first intent should exist");
         let second = steering.pop_follow_up_intent().expect("second intent should exist");
         assert_ne!(first.id(), second.id());
         assert_eq!(first.text(), "input-0");
         assert_eq!(second.text(), "input-1");
+    }
+
+    #[test]
+    fn follow_up_overflow_parks_instead_of_dropping_bursts() {
+        let mut steering = RuntimeSteering::default();
+        // Fill the primary FIFO.
+        for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+            assert!(steering.try_queue_follow_up_input(format!("primary-{index}")).is_ok());
+        }
+        // Burst beyond primary parks in overflow rather than dropping.
+        for index in 0..5 {
+            assert!(steering.try_queue_follow_up_input(format!("overflow-{index}")).is_ok());
+        }
+        assert!(steering.has_pending_follow_up_inputs());
+
+        // Drain the primary; overflow items must arrive afterwards in order.
+        for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+            let intent = steering.pop_follow_up_intent().expect("primary intent");
+            assert_eq!(intent.text(), format!("primary-{index}"));
+        }
+        for index in 0..5 {
+            let intent = steering.pop_follow_up_intent().expect("overflow intent");
+            assert_eq!(intent.text(), format!("overflow-{index}"));
+        }
+        assert!(!steering.has_pending_follow_up_inputs());
+    }
+
+    #[test]
+    fn pop_yields_overflow_when_primary_is_empty() {
+        // In-flight occupancy can park new intents in overflow while the
+        // primary FIFO is empty (admission counts in-flight). `has_pending`
+        // staying true must never race a `None` pop.
+        let mut steering = RuntimeSteering::default();
+        for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+            assert!(steering.try_queue_follow_up_input(format!("inflight-{index}")).is_ok());
+        }
+        assert_eq!(steering.drain_follow_up_intents_to_in_flight().len(), MAX_QUEUED_FOLLOW_UP_INTENTS);
+        assert!(steering.queued_follow_up_inputs.is_empty(), "primary must be empty after a full in-flight drain");
+        assert!(steering.try_queue_follow_up_input("parked".to_string()).is_ok());
+        assert!(steering.has_pending_follow_up_inputs());
+        let intent = steering
+            .pop_follow_up_intent()
+            .expect("pop must yield overflow when primary is empty");
+        assert_eq!(intent.text(), "parked");
     }
 
     #[test]
@@ -1284,16 +1369,23 @@ mod tests {
     fn no_archive_release_reuses_follow_up_capacity_without_applied_ids() {
         let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
         let mut runtime = AgentRuntime::new(state, None, None);
-        for index in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+        let total_capacity = MAX_QUEUED_FOLLOW_UP_INTENTS + MAX_OVERFLOW_FOLLOW_UP_INTENTS;
+        for index in 0..total_capacity {
             runtime
                 .try_queue_follow_up_input(format!("input-{index}"))
                 .expect("intent should be accepted");
         }
 
-        for _ in 0..MAX_QUEUED_FOLLOW_UP_INTENTS {
+        for _ in 0..total_capacity {
             runtime.run_until_idle().expect("queued intent should become a user message");
         }
-        assert!(runtime.try_queue_follow_up_input("overflow".to_string()).is_err());
+        // In-flight holds every accepted intent, so the primary FIFO is full
+        // and a new intent parks in overflow instead of failing.
+        assert!(runtime.try_queue_follow_up_input("parked-0".to_string()).is_ok());
+        for index in 1..MAX_OVERFLOW_FOLLOW_UP_INTENTS {
+            assert!(runtime.try_queue_follow_up_input(format!("parked-{index}")).is_ok());
+        }
+        assert!(runtime.try_queue_follow_up_input("rejected".to_string()).is_err());
 
         runtime.steering.release_in_flight_follow_up_intents_without_persistence();
         assert!(runtime.try_queue_follow_up_input("after-release".to_string()).is_ok());

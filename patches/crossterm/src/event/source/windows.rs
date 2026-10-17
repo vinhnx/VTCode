@@ -3,17 +3,17 @@ use std::time::Duration;
 use crossterm_winapi::{Console, Handle, InputRecord};
 
 use crate::event::{
-    sys::windows::{parse::MouseButtonsPressed, poll::WinApiPoll},
     Event,
+    sys::windows::{parse::MouseButtonsPressed, poll::WinApiPoll},
 };
 
 #[cfg(feature = "event-stream")]
 use crate::event::sys::Waker;
 use crate::event::{
+    InternalEvent,
     source::EventSource,
     sys::windows::parse::{handle_key_event, handle_mouse_event},
     timeout::PollTimeout,
-    InternalEvent,
 };
 
 pub(crate) struct WindowsEventSource {
@@ -49,12 +49,9 @@ impl EventSource for WindowsEventSource {
                 let number = self.console.number_of_console_input_events()?;
                 if event_ready && number != 0 {
                     let event = match self.console.read_single_input_event()? {
-                        InputRecord::KeyEvent(record) => {
-                            handle_key_event(record, &mut self.surrogate_buffer)
-                        }
+                        InputRecord::KeyEvent(record) => handle_key_event(record, &mut self.surrogate_buffer),
                         InputRecord::MouseEvent(record) => {
-                            let mouse_event =
-                                handle_mouse_event(record, &self.mouse_buttons_pressed);
+                            let mouse_event = handle_mouse_event(record, &self.mouse_buttons_pressed);
                             self.mouse_buttons_pressed = MouseButtonsPressed {
                                 left: record.button_state.left_button(),
                                 right: record.button_state.right_button(),
@@ -65,10 +62,7 @@ impl EventSource for WindowsEventSource {
                         }
                         InputRecord::WindowBufferSizeEvent(record) => {
                             // windows starts counting at 0, unix at 1, add one to replicate unix behaviour.
-                            Some(Event::Resize(
-                                (record.size.x as i32 + 1) as u16,
-                                (record.size.y as i32 + 1) as u16,
-                            ))
+                            Some(Event::Resize((record.size.x as i32 + 1) as u16, (record.size.y as i32 + 1) as u16))
                         }
                         InputRecord::FocusEvent(record) => {
                             let event = if record.set_focus {

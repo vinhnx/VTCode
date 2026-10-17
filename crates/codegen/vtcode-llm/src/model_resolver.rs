@@ -468,7 +468,7 @@ pub fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
     }
 
     let model = trimmed.to_ascii_lowercase();
-    if model.starts_with("muse-spark-") {
+    if model.starts_with("muse-spark-") || model.starts_with("muse-wonder") {
         Some(Provider::Meta)
     } else if model.starts_with("gpt-oss-")
         || model.starts_with("gpt-")
@@ -513,6 +513,7 @@ pub fn heuristic_provider_from_model(model: &str) -> Option<Provider> {
         || model.starts_with("zai-org/")
         || model.starts_with("moonshotai/")
         || model.starts_with("minimaxai/")
+        || model.starts_with("meta-models/")
     {
         Some(Provider::HuggingFace)
     } else if model.starts_with("mixtral-")

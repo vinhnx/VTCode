@@ -94,13 +94,7 @@ impl FilePalette {
     pub(super) fn simple_fuzzy_match(path: &str, query: &str) -> Option<usize> {
         let mut scorer = SearchScorer::new();
         scorer.set_query(query);
-        let dummy_entry = super::FileEntry {
-            path: path.to_string(),
-            display_name: path.to_string(),
-            relative_path: path.to_string(),
-            is_dir: false,
-            is_parent: false,
-        };
+        let dummy_entry = super::FileEntry::new(path.to_string(), path.to_string(), path.to_string(), false, false);
         scorer.score(&dummy_entry, 0).map(|s| s.score)
     }
 }

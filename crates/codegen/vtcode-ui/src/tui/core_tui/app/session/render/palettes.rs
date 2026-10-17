@@ -70,7 +70,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     if !palette.has_agents() {
         let loading = Paragraph::new(Line::from(Span::styled(
             "Loading subagents...".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
+            session.core.styles.muted_text_style(),
         )))
         .wrap(Wrap { trim: true });
         frame.render_widget(loading, area);
@@ -84,7 +84,10 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     }
 
     let base_style = default_style(session);
-    let dim_style = base_style.add_modifier(Modifier::DIM);
+    // Muted by explicit color (theme secondary), never `Modifier::DIM`:
+    // DIM doubles as a sticky area style in this pipeline and renders
+    // near-invisible on several terminals.
+    let muted_style = session.core.styles.muted_text_style();
     let highlight_style = modal_list_highlight_style(session);
 
     let selected = rows.iter().position(|row| row.selectable && row.selected);
@@ -96,19 +99,15 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
             global_indices.push(row.global_index);
             let is_selected = selected == Some(idx);
             let cursor = list_cursor(is_selected);
-            let cursor_style = if is_selected { highlight_style } else { dim_style };
-            let name_style = if is_selected {
-                highlight_style
-            } else {
-                row.style.add_modifier(Modifier::DIM)
-            };
+            let cursor_style = if is_selected { highlight_style } else { muted_style };
+            let name_style = if is_selected { highlight_style } else { row.style };
             let mut spans = vec![
                 Span::styled(cursor, cursor_style),
                 Span::styled(" ", cursor_style),
                 Span::styled(row.text, name_style),
             ];
             if let Some(subtitle) = row.subtitle {
-                let sub_style = if is_selected { highlight_style } else { dim_style };
+                let sub_style = if is_selected { highlight_style } else { muted_style };
                 spans.push(Span::styled(format!("  {subtitle}"), sub_style));
             }
 
@@ -116,9 +115,9 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
                 InlineListRow::single(
                     Line::from(spans),
                     if row.selectable {
-                        dim_style
+                        muted_style
                     } else {
-                        dim_style.add_modifier(Modifier::DIM)
+                        muted_style.add_modifier(Modifier::ITALIC)
                     },
                 ),
                 1_u16,
@@ -148,7 +147,7 @@ pub fn render_agent_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         area,
         sections,
         SharedListPanelStyles {
-            base_style: dim_style,
+            base_style,
             selected_style: Some(highlight_style),
             text_style: base_style,
             divider_style: None,
@@ -220,20 +219,29 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     frame.render_widget(Clear, area);
 
     if !palette.has_files() {
-        let loading = Paragraph::new(Line::from(Span::styled(
-            "Loading workspace files...".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        )))
-        .wrap(Wrap { trim: true });
+        // Distinguish "index still loading" from "the current directory is
+        // genuinely empty" so the user does not wait on a finished load.
+        let message = if palette.is_search_mode() && !palette.search_index_loaded() {
+            "Indexing workspace files…".to_owned()
+        } else {
+            "No files here".to_owned()
+        };
+        let loading = Paragraph::new(Line::from(Span::styled(message, session.core.styles.muted_text_style())))
+            .wrap(Wrap { trim: true });
         frame.render_widget(loading, area);
         return;
     }
 
     let base_style = default_style(session);
-    let dim_style = base_style.add_modifier(Modifier::DIM);
+    // Muted by explicit color (theme secondary), never `Modifier::DIM`: DIM
+    // doubles as a sticky area style in this pipeline and renders
+    // near-invisible on several terminals.
+    let muted_style = session.core.styles.muted_text_style();
     let highlight_style = modal_list_highlight_style(session);
     let accent = accent_style(session);
 
+    let warning_style = session.core.styles.warning_style();
+    let search_mode = palette.is_search_mode();
     let selected = palette.selected_index();
     let rendered_rows: Vec<(InlineListRow, u16)> = palette
         .list_entries()
@@ -242,9 +250,14 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         .map(|(idx, entry)| {
             let is_selected = selected == Some(idx);
             let cursor = list_cursor(is_selected);
-            let cursor_style = if is_selected { highlight_style } else { dim_style };
+            let cursor_style = if is_selected { highlight_style } else { muted_style };
+
+            let broken = entry.symlink_broken;
             let name_style = if entry.is_parent {
                 cursor_style.add_modifier(Modifier::ITALIC)
+            } else if broken {
+                // A dangling symlink is actionable but currently unusable.
+                warning_style
             } else if entry.is_dir {
                 if is_selected {
                     highlight_style.add_modifier(Modifier::BOLD)
@@ -257,39 +270,81 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
                 palette
                     .style_for_entry(entry)
                     .map(crate::tui::core_tui::style::ratatui_style_from_ansi)
-                    .unwrap_or(dim_style)
+                    .unwrap_or(muted_style)
             };
 
-            let tree_prefix = if entry.is_parent {
-                ui::INLINE_FILE_PICKER_PARENT_PREFIX.to_owned()
-            } else if entry.is_dir {
-                ui::INLINE_FILE_PICKER_TREE_PREFIX.to_owned()
+            // Glyph communicates row kind at a glance: `↑` ascends, `▸` opens a
+            // directory, `▧`/`⚙` mark images/executables, and code/other files
+            // keep a blank cell so the filename column stays aligned.
+            let glyph = if entry.is_parent {
+                ui::INLINE_FILE_PICKER_PARENT_PREFIX.trim_end().to_owned()
             } else {
-                ui::INLINE_FILE_PICKER_TREE_INDENT.to_owned()
+                entry.kind.glyph().to_owned()
             };
 
-            // Search mode shows full relative paths, so every row starts at the
-            // same column. Depth-proportional indent would staircase deeper
-            // files to the right; browse mode already shows basenames only.
-            let spans = vec![
+            let mut spans = vec![
                 Span::styled(cursor, cursor_style),
                 Span::styled(" ", cursor_style),
-                Span::styled(tree_prefix, cursor_style),
-                Span::styled(entry.display_name.clone(), name_style),
+                Span::styled(format!("{glyph} "), cursor_style),
             ];
-            (InlineListRow::single(Line::from(spans), dim_style), 1_u16)
+
+            // Search rows carry the full relative path; split it so the parent
+            // directory reads as muted hierarchy and the basename as the target.
+            // Browse rows already show a basename only.
+            if search_mode && !entry.is_parent {
+                if let Some((dir, base)) = entry.display_name.rsplit_once('/') {
+                    spans.push(Span::styled(format!("{dir}/"), muted_style));
+                    spans.push(Span::styled(base.to_owned(), name_style));
+                } else {
+                    spans.push(Span::styled(entry.display_name.clone(), name_style));
+                }
+            } else {
+                spans.push(Span::styled(entry.display_name.clone(), name_style));
+            }
+
+            if let Some(target) = &entry.symlink_target {
+                let arrow_style = if broken { warning_style } else { muted_style };
+                spans.push(Span::styled(format!(" → {}", target.display()), arrow_style));
+                if broken {
+                    spans.push(Span::styled(" (broken)".to_owned(), warning_style));
+                }
+            }
+
+            (InlineListRow::single(Line::from(spans), muted_style), 1_u16)
         })
         .collect();
+
+    // A `+N` suffix surfaces when the listing is longer than the panel's visible
+    // window, so the user knows scrolling continues past the fold. The hidden
+    // count uses the real visible-row budget, not a fixed constant.
+    let overflow_suffix = if palette.has_more_items() {
+        let visible_rows = file_palette_panel_layout(session).map_or(0, |layout| layout.visible_list_rows(area));
+        if visible_rows > 0 && palette.total_items() > visible_rows {
+            Some(format!("  +{} more", palette.total_items() - visible_rows))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     let header = if palette.is_search_mode() {
         // The active query is already visible in the search field, so the header
         // only needs to label the panel — repeating `(search: '…')` here is clutter.
-        vec![Line::from(Span::styled("Files", highlight_style))]
+        let mut spans = vec![Span::styled("Files", highlight_style)];
+        if let Some(suffix) = &overflow_suffix {
+            spans.push(Span::styled(suffix.clone(), muted_style));
+        }
+        vec![Line::from(spans)]
     } else {
-        vec![Line::from(vec![
+        let mut spans = vec![
             Span::styled("Files", highlight_style),
-            Span::styled(format!("  {}", palette.breadcrumb()), dim_style),
-        ])]
+            Span::styled(format!("  {}", palette.breadcrumb()), muted_style),
+        ];
+        if let Some(suffix) = &overflow_suffix {
+            spans.push(Span::styled(suffix.clone(), muted_style));
+        }
+        vec![Line::from(spans)]
     };
 
     let sections = SharedListPanelSections {
@@ -314,7 +369,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         area,
         sections,
         SharedListPanelStyles {
-            base_style: dim_style,
+            base_style,
             selected_style: Some(highlight_style),
             text_style: base_style,
             divider_style: Some(session.core.styles.border_style()),
@@ -334,6 +389,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
 fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<AgentPaletteRenderRow> {
     let mut rows = Vec::new();
     let default = default_style(session);
+    let muted = session.core.styles.muted_text_style();
 
     for (global_idx, entry, selected) in palette.current_page_items() {
         rows.push(AgentPaletteRenderRow {
@@ -350,7 +406,7 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
         rows.push(AgentPaletteRenderRow {
             text: "No matching agents".to_owned(),
             subtitle: None,
-            style: default.add_modifier(Modifier::DIM),
+            style: muted,
             selectable: false,
             selected: false,
             global_index: 0,
@@ -364,7 +420,7 @@ fn build_agent_palette_rows(session: &Session, palette: &AgentPalette) -> Vec<Ag
         rows.push(AgentPaletteRenderRow {
             text: format!("... ({remaining} more items)"),
             subtitle: None,
-            style: default.add_modifier(Modifier::DIM | Modifier::ITALIC),
+            style: muted.add_modifier(Modifier::ITALIC),
             selectable: false,
             selected: false,
             global_index: 0,
@@ -393,12 +449,19 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
     let mut lines = vec![];
 
     if palette.is_empty() {
-        lines.push(Line::from(Span::styled("No files found matching filter".to_owned(), default_style(session))));
+        let message = if palette.is_search_mode() && !palette.search_index_loaded() {
+            "Indexing workspace files…"
+        } else if palette.is_search_mode() {
+            "No files match — refine the filter or clear it to browse"
+        } else {
+            "Empty directory — press ← to go up"
+        };
+        lines.push(Line::from(Span::styled(message.to_owned(), default_style(session))));
     } else {
         let nav_hint = if palette.is_search_mode() {
-            "↑↓ Navigate · → open · ← up · Type to refine · Esc close"
+            "↑↓ Navigate · Enter select · ← up · Type to refine · Esc close"
         } else {
-            "↑↓ Navigate · → open · ← up · Type to filter · Esc close"
+            "↑↓ Navigate · Enter open · Alt+Enter folder · ← up · Type to filter · Esc close"
         };
 
         lines.push(Line::from(Span::styled(nav_hint.to_owned(), default_style(session))));

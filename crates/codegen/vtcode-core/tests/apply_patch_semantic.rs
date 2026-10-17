@@ -386,11 +386,8 @@ async fn semantic_anchor_fails_when_candidate_region_is_not_safe() {
 async fn numeric_hunk_headers_do_not_trigger_semantic_fallback() {
     let temp_dir = TempDir::new().unwrap();
     let source = temp_dir.path().join("sample.rs");
-    fs::write(
-        &source,
-        concat!("pub(crate) fn second() -> usize {\n", "    let value = 3;\n", "    value\n", "}\n"),
-    )
-    .unwrap();
+    let original_source = concat!("pub(crate) fn second() -> usize {\n", "    let value = 3;\n", "    value\n", "}\n");
+    fs::write(&source, original_source).unwrap();
 
     let patch = r#"*** Begin Patch
 *** Update File: sample.rs
@@ -405,8 +402,17 @@ async fn numeric_hunk_headers_do_not_trigger_semantic_fallback() {
     let result = registry.execute_tool("apply_patch", json!({ "patch": patch })).await.unwrap();
 
     assert!(result["error"].is_object(), "{result:?}");
+    let mismatch = &result["error"]["patch_failure"]["ContextMismatch"];
+    assert!(mismatch.is_object(), "{result:?}");
+    assert_eq!(mismatch["path"], "sample.rs");
+    let original_error = result["error"]["original_error"].as_str().unwrap();
+    assert!(original_error.contains("failed to locate expected lines"), "{original_error}");
+    assert!(!original_error.contains("semantic"), "{original_error}");
+    assert!(!original_error.contains("usable symbol"), "{original_error}");
     let message = error_message(&result);
-    assert!(message.contains("failed to locate expected lines"));
+    // Typed context-mismatch failure, not a semantic-anchor diagnosis.
+    assert!(message.contains("Patch context mismatch"), "{message}");
     assert!(!message.contains("semantic anchor"), "{message}");
     assert!(!message.contains("usable symbol"), "{message}");
+    assert_eq!(fs::read_to_string(&source).unwrap(), original_source);
 }

@@ -5,7 +5,8 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::plan_blocks::{
-    extract_any_plan, has_exactly_one_proposed_plan_block, strip_plan_persistence_policy_line,
+    extract_any_plan, has_exactly_one_proposed_plan_block, looks_like_attempted_plan, looks_like_clarifying_question,
+    strip_plan_persistence_policy_line,
 };
 use crate::agent::runloop::unified::planning_workflow::validate_plan_content;
 use crate::agent::runloop::unified::turn::context::{PreparedAssistantToolCall, TurnProcessingResult};
@@ -146,13 +147,15 @@ pub(crate) fn process_llm_response(
     }
 
     // Providers occasionally omit the plan tags while still returning a
-    // structured synthesis. Treat a Summary/Steps response as the plan so it
-    // is persisted and shown to the user instead of being treated as an
-    // uncommitted intermediate answer.
+    // structured synthesis. Preserve both validated structured responses and
+    // text-only attempted drafts before interview forcing can replace them.
+    // Invalid candidates must reach bounded validation repair, not an unrelated
+    // interview followed by a planless completion (session 20261015T161453Z).
     if planning_active
         && proposed_plan.is_none()
         && let Some(text) = final_text.as_deref()
-        && looks_like_structured_plan(text)
+        && (looks_like_structured_plan(text)
+            || (tool_calls.is_empty() && !looks_like_clarifying_question(text) && looks_like_attempted_plan(text)))
         && allow_tool_calls
     {
         proposed_plan = Some(text.trim().to_string());
@@ -617,6 +620,40 @@ mod tests {
     use super::*;
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+
+    #[test]
+    fn attempted_draft_detection_preserves_questions_native_tools_and_execution_prose() {
+        let draft = "## Implementation Steps\n1. Inspect README\n2. Refine wording";
+        for (planning, native_tools, question) in [(true, true, false), (true, false, true), (false, false, false)] {
+            let text = if question {
+                format!("{draft}\nWhich audience should this target?")
+            } else {
+                draft.to_string()
+            };
+            let mut response = LLMResponse::new("test", &text);
+            if native_tools {
+                response.tool_calls = Some(vec![vtcode_core::llm::provider::ToolCall::function(
+                    "read".to_string(),
+                    "read_file".to_string(),
+                    r#"{"path":"README.md"}"#.to_string(),
+                )]);
+            }
+            let mut renderer = AnsiRenderer::stdout();
+            let result =
+                process_llm_response(&response, &mut renderer, 0, planning, false, false, true, None, None).unwrap();
+            if native_tools {
+                let TurnProcessingResult::ToolCalls { tool_calls, .. } = result else {
+                    panic!("native inspection must be preserved");
+                };
+                assert_eq!(tool_calls.len(), 1);
+                assert_eq!(tool_calls[0].tool_name(), "read_file");
+            } else {
+                assert!(
+                    matches!(result, TurnProcessingResult::TextResponse { proposed_plan: None, text: actual, .. } if actual == text)
+                );
+            }
+        }
+    }
 
     #[test]
     fn prepare_tool_calls_reuses_parsed_arguments_and_metadata() {

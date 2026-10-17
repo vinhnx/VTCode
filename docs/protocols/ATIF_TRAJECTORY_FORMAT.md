@@ -1,15 +1,18 @@
 # Agent Trajectory Interchange Format (ATIF)
 
-VT Code implements the [Agent Trajectory Interchange Format (ATIF)](https://www.harborframework.com/docs/agents/trajectory-format) v1.4, a standardized JSON-based specification for logging complete agent interaction histories. ATIF trajectories are usable across debugging, visualization, Supervised Fine-Tuning (SFT), and Reinforcement Learning (RL) pipelines.
+VT Code implements the
+[Agent Trajectory Interchange Format (ATIF)](https://www.harborframework.com/docs/agents/trajectory-format) v1.4, a
+standardized JSON-based specification for logging complete agent interaction histories. ATIF trajectories are usable
+across debugging, visualization, Supervised Fine-Tuning (SFT), and Reinforcement Learning (RL) pipelines.
 
-For the full specification, see the [ATIF RFC](https://github.com/laude-institute/harbor/blob/main/docs/rfcs/0001-trajectory-format.md).
+For the full specification, see the
+[ATIF RFC](https://github.com/laude-institute/harbor/blob/main/docs/rfcs/0001-trajectory-format.md).
 
 ## Overview
 
-When enabled, VT Code exports an `atif-trajectory.json` file under the
-canonical session's derived artifacts at session end. The file captures the
-complete session: user messages, agent responses, tool executions,
-observations, and per-step/aggregate LLM metrics.
+When enabled, VT Code exports an `atif-trajectory.json` file under the canonical session's derived artifacts at session
+end. The file captures the complete session: user messages, agent responses, tool executions, observations, and
+per-step/aggregate LLM metrics.
 
 ## Configuration
 
@@ -24,10 +27,8 @@ The ATIF export is independent of `trajectory_enabled` — you can enable one wi
 
 Output location: `<workspace>/.vtcode/sessions/<session_id>/derived/atif-trajectory.json`
 
-The canonical source stream is
-`<workspace>/.vtcode/sessions/<session_id>/events.jsonl`. Historical global
-artifacts under the legacy `VTCODE_HOME/sessions/` path are left untouched and are not imported
-or deleted automatically.
+The canonical source stream is `<workspace>/.vtcode/sessions/<session_id>/events.jsonl`. Historical global artifacts
+under the legacy `VTCODE_HOME/sessions/` path are left untouched and are not imported or deleted automatically.
 
 ## Schema
 
@@ -35,81 +36,85 @@ ATIF v1.4 defines these core types:
 
 ### Root-Level Trajectory
 
-| Field | Type | Status | Description |
-|-------|------|--------|-------------|
-| `schema_version` | String | Required | `"ATIF-v1.4"` |
-| `session_id` | String | Required | Unique identifier for the agent run |
-| `agent` | Object | Required | Agent configuration (name, version, model) |
-| `steps` | Array | Required | Ordered interaction steps |
-| `notes` | String | Optional | Developer notes |
-| `final_metrics` | Object | Optional | Aggregate metrics for the full trajectory |
-| `extra` | Object | Optional | Custom root-level metadata |
+| Field            | Type   | Status   | Description                                |
+| ---------------- | ------ | -------- | ------------------------------------------ |
+| `schema_version` | String | Required | `"ATIF-v1.4"`                              |
+| `session_id`     | String | Required | Unique identifier for the agent run        |
+| `agent`          | Object | Required | Agent configuration (name, version, model) |
+| `steps`          | Array  | Required | Ordered interaction steps                  |
+| `notes`          | String | Optional | Developer notes                            |
+| `final_metrics`  | Object | Optional | Aggregate metrics for the full trajectory  |
+| `extra`          | Object | Optional | Custom root-level metadata                 |
 
 ### Step Object
 
-| Field | Type | Status | Description |
-|-------|------|--------|-------------|
-| `step_id` | Integer | Required | Ordinal index (starting from 1) |
-| `timestamp` | String | Optional | ISO 8601 timestamp |
-| `source` | String | Required | `"system"`, `"user"`, or `"agent"` |
-| `model_name` | String | Optional | LLM model used (agent steps only) |
-| `message` | String | Required | Step content |
-| `reasoning_content` | String | Optional | Agent internal reasoning |
-| `tool_calls` | Array | Optional | Tool/function invocations |
-| `observation` | Object | Optional | Environment feedback |
-| `metrics` | Object | Optional | Per-step LLM metrics |
-| `extra` | Object | Optional | Custom step-level metadata |
+| Field               | Type    | Status   | Description                        |
+| ------------------- | ------- | -------- | ---------------------------------- |
+| `step_id`           | Integer | Required | Ordinal index (starting from 1)    |
+| `timestamp`         | String  | Optional | ISO 8601 timestamp                 |
+| `source`            | String  | Required | `"system"`, `"user"`, or `"agent"` |
+| `model_name`        | String  | Optional | LLM model used (agent steps only)  |
+| `message`           | String  | Required | Step content                       |
+| `reasoning_content` | String  | Optional | Agent internal reasoning           |
+| `tool_calls`        | Array   | Optional | Tool/function invocations          |
+| `observation`       | Object  | Optional | Environment feedback               |
+| `metrics`           | Object  | Optional | Per-step LLM metrics               |
+| `extra`             | Object  | Optional | Custom step-level metadata         |
 
 ### Metrics
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `prompt_tokens` | Integer | Total input tokens (cached + non-cached) |
-| `completion_tokens` | Integer | Tokens generated by the model |
-| `cached_tokens` | Integer | Subset of prompt_tokens that were cache hits |
-| `cost_usd` | Float | Estimated cost for this step |
-| `logprobs` | Array | Log probabilities for RL training |
-| `completion_token_ids` | Array | Token IDs for RL training |
-| `prompt_token_ids` | Array | Input token IDs |
+| Field                  | Type    | Description                                  |
+| ---------------------- | ------- | -------------------------------------------- |
+| `prompt_tokens`        | Integer | Total input tokens (cached + non-cached)     |
+| `completion_tokens`    | Integer | Tokens generated by the model                |
+| `cached_tokens`        | Integer | Subset of prompt_tokens that were cache hits |
+| `cost_usd`             | Float   | Estimated cost for this step                 |
+| `logprobs`             | Array   | Log probabilities for RL training            |
+| `completion_token_ids` | Array   | Token IDs for RL training                    |
+| `prompt_token_ids`     | Array   | Input token IDs                              |
 
 ### Final Metrics
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `total_prompt_tokens` | Integer | Sum of all prompt tokens |
+| Field                     | Type    | Description                  |
+| ------------------------- | ------- | ---------------------------- |
+| `total_prompt_tokens`     | Integer | Sum of all prompt tokens     |
 | `total_completion_tokens` | Integer | Sum of all completion tokens |
-| `total_cached_tokens` | Integer | Sum of all cached tokens |
-| `total_cost_usd` | Float | Total estimated cost |
-| `total_steps` | Integer | Total number of steps |
+| `total_cached_tokens`     | Integer | Sum of all cached tokens     |
+| `total_cost_usd`          | Float   | Total estimated cost         |
+| `total_steps`             | Integer | Total number of steps        |
 
 ## VT Code Event Mapping
 
 VT Code converts its internal `ThreadEvent` stream to ATIF steps:
 
-| VT Code Event | ATIF Source | Notes |
-|--------------|-------------|-------|
-| `AgentMessage` | `agent` | Agent text response |
-| `Plan` | `agent` | Planning workflow content |
-| `Reasoning` | `agent` | Model reasoning/thinking |
-| `ToolInvocation` + `ToolOutput` | `agent` | Paired into single step with tool_calls + observation |
-| `CommandExecution` | `agent` | Shell command with output |
-| `McpToolCall` | `agent` | MCP tool invocation |
-| `TurnCompleted` | `system` | Turn boundary with usage metrics |
-| `TurnFailed` | `system` | Failed turn with error message |
-| `FileChange` | `system` | File modification summary |
-| `WebSearch` | `system` | Search query and results |
-| `Harness` | `system` | Continuation/verification events |
-| `CompactBoundary` | `system` | Context compaction event |
+| VT Code Event                   | ATIF Source | Notes                                                 |
+| ------------------------------- | ----------- | ----------------------------------------------------- |
+| `AgentMessage`                  | `agent`     | Agent text response                                   |
+| `Plan`                          | `agent`     | Planning workflow content                             |
+| `Reasoning`                     | `agent`     | Model reasoning/thinking                              |
+| `ToolInvocation` + `ToolOutput` | `agent`     | Paired into single step with tool_calls + observation |
+| `CommandExecution`              | `agent`     | Shell command with output                             |
+| `McpToolCall`                   | `agent`     | MCP tool invocation                                   |
+| `TurnCompleted`                 | `system`    | Turn boundary with usage metrics                      |
+| `TurnFailed`                    | `system`    | Failed turn with error message                        |
+| `FileChange`                    | `system`    | File modification summary                             |
+| `WebSearch`                     | `system`    | Search query and results                              |
+| `Harness`                       | `system`    | Continuation/verification events                      |
+| `CompactBoundary`               | `system`    | Context compaction event                              |
 
-Lifecycle events (`TurnStarted`, `ItemStarted`, `ItemUpdated`, `PlanDelta`) are skipped — only terminal states are exported.
+Lifecycle events (`TurnStarted`, `ItemStarted`, `ItemUpdated`, `PlanDelta`) are skipped — only terminal states are
+exported.
 
 ## Implementation
 
 The ATIF implementation lives in `crates/common/vtcode-exec-events/src/atif.rs` with:
 
-- **Schema types**: `Trajectory`, `AtifAgent`, `Step`, `AtifToolCall`, `Observation`, `ObservationResult`, `StepMetrics`, `FinalMetrics`
-- **`AtifTrajectoryBuilder`**: Stateful collector that converts live `ThreadEvent` streams into ATIF trajectories. Implements `EventEmitter` for direct integration with the event pipeline.
-- **Tool call pairing**: `ToolInvocation` events are buffered until matching `ToolOutput` arrives, then merged into a single ATIF step with both `tool_calls` and `observation`.
+- **Schema types**: `Trajectory`, `AtifAgent`, `Step`, `AtifToolCall`, `Observation`, `ObservationResult`,
+  `StepMetrics`, `FinalMetrics`
+- **`AtifTrajectoryBuilder`**: Stateful collector that converts live `ThreadEvent` streams into ATIF trajectories.
+  Implements `EventEmitter` for direct integration with the event pipeline.
+- **Tool call pairing**: `ToolInvocation` events are buffered until matching `ToolOutput` arrives, then merged into a
+  single ATIF step with both `tool_calls` and `observation`.
 
 ### Rust Usage
 
@@ -189,13 +194,13 @@ let json = serde_json::to_string_pretty(&trajectory)?;
 
 ## Schema Versions
 
-| Version | Changes |
-|---------|---------|
+| Version                 | Changes                                            |
+| ----------------------- | -------------------------------------------------- |
 | **ATIF-v1.4** (current) | Added `prompt_token_ids` for prompt token analysis |
-| ATIF-v1.3 | Added `completion_token_ids` for RL training |
-| ATIF-v1.2 | Extended observation to support system steps |
-| ATIF-v1.1 | Added `extra` field at root level |
-| ATIF-v1.0 | Initial specification |
+| ATIF-v1.3               | Added `completion_token_ids` for RL training       |
+| ATIF-v1.2               | Extended observation to support system steps       |
+| ATIF-v1.1               | Added `extra` field at root level                  |
+| ATIF-v1.0               | Initial specification                              |
 
 ## Interoperability
 

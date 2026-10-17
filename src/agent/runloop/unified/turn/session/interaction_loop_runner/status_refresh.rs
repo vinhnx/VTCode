@@ -1,9 +1,8 @@
 use std::path::Path;
 
 use super::super::interaction_loop::{InteractionLoopContext, InteractionState};
-use super::support::{refresh_live_ide_context_update, selected_model_supports_image_input};
+use super::support::selected_model_supports_image_input;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::session_setup::{IdeContextBridge, apply_ide_context_snapshot};
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::status_line;
 use crate::agent::runloop::unified::turn::turn_processing::resolve_effective_request_model;
@@ -29,13 +28,12 @@ pub(super) struct StatusRefreshRequest {
     pub(super) reason: StatusRefreshReason,
 }
 
-/// The smallest set of runtime state needed by the status/IDE/title refresh.
+/// The smallest set of runtime state needed by the status/title refresh.
 /// Keeping this adapter separate from `InteractionLoopContext` prevents this
 /// UI cadence from gaining accidental access to turn execution state.
 pub(super) struct StatusRefreshContext<'a> {
     handle: &'a InlineHandle,
     header_context: &'a mut InlineHeaderContext,
-    ide_context_bridge: &'a mut Option<IdeContextBridge>,
     context_manager: &'a mut ContextManager,
     active_primary_agent: &'a vtcode_core::primary_agent::ActivePrimaryAgentState,
     workspace: &'a Path,
@@ -54,7 +52,6 @@ impl<'a> StatusRefreshContext<'a> {
         Self {
             handle: ctx.handle,
             header_context: ctx.header_context,
-            ide_context_bridge: ctx.ide_context_bridge,
             context_manager: ctx.context_manager,
             active_primary_agent: &*ctx.active_primary_agent,
             workspace: ctx.config.workspace.as_path(),
@@ -72,7 +69,7 @@ impl<'a> StatusRefreshContext<'a> {
 
 /// Refresh UI-facing runtime state on the interaction loop's cadence.
 ///
-/// This boundary owns only status, IDE, and title synchronization; turn
+/// This boundary owns only status and title synchronization; turn
 /// execution and MCP lifecycle remain in the orchestration loop.
 pub(super) async fn refresh_interaction_ui(
     mut ctx: StatusRefreshContext<'_>,
@@ -80,7 +77,6 @@ pub(super) async fn refresh_interaction_ui(
     request: StatusRefreshRequest,
 ) {
     refresh_image_capability(&ctx);
-    refresh_ide_context(&mut ctx, request);
     refresh_runtime_counters(&mut ctx, state).await;
     refresh_status_line(&ctx, state, request).await;
     refresh_balance(&ctx, state).await;
@@ -92,20 +88,6 @@ fn refresh_image_capability(ctx: &StatusRefreshContext<'_>) {
     let model_supports_image_input =
         selected_model_supports_image_input(ctx.provider, ctx.model, provider_supports_vision);
     ctx.handle.set_image_input_enabled(model_supports_image_input);
-}
-
-fn refresh_ide_context(ctx: &mut StatusRefreshContext<'_>, request: StatusRefreshRequest) {
-    let live_ide_context = refresh_live_ide_context_update(ctx.ide_context_bridge);
-    if live_ide_context.changed || request.reason.configuration_reloaded() {
-        apply_ide_context_snapshot(
-            ctx.context_manager,
-            ctx.header_context,
-            ctx.handle,
-            ctx.workspace,
-            ctx.vt_cfg,
-            live_ide_context.snapshot,
-        );
-    }
 }
 
 async fn refresh_runtime_counters(ctx: &mut StatusRefreshContext<'_>, state: &mut InteractionState<'_>) {

@@ -1,12 +1,10 @@
 # VT Code Async Performance Audit
 
-> **Note (2026-06):** The cache, middleware, patterns, executor, and optimizer
-> modules referenced below have been merged into `vtcode-core::tools` as part
-> of the crate consolidation. File paths in this document reflect their
+> **Note (2026-06):** The cache, middleware, patterns, executor, and optimizer modules referenced below have been merged
+> into `vtcode-core::tools` as part of the crate consolidation. File paths in this document reflect their
 > pre-consolidation locations.
 
-Date: 2026-03-04
-Scope: Runtime-critical paths first (`vtcode-core`, `vtcode-bash-runner`)
+Date: 2026-03-04 Scope: Runtime-critical paths first (`vtcode-core`, `vtcode-bash-runner`)
 
 ## Audit Rubric
 
@@ -23,6 +21,7 @@ Each module was reviewed for:
 ### Critical
 
 1. Awaiting observer hooks while cache write locks are held
+
 - File: `crates/codegen/vtcode-core/src/tools/registry/cache.rs`
 - Impact: lock contention amplification, potential stall chains under load
 - Status: fixed in this batch
@@ -30,6 +29,7 @@ Each module was reviewed for:
 ### High
 
 1. Async-facing notification manager used std sync locks in hot path
+
 - File: `crates/codegen/vtcode-core/src/notifications/mod.rs`
 - Impact: unnecessary poisoning/recovery branches and slower lock path
 - Status: improved in this batch (`parking_lot::{RwLock, Mutex}`)
@@ -37,14 +37,18 @@ Each module was reviewed for:
 ### Medium (Deferred)
 
 1. Graceful process-group termination uses polling sleeps in synchronous loop
+
 - File: `crates/codegen/vtcode-bash-runner/src/process_group.rs`
-- Note: currently called from synchronous PTY cleanup paths and `spawn_blocking` paths, so runtime risk is lower than the above critical/high items
+- Note: currently called from synchronous PTY cleanup paths and `spawn_blocking` paths, so runtime risk is lower than
+  the above critical/high items
 - Deferred action: evaluate async-aware termination path only where call sites are async-sensitive
 
-2. Deprecated synchronous retry middleware uses blocking sleep
+1. Deprecated synchronous retry middleware uses blocking sleep
+
 - File: `crates/codegen/vtcode-core/src/tools/middleware.rs`
 - Note: type is marked deprecated in favor of `AsyncRetryMiddleware`
-- Deferred action: keep behavior stable; avoid churn unless deprecated path is removed or reactivated in runtime-critical paths
+- Deferred action: keep behavior stable; avoid churn unless deprecated path is removed or reactivated in
+  runtime-critical paths
 
 ## Implemented Batch (Runtime-Critical)
 
@@ -84,7 +88,8 @@ Updated `crates/codegen/vtcode-core/src/tools/registry/cache.rs`:
 
 Updated `crates/codegen/vtcode-core/src/notifications/mod.rs`:
 
-- async config methods now delegate to sync methods (`update_config` -> `update_config_sync`, `get_config` -> `get_config_sync`) to remove duplicated lock logic
+- async config methods now delegate to sync methods (`update_config` -> `update_config_sync`, `get_config` ->
+  `get_config_sync`) to remove duplicated lock logic
 
 ### 4) Async-safe process termination helper + cache lock scope tightening
 
@@ -125,7 +130,8 @@ Updated `crates/codegen/vtcode-bash-runner/src/process_group.rs`:
 
 ### 7) Async-safe PTY bulk termination in runloop timeout/guard paths
 
-Updated `crates/codegen/vtcode-core/src/tools/registry/pty.rs` and `crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs`:
+Updated `crates/codegen/vtcode-core/src/tools/registry/pty.rs` and
+`crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs`:
 
 - added `PtySessionManager::terminate_all_async()` using `tokio::task::spawn_blocking`
 - added `ToolRegistry::terminate_all_pty_sessions_async()` facade method
@@ -226,82 +232,102 @@ Updated `src/agent/runloop/unified/tool_pipeline/execution_runtime.rs`:
 
 ### 16) Async state-machine bloat patterns (Tweede Golf, May 2026)
 
-Reference: <https://tweedegolf.nl/en/blog/237/async-rust-never-left-the-mvp-state>
-Upstream Project Goal: <https://rust-lang.github.io/rust-project-goals/2026/async-statemachine-optimisation.html>
+Reference: <https://tweedegolf.nl/en/blog/237/async-rust-never-left-the-mvp-state> Upstream Project Goal:
+<https://rust-lang.github.io/rust-project-goals/2026/async-statemachine-optimisation.html>
 
-The article identifies four sources of bloat in the futures that `rustc` generates today, all rooted in the MIR `coroutine_resume` lowering:
+The article identifies four sources of bloat in the futures that `rustc` generates today, all rooted in the MIR
+`coroutine_resume` lowering:
 
 1. The `Returned` state always panics on re-poll (overhead even when callers are well-behaved).
 2. Async blocks with no `.await` still receive a 3-state machine and discriminant switch.
-3. Pure-delegation futures (`async fn bar() { foo(blah).await }`) are not inlined; `bar` gets its own state machine that wraps `foo`'s.
-4. `match` arms that each end in `.await` produce one duplicated suspend state per arm even when the saved type is identical.
+3. Pure-delegation futures (`async fn bar() { foo(blah).await }`) are not inlined; `bar` gets its own state machine that
+   wraps `foo`'s.
+4. `match` arms that each end in `.await` produce one duplicated suspend state per arm even when the saved type is
+   identical.
 
-The article's measured wins (2-5% binary size on embedded; ~3% perf on x86 with `smol`) are from compiler-side hacks. Source-level workarounds are explicitly characterized as ugly noise the compiler should obviate. We therefore adopt the following policy rather than mass rewrites:
+The article's measured wins (2-5% binary size on embedded; ~3% perf on x86 with `smol`) are from compiler-side hacks.
+Source-level workarounds are explicitly characterized as ugly noise the compiler should obviate. We therefore adopt the
+following policy rather than mass rewrites:
 
 #### Policy
 
 - Track the upstream Project Goal in this audit; revisit on each `rustup` toolchain bump.
 - For NEW code in `vtcode-core` runtime hot paths:
-  - Do not write `async fn` for a body that contains no `.await` unless required by a trait signature; use a plain `fn` instead.
-  - For pure single-step delegations (`async fn x(a) { y(a).await }`) on free or inherent functions, prefer `fn x(a) -> impl Future<Output = T> + use<'_, ...>` so the wrapper state machine is elided. Do not apply this to `#[async_trait]` impls, ACP/Codex protocol handlers, or any caller that spawns the future on a multi-thread runtime where `Send` inference would regress.
-  - When a `match` chooses between calls of the same async fn that differ only in arguments (article's "Collapsing states" example), hoist the differing argument into a `let` and `.await` once after the match.
-- Do not rewrite existing code purely for these patterns. The compiler fix is the right intervention; opportunistic rewrites are acceptable when a file is already being edited for another reason.
+  - Do not write `async fn` for a body that contains no `.await` unless required by a trait signature; use a plain `fn`
+    instead.
+  - For pure single-step delegations (`async fn x(a) { y(a).await }`) on free or inherent functions, prefer
+    `fn x(a) -> impl Future<Output = T> + use<'_, ...>` so the wrapper state machine is elided. Do not apply this to
+    `#[async_trait]` impls, ACP/Codex protocol handlers, or any caller that spawns the future on a multi-thread runtime
+    where `Send` inference would regress.
+  - When a `match` chooses between calls of the same async fn that differ only in arguments (article's "Collapsing
+    states" example), hoist the differing argument into a `let` and `.await` once after the match.
+- Do not rewrite existing code purely for these patterns. The compiler fix is the right intervention; opportunistic
+  rewrites are acceptable when a file is already being edited for another reason.
 
 #### Scan summary (snapshot)
 
-A scoped scan (`async fn` whose body contains no `.await`, excluding `#[test]`/`#[tokio::test]`/`async_trait` macros) found 214 candidates. The vast majority are trait method implementations whose `async` keyword is mandated by the trait signature and cannot be removed. Genuine pure-delegation candidates (single inner `.await`, free or inherent fn, not a trait impl) cluster in:
+A scoped scan (`async fn` whose body contains no `.await`, excluding `#[test]`/`#[tokio::test]`/`async_trait` macros)
+found 214 candidates. The vast majority are trait method implementations whose `async` keyword is mandated by the trait
+signature and cannot be removed. Genuine pure-delegation candidates (single inner `.await`, free or inherent fn, not a
+trait impl) cluster in:
 
-- [crates/codegen/vtcode-core/src/tools/registry/builder.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/builder.rs) — five `ToolRegistry::new*` constructors all delegate to `Self::build_with_policy(...).await`.
-- [crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs#L43-L49) — `terminate_all_pty_sessions_async`, `terminate_all_exec_sessions_async`.
-- [crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs#L82-L88) — `harness_exec_session_completed`, `terminate_harness_exec_session`.
-- [crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs) — `read_file`, `write_file`, `create_file`, `delete_file` thin wrappers around `execute_tool`.
-- [crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs#L266) — `execute_public_tool_request`, `execute_tool`.
-- [crates/codegen/vtcode-core/src/tools/cache.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/cache.rs) — `put_file`, `put_directory` arc wrappers.
-- [crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs#L101-L115) — `stream`, `stream_normalized`, `generate` delegations.
-- [crates/codegen/vtcode-core/src/project_doc.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/project_doc.rs#L112-L125) — `get_user_instructions`, `build_instruction_appendix`.
-- [crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs#L267) — `normalize_user_path`.
-- [crates/codegen/vtcode-core/src/tools/file_ops/write.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/write.rs#L48) — `write_file` wrapper around `write_file_internal`.
+- [crates/codegen/vtcode-core/src/tools/registry/builder.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/builder.rs)
+  — five `ToolRegistry::new*` constructors all delegate to `Self::build_with_policy(...).await`.
+- [crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs#L43-L49)
+  — `terminate_all_pty_sessions_async`, `terminate_all_exec_sessions_async`.
+- [crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/harness_facade.rs#L82-L88)
+  — `harness_exec_session_completed`, `terminate_harness_exec_session`.
+- [crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/file_helpers.rs)
+  — `read_file`, `write_file`, `create_file`, `delete_file` thin wrappers around `execute_tool`.
+- [crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/registry/execution_facade.rs#L266)
+  — `execute_public_tool_request`, `execute_tool`.
+- [crates/codegen/vtcode-core/src/tools/cache.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/cache.rs)
+  — `put_file`, `put_directory` arc wrappers.
+- [crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/llm/providers/openai/provider/provider_impl.rs#L101-L115)
+  — `stream`, `stream_normalized`, `generate` delegations.
+- [crates/codegen/vtcode-core/src/project_doc.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/project_doc.rs#L112-L125)
+  — `get_user_instructions`, `build_instruction_appendix`.
+- [crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/path_policy.rs#L267)
+  — `normalize_user_path`.
+- [crates/codegen/vtcode-core/src/tools/file_ops/write.rs](file:///Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/crates/codegen/vtcode-core/src/tools/file_ops/write.rs#L48)
+  — `write_file` wrapper around `write_file_internal`.
 
-Pattern 4 ("Collapsing states") yielded one match in `crates/codegen/vtcode-core/src/mcp/cli.rs:164`, but each arm calls a *different* function (`run_list`, `run_get`, `run_add`, …) so the saved suspend types differ and there is nothing to collapse. No source change is warranted.
+Pattern 4 ("Collapsing states") yielded one match in `crates/codegen/vtcode-core/src/mcp/cli.rs:164`, but each arm calls
+a _different_ function (`run_list`, `run_get`, `run_add`, …) so the saved suspend types differ and there is nothing to
+collapse. No source change is warranted.
 
 #### Status
 
-- Documented and applied opportunistically in touched runtime files (per policy above), focused on pure-delegation wrappers in `vtcode-core`.
-- Re-scan after the next `rust-toolchain.toml` bump to see how many candidates the upstream `coroutine_resume` work has obsoleted.
-- If the upstream Project Goal lands an `unwind = abort` / `panic = abort` switch that drops the `Panicked` state, evaluate whether `release-profile-strict` should opt in for binary-size sensitive embeds (tracked here, not actioned).
+- Documented and applied opportunistically in touched runtime files (per policy above), focused on pure-delegation
+  wrappers in `vtcode-core`.
+- Re-scan after the next `rust-toolchain.toml` bump to see how many candidates the upstream `coroutine_resume` work has
+  obsoleted.
+- If the upstream Project Goal lands an `unwind = abort` / `panic = abort` switch that drops the `Panicked` state,
+  evaluate whether `release-profile-strict` should opt in for binary-size sensitive embeds (tracked here, not actioned).
 
 ### 17) Runtime-boundary I/O follow-up (August 2026)
 
-The runtime-focused optimization pass tightened the remaining async I/O
-boundaries without changing public wire contracts:
+The runtime-focused optimization pass tightened the remaining async I/O boundaries without changing public wire
+contracts:
 
-- Instruction discovery uses Tokio canonicalization, metadata, existence, and
-  directory checks. Recursive instruction expansion remains in
-  `spawn_blocking`, where its synchronous tree walk and reads belong.
-- Child-agent memory appendices now have an async loader used by the child loop;
-  the synchronous loader remains available for compatibility, and both paths
-  share the same rendering and error behavior.
-- Persistent-memory preference, repository, rollout, and note reads use
-  `tokio::try_join!` where independent, then assemble results in the existing
-  source order. Cleanup/consolidation preserve their error context and write
-  ordering.
-- The registry captures the effective persistent-memory configuration during
-  its workspace tool-config parse, so each memory-tool call avoids reparsing
-  `vtcode.toml`; the existing disabled-memory guard remains in place.
-- Basic and legacy directory listings reuse awaited metadata instead of making
-  synchronous `Path` probes on the runtime thread; list filters compile once
-  per directory, and the basic-list cache key includes workspace and
-  response-shaping inputs to prevent cross-workspace hits.
-- Context-reset manifests are written with async Tokio filesystem APIs from
-  compaction and continuation paths; the synchronous helpers remain available
-  for compatibility callers.
-- Trajectory logger session setup uses an async writer constructor; retention
-  rotation and pruning run on the blocking pool, while the synchronous logger
-  constructors remain available for compatibility and tests.
+- Instruction discovery uses Tokio canonicalization, metadata, existence, and directory checks. Recursive instruction
+  expansion remains in `spawn_blocking`, where its synchronous tree walk and reads belong.
+- Child-agent memory appendices now have an async loader used by the child loop; the synchronous loader remains
+  available for compatibility, and both paths share the same rendering and error behavior.
+- Persistent-memory preference, repository, rollout, and note reads use `tokio::try_join!` where independent, then
+  assemble results in the existing source order. Cleanup/consolidation preserve their error context and write ordering.
+- The registry captures the effective persistent-memory configuration during its workspace tool-config parse, so each
+  memory-tool call avoids reparsing `vtcode.toml`; the existing disabled-memory guard remains in place.
+- Basic and legacy directory listings reuse awaited metadata instead of making synchronous `Path` probes on the runtime
+  thread; list filters compile once per directory, and the basic-list cache key includes workspace and response-shaping
+  inputs to prevent cross-workspace hits.
+- Context-reset manifests are written with async Tokio filesystem APIs from compaction and continuation paths; the
+  synchronous helpers remain available for compatibility callers.
+- Trajectory logger session setup uses an async writer constructor; retention rotation and pruning run on the blocking
+  pool, while the synchronous logger constructors remain available for compatibility and tests.
 
-The changes intentionally leave `ThreadEvent`, session history, and tool wire
-schemas unchanged. Remaining synchronous filesystem work is either a deliberate
-compatibility helper or isolated inside `spawn_blocking`.
+The changes intentionally leave `ThreadEvent`, session history, and tool wire schemas unchanged. Remaining synchronous
+filesystem work is either a deliberate compatibility helper or isolated inside `spawn_blocking`.
 
 ## Validation
 
@@ -324,11 +350,13 @@ Executed:
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode turn::utils -- --nocapture` (re-run after `force_redraw` fix)
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode session_setup -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode async_mcp_manager::tests -- --nocapture`
-- `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode async_mcp_manager::tests -- --nocapture` (re-run after duplicate-init guard test)
+- `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode async_mcp_manager::tests -- --nocapture` (re-run after
+  duplicate-init guard test)
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_routing -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline::execution_runtime -- --nocapture`
 - `RUSTC_WRAPPER= cargo test -p vtcode --bin vtcode tool_pipeline::pty_stream -- --nocapture`
+<!-- markdownlint-disable-next-line MD013 -->
 - `rustfmt --check crates/codegen/vtcode-core/src/tools/registry/pty.rs crates/codegen/vtcode-core/src/tools/registry/pty_facade.rs src/agent/runloop/unified/turn/session_loop_runner.rs src/agent/runloop/unified/turn/tool_outcomes/handlers.rs`
 - `rustfmt --check src/agent/runloop/unified/turn/utils.rs`
 - `rustfmt --check src/agent/runloop/unified/session_setup/signal.rs src/agent/runloop/unified/progress.rs`
@@ -344,7 +372,8 @@ Result: all commands completed successfully for the touched areas.
 
 Note on strict clippy:
 
-- `RUSTC_WRAPPER= cargo clippy --workspace --all-targets -- -D warnings` currently fails due pre-existing unrelated lint debt in other crates (`vtcode-ui`, `vtcode-config`, `vtcode-core`, `vtcode` tests)
+- `RUSTC_WRAPPER= cargo clippy --workspace --all-targets -- -D warnings` currently fails due pre-existing unrelated lint
+  debt in other crates (`vtcode-ui`, `vtcode-config`, `vtcode-core`, `vtcode` tests)
 - touched packages were validated with focused checks/tests and format checks
 
 Performance sample output was written to `.vtcode/perf/diff.md` (single local sample; interpret as directional only).
@@ -352,8 +381,10 @@ Performance sample output was written to `.vtcode/perf/diff.md` (single local sa
 ## Next Batch (Recommended)
 
 1. Cancellation/fairness pass
+
 - prioritize tool pipeline and runloop `select!` sites for cancellation-safety review
 - verify long-running work always yields or is delegated to `spawn_blocking`
 
-2. Optional benchmark pass
+1. Optional benchmark pass
+
 - run `./scripts/perf/baseline.sh` before/after targeted lock-path changes in cache-heavy flows

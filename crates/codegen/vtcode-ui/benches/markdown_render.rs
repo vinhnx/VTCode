@@ -58,6 +58,22 @@ fn large_fenced_code_block(language: Option<&str>) -> String {
     out
 }
 
+fn unicode_prose() -> String {
+    (0..240)
+        .map(|index| format!("Paragraph {index}: café 東京 describes an asymmetric result.\n\n"))
+        .collect()
+}
+
+fn plan_wrappers_with_multiline_code() -> String {
+    (0..160)
+        .map(|index| {
+            format!(
+                "<plan>\nSection {index} before ``literal\nordinary café 東京\n<plan>inside code</plan>\nend`` after.\n</plan>\n\n"
+            )
+        })
+        .collect()
+}
+
 fn markdown_render_benchmark(c: &mut Criterion) {
     let styles = theme::active_styles();
     let cases: Vec<(&str, String)> = vec![
@@ -66,6 +82,8 @@ fn markdown_render_benchmark(c: &mut Criterion) {
         ("nested_list_blockquote", nested_list_blockquote_markdown()),
         ("large_code_with_language", large_fenced_code_block(Some("rust"))),
         ("large_code_without_language", large_fenced_code_block(None)),
+        ("unicode_prose", unicode_prose()),
+        ("plan_wrappers_multiline_code", plan_wrappers_with_multiline_code()),
     ];
 
     let mut group = c.benchmark_group("markdown_render");

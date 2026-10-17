@@ -556,17 +556,33 @@ fn streaming_state_set_on_agent_append_pasted_message() {
 }
 
 #[test]
-fn busy_enter_steers_active_run() {
+fn busy_enter_queues_for_next_turn() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     set_busy_status(&mut session);
     session.set_input("keep searching in docs/".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Steer(value)) if value == "keep searching in docs/"));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "keep searching in docs/");
+            assert!(!value.batchable, "busy plain-Enter must stay its own turn");
+        }
+        other => panic!("expected non-batchable QueueSubmit, got: {other:?}"),
+    }
+    // Synchronization + UI feedback: optimistic local queue updated on the
+    // same &mut borrow that emitted the event, composer cleared, overlay
+    // shows the queued entry above the input.
+    assert_eq!(session.queued_inputs, vec!["keep searching in docs/".to_string()]);
+    assert_eq!(session.input_manager.content(), "");
+    let transcript = visible_transcript(&mut session);
+    assert!(
+        transcript.iter().any(|line| line.contains("↳ [1/1] keep searching in docs/")),
+        "queued input must render in the queue overlay, got: {transcript:?}"
+    );
 }
 
 #[test]
-fn retained_foreground_session_does_not_steer_idle_composer() {
+fn retained_foreground_session_queues_busy_composer() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
     session.set_input("start a new turn".to_string());
@@ -575,13 +591,20 @@ fn retained_foreground_session_does_not_steer_idle_composer() {
     assert!(matches!(event, Some(InlineEvent::Submit(value)) if value == "start a new turn"));
 
     set_busy_status(&mut session);
-    session.set_input("steer active turn".to_string());
+    session.set_input("queue while busy".to_string());
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(InlineEvent::Steer(value)) if value == "steer active turn"));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "queue while busy");
+            assert!(!value.batchable, "busy plain-Enter must stay its own turn");
+        }
+        other => panic!("expected non-batchable QueueSubmit, got: {other:?}"),
+    }
+    assert_eq!(session.queued_inputs, vec!["queue while busy".to_string()]);
 }
 
 #[test]
-fn app_retained_foreground_session_does_not_steer_idle_composer() {
+fn app_retained_foreground_session_queues_busy_composer() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     session.core.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
     session.core.set_input("start a new turn".to_string());
@@ -590,9 +613,16 @@ fn app_retained_foreground_session_does_not_steer_idle_composer() {
     assert!(matches!(event, Some(AppInlineEvent::Submit(value)) if value.text == "start a new turn"));
 
     set_app_session_busy_status(&mut session);
-    session.core.set_input("steer active turn".to_string());
+    session.core.set_input("queue while busy".to_string());
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(event, Some(AppInlineEvent::Steer(value)) if value.text == "steer active turn"));
+    match &event {
+        Some(AppInlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "queue while busy");
+            assert!(!value.batchable, "busy plain-Enter must stay its own turn");
+        }
+        other => panic!("expected non-batchable QueueSubmit, got: {other:?}"),
+    }
+    assert_eq!(session.core.queued_inputs, vec!["queue while busy".to_string()]);
 }
 
 #[test]
@@ -606,13 +636,56 @@ fn busy_enter_keeps_slash_commands_on_queue_path() {
 }
 
 #[test]
-fn busy_control_enter_queues_submission() {
+fn busy_control_enter_queues_batchable_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     set_busy_status(&mut session);
     session.set_input("keep searching in docs/".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
-    assert!(matches!(event, Some(InlineEvent::QueueSubmit(value)) if value == "keep searching in docs/"));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "keep searching in docs/");
+            assert!(value.batchable, "busy Ctrl+Enter plain text must coalesce like the app path");
+        }
+        other => panic!("expected batchable QueueSubmit, got: {other:?}"),
+    }
+    assert_eq!(session.queued_inputs, vec!["keep searching in docs/".to_string()]);
+    assert_eq!(session.input_manager.content(), "");
+}
+
+#[test]
+fn busy_control_enter_slash_stays_non_batchable() {
+    // Asymmetric counterpart: slash commands keep one-per-turn dispatch and
+    // must not merge with a batchable batch.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.set_input("/model gpt-4o".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "/model gpt-4o");
+            assert!(!value.batchable, "slash commands must stay one per turn");
+        }
+        other => panic!("expected non-batchable QueueSubmit, got: {other:?}"),
+    }
+}
+
+#[test]
+fn busy_tab_queues_batchable_submission() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.set_input("tabbed follow-up".to_string());
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "tabbed follow-up");
+            assert!(value.batchable, "busy Tab plain text must coalesce like Ctrl+Enter");
+        }
+        other => panic!("expected batchable QueueSubmit, got: {other:?}"),
+    }
+    assert_eq!(session.queued_inputs, vec!["tabbed follow-up".to_string()]);
 }
 
 #[test]
@@ -629,16 +702,90 @@ fn app_busy_control_enter_queues_batchable_submission() {
 }
 
 #[test]
-fn app_busy_plain_enter_steers_active_run() {
+fn app_busy_plain_enter_queues_for_next_turn() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     set_app_session_busy_status(&mut session);
     session.core.set_input("one turn".to_string());
 
     let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    match &event {
+        Some(AppInlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "one turn");
+            assert!(!value.batchable, "busy plain-Enter must stay its own turn");
+        }
+        other => panic!("expected non-batchable QueueSubmit, got: {other:?}"),
+    }
+    assert_eq!(session.core.queued_inputs, vec!["one turn".to_string()]);
+    assert_eq!(session.core.input_manager.content(), "");
+}
+
+#[test]
+fn busy_plain_enter_queues_preserve_fifo_order() {
+    // Asymmetric FIFO check: two distinct busy Enters must land oldest-first
+    // so the first typed runs first after the current turn.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+
+    session.set_input("first queued".to_string());
+    let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(
-        matches!(&event, Some(AppInlineEvent::Steer(value)) if value.text == "one turn"),
-        "expected Steer, got: {event:?}"
+        matches!(&first, Some(InlineEvent::QueueSubmit(value)) if value.text == "first queued" && !value.batchable),
+        "expected first non-batchable QueueSubmit, got: {first:?}"
     );
+
+    session.set_input("second queued".to_string());
+    let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(
+        matches!(&second, Some(InlineEvent::QueueSubmit(value)) if value.text == "second queued" && !value.batchable),
+        "expected second non-batchable QueueSubmit, got: {second:?}"
+    );
+
+    assert_eq!(session.queued_inputs, vec!["first queued".to_string(), "second queued".to_string()]);
+    let transcript = visible_transcript(&mut session);
+    assert!(
+        transcript.iter().any(|line| line.contains("↳ [1/2] first queued")),
+        "oldest queued entry must render first, got: {transcript:?}"
+    );
+    assert!(
+        transcript.iter().any(|line| line.contains("↳ [2/2] second queued")),
+        "newest queued entry must render second, got: {transcript:?}"
+    );
+}
+
+#[test]
+fn queued_inputs_cap_keeps_newest() {
+    // Asymmetric boundary: 260 pushes must keep the newest 256, dropping the
+    // 4 oldest, so the optimistic overlay mirrors the authoritative cap.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    for i in 0..260 {
+        session.push_queued_input(format!("msg {i}"));
+    }
+    assert_eq!(session.queued_inputs.len(), 256);
+    assert_eq!(session.queued_inputs.first().map(String::as_str), Some("msg 4"));
+    assert_eq!(session.queued_inputs.last().map(String::as_str), Some("msg 259"));
+}
+
+#[test]
+fn busy_plain_enter_with_attachments_queues_single_turn() {
+    // Queued attachments must stay with their message as one turn; the old
+    // Steer path rejected attachments with a warning + draft restore.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.set_input("see image".to_string());
+    session
+        .input_manager
+        .set_attachments(vec![ContentPart::image("encoded", "image/png")]);
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    match &event {
+        Some(InlineEvent::QueueSubmit(value)) => {
+            assert_eq!(value.text, "see image");
+            assert!(value.has_attachments(), "attachment must stay queued with its message");
+            assert!(!value.batchable, "attachment queue entries must dispatch alone");
+        }
+        other => panic!("expected QueueSubmit with attachment, got: {other:?}"),
+    }
+    assert_eq!(session.queued_inputs, vec!["see image".to_string()]);
 }
 
 #[test]
@@ -948,4 +1095,48 @@ fn app_legacy_control_codes_match_cmd_line_editing() {
     let clear = session.process_key(KeyEvent::new(KeyCode::Char('\u{15}'), KeyModifiers::NONE));
     assert!(clear.is_none());
     assert_eq!(session.core.input_manager.content(), "first\n\nthird");
+}
+
+#[test]
+fn modified_enter_preserves_command_drafts_and_literal_backslashes() {
+    for running in [false, true] {
+        for modifiers in [KeyModifiers::SHIFT, KeyModifiers::ALT] {
+            for draft in ["/stop", "/plan", "/help", "/stop\\", "/plan\\", "/help\\", "literal\\"] {
+                let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+                if running {
+                    session.handle_command(InlineCommand::SetActivityState(ActivityState::Building));
+                }
+                session.input_manager.set_content(draft.to_string());
+                let event = session.process_key(KeyEvent::new(KeyCode::Enter, modifiers));
+                assert!(event.is_none(), "{draft} {modifiers:?} running={running}");
+                assert_eq!(session.input_manager.content(), format!("{draft}\n"));
+                assert!(session.queued_inputs.is_empty());
+            }
+        }
+    }
+}
+
+#[test]
+fn composer_enter_and_control_j_keep_existing_newline_and_submit_behavior() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.input_manager.set_content("literal\\".to_string());
+    assert!(session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)).is_none());
+    assert_eq!(session.input_manager.content(), "literal\n");
+    session.input_manager.set_content("/help".to_string());
+    assert!(
+        session
+            .process_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL))
+            .is_none()
+    );
+    assert_eq!(session.input_manager.content(), "/help\n");
+    for modifiers in [
+        KeyModifiers::NONE,
+        KeyModifiers::CONTROL,
+        KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+    ] {
+        session.input_manager.set_content("send this".to_string());
+        assert!(
+            matches!(session.process_key(KeyEvent::new(KeyCode::Enter, modifiers)), Some(InlineEvent::Submit(input)) if input.text == "send this")
+        );
+    }
 }

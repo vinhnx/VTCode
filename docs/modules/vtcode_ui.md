@@ -4,15 +4,16 @@ Unified UI framework for VT Code: design system, theme registry, and TUI framewo
 
 ## Overview
 
-`vtcode-ui` consolidates the design system, theme registry, and terminal UI framework into a single crate. It provides the public UI-facing API surface for downstream consumers while keeping host-specific integrations inside `vtcode-core`.
+`vtcode-ui` consolidates the design system, theme registry, and terminal UI framework into a single crate. It provides
+the public UI-facing API surface for downstream consumers while keeping host-specific integrations inside `vtcode-core`.
 
 ## Architecture
 
-| Area | Path | Description |
-|------|------|-------------|
-| Design system | `design/` | Color conversion, style bridging, layout, diff, panel primitives |
-| Theme registry | `theme/` | ThemeStyles, runtime state, syntax theme resolution |
-| TUI framework | `tui/` | Session, widgets, runner, markdown rendering, config |
+| Area           | Path      | Description                                                      |
+| -------------- | --------- | ---------------------------------------------------------------- |
+| Design system  | `design/` | Color conversion, style bridging, layout, diff, panel primitives |
+| Theme registry | `theme/`  | ThemeStyles, runtime state, syntax theme resolution              |
+| TUI framework  | `tui/`    | Session, widgets, runner, markdown rendering, config             |
 
 ## Key Components
 

@@ -1,0 +1,639 @@
+# VT Code Configuration File (Example)
+# Getting-started reference; see docs/config/CONFIGURATION_PRECEDENCE.md for override order.
+# Copy this file to vtcode.toml and customize as needed.
+
+# Clickable file citation URI scheme ("vscode", "cursor", "windsurf", "vscode-insiders", "none")
+file_opener = "none"
+
+# Workspace-level configuration
+# [workspace]
+# When true, force workspace root vtcode.toml as the sole active config layer
+# (system, user, project, and dot-dir layers are discarded)
+# use_root_config = false
+# include_context = true
+# max_context_size = 1048576  # 1MB
+
+# Primary agent selected for new sessions when no explicit session selection is active
+default_primary_agent = "build"
+
+# Optional external command invoked after each completed agent turn
+notify = []
+
+# User-defined OpenAI-compatible providers
+custom_providers = []
+
+# [[custom_providers]]
+# name = "mycorp"
+# display_name = "MyCorporateName"
+# base_url = "https://llm.corp.example/v1"
+# api_key_env = "MYCORP_API_KEY"
+# model = "gpt-5-mini"
+# context_window = 256000
+
+[history]
+# Persist local session transcripts to disk
+persistence = "file"
+
+# Optional max size budget for each persisted session snapshot
+# max_bytes = 104857600
+
+[tui]
+# Enable all built-in TUI notifications, disable them, or restrict to specific event types.
+# notifications = true
+# notifications = ["agent-turn-complete", "approval-requested"]
+
+# Notification transport: "auto", "osc9", or "bel"
+# notification_method = "auto"
+
+# Set to false to reduce shimmer/animation effects
+# animations = true
+
+# Alternate-screen override: "always" or "never"
+# alternate_screen = "never"
+
+# Show onboarding hints on the welcome screen
+# show_tooltips = true
+
+# Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
+[agent]
+# Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
+provider = "openai"
+
+# Environment variable containing the API key for the provider
+api_key_env = "OPENAI_API_KEY"
+
+# Default model to use when no specific model is specified
+default_model = "gpt-5.6-sol"
+
+# Visual theme for the terminal interface
+theme = "ciapre-dark"
+
+# Enable TODO planning helper mode for structured task management
+todo_planning_mode = true
+
+# UI surface to use ("inline" by default; "auto" and "alternate" are also supported)
+ui_surface = "inline"
+
+# Maximum number of conversation turns before rotating context (affects memory usage)
+# Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
+max_conversation_turns = 150
+
+# Reasoning effort level ("none", "minimal", "low", "medium", "high", "xhigh", "max") - affects model usage and response speed
+reasoning_effort = "none"
+
+# Temperature for main model responses (0.0-1.0)
+temperature = 0.7
+
+# Enable self-review loop to check and improve responses (increases API calls)
+enable_self_review = false
+
+# Maximum number of review passes when self-review is enabled
+max_review_passes = 1
+
+# Enable prompt refinement loop for improved prompt quality (increases processing time)
+refine_prompts_enabled = false
+
+# Maximum passes for prompt refinement when enabled
+refine_prompts_max_passes = 1
+
+# Optional alternate model for refinement (leave empty to use default)
+refine_prompts_model = ""
+
+# Maximum size of project documentation to include in context (in bytes)
+project_doc_max_bytes = 16384
+
+# Maximum size of instruction files to process (in bytes)
+instruction_max_bytes = 16384
+
+# List of additional instruction files to include in context
+instruction_files = []
+
+# Instruction files or globs to exclude from AGENTS/rules discovery
+instruction_excludes = []
+
+# Maximum recursive @import depth for instruction and rule files
+instruction_import_max_depth = 5
+
+# Durable per-repository memory for main sessions
+[agent.persistent_memory]
+enabled = false
+auto_write = true
+# directory_override = "/absolute/user-local/path"
+# Startup scan budget for the compact memory summary
+startup_line_limit = 200
+startup_byte_limit = 25600
+
+# Lightweight model helpers for lower-cost side tasks
+[agent.small_model]
+enabled = true
+model = ""
+temperature = 0.3
+use_for_large_reads = true
+use_for_web_summary = true
+use_for_git_history = true
+use_for_memory = true
+
+# Inline prompt suggestions for the chat composer
+[agent.prompt_suggestions]
+# Enable Alt+P ghost-text suggestions in the composer
+enabled = true
+
+# Lightweight model for prompt suggestions (leave empty to auto-pick)
+model = ""
+
+# Lower values keep suggestions stable and completion-like
+temperature = 0.3
+
+# Show a one-time note that LLM-backed suggestions can consume tokens
+show_cost_notice = true
+
+# Onboarding configuration - Customize the startup experience
+[agent.onboarding]
+# Enable the onboarding welcome message on startup
+enabled = true
+
+# Custom introduction text shown on startup
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+
+# Include project overview information in welcome
+include_project_overview = true
+
+# Include language summary information in welcome
+include_language_summary = false
+
+# Include key guideline highlights from AGENTS.md/CLAUDE.md
+include_guideline_highlights = true
+
+# Include usage tips in the welcome message
+include_usage_tips_in_welcome = false
+
+# Include recommended actions in the welcome message
+include_recommended_actions_in_welcome = false
+
+# Maximum number of guideline highlights to show
+guideline_highlight_limit = 3
+
+# List of usage tips shown during onboarding
+usage_tips = [
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md/CLAUDE.md guidelines when proposing changes.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+]
+
+# List of recommended actions shown during onboarding
+recommended_actions = [
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+]
+
+# Checkpointing configuration for session persistence
+[agent.checkpointing]
+# Enable automatic session checkpointing
+enabled = true
+
+# Maximum number of checkpoints to keep on disk
+max_snapshots = 50
+
+# Maximum age of checkpoints to keep (in days)
+max_age_days = 30
+
+# Per-turn tool-call budget for the built-in agent harness
+[agent.harness]
+max_tool_calls_per_turn = 120
+
+# Tool security configuration
+[tools]
+# Default policy when no specific policy is defined ("allow", "prompt", "deny")
+# "allow" - Execute without confirmation
+# "prompt" - Ask for confirmation
+# "deny" - Block the tool
+default_policy = "prompt"
+
+# Maximum number of tool loops allowed per turn
+# Set to 0 to disable the limit and let other turn safeguards govern termination.
+max_tool_loops = 60
+
+# Maximum number of repeated identical tool calls (prevents stuck loops)
+max_repeated_tool_calls = 2
+
+# Maximum consecutive blocked tool calls before force-breaking the turn
+# Helps prevent high-CPU churn when calls are repeatedly denied/blocked
+max_consecutive_blocked_tool_calls_per_turn = 8
+
+# Maximum sequential spool-chunk reads per turn before nudging targeted extraction/summarization
+max_sequential_spool_chunk_reads = 6
+
+# Specific tool policies - Override default policy for individual tools
+[tools.policies]
+apply_patch = "prompt"            # Apply code patches (requires confirmation)
+request_user_input = "allow"      # Ask focused user questions when the task requires it
+task_tracker = "prompt"           # Create or update explicit task plans
+exec_command = "prompt"           # Run commands; pipe-first by default, set tty=true for PTY/interactive sessions
+write_stdin = "prompt"            # Send input to active command sessions
+code_search = "allow"             # Advanced bounded literal search with query-led filters
+
+# Command security - Define safe and dangerous command patterns
+[commands]
+# Commands that are always allowed without confirmation
+allow_list = [
+    "ls",           # List directory contents
+    "pwd",          # Print working directory
+    "git status",   # Show git status
+    "git diff",     # Show git differences
+    "cargo check",  # Check Rust code
+    "echo",         # Print text
+]
+
+# Commands that are never allowed
+deny_list = [
+    "rm -rf /",        # Delete root directory (dangerous)
+    "rm -rf ~",        # Delete home directory (dangerous)
+    "shutdown",        # Shut down system (dangerous)
+    "reboot",          # Reboot system (dangerous)
+    "sudo *",          # Any sudo command (dangerous)
+    ":(){ :|:& };:",   # Fork bomb (dangerous)
+]
+
+# Command patterns that are allowed (supports glob patterns)
+allow_glob = [
+    "git *",        # All git commands
+    "cargo *",      # All cargo commands
+    "python -m *",  # Python module commands
+]
+
+# Command patterns that are denied (supports glob patterns)
+deny_glob = [
+    "rm *",         # All rm commands
+    "sudo *",       # All sudo commands
+    "chmod *",      # All chmod commands
+    "chown *",      # All chown commands
+    "kubectl *",    # All kubectl commands (admin access)
+]
+
+# Regular expression patterns for allowed commands (if needed)
+allow_regex = []
+
+# Regular expression patterns for denied commands (if needed)
+deny_regex = []
+
+# Security configuration - Safety settings for automated operations
+[security]
+# Require human confirmation for potentially dangerous actions
+human_in_the_loop = true
+
+# Require explicit write tool usage for claims about file modifications
+require_write_tool_for_claims = true
+
+# Auto-apply patches without prompting (DANGEROUS - disable for safety)
+auto_apply_detected_patches = false
+
+# UI configuration - Terminal and display settings
+[ui]
+# Enable reduced-motion presentation explicitly. When omitted, VT Code honors
+# VTCODE_REDUCE_MOTION first, then supported OS accessibility preferences.
+# reduce_motion_mode = true
+# To keep progress animation in reduced-motion mode, set this to true.
+# reduce_motion_keep_progress_animation = false
+
+# Tool output display mode
+# "compact" - Concise tool output
+# "full" - Detailed tool output
+tool_output_mode = "compact"
+
+# Tool transition summary display mode
+# "compact" - Render one compact summary per call and keep live PTY output bounded
+# "expanded" - Render the expanded summary layout per call
+tool_display_mode = "compact"
+
+# Maximum number of lines to display in tool output (prevents transcript flooding)
+# Lines beyond this limit are truncated to a tail preview
+tool_output_max_lines = 600
+
+# Maximum bytes threshold for spooling tool output to disk
+# Output exceeding this size is written to .vtcode/tool-output/*.log
+tool_output_spool_bytes = 200000
+
+# Optional custom directory for spooled tool output logs
+# If not set, defaults to .vtcode/tool-output/
+# tool_output_spool_dir = "/path/to/custom/spool/dir"
+
+# Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
+allow_tool_ansi = false
+
+# Number of rows to allocate for inline UI viewport
+inline_viewport_rows = 16
+
+# Show elapsed time divider after each completed turn
+show_turn_timer = false
+
+# Show warning/error/fatal diagnostic lines directly in transcript
+# Effective in debug/development builds only
+show_diagnostics_in_transcript = false
+
+# Show timeline navigation panel
+show_timeline_pane = false
+
+# Optional terminal activity reporting (interactive TUI only).
+[ui.program_status]
+enabled = false
+
+# Runtime notification preferences
+[ui.notifications]
+# Master toggle for terminal/desktop notifications
+enabled = true
+
+# Delivery mode: "terminal", "hybrid", or "desktop"
+delivery_mode = "desktop"
+
+# Preferred desktop backend: "auto", "osascript", "notify_rust", or "terminal"
+backend = "auto"
+
+# Suppress notifications while terminal is focused
+suppress_when_focused = true
+
+# Failure/error notifications
+command_failure = false
+tool_failure = false
+error = true
+
+# Completion notifications
+# Legacy master toggle (fallback for split settings when unset)
+completion = true
+completion_success = false
+completion_failure = true
+
+# Human approval/interaction notifications
+hitl = true
+policy_approval = true
+request = false
+
+# Success notifications for tool call results
+tool_success = false
+
+# Repeated notification suppression
+repeat_window_seconds = 30
+max_identical_in_window = 1
+
+# Status line configuration
+[ui.status_line]
+# Status line mode ("auto", "command", "hidden")
+mode = "auto"
+
+# Show current system time (HH:MM:SS) on the status line
+show_clock = true
+
+# How often to refresh status line (milliseconds)
+refresh_interval_ms = 2000
+
+# Timeout for command execution in status line (milliseconds)
+command_timeout_ms = 200
+
+# Terminal title configuration
+[ui.terminal_title]
+# Ordered terminal title items (empty list disables VT Code-managed titles)
+items = ["spinner", "project"]
+
+# Enable Vim-style prompt editing in interactive mode
+vim_mode = false
+
+# PTY (Pseudo Terminal) configuration - For interactive command execution
+[pty]
+# Enable PTY support for interactive commands
+enabled = true
+
+# Default number of terminal rows for PTY sessions
+default_rows = 24
+
+# Default number of terminal columns for PTY sessions
+default_cols = 80
+
+# Maximum number of concurrent PTY sessions
+max_sessions = 10
+
+# Command timeout in seconds (prevents hanging commands)
+command_timeout_seconds = 300
+
+# Number of recent lines to show in PTY output
+stdout_tail_lines = 20
+
+# Total lines to keep in PTY scrollback buffer
+scrollback_lines = 400
+
+# Optional preferred shell for PTY sessions (falls back to $SHELL when unset)
+# preferred_shell = "/bin/zsh"
+
+# Route shell execution through zsh EXEC_WRAPPER intercept hooks (feature-gated)
+shell_zsh_fork = false
+
+# Absolute path to patched zsh used when shell_zsh_fork is enabled
+# zsh_path = "/usr/local/bin/zsh"
+
+# Context management configuration - Controls conversation memory
+[context]
+# Session prompt safety budget used by automatic compaction.
+# Set to 0 to derive the effective budget from the resolved model/provider
+# capacity; positive values remain an explicit session safety ceiling.
+max_context_tokens = 0
+
+# Percentage to trim context to when it gets too large
+trim_to_percent = 60
+
+# Number of recent conversation turns to always preserve
+preserve_recent_turns = 6
+
+# Decision ledger configuration - Track important decisions
+[context.ledger]
+# Enable decision tracking and persistence
+enabled = true
+
+# Maximum number of decisions to keep in ledger
+max_entries = 12
+
+# Include ledger summary in model prompts
+include_in_prompt = true
+
+# Preserve ledger during context compression
+preserve_in_compression = true
+
+# AI model routing - Intelligent model selection
+# Telemetry and analytics
+[telemetry]
+# Enable trajectory logging for usage analysis
+trajectory_enabled = true
+
+# Syntax highlighting configuration
+[syntax_highlighting]
+# Enable syntax highlighting for code in tool output
+enabled = true
+
+# Theme for syntax highlighting
+theme = "base16-ocean.dark"
+
+# Cache syntax highlighting themes for performance
+cache_themes = true
+
+# Maximum file size for syntax highlighting (in MB)
+max_file_size_mb = 10
+
+# Programming languages to enable syntax highlighting for
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+    "bash",
+    "sh",
+    "shell",
+    "zsh",
+    "markdown",
+    "md",
+]
+
+# Timeout for syntax highlighting operations (milliseconds)
+highlight_timeout_ms = 1000
+
+# Automation features - Full-auto permission review settings
+[automation.full_auto]
+# Enable full automation mode (DANGEROUS - requires careful oversight)
+enabled = false
+
+# Maximum number of turns before asking for human input
+max_turns = 100
+
+# Tools allowed in full automation mode
+allowed_tools = [
+    "write_file",
+    "read_file",
+    "list_files",
+    "grep_file",
+]
+
+# Require profile acknowledgment before using full auto
+require_profile_ack = true
+
+# Grant tool-loop and session tool-call limit increases without prompting
+auto_grant_tool_limits = true
+
+# Path to full auto profile configuration
+profile_path = "automation/full_auto_profile.toml"
+
+[automation.scheduled_tasks]
+# Enable cron tools and durable `vtcode schedule` jobs
+enabled = false
+
+# Prompt caching - Cache model responses for efficiency
+[prompt_cache]
+# Enable prompt caching (reduces API calls for repeated prompts)
+enabled = true
+
+# Maximum number of cache entries to keep
+max_entries = 1000
+
+# Maximum age of cache entries (in days)
+max_age_days = 30
+
+# Enable automatic cache cleanup
+enable_auto_cleanup = true
+
+# Minimum quality threshold to keep cache entries
+min_quality_threshold = 0.7
+
+# Keep volatile runtime counters at the end of system prompts to improve provider-side prefix cache reuse
+# (enabled by default; disable only if you need legacy prompt layout)
+cache_friendly_prompt_shaping = true
+
+# Prompt cache configuration for OpenAI
+    [prompt_cache.providers.openai]
+    enabled = true
+    min_prefix_tokens = 1024
+    idle_expiration_seconds = 3600
+    surface_metrics = true
+    # Routing key strategy for OpenAI prompt cache locality.
+    # "session" creates one stable key per VT Code conversation.
+    prompt_cache_key_mode = "session"
+    # Optional: server-side prompt cache retention for OpenAI Responses API
+    # Supported values: "in_memory" or "24h" (leave commented out for default behavior)
+    # prompt_cache_retention = "24h"
+
+# Prompt cache configuration for Anthropic
+[prompt_cache.providers.anthropic]
+enabled = true
+default_ttl_seconds = 300
+extended_ttl_seconds = 3600
+max_breakpoints = 4
+cache_system_messages = true
+cache_user_messages = true
+
+# Prompt cache configuration for Gemini
+[prompt_cache.providers.gemini]
+enabled = true
+mode = "implicit"
+min_prefix_tokens = 1024
+explicit_ttl_seconds = 3600
+
+# Prompt cache configuration for OpenRouter
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+# Prompt cache configuration for Moonshot
+[prompt_cache.providers.moonshot]
+enabled = true
+
+# Prompt cache configuration for DeepSeek
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
+# Prompt cache configuration for Z.AI
+[prompt_cache.providers.zai]
+enabled = false
+
+# Model Context Protocol (MCP) - Connect external tools and services
+[mcp]
+# Enable Model Context Protocol (may impact startup time if services unavailable)
+enabled = true
+max_concurrent_connections = 5
+request_timeout_seconds = 30
+retry_attempts = 3
+
+# MCP UI configuration
+[mcp.ui]
+mode = "compact"
+max_events = 50
+show_provider_names = true
+
+# MCP renderer profiles for different services
+[mcp.ui.renderers]
+sequential-thinking = "sequential-thinking"
+context7 = "context7"
+
+# MCP provider configuration - External services that connect via MCP
+[[mcp.providers]]
+name = "time"
+command = "uvx"
+args = ["mcp-server-time"]
+enabled = true
+max_concurrent_requests = 3
+[mcp.providers.env]
+
+# Agent Client Protocol (ACP) - IDE integration
+[acp]
+enabled = true
+
+[acp.zed]
+enabled = true
+transport = "stdio"
+# workspace_trust controls ACP trust mode: "tools_policy" (prompts) or "full_auto" (no prompts)
+workspace_trust = "full_auto"
+
+[acp.zed.tools]
+read_file = true
+list_files = true
+
+# Native Claude fast mode uses premium pricing. Switching speeds invalidates prompt-cache reuse.
+# [provider.anthropic]
+# speed = "fast"  # standard or fast; unset uses standard, incompatible routes keep the preference dormant

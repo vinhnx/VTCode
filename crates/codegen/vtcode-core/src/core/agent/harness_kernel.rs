@@ -19,12 +19,54 @@ pub fn should_expose_tool_in_mode(
     FeatureSet::tool_enabled_for_mode(name, planning_active, request_user_input_enabled)
 }
 
+/// Whether a tool is on the wire in a cache-stable catalog (union of planning
+/// and execution exposure). Used when `prompt_cache.stable_tool_catalog_across_modes`
+/// is enabled so planning toggles do not rewrite the tool array.
+pub fn should_expose_tool_in_stable_catalog(tool: &ToolDefinition, request_user_input_enabled: bool) -> bool {
+    should_expose_tool_in_mode(tool, false, request_user_input_enabled)
+        || should_expose_tool_in_mode(tool, true, request_user_input_enabled)
+}
+
 pub fn filter_tool_definitions_for_mode(
     tools: Option<Arc<Vec<ToolDefinition>>>,
     planning_active: bool,
     request_user_input_enabled: bool,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
+    filter_tool_definitions_for_mode_with_stability(tools, planning_active, request_user_input_enabled, false)
+}
+
+pub fn filter_tool_definitions_for_mode_with_stability(
+    tools: Option<Arc<Vec<ToolDefinition>>>,
+    planning_active: bool,
+    request_user_input_enabled: bool,
+    stable_catalog: bool,
+) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
+    // Cache-stable catalog: union of planning/execution exposure and no action
+    // masking, so planning toggles cannot rewrite the wire tool array.
+    if stable_catalog {
+        // Fast path first, mirroring the arms below: when every tool
+        // survives, reuse the Arc instead of deep-cloning the catalog (each
+        // definition carries its description + JSON schema). No-op filters
+        // must not copy shared state.
+        if tools
+            .iter()
+            .all(|tool| should_expose_tool_in_stable_catalog(tool, request_user_input_enabled))
+        {
+            return Some(tools);
+        }
+        let filtered: Vec<ToolDefinition> = tools
+            .iter()
+            .filter(|tool| should_expose_tool_in_stable_catalog(tool, request_user_input_enabled))
+            .cloned()
+            .collect();
+        return if filtered.is_empty() {
+            None
+        } else {
+            Some(Arc::new(filtered))
+        };
+    }
+
     if !planning_active {
         // No action masking needed; only filter whole tools.
         if tools
@@ -99,7 +141,9 @@ pub use crate::core::agent::hash_utils::{
     hash_tool_definitions, hash_value, low_signal_attempt_key, stable_system_prefix_hash,
 };
 pub use crate::core::agent::request_plan::{HarnessRequestPlan, HarnessRequestPlanInput, build_harness_request_plan};
-pub use crate::core::agent::result_reducers::{reduce_tool_result, strip_tui_display_fields};
+pub use crate::core::agent::result_reducers::{
+    project_model_tool_result, reduce_tool_result, strip_tui_display_fields,
+};
 pub use crate::core::agent::tool_batching::{
     FallbackRecommendation, FallbackStep, PreparedToolBatch, PreparedToolBatchKind, PreparedToolCall,
     is_parallel_safe_tool_batch,
@@ -335,6 +379,59 @@ mod tests {
         assert!(!names.contains(&tools::APPLY_PATCH));
         assert!(!names.contains(&tools::WRITE_STDIN));
         assert!(!names.contains(&tools::WRITE_FILE));
+    }
+
+    #[test]
+    fn stable_catalog_keeps_mutating_tools_across_planning_toggles() {
+        let tools = Arc::new(vec![
+            function_tool(tools::CODE_SEARCH),
+            function_tool(tools::UNIFIED_FILE),
+            function_tool(tools::APPLY_PATCH),
+            function_tool(tools::WRITE_FILE),
+        ]);
+
+        let planning = filter_tool_definitions_for_mode_with_stability(Some(tools.clone()), true, false, true)
+            .expect("stable planning catalog");
+        let execution = filter_tool_definitions_for_mode_with_stability(Some(tools), false, false, true)
+            .expect("stable execution catalog");
+        let planning_names: Vec<&str> = planning.iter().map(|tool| tool.function_name()).collect();
+        let execution_names: Vec<&str> = execution.iter().map(|tool| tool.function_name()).collect();
+        assert_eq!(planning_names, execution_names, "stable catalog must match across modes");
+        assert!(planning_names.contains(&tools::APPLY_PATCH));
+        assert!(planning_names.contains(&tools::WRITE_FILE));
+    }
+
+    #[test]
+    fn stable_catalog_reuses_arc_when_nothing_is_filtered() {
+        // Asymmetric triple: all-exposed input keeps its Arc (no deep clone
+        // of descriptions + schemas); input with a mode-hidden tool gets a
+        // new Arc without it; fully-hidden input stays None.
+        let tools = Arc::new(vec![function_tool(tools::CODE_SEARCH), function_tool(tools::APPLY_PATCH)]);
+
+        let filtered = filter_tool_definitions_for_mode_with_stability(Some(tools.clone()), true, false, true)
+            .expect("stable catalog");
+        assert!(Arc::ptr_eq(&tools, &filtered), "no-op stable filter must reuse the Arc");
+
+        let execution = filter_tool_definitions_for_mode_with_stability(Some(tools.clone()), false, false, true)
+            .expect("stable catalog");
+        assert!(Arc::ptr_eq(&filtered, &execution), "stable catalog must be identical across toggles");
+
+        let mixed = Arc::new(vec![
+            function_tool(tools::CODE_SEARCH),
+            function_tool(tools::REQUEST_USER_INPUT),
+        ]);
+        let pruned = filter_tool_definitions_for_mode_with_stability(Some(mixed.clone()), true, false, true)
+            .expect("stable catalog");
+        assert!(!Arc::ptr_eq(&mixed, &pruned));
+        let names: Vec<&str> = pruned.iter().map(|tool| tool.function_name()).collect();
+        assert!(names.contains(&tools::CODE_SEARCH));
+        assert!(!names.contains(&tools::REQUEST_USER_INPUT));
+
+        let hidden = Arc::new(vec![function_tool(tools::REQUEST_USER_INPUT)]);
+        assert!(
+            filter_tool_definitions_for_mode_with_stability(Some(hidden), false, false, true).is_none(),
+            "fully-hidden stable catalog stays None"
+        );
     }
 
     #[test]

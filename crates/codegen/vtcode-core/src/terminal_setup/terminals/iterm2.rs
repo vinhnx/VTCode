@@ -115,10 +115,11 @@ pub struct ProfileIconInstallReport {
 /// Render the dynamic-profile JSON pointing at an absolute icon path.
 ///
 /// Unspecified attributes inherit live from the default profile, so
-/// switching to this profile changes only the tab icon. The
-/// `Automatic Profile Switching` rule is best-effort (unknown keys are
-/// ignored): where honored, the session reverts automatically when the
-/// foreground job stops matching.
+/// switching to this profile changes only the tab icon. There is no
+/// `Automatic Profile Switching` rule: VT Code switches to this profile
+/// explicitly at TUI startup and reverts to the session's original profile
+/// on exit, so automatic reversion (which requires iTerm2 Shell Integration)
+/// is neither needed nor reliable.
 pub fn dynamic_profile_json(icon_path: &Path) -> Result<String> {
     let document = serde_json::json!({
         "Profiles": [{
@@ -126,7 +127,6 @@ pub fn dynamic_profile_json(icon_path: &Path) -> Result<String> {
             "Guid": PROFILE_GUID,
             "Icon": ITERM2_ICON_MODE_CUSTOM,
             "Custom Icon Path": icon_path.to_string_lossy(),
-            "Automatic Profile Switching": ["&vtcode"],
         }],
     });
     serde_json::to_string_pretty(&document).context("failed to serialize iTerm2 dynamic profile")
@@ -173,7 +173,9 @@ pub fn profile_icon_instructions() -> Vec<String> {
     vec![
         "TAB ICON (profile image):".to_string(),
         "1. Run `/terminal-setup install-iterm2-icon` to install the VT Code tab icon automatically.".to_string(),
-        "2. Or set it manually: Settings → Profiles → General → Icon → Custom, then pick a PNG from resources/icons/."
+        "2. If a tab is stuck showing the VT Code icon after exit, run `/terminal-setup reset-iterm2-icon`."
+            .to_string(),
+        "3. Or set it manually: Settings → Profiles → General → Icon → Custom, then pick a PNG from resources/icons/."
             .to_string(),
     ]
 }
@@ -202,12 +204,42 @@ pub fn run_profile_icon_install(renderer: &mut crate::utils::ansi::AnsiRenderer)
     Ok(())
 }
 
+/// Reset the current session's iTerm2 profile to its original name.
+///
+/// Repair path for tabs left stuck on the `VT Code` icon profile by an older
+/// build that switched profile without reverting. Emits `OSC 1337;SetProfile=`
+/// with the session's original profile (from `ITERM_PROFILE`, falling back to
+/// iTerm2's `Default`). Fails closed outside iTerm2 or off macOS.
+pub fn run_profile_icon_reset(renderer: &mut crate::utils::ansi::AnsiRenderer) -> Result<()> {
+    use crate::terminal_setup::detector::TerminalType;
+    use crate::utils::ansi::MessageStyle;
+    use std::io::Write as _;
+    use vtcode_commons::ansi_codes::set_iterm2_profile;
+    use vtcode_commons::terminal_detection::{ITERM2_DEFAULT_PROFILE_NAME, original_iterm2_profile_name};
+
+    let terminal = TerminalType::detect()?;
+    if !matches!(terminal, TerminalType::ITerm2) {
+        renderer.line(MessageStyle::Error, &format!("This reset needs iTerm2 (detected {}).", terminal.name()))?;
+        return Ok(());
+    }
+    let target = original_iterm2_profile_name().unwrap_or_else(|| ITERM2_DEFAULT_PROFILE_NAME.to_string());
+    let mut stdout = std::io::stdout();
+    stdout
+        .write_all(set_iterm2_profile(&target).as_bytes())
+        .with_context(|| "failed to write iTerm2 profile reset sequence")?;
+    stdout
+        .flush()
+        .with_context(|| "failed to flush iTerm2 profile reset sequence")?;
+    renderer.line(MessageStyle::Status, &format!("✓ Session profile reset to \"{target}\"."))?;
+    Ok(())
+}
+
 /// Ensure the iTerm2 profile icon is installed, returning the install
 /// report when this call wrote files.
 ///
 /// Best-effort first-run path: skips silently off macOS, outside iTerm2,
-/// or under tmux, and rewrites the artwork when the installed copy drifts
-/// from the shipped bytes so icon updates propagate.
+/// or under tmux, and rewrites the profile when the installed JSON or
+/// artwork drifts from the shipped copy so icon/profile updates propagate.
 pub fn ensure_profile_icon() -> Result<Option<ProfileIconInstallReport>> {
     if !cfg!(target_os = "macos") {
         return Ok(None);
@@ -234,7 +266,11 @@ pub fn ensure_profile_icon_at(
     let icon_fresh = std::fs::read(&icon_path)
         .map(|bytes| bytes == PROFILE_ICON_BYTES)
         .unwrap_or(false);
-    if profile_path.exists() && icon_fresh {
+    let profile_current = std::fs::read_to_string(&profile_path)
+        .ok()
+        .zip(dynamic_profile_json(&icon_path).ok())
+        .is_some_and(|(installed, expected)| installed == expected);
+    if profile_current && icon_fresh {
         return Ok(None);
     }
     install_profile_icon(home, data_dir).map(Some)
@@ -268,9 +304,8 @@ mod tests {
         assert_eq!(profile["Icon"], ITERM2_ICON_MODE_CUSTOM);
         assert_eq!(profile["Custom Icon Path"], "/data/vtcode/icons/vtcode-profile-120.png");
         assert!(
-            profile["Automatic Profile Switching"]
-                .as_array()
-                .is_some_and(|rules| rules.iter().any(|rule| rule == "&vtcode"))
+            profile.get("Automatic Profile Switching").is_none(),
+            "reversion is explicit now; the dynamic profile must not carry an APS rule"
         );
     }
 
@@ -340,5 +375,24 @@ mod tests {
         let third = ensure_profile_icon_at(home.path(), data.path(), true, false).unwrap();
         let report = third.expect("stale artwork must trigger a refresh");
         assert_eq!(std::fs::read(&report.icon_path).unwrap(), PROFILE_ICON_BYTES);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn ensure_refreshes_when_installed_profile_content_drifts() {
+        let home = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+
+        let first = ensure_profile_icon_at(home.path(), data.path(), true, false).unwrap();
+        let profile_path = first.expect("first run installs").profile_path;
+
+        // Simulate an older install that still carries the removed APS rule.
+        std::fs::write(&profile_path, r#"{"Profiles":[{"Name":"VT Code"}]}"#).unwrap();
+        let refreshed = ensure_profile_icon_at(home.path(), data.path(), true, false).unwrap();
+        let report = refreshed.expect("drifted profile content must trigger a rewrite");
+        assert_eq!(report.profile_path, profile_path);
+
+        let stored: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&profile_path).unwrap()).unwrap();
+        assert!(stored["Profiles"][0].get("Automatic Profile Switching").is_none());
     }
 }

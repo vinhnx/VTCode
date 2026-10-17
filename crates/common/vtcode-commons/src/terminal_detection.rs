@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 /// user profile with a generic name.
 pub const ITERM2_PROFILE_NAME: &str = "VT Code";
 
+/// Name of iTerm2's built-in default profile, used as the restore fallback
+/// when the session's original profile cannot be determined.
+pub const ITERM2_DEFAULT_PROFILE_NAME: &str = "Default";
+
 /// Filename of the shipped iTerm2 dynamic profile.
 pub const ITERM2_DYNAMIC_PROFILE_FILENAME: &str = "vtcode.json";
 
@@ -36,13 +40,35 @@ pub fn installed_iterm2_profile_path(home: &Path) -> PathBuf {
     iterm2_dynamic_profiles_dir(home).join(ITERM2_DYNAMIC_PROFILE_FILENAME)
 }
 
+/// Named gate conditions for the one-shot iTerm2 profile switch.
+///
+/// Stable-Rust emulation of named arguments: call sites construct this
+/// struct with named fields instead of passing three positional `bool`s,
+/// so `iterm_session` cannot be confused with `tmux_session` at a glance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ITerm2ProfileConditions {
+    /// `ITERM_SESSION_ID` is present (real iTerm2 session).
+    pub iterm_session: bool,
+    /// `TMUX` is present (proprietary sequences do not pass through multiplexers).
+    pub tmux_session: bool,
+    /// Shipped dynamic profile is installed.
+    pub profile_installed: bool,
+}
+
+impl ITerm2ProfileConditions {
+    /// Pure gate evaluation.
+    pub fn should_apply(&self) -> bool {
+        self.iterm_session && !self.tmux_session && self.profile_installed
+    }
+}
+
 /// Pure gate for the one-shot iTerm2 profile switch.
 ///
 /// Switch only for a real iTerm2 session outside tmux (proprietary
 /// sequences do not pass through multiplexers) with the shipped profile
 /// installed, so removing the profile file disables the switch.
 pub fn should_apply_iterm2_profile(iterm_session: bool, tmux_session: bool, profile_installed: bool) -> bool {
-    iterm_session && !tmux_session && profile_installed
+    ITerm2ProfileConditions { iterm_session, tmux_session, profile_installed }.should_apply()
 }
 
 /// Environment plus install gate evaluated against the live process.
@@ -57,7 +83,29 @@ pub fn should_apply_iterm2_profile_now() -> bool {
         .map(|home| installed_iterm2_profile_path(&home))
         .map(|path| path.exists())
         .unwrap_or(false);
-    should_apply_iterm2_profile(iterm_session, tmux_session, installed)
+    ITerm2ProfileConditions {
+        iterm_session,
+        tmux_session,
+        profile_installed: installed,
+    }
+    .should_apply()
+}
+
+/// The profile name to restore after VT Code's one-shot icon switch.
+///
+/// Reads iTerm2's `ITERM_PROFILE`, which is fixed at session creation and is
+/// **not** updated by `OSC 1337;SetProfile=`, so it still names the session's
+/// original profile after the switch. Returns `None` when the value is unset,
+/// empty, or already [`ITERM2_PROFILE_NAME`]: in that case there is nothing to
+/// restore (the session already uses the shipped profile, or we cannot tell
+/// what to revert to without hijacking an unrelated profile).
+pub fn original_iterm2_profile_name() -> Option<String> {
+    let name = env::var("ITERM_PROFILE").ok()?;
+    let trimmed = name.trim();
+    if trimmed.is_empty() || trimmed == ITERM2_PROFILE_NAME {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 /// Supported terminal emulators.
@@ -382,7 +430,7 @@ pub fn is_ghostty_terminal(term_program: Option<&str>, term: Option<&str>) -> bo
 }
 
 fn terminal_name_contains(value: Option<&str>, needle: &str) -> bool {
-    value.map(|value| value.to_ascii_lowercase().contains(needle)).unwrap_or(false)
+    value.is_some_and(|value| crate::formatting::contains_ignore_ascii_case(value, needle))
 }
 
 #[cfg(test)]
@@ -470,5 +518,42 @@ mod tests {
         assert!(!should_apply_iterm2_profile(true, true, true));
         assert!(!should_apply_iterm2_profile(true, false, false));
         assert!(!should_apply_iterm2_profile(false, false, false));
+    }
+
+    #[test]
+    fn iterm2_profile_conditions_match_legacy_function() {
+        let named = ITerm2ProfileConditions {
+            iterm_session: true,
+            tmux_session: false,
+            profile_installed: true,
+        };
+        assert!(named.should_apply());
+        assert_eq!(named.should_apply(), should_apply_iterm2_profile(true, false, true));
+        let defaulted = ITerm2ProfileConditions { iterm_session: true, ..Default::default() };
+        assert!(!defaulted.should_apply());
+    }
+
+    #[test]
+    fn original_iterm2_profile_name_returns_session_profile() {
+        let env = crate::env_lock::lock();
+        let previous = env::var_os("ITERM_PROFILE");
+        env.set_var("ITERM_PROFILE", "  Solarized Dark  ");
+        assert_eq!(original_iterm2_profile_name().as_deref(), Some("Solarized Dark"));
+        env.restore_var("ITERM_PROFILE", previous);
+    }
+
+    #[test]
+    fn original_iterm2_profile_name_skips_shipped_profile() {
+        let env = crate::env_lock::lock();
+        let previous = env::var_os("ITERM_PROFILE");
+        env.set_var("ITERM_PROFILE", ITERM2_PROFILE_NAME);
+        assert_eq!(original_iterm2_profile_name(), None);
+
+        env.set_var("ITERM_PROFILE", "   ");
+        assert_eq!(original_iterm2_profile_name(), None);
+
+        env.remove_var("ITERM_PROFILE");
+        assert_eq!(original_iterm2_profile_name(), None);
+        env.restore_var("ITERM_PROFILE", previous);
     }
 }

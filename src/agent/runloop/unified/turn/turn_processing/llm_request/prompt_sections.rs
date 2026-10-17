@@ -34,11 +34,9 @@ pub(super) async fn build_few_shot_section(ctx: &TurnProcessingContext<'_>) -> O
 }
 
 /// Return the text of the most recent user message in `history`.
-pub(super) fn latest_user_query(history: &[uni::Message]) -> Option<String> {
-    history
-        .iter()
-        .rev()
-        .find(|message| matches!(message.role, uni::MessageRole::User))
+fn latest_user_query(history: &[uni::Message]) -> Option<String> {
+    use crate::agent::runloop::unified::turn::context::last_user_message;
+    last_user_message(history)
         .map(|message| message.content.as_text().into_owned())
         .filter(|text: &String| !text.trim().is_empty())
 }

@@ -16,7 +16,14 @@ pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VT
     display_welcome(renderer)?;
 
     let terminal_type = TerminalType::detect()?;
+    run_setup_for_terminal(renderer, terminal_type, || terminal_type.config_path())
+}
 
+fn run_setup_for_terminal(
+    renderer: &mut AnsiRenderer,
+    terminal_type: TerminalType,
+    resolve_config_path: impl FnOnce() -> Result<std::path::PathBuf>,
+) -> Result<()> {
     renderer.line(MessageStyle::Status, &format!("Detected terminal: {}", terminal_type.name()))?;
 
     // Step 2: Feature Selection (for now, show what will be configured)
@@ -56,8 +63,13 @@ pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VT
         TerminalSetupAvailability::Offered => {}
     }
 
+    if let Some(instructions) = manual_setup_instructions(terminal_type, &features)? {
+        render_guidance_messages(renderer, &instructions.lines().map(str::to_string).collect::<Vec<_>>())?;
+        return Ok(());
+    }
+
     // Get config path
-    let config_path = match terminal_type.config_path() {
+    let config_path = match resolve_config_path() {
         Ok(path) => {
             renderer.line(MessageStyle::Info, &format!("Config file: {}", path.display()))?;
             path
@@ -110,7 +122,9 @@ pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VT
             anyhow::bail!("native-support terminals should return before config generation")
         }
         TerminalType::Alacritty => crate::terminal_setup::terminals::alacritty::generate_config(&enabled_features)?,
-        TerminalType::Zed => crate::terminal_setup::terminals::zed::generate_config(&enabled_features)?,
+        TerminalType::Zed | TerminalType::VSCode => {
+            anyhow::bail!("manual-setup terminals should return before config generation")
+        }
         TerminalType::TerminalApp
         | TerminalType::Xterm
         | TerminalType::WindowsTerminal
@@ -118,15 +132,6 @@ pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VT
         | TerminalType::Tabby
         | TerminalType::Unknown => {
             anyhow::bail!("guidance-only terminals should return before config generation")
-        }
-        TerminalType::VSCode => {
-            // VS Code requires manual setup - display instructions
-            let instructions = crate::terminal_setup::terminals::vscode::generate_config(&enabled_features)?;
-            renderer.line_if_not_empty(MessageStyle::Info)?;
-            for line in instructions.lines() {
-                renderer.line(MessageStyle::Info, line)?;
-            }
-            return Ok(());
         }
     };
 
@@ -165,6 +170,14 @@ pub async fn run_terminal_setup_wizard(renderer: &mut AnsiRenderer, _config: &VT
     }
 
     Ok(())
+}
+
+fn manual_setup_instructions(terminal_type: TerminalType, features: &[TerminalFeature]) -> Result<Option<String>> {
+    match terminal_type {
+        TerminalType::Zed => crate::terminal_setup::terminals::zed::generate_config(features).map(Some),
+        TerminalType::VSCode => crate::terminal_setup::terminals::vscode::generate_config(features).map(Some),
+        _ => Ok(None),
+    }
 }
 
 /// Display welcome message
@@ -307,5 +320,32 @@ mod tests {
         let joined = lines.join("\n");
         assert!(joined.contains("icon"));
         assert!(joined.contains(".png"));
+    }
+    #[test]
+    fn zed_manual_setup_returns_before_path_resolution_or_file_operations() {
+        use crate::utils::ansi::AnsiRenderer;
+        use vtcode_ui::tui::core_tui::app::types::InlineHandle;
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        let sandbox = tempfile::tempdir().unwrap();
+        let keymap = sandbox.path().join("keymap.json");
+        std::fs::write(&keymap, "[{\"context\":\"Editor\",\"bindings\":{}}]").unwrap();
+        super::run_setup_for_terminal(&mut renderer, TerminalType::Zed, || {
+            panic!("manual setup must return before resolving any config path");
+        })
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&keymap).unwrap(), "[{\"context\":\"Editor\",\"bindings\":{}}]");
+        assert_eq!(std::fs::read_dir(sandbox.path()).unwrap().count(), 1);
+        assert!(receiver.try_recv().is_ok(), "setup must emit instructions");
+        let instructions = super::manual_setup_instructions(TerminalType::Zed, &[super::TerminalFeature::Multiline])
+            .unwrap()
+            .unwrap();
+        assert!(instructions.contains("existing keymap array"));
+        assert!(instructions.contains("terminal::SendText"));
+        assert!(
+            super::manual_setup_instructions(TerminalType::Alacritty, &[])
+                .unwrap()
+                .is_none()
+        );
     }
 }

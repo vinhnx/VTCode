@@ -2,39 +2,16 @@ use std::sync::Arc;
 
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig, ReasoningEffortLevel};
+use vtcode_core::config::types::AgentConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::{
-    InlineEvent, InlineHandle, InlineListItem, InlineListSelection, TransientEvent, TransientSubmission,
-};
+use vtcode_ui::tui::app::{InlineEvent, InlineHandle, TransientEvent, TransientSubmission};
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::slash_commands::parse_effort_args;
 use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
 use crate::agent::runloop::unified::state::CtrlCState;
-use crate::agent::runloop::unified::turn::session::slash_commands::effort_description;
 
 enum Picker {
     Model(Box<ModelPickerState>),
-    Effort { persist: bool },
-}
-
-/// Picker rows for the busy-turn effort selector. Mirrors the idle
-/// `/effort` rows (title, description subtitle, current badge, search text)
-/// so both surfaces describe levels identically.
-fn effort_picker_items(current: ReasoningEffortLevel, model: &str) -> Vec<InlineListItem> {
-    ReasoningEffortLevel::allowed_values()
-        .iter()
-        .filter_map(|value| ReasoningEffortLevel::parse(value))
-        .map(|level| InlineListItem {
-            title: level.as_str().to_string(),
-            subtitle: Some(effort_description(level, model).to_string()),
-            badge: (level == current).then_some("Current".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("effort:{}", level.as_str()))),
-            search_value: Some(format!("{} {}", level.as_str(), effort_description(level, model))),
-        })
-        .collect()
 }
 
 pub(super) async fn run(
@@ -98,39 +75,6 @@ pub(super) async fn run(
                                 renderer.line(MessageStyle::Error, &format!("Failed to start model picker: {error:#}"));
                         }
                     }
-                } else if let Some(args) = command.strip_prefix("/effort") {
-                    if !args.is_empty() && !args.starts_with(char::is_whitespace) {
-                        continue;
-                    }
-                    if picker.is_some() {
-                        let _ =
-                            renderer.line(MessageStyle::Error, "Complete or cancel the current settings picker first.");
-                        continue;
-                    }
-                    match parse_effort_args(args) {
-                        Ok((Some(level), persist)) => {
-                            effort = level;
-                            let _ = settings.send(SessionSettingsControl::Effort { level, persist });
-                            let _ = renderer.line(
-                                MessageStyle::Info,
-                                &format!("Effort {level} selected; pending the next request."),
-                            );
-                        }
-                        Ok((None, persist)) => {
-                            let items = effort_picker_items(effort, &model);
-                            handle.show_list_modal(
-                                "Effort level".to_string(),
-                                vec![format!("Select effort for {model}; it applies on the next request.")],
-                                items,
-                                Some(InlineListSelection::ConfigAction(format!("effort:{}", effort.as_str()))),
-                                None,
-                            );
-                            picker = Some(Picker::Effort { persist });
-                        }
-                        Err(error) => {
-                            let _ = renderer.line(MessageStyle::Error, &error);
-                        }
-                    }
                 }
             }
             InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Selection(selection))) => {
@@ -157,66 +101,11 @@ pub(super) async fn run(
                             picker = Some(Picker::Model(state));
                         }
                     },
-                    Some(Picker::Effort { persist }) => {
-                        let level = match selection {
-                            InlineListSelection::ConfigAction(action) => {
-                                action.strip_prefix("effort:").and_then(ReasoningEffortLevel::parse)
-                            }
-                            _ => None,
-                        };
-                        if let Some(level) = level {
-                            effort = level;
-                            let _ = settings.send(SessionSettingsControl::Effort { level, persist });
-                            let _ = renderer.line(
-                                MessageStyle::Info,
-                                &format!("Effort {level} selected; pending the next request."),
-                            );
-                        } else {
-                            let _ = renderer.line(MessageStyle::Error, "Invalid effort selection.");
-                            picker = Some(Picker::Effort { persist });
-                        }
-                    }
                     None => {}
                 }
             }
             InlineEvent::Transient(TransientEvent::Cancelled) => picker = None,
             _ => {}
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::effort_picker_items;
-    use vtcode_core::config::types::ReasoningEffortLevel;
-
-    #[test]
-    fn busy_effort_rows_mirror_idle_descriptions() {
-        let items = effort_picker_items(ReasoningEffortLevel::Medium, "some-model");
-        assert!(!items.is_empty(), "picker must offer levels");
-        for item in &items {
-            assert!(item.subtitle.as_deref().is_some_and(|text| !text.is_empty()));
-            assert!(item.search_value.as_deref().is_some_and(|text| text.contains(&item.title)));
-        }
-        let current = items.iter().find(|item| item.title == "medium").expect("medium row exists");
-        assert_eq!(current.badge.as_deref(), Some("Current"));
-        assert!(
-            items
-                .iter()
-                .filter(|item| item.title != "medium")
-                .all(|item| item.badge.is_none())
-        );
-    }
-
-    #[test]
-    fn busy_effort_rows_use_model_specific_copy() {
-        let generic = effort_picker_items(ReasoningEffortLevel::High, "other-model");
-        let opus = effort_picker_items(ReasoningEffortLevel::High, "claude-opus-5");
-        let generic_xhigh = generic.iter().find(|item| item.title == "xhigh").expect("xhigh row");
-        let opus_xhigh = opus.iter().find(|item| item.title == "xhigh").expect("xhigh row");
-        assert_ne!(
-            generic_xhigh.subtitle, opus_xhigh.subtitle,
-            "model-specific descriptions must flow through to the busy picker"
-        );
     }
 }

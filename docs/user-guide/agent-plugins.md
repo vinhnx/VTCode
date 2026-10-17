@@ -1,8 +1,11 @@
 # Agent Plugins
 
-Agent Plugins are portable packages that bundle Agent Skills and MCP servers under a root `plugin.json` manifest, following the [Agent Plugins](https://agent-plugins.org/specification) spec. Install one and its skills and MCP servers become available to VT Code immediately.
+Agent Plugins are portable packages that bundle Agent Skills and MCP servers under a root `plugin.json` manifest,
+following the [Agent Plugins](https://agent-plugins.org/specification) spec. Install one and its skills and MCP servers
+become available to VT Code immediately.
 
-For the full reference — plugin layout, manifest fields, MCP transports, and security behavior — see the [Agent Plugins Guide](../guides/agent-plugins.md).
+For the full reference — plugin layout, manifest fields, MCP transports, and security behavior — see the
+[Agent Plugins Guide](../guides/agent-plugins.md).
 
 ## What a plugin gives you
 
@@ -17,7 +20,8 @@ my-plugin/
 └── mcp.json                 # optional MCP servers
 ```
 
-- **Skills** placed under `skills/*/SKILL.md` are discovered from `<workspace>/.agents/plugins` and appear alongside your regular skills.
+- **Skills** placed under `skills/*/SKILL.md` are discovered from `<workspace>/.agents/plugins` and appear alongside
+  your regular skills.
 - **MCP servers** declared in `mcp.json` are started at session startup and exposed as `<plugin>.<server>` providers.
 
 ## Install a plugin
@@ -26,13 +30,15 @@ my-plugin/
 vtcode plugins add https://github.com/example/my-plugin
 ```
 
-`add` accepts a git URL or a local directory, clones/copies it into `~/.agents/plugins/<name>`, and validates it. Pass `--name` to override the directory name:
+`add` accepts a git URL or a local directory, clones/copies it into `~/.agents/plugins/<name>`, and validates it. Pass
+`--name` to override the directory name:
 
 ```bash
 vtcode plugins add https://github.com/example/my-plugin --name my-tools
 ```
 
-`add` installs to your **user** plugin root (`~/.agents/plugins`). To keep a plugin project-local instead, place it (or clone it) under `<workspace>/.agents/plugins/<name>` yourself.
+`add` installs to your **user** plugin root (`~/.agents/plugins`). To keep a plugin project-local instead, place it (or
+clone it) under `<workspace>/.agents/plugins/<name>` yourself.
 
 ## Manage plugins
 
@@ -56,20 +62,24 @@ Inside an interactive session the same management is available through the `/plu
 /plugin help                 # show command help
 ```
 
-`/plugin add` behaves exactly like `vtcode plugins add` — it installs into `~/.agents/plugins/<name>` and validates the manifest on the way in.
+`/plugin add` behaves exactly like `vtcode plugins add` — it installs into `~/.agents/plugins/<name>` and validates the
+manifest on the way in.
 
 ## Use plugin skills and MCP
 
 Once installed, no further setup is needed:
 
-- **Plugin skills** are loaded into the agent's skill catalog at session start and are available to the agent like any other skill (ask it to use one by name).
+- **Plugin skills** are loaded into the agent's skill catalog at session start and are available to the agent like any
+  other skill (ask it to use one by name).
 - **Plugin MCP servers** appear in `/mcp` as `<plugin>.<server>` and connect automatically at session start.
 
 Plugin skills and MCP servers are discovered from both `<workspace>/.agents/plugins` and `~/.agents/plugins`.
 
 ## Example: vtcode-plugins
 
-[`vinhnx/vtcode-plugins`](https://github.com/vinhnx/vtcode-plugins) is a real, open-source plugin that bundles nine general-purpose Agent Skills extracted from VT Code itself — Rust coding rules, codemod migrations, code review, workspace analysis, and more.
+[`vinhnx/vtcode-plugins`](https://github.com/vinhnx/vtcode-plugins) is a real, open-source plugin that bundles nine
+general-purpose Agent Skills extracted from VT Code itself — Rust coding rules, codemod migrations, code review,
+workspace analysis, and more.
 
 ```bash
 # Install it and inspect
@@ -83,7 +93,8 @@ vtcode plugins info vtcode-plugins
 
 ## Configure plugin behavior
 
-The `tools.plugins` section of `vtcode.toml` governs the separate **marketplace tool plugin** runtime (TOML manifests registered via the `manifests` list):
+The `tools.plugins` section of `vtcode.toml` governs the separate **marketplace tool plugin** runtime (TOML manifests
+registered via the `manifests` list):
 
 ```toml
 [tools.plugins]
@@ -94,12 +105,14 @@ deny = []                     # optional block-list
 auto_reload = true            # hot-reload manifest polling
 ```
 
-This section does **not** gate Agent Plugins. Agent Plugins (`~/.agents/plugins` and `<workspace>/.agents/plugins`) are always discovered and loaded regardless of `tools.plugins` settings.
+This section does **not** gate Agent Plugins. Agent Plugins (`~/.agents/plugins` and `<workspace>/.agents/plugins`) are
+always discovered and loaded regardless of `tools.plugins` settings.
 
 See the [Configuration Field Reference](../config/CONFIG_FIELD_REFERENCE.md) for every `tools.plugins.*` option.
 
 ## Further reading
 
-- [Agent Plugins Guide](../guides/agent-plugins.md) — reference: layout, manifest validation, MCP transports, environment expansion, path containment
+- [Agent Plugins Guide](../guides/agent-plugins.md) — reference: layout, manifest validation, MCP transports,
+  environment expansion, path containment
 - [MCP Integration Guide](../guides/mcp-integration.md) — using MCP servers in general
 - [Agent Skills Guide](../skills/SKILLS_GUIDE.md) — creating and loading skills

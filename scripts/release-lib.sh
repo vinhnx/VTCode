@@ -5,6 +5,12 @@
 
 [ -z "${SCRIPT_DIR:-}" ] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
+# Shared four-target Homebrew formula transformation.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/homebrew-formula.sh"
+# Shared classification; legacy formatting remains below.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/release-changelog-common.sh"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -34,6 +40,7 @@ get_github_username() {
 
 # ── Changelog ────────────────────────────────────────────────────────
 
+
 add_username_tags() {
 	local changelog=$1
 	local commits_range=$2
@@ -46,7 +53,8 @@ add_username_tags() {
 			local hash author_email
 			hash=$(echo "$line" | cut -d'|' -f1)
 			author_email=$(echo "$line" | cut -d'|' -f2)
-			local username=$(get_github_username "$author_email")
+			local username
+			username=$(get_github_username "$author_email")
 			echo "$hash|$username"
 		fi
 	done >"$temp_mapping_file"
@@ -77,16 +85,6 @@ add_username_tags() {
 	done <<<"$changelog"
 	rm -f "$temp_mapping_file"
 	echo "$result"
-}
-
-parse_commit_type() {
-	local message="$1"
-	local type=$(echo "$message" | sed -E 's/^([a-z]+)(\([^)]+\))?:.*/\1/')
-	if [[ "$type" == "$message" ]]; then
-		echo "other"
-	else
-		echo "$type"
-	fi
 }
 
 get_type_prefix() {
@@ -162,6 +160,9 @@ generate_structured_changelog() {
 			local hash message
 			hash=$(echo "$line" | awk '{print $1}')
 			message=$(echo "$line" | cut -d' ' -f2-)
+			if release_commit_is_excluded "$message"; then
+				continue
+			fi
 			local type
 			type=$(parse_commit_type "$message")
 			local clean_msg
@@ -180,7 +181,7 @@ generate_structured_changelog() {
 			prefix=$(get_type_prefix "$type")
 			echo "### $title"
 			echo ""
-			echo "$type_commits" | while IFS='|' read -r t hash msg; do
+			echo "$type_commits" | while IFS='|' read -r _ hash msg; do
 				echo "${prefix}${msg} (${hash})"
 			done
 			echo ""
@@ -251,21 +252,14 @@ update_changelog_from_commits() {
 			} >"$RELEASE_NOTES_FILE"
 			if [[ -f CHANGELOG.md ]]; then
 				if grep -q "^## $version " CHANGELOG.md; then
-					print_warning "Version $version already exists in CHANGELOG.md, skipping update"
+					print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+					remove_changelog_version_section "$version"
+				fi
+				# Insert git-cliff's generated content above the newest version
+				if [[ -n "$version_section" ]]; then
+					insert_changelog_entry "$version_section"
 				else
-					local header
-					header=$(head -n 4 CHANGELOG.md)
-					local remainder
-					remainder=$(tail -n +5 CHANGELOG.md)
-					{
-						printf '%s\n' "$header"
-						if [[ -n "$version_section" ]]; then
-							printf '%s\n' "$version_section"
-						else
-							printf '%s\n' "$changelog_content"
-						fi
-						printf '%s\n' "$remainder"
-					} >CHANGELOG.md
+					insert_changelog_entry "$changelog_content"
 				fi
 			else
 				cp "$temp_changelog" CHANGELOG.md
@@ -335,18 +329,11 @@ update_changelog_builtin() {
 	changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 	if [[ -f CHANGELOG.md ]]; then
 		if grep -q "^## $version " CHANGELOG.md; then
-			print_warning "Version $version already exists in CHANGELOG.md, skipping update"
-		else
-			local header
-			header=$(head -n 4 CHANGELOG.md)
-			local remainder
-			remainder=$(tail -n +5 CHANGELOG.md)
-			{
-				printf '%s\n' "$header"
-				printf '%b\n' "$changelog_entry"
-				printf '%s\n' "$remainder"
-			} >CHANGELOG.md
+			print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+			remove_changelog_version_section "$version"
 		fi
+		# Insert new entry above the newest version
+		insert_changelog_entry "$changelog_entry"
 	else
 		{
 			printf '%s\n' "# Changelog - vtcode"
@@ -418,56 +405,12 @@ trigger_docs_rs_rebuild() {
 
 # ── Homebrew ─────────────────────────────────────────────────────────
 
-update_homebrew_formula_file() {
-	local formula_path=$1
-	local version=$2
-	local x86_64_macos_sha=$3
-	local aarch64_macos_sha=$4
-	local aarch64_linux_sha=${5:-}
-	FORMULA_PATH="$formula_path" \
-		FORMULA_VERSION="$version" \
-		FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
-		FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
-		FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
-		python3 <<'PYTHON_SCRIPT'
-import os
-import re
-from pathlib import Path
-
-formula_path = Path(os.environ["FORMULA_PATH"])
-version = os.environ["FORMULA_VERSION"]
-x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
-aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
-aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
-
-content = formula_path.read_text()
-content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
-content = re.sub(
-    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
-    content,
-)
-content = re.sub(
-    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
-    content,
-)
-if aarch64_linux_sha:
-    content = re.sub(
-        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
-        content,
-    )
-
-formula_path.write_text(content)
-PYTHON_SCRIPT
-}
-
 publish_homebrew_tap() {
 	local version=$1
 	local x86_64_macos_sha=${2:-}
 	local aarch64_macos_sha=${3:-}
 	local aarch64_linux_sha=${4:-}
+	local x86_64_linux_sha=${5:-}
 	local formula_path="homebrew/vtcode.rb"
 
 	if [[ -z "$x86_64_macos_sha" ]]; then
@@ -479,7 +422,10 @@ publish_homebrew_tap() {
 	if [[ -z "$aarch64_linux_sha" ]]; then
 		aarch64_linux_sha=$(cat "dist/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
 	fi
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
+	if [[ -z "$x86_64_linux_sha" ]]; then
+		x86_64_linux_sha=$(cat "dist/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+	fi
+	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
 		print_info "Fetching checksums from GitHub release $version..."
 		local sha_tmp
 		sha_tmp=$(mktemp -d)
@@ -493,17 +439,20 @@ publish_homebrew_tap() {
 			if [[ -z "$aarch64_linux_sha" ]]; then
 				aarch64_linux_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
 			fi
+			if [[ -z "$x86_64_linux_sha" ]]; then
+				x86_64_linux_sha=$(cat "$sha_tmp/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+			fi
 		fi
 		rm -rf "$sha_tmp"
 	fi
 
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
-		print_error "Missing macOS checksums, cannot publish Homebrew tap"
+	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
+		print_error "Missing Homebrew target checksums, cannot publish Homebrew tap"
 		return 1
 	fi
 
 	print_info "Updating local Homebrew formula at $formula_path..."
-	if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"; then
+	if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha" "$x86_64_linux_sha"; then
 		print_error "Failed to update local Homebrew formula"
 		return 1
 	fi
@@ -597,7 +546,8 @@ trigger_and_wait_ci() {
 	print_success "CI workflow triggered for $released_version"
 	print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
 
-	local wait_start=$(date +%s)
+	local wait_start
+	wait_start=$(date +%s)
 	local timeout=3600
 	local run_id=""
 	local attempts=0
@@ -622,7 +572,8 @@ trigger_and_wait_ci() {
 		run_info=$(gh run view "$run_id" --json status,conclusion 2>/dev/null || echo '{"status":"failed","conclusion":"failure"}')
 		status=$(echo "$run_info" | jq -r '.status')
 		conclusion=$(echo "$run_info" | jq -r '.conclusion')
-		local now=$(date +%s)
+		local now
+		now=$(date +%s)
 		local elapsed=$((now - wait_start))
 		if [[ $elapsed -gt $timeout ]]; then
 			print_warning "CI build timeout after $timeout seconds"
@@ -655,7 +606,8 @@ create_and_upload_release() {
 	fi
 
 	if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-		export GITHUB_TOKEN=$(gh auth token)
+		GITHUB_TOKEN=$(gh auth token)
+		export GITHUB_TOKEN
 	fi
 
 	if ! gh release view "$released_version" &>/dev/null; then
@@ -701,7 +653,7 @@ create_and_upload_release() {
 
 	# Generate consolidated checksums.txt
 	(
-		cd "$binaries_dir"
+		cd "$binaries_dir" || return 1
 		local shacmd=""
 		if command -v sha256sum &>/dev/null; then
 			shacmd="sha256sum"

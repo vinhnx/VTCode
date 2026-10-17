@@ -390,6 +390,112 @@ fn thread_completion_status_matches_public_contract() {
 }
 
 #[test]
+fn new_session_preserves_last_turn_outcome() {
+    struct CompletionCase {
+        turn_result: Option<TurnLoopResult>,
+        fallback: bool,
+        outcome_code: &'static str,
+        subtype: ThreadCompletionSubtype,
+    }
+    for case in [
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Blocked { reason: Some("recovery exhausted".into()) }),
+            fallback: true,
+            outcome_code: "blocked",
+            subtype: ThreadCompletionSubtype::ErrorDuringExecution,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Aborted),
+            fallback: false,
+            outcome_code: "blocked",
+            subtype: ThreadCompletionSubtype::ErrorDuringExecution,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Completed { plan_approved_execution_pending: false }),
+            fallback: true,
+            outcome_code: "failed",
+            subtype: ThreadCompletionSubtype::ErrorDuringExecution,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Completed { plan_approved_execution_pending: false }),
+            fallback: false,
+            outcome_code: "new_session",
+            subtype: ThreadCompletionSubtype::Success,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Completed { plan_approved_execution_pending: true }),
+            fallback: false,
+            outcome_code: "new_session",
+            subtype: ThreadCompletionSubtype::Success,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Cancelled),
+            fallback: false,
+            outcome_code: "cancelled",
+            subtype: ThreadCompletionSubtype::Cancelled,
+        },
+        CompletionCase {
+            turn_result: Some(TurnLoopResult::Exit),
+            fallback: false,
+            outcome_code: "exit",
+            subtype: ThreadCompletionSubtype::Cancelled,
+        },
+        CompletionCase {
+            turn_result: None,
+            fallback: false,
+            outcome_code: "new_session",
+            subtype: ThreadCompletionSubtype::Success,
+        },
+    ] {
+        assert_eq!(
+            resolve_thread_completion_status(
+                &SessionEndReason::NewSession,
+                false,
+                None,
+                case.turn_result.as_ref(),
+                case.fallback,
+            ),
+            (case.outcome_code, case.subtype)
+        );
+    }
+}
+
+#[test]
+fn failed_plan_summary_is_terminal_without_fallback_response() {
+    for reason in [SessionEndReason::Completed, SessionEndReason::NewSession] {
+        assert_eq!(
+            resolve_thread_completion_status(
+                &reason,
+                false,
+                Some(ExecutionSummaryStatus::Failed),
+                Some(&TurnLoopResult::Completed { plan_approved_execution_pending: false }),
+                false,
+            ),
+            ("failed", ThreadCompletionSubtype::ErrorDuringExecution)
+        );
+    }
+}
+
+#[test]
+fn thread_budget_limit_takes_precedence_over_last_turn_and_clean_exit() {
+    for reason in [
+        SessionEndReason::Completed,
+        SessionEndReason::NewSession,
+        SessionEndReason::Exit,
+    ] {
+        for turn_result in [
+            TurnLoopResult::Aborted,
+            TurnLoopResult::Completed { plan_approved_execution_pending: false },
+        ] {
+            assert_eq!(
+                resolve_thread_completion_status(&reason, true, None, Some(&turn_result), false),
+                ("budget_limit_reached", ThreadCompletionSubtype::ErrorMaxBudgetUsd)
+            );
+        }
+    }
+}
+
+#[test]
 fn exit_after_completed_turn_reports_success_instead_of_cancellation() {
     assert_eq!(
         resolve_thread_completion_status(
@@ -405,6 +511,25 @@ fn exit_after_completed_turn_reports_success_instead_of_cancellation() {
     assert_eq!(
         resolve_thread_completion_status(&SessionEndReason::Exit, false, None, Some(&TurnLoopResult::Exit), false,),
         ("exit", ThreadCompletionSubtype::Cancelled)
+    );
+}
+
+#[test]
+fn terminal_plan_rejection_never_reports_success_on_session_completion() {
+    let rejected = TurnLoopResult::Blocked {
+        reason: Some("plan artifact rejected; revise the plan before continuing".to_string()),
+    };
+    for end_reason in [
+        SessionEndReason::Completed,
+        SessionEndReason::NewSession,
+        SessionEndReason::Exit,
+    ] {
+        let (_, subtype) = resolve_thread_completion_status(&end_reason, false, None, Some(&rejected), false);
+        assert_ne!(subtype, ThreadCompletionSubtype::Success);
+    }
+    assert_eq!(
+        resolve_thread_completion_status(&SessionEndReason::Completed, false, None, Some(&rejected), false),
+        ("blocked", ThreadCompletionSubtype::ErrorDuringExecution)
     );
 }
 

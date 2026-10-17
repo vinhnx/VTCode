@@ -3,12 +3,12 @@
 //!
 //! Each tool produces a different response shape, so the helpers here
 //! focus on the lower-level primitives: pulling an HTTP status code out
-//! of a reqwest error string, and mapping a status / keyword to a
-//! category. The per-tool `next_action` text lives next to the tool's
-//! own response builder.
+//! of a reqwest error string, mapping a status / keyword to a
+//! category, and decoding HTML entities in scraped text. The per-tool
+//! `next_action` text lives next to the tool's own response builder.
 
 use regex::Regex;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 /// Pull an HTTP status code out of a reqwest error string.
 ///
@@ -43,6 +43,61 @@ pub fn extract_http_status(message: &str) -> Option<u16> {
     // The matched number is in either capture group 1 or 2 depending
     // on which alternation fired.
     caps.get(1).or_else(|| caps.get(2)).and_then(|m| m.as_str().parse().ok())
+}
+
+static HTML_DEC_ENTITY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"&#([0-9]{1,7});").expect("valid decimal entity regex"));
+static HTML_HEX_ENTITY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)&#x([0-9a-f]{1,6});").expect("valid hex entity regex"));
+
+/// Decode one numeric character reference (`caps[1]` in `radix`); keep the
+/// original text when the digits are invalid or not a Unicode scalar value.
+fn decode_numeric_entity(caps: &regex::Captures, radix: u32) -> String {
+    let parsed = caps.get(1).and_then(|m| {
+        if radix == 16 {
+            u32::from_str_radix(m.as_str(), 16).ok()
+        } else {
+            m.as_str().parse::<u32>().ok()
+        }
+    });
+    parsed
+        .and_then(char::from_u32)
+        .map(|ch| ch.to_string())
+        .unwrap_or_else(|| caps.get(0).map(|m| m.as_str()).unwrap_or_default().to_string())
+}
+
+/// Decode HTML character references (numeric decimal/hex plus common named
+/// entities) in scraped text. Invalid code points keep their original text.
+/// `&amp;` decodes last so `&amp;lt;` yields `&lt;`, not `<`.
+pub(crate) fn decode_html_entities(input: &str) -> String {
+    // Numeric references first (decimal + hex); invalid code points keep
+    // their original text rather than panicking or emitting replacement.
+    let hex_decoded = HTML_HEX_ENTITY.replace_all(input, |caps: &regex::Captures| decode_numeric_entity(caps, 16));
+    let num_decoded =
+        HTML_DEC_ENTITY.replace_all(&hex_decoded, |caps: &regex::Captures| decode_numeric_entity(caps, 10));
+    // Named references next, with `&amp;` last so `&amp;lt;` decodes to
+    // `&lt;` (single pass) rather than `<` (double decode).
+    num_decoded
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&#x27;", "'")
+        .replace("&#x2F;", "/")
+        .replace("&nbsp;", " ")
+        .replace("&hellip;", "…")
+        .replace("&rsquo;", "’")
+        .replace("&lsquo;", "‘")
+        .replace("&rdquo;", "”")
+        .replace("&ldquo;", "“")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
+        .replace("&copy;", "©")
+        .replace("&reg;", "®")
+        .replace("&times;", "×")
+        .replace("&middot;", "·")
+        .replace("&amp;", "&")
 }
 
 #[cfg(test)]

@@ -5,12 +5,16 @@ use vtcode_commons::ErrorCategory;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::{
-    MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
+use super::responses::{
+    MAX_POST_TOOL_RECOVERY_CYCLES, PLANNING_BUDGET_EXHAUSTED_NO_DRAFT_NOTICE, PLANNING_BUDGET_EXHAUSTED_USER_NOTICE,
+    PLANNING_INTERVIEW_DENIED_NO_DRAFT_NOTICE, PLANNING_RECOVERY_EXHAUSTED_NO_DRAFT_NOTICE,
+    PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE, PLANNING_RECOVERY_SYNTHESIS_FALLBACK,
     PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW, PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_RETRY,
+    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
+};
+use super::{
     POST_TOOL_RECOVERY_REASON, POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
     POST_TOOL_TOOL_ENABLED_RETRY_DIRECTIVE, RECOVERY_CONTRACT_VIOLATION_REASON,
-    RECOVERY_SYNTHESIS_FALLBACK_FINAL_ANSWER,
 };
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
 use crate::agent::runloop::unified::plan_blocks::extract_any_plan;
@@ -24,55 +28,18 @@ use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_processing::is_unmatched_tool_result_error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PostToolFailureRecovery {
-    NotApplicable,
-    RetryToolEnabled,
-    RetryToolFree,
-    StopAfterDirective,
-}
+#[path = "post_tool_recovery/failure.rs"]
+mod failure;
+
+pub(super) use failure::{
+    PlanRecoveryEventContext, PostToolFailureRecovery, has_tool_response_since, is_misconfiguration_error,
+    is_provider_context_capacity_failure, is_transient_recovery_error, misconfiguration_guidance,
+};
 
 const POST_TOOL_TOOL_ENABLED_RETRY_FAILED_REASON: &str = "Post-tool recovery could not confirm the requested work after one bounded tool-enabled retry. The completed tool outputs and resume handoff were retained; retry from the pending step.";
 const UNMATCHED_TOOL_RESULT_BLOCK_REASON: &str = "Provider rejected an unmatched tool result after one bounded request-history repair. The turn is blocked with a resumable handoff.";
 pub(super) const POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON: &str = "The provider rejected the follow-up because the context exceeded its capacity, and the bounded recovery compaction could not reduce the request. Completed tool outputs were retained; retry after reducing context or switching model.";
 const MAX_PLANNING_SYNTHESIS_RECOVERY_RETRIES: u8 = 1;
-
-#[derive(Clone, Copy)]
-pub(super) struct PlanRecoveryEventContext<'a> {
-    pub(super) emitter: Option<&'a HarnessEventEmitter>,
-    pub(super) thread_id: &'a str,
-    pub(super) turn_id: &'a str,
-}
-
-pub(super) fn has_tool_response_since(messages: &[uni::Message], baseline_len: usize) -> bool {
-    messages
-        .get(baseline_len..)
-        .is_some_and(|recent| recent.iter().any(|msg| msg.role == uni::MessageRole::Tool))
-}
-
-/// Context-capacity recovery is valid only for the provider request itself.
-/// Parsing and tool-result failures may contain similar wording in arbitrary
-/// payloads; treating those as prompt overflow would discard useful history
-/// and schedule an unrelated write-capable retry.
-fn is_provider_context_capacity_failure(failure_stage: &str, err: &anyhow::Error) -> bool {
-    failure_stage == "execute_llm_request" && vtcode_commons::is_context_capacity_error(err)
-}
-
-fn misconfiguration_guidance(err: &anyhow::Error) -> Option<vtcode_commons::ConfigGuidance> {
-    let message = format!("{err:#}");
-    if message.contains("Correct the configuration before retrying.") {
-        return None;
-    }
-    vtcode_commons::detect_misconfiguration_in_anyhow(err)
-}
-
-fn is_misconfiguration_error(err: &anyhow::Error) -> bool {
-    vtcode_commons::detect_misconfiguration_in_anyhow(err).is_some()
-}
-
-fn is_transient_recovery_error(err: &anyhow::Error) -> bool {
-    vtcode_commons::classify_anyhow_error(err).is_retryable() && !is_misconfiguration_error(err)
-}
 
 fn planning_synthesis_retry_allowed(
     tool_free_recovery: bool,
@@ -430,22 +397,14 @@ impl PlanningRecoveryOutcome {
 /// `PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT`.
 fn planning_finalize_notice(outcome: PlanningRecoveryOutcome) -> &'static str {
     match outcome {
-        PlanningRecoveryOutcome::BudgetExhausted { plan_ready: true } => super::PLANNING_BUDGET_EXHAUSTED_USER_NOTICE,
-        PlanningRecoveryOutcome::BudgetExhausted { plan_ready: false } => {
-            super::PLANNING_BUDGET_EXHAUSTED_NO_DRAFT_NOTICE
-        }
-        PlanningRecoveryOutcome::RecoveryExhausted { plan_ready: true } => {
-            super::PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE
-        }
-        PlanningRecoveryOutcome::RecoveryExhausted { plan_ready: false } => {
-            super::PLANNING_RECOVERY_EXHAUSTED_NO_DRAFT_NOTICE
-        }
+        PlanningRecoveryOutcome::BudgetExhausted { plan_ready: true } => PLANNING_BUDGET_EXHAUSTED_USER_NOTICE,
+        PlanningRecoveryOutcome::BudgetExhausted { plan_ready: false } => PLANNING_BUDGET_EXHAUSTED_NO_DRAFT_NOTICE,
+        PlanningRecoveryOutcome::RecoveryExhausted { plan_ready: true } => PLANNING_RECOVERY_EXHAUSTED_USER_NOTICE,
+        PlanningRecoveryOutcome::RecoveryExhausted { plan_ready: false } => PLANNING_RECOVERY_EXHAUSTED_NO_DRAFT_NOTICE,
         PlanningRecoveryOutcome::InterviewDenied { plan_ready: true } => {
             PLANNING_RECOVERY_SYNTHESIS_FALLBACK_NO_INTERVIEW
         }
-        PlanningRecoveryOutcome::InterviewDenied { plan_ready: false } => {
-            super::PLANNING_INTERVIEW_DENIED_NO_DRAFT_NOTICE
-        }
+        PlanningRecoveryOutcome::InterviewDenied { plan_ready: false } => PLANNING_INTERVIEW_DENIED_NO_DRAFT_NOTICE,
     }
 }
 

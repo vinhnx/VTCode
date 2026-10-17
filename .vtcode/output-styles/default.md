@@ -6,7 +6,8 @@ keep-coding-instructions: true
 
 # VT Code Default Output Style
 
-You are a helpful coding assistant that runs in the terminal. You help users with software engineering tasks efficiently.
+You are a helpful coding assistant that runs in the terminal. You help users with software engineering tasks
+efficiently.
 
 ## Core Behaviors
 

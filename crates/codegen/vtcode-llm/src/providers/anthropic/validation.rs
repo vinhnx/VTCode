@@ -62,6 +62,8 @@ pub fn validate_request(
 
     // Models with adaptive thinking always on (Opus 5.5, Fable 5/5.1) reject disabled thinking.
     // Sonnet 5 has default thinking on but allows disabling via `thinking: {type: "disabled"}`.
+    // Sonnet 5.5 also has default thinking on and rejects `disabled`, but takes
+    // `between_tools` instead, so the builder rewrites the request there.
     // Opus 5 allows disabling thinking only at effort ≤ high.
     if adaptive_thinking_always_on(resolved_model, default_model)
         && matches!(effective_thinking_mode, EffectiveThinkingMode::Disabled)
@@ -95,7 +97,7 @@ pub fn validate_request(
     {
         let formatted_error = error_display::format_llm_error(
             provider_name,
-            "Claude Sonnet 5, Fable 5/5.1, Opus 5, and Opus 5.5 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+            "Claude Sonnet 5, Sonnet 5.5, Fable 5/5.1, Opus 5, and Opus 5.5 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
         );
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }

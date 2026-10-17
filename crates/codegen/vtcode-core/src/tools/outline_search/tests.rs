@@ -334,3 +334,131 @@ fn code_search_definition_smart_case_supports_unicode_lowercase_queries() {
     assert!(smart_case_eq("Éclair", "éclair"));
     assert!(!smart_case_eq("éclair", "Éclair"));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn declaration_backend_terminates_owned_child_on_cancel_error_and_truncation() {
+    use std::process::{Command, Stdio};
+    use std::time::Duration;
+
+    for mode in ["cancel", "malformed", "truncated", "failed"] {
+        let output = if mode == "malformed" {
+            "invalid json\n"
+        } else {
+            TWO_FILE_STREAM
+        };
+        let (_script_dir, script_path) = write_fake_sg(output);
+        let script = format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n    printf 'ast-grep 0.44.0\\n'\n    exit 0\nfi\nprintf '%s\\n' \"$$\" > \"$0.pid\"\n{}{}\n",
+            if matches!(mode, "cancel" | "failed") {
+                ""
+            } else {
+                "cat \"${0%/*}/output.txt\"\n"
+            },
+            if mode == "failed" { "exit 7" } else { "exec sleep 30" },
+        );
+        fs::write(&script_path, script).unwrap();
+        let pid_path = script_path.with_file_name("sg.pid");
+        let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+        let workspace = workspace_with_source();
+        let source_path = workspace.path().join("src");
+        let mut search =
+            Box::pin(search_declarations_bounded(workspace.path(), &source_path, "alpha", &[AstGrepLanguage::Rust], 1));
+        let read_pid = async {
+            tokio::time::timeout(Duration::from_secs(3), async {
+                loop {
+                    if let Ok(pid) = tokio::fs::read_to_string(&pid_path).await
+                        && !pid.trim().is_empty()
+                    {
+                        break pid.trim().to_owned();
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("definition child starts")
+        };
+        let (pid, result) = if mode == "cancel" {
+            let pid = tokio::select! {
+                result = &mut search => panic!("search completed before cancellation: {result:?}"),
+                pid = read_pid => pid,
+            };
+            drop(search);
+            (pid, None)
+        } else {
+            let result = tokio::time::timeout(Duration::from_secs(3), &mut search)
+                .await
+                .expect("completed stream returns promptly");
+            drop(search);
+            (read_pid.await, Some(result))
+        };
+        let terminated = tokio::time::timeout(Duration::from_secs(3), async {
+            while Command::new("kill")
+                .args(["-0", &pid])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .unwrap()
+                .success()
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        if terminated.is_err() {
+            // Clean up the controlled fixture even when the regression fails.
+            let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        }
+        assert!(terminated.is_ok(), "{mode}: the owned declaration child must terminate");
+        if let Some(result) = result {
+            if mode == "malformed" {
+                assert!(result.unwrap_err().to_string().contains("failed to parse definition stream"));
+            } else if mode == "failed" {
+                let error = result.unwrap_err().to_string();
+                assert!(error.contains("definition search failed"));
+                assert!(error.contains("exit status: 7"));
+            } else {
+                let outcome = result.unwrap();
+                assert!(outcome.truncated);
+                assert!(!outcome.stream_complete);
+                assert_eq!(outcome.files[0].declarations.len(), 1);
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn declaration_backend_executes_outline_without_a_version_probe() {
+    let (_script_dir, script_path) = write_fake_sg(TWO_FILE_STREAM);
+    fs::write(
+        &script_path,
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+    printf 'unexpected probe\n' > "$0.probed"
+    exit 7
+fi
+cat "${0%/*}/output.txt"
+"#,
+    )
+    .unwrap();
+    let probe_path = script_path.with_file_name("sg.probed");
+    let _override = set_read_only_ast_grep_override_for_tests(Some(script_path));
+    let workspace = workspace_with_source();
+    let outcome = search_declarations_bounded(
+        workspace.path(),
+        &workspace.path().join("src"),
+        "alpha",
+        &[AstGrepLanguage::Rust],
+        5,
+    )
+    .await
+    .expect("outline execution is the availability check");
+    assert!(!probe_path.exists(), "search must not spawn a synchronous metadata probe");
+    assert_eq!(outcome.files.len(), 2);
+    assert_eq!(outcome.files[0].declarations[0].name, "alpha");
+    assert!(outcome.stream_complete);
+    assert!(!outcome.truncated);
+}

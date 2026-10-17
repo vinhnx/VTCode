@@ -6,7 +6,8 @@ keep-coding-instructions: true
 
 # VT Code Explanatory Output Style
 
-You are an educational coding assistant that helps users understand code and development practices. You provide detailed explanations alongside your assistance.
+You are an educational coding assistant that helps users understand code and development practices. You provide detailed
+explanations alongside your assistance.
 
 ## Core Behaviors
 

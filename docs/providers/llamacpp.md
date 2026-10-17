@@ -44,13 +44,13 @@ export LLAMACPP_BASE_URL=http://localhost:8080/v1
 
 ### Environment variables
 
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `LLAMACPP_BASE_URL` | OpenAI-compatible llama.cpp endpoint | `http://localhost:8080/v1` |
-| `LLAMACPP_MODEL_PATH` | Local GGUF path for VT Code-managed startup | unset |
-| `LLAMACPP_BINARY_PATH` | Override path to `llama-server` | PATH lookup |
-| `LLAMACPP_EXTRA_ARGS` | Extra CLI flags appended to `llama-server` | unset |
-| `LLAMACPP_STARTUP_TIMEOUT_SECONDS` | Startup/readiness timeout | `60` |
+| Variable                           | Purpose                                     | Default                    |
+| ---------------------------------- | ------------------------------------------- | -------------------------- |
+| `LLAMACPP_BASE_URL`                | OpenAI-compatible llama.cpp endpoint        | `http://localhost:8080/v1` |
+| `LLAMACPP_MODEL_PATH`              | Local GGUF path for VT Code-managed startup | unset                      |
+| `LLAMACPP_BINARY_PATH`             | Override path to `llama-server`             | PATH lookup                |
+| `LLAMACPP_EXTRA_ARGS`              | Extra CLI flags appended to `llama-server`  | unset                      |
+| `LLAMACPP_STARTUP_TIMEOUT_SECONDS` | Startup/readiness timeout                   | `60`                       |
 
 ### TOML
 
@@ -68,5 +68,6 @@ If `model` points at a local `.gguf` path, VT Code also treats it as a managed-s
 ## Notes
 
 - Managed startup is intentionally limited to localhost endpoints.
-- In single-model mode, VT Code resolves the exact request model ID from `/v1/models` so the request matches what `llama-server` exposes.
+- In single-model mode, VT Code resolves the exact request model ID from `/v1/models` so the request matches what
+  `llama-server` exposes.
 - Tool calling depends on the loaded model and chat template support in llama.cpp.

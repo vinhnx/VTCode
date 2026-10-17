@@ -20,11 +20,6 @@ pub(super) struct ShellExecutionPlan {
     pub(super) sandbox_policy: Option<SandboxPolicy>,
 }
 
-const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
-    "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
-const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str =
-    "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
-
 fn push_unique_reason(reasons: &mut Vec<String>, reason: impl Into<String>) {
     let reason = reason.into();
     if !reasons.iter().any(|existing| existing == &reason) {
@@ -105,7 +100,7 @@ pub(super) fn build_shell_execution_plan(
 
     if sandbox_permissions.uses_additional_permissions() {
         let Some(additional_permissions) = additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+            return Err(anyhow!(SandboxPermissions::MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
         };
         policy = sandbox_policy_with_additional_permissions(policy, additional_permissions);
     }
@@ -318,21 +313,21 @@ pub(super) async fn parse_requested_sandbox_permissions(
         .cloned()
         .map(serde_json::from_value::<AdditionalPermissions>)
         .transpose()
-        .with_context(|| "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays.")?
-        .filter(|permissions| !permissions.is_empty());
+        .with_context(|| "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays.")?;
 
-    let sandbox_permissions = sandbox_permissions.normalized_for(parsed_additional_permissions.as_ref());
-
-    if sandbox_permissions.requires_escalated_permissions() {
-        let justification = payload.get("justification").and_then(Value::as_str).map(str::trim);
-        if justification.is_none_or(str::is_empty) {
-            return Err(anyhow!(MISSING_ESCALATION_JUSTIFICATION_MESSAGE));
-        }
-    }
+    // Modular proof: the permission impl validates the mode/additional/
+    // justification combination once, so this caller trusts the returned
+    // request instead of re-implementing the conflict rules (external proof).
+    let justification = payload.get("justification").and_then(Value::as_str);
+    let (sandbox_permissions, parsed_additional_permissions) = sandbox_permissions
+        .resolve_request(parsed_additional_permissions, justification)?
+        .into_parts();
 
     let additional_permissions = if sandbox_permissions.uses_additional_permissions() {
+        // Defensive fail-closed net: `resolve_request` already proved
+        // additional permissions are present for this mode.
         let Some(additional_permissions) = parsed_additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+            return Err(anyhow!(SandboxPermissions::MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
         };
         let normalized =
             normalize_additional_permissions(additional_permissions, workspace_root, cwd, sandbox_config).await?;
@@ -341,10 +336,10 @@ pub(super) async fn parse_requested_sandbox_permissions(
         }
         Some(normalized)
     } else {
+        // Defensive fail-closed net: `resolve_request` already rejected
+        // stray additional permissions for non-additional modes.
         if parsed_additional_permissions.is_some() {
-            return Err(anyhow!(
-                "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`"
-            ));
+            return Err(anyhow!(SandboxPermissions::ADDITIONAL_PERMISSIONS_MODE_MESSAGE));
         }
         None
     };

@@ -2,7 +2,8 @@
 
 ## Overview
 
-The file reference feature allows users to target specific files in their codebase using the "@" symbol in the VT Code TUI. This provides context-aware operations by explicitly specifying which files are relevant to the current query.
+The file reference feature allows users to target specific files in their codebase using the "@" symbol in the VT Code
+TUI. This provides context-aware operations by explicitly specifying which files are relevant to the current query.
 
 ## Usage
 
@@ -22,19 +23,22 @@ The file reference feature allows users to target specific files in their codeba
 
 ### Examples
 
-```
+```text
 @src/main.rs
 ```
+
 References the main.rs file in the src directory.
 
-```
+```text
 @vtcode.toml
 ```
+
 References the vtcode.toml configuration file.
 
+```text
+@
 ```
-@ 
-```
+
 Opens file browser showing all available files.
 
 ## UI Design
@@ -42,12 +46,14 @@ Opens file browser showing all available files.
 ### Modal Approach (Recommended)
 
 The file browser appears as a centered modal overlay that:
+
 - Provides focused interaction without blocking chat history
 - Shows clear visual separation from the main interface
 - Displays pagination info (e.g., "Page 2/5")
 - Includes search/filter feedback
 
 **Advantages:**
+
 - Less visual clutter
 - Focused user attention
 - Clear interaction model

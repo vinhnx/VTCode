@@ -6,8 +6,8 @@ pub(crate) enum ValidationResult {
     Proceed(PreparedToolCall),
     /// Tool was blocked by policy/guardrails, skip execution and track blocked-call guard
     Blocked,
-    /// Inspection has no visible preview; count once per assistant batch, not per parallel call.
-    PreviewExhausted,
+    /// A path-local read cap; retain the consecutive fuse without charging the total fuse.
+    ReadCapBlocked,
     /// Tool call was intentionally handled and should not count as blocked
     Handled,
     /// Stop turn/loop with a specific outcome (e.g. Exit or Cancel)

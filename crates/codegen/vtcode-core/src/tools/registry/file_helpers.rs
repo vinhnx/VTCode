@@ -20,7 +20,8 @@ use crate::tools::traits::Tool;
 use crate::tools::types::EditInput;
 
 use super::ToolRegistry;
-use super::utils;
+mod replacement;
+use replacement::ReplacementPlan;
 
 const EDIT_FILE_MAX_CHARS: usize = 800;
 const EDIT_FILE_MAX_LINES: usize = 40;
@@ -79,122 +80,15 @@ fn strip_line_prefixes(text: &str) -> (String, bool) {
         return (text.to_string(), false);
     }
 
-    let stripped = lines
-        .iter()
+    let stripped = text
+        .split_inclusive('\n')
         .map(|line| match line_prefix_len(line) {
             Some(prefix_len) => &line[prefix_len..],
-            None => *line,
+            None => line,
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<String>();
 
     (stripped, true)
-}
-
-/// Normalize internal whitespace: collapse consecutive whitespace to single spaces.
-fn ws_normalize(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    for word in s.split_whitespace() {
-        if !result.is_empty() {
-            result.push(' ');
-        }
-        result.push_str(word);
-    }
-    result
-}
-
-fn apply_edit_replacement(content: &str, effective_old_str: &str, effective_new_str: &str) -> Option<String> {
-    let had_trailing_newline = content.ends_with('\n');
-    let mut replacement_occurred = false;
-    let mut new_content = content.to_owned();
-
-    if let Some(pos) = content.find(effective_old_str) {
-        new_content = format!("{}{}{}", &content[..pos], effective_new_str, &content[pos + effective_old_str.len()..]);
-        replacement_occurred = new_content != content;
-    }
-
-    if !replacement_occurred {
-        let old_lines: Vec<&str> = effective_old_str.lines().collect();
-        let content_lines: Vec<&str> = content.lines().collect();
-        let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
-
-        'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
-            if utils::lines_match(window, &old_lines) {
-                let mut result_lines = Vec::with_capacity(
-                    i + replacement_lines.len() + content_lines.len().saturating_sub(i + old_lines.len()),
-                );
-                result_lines.extend_from_slice(&content_lines[..i]);
-                result_lines.extend_from_slice(&replacement_lines);
-                result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-
-                new_content = result_lines.join("\n");
-                replacement_occurred = true;
-                break 'outer;
-            }
-        }
-
-        if !replacement_occurred {
-            // Pre-compute normalised old lines once (avoid re-allocation per window).
-            let old_normalized: Vec<String> = old_lines.iter().map(|l| ws_normalize(l)).collect();
-
-            for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
-                let mut ok = true;
-                for (j, line) in window.iter().enumerate() {
-                    if ws_normalize(line) != old_normalized[j] {
-                        ok = false;
-                        break;
-                    }
-                }
-
-                if ok {
-                    let mut result_lines = Vec::with_capacity(
-                        i + replacement_lines.len() + content_lines.len().saturating_sub(i + old_lines.len()),
-                    );
-                    result_lines.extend_from_slice(&content_lines[..i]);
-                    result_lines.extend_from_slice(&replacement_lines);
-                    result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-
-                    new_content = result_lines.join("\n");
-                    replacement_occurred = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if !replacement_occurred {
-        return None;
-    }
-
-    if had_trailing_newline && !new_content.ends_with('\n') {
-        new_content.push('\n');
-    }
-
-    Some(new_content)
-}
-
-#[cold]
-fn edit_not_found_error(
-    current_content: &str,
-    effective_old_str: &str,
-    stripped_old: bool,
-    stripped_new: bool,
-) -> anyhow::Error {
-    let content_preview = if current_content.len() > 500 {
-        vtcode_commons::preview::condense_text_bytes(current_content, 250, 250)
-    } else {
-        current_content.to_owned()
-    };
-
-    let numbering_note = if stripped_old || stripped_new {
-        "\n\nNote: line-number prefixes were stripped before matching."
-    } else {
-        ""
-    };
-
-    anyhow!(
-        "Could not find text to replace in file.\n\nExpected to replace:\n{effective_old_str}\n\nFile content preview:\n{content_preview}\n\nFix: old_str must match the file content exactly, including whitespace, newlines, and indentation. Re-read the target lines with `exec_command` to get the exact text, then copy it into old_str without adding newlines or changing indentation.{numbering_note}"
-    )
 }
 
 impl ToolRegistry {
@@ -218,9 +112,12 @@ impl ToolRegistry {
         let input: EditInput = deserialize_tool_args(&args, "edit_file")?;
         let override_snapshot = conflict_override_snapshot(&args);
 
-        let (effective_old_str, stripped_old) = strip_line_prefixes(&input.old_str);
-        let (effective_new_str, stripped_new) = strip_line_prefixes(&input.new_str);
+        let (effective_old_str, _) = strip_line_prefixes(&input.old_str);
+        let (effective_new_str, _) = strip_line_prefixes(&input.new_str);
 
+        if effective_old_str.is_empty() {
+            return Err(anyhow!("edit_file requires non-empty original source; use apply_patch for insertions"));
+        }
         let old_len = effective_old_str.len();
         let new_len = effective_new_str.len();
         let old_lines = effective_old_str.lines().count();
@@ -256,7 +153,11 @@ impl ToolRegistry {
             .edited_file_monitor_ref()
             .tracked_read_text(&canonical_path)
             .await
-            .and_then(|content| apply_edit_replacement(&content, &effective_old_str, &effective_new_str));
+            .and_then(|content| {
+                ReplacementPlan::build(&canonical_path, &content, &effective_old_str, &effective_new_str)
+                    .ok()
+                    .map(|plan| plan.apply(&content))
+            });
 
         if let Some(conflict) = self
             .edited_file_monitor_ref()
@@ -269,10 +170,25 @@ impl ToolRegistry {
         let current_content = fs::read_to_string(&canonical_path)
             .await
             .with_context(|| format!("Cannot read file: {}", canonical_path.display()))?;
-        let Some(new_content) = apply_edit_replacement(&current_content, &effective_old_str, &effective_new_str) else {
-            return Err(edit_not_found_error(&current_content, &effective_old_str, stripped_old, stripped_new));
+        let plan = ReplacementPlan::build(&canonical_path, &current_content, &effective_old_str, &effective_new_str)?;
+        let new_content = plan.apply(&current_content);
+        let range = &plan.line_range;
+        tracing::debug!(match_kind = ?plan.match_kind, "Planned literal edit");
+        self.edited_file_monitor_ref().source_inspection().require(
+            &canonical_path,
+            &current_content,
+            std::slice::from_ref(range),
+        )?;
+        let added = range
+            .len()
+            .saturating_add(new_content.lines().count())
+            .saturating_sub(current_content.lines().count());
+        let replacement = crate::tools::source_inspection::mutations::InspectedReplacement {
+            start: range.start,
+            removed: range.len(),
+            added,
         };
-
+        let after = new_content.clone();
         let mut write_args = json!({
             "path": input.path,
             "content": new_content,
@@ -282,7 +198,25 @@ impl ToolRegistry {
             write_args[FILE_CONFLICT_OVERRIDE_ARG] = snapshot.clone();
         }
 
-        self.file_ops_tool().write_file_internal(write_args, false).await
+        let mut result = self.file_ops_tool().write_file_internal(write_args, false).await?;
+        if result.get("conflict_detected").and_then(Value::as_bool) != Some(true) {
+            self.edited_file_monitor_ref().source_inspection().record_edit(
+                &canonical_path,
+                &current_content,
+                &after,
+                &[replacement],
+                crate::tools::source_inspection::call_key(tools::EDIT_FILE, &args),
+            );
+            if let Some(fields) = result.as_object_mut() {
+                let modified_paths = if current_content == after {
+                    Vec::new()
+                } else {
+                    vec![canonical_path]
+                };
+                fields.insert("modified_files".into(), json!(modified_paths));
+            }
+        }
+        Ok(result)
     }
 
     /// Inline-delegating wrapper. See [`Self::read_file`].
@@ -316,21 +250,5 @@ impl ToolRegistry {
         // `list_files` call can safely run alongside `code_search` in the same batch.
         let tool = self.inventory.file_ops_tool().clone();
         tool.execute(args).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::edit_not_found_error;
-
-    #[test]
-    fn edit_not_found_error_points_at_a_model_facing_reread_path() {
-        let message = edit_not_found_error("fn main() {}\n", "fn mian() {}", false, false).to_string();
-
-        assert!(message.contains(
-            "Re-read the target lines with `exec_command` to get the exact text, then copy it into old_str without adding newlines or changing indentation."
-        ));
-        assert!(!message.contains("read_file"));
-        assert!(!message.contains("line-number prefixes were stripped"));
     }
 }

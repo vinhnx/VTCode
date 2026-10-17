@@ -229,7 +229,30 @@ pub(crate) fn enforce_blocked_tool_call_guard(
     tool_name: &str,
     args: &Value,
 ) -> Option<TurnHandlerOutcome> {
-    let streak = ctx.record_blocked_tool_call();
+    enforce_blocked_tool_call_guard_with_scope(ctx, tool_call_id, tool_name, args, false)
+}
+
+pub(crate) fn enforce_read_cap_blocked_tool_call_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    tool_name: &str,
+    args: &Value,
+) -> Option<TurnHandlerOutcome> {
+    enforce_blocked_tool_call_guard_with_scope(ctx, tool_call_id, tool_name, args, true)
+}
+
+fn enforce_blocked_tool_call_guard_with_scope(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    tool_name: &str,
+    args: &Value,
+    path_local: bool,
+) -> Option<TurnHandlerOutcome> {
+    let streak = if path_local {
+        ctx.harness_state.record_blocked_tool_call_streak()
+    } else {
+        ctx.record_blocked_tool_call()
+    };
     let blocked_total = ctx.blocked_tool_calls();
     let limits = blocked_tool_call_limits_for_tool(ctx, tool_name);
 

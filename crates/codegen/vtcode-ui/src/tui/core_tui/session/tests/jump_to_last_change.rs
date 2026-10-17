@@ -176,6 +176,21 @@ fn jump_dispatch_at_bottom_with_tracked_change_preserves_cursor_end() {
 }
 
 #[test]
+fn wheel_scroll_via_coalesced_path_shows_jump_hint() {
+    let mut session = prepare_sized_session(10);
+    // Mouse wheel-up routes through apply_coalesced_scroll with a negative
+    // line delta; the hint must appear there too, not only on PgUp/line scrolls.
+    session.apply_coalesced_scroll(-3, 0);
+    assert!(session.scroll_offset() > 0, "coalesced scroll must move the view");
+    assert!(session.should_show_jump_to_last_change());
+
+    // Scrolling back to the bottom clears the hint.
+    session.apply_coalesced_scroll(3, 0);
+    assert_eq!(session.scroll_offset(), 0);
+    assert!(!session.should_show_jump_to_last_change());
+}
+
+#[test]
 fn footer_hint_appends_jump_label_while_scrolled() {
     let mut session = prepare_sized_session(10);
     session.handle_command(InlineCommand::SetInputStatus {

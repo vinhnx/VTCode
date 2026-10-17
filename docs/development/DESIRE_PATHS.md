@@ -1,10 +1,12 @@
 # Desire Paths in VT Code
 
-This document explains the design philosophy of paving "desire paths" in VT Code—optimizing the tool to work naturally with how agents think and work.
+This document explains the design philosophy of paving "desire paths" in VT Code—optimizing the tool to work naturally
+with how agents think and work.
 
 ## Philosophy
 
-A desire path is a common pattern that emerges from how users actually behave, rather than how designers intended them to behave. In software, this principle means:
+A desire path is a common pattern that emerges from how users actually behave, rather than how designers intended them
+to behave. In software, this principle means:
 
 **When an agent intuitively guesses wrong about a feature, we should improve the interface to make that guess right.**
 
@@ -19,7 +21,8 @@ We do:
 - Implement flags agents naturally expect
 - Design interfaces that align with agent mental models
 
-Over time, this compounds. Each small UX improvement reduces friction, and agents naturally stop making "mistakes" because the tool now works the way they naturally think.
+Over time, this compounds. Each small UX improvement reduces friction, and agents naturally stop making "mistakes"
+because the tool now works the way they naturally think.
 
 ## Current Paved Paths
 
@@ -35,7 +38,8 @@ Agents intuitively try short command names. We've paved these paths:
 
 **Location**: `.cargo/config.toml` → `[alias]` section
 
-**Why it works**: Agents coming from other CLI tools expect abbreviated commands. By providing these aliases, we eliminate the cognitive overhead of remembering full command names.
+**Why it works**: Agents coming from other CLI tools expect abbreviated commands. By providing these aliases, we
+eliminate the cognitive overhead of remembering full command names.
 
 ### Test Invocation Patterns
 
@@ -57,7 +61,7 @@ These are patterns agents have tried or might try that aren't yet smooth:
 
 **Current friction**:
 
-```
+```text
 exec_command {
   "cmd": "rg -n 'fn main' src/"
 }
@@ -65,7 +69,7 @@ exec_command {
 
 **Intuitive expectation**:
 
-```
+```text
 exec_command "rg -n 'fn main' src/"
 ```
 
@@ -156,6 +160,5 @@ By making suggestions and noting aliases in help text, we guide agents toward go
 
 ---
 
-**Last Updated**: Dec 30, 2025
-**Philosophy Introduced By**: Amp AI Agent
-**Based On**: Wikipedia's "Desire Path" concept
+**Last Updated**: Dec 30, 2025 **Philosophy Introduced By**: Amp AI Agent **Based On**: Wikipedia's "Desire Path"
+concept

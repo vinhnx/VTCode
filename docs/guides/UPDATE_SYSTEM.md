@@ -4,77 +4,66 @@ This guide covers VT Code's update system, including release channels, version p
 
 ## Overview
 
-VT Code includes a built-in update system that can check for and install updates from GitHub Releases. The system supports:
+VT Code includes a built-in update system that can check for and install updates from GitHub Releases. The system
+supports:
 
 - **Multiple release channels** (stable, beta, nightly)
 - **Version pinning** for staying on specific versions
 - **Configurable update behavior** via `update.toml` in the canonical user config directory
 - **Download mirrors** for better availability
 
-Standalone updates use VT Code's native replacement pipeline: the updater selects the
-exact target archive, streams it with the configured timeout, verifies published
-SHA-256 metadata when available, rejects unsafe archive paths, and replaces only the
-`vtcode`/`vtcode.exe` executable. When an update is triggered from the TUI (`/update`
-or the startup update prompt), the pipeline reports per-phase progress — a live
-download progress bar with byte count and percentage, plus `Verifying checksum`,
-`Extracting archive`, and `Installing new binary` phase messages — so the update
-never appears to hang. Binaries built with the former `self_update`-based
-updater (v0.141.0–v0.141.4) cannot use this flow directly, but the [legacy updater
-compatibility bridge](#legacy-updater-compatibility-bridge-v01410v01414) lets them
+Standalone updates use VT Code's native replacement pipeline: the updater selects the exact target archive, streams it
+with the configured timeout, verifies published SHA-256 metadata when available, rejects unsafe archive paths, and
+replaces only the `vtcode`/`vtcode.exe` executable. When an update is triggered from the TUI (`/update` or the startup
+update prompt), the pipeline reports per-phase progress — a live download progress bar with byte count and percentage,
+plus `Verifying checksum`, `Extracting archive`, and `Installing new binary` phase messages — so the update never
+appears to hang. Binaries built with the former `self_update`-based updater (v0.141.0–v0.141.4) cannot use this flow
+directly, but the [legacy updater compatibility bridge](#legacy-updater-compatibility-bridge-v01410-v01414) lets them
 self-update to v0.141.6+ without a manual bootstrap install.
 
 ### Asset extensions by platform
 
-The updater picks the archive by target suffix — `.zip` for Windows
-(`x86_64-pc-windows-msvc`) and `.tar.gz` for macOS and Linux — then extracts the
-platform executable (`vtcode` on Unix, `vtcode.exe` on Windows) with `flate2`+`tar`
-or `zip`. Checksum sidecars are matched in this order: the modern
-`<archive>.sha256`, the legacy extension-stripped `vtcode-<v>-<target>.sha256`, then
-the aggregate `checksums.txt`. Windows ARM is unsupported until the build pipeline
+The updater picks the archive by target suffix — `.zip` for Windows (`x86_64-pc-windows-msvc`) and `.tar.gz` for macOS
+and Linux — then extracts the platform executable (`vtcode` on Unix, `vtcode.exe` on Windows) with `flate2`+`tar` or
+`zip`. Checksum sidecars are matched in this order: the modern `<archive>.sha256`, the legacy extension-stripped
+`vtcode-<v>-<target>.sha256`, then the aggregate `checksums.txt`. Windows ARM is unsupported until the build pipeline
 publishes that target; such users should use the install script.
 
 ### Legacy updater compatibility bridge (v0.141.0-v0.141.4)
 
-Releases v0.141.0 through v0.141.4 ship the `self_update` 1.0.0-rc.6 crate with the
-`archive-tar` feature but **not** `compression-tar-gz`, so their `vtcode update` fails
-on a `.tar.gz` archive with `CompressionNotEnabledError: 'gz' compression not
-supported`. These binaries are already shipped, so the fix has to work with their
-existing asset-selection logic rather than change it.
+Releases v0.141.0 through v0.141.4 ship the `self_update` 1.0.0-rc.6 crate with the `archive-tar` feature but **not**
+`compression-tar-gz`, so their `vtcode update` fails on a `.tar.gz` archive with
+`CompressionNotEnabledError: 'gz' compression not supported`. These binaries are already shipped, so the fix has to work
+with their existing asset-selection logic rather than change it.
 
 How the legacy updater selects an asset (verified against the crate source):
 
-1. It calls `asset_for(target, Some("{target}.tar.gz"))`, which returns the **first**
-   asset whose name `contains(target)` AND `contains("{target}.tar.gz")`.
-2. GitHub's releases API returns the `assets` array **sorted alphabetically by name**
-   (ascending) — upload order is irrelevant — so "first match" is the
-   alphabetically-first matching asset.
-3. The downloaded file is saved under the asset's own name, and `detect_archive`
-   reads the **final** path extension. Anything other than `zip`/`tar`/`tgz`/`gz`
-   is treated as a plain uncompressed binary (`ArchiveKind::Plain`), and `extract_file`
-   copies the raw bytes verbatim to `<dir>/vtcode` — no gzip feature required.
+1. It calls `asset_for(target, Some("{target}.tar.gz"))`, which returns the **first** asset whose name
+   `contains(target)` AND `contains("{target}.tar.gz")`.
+2. GitHub's releases API returns the `assets` array **sorted alphabetically by name** (ascending) — upload order is
+   irrelevant — so "first match" is the alphabetically-first matching asset.
+3. The downloaded file is saved under the asset's own name, and `detect_archive` reads the **final** path extension.
+   Anything other than `zip`/`tar`/`tgz`/`gz` is treated as a plain uncompressed binary (`ArchiveKind::Plain`), and
+   `extract_file` copies the raw bytes verbatim to `<dir>/vtcode` — no gzip feature required.
 
 Starting with v0.141.6, every release also publishes a raw executable asset named
-`compat-vtcode-<v>-<target>.tar.gz.compat`. It contains the `{target}.tar.gz`
-substring (so the legacy identifier matches it) and its final extension is `.compat`
-(so it is treated as a plain binary). Crucially, the **`compat-` prefix sorts before
-`vtcode-`** (`c` < `v`), so it is the alphabetically-first match and the legacy updater
-picks it instead of the broken `.tar.gz`. The v0.141.5+ updater ignores these assets
-(its matcher requires `starts_with("vtcode-")` AND `ends_with("{target}.tar.gz"` /
-`"{target}.zip")`) and uses the real archive, so both generations install
-byte-identical binaries.
+`compat-vtcode-<v>-<target>.tar.gz.compat`. It contains the `{target}.tar.gz` substring (so the legacy identifier
+matches it) and its final extension is `.compat` (so it is treated as a plain binary). Crucially, the **`compat-` prefix
+sorts before `vtcode-`** (`c` < `v`), so it is the alphabetically-first match and the legacy updater picks it instead of
+the broken `.tar.gz`. The v0.141.5+ updater ignores these assets (its matcher requires `starts_with("vtcode-")` AND
+`ends_with("{target}.tar.gz"` / `"{target}.zip")`) and uses the real archive, so both generations install byte-identical
+binaries.
 
-> ⚠️ The `compat-` prefix is **load-bearing**. Naming the asset
-> `vtcode-<v>-<target>.tar.gz.compat` (no prefix) does **not** work: it sorts *after*
-> the normal `vtcode-<v>-<target>.tar.gz`, so the legacy updater would still pick the
-> broken `.tar.gz` and fail. The invariant "compat name sorts before the normal
-> archive name" is enforced by `scripts/tests/test_release_assets.sh`.
+> ⚠️ The `compat-` prefix is **load-bearing**. Naming the asset `vtcode-<v>-<target>.tar.gz.compat` (no prefix) does
+> **not** work: it sorts _after_ the normal `vtcode-<v>-<target>.tar.gz`, so the legacy updater would still pick the
+> broken `.tar.gz` and fail. The invariant "compat name sorts before the normal archive name" is enforced by
+> `scripts/tests/test_release_assets.sh`.
 
-These `.compat` assets are temporary and may be removed once the supported upgrade
-floor exceeds v0.141.4. They are generated by `scripts/release-assets.sh` from the
-same normal archives used by installers and covered by `checksums.txt`. Windows is
-included by default (the bridge also rescues Windows v0.141.0-v0.141.4 users, whose
-updater never matched the published `.zip`); set `RELEASE_REQUIRE_WINDOWS=false` only
-for an emergency macOS/Linux rescue when Windows CI is flaky.
+These `.compat` assets are temporary and may be removed once the supported upgrade floor exceeds v0.141.4. They are
+generated by `scripts/release-assets.sh` from the same normal archives used by installers and covered by
+`checksums.txt`. Windows is included by default (the bridge also rescues Windows v0.141.0-v0.141.4 users, whose updater
+never matched the published `.zip`); set `RELEASE_REQUIRE_WINDOWS=false` only for an emergency macOS/Linux rescue when
+Windows CI is flaky.
 
 ## Quick Start
 
@@ -241,19 +230,19 @@ auto_rollback = false
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `channel` | String | `"stable"` | Release channel: `stable`, `beta`, or `nightly` |
-| `pin.version` | String | `null` | Pinned version (null = follow channel) |
-| `pin.reason` | String | `null` | User note for pinning |
-| `pin.auto_unpin` | Boolean | `false` | Auto-remove pin after successful update |
-| `mirrors.primary` | String | GitHub | Primary download mirror URL |
-| `mirrors.fallbacks` | Array | `[]` | Fallback mirror URLs |
-| `mirrors.geo_select` | Boolean | `true` | Enable geographic mirror selection |
-| `check_interval_hours` | Integer | `24` | Hours between update checks (0 = disable) |
-| `download_timeout_secs` | Integer | `300` | Download timeout in seconds |
-| `keep_backup` | Boolean | `true` | Keep backup of previous version |
-| `auto_rollback` | Boolean | `false` | Auto-rollback on startup failure |
+| Option                  | Type    | Default    | Description                                     |
+| ----------------------- | ------- | ---------- | ----------------------------------------------- |
+| `channel`               | String  | `"stable"` | Release channel: `stable`, `beta`, or `nightly` |
+| `pin.version`           | String  | `null`     | Pinned version (null = follow channel)          |
+| `pin.reason`            | String  | `null`     | User note for pinning                           |
+| `pin.auto_unpin`        | Boolean | `false`    | Auto-remove pin after successful update         |
+| `mirrors.primary`       | String  | GitHub     | Primary download mirror URL                     |
+| `mirrors.fallbacks`     | Array   | `[]`       | Fallback mirror URLs                            |
+| `mirrors.geo_select`    | Boolean | `true`     | Enable geographic mirror selection              |
+| `check_interval_hours`  | Integer | `24`       | Hours between update checks (0 = disable)       |
+| `download_timeout_secs` | Integer | `300`      | Download timeout in seconds                     |
+| `keep_backup`           | Boolean | `true`     | Keep backup of previous version                 |
+| `auto_rollback`         | Boolean | `false`    | Auto-rollback on startup failure                |
 
 ## CLI Reference
 
@@ -262,6 +251,7 @@ auto_rollback = false
 Check for and install updates.
 
 **Options:**
+
 - `--check` - Check only, don't install
 - `--force` - Force reinstall even if up-to-date
 - `--list` - List available versions
@@ -294,7 +284,8 @@ vtcode update --channel beta
 
 ### Managed Installs
 
-If VT Code was installed via a package manager, the update system will detect this and provide the appropriate update command:
+If VT Code was installed via a package manager, the update system will detect this and provide the appropriate update
+command:
 
 - **Homebrew**: `brew upgrade vtcode`
 - **Cargo**: `cargo install vtcode --force`
@@ -302,14 +293,14 @@ If VT Code was installed via a package manager, the update system will detect th
 
 ### Backup and Rollback
 
-When `keep_backup = true` (default), the previous version is kept after update. If `auto_rollback = true`, VT Code will automatically revert to the backup if the new version fails to start.
+When `keep_backup = true` (default), the previous version is kept after update. If `auto_rollback = true`, VT Code will
+automatically revert to the backup if the new version fails to start.
 
 ### Update Checks
 
-By default, VT Code checks for updates every 24 hours. The check timestamp is
-stored in the resolved user cache directory (on Linux/BSD, `$XDG_CACHE_HOME/vtcode`,
-defaulting to `~/.cache/vtcode`). See the [user data directories guide](user-data-directories.md)
-when the cache root must be changed or diagnosed.
+By default, VT Code checks for updates every 24 hours. The check timestamp is stored in the resolved user cache
+directory (on Linux/BSD, `$XDG_CACHE_HOME/vtcode`, defaulting to `~/.cache/vtcode`). See the
+[user data directories guide](user-data-directories.md) when the cache root must be changed or diagnosed.
 
 To disable automatic checks:
 
@@ -323,11 +314,14 @@ check_interval_hours = 0
 
 1. Check internet connectivity
 2. Try a different mirror:
+
    ```toml
    [mirrors]
    primary = "https://mirror.example.com/vtcode"
    ```
+
 3. Increase timeout:
+
    ```toml
    download_timeout_secs = 600
    ```
@@ -346,6 +340,7 @@ If an update causes issues:
 
 1. **Manual rollback**: Download previous version from GitHub Releases
 2. **Auto-rollback**: If enabled, happens automatically on startup failure
+
    ```toml
    auto_rollback = true
    ```
@@ -369,16 +364,19 @@ vtcode update --force
 For automated environments, you can:
 
 1. **Pin versions** to ensure consistency:
+
    ```bash
    vtcode update --pin 0.85.3
    ```
 
 2. **Disable auto-checks**:
+
    ```toml
    check_interval_hours = 0
    ```
 
 3. **Use specific channels** for testing:
+
    ```toml
    channel = "beta"
    ```

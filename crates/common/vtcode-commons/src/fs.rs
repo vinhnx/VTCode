@@ -317,12 +317,18 @@ pub fn read_json_file_sync<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<
 }
 
 /// Check whether a path looks like an image file based on extension.
+///
+/// Matching is case-insensitive because macOS and Windows commonly use
+/// case-insensitive filesystems, so `IMAGE.PNG` is still an image.
 pub fn is_image_path(path: &Path) -> bool {
     let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
         return false;
     };
 
-    matches!(extension, "bmp" | "gif" | "jpeg" | "jpg" | "png" | "svg" | "tif" | "tiff" | "webp")
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "bmp" | "gif" | "jpeg" | "jpg" | "png" | "svg" | "tif" | "tiff" | "webp"
+    )
 }
 
 /// Check whether a string is a Windows absolute path (e.g., `C:\...` or `C:/...`).

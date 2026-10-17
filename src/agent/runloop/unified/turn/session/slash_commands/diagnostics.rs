@@ -1,9 +1,11 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Context, Result};
 use vtcode_config::loader::ConfigManager;
 use vtcode_core::config::ToolPolicy;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::InlineListSelection;
 
 use crate::agent::runloop::unified::diagnostics::{CheckupOptions, count_configured_hooks, run_checkup_diagnostics};
 use crate::agent::runloop::unified::ui_interaction::display_session_status;
@@ -17,9 +19,9 @@ const CHECKUP_ACTION_PREFIX: &str = "checkup.action.";
 const CHECKUP_ACTION_BACK: &str = "checkup.action.back";
 const CHECKUP_ACTION_OPTIMIZE_PREFIX: &str = "checkup.optimize.";
 
-/// Identifies an applicable `/checkup` optimization the user can apply.
+/// Identifies an applicable `/config checkup` optimization the user can apply.
 ///
-/// These are all reversible config mutations; `/checkup` confirms with the user
+/// These are all reversible config mutations; `/config checkup` confirms with the user
 /// (via the selection modal) before mutating anything.
 #[derive(Debug)]
 struct CheckupRemediation {
@@ -136,27 +138,12 @@ pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<S
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_show_memory(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if !ctx.renderer.supports_inline_ui() {
-        memory::render_memory_status_lines(&mut ctx, false).await?;
-        ctx.renderer
-            .line(MessageStyle::Info, "Next actions: `/memory` in inline UI, `/config memory`, or `/edit <target>`.")?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    if !super::ui::ensure_selection_ui_available(&mut ctx, "opening memory controls")? {
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    memory::run_memory_modal(&mut ctx, false).await
-}
-
 pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_config_lines(&mut ctx).await?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Use `/memory` in inline UI for quick actions or `/config agent.persistent_memory` for the raw section.",
+            "Use `/config memory` for quick actions or `/config agent.persistent_memory` for the raw section.",
         )?;
         return Ok(SlashCommandControl::Continue);
     }
@@ -259,44 +246,43 @@ pub(crate) async fn handle_start_terminal_setup(ctx: SlashCommandContext<'_>) ->
 
 fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let mut items = vec![
-        InlineListItem {
-            title: "Run full checkup".to_string(),
-            subtitle: Some("Run all checks: config, provider key, dependencies, MCP, links, and skills".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}full"))),
-            search_value: Some("checkup full all checks mcp dependencies".to_string()),
-        },
-        InlineListItem {
-            title: "Run quick checkup".to_string(),
-            subtitle: Some("Run core checks only (skips dependencies, MCP, links, and skills)".to_string()),
-            badge: Some("Fast".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}quick"))),
-            search_value: Some("checkup quick fast checks".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close without running the checkup".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
-            search_value: Some("back close cancel".to_string()),
-        },
+        ui_list::action(
+            "Run full checkup",
+            "Run all checks: config, provider key, dependencies, MCP, links, and skills".to_string(),
+            Some("Recommended".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}full"))),
+        )
+        .with_search_value("checkup full all checks mcp dependencies".to_string()),
+        ui_list::action(
+            "Run quick checkup",
+            "Run core checks only (skips dependencies, MCP, links, and skills)".to_string(),
+            Some("Fast".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_PREFIX}quick"))),
+        )
+        .with_search_value("checkup quick fast checks".to_string()),
+        ui_list::action(
+            "Back",
+            "Close without running the checkup".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(CHECKUP_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back close cancel".to_string()),
     ];
 
     for remediation in compute_checkup_remediations(ctx.vt_cfg) {
-        items.push(InlineListItem {
-            title: remediation.title,
-            subtitle: Some(remediation.subtitle),
-            badge: Some("Optimization".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{CHECKUP_ACTION_OPTIMIZE_PREFIX}{}",
-                remediation.id
-            ))),
-            search_value: Some(remediation.search_value),
-        });
+        items.push(
+            ui_list::action(
+                remediation.title,
+                remediation.subtitle,
+                Some("Optimization".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{CHECKUP_ACTION_OPTIMIZE_PREFIX}{}", remediation.id))),
+            )
+            .with_search_value(remediation.search_value),
+        );
     }
 
     ctx.renderer.show_list_modal(

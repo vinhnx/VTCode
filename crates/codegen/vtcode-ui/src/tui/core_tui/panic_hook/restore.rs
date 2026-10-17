@@ -11,6 +11,17 @@ use ratatui::crossterm::{
 
 use super::state::{self, COLOR_SCHEME_REPORTS_ENABLED, KEYBOARD_ENHANCEMENTS_PUSHED};
 
+/// Emit the session's original iTerm2 profile switch-back, if one is pending.
+///
+/// VT Code switches to its `VT Code` icon profile at TUI startup; `OSC 1337;
+/// SetProfile=` is sticky, so the matching switch back to the session's
+/// original profile is emitted here (on normal exit, Ctrl+C, panic, and
+/// SIGTERM) rather than left to iTerm2's Automatic Profile Switching, which
+/// requires Shell Integration and is not reliably present.
+fn emit_iterm2_profile_restore(writer: &mut impl Write, original: &str) -> io::Result<()> {
+    writer.write_all(vtcode_commons::ansi_codes::set_iterm2_profile(original).as_bytes())
+}
+
 /// Emit the terminal-restoration escape sequence.
 ///
 /// When `clear_alternate` is true we are currently on the alternate screen
@@ -60,34 +71,91 @@ fn open_tty_writer() -> Option<std::fs::File> {
     OpenOptions::new().write(true).open("/dev/tty").ok()
 }
 
+/// Only alternate-screen sessions saved a cursor position at startup.
+fn emit_cursor_restore_sequence(writer: &mut impl Write, clear_alternate: bool) -> io::Result<()> {
+    if clear_alternate {
+        execute!(writer, SetCursorStyle::DefaultUserShape, Show, RestorePosition)
+    } else {
+        execute!(writer, SetCursorStyle::DefaultUserShape, Show)
+    }
+}
+
 fn emit_restore_to_all_targets(clear_alternate: bool) -> Option<io::Error> {
     let mut first_error: Option<io::Error> = None;
+    let profile_restore = state::take_iterm2_profile_to_restore();
 
     let mut stderr = io::stderr();
+    crate::tui::core_tui::program_status::cleanup_before_restore(&mut stderr);
     if let Err(error) = emit_restore_sequence(&mut stderr, clear_alternate) {
         first_error.get_or_insert(error);
     }
-    if let Err(error) = execute!(stderr, SetCursorStyle::DefaultUserShape, Show, RestorePosition) {
+    // Only alternate-screen sessions saved the pre-TUI cursor (see
+    // `run_tui`): restoring it returns to the pre-TUI row. Inline sessions
+    // never saved, so restoring would yank the cursor from the end of the
+    // transcript back to the frame start and force the exit summary onto a
+    // viewport-height jump (blank gap) — leave it where the TUI left it.
+    if let Err(error) = emit_cursor_restore_sequence(&mut stderr, clear_alternate) {
         first_error.get_or_insert_with(|| io::Error::other(error.to_string()));
+    }
+    // Clear the terminal title on the canonical stream as well: the emergency
+    // Ctrl+C/SIGTERM paths never reach `Session::clear_terminal_title()`, so
+    // without this the previous session title leaks into the shell.
+    let _ = write!(stderr, "\x1b]0;default\x07");
+    if let Some(original) = profile_restore.as_deref() {
+        let _ = emit_iterm2_profile_restore(&mut stderr, original);
     }
     let _ = stderr.flush();
     crate::tui::core_tui::runner::terminal_io::reset_mouse_pointer_shape();
 
     if let Some(mut tty) = open_tty_writer() {
         let _ = emit_restore_sequence(&mut tty, clear_alternate);
-        let _ = execute!(tty, SetCursorStyle::DefaultUserShape, Show, RestorePosition);
+        let _ = emit_cursor_restore_sequence(&mut tty, clear_alternate);
         let _ = tty.flush();
         let _ = write!(tty, "\x1b]22;default\x07");
+        let _ = write!(tty, "\x1b]0;default\x07");
+        if let Some(original) = profile_restore.as_deref() {
+            let _ = emit_iterm2_profile_restore(&mut tty, original);
+        }
         let _ = tty.flush();
     }
+
+    // Stdout carries no escape sequences here, but flushing it guarantees any
+    // buffered postamble (exit summary) is ordered after the restore instead
+    // of interleaving with it on Ctrl+C exits.
+    let _ = io::stdout().flush();
 
     first_error
 }
 
+/// Best-effort raw-mode release for post-TUI stdout postambles.
+///
+/// Unlike [`restore_tui()`] (escape restore is one-shot via `RESTORE_DONE`),
+/// this always attempts `disable_raw_mode()` so a late `println!` never
+/// staircases when output processing (`ONLCR`) is still off. Safe to call when
+/// raw mode was never enabled: crossterm's disable is a no-op in that case.
+/// Used after [`finish_deferred_raw_mode_restore`] as a force-cooked backstop.
+pub fn ensure_raw_mode_disabled() {
+    let _ = disable_raw_mode();
+}
+
+/// Drains terminal input that arrived after the TUI stopped reading it.
+///
+/// Teardown takes seconds (MCP shutdown, session-end hooks, TUI join) and the
+/// event stream is cancelled long before that finishes. A late reply — most
+/// visibly the kitty-protocol key-*release* report for the Ctrl+C that
+/// triggered the exit (`CSI 99;5:3u`) — then sits in the tty input buffer, is
+/// echoed once the tty returns to cooked mode, and spills into the shell after
+/// the process exits. Draining after raw mode is restored (and once more just
+/// before process exit) consumes it. Idempotent and bounded (~10 ms).
+pub fn drain_pending_terminal_input() {
+    crate::tui::core_tui::runner::terminal_io::drain_terminal_events();
+}
+
 /// Restore terminal to a usable state after a panic or error.
 ///
-/// This is the single canonical function for terminal restoration.
-/// It is idempotent: subsequent calls are no-ops.
+/// Escape-sequence restore is one-shot via `RESTORE_DONE`. The cooked-mode
+/// transition is claimed separately, so this always finishes raw-mode restore
+/// even when a prior [`restore_tui_keep_raw_mode`] already tore the TUI down.
 ///
 /// - Drains pending events before and after restoration
 /// - Clears the alternate viewport before leaving the alternate screen
@@ -98,6 +166,92 @@ fn emit_restore_to_all_targets(clear_alternate: bool) -> Option<io::Error> {
 /// - Resets cursor style and shows cursor
 /// - Restores raw mode to its state before the TUI started
 pub fn restore_tui() -> io::Result<()> {
+    let error = restore_terminal_state(false);
+    // Always force the cooked-mode transition. A prior `restore_tui_keep_raw_mode`
+    // may have claimed the escape-sequence restore and left raw mode on; Drop
+    // backstops, panic hooks, and emergency exits must never leave the tty raw.
+    finish_raw_mode_restore();
+    drain_pending_terminal_input();
+    error
+}
+
+/// Restore every escape-sequence mode but deliberately **keep raw mode**.
+///
+/// Used by the runner's mode guard, which fires the moment the TUI task ends —
+/// before the runloop has finished teardown (archive write, MCP shutdown, TUI
+/// join). Raw mode keeps the tty's echo off, so a late kitty-protocol reply
+/// (the key-release report for the exiting Ctrl+C) cannot be echoed onto the
+/// screen; the exit postamble drains and then transitions to cooked mode as its
+/// final step, in [`finish_deferred_raw_mode_restore`]. Every other restore path
+/// goes through [`restore_tui`], which forces the cooked transition even when
+/// the escape-sequence restore was already claimed, so a panic or emergency
+/// exit can never leave the tty in raw mode.
+pub fn restore_tui_keep_raw_mode() -> io::Result<()> {
+    restore_terminal_state(true)
+}
+
+/// Restore raw mode to the state recorded before the TUI started.
+///
+/// If the terminal's current raw-mode can be queried we only toggle when needed;
+/// otherwise fall back to disabling raw mode to preserve a conservative and
+/// usable state.
+fn restore_raw_mode_state() -> Option<io::Error> {
+    let previous_raw = state::is_raw_mode_was_enabled();
+    let mut error = None;
+    match is_raw_mode_enabled() {
+        Ok(current_enabled) => {
+            if previous_raw && !current_enabled {
+                if let Err(err) = enable_raw_mode() {
+                    error = Some(err);
+                }
+            } else if !previous_raw && current_enabled {
+                if let Err(err) = disable_raw_mode() {
+                    error = Some(err);
+                }
+            }
+        }
+        Err(_) => {
+            if !previous_raw {
+                if let Err(err) = disable_raw_mode() {
+                    error = Some(err);
+                }
+            }
+        }
+    }
+    error
+}
+
+/// Finish a deferred raw-mode restore as the last act of a graceful exit.
+///
+/// Drains pending input *before* leaving raw mode — echo is still off, so the
+/// bytes are consumed instead of echoed — then restores the tty's raw-mode
+/// state and drains once more so nothing spills into the shell.
+pub fn finish_deferred_raw_mode_restore() {
+    drain_pending_terminal_input();
+    finish_raw_mode_restore();
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    drain_pending_terminal_input();
+}
+
+/// Restore raw mode to its pre-TUI state exactly once.
+///
+/// Claimed separately from the escape-sequence restore so force paths
+/// ([`restore_tui`]) can still finish the cooked transition after
+/// [`restore_tui_keep_raw_mode`] already tore the TUI down.
+fn finish_raw_mode_restore() {
+    if !state::try_claim_raw_mode_restore() {
+        return;
+    }
+    if let Some(error) = restore_raw_mode_state() {
+        tracing::debug!(%error, "failed to restore raw mode");
+    }
+    state::mark_raw_mode_was_enabled(false);
+}
+
+/// Shared restore body. With `keep_raw_mode` the tty is left in raw mode and
+/// the post-restore input drain is skipped (the caller owns that ordering).
+fn restore_terminal_state(keep_raw_mode: bool) -> io::Result<()> {
     if !state::try_claim_restore() {
         return Ok(());
     }
@@ -138,33 +292,15 @@ pub fn restore_tui() -> io::Result<()> {
     // Drain terminal responses from restore sequences while raw mode still active
     crate::tui::core_tui::runner::terminal_io::drain_terminal_events();
 
-    // Restore raw-mode to the state it had before the TUI started.
-    // If we can query the terminal's current raw-mode we only toggle when
-    // needed; otherwise fall back to disabling raw mode to preserve a
-    // conservative and usable state.
-    let previous_raw = state::is_raw_mode_was_enabled();
-    match is_raw_mode_enabled() {
-        Ok(current_enabled) => {
-            if previous_raw && !current_enabled {
-                if let Err(error) = enable_raw_mode() {
-                    first_error.get_or_insert(error);
-                }
-            } else if !previous_raw && current_enabled {
-                if let Err(error) = disable_raw_mode() {
-                    first_error.get_or_insert(error);
-                }
-            }
-        }
-        Err(_) => {
-            // Couldn't query — fall back to best-effort disable when the
-            // TUI had enabled raw mode (previous_raw == false) to avoid
-            // leaving the tty in a no-echo/no-stdin state.
-            if !previous_raw {
-                if let Err(error) = disable_raw_mode() {
-                    first_error.get_or_insert(error);
-                }
-            }
-        }
+    // A graceful exit may ask to keep raw mode past this point: the tty's echo
+    // stays off while the runloop finishes teardown, so late input (the kitty
+    // key-release report for the exiting Ctrl+C) cannot be echoed onto the
+    // screen. The cooked transition is owned by `finish_raw_mode_restore` and
+    // claimed separately, so a later force path can still finish it.
+    if keep_raw_mode {
+        let _ = io::stdout().flush();
+        let _ = io::stderr().flush();
+        return Ok(());
     }
 
     // Best-effort stty sane equivalent for /dev/tty when raw-mode toggles
@@ -172,9 +308,12 @@ pub fn restore_tui() -> io::Result<()> {
     if let Some(mut tty) = open_tty_writer() {
         let _ = tty.flush();
     }
-    // Ensure stderr is flushed after raw mode restore
+    // Ensure both streams are flushed after restore sequences so the shell
+    // prompt and any exit postamble are ordered after them. The raw-mode
+    // transition itself runs in `finish_raw_mode_restore` (called by
+    // `restore_tui` / `finish_deferred_raw_mode_restore`).
+    let _ = io::stdout().flush();
     let _ = io::stderr().flush();
-    state::mark_raw_mode_was_enabled(false);
 
     match first_error {
         Some(error) => Err(error),
@@ -188,12 +327,76 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
+    fn cursor_restore_keeps_inline_position_and_restores_alternate_position() {
+        for alternate in [false, true] {
+            let mut bytes = Vec::new();
+            emit_cursor_restore_sequence(&mut bytes, alternate).unwrap();
+            let text = String::from_utf8(bytes).unwrap();
+            assert!(text.contains("\x1b[0 q"), "default cursor style: {text:?}");
+            assert!(text.contains("\x1b[?25h"), "show cursor: {text:?}");
+            assert_eq!(
+                text.matches("\x1b8").count(),
+                usize::from(alternate),
+                "restore only a saved alternate-screen cursor: {text:?}"
+            );
+            if alternate {
+                assert!(text.ends_with("\x1b8"), "show cursor before restoring position: {text:?}");
+            }
+        }
+    }
+
+    #[test]
     fn test_restore_terminal_no_panic_when_not_initialized() {
         state::RESTORE_DONE.store(false, Ordering::SeqCst);
+        state::RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
         state::TUI_INITIALIZED.store(false, Ordering::SeqCst);
 
         let result = restore_tui();
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn keep_raw_mode_leaves_raw_restore_pending() {
+        state::RESTORE_DONE.store(false, Ordering::SeqCst);
+        state::RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+        state::mark_terminal_modified();
+
+        let _ = restore_tui_keep_raw_mode();
+        assert!(state::RESTORE_DONE.load(Ordering::SeqCst), "escape restore must be claimed");
+        assert!(
+            !state::RAW_MODE_RESTORE_DONE.load(Ordering::SeqCst),
+            "keep_raw_mode must leave the cooked transition pending"
+        );
+
+        let _ = restore_tui();
+        assert!(
+            state::RAW_MODE_RESTORE_DONE.load(Ordering::SeqCst),
+            "force restore_tui after keep_raw_mode must finish the cooked transition"
+        );
+        state::mark_terminal_restored();
+    }
+
+    #[test]
+    fn raw_mode_restore_is_claimed_exactly_once() {
+        state::RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+        assert!(state::try_claim_raw_mode_restore());
+        assert!(!state::try_claim_raw_mode_restore(), "second raw restore claim must fail");
+        state::RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn finish_deferred_then_restore_tui_is_idempotent() {
+        state::RESTORE_DONE.store(false, Ordering::SeqCst);
+        state::RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+        state::mark_terminal_modified();
+
+        let _ = restore_tui_keep_raw_mode();
+        finish_deferred_raw_mode_restore();
+        assert!(state::RAW_MODE_RESTORE_DONE.load(Ordering::SeqCst));
+
+        let _ = restore_tui();
+        assert!(state::RAW_MODE_RESTORE_DONE.load(Ordering::SeqCst));
+        state::mark_terminal_restored();
     }
 
     #[test]
@@ -276,5 +479,16 @@ mod tests {
         let result = restore_tui();
         assert!(result.is_ok() || result.is_err());
         assert!(!state::is_terminal_modified(), "restore must clear the modified flag");
+    }
+
+    #[test]
+    fn iterm2_profile_restore_emits_switch_back_sequence() {
+        let mut bytes: Vec<u8> = Vec::new();
+        emit_iterm2_profile_restore(&mut bytes, "Solarized Dark").unwrap();
+        assert_eq!(String::from_utf8(bytes).unwrap(), "\x1b]1337;SetProfile=Solarized Dark\x07");
+
+        let mut default_bytes: Vec<u8> = Vec::new();
+        emit_iterm2_profile_restore(&mut default_bytes, "Default").unwrap();
+        assert_eq!(String::from_utf8(default_bytes).unwrap(), "\x1b]1337;SetProfile=Default\x07");
     }
 }

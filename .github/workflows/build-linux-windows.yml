@@ -35,21 +35,52 @@ concurrency:
 # https://docs.github.com/billing/managing-billing-for-github-actions/about-billing-for-github-actions
 # - Linux builds run on ubuntu-latest using Cross
 # - Windows build is on by default and can be disabled per-run via input
-# - Minimal artifact retention (7 days)
+# - Minimal artifact retention (2 days, already-compressed archives)
 # - Efficient caching
 
 jobs:
+  gen-man:
+    name: Generate man pages (once)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          key: man-xtask
+          cache-bin: false
+      - name: Generate man pages
+        shell: bash
+        run: cargo run --locked -p xtask -- gen-man --out-dir man/man1
+      - name: Upload man pages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: man-pages
+          path: man/
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
   build-linux:
     name: Build (${{ matrix.target }})
+    needs: [gen-man]
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
       CARGO_TERM_VERBOSE: false
       CARGO_TERM_COLOR: always
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         target:
           - x86_64-unknown-linux-gnu
@@ -98,6 +129,10 @@ jobs:
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
         with:
           version: 0.15.2
+          # Per-run global-cache entries (~160 MiB, keyed by run ID) are never
+          # reused across releases and churn the 10 GB free-tier cache. The 51 MiB
+          # compiler tarball stays cached; re-download costs ~7s per cross job.
+          use-cache: false
 
       - name: Install Cross
         if: matrix.target != 'x86_64-unknown-linux-gnu'
@@ -125,6 +160,7 @@ jobs:
           RUSTFLAGS: ${{ startsWith(matrix.target, 'x86_64') && '-C target-cpu=x86-64 -C link-arg=-Wl,--gc-sections' || '-C link-arg=-Wl,--gc-sections' }}
 
       - name: Verify Linux TLS linkage
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           set -euo pipefail
@@ -169,10 +205,11 @@ jobs:
             echo "✗ Binary not found!" && exit 1
           fi
 
-      - name: Generate man pages
-        shell: bash
-        run: |
-          cargo run --locked -p xtask -- gen-man --out-dir man/man1
+      - name: Download man pages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: man-pages
+          path: man/
 
       - name: Package
         shell: bash
@@ -195,14 +232,14 @@ jobs:
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
           if-no-files-found: error
-          retention-days: 7
-          compression-level: 6
+          retention-days: 2
+          compression-level: 0
 
   build-windows:
     if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
     name: Build (x86_64-pc-windows-msvc)
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 45
     permissions:
       contents: read
     env:
@@ -240,12 +277,13 @@ jobs:
         with:
           key: x86_64-pc-windows-msvc
 
-      - name: Fetch dependencies
-        run: cargo fetch --target x86_64-pc-windows-msvc
-        shell: bash
-
       - name: Build (x86_64-pc-windows-msvc)
-        run: cargo build --frozen --profile release-fast-windows --target x86_64-pc-windows-msvc --jobs 2
+        # --locked (not --frozen): --frozen implies --offline, and a
+        # prefix-hit cache restore can lack index metadata for the current
+        # lockfile ("no matching package ... found" with no network to heal).
+        # --locked still pins the lockfile but permits downloads, matching
+        # the Linux jobs. See run 38934744656 / job 117087298931.
+        run: cargo build --locked --profile release-fast-windows --target x86_64-pc-windows-msvc --jobs 4
         shell: bash
 
       - name: Check Binary
@@ -276,5 +314,5 @@ jobs:
             vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.zip
             vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
           if-no-files-found: error
-          retention-days: 7
-          compression-level: 6
+          retention-days: 2
+          compression-level: 0

@@ -4,27 +4,28 @@ Skill types, discovery, loading, and validation for VT Code.
 
 ## Overview
 
-Provides the core skill system including skill manifests, validation, bundling, template rendering, native plugin support, and versioning. Integration-point modules remain in `vtcode-core`.
+Provides the core skill system including skill manifests, validation, bundling, template rendering, native plugin
+support, and versioning. Integration-point modules remain in `vtcode-core`.
 
 ## Key Modules
 
-| Module | Purpose |
-|--------|---------|
-| `types.rs` | Core types: `Skill`, `SkillManifest`, `SkillContext`, `SkillScope` |
-| `manifest.rs` | SKILL.md parsing, `SkillYaml`, template generation |
-| `authoring.rs` | Skill authoring, frontmatter parsing, validation |
-| `bundle.rs` | Skill bundling, import/export, index management |
-| `templates.rs` | Template engine, traditional/CLI-tool templates |
-| `container.rs` | Skill container management, versioning |
-| `container_validation.rs` | Container skills compatibility validation |
-| `context_manager.rs` | Memory-efficient skill loading with LRU eviction |
-| `validation.rs` | Skill validation rules and reports |
-| `enhanced_validator.rs` | Comprehensive skill validator |
-| `native_plugin.rs` | Native plugin loading via `libloading` |
-| `system.rs` | System skills embedding and installation |
-| `versioning.rs` | Skill version resolution and lockfiles |
-| `injection.rs` | Skill injection into prompts |
-| `prompt_integration.rs` | Skills prompt rendering modes |
+| Module                    | Purpose                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `types.rs`                | Core types: `Skill`, `SkillManifest`, `SkillContext`, `SkillScope` |
+| `manifest.rs`             | SKILL.md parsing, `SkillYaml`, template generation                 |
+| `authoring.rs`            | Skill authoring, frontmatter parsing, validation                   |
+| `bundle.rs`               | Skill bundling, import/export, index management                    |
+| `templates.rs`            | Template engine, traditional/CLI-tool templates                    |
+| `container.rs`            | Skill container management, versioning                             |
+| `container_validation.rs` | Container skills compatibility validation                          |
+| `context_manager.rs`      | Memory-efficient skill loading with LRU eviction                   |
+| `validation.rs`           | Skill validation rules and reports                                 |
+| `enhanced_validator.rs`   | Comprehensive skill validator                                      |
+| `native_plugin.rs`        | Native plugin loading via `libloading`                             |
+| `system.rs`               | System skills embedding and installation                           |
+| `versioning.rs`           | Skill version resolution and lockfiles                             |
+| `injection.rs`            | Skill injection into prompts                                       |
+| `prompt_integration.rs`   | Skills prompt rendering modes                                      |
 
 ## Skill Lifecycle
 

@@ -77,6 +77,7 @@ fn build_statusline_prompt_step(
                 other: Some(String::new()),
             }),
             search_value: Some("submit statusline input".to_string()),
+            ..Default::default()
         }],
         completed: false,
         answer: None,

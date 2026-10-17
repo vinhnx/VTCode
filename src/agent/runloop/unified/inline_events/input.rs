@@ -13,12 +13,12 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
     }
 
     pub(crate) fn submit(self, input: SubmittedInput) -> InlineLoopAction {
-        self.state.reset_interrupt_state();
+        self.state.reset_after_submission();
         InlineLoopAction::Submit(input.trim_text())
     }
 
     pub(crate) fn submit_prompt(self, input: SubmittedInput) -> InlineLoopAction {
-        self.state.reset_interrupt_state();
+        self.state.reset_after_submission();
         InlineLoopAction::SubmitPrompt(input.trim_text())
     }
 
@@ -28,7 +28,7 @@ impl<'a, 'state> InlineInputProcessor<'a, 'state> {
         queue: &mut InlineQueueState<'_>,
         primary_agent: Option<String>,
     ) -> InlineLoopAction {
-        self.state.reset_interrupt_state();
+        self.state.reset_after_submission();
         let input = input.trim_text();
         if input.is_empty() {
             return InlineLoopAction::Continue;
@@ -67,6 +67,26 @@ mod tests {
         let action = InlineInputProcessor::new(&mut state).submit_prompt("/exit".into());
 
         assert!(matches!(action, InlineLoopAction::SubmitPrompt(input) if input.text == "/exit"));
+    }
+
+    #[test]
+    fn passive_actions_preserve_cancellation_until_fresh_submission() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+        let ctrl_c_state = CtrlCState::new();
+        ctrl_c_state.request_local_cancel();
+        ctrl_c_state.mark_cancel_handled();
+        let interrupts = InlineInterruptCoordinator::new(&ctrl_c_state);
+        let mut displayed = true;
+        let mut state = InlineEventState::new(&mut renderer, interrupts, &mut displayed);
+        InlineInputProcessor::new(&mut state).passive();
+        assert!(ctrl_c_state.is_cancel_handled());
+        InlineInputProcessor::new(&mut state).submit("continue".into());
+        assert!(!ctrl_c_state.is_cancel_handled());
+        ctrl_c_state.request_exit();
+        InlineInputProcessor::new(&mut state).submit("continue".into());
+        assert!(ctrl_c_state.is_exit_requested());
     }
 
     #[tokio::test]

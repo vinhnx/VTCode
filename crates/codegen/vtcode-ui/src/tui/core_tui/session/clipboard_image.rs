@@ -53,6 +53,16 @@ pub(crate) enum ClipboardImageError {
     WslFallbackFailure,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub(crate) enum ClipboardTextError {
+    #[error("no text in clipboard")]
+    NoText,
+    #[error("clipboard text paste unavailable")]
+    ClipboardUnavailable,
+    #[error("WSL PowerShell clipboard fallback failed")]
+    WslFallbackFailure,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ClipboardRgbaImage {
     pub width: usize,
@@ -66,6 +76,10 @@ trait ClipboardImageSource {
     fn rgba_image(&mut self) -> Result<ClipboardRgbaImage, ClipboardImageError>;
 }
 
+trait ClipboardTextSource {
+    fn text(&mut self) -> Result<String, ClipboardTextError>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CommandRunOutput {
     status_code: Option<i32>,
@@ -75,6 +89,74 @@ struct CommandRunOutput {
 
 trait ClipboardCommandRunner {
     fn run(&self, program: &str, args: &[&str], timeout: Duration) -> std::io::Result<CommandRunOutput>;
+}
+
+pub(crate) fn read_clipboard_text() -> Result<String, ClipboardTextError> {
+    let wsl = is_wsl();
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let mut source = match ArboardClipboardSource::new_text() {
+            Ok(source) => source,
+            Err(_) if wsl => return read_wsl_fallback_text(&SystemCommandRunner),
+            Err(error) => return Err(error),
+        };
+        read_clipboard_text_with(&mut source, &SystemCommandRunner, wsl)
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        if wsl {
+            read_wsl_fallback_text(&SystemCommandRunner)
+        } else {
+            Err(ClipboardTextError::ClipboardUnavailable)
+        }
+    }
+}
+
+fn read_clipboard_text_with(
+    source: &mut impl ClipboardTextSource,
+    command_runner: &impl ClipboardCommandRunner,
+    wsl: bool,
+) -> Result<String, ClipboardTextError> {
+    match source.text() {
+        Ok(text) if text.is_empty() => Err(ClipboardTextError::NoText),
+        Ok(text) => Ok(text),
+        Err(ClipboardTextError::NoText | ClipboardTextError::ClipboardUnavailable) if wsl => {
+            read_wsl_fallback_text(command_runner)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn read_wsl_fallback_text(command_runner: &impl ClipboardCommandRunner) -> Result<String, ClipboardTextError> {
+    const SCRIPT: &str = "Get-Clipboard -Raw";
+    let attempts: [(&str, &[&str]); 2] = [
+        ("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", SCRIPT]),
+        ("pwsh.exe", &["-NoProfile", "-NonInteractive", "-Command", SCRIPT]),
+    ];
+
+    for (program, args) in attempts {
+        let output = match command_runner.run(program, args, WSL_FALLBACK_TIMEOUT) {
+            Ok(output) => output,
+            Err(_) => continue,
+        };
+        if output.timed_out {
+            continue;
+        }
+        if output.status_code == Some(0) {
+            let stdout = String::from_utf8(output.stdout).map_err(|_| ClipboardTextError::WslFallbackFailure)?;
+            // PowerShell appends CRLF; strip trailing line breaks only so
+            // indentation and interior spacing paste verbatim.
+            let text = stdout.trim_end_matches(['\r', '\n']).to_string();
+            if text.is_empty() {
+                return Err(ClipboardTextError::NoText);
+            }
+            return Ok(text);
+        }
+    }
+
+    Err(ClipboardTextError::WslFallbackFailure)
 }
 
 pub(crate) fn read_clipboard_image() -> Result<ContentPart, ClipboardImageError> {
@@ -228,6 +310,12 @@ impl ArboardClipboardSource {
             .map(|clipboard| Self { clipboard })
             .map_err(map_arboard_error)
     }
+
+    fn new_text() -> Result<Self, ClipboardTextError> {
+        arboard::Clipboard::new()
+            .map(|clipboard| Self { clipboard })
+            .map_err(map_arboard_text_error)
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -254,6 +342,24 @@ fn map_arboard_error(error: arboard::Error) -> ClipboardImageError {
             ClipboardImageError::ClipboardUnavailable
         }
         _ => ClipboardImageError::ClipboardUnavailable,
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+impl ClipboardTextSource for ArboardClipboardSource {
+    fn text(&mut self) -> Result<String, ClipboardTextError> {
+        self.clipboard.get_text().map_err(map_arboard_text_error)
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn map_arboard_text_error(error: arboard::Error) -> ClipboardTextError {
+    match error {
+        arboard::Error::ContentNotAvailable | arboard::Error::ConversionFailure => ClipboardTextError::NoText,
+        arboard::Error::ClipboardNotSupported | arboard::Error::ClipboardOccupied | arboard::Error::Unknown { .. } => {
+            ClipboardTextError::ClipboardUnavailable
+        }
+        _ => ClipboardTextError::ClipboardUnavailable,
     }
 }
 
@@ -575,6 +681,95 @@ mod tests {
             .expect_err("missing WSL fallback commands should fail");
 
         assert_eq!(error, ClipboardImageError::WslFallbackFailure);
+        assert_eq!(runner.called_programs(), vec!["powershell.exe", "pwsh.exe"]);
+    }
+
+    #[derive(Default)]
+    struct MockClipboardTextSource {
+        text_result: Option<Result<String, ClipboardTextError>>,
+    }
+
+    impl ClipboardTextSource for MockClipboardTextSource {
+        fn text(&mut self) -> Result<String, ClipboardTextError> {
+            self.text_result.take().unwrap_or(Err(ClipboardTextError::NoText))
+        }
+    }
+
+    #[test]
+    fn clipboard_text_pastes_verbatim_with_indentation() {
+        let mut source = MockClipboardTextSource {
+            text_result: Some(Ok("  indented\nsecond line".to_string())),
+        };
+        let runner = MockCommandRunner::default();
+
+        let text = read_clipboard_text_with(&mut source, &runner, false).expect("clipboard text should be read");
+
+        assert_eq!(text, "  indented\nsecond line");
+        assert!(runner.called_programs().is_empty());
+    }
+
+    #[test]
+    fn empty_clipboard_text_maps_to_no_text() {
+        let mut source = MockClipboardTextSource { text_result: Some(Ok(String::new())) };
+        let runner = MockCommandRunner::default();
+
+        let error =
+            read_clipboard_text_with(&mut source, &runner, false).expect_err("empty clipboard should map to no text");
+
+        assert_eq!(error, ClipboardTextError::NoText);
+        assert!(runner.called_programs().is_empty());
+    }
+
+    #[test]
+    fn unavailable_clipboard_text_without_wsl_stays_unavailable() {
+        let mut source = MockClipboardTextSource {
+            text_result: Some(Err(ClipboardTextError::ClipboardUnavailable)),
+        };
+        let runner = MockCommandRunner::default();
+
+        let error = read_clipboard_text_with(&mut source, &runner, false)
+            .expect_err("unavailable clipboard should map distinctly");
+
+        assert_eq!(error, ClipboardTextError::ClipboardUnavailable);
+        assert!(runner.called_programs().is_empty());
+    }
+
+    #[test]
+    fn wsl_text_fallback_trims_powershell_line_endings() {
+        let runner = MockCommandRunner::with_outputs(vec![Ok(CommandRunOutput {
+            status_code: Some(0),
+            stdout: b"pasted line\r\n".to_vec(),
+            timed_out: false,
+        })]);
+        let mut source = MockClipboardTextSource {
+            text_result: Some(Err(ClipboardTextError::ClipboardUnavailable)),
+        };
+
+        let text = read_clipboard_text_with(&mut source, &runner, true).expect("WSL fallback should provide text");
+
+        assert_eq!(text, "pasted line");
+        assert_eq!(runner.called_programs(), vec!["powershell.exe"]);
+    }
+
+    #[test]
+    fn wsl_text_fallback_failures_map_to_failure() {
+        let runner = MockCommandRunner::with_outputs(vec![
+            Ok(CommandRunOutput {
+                status_code: Some(1),
+                stdout: Vec::new(),
+                timed_out: false,
+            }),
+            Ok(CommandRunOutput {
+                status_code: None,
+                stdout: Vec::new(),
+                timed_out: true,
+            }),
+        ]);
+        let mut source = MockClipboardTextSource { text_result: Some(Err(ClipboardTextError::NoText)) };
+
+        let error = read_clipboard_text_with(&mut source, &runner, true).expect_err("failed WSL fallback should fail");
+
+        assert_eq!(error, ClipboardTextError::WslFallbackFailure);
         assert_eq!(runner.called_programs(), vec!["powershell.exe", "pwsh.exe"]);
     }
 }

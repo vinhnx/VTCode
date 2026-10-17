@@ -59,6 +59,7 @@ pub(super) fn emit_blocked_handoff_events(
     archive_path: &std::path::Path,
 ) {
     event_recorder.turn_blocked(vtcode_exec_events::TurnBlockedEvent {
+        completed_at: None,
         message: blocked_message.to_string(),
         last_tool: None,
         blocked_streak: 0,

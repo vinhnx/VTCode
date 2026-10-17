@@ -1,12 +1,13 @@
 # Contributing to VT Code
 
-Welcome to VT Code! We're excited that you're interested in contributing to this Rust-based terminal coding agent. This document outlines the guidelines and best practices for contributing to the project.
+Welcome to VT Code! We're excited that you're interested in contributing to this Rust-based terminal coding agent. This
+document outlines the guidelines and best practices for contributing to the project.
 
 ## Table of Contents
 
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
-- [Project Structure](#project-structure) 
+- [Project Structure](#project-structure)
 - [Code Style](#code-style)
 - [Testing](#testing)
 - [Submitting Changes](#submitting-changes)
@@ -16,14 +17,16 @@ Welcome to VT Code! We're excited that you're interested in contributing to this
 
 ## Getting Started
 
-VT Code is a Rust-based terminal coding agent with LLM-native code understanding and robust shell safety. It supports multiple LLM providers with automatic failover, prompt caching, and token-efficient context management.
+VT Code is a Rust-based terminal coding agent with LLM-native code understanding and robust shell safety. It supports
+multiple LLM providers with automatic failover, prompt caching, and token-efficient context management.
 
 Before contributing, please familiarize yourself with:
 
 1. The [README.md](README.md) for an overview of the project
 2. The [AGENTS.md](../AGENTS.md) for agent governance, workspace conventions, and per-crate guidance
 3. The [Architecture documentation](./ARCHITECTURE.md) for understanding the system design
-4. The [Extension Boundaries guide](./development/EXTENSION_BOUNDARIES.md) before adding new trait- or provider-shaped extension points
+4. The [Extension Boundaries guide](./development/EXTENSION_BOUNDARIES.md) before adding new trait- or provider-shaped
+   extension points
 5. The [Development Guide](./development/README.md) for detailed development processes
 
 ## Development Setup
@@ -116,6 +119,7 @@ Cargo workspace with ~30 crates. Rust stable, MSRV 1.98.1, edition 2024.
 ### Examples
 
 **Good:**
+
 ```rust
 /// Reads a file with proper error handling
 pub async fn read_file_with_context(path: &str) -> anyhow::Result<String> {
@@ -126,6 +130,7 @@ pub async fn read_file_with_context(path: &str) -> anyhow::Result<String> {
 ```
 
 **Avoid:**
+
 ```rust
 // Hardcoded values
 let limit = 1000;
@@ -214,7 +219,7 @@ pub async fn example_function(path: &str) -> Result<()> {
     let content = tokio::fs::read_to_string(path)
         .await
         .with_context(|| format!("Failed to read file at {}", path))?;
-    
+
     // Process content...
     Ok(())
 }
@@ -243,9 +248,12 @@ pub async fn example_function(path: &str) -> Result<()> {
 
 ### Core Components
 
-- **LLM Abstractions**: Provider traits with uniform async interfaces supporting OpenAI, Anthropic, Gemini, Meta AI, xAI, DeepSeek, Z.AI, Moonshot AI, OpenRouter, and Ollama
-- **Modular Tools**: Internal trait-based composition for built-in tools, with MCP/manifests preferred for external extensions
-- **Extension Boundaries**: Prefer config, manifests, plugins, and MCP over new public Rust traits for third-party integrations
+- **LLM Abstractions**: Provider traits with uniform async interfaces supporting OpenAI, Anthropic, Gemini, Meta AI,
+  xAI, DeepSeek, Z.AI, Moonshot AI, OpenRouter, and Ollama
+- **Modular Tools**: Internal trait-based composition for built-in tools, with MCP/manifests preferred for external
+  extensions
+- **Extension Boundaries**: Prefer config, manifests, plugins, and MCP over new public Rust traits for third-party
+  integrations
 - **Configuration Engine**: Deserializes `vtcode.toml` into validated structs
 - **Context Engineering System**: Implements iterative, per-turn curation with token budgeting
 - **Security & Safety**: Tree-sitter-bash for critical shell command validation and OS-native sandboxing
@@ -262,11 +270,13 @@ pub async fn example_function(path: &str) -> Result<()> {
 ### Need Help?
 
 - **GitHub Issues**: Report bugs and request features at [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
-- **Discussions**: Ask questions and discuss development in [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
+- **Discussions**: Ask questions and discuss development in
+  [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
 
 ### Questions?
 
-If you have questions about contributing or need clarification on any aspect of the project, feel free to open an issue or reach out through the appropriate channel. We're committed to helping new contributors get up to speed.
+If you have questions about contributing or need clarification on any aspect of the project, feel free to open an issue
+or reach out through the appropriate channel. We're committed to helping new contributors get up to speed.
 
 ---
 

@@ -107,6 +107,9 @@ impl<'a> FooterWidget<'a> {
     }
 
     fn build_status_line(&self, width: u16) -> Line<'static> {
+        if width == 0 {
+            return Line::default();
+        }
         let mut spans = Vec::new();
 
         // Left status
@@ -134,17 +137,27 @@ impl<'a> FooterWidget<'a> {
             spans.push(Span::styled(spinner.to_string(), self.styles.muted_style()));
         }
 
-        // Calculate space needed for right status
-        let right_text = self.right_status.unwrap_or("");
-        let left_len: usize = spans.iter().map(|s| s.content.len()).sum();
-        let right_len = right_text.len();
-        let available = width as usize;
-
-        // Add padding and right status if there's room
-        if left_len + right_len + 2 <= available {
-            let padding = available.saturating_sub(left_len + right_len);
-            spans.push(Span::raw(" ".repeat(padding)));
-            spans.extend(self.build_right_status_spans(right_text));
+        // Reserve right-side content before fitting variable left activity.
+        // Measure terminal columns rather than bytes (Git/context may be Unicode).
+        let right = crate::tui::core_tui::session::utils::line_truncation::truncate_line_with_ellipsis_if_overflow(
+            Line::from(self.build_right_status_spans(self.right_status.unwrap_or(""))),
+            usize::from(width),
+        );
+        let right_width = right.width();
+        let left_budget = usize::from(width).saturating_sub(right_width + usize::from(right_width > 0));
+        spans = if left_budget == 0 {
+            Vec::new()
+        } else {
+            crate::tui::core_tui::session::utils::line_truncation::truncate_line_with_ellipsis_if_overflow(
+                Line::from(spans),
+                left_budget,
+            )
+            .spans
+        };
+        if right_width > 0 {
+            let left_width = Line::from(spans.clone()).width();
+            spans.push(Span::raw(" ".repeat(usize::from(width).saturating_sub(left_width + right_width))));
+            spans.extend(right.spans);
         }
 
         Line::from(spans)
@@ -258,5 +271,16 @@ mod tests {
         assert!(line.spans.len() > 1);
         let rendered = line.spans.iter().map(|span| span.content.as_ref()).collect::<String>();
         assert!(rendered.contains("Approval required"));
+    }
+
+    #[test]
+    fn zero_left_allocation_emits_only_reserved_right_content() {
+        let styles = SessionStyles::new(InlineTheme::default());
+        let widget = FooterWidget::new(&styles).left_status("topic/stable*").right_status("• Build");
+        for (width, expected) in [(0, ""), (6, "• Bui…"), (7, "• Build"), (8, " • Build")] {
+            let line = widget.build_status_line(width);
+            assert_eq!(line.to_string(), expected);
+            assert!(line.width() <= usize::from(width));
+        }
     }
 }

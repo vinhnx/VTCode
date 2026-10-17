@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -206,7 +208,6 @@ async fn apply_skill_command_outcome(
                     Ok(SlashCommandControl::BreakWithReason(reason))
                 }
                 SlashCommandControl::SelectAgent(name) => Ok(SlashCommandControl::SelectAgent(name)),
-                SlashCommandControl::ResumeLatest { show_all } => Ok(SlashCommandControl::ResumeLatest { show_all }),
             }
         }
         SkillCommandOutcome::Error { message } => {
@@ -619,18 +620,18 @@ async fn prompt_text(
     let step = WizardStep {
         title: "Input".to_string(),
         question: question.to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: SKILL_PROMPT_QUESTION_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit input".to_string()),
-        }],
+        items: vec![
+            ui_list::choice(
+                "Submit",
+                Some("Press Tab to type text, then Enter to submit.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: SKILL_PROMPT_QUESTION_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("submit input".to_string()),
+        ],
         completed: false,
         answer: None,
         allow_freeform: true,
@@ -684,110 +685,111 @@ async fn prompt_text(
 
 fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let items = vec![
-        InlineListItem {
-            title: "Browse skills".to_string(),
-            subtitle: Some("Open the skills catalog and per-skill actions".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}browse"))),
-            search_value: Some("browse catalog skills".to_string()),
-        },
-        InlineListItem {
-            title: "List skills".to_string(),
-            subtitle: Some("Show all discoverable skills".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}list"))),
-            search_value: Some("list skills".to_string()),
-        },
-        InlineListItem {
-            title: "Search skills".to_string(),
-            subtitle: Some("Filter skills by name or description".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}search"))),
-            search_value: Some("search query".to_string()),
-        },
-        InlineListItem {
-            title: "Create skill".to_string(),
-            subtitle: Some("Scaffold a new skill template".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}create"))),
-            search_value: Some("create scaffold".to_string()),
-        },
-        InlineListItem {
-            title: "Enable skill".to_string(),
-            subtitle: Some("Load a skill into the current session".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}load"))),
-            search_value: Some("enable load".to_string()),
-        },
-        InlineListItem {
-            title: "Disable skill".to_string(),
-            subtitle: Some("Unload an enabled skill from this session".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}unload"))),
-            search_value: Some("disable unload".to_string()),
-        },
-        InlineListItem {
-            title: "View skill details".to_string(),
-            subtitle: Some("Show metadata and instructions".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}info"))),
-            search_value: Some("details info metadata".to_string()),
-        },
-        InlineListItem {
-            title: "Run skill".to_string(),
-            subtitle: Some("Execute a skill with optional input".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}use"))),
-            search_value: Some("run execute use".to_string()),
-        },
-        InlineListItem {
-            title: "Validate skill".to_string(),
-            subtitle: Some("Validate skill structure".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}validate"))),
-            search_value: Some("validate lint".to_string()),
-        },
-        InlineListItem {
-            title: "Package skill".to_string(),
-            subtitle: Some("Package a skill to .skill file".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}package"))),
-            search_value: Some("package bundle".to_string()),
-        },
-        InlineListItem {
-            title: "Regenerate index".to_string(),
-            subtitle: Some("Rebuild skills index file".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}regen"))),
-            search_value: Some("index regenerate".to_string()),
-        },
-        InlineListItem {
-            title: "Show help".to_string(),
-            subtitle: Some("Display `/skills` command help".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}help"))),
-            search_value: Some("help commands".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close skills manager".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(SKILL_ACTION_BACK.to_string())),
-            search_value: Some("back close".to_string()),
-        },
+        ui_list::group_header("Actions"),
+        ui_list::action(
+            "Browse skills",
+            "Open the skills catalog and per-skill actions".to_string(),
+            Some("Recommended".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}browse"))),
+        )
+        .with_search_value("browse catalog skills".to_string()),
+        ui_list::action(
+            "List skills",
+            "Show all discoverable skills".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}list"))),
+        )
+        .with_search_value("list skills".to_string()),
+        ui_list::action(
+            "Search skills",
+            "Filter skills by name or description".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}search"))),
+        )
+        .with_search_value("search query".to_string()),
+        ui_list::action(
+            "Create skill",
+            "Scaffold a new skill template".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}create"))),
+        )
+        .with_search_value("create scaffold".to_string()),
+        ui_list::action(
+            "Enable skill",
+            "Load a skill into the current session".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}load"))),
+        )
+        .with_search_value("enable load".to_string()),
+        ui_list::action(
+            "Disable skill",
+            "Unload an enabled skill from this session".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}unload"))),
+        )
+        .with_search_value("disable unload".to_string()),
+        ui_list::action(
+            "View skill details",
+            "Show metadata and instructions".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}info"))),
+        )
+        .with_search_value("details info metadata".to_string()),
+        ui_list::action(
+            "Run skill",
+            "Execute a skill with optional input".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}use"))),
+        )
+        .with_search_value("run execute use".to_string()),
+        ui_list::action(
+            "Validate skill",
+            "Validate skill structure".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}validate"))),
+        )
+        .with_search_value("validate lint".to_string()),
+        ui_list::action(
+            "Package skill",
+            "Package a skill to .skill file".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}package"))),
+        )
+        .with_search_value("package bundle".to_string()),
+        ui_list::action(
+            "Regenerate index",
+            "Rebuild skills index file".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}regen"))),
+        )
+        .with_search_value("index regenerate".to_string()),
+        ui_list::action(
+            "Show help",
+            "Display `/skills` command help".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{SKILL_ACTION_PREFIX}help"))),
+        )
+        .with_search_value("help commands".to_string()),
+        ui_list::action(
+            "Back",
+            "Close skills manager".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(SKILL_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back close".to_string()),
     ];
 
     ctx.renderer.show_list_modal(
@@ -802,24 +804,28 @@ fn show_skills_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
 fn show_skills_list_modal(ctx: &mut SlashCommandContext<'_>, entries: &[InteractiveSkillEntry]) {
     let mut items: Vec<InlineListItem> = entries
         .iter()
-        .map(|entry| InlineListItem {
-            title: entry.name.clone(),
-            subtitle: Some(entry.description.clone()),
-            badge: Some(entry.badge()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_OPEN_PREFIX, entry.name))),
-            search_value: Some(format!("{} {}", entry.name, entry.description)),
+        .map(|entry| {
+            ui_list::action(
+                entry.name.clone(),
+                entry.description.clone(),
+                Some(entry.badge()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_OPEN_PREFIX, entry.name))),
+            )
+            .with_search_value(format!("{} {}", entry.name, entry.description))
         })
         .collect();
 
-    items.push(InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Return to skills actions".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
-        search_value: Some("back".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Back",
+            "Return to skills actions".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
+        )
+        .with_search_value("back".to_string()),
+    );
 
     let selected = entries
         .first()
@@ -846,24 +852,28 @@ fn show_skill_picker_modal(
 ) {
     let mut items: Vec<InlineListItem> = entries
         .iter()
-        .map(|entry| InlineListItem {
-            title: entry.name.clone(),
-            subtitle: Some(entry.description.clone()),
-            badge: Some(entry.badge()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_PICK_PREFIX, entry.name))),
-            search_value: Some(format!("{} {}", entry.name, entry.description)),
+        .map(|entry| {
+            ui_list::action(
+                entry.name.clone(),
+                entry.description.clone(),
+                Some(entry.badge()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_PICK_PREFIX, entry.name))),
+            )
+            .with_search_value(format!("{} {}", entry.name, entry.description))
         })
         .collect();
 
-    items.push(InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Cancel and return".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
-        search_value: Some("back cancel".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Back",
+            "Cancel and return".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(SKILL_PICK_BACK_ACTION.to_string())),
+        )
+        .with_search_value("back cancel".to_string()),
+    );
 
     let selected = entries
         .first()
@@ -885,73 +895,87 @@ fn show_skill_picker_modal(
 fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &InteractiveSkillEntry) {
     let mut items = Vec::new();
     if entry.is_loadable() && entry.loaded {
-        items.push(InlineListItem {
-            title: "Disable for this session".to_string(),
-            subtitle: Some("Unload this skill from the active session".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_DISABLE_PREFIX, entry.name))),
-            search_value: Some("disable unload session".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "Disable for this session",
+                "Unload this skill from the active session".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_DISABLE_PREFIX, entry.name))),
+            )
+            .with_search_value("disable unload session".to_string()),
+        );
     } else if entry.is_loadable() {
-        items.push(InlineListItem {
-            title: "Enable for this session".to_string(),
-            subtitle: Some("Load this skill into the active session".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_ENABLE_PREFIX, entry.name))),
-            search_value: Some("enable load session".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "Enable for this session",
+                "Load this skill into the active session".to_string(),
+                Some("Recommended".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_ENABLE_PREFIX, entry.name))),
+            )
+            .with_search_value("enable load session".to_string()),
+        );
     }
 
-    items.push(InlineListItem {
-        title: "View details".to_string(),
-        subtitle: Some("Show full skill metadata and instructions".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_INFO_PREFIX, entry.name))),
-        search_value: Some("details info metadata".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "View details",
+            "Show full skill metadata and instructions".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_INFO_PREFIX, entry.name))),
+        )
+        .with_search_value("details info metadata".to_string()),
+    );
 
-    items.push(InlineListItem {
-        title: "Run skill".to_string(),
-        subtitle: Some("Execute this skill with optional input".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_USE_PREFIX, entry.name))),
-        search_value: Some("run execute use".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Run skill",
+            "Execute this skill with optional input".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_USE_PREFIX, entry.name))),
+        )
+        .with_search_value("run execute use".to_string()),
+    );
 
     if entry.supports_validation() {
-        items.push(InlineListItem {
-            title: "Validate".to_string(),
-            subtitle: Some("Validate this skill structure".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_VALIDATE_PREFIX, entry.name))),
-            search_value: Some("validate".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "Validate",
+                "Validate this skill structure".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_VALIDATE_PREFIX, entry.name))),
+            )
+            .with_search_value("validate".to_string()),
+        );
     }
 
     if entry.supports_packaging() {
-        items.push(InlineListItem {
-            title: "Package".to_string(),
-            subtitle: Some("Package this skill to .skill".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_PACKAGE_PREFIX, entry.name))),
-            search_value: Some("package bundle".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "Package",
+                "Package this skill to .skill".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", SKILL_PACKAGE_PREFIX, entry.name))),
+            )
+            .with_search_value("package bundle".to_string()),
+        );
     }
 
-    items.push(InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Return to skills list".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(SKILL_BACK_ACTION.to_string())),
-        search_value: Some("back return".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Back",
+            "Return to skills list".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(SKILL_BACK_ACTION.to_string())),
+        )
+        .with_search_value("back return".to_string()),
+    );
 
     let default_selection = items.first().and_then(|item| item.selection.clone());
     let title = format!("Skill: {}", entry.name);

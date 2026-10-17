@@ -10,7 +10,6 @@ use vtcode_core::tools::dominant_workspace_language;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 
 use crate::agent::runloop::git::GitStatusSummary;
-use crate::agent::runloop::unified::session_setup::preferred_display_language_for_workspace;
 
 #[allow(
     clippy::too_many_arguments,
@@ -46,8 +45,13 @@ pub(super) async fn run_status_line_command(
         stdin
             .write_all(&payload_bytes)
             .await
+            .or_else(handle_status_stdin_error)
             .context("failed to write status line payload")?;
-        stdin.shutdown().await.context("failed to close status line command stdin")?;
+        stdin
+            .shutdown()
+            .await
+            .or_else(handle_status_stdin_error)
+            .context("failed to close status line command stdin")?;
     }
 
     let timeout_ms = std::cmp::max(config.command_timeout_ms, 1);
@@ -91,6 +95,16 @@ pub(super) async fn run_status_line_command(
         .map(|line| strip_ansi(&line));
 
     Ok(first_line)
+}
+
+fn handle_status_stdin_error(error: std::io::Error) -> std::io::Result<()> {
+    // Commands may ignore the optional JSON input. Their exit status and
+    // timeout still determine success after the pipe has closed.
+    if error.kind() == std::io::ErrorKind::BrokenPipe {
+        Ok(())
+    } else {
+        Err(error)
+    }
 }
 
 #[derive(Serialize)]
@@ -139,7 +153,7 @@ impl StatusLineCommandPayload {
                 current_dir: workspace_path.clone(),
                 project_dir: workspace_path,
                 dominant_language: dominant_workspace_language(workspace),
-                active_language: preferred_display_language_for_workspace(workspace),
+                active_language: dominant_workspace_language(workspace),
             },
             model: StatusLineModel {
                 id: model_id.to_string(),
@@ -189,13 +203,89 @@ impl StatusLineGit {
 
 #[cfg(test)]
 mod tests {
-    use super::StatusLineCommandPayload;
+    use super::{StatusLineCommandPayload, handle_status_stdin_error, run_status_line_command};
     use serde_json::Value;
     use serial_test::serial;
     use std::fs;
     use tempfile::TempDir;
-    use vtcode_commons::env_lock::{remove_var as remove_env_var, set_var as set_env_var};
-    use vtcode_core::ide_context::{IDE_CONTEXT_ENV_VAR, LEGACY_VSCODE_CONTEXT_ENV_VAR};
+
+    #[tokio::test]
+    async fn custom_command_may_ignore_json_input_without_hiding_process_failures() {
+        let workspace = TempDir::new().unwrap();
+        let config = vtcode_core::config::StatusLineConfig { command_timeout_ms: 2_000, ..Default::default() };
+        // Exceed the pipe capacity so closing stdin cannot race a completed write.
+        let model_id = "m".repeat(2 * 1024 * 1024);
+        let output = run_status_line_command(
+            "exec 0<&-; printf 'custom status\\n'",
+            workspace.path(),
+            &model_id,
+            "Model",
+            "low",
+            None,
+            &config,
+        )
+        .await
+        .unwrap();
+        assert_eq!(output.as_deref(), Some("custom status"));
+        let output =
+            run_status_line_command("exec 0<&-; exit 0", workspace.path(), &model_id, "Model", "low", None, &config)
+                .await
+                .unwrap();
+        assert!(output.is_none());
+        let error =
+            run_status_line_command("exec 0<&-; exit 7", workspace.path(), &model_id, "Model", "low", None, &config)
+                .await
+                .unwrap_err();
+        assert!(error.to_string().contains("exited with status"), "{error:#}");
+        let config = vtcode_core::config::StatusLineConfig { command_timeout_ms: 20, ..Default::default() };
+        let error = run_status_line_command(
+            "exec 0<&-; exec sleep 1",
+            workspace.path(),
+            &model_id,
+            "Model",
+            "low",
+            None,
+            &config,
+        )
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("timed out after 20ms"), "{error:#}");
+    }
+
+    #[test]
+    fn status_stdin_tolerates_only_broken_pipe_errors() {
+        assert!(handle_status_stdin_error(std::io::Error::from(std::io::ErrorKind::BrokenPipe)).is_ok());
+        for kind in [
+            std::io::ErrorKind::PermissionDenied,
+            std::io::ErrorKind::ConnectionReset,
+        ] {
+            let error = handle_status_stdin_error(std::io::Error::from(kind)).unwrap_err();
+            assert_eq!(error.kind(), kind);
+        }
+    }
+
+    #[tokio::test]
+    async fn custom_commands_can_still_read_the_json_payload() {
+        let workspace = TempDir::new().unwrap();
+        let config = vtcode_core::config::StatusLineConfig { command_timeout_ms: 2_000, ..Default::default() };
+        let output = run_status_line_command(
+            "cat > status-payload.json; printf 'payload read\\n'",
+            workspace.path(),
+            "fixture-model",
+            "Fixture Model",
+            "high",
+            None,
+            &config,
+        )
+        .await
+        .unwrap();
+        assert_eq!(output.as_deref(), Some("payload read"));
+        let value: Value =
+            serde_json::from_str(&fs::read_to_string(workspace.path().join("status-payload.json")).unwrap()).unwrap();
+        assert_eq!(value["hook_event_name"], "Status");
+        assert_eq!(value["model"]["id"], "fixture-model");
+        assert_eq!(value["runtime"]["reasoning_effort"], "high");
+    }
 
     #[test]
     #[serial]
@@ -204,88 +294,10 @@ mod tests {
         fs::create_dir_all(workspace.path().join("src")).expect("create src");
         fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
 
-        remove_env_var(IDE_CONTEXT_ENV_VAR);
-        remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
-
         let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
         let value = serde_json::to_value(payload).expect("serialize payload");
 
         assert_eq!(value["workspace"]["dominant_language"], Value::String("Rust".to_string()));
         assert_eq!(value["workspace"]["active_language"], Value::String("Rust".to_string()));
-
-        remove_env_var(IDE_CONTEXT_ENV_VAR);
-        remove_env_var(LEGACY_VSCODE_CONTEXT_ENV_VAR);
-    }
-
-    #[test]
-    #[serial]
-    fn payload_prefers_active_editor_language_from_snapshot() {
-        let workspace = TempDir::new().expect("workspace tempdir");
-        fs::create_dir_all(workspace.path().join("src")).expect("create src");
-        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
-        let snapshot_path = workspace.path().join("snapshot.json");
-        fs::write(
-            &snapshot_path,
-            format!(
-                r#"{{
-                    "version": 1,
-                    "provider_family": "generic",
-                    "workspace_root": "{}",
-                    "active_file": {{
-                        "path": "{}/script.py",
-                        "language_id": "python",
-                        "dirty": false,
-                        "truncated": false
-                    }}
-                }}"#,
-                workspace.path().display(),
-                workspace.path().display()
-            ),
-        )
-        .expect("write snapshot");
-
-        set_env_var(IDE_CONTEXT_ENV_VAR, &snapshot_path);
-
-        let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
-        let value = serde_json::to_value(payload).expect("serialize payload");
-
-        assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));
-
-        remove_env_var(IDE_CONTEXT_ENV_VAR);
-    }
-
-    #[test]
-    #[serial]
-    fn payload_prefers_workspace_ide_context_snapshot_without_env() {
-        let workspace = TempDir::new().expect("workspace tempdir");
-        fs::create_dir_all(workspace.path().join("src")).expect("create src");
-        fs::create_dir_all(workspace.path().join(".vtcode")).expect("create .vtcode");
-        fs::write(workspace.path().join("src/lib.rs"), "fn alpha() {}\n").expect("write rust");
-        fs::write(
-            workspace.path().join(".vtcode/ide-context.json"),
-            format!(
-                r#"{{
-                    "version": 1,
-                    "provider_family": "vscode_compatible",
-                    "workspace_root": "{}",
-                    "active_file": {{
-                        "path": "{}/script.py",
-                        "language_id": "python",
-                        "dirty": false,
-                        "truncated": false
-                    }}
-                }}"#,
-                workspace.path().display(),
-                workspace.path().display()
-            ),
-        )
-        .expect("write snapshot");
-
-        remove_env_var(IDE_CONTEXT_ENV_VAR);
-
-        let payload = StatusLineCommandPayload::new(workspace.path(), "model", "Model", "low", None);
-        let value = serde_json::to_value(payload).expect("serialize payload");
-
-        assert_eq!(value["workspace"]["active_language"], Value::String("Python".to_string()));
     }
 }

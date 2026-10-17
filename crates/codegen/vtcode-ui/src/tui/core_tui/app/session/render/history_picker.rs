@@ -43,8 +43,11 @@ struct HistoryPickerPanelModel {
     selected: Option<usize>,
     offset: usize,
     visible_rows: usize,
-    base_style: Style,
     highlight_style: Style,
+    /// Muted-by-color row style (theme secondary), never `Modifier::DIM` —
+    /// ratatui's `Cell::set_style` only inserts modifiers, so a DIM painted
+    /// over the panel sticks to every glyph drawn on top of it.
+    muted_style: Style,
 }
 
 impl SharedListWidgetModel for HistoryPickerPanelModel {
@@ -54,22 +57,22 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
                 InlineListRow::single(
                     Line::from(Span::styled(
                         "No history matches".to_owned(),
-                        self.base_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
+                        self.muted_style.add_modifier(Modifier::ITALIC),
                     )),
-                    self.base_style.add_modifier(Modifier::DIM),
+                    self.muted_style,
                 ),
                 1_u16,
             )];
         }
 
-        let dim_style = self.base_style.add_modifier(Modifier::DIM);
+        let muted_style = self.muted_style;
 
         self.entries
             .iter()
             .enumerate()
             .map(|(idx, (content, time_label))| {
                 let is_selected = self.selected == Some(idx);
-                // Reserve space for the "│ " selection gutter so rows never
+                // Reserve space for the "┃ " selection gutter so rows never
                 // overflow the panel width and wrap.
                 let max_chars = (width as usize).saturating_sub(selection_padding_width());
 
@@ -86,12 +89,12 @@ impl SharedListWidgetModel for HistoryPickerPanelModel {
                     display_text
                 };
                 let cursor = list_cursor(is_selected);
-                let cursor_style = if is_selected { self.highlight_style } else { dim_style };
-                let text_style = if is_selected { self.highlight_style } else { dim_style };
+                let cursor_style = if is_selected { self.highlight_style } else { muted_style };
+                let text_style = if is_selected { self.highlight_style } else { muted_style };
                 (
                     InlineListRow::single(
                         Line::from(vec![Span::styled(cursor, cursor_style), Span::styled(truncated, text_style)]),
-                        dim_style,
+                        muted_style,
                     ),
                     1_u16,
                 )
@@ -167,7 +170,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         )
     };
     let default_style = default_style(session);
-    let dim_style = default_style.add_modifier(Modifier::DIM);
+    let muted_style = session.core.styles.muted_text_style();
     let highlight_style = modal_list_highlight_style(session);
     let sections = SharedListPanelSections {
         header: vec![Line::from(Span::styled("History".to_owned(), highlight_style))],
@@ -191,8 +194,8 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         selected: selected_idx,
         offset: current_offset,
         visible_rows: 0,
-        base_style: default_style,
         highlight_style,
+        muted_style,
     };
 
     render_shared_list_panel(
@@ -200,7 +203,7 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
         area,
         sections,
         SharedListPanelStyles {
-            base_style: dim_style,
+            base_style: default_style,
             selected_style: Some(highlight_style),
             text_style: default_style,
             divider_style: None,

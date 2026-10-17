@@ -1,14 +1,12 @@
 use std::{collections::VecDeque, io, time::Duration};
 
-use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+use mio::{Events, Interest, Poll, Token, unix::SourceFd};
 use signal_hook_mio::v1_0::Signals;
 
 #[cfg(feature = "event-stream")]
 use crate::event::sys::Waker;
-use crate::event::{
-    source::EventSource, sys::unix::parse::parse_event, timeout::PollTimeout, Event, InternalEvent,
-};
-use crate::terminal::sys::file_descriptor::{tty_fd, FileDesc};
+use crate::event::{Event, InternalEvent, source::EventSource, sys::unix::parse::parse_event, timeout::PollTimeout};
+use crate::terminal::sys::file_descriptor::{FileDesc, tty_fd};
 
 // Tokens to identify file descriptor
 const TTY_TOKEN: Token = Token(0);
@@ -96,10 +94,8 @@ impl EventSource for UnixInternalEventSource {
                             match self.tty_fd.read(&mut self.tty_buffer) {
                                 Ok(read_count) => {
                                     if read_count > 0 {
-                                        self.parser.advance(
-                                            &self.tty_buffer[..read_count],
-                                            read_count == TTY_BUFFER_SIZE,
-                                        );
+                                        self.parser
+                                            .advance(&self.tty_buffer[..read_count], read_count == TTY_BUFFER_SIZE);
                                     }
                                 }
                                 Err(e) => {
@@ -129,9 +125,7 @@ impl EventSource for UnixInternalEventSource {
                             // it's a really long time from the mio, async-std/tokio executor, ...
                             // point of view.
                             let new_size = crate::terminal::size()?;
-                            return Ok(Some(InternalEvent::Event(Event::Resize(
-                                new_size.0, new_size.1,
-                            ))));
+                            return Ok(Some(InternalEvent::Event(Event::Resize(new_size.0, new_size.1))));
                         }
                     }
                     #[cfg(feature = "event-stream")]

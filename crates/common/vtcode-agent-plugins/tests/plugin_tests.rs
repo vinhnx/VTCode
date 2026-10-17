@@ -474,3 +474,259 @@ fn remove_refuses_path_traversal_in_name() {
 
     assert!(sentinel.is_file(), "traversal remove() deleted a file outside the plugins root");
 }
+
+#[test]
+fn reject_cross_variant_fields() {
+    // Closed variants (§7.2.1): a stdio-only field on http, or vice versa,
+    // invalidates only that entry.
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "stdio_with_url": {"type": "stdio", "command": "echo", "url": "https://example.com/mcp"},
+            "http_with_command": {"type": "streamable-http", "url": "https://example.com/mcp", "command": "echo"},
+            "http_with_cwd": {"type": "streamable-http", "url": "https://example.com/mcp", "cwd": "./data"},
+            "good_stdio": {"type": "stdio", "command": "echo"},
+            "good_http": {"type": "streamable-http", "url": "https://example.com/mcp"}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(!config.servers.contains_key("stdio_with_url"));
+    assert!(!config.servers.contains_key("http_with_command"));
+    assert!(!config.servers.contains_key("http_with_cwd"));
+    assert!(config.servers.contains_key("good_stdio"));
+    assert!(config.servers.contains_key("good_http"));
+}
+
+#[test]
+fn reject_invalid_command_tokens() {
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "shell_string": {"type": "stdio", "command": "npx --yes"},
+            "absolute_path": {"type": "stdio", "command": "/usr/bin/python3"},
+            "slash_bare": {"type": "stdio", "command": "bin/server"},
+            "good_bare": {"type": "stdio", "command": "npx"},
+            "good_relative": {"type": "stdio", "command": "./bin/server"}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(!config.servers.contains_key("shell_string"), "shell string must be rejected");
+    assert!(!config.servers.contains_key("absolute_path"), "absolute path must use ./");
+    assert!(!config.servers.contains_key("slash_bare"), "bare with slash must use ./");
+    assert!(config.servers.contains_key("good_bare"));
+    assert!(config.servers.contains_key("good_relative"));
+}
+
+#[test]
+fn reject_invalid_cwd_forms() {
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "bare": {"type": "stdio", "command": "echo", "cwd": "data"},
+            "absolute": {"type": "stdio", "command": "echo", "cwd": "/tmp"},
+            "other_var": {"type": "stdio", "command": "echo", "cwd": "${HOME}/x"},
+            "good_dot": {"type": "stdio", "command": "echo", "cwd": "./data"},
+            "good_root": {"type": "stdio", "command": "echo", "cwd": "${PLUGIN_ROOT}"},
+            "good_root_sub": {"type": "stdio", "command": "echo", "cwd": "${PLUGIN_ROOT}/sub"},
+            "good_data": {"type": "stdio", "command": "echo", "cwd": "${PLUGIN_DATA}"},
+            "good_data_sub": {"type": "stdio", "command": "echo", "cwd": "${PLUGIN_DATA}/sub"}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(!config.servers.contains_key("bare"));
+    assert!(!config.servers.contains_key("absolute"));
+    assert!(!config.servers.contains_key("other_var"));
+    assert!(config.servers.contains_key("good_dot"));
+    assert!(config.servers.contains_key("good_root"));
+    assert!(config.servers.contains_key("good_root_sub"));
+    assert!(config.servers.contains_key("good_data"));
+    assert!(config.servers.contains_key("good_data_sub"));
+}
+
+#[test]
+fn reject_reserved_env_keys() {
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "bad_root": {"type": "stdio", "command": "echo", "env": {"PLUGIN_ROOT": "/tmp"}},
+            "bad_data": {"type": "stdio", "command": "echo", "env": {"PLUGIN_DATA": "/tmp"}},
+            "good": {"type": "stdio", "command": "echo", "env": {"DATA_DIR": "${PLUGIN_DATA}/db"}}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(!config.servers.contains_key("bad_root"));
+    assert!(!config.servers.contains_key("bad_data"));
+    assert!(config.servers.contains_key("good"));
+}
+
+#[test]
+fn reject_invalid_remote_urls() {
+    // Asymmetric: https non-loopback loads, http non-loopback does not;
+    // http loopback (localhost, 127.x, ::1) loads.
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "https_ok": {"type": "streamable-http", "url": "https://example.com/mcp"},
+            "http_public": {"type": "streamable-http", "url": "http://example.com/mcp"},
+            "http_localhost": {"type": "streamable-http", "url": "http://localhost:4317/mcp"},
+            "http_127": {"type": "streamable-http", "url": "http://127.0.0.1:8000/mcp"},
+            "http_127_range": {"type": "streamable-http", "url": "http://127.12.34.56/mcp"},
+            "http_128": {"type": "streamable-http", "url": "http://128.0.0.1/mcp"},
+            "http_v6": {"type": "streamable-http", "url": "http://[::1]/mcp"},
+            "userinfo": {"type": "streamable-http", "url": "https://user@example.com/mcp"},
+            "fragment": {"type": "streamable-http", "url": "https://example.com/mcp#frag"},
+            "relative": {"type": "streamable-http", "url": "/mcp"}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(config.servers.contains_key("https_ok"));
+    assert!(!config.servers.contains_key("http_public"), "non-loopback http must require https");
+    assert!(config.servers.contains_key("http_localhost"));
+    assert!(config.servers.contains_key("http_127"));
+    assert!(config.servers.contains_key("http_127_range"), "127/8 is loopback");
+    assert!(!config.servers.contains_key("http_128"), "128.x is not loopback");
+    assert!(config.servers.contains_key("http_v6"));
+    assert!(!config.servers.contains_key("userinfo"), "userinfo must be rejected");
+    assert!(!config.servers.contains_key("fragment"), "fragment must be rejected");
+    assert!(!config.servers.contains_key("relative"), "relative url must be rejected");
+}
+
+#[test]
+fn reject_invalid_headers() {
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "bad_name": {"type": "streamable-http", "url": "https://example.com/mcp", "headers": {"Bad Name": "v"}},
+            "bad_value": {"type": "streamable-http", "url": "https://example.com/mcp", "headers": {"X-Ok": "a\nb"}},
+            "good": {"type": "streamable-http", "url": "https://example.com/mcp", "headers": {"X-Tenant": "public"}}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(!config.servers.contains_key("bad_name"), "header name with space must be rejected");
+    assert!(!config.servers.contains_key("bad_value"), "header value with newline must be rejected");
+    assert!(config.servers.contains_key("good"));
+}
+
+#[test]
+fn expand_placeholders_is_single_pass() {
+    // Text introduced by replacement must not be rescanned (§9.2).
+    let root = PathBuf::from("/r/${PLUGIN_DATA}");
+    let data = PathBuf::from("/d");
+    let expanded = expand_placeholders("${PLUGIN_ROOT}/a", &root, &data);
+    assert_eq!(expanded, "/r/${PLUGIN_DATA}/a", "replacement text must stay literal");
+    let expanded = expand_placeholders("${PLUGIN_DATA}/${PLUGIN_ROOT}", &root, &data);
+    assert_eq!(expanded, "/d//r/${PLUGIN_DATA}");
+}
+
+#[test]
+fn default_plugin_data_lives_outside_package() {
+    let dir = default_plugin_data_dir("my-plugin");
+    let mut parts: Vec<_> = dir.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    assert!(parts.len() >= 2, "data dir must have parent components: {}", dir.display());
+    let tail = parts.split_off(parts.len() - 2);
+    assert_eq!(tail, vec!["plugin-data".to_string(), "my-plugin".to_string()]);
+    // Must not be inside a hypothetical package root.
+    let package = PathBuf::from("/tmp/pkg/my-plugin");
+    assert!(!dir.starts_with(&package));
+}
+
+#[test]
+fn resolve_cwd_rejects_dotdot_escape() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("plugin");
+    std::fs::create_dir_all(&root).unwrap();
+    let data = tmp.path().join("plugin-data");
+    std::fs::create_dir_all(&data).unwrap();
+    // `${PLUGIN_ROOT}/../evil` passes the syntactic form check but must fail
+    // containment after expansion.
+    assert!(resolve_cwd(Some("${PLUGIN_ROOT}/../evil"), &root, &data).is_err());
+    assert!(resolve_cwd(Some("${PLUGIN_DATA}/../sibling"), &root, &data).is_err());
+    assert!(resolve_cwd(Some("./ok-subdir"), &root, &data).is_ok());
+}
+
+#[test]
+fn uppercase_scheme_is_accepted() {
+    let content = r#"{
+        "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        "mcpServers": {
+            "upper": {"type": "streamable-http", "url": "HTTPS://example.com/mcp"}
+        }
+    }"#;
+    let config = McpConfig::parse(content).unwrap();
+    assert!(config.servers.contains_key("upper"), "scheme must be case-insensitive");
+}
+
+#[test]
+fn reject_bare_directory_command() {
+    assert!(validate_command_token("./").is_err());
+    assert!(validate_command_token("./.").is_err());
+    assert!(validate_command_token("npx").is_ok());
+    assert!(validate_command_token("./bin/server").is_ok());
+}
+
+#[test]
+fn duplicate_skill_names_keep_first() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("plugin");
+    std::fs::create_dir_all(root.join("skills/a")).unwrap();
+    std::fs::create_dir_all(root.join("skills/b")).unwrap();
+    std::fs::write(
+        root.join("plugin.json"),
+        r#"{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "dup-test"}"#,
+    )
+    .unwrap();
+    for dir in ["a", "b"] {
+        std::fs::write(
+            root.join(format!("skills/{dir}/SKILL.md")),
+            "---\nname: same-name\ndescription: dup skill\n---\n# Body\n",
+        )
+        .unwrap();
+    }
+    let plugin = LoadedPlugin::load_from_dir(&root).unwrap();
+    assert_eq!(plugin.skills.len(), 1, "duplicate manifest names must dedup to first");
+    assert_eq!(plugin.skills[0].name, "same-name");
+}
+
+#[test]
+fn skill_dir_mismatch_warns_but_loads() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("plugin");
+    std::fs::create_dir_all(root.join("skills/renamed-dir")).unwrap();
+    std::fs::write(
+        root.join("plugin.json"),
+        r#"{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "mismatch-test"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("skills/renamed-dir/SKILL.md"),
+        "---\nname: original-name\ndescription: renamed on install\n---\n# Body\n",
+    )
+    .unwrap();
+    let plugin = LoadedPlugin::load_from_dir(&root).unwrap();
+    assert_eq!(plugin.skills.len(), 1);
+    assert_eq!(plugin.skills[0].name, "original-name");
+    assert_eq!(plugin.skills[0].dir_name, "renamed-dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_symlink_escape_is_isolated() {
+    use std::os::unix::fs::symlink;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("plugin");
+    std::fs::create_dir_all(root.join("skills/good")).unwrap();
+    std::fs::write(
+        root.join("plugin.json"),
+        r#"{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "escape-test"}"#,
+    )
+    .unwrap();
+    std::fs::write(root.join("skills/good/SKILL.md"), "---\nname: good\ndescription: good skill\n---\n# Body\n")
+        .unwrap();
+    let outside = tmp.path().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("SKILL.md"), "---\nname: evil\ndescription: evil\n---\n# Body\n").unwrap();
+    symlink(&outside, root.join("skills/evil")).unwrap();
+    let plugin = LoadedPlugin::load_from_dir(&root).unwrap();
+    assert!(plugin.skills.iter().any(|s| s.name == "good"));
+    assert!(!plugin.skills.iter().any(|s| s.name == "evil"), "escaping skill must be skipped");
+}

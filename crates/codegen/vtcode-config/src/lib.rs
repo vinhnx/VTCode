@@ -58,7 +58,6 @@ pub mod debug;
 pub mod defaults;
 pub(crate) mod env_helpers;
 pub mod hooks;
-pub mod ide_context;
 pub mod loader;
 pub mod mcp;
 pub mod models;
@@ -79,6 +78,9 @@ pub mod update;
 pub mod webmcp;
 pub mod workspace_env;
 
+#[cfg(test)]
+mod test_support;
+
 pub use acp::{
     AcpAuthMethod, AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode, WorkspaceTrustLevel,
@@ -86,9 +88,9 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AuthConfig,
-    AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig, BundledSkillsConfig, CommandsConfig,
-    CopilotAuthConfig, CustomProviderApiFormat, CustomProviderCommandAuthConfig, CustomProviderConfig,
+    AgentCodexAppServerConfig, AgentConfig, AgentOnboardingConfig, AgentPromptSuggestionsConfig, AnthropicSpeed,
+    AuthConfig, AutoPermissionConfig, AutoPermissionEnvironmentConfig, AutomationConfig, BundledSkillsConfig,
+    CommandsConfig, CopilotAuthConfig, CustomProviderApiFormat, CustomProviderCommandAuthConfig, CustomProviderConfig,
     CustomProviderProfileConfig, DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
     FullAutoConfig, GatekeeperConfig, MemoriesConfig, MicroVMSandboxConfig, MicroVmProvider, ModelConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, NetworkPolicy, OpenAIAuthConfig, OpenAIConfig, OpenAIHostedShellConfig,
@@ -110,10 +112,6 @@ pub use defaults::{
 pub use hooks::{
     HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig, WorkspaceHookCommand,
     WorkspaceLifecycleHooks,
-};
-pub use ide_context::{
-    IdeContextConfig, IdeContextProviderConfig, IdeContextProviderFamily, IdeContextProviderMode,
-    IdeContextProvidersConfig,
 };
 pub use loader::layers::{
     ConfigLayerEntry, ConfigLayerLoadError, ConfigLayerMetadata, ConfigLayerSource, ConfigLayerStack,
@@ -141,7 +139,7 @@ pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{
     AskQuestionsConfig, ChatConfig, LayoutModeOverride, NotificationBackend, NotificationDeliveryMode, PtyConfig,
     ReasoningDisplayMode, ToolDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode, UiFullscreenConfig,
-    UiNotificationsConfig, UiTranscriptReviewConfig,
+    UiNotificationsConfig, UiProgramStatusConfig, UiTranscriptReviewConfig,
 };
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
@@ -149,8 +147,8 @@ pub use status_line::{StatusLineConfig, StatusLineMode};
 pub use subagents::{
     AgentMode, DiscoveredSubagents, IsolationMode, SubagentDiscoveryInput, SubagentMcpServer, SubagentMemoryScope,
     SubagentRuntimeLimits, SubagentSource, SubagentSpec, builtin_plan_agent, builtin_primary_auto_agent,
-    builtin_primary_build_agent, builtin_primary_duck_agent, builtin_subagents, discover_subagents,
-    load_subagent_from_file,
+    builtin_primary_build_agent, builtin_primary_coordinator_agent, builtin_primary_duck_agent, builtin_subagents,
+    discover_subagents, load_subagent_from_file,
 };
 pub use telemetry::TelemetryConfig;
 pub use terminal_title::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};

@@ -220,6 +220,7 @@ impl ToolHandler for ToolToHandlerAdapter {
 
 /// Default session implementation for adapters.
 pub struct DefaultToolSession {
+    monitor: Arc<crate::tools::edited_file_monitor::EditedFileMonitor>,
     cwd: PathBuf,
     workspace_root: PathBuf,
     shell: String,
@@ -229,17 +230,36 @@ impl DefaultToolSession {
     pub fn new(cwd: PathBuf) -> Self {
         let workspace_root = cwd.clone();
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        Self { cwd, workspace_root, shell }
+        Self {
+            cwd,
+            workspace_root,
+            shell,
+            monitor: Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
+        }
     }
 
     pub fn with_workspace(cwd: PathBuf, workspace_root: PathBuf) -> Self {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
-        Self { cwd, workspace_root, shell }
+        Self {
+            cwd,
+            workspace_root,
+            shell,
+            monitor: Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new()),
+        }
+    }
+    /// Share the same mutation leases and source ledger with registry handlers.
+    pub fn with_file_monitor(mut self, monitor: Arc<crate::tools::edited_file_monitor::EditedFileMonitor>) -> Self {
+        self.monitor = monitor;
+        self
     }
 }
 
 #[async_trait]
 impl ToolSession for DefaultToolSession {
+    fn edited_file_monitor(&self) -> Option<&crate::tools::edited_file_monitor::EditedFileMonitor> {
+        Some(&self.monitor)
+    }
+
     fn cwd(&self) -> &PathBuf {
         &self.cwd
     }

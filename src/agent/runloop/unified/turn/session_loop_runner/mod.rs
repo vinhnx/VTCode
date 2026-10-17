@@ -10,6 +10,7 @@ mod orchestration;
 mod plan_seed;
 mod support;
 mod turn_tail;
+mod verification_recovery;
 
 #[cfg(test)]
 mod tests;

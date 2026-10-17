@@ -45,7 +45,7 @@ impl ToolRegistry {
         let byte_fuse = byte_fuse.min(max_preview_bytes);
         let token_fuse = token_fuse.min(max_output_tokens);
         if serialized.len() > byte_fuse || approx_tokens > token_fuse {
-            let truncated = serialized.chars().take(byte_fuse).collect::<String>();
+            let truncated = truncate_byte_budget(&serialized, byte_fuse, "");
             return json!({
                 "content": truncated,
                 "truncated": true,
@@ -157,53 +157,14 @@ impl ToolRegistry {
         is_mcp: bool,
         max_output_tokens: usize,
     ) -> Value {
-        let processed = self
-            .process_tool_output_inner(tool_name, value, is_mcp, max_output_tokens)
-            .await;
-        self.enforce_turn_preview_budget(processed)
-    }
-
-    /// Enforce the regular aggregate preview budget and small-preview reserve.
-    ///
-    /// Per-result limiting bounds one response. This regular budget covers
-    /// the turn's larger payload bodies; small verifier-sized bodies use a
-    /// separate finite allowance so concise checks remain visible after the
-    /// regular budget is exhausted. On either limit, outcome/control metadata
-    /// remains while payload bodies are truncated or omitted and marked with
-    /// `preview_budget_exhausted`.
-    fn enforce_turn_preview_budget(&self, mut value: Value) -> Value {
-        let budget_bytes =
-            vtcode_config::constants::output_limits::turn_preview_budget_bytes(self.is_planning_active());
-
-        let body_bytes = payload_body_bytes(&value);
-        if body_bytes == 0 {
-            return value;
-        }
-        // Verifier-sized payloads use their own bounded reserve so concise
-        // checks stay visible after earlier large reads without making the
-        // aggregate preview budget unbounded across repeated calls.
-        if body_bytes <= vtcode_config::constants::output_limits::TINY_PREVIEW_BYPASS_BYTES {
-            let tiny_budget = vtcode_config::constants::output_limits::TURN_TINY_PREVIEW_BUDGET_BYTES;
-            let previous = self.charge_turn_tiny_preview_bytes(body_bytes);
-            if previous >= tiny_budget {
-                strip_payload_bodies(&mut value);
-                return value;
-            }
-            if previous.saturating_add(body_bytes) > tiny_budget {
-                truncate_payload_bodies(&mut value, tiny_budget - previous);
-            }
-            return value;
-        }
-
-        let previous = self.charge_turn_preview_bytes(body_bytes);
-        if previous >= budget_bytes {
-            strip_payload_bodies(&mut value);
-            return value;
-        }
-        if previous + body_bytes > budget_bytes {
-            truncate_payload_bodies(&mut value, budget_bytes - previous);
-        }
-        value
+        // Every result gets its own bounded preview. History compaction owns
+        // accumulated context; prior calls must never hide fresh evidence.
+        let max_output_tokens = max_output_tokens.min(
+            vtcode_config::constants::output_limits::turn_preview_budget_bytes(self.is_planning_active())
+                / crate::tools::output_limits::OUTPUT_PREVIEW_CHARS_PER_TOKEN,
+        );
+        self.process_tool_output_inner(tool_name, value, is_mcp, max_output_tokens)
+            .await
     }
 
     async fn process_tool_output_inner(
@@ -223,6 +184,7 @@ impl ToolRegistry {
                         "spool_complete",
                         "spool_pending",
                         "spooled_bytes",
+                        "spool_line_count",
                         "spool_note",
                     ] {
                         object.remove(field);
@@ -235,7 +197,7 @@ impl ToolRegistry {
             // fields. Sanitize those fields before trusting the marker; the
             // marker only describes storage, not the safety of the payload.
             ensure_spooled_reference_metadata(&mut value);
-            if crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
+            if crate::tools::tool_intent::is_command_session_tool(tool_name)
                 && let Some(content) = value
                     .get("preview")
                     .and_then(Value::as_str)
@@ -301,93 +263,6 @@ impl ToolRegistry {
 
         Self::sanitize_tool_output(value, is_mcp, max_output_tokens)
     }
-}
-
-/// Provider-visible payload-body fields counted against the per-turn preview
-/// budget. Outcome/control metadata (exit codes, spool paths, truncation
-/// flags) is never counted and never stripped.
-///
-/// Keep in sync with `TOOL_PREVIEW_BODY_FIELDS` in
-/// `src/agent/runloop/unified/run_loop_context.rs` (same field list, broader
-/// visibility predicate): the two lists must agree on what counts as payload
-/// body or Layer1/Layer2 budget accounting diverges.
-///
-/// Spooler-generated responses carry the same condensed preview in both
-/// `preview` and `output`/`content` for backward compatibility; the runloop
-/// shaping layer (`apply_spool_reference_only`) reduces these to a single
-/// preview-only reference before provider history. Charging sums distinct
-/// payload bodies but counts identical duplicated strings once, so Layer1
-/// accounting matches the post-shaping payload the model actually sees while
-/// still bounding genuinely distinct streams (e.g. `output` plus a separate
-/// `stderr`).
-const PAYLOAD_BODY_FIELDS: [&str; 5] = ["output", "preview", "content", "stdout", "stderr"];
-
-fn payload_body_bytes(value: &Value) -> usize {
-    let mut seen: Vec<&str> = Vec::with_capacity(PAYLOAD_BODY_FIELDS.len());
-    let mut total = 0;
-    for field in PAYLOAD_BODY_FIELDS {
-        let Some(text) = value.get(field).and_then(Value::as_str) else {
-            continue;
-        };
-        if seen.contains(&text) {
-            continue;
-        }
-        seen.push(text);
-        total += text.len();
-    }
-    total
-}
-
-/// Bounded failure signal retained when payload bodies are stripped.
-/// Matches the spooler's `stderr_preview` width so Layer1-stripped failures
-/// carry the same diagnosis the runloop stub preserves for Layer2-only
-/// suppression; without this, a failed command arriving after exhaustion
-/// loses its error text before the runloop can preserve it.
-const STRIP_STDERR_PREVIEW_BYTES: usize = 500;
-
-fn strip_payload_bodies(value: &mut Value) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    let stderr_preview = object
-        .get("stderr")
-        .and_then(Value::as_str)
-        .filter(|stderr| !stderr.trim().is_empty())
-        .map(|stderr| redact_secrets(truncate_byte_budget(stderr, STRIP_STDERR_PREVIEW_BYTES, "... (truncated)")));
-    for field in PAYLOAD_BODY_FIELDS {
-        object.remove(field);
-    }
-    if let Some(preview) = stderr_preview {
-        object.insert("stderr_preview".to_string(), Value::String(preview));
-    }
-    object.insert("preview_budget_exhausted".to_string(), Value::Bool(true));
-}
-
-fn truncate_payload_bodies(value: &mut Value, remaining_bytes: usize) {
-    let mut remaining = remaining_bytes;
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    for field in PAYLOAD_BODY_FIELDS {
-        let Some(text) = object.get(field).and_then(Value::as_str) else {
-            continue;
-        };
-        if remaining == 0 {
-            object.remove(field);
-            continue;
-        }
-        if text.len() <= remaining {
-            remaining -= text.len();
-            continue;
-        }
-        let mut end = remaining;
-        while end > 0 && !text.is_char_boundary(end) {
-            end -= 1;
-        }
-        object.insert(field.to_string(), Value::String(text[..end].to_string()));
-        remaining = 0;
-    }
-    object.insert("preview_budget_exhausted".to_string(), Value::Bool(true));
 }
 
 #[cfg(test)]
@@ -539,219 +414,68 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn turn_preview_budget_truncates_then_strips_payload_bodies() {
+    async fn repeated_previews_and_verifiers_never_exhaust_visibility() {
         let temp = tempfile::tempdir().unwrap();
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
-        // 8 KiB bodies stay under the spooler threshold while nine of them
-        // exceed the 64 KiB aggregate turn budget.
-        let body = "x".repeat(8_000);
-
-        for _ in 0..8 {
-            let result = registry
-                .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-                .await;
-            assert_eq!(result["output"].as_str().unwrap().len(), body.len());
-            assert!(result.get("preview_budget_exhausted").is_none());
+        for planning in [false, true] {
+            if planning {
+                registry.enable_planning();
+            }
+            for index in 0..40 {
+                if index == 20 {
+                    registry.begin_turn_preview_window();
+                }
+                let body = format!("evidence-{index} {}", "x".repeat(8_000));
+                let result = registry
+                    .process_tool_output("grep_file", json!({"success": true, "output": body}), false, 100_000)
+                    .await;
+                assert_eq!(result["output"], body);
+                assert!(result.get("preview_budget_exhausted").is_none());
+                let verifier = registry
+                    .process_tool_output(
+                        "exec_command",
+                        json!({"exit_code": 1, "output": "failed check", "stderr": "error: missing fixture"}),
+                        false,
+                        100_000,
+                    )
+                    .await;
+                assert_eq!(verifier["output"], "failed check");
+                assert_eq!(verifier["stderr"], "error: missing fixture");
+                assert_eq!(verifier["exit_code"], 1);
+            }
         }
-
-        let ninth = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-            .await;
-        let ninth_len = ninth["output"].as_str().unwrap().len();
-        assert!(
-            ninth_len > 0 && ninth_len < body.len(),
-            "ninth response should be truncated to the remaining turn budget, got {ninth_len}"
-        );
-        assert_eq!(ninth["preview_budget_exhausted"], true);
-
-        let tenth = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": body }), false, 100_000)
-            .await;
-        assert!(tenth.get("output").is_none(), "payload body should be stripped once exhausted");
-        assert_eq!(tenth["preview_budget_exhausted"], true);
-        assert_eq!(tenth["success"], true, "outcome metadata must survive the strip");
     }
 
     #[tokio::test]
-    async fn turn_preview_budget_keeps_verifier_sized_payloads_visible() {
+    async fn producer_spooled_stderr_remains_bounded_and_later_checks_visible() {
         let temp = tempfile::tempdir().unwrap();
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
-        // Exhaust the 64 KiB execution budget with 8 KiB research payloads.
-        let body = "x".repeat(8_000);
-        for _ in 0..9 {
-            registry
-                .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-                .await;
-        }
-        // Small verifier outputs remain visible after the regular budget is
-        // exhausted, but repeated calls consume a separate finite allowance.
-        let verifier = registry
-            .process_tool_output("grep_file", json!({ "success": true, "exit_code": 0, "output": "3" }), false, 100_000)
-            .await;
-        assert_eq!(verifier["output"], "3");
-
-        let body = "v".repeat(vtcode_config::constants::output_limits::TINY_PREVIEW_BYPASS_BYTES);
-        let reserve = vtcode_config::constants::output_limits::TURN_TINY_PREVIEW_BUDGET_BYTES;
-        for _ in 0..(reserve - 1) / body.len() {
-            let tiny = registry
-                .process_tool_output(
-                    "grep_file",
-                    json!({ "success": true, "exit_code": 0, "output": body.clone() }),
-                    false,
-                    100_000,
-                )
-                .await;
-            assert_eq!(tiny["output"].as_str().unwrap().len(), body.len());
-            assert!(tiny.get("preview_budget_exhausted").is_none());
-        }
-
-        let remainder = reserve - 1 - (reserve - 1) / body.len() * body.len();
-        let boundary = registry
+        let result = registry
             .process_tool_output(
-                "grep_file",
-                json!({ "success": true, "exit_code": 0, "output": "v".repeat(remainder) }),
+                "exec_command",
+                json!({
+                    "output_spooled": true, "spool_path": ".vtcode/context/tool_outputs/failure.txt",
+                    "spool_complete": true, "output": "failed", "stderr": "界".repeat(50_000), "exit_code": 1,
+                }),
                 false,
-                100_000,
+                64,
             )
             .await;
-        assert_eq!(boundary["output"].as_str().unwrap().len(), remainder);
-        assert!(boundary.get("preview_budget_exhausted").is_none());
-
-        let exhausted = registry
-            .process_tool_output("grep_file", json!({ "success": true, "exit_code": 0, "output": "4" }), false, 100_000)
+        assert!(result["stderr"].as_str().unwrap().len() <= 64 * 4);
+        assert_eq!(result["exit_code"], 1);
+        assert_eq!(result["spool_path"], ".vtcode/context/tool_outputs/failure.txt");
+        assert!(result.get("preview_budget_exhausted").is_none());
+        let later = registry
+            .process_tool_output("exec_command", json!({"output": "verified", "exit_code": 0}), false, 64)
             .await;
-        assert!(exhausted.get("output").is_none());
-        assert_eq!(exhausted["success"], true);
-        assert_eq!(exhausted["exit_code"], 0);
-        assert_eq!(exhausted["preview_budget_exhausted"], true);
-    }
-
-    #[tokio::test]
-    async fn turn_preview_budgets_reset_between_turns() {
-        let temp = tempfile::tempdir().unwrap();
-        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
-        let body = "x".repeat(8_000);
-
-        for _ in 0..9 {
-            registry
-                .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-                .await;
-        }
-        let tiny_body = "v".repeat(vtcode_config::constants::output_limits::TINY_PREVIEW_BYPASS_BYTES);
-        for _ in 0..vtcode_config::constants::output_limits::TURN_TINY_PREVIEW_BUDGET_BYTES / tiny_body.len() {
-            registry
-                .process_tool_output(
-                    "grep_file",
-                    json!({ "success": true, "output": tiny_body.clone() }),
-                    false,
-                    100_000,
-                )
-                .await;
-        }
-        registry.begin_turn_preview_window();
-
-        let after_reset = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": body }), false, 100_000)
-            .await;
-        assert_eq!(
-            after_reset["output"].as_str().unwrap().len(),
-            body.len(),
-            "a fresh turn window must accept the payload again"
-        );
-        let tiny_after_reset = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": tiny_body }), false, 100_000)
-            .await;
-        assert!(tiny_after_reset.get("output").is_some(), "small-preview reserve must reset per turn");
-    }
-
-    #[tokio::test]
-    async fn planning_preview_budget_holds_twelve_spooled_previews() {
-        let temp = tempfile::tempdir().unwrap();
-        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
-        registry.enable_planning();
-        let body = "x".repeat(8_000);
-
-        for _ in 0..12 {
-            let result = registry
-                .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-                .await;
-            assert_eq!(result["output"].as_str().unwrap().len(), body.len());
-            assert!(result.get("preview_budget_exhausted").is_none());
-        }
-
-        // 96 KiB holds twelve 8_000-byte inline previews (96_000) with 2_304
-        // bytes left: the thirteenth truncates, the fourteenth strips.
-        let thirteenth = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": body.clone() }), false, 100_000)
-            .await;
-        assert_eq!(thirteenth["output"].as_str().unwrap().len(), 2_304);
-        assert_eq!(thirteenth["preview_budget_exhausted"], true);
-
-        let fourteenth = registry
-            .process_tool_output("grep_file", json!({ "success": true, "output": body }), false, 100_000)
-            .await;
-        assert!(fourteenth.get("output").is_none());
-        assert_eq!(fourteenth["preview_budget_exhausted"], true);
+        assert_eq!(later["output"], "verified");
     }
 
     #[test]
-    fn duplicated_spool_preview_fields_charge_once() {
-        // Spooler-generated responses duplicate the condensed preview in both
-        // `preview` and `output`/`content`. Identical strings charge once so
-        // Layer1 matches the single post-shaping payload, while genuinely
-        // distinct streams still sum.
-        let duplicated = json!({
-            "success": true,
-            "preview": "x".repeat(6_000),
-            "output": "x".repeat(6_000),
-            "spool_path": ".vtcode/context/tool_outputs/tool_123.txt"
-        });
-        assert_eq!(payload_body_bytes(&duplicated), 6_000);
-
-        let single = json!({ "success": true, "output": "x".repeat(6_000) });
-        assert_eq!(payload_body_bytes(&single), 6_000);
-
-        let distinct = json!({
-            "success": true,
-            "output": "x".repeat(5_000),
-            "stderr": "e".repeat(3_000)
-        });
-        assert_eq!(payload_body_bytes(&distinct), 8_000);
-
-        let empty = json!({ "success": true, "exit_code": 0 });
-        assert_eq!(payload_body_bytes(&empty), 0);
-    }
-
-    #[test]
-    fn strip_preserves_bounded_stderr_preview() {
-        let mut failed = json!({
-            "success": false,
-            "exit_code": 1,
-            "output": "x".repeat(6_000),
-            "stderr": "error: build failed at foo.rs:42"
-        });
-        strip_payload_bodies(&mut failed);
-        assert!(failed.get("output").is_none());
-        assert!(failed.get("stderr").is_none());
-        assert_eq!(failed["stderr_preview"], "error: build failed at foo.rs:42");
-        assert_eq!(failed["preview_budget_exhausted"], true);
-        assert_eq!(failed["exit_code"], 1);
-
-        let mut long_stderr = json!({
-            "success": false,
-            "exit_code": 1,
-            "output": "x".repeat(6_000),
-            "stderr": "e".repeat(2_000)
-        });
-        strip_payload_bodies(&mut long_stderr);
-        let preview = long_stderr["stderr_preview"].as_str().unwrap();
-        assert!(preview.len() <= STRIP_STDERR_PREVIEW_BYTES + "... (truncated)".len());
-        assert_eq!(long_stderr["preview_budget_exhausted"], true);
-
-        let mut clean = json!({ "success": true, "output": "x".repeat(6_000) });
-        strip_payload_bodies(&mut clean);
-        assert!(clean.get("stderr_preview").is_none());
-        assert_eq!(clean["preview_budget_exhausted"], true);
+    fn sanitization_byte_fuse_bounds_multibyte_text() {
+        let result = ToolRegistry::sanitize_tool_output(json!({"output": "界".repeat(1000)}), false, 64);
+        assert!(result["content"].as_str().unwrap().len() <= 64 * 4);
+        assert_eq!(result["truncated"], true);
     }
 
     #[tokio::test]

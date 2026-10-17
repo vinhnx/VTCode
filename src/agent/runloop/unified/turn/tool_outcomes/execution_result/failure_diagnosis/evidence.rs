@@ -186,6 +186,10 @@ fn is_sensitive_diagnostic_key(key: &str) -> bool {
 }
 
 pub(super) fn bounded_field(value: &str) -> String {
+    bounded_field_with_limit(value, DIAGNOSIS_MAX_FIELD_BYTES)
+}
+
+pub(super) fn bounded_field_with_limit(value: &str, max_bytes: usize) -> String {
     let sanitized = sanitize_diagnostic_text(value);
     let mut single_line = String::with_capacity(sanitized.len());
     for character in sanitized.trim().chars() {
@@ -194,7 +198,7 @@ pub(super) fn bounded_field(value: &str) -> String {
             _ => single_line.push(character),
         }
     }
-    bound_text(single_line.trim(), DIAGNOSIS_MAX_FIELD_BYTES)
+    bound_text(single_line.trim(), max_bytes)
 }
 
 /// Keep tool-provided text inside an evidence boundary even when it contains
@@ -204,7 +208,11 @@ pub(super) fn escape_untrusted_evidence(value: &str) -> String {
 }
 
 pub(super) fn safe_error_text(error: &anyhow::Error) -> String {
-    let sanitized = sanitize_diagnostic_text(&error.to_string());
+    // Preserve the bounded, sanitized cause chain (`{:#}` joins anyhow
+    // contexts with ": ") so auth/param/transport failures stay
+    // distinguishable. Raw bodies/credentials are still stripped by the
+    // sanitizer and the result stays bounded to DIAGNOSIS_MAX_FIELD_BYTES.
+    let sanitized = sanitize_diagnostic_text(&format!("{error:#}"));
     bound_text(sanitized.trim(), DIAGNOSIS_MAX_FIELD_BYTES)
 }
 

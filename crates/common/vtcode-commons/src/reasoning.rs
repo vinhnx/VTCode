@@ -158,6 +158,13 @@ mod tests {
         for value in constants::PARSEABLE_LEVELS {
             let parsed = ReasoningEffortLevel::parse(value).unwrap_or_else(|| panic!("{value} must parse"));
             assert_eq!(parsed.as_str(), *value);
+            // The derived serde wire form must agree with `as_str()` too:
+            // config and provider payloads round-trip through both paths.
+            assert_eq!(
+                serde_json::to_value(parsed).expect("serializes"),
+                serde_json::json!(*value),
+                "serde wire form drifted from as_str() for {parsed:?}"
+            );
         }
         let named = named_levels();
         assert_eq!(named.len(), constants::PARSEABLE_LEVELS.len());

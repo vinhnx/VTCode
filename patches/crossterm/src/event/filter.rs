@@ -28,10 +28,7 @@ impl Filter for KeyboardEnhancementFlagsFilter {
         // a PrimaryDeviceAttributes response. If we receive the PrimaryDeviceAttributes
         // response but not KeyboardEnhancementFlags, the terminal does not support
         // progressive keyboard enhancement.
-        matches!(
-            *event,
-            InternalEvent::KeyboardEnhancementFlags(_) | InternalEvent::PrimaryDeviceAttributes
-        )
+        matches!(*event, InternalEvent::KeyboardEnhancementFlags(_) | InternalEvent::PrimaryDeviceAttributes)
     }
 }
 
@@ -65,8 +62,8 @@ impl Filter for EventFilter {
 #[cfg(unix)]
 mod tests {
     use super::{
-        super::Event, CursorPositionFilter, EventFilter, Filter, InternalEvent,
-        KeyboardEnhancementFlagsFilter, PrimaryDeviceAttributesFilter,
+        super::Event, CursorPositionFilter, EventFilter, Filter, InternalEvent, KeyboardEnhancementFlagsFilter,
+        PrimaryDeviceAttributesFilter,
     };
 
     #[derive(Debug, Clone)]
@@ -87,11 +84,9 @@ mod tests {
     #[test]
     fn test_keyboard_enhancement_status_filter_filters_keyboard_enhancement_status() {
         assert!(!KeyboardEnhancementFlagsFilter.eval(&InternalEvent::Event(Event::Resize(10, 10))));
-        assert!(
-            KeyboardEnhancementFlagsFilter.eval(&InternalEvent::KeyboardEnhancementFlags(
-                crate::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-            ))
-        );
+        assert!(KeyboardEnhancementFlagsFilter.eval(&InternalEvent::KeyboardEnhancementFlags(
+            crate::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )));
         assert!(KeyboardEnhancementFlagsFilter.eval(&InternalEvent::PrimaryDeviceAttributes));
     }
 

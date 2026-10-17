@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use vtcode_commons::preview::{condense_text_bytes, tail_preview_text};
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::core::agent::result_reducers::strip_tui_display_fields;
+use vtcode_core::core::agent::result_reducers::{project_model_tool_result, reduce_tool_result};
 use vtcode_core::llm::provider::{LLMRequest, Message as LlmMessage};
 use vtcode_core::llm::{
     LightweightFeature, collect_single_response, create_provider_for_model_route, resolve_lightweight_route,
@@ -431,7 +431,13 @@ async fn build_tool_response_content(
     // `output` via the pipeline-output path, not from this string, so
     // removing it here is display-safe and avoids feeding redundant display
     // data to the model on every tracker call.
-    let model_output = strip_tui_display_fields(tool_name, output);
+    //
+    // Apply `reduce_tool_result` first so interactive sessions share the
+    // headless AgentRunner's hard caps (32 KiB / 2000 lines on read/exec
+    // bodies). Without this, `raw=true` and summarizer-failure fallbacks
+    // push full tool bodies into history.
+    let reduced = reduce_tool_result(tool_name, output.clone());
+    let model_output = project_model_tool_result(tool_name, args_val, &reduced);
     let output = model_output.as_ref();
 
     // Skip LLM summarization when raw=true is requested
@@ -516,43 +522,43 @@ fn record_prepared_tool_response_metrics(
 }
 
 fn compact_next_continue_args(value: &serde_json::Value) -> serde_json::Value {
-    let Some(obj) = value.as_object() else {
-        return value.clone();
-    };
     let Some(parsed) = PtyContinuationArgs::from_value(value) else {
         return value.clone();
     };
-
-    let mut compacted = match parsed.to_compact_value() {
-        serde_json::Value::Object(map) => map,
-        _ => return value.clone(),
-    };
-    for (key, nested_value) in obj {
-        if key != "action" && key != "session_id" && key != "s" {
-            compacted.insert(key.clone(), nested_value.clone());
-        }
-    }
-    serde_json::Value::Object(compacted)
+    let compacted = parsed.to_compact_value();
+    merge_compaction_extras(value, compacted, &["action", "session_id", "s"])
 }
 
 fn compact_next_read_args(value: &serde_json::Value) -> serde_json::Value {
-    let Some(obj) = value.as_object() else {
-        return value.clone();
-    };
     let Some(parsed) = ReadChunkContinuationArgs::from_value(value) else {
         return value.clone();
     };
+    let compacted = parsed.to_compact_value();
+    merge_compaction_extras(value, compacted, &["path", "offset", "limit", "p", "o", "l"])
+}
 
-    let mut compacted = match parsed.to_compact_value() {
-        serde_json::Value::Object(map) => map,
-        _ => return value.clone(),
+/// Merge non-canonical keys from the original object onto its compact form.
+///
+/// Single home for the clone-and-preserve-extras pattern (DRY): both
+/// continuation shapes compact their identity keys and keep any extra
+/// steering fields verbatim for the harness.
+fn merge_compaction_extras(
+    original: &serde_json::Value,
+    compacted: serde_json::Value,
+    exclude: &[&str],
+) -> serde_json::Value {
+    let Some(obj) = original.as_object() else {
+        return original.clone();
+    };
+    let serde_json::Value::Object(mut map) = compacted else {
+        return original.clone();
     };
     for (key, nested_value) in obj {
-        if !matches!(key.as_str(), "path" | "offset" | "limit" | "p" | "o" | "l") {
-            compacted.insert(key.clone(), nested_value.clone());
+        if !exclude.contains(&key.as_str()) {
+            map.insert(key.clone(), nested_value.clone());
         }
     }
-    serde_json::Value::Object(compacted)
+    serde_json::Value::Object(map)
 }
 
 fn is_false_bool(value: &serde_json::Value) -> bool {
@@ -599,7 +605,12 @@ fn should_keep_exec_success_next_action(obj: &serde_json::Map<String, serde_json
 }
 
 fn should_keep_recoverable_failure_next_action(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
-    is_recoverable_failure_payload(obj) && has_non_empty_string_field(obj, "next_action")
+    let policy_denied = has_error_payload(obj)
+        && obj
+            .get("error_class")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|class| matches!(class, "policy_denied" | "policy_blocked"));
+    (is_recoverable_failure_payload(obj) || policy_denied) && has_non_empty_string_field(obj, "next_action")
 }
 
 fn should_keep_search_recovery_success_next_action(obj: &serde_json::Map<String, serde_json::Value>) -> bool {
@@ -715,6 +726,7 @@ mod tests {
         let output = json!({
             "spool_path": ".vtcode/context/tool_outputs/command.log",
             "spooled_bytes": 38_912,
+            "spool_line_count": 377,
             "preview": "bounded command preview",
             "output": "large output that was written to the spool"
         });
@@ -723,6 +735,7 @@ mod tests {
         let shaped: serde_json::Value = serde_json::from_str(&content).expect("shaped response should be JSON");
         assert_eq!(shaped["spool_path"], output["spool_path"]);
         assert_eq!(shaped["spooled_bytes"], 38_912);
+        assert_eq!(shaped["spool_line_count"], 377);
         assert_eq!(shaped["preview"], "bounded command preview");
         assert!(shaped.get("output").is_none());
     }
@@ -786,5 +799,62 @@ mod tests {
 
         assert_eq!(diagnostics.spooled_results, 0);
         assert_eq!(diagnostics.raw_spooled_bytes, 0);
+    }
+
+    #[tokio::test]
+    async fn raw_tool_response_applies_reduce_tool_result_hard_caps() {
+        // Interactive path must share the headless AgentRunner's reduce caps
+        // even when raw=true skips summarization (the previous leak).
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let stdout = (0..2200).map(|_| "a").collect::<Vec<_>>().join("\n");
+        let output = json!({ "stdout": stdout, "exit_code": 0 });
+        let args = json!({ "cmd": "gen", "raw": true });
+
+        let mut ctx = backing.turn_processing_context();
+        let content = prepare_tool_response_content(&mut ctx, tool_names::UNIFIED_EXEC, &args, &output).await;
+
+        let shaped: serde_json::Value = serde_json::from_str(&content).expect("model content should be JSON");
+        assert_eq!(shaped["is_truncated"], json!(true));
+        let visible = shaped["stdout"].as_str().expect("stdout remains a string");
+        assert!(
+            visible.lines().count() < 2200,
+            "raw=true must still apply reduce_tool_result line caps, got {} lines",
+            visible.lines().count()
+        );
+    }
+
+    #[test]
+    fn compact_continuation_preserves_extras_asymmetrically() {
+        // Asymmetric: continue carries a wait hint extra, read carries a path-extra.
+        // Both must compact identity keys yet keep their own extras verbatim.
+        let continued = compact_next_continue_args(&json!({
+            "session_id": "run-continue-1",
+            "next_hint": "wait-again"
+        }));
+        assert_eq!(continued["s"], json!("run-continue-1"));
+        assert!(continued.get("session_id").is_none());
+        assert_eq!(continued["next_hint"], json!("wait-again"));
+
+        let read = compact_next_read_args(&json!({
+            "path": "a.log",
+            "offset": 81,
+            "limit": 40,
+            "spool_chunked": true
+        }));
+        assert_eq!(read["p"], json!("a.log"));
+        assert_eq!(read["o"], json!(81));
+        assert!(read.get("path").is_none());
+        assert_eq!(read["spool_chunked"], json!(true));
+    }
+
+    #[test]
+    fn compact_continuation_passes_through_unparsable() {
+        // Boundary: non-object and missing-identity inputs must round-trip untouched,
+        // never produce an empty compact object the harness would misread.
+        let scalar = json!("not-an-object");
+        assert_eq!(compact_next_continue_args(&scalar), scalar);
+        let missing = json!({"unrelated": 1});
+        assert_eq!(compact_next_continue_args(&missing), missing);
+        assert_eq!(compact_next_read_args(&missing), missing);
     }
 }

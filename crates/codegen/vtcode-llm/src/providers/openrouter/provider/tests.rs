@@ -12,31 +12,9 @@ use crate::providers::shared::{StreamFragment, extract_data_payload};
 use futures::StreamExt;
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, ResponseTemplate};
 
-fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<String>() {
-        return message.clone();
-    }
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        return (*message).to_string();
-    }
-    "unknown panic".to_string()
-}
-
-async fn start_mock_server_or_skip() -> Option<MockServer> {
-    match tokio::spawn(async { MockServer::start().await }).await {
-        Ok(server) => Some(server),
-        Err(err) if err.is_panic() => {
-            let message = panic_message(err.into_panic());
-            if message.contains("Operation not permitted") || message.contains("PermissionDenied") {
-                return None;
-            }
-            panic!("mock server should start: {message}");
-        }
-        Err(err) => panic!("mock server task should complete: {err}"),
-    }
-}
+use crate::providers::test_support::start_mock_server_or_skip;
 
 fn sample_tool() -> ToolDefinition {
     ToolDefinition::function(
@@ -657,4 +635,220 @@ async fn generate_omits_openrouter_session_identity_when_lineage_blank() {
         .iter()
         .any(|(name, _)| name.as_str().eq_ignore_ascii_case("x-session-id"));
     assert!(!has_header, "blank lineage must omit x-session-id");
+}
+
+fn test_provider_with_attribution(
+    base_url: &str,
+    model: &str,
+    attribution: OpenRouterAttributionConfig,
+) -> OpenRouterProvider {
+    let http_client = reqwest::Client::builder().no_proxy().build().expect("test client should build");
+    let mut provider = OpenRouterProvider::new_with_client(
+        "test-key".to_string(),
+        model.to_string(),
+        http_client,
+        base_url.to_string(),
+        TimeoutsConfig::default(),
+    );
+    provider.attribution = attribution;
+    provider
+}
+
+fn has_attribution_headers(request: &wiremock::Request) -> (bool, bool, bool) {
+    let has_referer = request
+        .headers
+        .iter()
+        .any(|(n, _)| n.as_str().eq_ignore_ascii_case("http-referer"));
+    let has_title = request
+        .headers
+        .iter()
+        .any(|(n, _)| n.as_str().eq_ignore_ascii_case("x-openrouter-title"));
+    let has_categories = request
+        .headers
+        .iter()
+        .any(|(n, _)| n.as_str().eq_ignore_ascii_case("x-openrouter-categories"));
+    (has_referer, has_title, has_categories)
+}
+
+/// Hold the process-wide env lock with `VTCODE_OPENROUTER_ATTRIBUTION` cleared
+/// so ambient CI env cannot flip attribution assertions. Returns the guard
+/// plus the prior value for restoration.
+fn cleared_attribution_env() -> (vtcode_commons::env_lock::EnvGuard, Option<std::ffi::OsString>) {
+    const KEY: &str = env_vars::VTCODE_OPENROUTER_ATTRIBUTION;
+    let guard = vtcode_commons::env_lock::lock();
+    let prior = std::env::var_os(KEY);
+    guard.remove_var(KEY);
+    (guard, prior)
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn generate_omits_attribution_by_default() {
+    let model_id = "openai/gpt-4o-mini";
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let (env, prior) = cleared_attribution_env();
+    let provider = test_provider(&server.uri(), model_id);
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [{"finish_reason": "stop", "message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    provider
+        .generate(LLMRequest {
+            model: model_id.to_string(),
+            messages: vec![Message::user("hi".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("generate");
+
+    let requests = server.received_requests().await.expect("received requests");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(has_attribution_headers(&requests[0]), (false, false, false));
+    env.restore_var(env_vars::VTCODE_OPENROUTER_ATTRIBUTION, prior);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn generate_sends_attribution_when_enabled() {
+    use vtcode_config::core::OpenRouterAttributionConfig;
+
+    let model_id = "openai/gpt-4o-mini";
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let (env, prior) = cleared_attribution_env();
+    let provider = test_provider_with_attribution(
+        &server.uri(),
+        model_id,
+        OpenRouterAttributionConfig { enabled: true, referer: None, title: None },
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [{"finish_reason": "stop", "message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    provider
+        .generate(LLMRequest {
+            model: model_id.to_string(),
+            messages: vec![Message::user("hi".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("generate");
+
+    let requests = server.received_requests().await.expect("received requests");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(has_attribution_headers(&requests[0]), (true, true, true));
+    let headers: Vec<(String, String)> = requests[0]
+        .headers
+        .iter()
+        .map(|(n, v)| (n.as_str().to_ascii_lowercase(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let referer = headers
+        .iter()
+        .find(|(n, _)| n == "http-referer")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("");
+    let categories = headers
+        .iter()
+        .find(|(n, _)| n == "x-openrouter-categories")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("");
+    assert_eq!(referer, OpenRouterAttributionConfig::DEFAULT_REFERER);
+    assert_eq!(categories, "cli-agent");
+    env.restore_var(env_vars::VTCODE_OPENROUTER_ATTRIBUTION, prior);
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn generate_uses_custom_attribution_override_vs_default() {
+    use vtcode_config::core::{OpenRouterAttributionConfig, OpenRouterConfig};
+
+    let model_id = "openai/gpt-4o-mini";
+    let Some(server) = start_mock_server_or_skip().await else {
+        return;
+    };
+    let (env, prior) = cleared_attribution_env();
+    // Exercise the factory-plumbing constructor (`from_config_with_attribution`,
+    // used by `OpenRouterProviderBuild`) rather than setting the field directly.
+    // Asymmetric: custom fork URL + custom title must win over defaults, blank falls back.
+    let provider = OpenRouterProvider::from_config_with_attribution(
+        Some("test-key".to_string()),
+        Some(model_id.to_string()),
+        Some(server.uri()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenRouterConfig {
+            attribution: OpenRouterAttributionConfig {
+                enabled: true,
+                referer: Some("https://example.com/my-fork".to_string()),
+                title: Some("My Fork".to_string()),
+            },
+        }),
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "choices": [{"finish_reason": "stop", "message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    provider
+        .generate(LLMRequest {
+            model: model_id.to_string(),
+            messages: vec![Message::user("hi".to_string())].into(),
+            ..Default::default()
+        })
+        .await
+        .expect("generate");
+
+    let requests = server.received_requests().await.expect("received requests");
+    let headers: Vec<(String, String)> = requests[0]
+        .headers
+        .iter()
+        .map(|(n, v)| (n.as_str().to_ascii_lowercase(), v.to_str().unwrap_or_default().to_string()))
+        .collect();
+    let referer = headers
+        .iter()
+        .find(|(n, _)| n == "http-referer")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("");
+    let title = headers
+        .iter()
+        .find(|(n, _)| n == "x-openrouter-title")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("");
+    assert_eq!(referer, "https://example.com/my-fork");
+    assert_eq!(title, "My Fork");
+
+    // Boundary: blank/whitespace overrides fall back to defaults, not empty headers.
+    let blank = OpenRouterAttributionConfig {
+        enabled: true,
+        referer: Some("   ".to_string()),
+        title: Some("".to_string()),
+    };
+    assert_eq!(blank.resolved_referer(), OpenRouterAttributionConfig::DEFAULT_REFERER);
+    assert_eq!(blank.resolved_title(), OpenRouterAttributionConfig::DEFAULT_TITLE);
+    env.restore_var(env_vars::VTCODE_OPENROUTER_ATTRIBUTION, prior);
 }

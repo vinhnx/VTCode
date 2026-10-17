@@ -460,6 +460,64 @@ fn progress_ticks_follow_reduce_motion_override_and_screen_reader_policy() {
 }
 
 #[test]
+fn animation_tick_needed_only_for_active_or_pending_work() {
+    use crate::tui::core_tui::session::mouse_selection::{DragAutoScroll, DragAutoScrollDirection};
+
+    // A fresh idle session rests — input, commands (new messages), and
+    // crossterm events already render immediately, so no periodic tick is needed.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!session.needs_animation_tick(), "fresh idle session must not need animation ticks");
+
+    // Thinking spinner needs active-rate ticks for its 80ms frames.
+    session.thinking_spinner.start();
+    assert!(session.needs_animation_tick(), "active spinner must need ticks");
+    session.thinking_spinner.stop();
+    assert!(!session.needs_animation_tick(), "stopped spinner must rest");
+
+    // Shimmer status needs ticks for its 33ms frames; clearing it needs one
+    // final tick to repaint, then rests.
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running command: test".to_string()),
+        right: None,
+    });
+    assert!(session.needs_animation_tick(), "shimmer status must need ticks");
+    session.handle_command(InlineCommand::SetInputStatus { left: None, right: None });
+    session.handle_tick();
+    assert!(!session.needs_animation_tick(), "cleared shimmer must rest after final tick");
+
+    // Background work animates the shimmer without marking a turn busy.
+    session.set_background_activity_count(1);
+    assert!(session.needs_animation_tick(), "background work must need ticks");
+    session.set_background_activity_count(0);
+    assert!(!session.needs_animation_tick(), "finished background work must rest");
+
+    // Copy notification expiry needs a tick to clear promptly.
+    session.show_copy_notification(5);
+    assert!(session.needs_animation_tick(), "copy notification must need ticks");
+    session.copy_notification_until = Some(Instant::now().checked_sub(Duration::from_secs(1)).unwrap());
+    session.handle_tick();
+    assert!(!session.needs_animation_tick(), "expired copy notification must rest");
+
+    // Drag auto-scroll needs ticks to step while the pointer rests at an edge.
+    session.drag_auto_scroll = Some(DragAutoScroll {
+        direction: DragAutoScrollDirection::Down,
+        column: 0,
+        row: 0,
+        last_step: Instant::now(),
+    });
+    assert!(session.needs_animation_tick(), "armed drag auto-scroll must need ticks");
+    session.cancel_drag_auto_scroll();
+    assert!(!session.needs_animation_tick(), "released drag must rest");
+
+    // Reduce-motion suppresses spinner/shimmer frames but not expiry cleanup.
+    session.thinking_spinner.start();
+    session.appearance.reduce_motion_mode = true;
+    assert!(!session.needs_animation_tick(), "reduce-motion must suppress spinner ticks");
+    session.show_copy_notification(5);
+    assert!(session.needs_animation_tick(), "expiries still need ticks under reduce-motion");
+}
+
+#[test]
 fn active_pty_observer_overrides_idle_stage_status() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let active_pty_sessions = Arc::new(AtomicUsize::new(1));

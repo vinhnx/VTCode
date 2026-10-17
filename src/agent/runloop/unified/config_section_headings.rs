@@ -73,23 +73,6 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("dotfile_protection", "Dotfile Protection", "Extra safeguards for shell and editor dotfiles."),
     ("hooks", "Lifecycle Hooks", "Automations triggered around session events."),
     ("hooks.lifecycle", "Lifecycle Events", "Hook groups for session and tool milestones."),
-    ("ide_context", "IDE Context", "Cross-IDE active editor context injected into prompts and inline UI."),
-    (
-        "ide_context.providers",
-        "IDE Providers",
-        "Per-editor-family enablement for editor context ingestion.",
-    ),
-    (
-        "ide_context.providers.vscode_compatible",
-        "VS Code Family",
-        "Enable context snapshots from VS Code, Cursor, Windsurf, and compatible editors.",
-    ),
-    ("ide_context.providers.zed", "Zed Family", "Enable context snapshots from Zed integrations."),
-    (
-        "ide_context.providers.generic",
-        "Generic Bridge",
-        "Enable file-bridge snapshots from JetBrains and other external adapters.",
-    ),
     ("mcp", "MCP Servers", "Model Context Protocol providers and defaults."),
     ("mcp.allowlist", "MCP Allowlist", "Default restrictions for MCP resources, prompts, and config."),
     ("mcp.allowlist.default", "Default MCP Rules", "Fallback allowlist applied to every MCP provider."),
@@ -170,6 +153,7 @@ static SECTION_HEADINGS: &[(&str, &str, &str)] = &[
     ("tools.web_fetch", "Web Fetch", "Remote fetch limits and safety checks."),
     ("ui", "Interface", "Appearance, layout, and transcript behavior."),
     ("ui.keyboard_protocol", "Keyboard Protocol", "Enhanced terminal keyboard reporting."),
+    ("ui.program_status", "Terminal program status", "Opt-in terminal activity and child-task reports."),
     ("ui.notifications", "Notifications", "Desktop and in-app notification delivery."),
     ("ui.status_line", "Status Line", "Bottom status bar content and refresh behavior."),
 ];

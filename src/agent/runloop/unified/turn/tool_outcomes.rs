@@ -40,19 +40,47 @@ pub(crate) fn is_grep_style_no_match(tool_name: &str, args: &Value, output: &Val
         return false;
     }
 
-    let command = args
-        .get("command")
-        .and_then(Value::as_str)
-        .or_else(|| args.get("cmd").and_then(Value::as_str))
-        .or_else(|| output.get("command").and_then(Value::as_str))
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    let grep_style = command.starts_with("grep ")
-        || command.starts_with("rg ")
-        || command.contains("/grep ")
-        || command.contains("/rg ");
-    let output_empty = [
+    let command_args = if args.get("command").is_none() && args.get("cmd").is_none() {
+        output
+    } else {
+        args
+    };
+    vtcode_core::tools::tool_intent::shell_command_is_standalone_grep_search(command_args)
+        && search_output_is_fully_visible(output)
+        && search_output_is_empty(output)
+}
+
+/// Empty successful search pipelines still carry no new navigation evidence.
+/// Do not confuse a hidden preview, an in-progress capture, or a quiet probe
+/// with a completed empty search. This is a loop signal, never a success or
+/// verification verdict for an earlier pipeline stage.
+pub(crate) fn is_empty_shell_search(tool_name: &str, args: &Value, output: &Value) -> bool {
+    matches!(tool_name, tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND)
+        && vtcode_core::tools::tool_intent::is_command_run_tool_call(tool_name, args)
+        && output.get("exit_code").and_then(Value::as_i64) == Some(0)
+        && vtcode_core::tools::tool_intent::shell_command_is_output_search(args)
+        && search_output_is_fully_visible(output)
+        && search_output_is_empty(output)
+}
+
+fn search_output_is_fully_visible(output: &Value) -> bool {
+    ![
+        "truncated",
+        "output_truncated",
+        "is_truncated",
+        "result_ref_only",
+        "spool_ref_only",
+    ]
+    .iter()
+    .any(|key| output.get(*key).and_then(Value::as_bool) == Some(true))
+        && ["total_output_bytes", "spooled_bytes", "byte_count"]
+            .iter()
+            .all(|key| output.get(*key).is_none_or(|value| value.as_u64() == Some(0)))
+        && output.get("spool_path").is_none_or(Value::is_null)
+}
+
+fn search_output_is_empty(output: &Value) -> bool {
+    [
         "stdout",
         "output",
         "preview",
@@ -66,9 +94,7 @@ pub(crate) fn is_grep_style_no_match(tool_name: &str, args: &Value, output: &Val
         "hint",
     ]
     .iter()
-    .all(|key| output_field_is_empty(output.get(*key)));
-
-    grep_style && output_empty
+    .all(|key| output_field_is_empty(output.get(*key)))
 }
 
 pub(crate) fn output_field_is_empty(value: Option<&Value>) -> bool {

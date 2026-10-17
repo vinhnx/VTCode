@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use crate::agent::runloop::unified::session_setup::configured_anthropic_config;
 use anyhow::Result;
 use vtcode_auth::AuthCredentialsStoreMode;
@@ -537,6 +539,7 @@ fn reload_provider_client_if_matching(
             timeouts: None,
             openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
             anthropic: configured_anthropic_config(ctx.vt_cfg.as_ref()),
+            openrouter: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openrouter.clone()),
             model_behavior: ctx.config.model_behavior.clone(),
             workspace_root: Some(ctx.config.workspace.clone()),
         },
@@ -565,6 +568,9 @@ fn storage_mode(ctx: &SlashCommandContext<'_>) -> AuthCredentialsStoreMode {
 // --- Input ---
 
 async fn wait_for_secure_prompt_input(ctx: &mut SlashCommandContext<'_>) -> Option<String> {
+    let _status_wait = ctx
+        .handle
+        .program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
     loop {
         if ctx.ctrl_c_state.is_cancel_requested() {
             dismiss_modal(ctx);
@@ -697,6 +703,7 @@ fn build_secret_action_items(
             indent: 1,
             selection: Some(InlineListSelection::ConfigAction(add_action.clone())),
             search_value: Some(format!("add {} api key", label.to_lowercase())),
+            ..Default::default()
         });
         items.push(InlineListItem {
             title: format!("Delete {label} key"),
@@ -705,20 +712,23 @@ fn build_secret_action_items(
             indent: 1,
             selection: Some(InlineListSelection::ConfigAction(delete_action)),
             search_value: Some(format!("delete {} api key", label.to_lowercase())),
+            ..Default::default()
         });
         if is_current {
             current_selection = Some(InlineListSelection::ConfigAction(add_action));
         }
     }
 
-    items.push(InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Close secret manager".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(SECRET_ACTION_BACK.to_string())),
-        search_value: Some("back close exit".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Back",
+            "Close secret manager".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(SECRET_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back close exit".to_string()),
+    );
 
     let selected =
         current_selection.unwrap_or_else(|| InlineListSelection::ConfigAction(format!("{SECRET_ACTION_PREFIX}list")));
@@ -812,12 +822,12 @@ fn render_secret_status_table(
 }
 
 fn list_item(title: &str, subtitle: &str, action: String, search: &str) -> InlineListItem {
-    InlineListItem {
-        title: title.to_string(),
-        subtitle: Some(subtitle.to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(action)),
-        search_value: Some(search.to_string()),
-    }
+    ui_list::action(
+        title.to_string(),
+        subtitle.to_string(),
+        None,
+        Tone::Neutral,
+        Some(InlineListSelection::ConfigAction(action)),
+    )
+    .with_search_value(search.to_string())
 }

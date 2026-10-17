@@ -52,7 +52,7 @@ impl AstGrepStatus {
                 managed: managed_ast_grep_bin_dir().is_ok_and(|directory| binary.starts_with(directory)),
                 binary,
             },
-            Err(err) => Self::Error { reason: err.to_string() },
+            Err(err) => Self::Error { reason: format!("{err:#}") },
         }
     }
 
@@ -168,6 +168,36 @@ mod tests {
     use crate::tools::ast_grep_binary::set_ast_grep_binary_override_for_tests;
     use serial_test::serial;
     use vtcode_commons::env_lock;
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn status_check_preserves_version_and_bounded_probe_causes() {
+        use std::os::unix::fs::PermissionsExt;
+        for (body, expected) in [
+            ("printf ' ast-grep 0.44.0\\n'", Ok("ast-grep 0.44.0")),
+            (":", Err("returned empty output")),
+            ("exit 7", Err("exited with status exit status: 7")),
+            ("head -c 65537 /dev/zero", Err("stdout exceeded 65536 bytes")),
+            ("exec /bin/sleep 30", Err("version probe timed out")),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let binary = directory.path().join("ast-grep");
+            let script = format!(
+                "#!/bin/sh\n[ \"$1\" = \"--version\" ] && [ \"$2\" = \"--color\" ] && [ \"$3\" = \"never\" ] && [ \"$NO_COLOR\" = 1 ] && [ \"$CLICOLOR\" = 0 ] || exit 9\n{body}\n"
+            );
+            std::fs::write(&binary, script).unwrap();
+            std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+            let _override = set_ast_grep_binary_override_for_tests(Some(binary));
+            match (expected, AstGrepStatus::check()) {
+                (Ok(expected), AstGrepStatus::Available { version, .. }) => assert_eq!(version, expected),
+                (Err(expected), AstGrepStatus::Error { reason }) => assert!(reason.contains(expected), "{reason}"),
+                (expected, actual) => panic!("expected {expected:?}, got {actual:?}"),
+            }
+        }
+        let _override = set_ast_grep_binary_override_for_tests(None);
+        assert_eq!(AstGrepStatus::check(), AstGrepStatus::NotFound);
+    }
 
     #[test]
     fn platform_mismatch_failures_do_not_enter_cooldown() {

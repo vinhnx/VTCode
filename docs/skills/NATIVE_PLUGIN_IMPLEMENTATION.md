@@ -2,7 +2,9 @@
 
 ## Overview
 
-This document summarizes the implementation of the Native Plugin System for VT Code using the [`libloading`](https://docs.rs/libloading) crate. The system enables explicitly approved integrations to load and execute native code plugins, providing high-performance, pre-compiled capabilities.
+This document summarizes the implementation of the Native Plugin System for VT Code using the
+[`libloading`](https://docs.rs/libloading) crate. The system enables explicitly approved integrations to load and
+execute native code plugins, providing high-performance, pre-compiled capabilities.
 
 ## What Was Implemented
 
@@ -13,28 +15,28 @@ This document summarizes the implementation of the Native Plugin System for VT C
 **Key Components:**
 
 - **`NativePluginTrait`**: Type-erased trait for plugin operations
-    - `metadata()` - Get plugin metadata
-    - `path()` - Get plugin path
-    - `execute()` - Execute plugin with context
+  - `metadata()` - Get plugin metadata
+  - `path()` - Get plugin path
+  - `execute()` - Execute plugin with context
 
 - **`NativePlugin`**: Concrete plugin implementation
-    - Holds `Library` handle (prevents unloading)
-    - Stores metadata and path
-    - Executes plugin functions via FFI
+  - Holds `Library` handle (prevents unloading)
+  - Stores metadata and path
+  - Executes plugin functions via FFI
 
 - **`PluginLoader`**: Discovers and loads plugins
-    - Manages trusted directories
-    - Validates plugin structure
-    - Loads dynamic libraries only after the caller's trust and approval gate
-    - Platform-specific library naming
+  - Manages trusted directories
+  - Validates plugin structure
+  - Loads dynamic libraries only after the caller's trust and approval gate
+  - Platform-specific library naming
 
 - **Plugin ABI Functions**:
-    - `vtcode_plugin_version()` - Returns ABI version (u32)
-    - `vtcode_plugin_metadata()` - Returns JSON metadata string
-    - `vtcode_plugin_execute()` - Main execution entry point
-    - `vtcode_plugin_free_string()` - Memory cleanup (optional)
+  - `vtcode_plugin_version()` - Returns ABI version (u32)
+  - `vtcode_plugin_metadata()` - Returns JSON metadata string
+  - `vtcode_plugin_execute()` - Main execution entry point
+  - `vtcode_plugin_free_string()` - Memory cleanup (optional)
 
-#### Data Structures:
+#### Data Structures
 
 ```rust
 pub struct PluginMetadata {
@@ -166,25 +168,25 @@ Complete working example:
 #### Safety Measures
 
 1. **Trusted Directories Only**
-    - Plugins only loaded from configured paths
-    - Prevents arbitrary code execution
+   - Plugins only loaded from configured paths
+   - Prevents arbitrary code execution
 
 2. **ABI Version Validation**
-    - Checks compatibility before loading
-    - Prevents version mismatch crashes
+   - Checks compatibility before loading
+   - Prevents version mismatch crashes
 
 3. **Metadata Validation**
-    - Validates JSON structure
-    - Ensures required fields present
+   - Validates JSON structure
+   - Ensures required fields present
 
 4. **Library Existence Check**
-    - Verifies dynamic library exists
-    - Tries multiple naming conventions
+   - Verifies dynamic library exists
+   - Tries multiple naming conventions
 
 5. **Memory Safety**
-    - Uses libloading for safe FFI
-    - Proper lifetime management
-    - Symbol loading with error handling
+   - Uses libloading for safe FFI
+   - Proper lifetime management
+   - Symbol loading with error handling
 
 #### Unsafe Code Justification
 
@@ -207,63 +209,64 @@ The implementation uses `unsafe` for:
 
 1. **Create Plugin Structure:**
 
-    ```bash
-    mkdir my-plugin
-    cd my-plugin
-    # Create Cargo.toml, src/lib.rs, plugin.json
-    ```
+   ```bash
+   mkdir my-plugin
+   cd my-plugin
+   # Create Cargo.toml, src/lib.rs, plugin.json
+   ```
 
 2. **Implement Required Functions:**
 
-    ```rust
-    #[no_mangle]
-    pub extern "C" fn vtcode_plugin_version() -> u32 { 1 }
+   ```rust
+   #[no_mangle]
+   pub extern "C" fn vtcode_plugin_version() -> u32 { 1 }
 
-    #[no_mangle]
-    pub extern "C" fn vtcode_plugin_metadata() -> *const c_char { ... }
+   #[no_mangle]
+   pub extern "C" fn vtcode_plugin_metadata() -> *const c_char { ... }
 
-    #[no_mangle]
-    pub extern "C" fn vtcode_plugin_execute(input: *const c_char) -> *const c_char { ... }
-    ```
+   #[no_mangle]
+   pub extern "C" fn vtcode_plugin_execute(input: *const c_char) -> *const c_char { ... }
+   ```
 
 3. **Build:**
 
-    ```bash
-    cargo build --release
-    ```
+   ```bash
+   cargo build --release
+   ```
 
 4. **Install:**
 
-    ```bash
-    # Replace PLUGIN_DIR with the resolved user data directory's plugins/ path.
-    cp -r target/release/libmy_plugin.* "$PLUGIN_DIR/my-plugin/"
-    cp plugin.json "$PLUGIN_DIR/my-plugin/"
-    ```
+   ```bash
+   # Replace PLUGIN_DIR with the resolved user data directory's plugins/ path.
+   cp -r target/release/libmy_plugin.* "$PLUGIN_DIR/my-plugin/"
+   cp plugin.json "$PLUGIN_DIR/my-plugin/"
+   ```
 
 5. **Use:**
-    ```bash
-    vtcode skills list
-    vtcode skills info my-plugin
-    ```
+
+   ```bash
+   vtcode skills list
+   vtcode skills info my-plugin
+   ```
 
 ### For VT Code Users
 
 1. **Discover Plugins:**
 
-    ```bash
-    vtcode skills list  # Shows all skills including plugins
-    ```
+   ```bash
+   vtcode skills list  # Shows all skills including plugins
+   ```
 
 2. **View Plugin Info:**
 
-    ```bash
-    vtcode skills info plugin-name
-    ```
+   ```bash
+   vtcode skills info plugin-name
+   ```
 
 3. **Use in Session:**
-    - Plugins automatically discovered
-    - Used when appropriate based on metadata
-    - Or explicitly requested by name
+   - Plugins automatically discovered
+   - Used when appropriate based on metadata
+   - Or explicitly requested by name
 
 ## Testing
 
@@ -395,71 +398,71 @@ cargo check
 ### Planned Features
 
 1. **Plugin Signature Verification**
-    - Cryptographic signatures
-    - Trust chain validation
-    - Automatic signature checking
+   - Cryptographic signatures
+   - Trust chain validation
+   - Automatic signature checking
 
 2. **Plugin Sandbox**
-    - Restricted system access
-    - Resource limits
-    - Network isolation
+   - Restricted system access
+   - Resource limits
+   - Network isolation
 
 3. **Plugin Manager CLI**
-    - `vtcode plugins install <url>`
-    - `vtcode plugins uninstall <name>`
-    - `vtcode plugins update`
-    - `vtcode plugins list`
+   - `vtcode plugins install <url>`
+   - `vtcode plugins uninstall <name>`
+   - `vtcode plugins update`
+   - `vtcode plugins list`
 
 4. **Plugin Registry**
-    - Central plugin repository
-    - Version management
-    - Dependency resolution
+   - Central plugin repository
+   - Version management
+   - Dependency resolution
 
 5. **Async Plugin Support**
-    - Non-blocking execution
-    - Streaming results
-    - Progress reporting
+   - Non-blocking execution
+   - Streaming results
+   - Progress reporting
 
 6. **Plugin Configuration UI**
-    - Interactive configuration
-    - Per-project settings
-    - Environment variables
+   - Interactive configuration
+   - Per-project settings
+   - Environment variables
 
 ### Potential Improvements
 
 1. **Performance**
-    - Plugin caching
-    - Lazy loading
-    - Connection pooling
+   - Plugin caching
+   - Lazy loading
+   - Connection pooling
 
 2. **Developer Experience**
-    - Plugin template generator
-    - Hot reload during development
-    - Better error messages
+   - Plugin template generator
+   - Hot reload during development
+   - Better error messages
 
 3. **Security**
-    - Capability-based security
-    - Fine-grained permissions
-    - Audit logging
+   - Capability-based security
+   - Fine-grained permissions
+   - Audit logging
 
 ## Known Limitations
 
 1. **No Plugin Hot-Reload**
-    - Plugins loaded once per session
-    - Requires restart to update
+   - Plugins loaded once per session
+   - Requires restart to update
 
 2. **Limited Error Recovery**
-    - Plugin crashes terminate session
-    - No automatic restart
+   - Plugin crashes terminate session
+   - No automatic restart
 
 3. **No Plugin Communication**
-    - Plugins can't talk to each other
-    - No plugin composition
+   - Plugins can't talk to each other
+   - No plugin composition
 
 4. **Single Threaded Execution**
-    - One plugin call at a time
-    - No concurrent execution per loaded plugin instance
-    - Public trait stays `Send + Sync`, but VT Code serializes ABI v1 FFI calls internally
+   - One plugin call at a time
+   - No concurrent execution per loaded plugin instance
+   - Public trait stays `Send + Sync`, but VT Code serializes ABI v1 FFI calls internally
 
 ## Security Considerations
 
@@ -522,10 +525,10 @@ cargo check
 
 ## Conclusion
 
-The Native Plugin System integrates libloading into VT Code's skill architecture, enabling high-performance native code extensions behind an explicit trust and approval boundary. Repository-controlled plugin roots remain metadata-only, and generic skill lookup does not open native libraries.
+The Native Plugin System integrates libloading into VT Code's skill architecture, enabling high-performance native code
+extensions behind an explicit trust and approval boundary. Repository-controlled plugin roots remain metadata-only, and
+generic skill lookup does not open native libraries.
 
 ---
 
-**Implementation Date:** March 3, 2026
-**Implemented By:** VT Code Team
-**Status:** v Complete and Functional
+**Implementation Date:** March 3, 2026 **Implemented By:** VT Code Team **Status:** v Complete and Functional

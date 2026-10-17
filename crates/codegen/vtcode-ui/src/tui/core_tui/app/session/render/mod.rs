@@ -7,7 +7,7 @@ mod local_agents;
 mod palettes;
 
 pub(super) use history_picker::{history_picker_panel_layout, render_history_picker, split_inline_history_picker_area};
-pub(super) use local_agents::{local_agents_window_area, render_local_agents};
+pub(super) use local_agents::{local_agents_expanded_panel_height, local_agents_fixed_rows, render_local_agents};
 pub(super) use palettes::{
     agent_palette_panel_layout, file_palette_panel_layout, render_agent_palette, render_file_palette,
     split_inline_agent_palette_area, split_inline_file_palette_area,

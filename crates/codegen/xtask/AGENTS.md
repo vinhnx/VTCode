@@ -1,3 +1,5 @@
+<!-- Compact maintainer rules retain the repository instruction line budget. -->
+<!-- markdownlint-disable MD013 -->
 # xtask
 
 [Root AGENTS.md](../../../AGENTS.md) | Release packaging automation for `cargo-binstall` extra-files layout.
@@ -9,7 +11,7 @@ layout that `cargo-binstall` auto-detects.
 
 ## Commands
 
-```
+```text
 cargo xtask package-release --target <triple> --version <ver> --binary <path>
 ```
 

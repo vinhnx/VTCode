@@ -1,15 +1,12 @@
+<!-- Compact maintainer rules retain the repository instruction line budget. -->
+<!-- markdownlint-disable MD013 -->
 # vtcode-webmcp
 
 [Root AGENTS.md](../../../AGENTS.md) | Authenticated browser bridge and safe workspace adapter.
 
 ## Modules
 
-- `protocol` — versioned browser/server messages.
-- `pairing` — expiring one-time codes, sessions, origin binding, revocation, and atomic replacement.
-- `event_hub` — bounded replay and slow-client handling for runtime events.
-- `runtime` — adapter traits and result types used by active and headless sessions.
-- `filesystem` — canonicalized, digest-checked headless workspace adapter using `vtcode-diff` for authoritative diffs.
-- `remote_mcp` — authenticated read-only Streamable HTTP and legacy SSE transports.
+- `protocol` — versioned browser/server messages. `pairing` — expiring one-time codes, sessions, origin binding, revocation, and atomic replacement. `event_hub` — bounded replay and slow-client handling for runtime events. `runtime` — adapter traits and result types used by active and headless sessions. `filesystem` — canonicalized, digest-checked headless workspace adapter using `vtcode-diff` for authoritative diffs. `remote_mcp` — authenticated read-only Streamable HTTP and legacy SSE transports.
 - `server` — Axum WebSocket transport and request dispatch.
 - `error.rs` — crate error types.
 
@@ -27,3 +24,4 @@
 - Pairing TTL is the one-time-code lifetime and authenticated-session inactivity lease; authenticated browser traffic may refresh it, and an in-flight authenticated operation may pin its lease until completion. Expiry checks outside an operation remain read-only.
 - Multiple configured exact origins may share one listener; origin-specific pairing issues a new pending code without revoking existing sessions, while replacement revokes all sessions.
 - Authenticated `status` may expose only non-secret bridge settings; the terminal/TUI remains authoritative for origins, roots, and policy. Keep browser settings refreshable from status/heartbeats without persisting tokens or pairing codes.
+- Explanation operations share pairing/origin checks; advertise `explanations_available` only with a canonical adapter. Evidence references must remain session/digest-bound, pages bounded, and navigation review-only: never submit prompts, mutate files, or run commands. Headless adapters return `unsupported`.

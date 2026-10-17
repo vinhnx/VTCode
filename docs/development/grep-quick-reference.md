@@ -1,13 +1,11 @@
 # rg Text Search Quick Reference Card
 
-> **Note:** legacy text-search dispatcher names are internal implementation
-> details. Use `exec_command.cmd` with `rg` for flexible shell text search.
-> Advanced `code_search` provides bounded literal search (with `|`-separated
-> alternation support) across definitions, syntactic usages, text, and paths.
+> **Note:** legacy text-search dispatcher names are internal implementation details. Use `exec_command.cmd` with `rg`
+> for flexible shell text search. Advanced `code_search` provides bounded literal search (with `|`-separated alternation
+> support) across definitions, syntactic usages, text, and paths.
 
-Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
-use the Unix-like profile by default; native Windows uses PowerShell. VT Code
-does not rewrite GNU flags for macOS BSD tools and does not translate Unix
+Shell examples follow the active shell prompt profile. Linux, macOS, and WSL use the Unix-like profile by default;
+native Windows uses PowerShell. VT Code does not rewrite GNU flags for macOS BSD tools and does not translate Unix
 commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 
 ## Essential Commands
@@ -28,20 +26,30 @@ For the live AI-facing tool call, pass the command through `exec_command.cmd`:
 {"cmd":"rg -n \"TODO\" src"}
 ```
 
+Pipe stdin defaults to EOF, so a pathless `rg` searches the working directory. Set `"stdin": true` only when
+you intend to send input later. Use the returned session ID for command lifecycle actions:
+
+| Action  | `write_stdin` arguments                        | Behavior                                              |
+| ------- | ---------------------------------------------- | ----------------------------------------------------- |
+| Wait    | `{"session_id":"run-id","action":"wait"}`      | Wait until exit or deadline; never kills the command. |
+| Inspect | `{"session_id":"run-id","action":"inspect"}`   | Read a bounded snapshot.                              |
+| Stop    | `{"session_id":"run-id","action":"terminate"}` | Kill the owned process group and capture output.      |
+| Release | `{"session_id":"run-id","action":"close"}`     | Cancel if necessary and remove the session record.    |
+
 ## Common Search Patterns
 
-| Task | Regex | File filter | Notes |
-| --- | --- | --- | --- |
-| Find functions | `^(pub )?fn \w+\(` | `--glob "**/*.rs"` | Rust function definitions |
-| Find imports | `^import.*from` | `--glob "**/*.ts"` | TypeScript and JavaScript imports |
-| Find classes | `^class \w+` | `--glob "**/*.java"` | Java class definitions |
-| Find TODOs | `TODO\|FIXME` | `--glob "**/*.rs"` | Common markers |
-| Find errors | `panic!\|unwrap\|throw` | `--glob "**/*.rs"` | Error patterns |
-| Find API calls | `\.get\(\|\.post\(` | `--glob "**/*.ts"` | HTTP verbs |
-| Find exports | `^export ` | `--glob "**/*.ts"` | Module exports |
-| Find config | `config\.` | `--glob "**/*.py"` | Config references |
-| Find async | `async fn` | `--glob "**/*.rs"` | Async functions |
-| Find unused | `^pub fn` | `--glob "**/*.rs"` | Public functions for refactoring |
+| Task           | Regex                   | File filter          | Notes                             |
+| -------------- | ----------------------- | -------------------- | --------------------------------- |
+| Find functions | `^(pub )?fn \w+\(`      | `--glob "**/*.rs"`   | Rust function definitions         |
+| Find imports   | `^import.*from`         | `--glob "**/*.ts"`   | TypeScript and JavaScript imports |
+| Find classes   | `^class \w+`            | `--glob "**/*.java"` | Java class definitions            |
+| Find TODOs     | `TODO\|FIXME`           | `--glob "**/*.rs"`   | Common markers                    |
+| Find errors    | `panic!\|unwrap\|throw` | `--glob "**/*.rs"`   | Error patterns                    |
+| Find API calls | `\.get\(\|\.post\(`     | `--glob "**/*.ts"`   | HTTP verbs                        |
+| Find exports   | `^export`               | `--glob "**/*.ts"`   | Module exports                    |
+| Find config    | `config\.`              | `--glob "**/*.py"`   | Config references                 |
+| Find async     | `async fn`              | `--glob "**/*.rs"`   | Async functions                   |
+| Find unused    | `^pub fn`               | `--glob "**/*.rs"`   | Public functions for refactoring  |
 
 ## Smart Patterns by Language
 
@@ -74,14 +82,14 @@ rg -n -C 2 "@property|@staticmethod" .
 
 ## Performance Tips
 
-| Optimisation | Benefit | Example |
-| --- | --- | --- |
-| Use `--glob` | 10-100x faster | `--glob "**/*.rs"` |
-| Use `-t` | 5-10x faster | `-t rust` |
-| Set `--max-filesize` | Skip large files | `--max-filesize 5M` |
-| Keep ignore files enabled | Skip `node_modules` and build output | default |
-| Reduce nearby lines | Smaller output | omit `-C`, `-A`, and `-B` |
-| Use `-F` | Faster for exact strings | `rg -F "literal text"` |
+| Optimisation              | Benefit                              | Example                   |
+| ------------------------- | ------------------------------------ | ------------------------- |
+| Use `--glob`              | 10-100x faster                       | `--glob "**/*.rs"`        |
+| Use `-t`                  | 5-10x faster                         | `-t rust`                 |
+| Set `--max-filesize`      | Skip large files                     | `--max-filesize 5M`       |
+| Keep ignore files enabled | Skip `node_modules` and build output | default                   |
+| Reduce nearby lines       | Smaller output                       | omit `-C`, `-A`, and `-B` |
+| Use `-F`                  | Faster for exact strings             | `rg -F "literal text"`    |
 
 ## Output Example
 
@@ -98,28 +106,22 @@ src/lib.rs
 
 ## Advanced `code_search`
 
-The advanced profile exposes `code_search` with required `query` and optional
-`path`, `file_types`, `result_types`, and `max_results`. The four result types
-are `definition`, `usage`, `text`, and `path`. Definitions are recognised
-declarations. Usages are exact syntactic identifiers, not resolved references.
-Text covers prose, configuration, comments, strings, and unclassified literal
-matches. Path results match filenames or paths.
+The advanced profile exposes `code_search` with required `query` and optional `path`, `file_types`, `result_types`, and
+`max_results`. The four result types are `definition`, `usage`, `text`, and `path`. Definitions are recognised
+declarations. Usages are exact syntactic identifiers, not resolved references. Text covers prose, configuration,
+comments, strings, and unclassified literal matches. Path results match filenames or paths.
 
-Literal smart-case applies to content and exact symbol-name matching: wholly
-lower-case queries are case-insensitive, while queries containing an upper-case
-character are case-sensitive. A query containing `|` is split into trimmed
-literal alternatives (empty terms dropped), so `tokio|async-std|runtime`
-matches any of the three terms; each term is escaped, so `|` is the only
-special character. Path matching is fuzzy and case-insensitive. If a response
-is truncated, narrow a filter in another call. No exact repository-wide total
-is implied.
+Literal smart-case applies to content and exact symbol-name matching: wholly lower-case queries are case-insensitive,
+while queries containing an upper-case character are case-sensitive. A query containing `|` is split into trimmed
+literal alternatives (empty terms dropped), so `tokio|async-std|runtime` matches any of the three terms; each term is
+escaped, so `|` is the only special character. Path matching is fuzzy and case-insensitive. If a response is truncated,
+narrow a filter in another call. No exact repository-wide total is implied.
 
 ```json
 {"query":"Widget","path":"src","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
-Use `exec_command` or the specialised ast-grep skill for arbitrary structural
-patterns.
+Use `exec_command` or the specialised ast-grep skill for arbitrary structural patterns.
 
 ## Real-World Examples
 
@@ -151,23 +153,22 @@ rg -n -C 2 -t typescript "try\\s*\\{|catch\\s*\\(|throw " .
 
 ## Regex Cheat Sheet
 
-| Regex | Matches |
-| --- | --- |
-| `.` | Any character |
-| `\w` | Word character `[a-zA-Z0-9_]` |
-| `\d` | Digit `[0-9]` |
-| `\s` | Whitespace |
-| `^` | Line start |
-| `$` | Line end |
-| `\|` | OR in shell examples that need escaping |
-| `(...)` | Group |
-| `*` | 0 or more |
-| `+` | 1 or more |
-| `?` | 0 or 1 |
-| `[...]` | Character class |
+| Regex   | Matches                                 |
+| ------- | --------------------------------------- |
+| `.`     | Any character                           |
+| `\w`    | Word character `[a-zA-Z0-9_]`           |
+| `\d`    | Digit `[0-9]`                           |
+| `\s`    | Whitespace                              |
+| `^`     | Line start                              |
+| `$`     | Line end                                |
+| `\|`    | OR in shell examples that need escaping |
+| `(...)` | Group                                   |
+| `*`     | 0 or more                               |
+| `+`     | 1 or more                               |
+| `?`     | 0 or 1                                  |
+| `[...]` | Character class                         |
 
-Escape backslashes for JSON shell strings, for example `\\w`, `\\d`, and
-`\\s`.
+Escape backslashes for JSON shell strings, for example `\\w`, `\\d`, and `\\s`.
 
 ## Decision Tree
 
@@ -201,19 +202,30 @@ What do you want to find?
 
 ## Common Mistakes
 
-| Wrong | Right | Why |
-| --- | --- | --- |
-| `rg "fn test"` | `rg "^fn test"` | Anchor patterns to line start |
-| `rg --glob "*.rs"` | `rg --glob "**/*.rs"` | Use `**` for recursive filters |
-| `rg "my.variable"` | `rg "my\\.variable"` | Escape special chars |
-| `rg "needle" .` on a huge tree | `rg --glob "src/**/*.ts" "needle" .` | Narrow scope |
-| `rg -C 50 "needle"` | `rg -C 3 "needle"` | Keep nearby output small |
-| Large codebase searches | `rg -t rust "needle"` | Use a type filter where possible |
+| Wrong                                             | Right                                         | Why                                                                                                                       |
+| ------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `rg "fn test"`                                    | `rg "^fn test"`                               | Anchor patterns to line start                                                                                             |
+| `rg --glob "*.rs"`                                | `rg --glob "**/*.rs"`                         | Use `**` for recursive filters                                                                                            |
+| `rg "my.variable"`                                | `rg "my\\.variable"`                          | Escape special chars                                                                                                      |
+| `rg "needle" .` on a huge tree                    | `rg --glob "src/**/*.ts" "needle" .`          | Narrow scope                                                                                                              |
+| `rg -C 50 "needle"`                               | `rg -C 3 "needle"`                            | Keep nearby output small                                                                                                  |
+| Large codebase searches                           | `rg -t rust "needle"`                         | Use a type filter where possible                                                                                          |
+| Repeat an empty search with cosmetic flag changes | Search again only for a new scope or question | Empty results are evidence; an empty pipeline still counts toward navigation convergence even if its final filter exits 0 |
+
+Quiet probes (`-q`, `--quiet`) are excluded from empty-output accounting. Option values such as the pattern in
+`rg -e -query src` are not quiet flags.
 
 ## See Also
 
 - Full guide: `docs/development/grep-tool-guide.md`
-- Advanced code search: see the grep-tool-guide "Advanced `code_search`"
-  section.
+- Advanced code search: see the grep-tool-guide "Advanced `code_search`" section.
 - System prompt: agent instructions for grep usage
-- ripgrep docs: https://github.com/BurntSushi/ripgrep
+- ripgrep docs: <https://github.com/BurntSushi/ripgrep>
+
+## Edit after inspection
+
+| Situation             | Tool call                                                                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authorized edit       | Call `apply_patch` directly with `{"input":"*** Begin Patch\n...\n*** End Patch\n"}`; `patch` is an alias. Never run it through the shell.                 |
+| Context mismatch      | One fresh range per affected path per turn, such as `exec_command` with `{"cmd":"sed -n '1,100p' src/example.rs"}`; copy exact current context.            |
+| Path read cap reached | A typed patch context mismatch permits that one bounded fresh read; repeated failures cannot replenish it. Other limits and permission checks still apply. |

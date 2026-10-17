@@ -12,21 +12,48 @@ use vtcode_commons::MultiErrors;
 
 /// Example Python script template
 const EXAMPLE_SCRIPT: &str = r#"#!/usr/bin/env python3
-"""
-Example script for {skill_name}
+# /// script
+# dependencies = []
+# ///
+"""Example script for {skill_name}.
 
-This demonstrates how to include executable scripts in a skill.
-Scripts provide deterministic, token-efficient operations.
+Demonstrates agentic script design: non-interactive, --help,
+structured stdout, diagnostics on stderr, meaningful exit codes.
+Replace with actual functionality.
 """
 
+import argparse
+import json
 import sys
 
-def main():
-    print("Example script for {skill_name}")
-    print("Replace with actual functionality")
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description="Example script for {skill_name}.")
+    parser.add_argument("input", nargs="?", help="Input file (default: stdin)")
+    parser.add_argument("--format", choices=["json", "text"], default="json")
+    parser.add_argument("--output", default="-", help="Output file or - for stdout")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv if argv is not None else sys.argv[1:])
+    # Idempotent: safe to retry; --dry-run previews without side effects.
+    result = {"skill": "{skill_name}", "input": args.input, "dry_run": args.dry_run}
+    output = json.dumps(result) if args.format == "json" else str(result)
+    if args.dry_run:
+        print(f"would write: {output}", file=sys.stderr)
+        return 0
+    if args.output == "-":
+        print(output)
+    else:
+        with open(args.output, "w", encoding="utf-8") as handle:
+            handle.write(output)
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 "#;
 
 /// Example reference document template

@@ -370,7 +370,7 @@ def render_markdown(entries: list[FieldEntry]) -> str:
         "```",
         "",
         "| Field | Type | Required | Default | Description |",
-        "|-------|------|----------|---------|-------------|",
+        "| ------- | ------ | ---------- | --------- | ------------- |",
     ]
     for entry in entries:
         required = "yes" if entry.required else "no"
@@ -400,7 +400,8 @@ def main() -> int:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(markdown, encoding="utf-8")
-    print(f"Wrote {len(entries)} config fields to {output_path.relative_to(REPO_ROOT)}")
+    output_label = output_path.relative_to(REPO_ROOT) if output_path.is_relative_to(REPO_ROOT) else output_path
+    print(f"Wrote {len(entries)} config fields to {output_label}")
     return 0
 
 

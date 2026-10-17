@@ -10,7 +10,8 @@ A curated collection of tools and integrations built to work with Hugging Face I
 
 ## About This Directory
 
-This directory contains documentation for tools that integrate with Hugging Face Inference Providers to provide enhanced functionality for AI-powered workflows.
+This directory contains documentation for tools that integrate with Hugging Face Inference Providers to provide enhanced
+functionality for AI-powered workflows.
 
 ### Requirements to Be Listed
 
@@ -26,8 +27,10 @@ We'd love to feature your tool! Here's how:
 
 1. **Test your integration** with Hugging Face Inference Providers
 2. **Fork the repository** at [github.com/huggingface/hub-docs](https://github.com/huggingface/hub-docs)
-3. **Update this index** (`docs/inference-providers/integrations/index.md`) to add your tool with a link to your integration docs
-4. **Create an integration page** (optional but recommended) following the [Integration Page Template](#integration-page-template)
+3. **Update this index** (`docs/inference-providers/integrations/index.md`) to add your tool with a link to your
+   integration docs
+4. **Create an integration page** (optional but recommended) following the
+   [Integration Page Template](#integration-page-template)
 5. **Submit a Pull Request** with your changes
 
 ### Integration Page Template
@@ -68,14 +71,14 @@ Step-by-step setup instructions with code examples.
 
 ### Choosing Between Inference API and Dedicated Endpoints
 
-**Hugging Face Inference API**
+#### Hugging Face Inference API
 
 - Best for: Getting started, testing, lower traffic volumes
 - No setup required beyond API token
 - Built-in rate limiting
 - Model selection from Hugging Face model hub
 
-**Dedicated Endpoints**
+#### Dedicated Endpoints
 
 - Best for: Production workloads, high traffic, custom models
 - Dedicated GPU resources

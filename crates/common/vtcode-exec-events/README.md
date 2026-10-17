@@ -2,46 +2,40 @@
 
 Structured execution telemetry event schema used across VT Code crates.
 
-This crate exposes the serialized schema for thread lifecycle updates,
-command execution results, and other timeline artifacts emitted by the
-agent runtime. Downstream applications can deserialize these structures
-to drive dashboards, logging, or auditing pipelines without depending on
-the full `vtcode-core` crate.
+This crate exposes the serialized schema for thread lifecycle updates, command execution results, and other timeline
+artifacts emitted by the agent runtime. Downstream applications can deserialize these structures to drive dashboards,
+logging, or auditing pipelines without depending on the full `vtcode-core` crate.
 
 <!-- cargo-rdme start -->
 
 Structured execution telemetry events shared across VT Code crates.
 
-This crate exposes the serialized schema for thread lifecycle updates,
-command execution results, and other timeline artifacts emitted by the
-automation runtime. Downstream applications can deserialize these
-structures to drive dashboards, logging, or auditing pipelines without
-depending on the full `vtcode-core` crate.
+This crate exposes the serialized schema for thread lifecycle updates, command execution results, and other timeline
+artifacts emitted by the automation runtime. Downstream applications can deserialize these structures to drive
+dashboards, logging, or auditing pipelines without depending on the full `vtcode-core` crate.
 
-### Agent Trace Support
+## Agent Trace Support
 
-This crate implements the [Agent Trace](https://agent-trace.dev/) specification
-for tracking AI-generated code attribution. See the `trace` module for details.
+This crate implements the [Agent Trace](https://agent-trace.dev/) specification for tracking AI-generated code
+attribution. See the `trace` module for details.
 
 <!-- cargo-rdme end -->
 
 ## Modules
 
-| Module | Purpose |
-|---|---|
-| `atif` | ATIF trajectory format for agent execution traces |
-| `trace` | [Agent Trace](https://agent-trace.dev/) attribution for AI-generated code |
-| `json` | JSON serialization/deserialization helpers (feature-gated) |
-| `schema` | JSON Schema export via `schemars` (feature-gated) |
+| Module   | Purpose                                                                   |
+| -------- | ------------------------------------------------------------------------- |
+| `atif`   | ATIF trajectory format for agent execution traces                         |
+| `trace`  | [Agent Trace](https://agent-trace.dev/) attribution for AI-generated code |
+| `json`   | JSON serialization/deserialization helpers (feature-gated)                |
+| `schema` | JSON Schema export via `schemars` (feature-gated)                         |
 
 ## Public entrypoints
 
 - `VersionedThreadEvent` — schema-versioned event wrapper
-- `ThreadEvent` — concrete event enum (started, completed, item updates, turn lifecycle,
-  plan approval lifecycle, …)
-- `EVENT_SCHEMA_VERSION` — current schema version (`"0.16.0"`; preserves the
-  bounded exec-session resume fields and adds terminal background-process
-  completion identity/status fields)
+- `ThreadEvent` — concrete event enum (started, completed, item updates, turn lifecycle, plan approval lifecycle, …)
+- `EVENT_SCHEMA_VERSION` — current schema version (`"0.17.0"`; adds optional task/turn context, input origin,
+  recorded terminal timestamps, command activity, public decisions, and native delegation status while preserving legacy decoding)
 - `EventEmitter` trait — sink for processing events
 
 ## Usage
@@ -58,12 +52,12 @@ let json = serde_json::to_string(&versioned)?;
 
 ## Feature flags
 
-| Flag | Description |
-|---|---|
-| `serde-json` (default) | JSON helpers in the `json` module |
-| `telemetry-tracing` | `TracingEmitter` for the `tracing` crate |
-| `telemetry-log` | `LogEmitter` for the `log` crate |
-| `schema-export` | JSON Schema generation via `schemars` |
+| Flag                   | Description                              |
+| ---------------------- | ---------------------------------------- |
+| `serde-json` (default) | JSON helpers in the `json` module        |
+| `telemetry-tracing`    | `TracingEmitter` for the `tracing` crate |
+| `telemetry-log`        | `LogEmitter` for the `log` crate         |
+| `schema-export`        | JSON Schema generation via `schemars`    |
 
 ## API reference
 

@@ -28,6 +28,10 @@ impl TuiSessionDriver for Session {
         self.handle_tick();
     }
 
+    fn needs_animation_tick(&self) -> bool {
+        self.needs_animation_tick()
+    }
+
     fn render(&mut self, frame: &mut ratatui::Frame<'_>) {
         self.render(frame);
     }
@@ -62,6 +66,18 @@ impl TuiSessionDriver for Session {
 
     fn update_terminal_title(&mut self) {
         self.update_terminal_title();
+    }
+
+    fn attach_program_status_terminal(&mut self) {
+        self.program_status.attach_terminal();
+    }
+
+    fn flush_program_status(&mut self) {
+        self.program_status.flush();
+    }
+
+    fn shutdown_program_status(&mut self) {
+        self.program_status.shutdown();
     }
 
     fn clear_terminal_title(&mut self) {

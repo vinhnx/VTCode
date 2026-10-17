@@ -1,5 +1,6 @@
 use super::ZedAgent;
 use crate::acp;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -360,10 +361,26 @@ impl ZedAgent {
 
     /// Programmatic equivalent of the SACP `session/new` handler — exposed
     /// for tests and for the SACP handler shim to call.
-    pub(crate) async fn new_session(
-        &self,
-        _req: acp::NewSessionRequest,
-    ) -> Result<acp::NewSessionResponse, acp::Error> {
+    ///
+    /// Single-workspace bridge: sessions share `config.workspace`. A request
+    /// `cwd` that is not absolute is rejected; a different absolute `cwd` is
+    /// accepted with a warn log and the workspace is used (per-session workspaces
+    /// would require per-session tool roots).
+    pub(crate) async fn new_session(&self, req: acp::NewSessionRequest) -> Result<acp::NewSessionResponse, acp::Error> {
+        ensure_absolute_cwd(&req.cwd)?;
+        if req.cwd != self.config.workspace {
+            warn!(
+                requested = %req.cwd.display(),
+                workspace = %self.config.workspace.display(),
+                "session/new cwd differs from agent workspace; using workspace (single-workspace bridge)"
+            );
+        }
+        if !req.additional_directories.is_empty() {
+            warn!("session/new additionalDirectories ignored (single-workspace bridge)");
+        }
+        if !req.mcp_servers.is_empty() {
+            warn!("session/new mcpServers ignored (client-managed MCP)");
+        }
         let session_id = self.register_session();
         let config_options = self
             .session_handle(&session_id)
@@ -382,13 +399,19 @@ impl ZedAgent {
         &self,
         args: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
+        ensure_absolute_cwd(&args.cwd)?;
         let session = if let Some(session) = self.session_handle(&args.session_id) {
             session
         } else {
             let identifier = args.session_id.0.as_ref();
             self.attach_thread_from_archive(&args.session_id, identifier)
                 .await
-                .map_err(|err| acp::Error::internal_error().data(err.to_string()))?
+                .map_err(|err| {
+                    acp::Error::invalid_params().data(serde_json::json!({
+                        "reason": "unknown_session",
+                        "detail": err.to_string(),
+                    }))
+                })?
         };
 
         if let Err(error) = self.send_available_commands_update(&args.session_id).await {
@@ -397,6 +420,93 @@ impl ZedAgent {
 
         let config_options = self.current_session_config_options(&session);
         Ok(acp::LoadSessionResponse::new().config_options(config_options))
+    }
+
+    /// Programmatic equivalent of the SACP `session/list` handler.
+    ///
+    /// Single-workspace bridge: every live session reports `config.workspace`
+    /// as its `cwd` with no `title`/`updated_at`. `cursor` pagination is not
+    /// implemented (full sorted list, no `next_cursor`); `cwd` filters by exact
+    /// equality against the workspace.
+    pub(crate) async fn list_sessions(
+        &self,
+        args: acp::ListSessionsRequest,
+    ) -> Result<acp::ListSessionsResponse, acp::Error> {
+        let cwd_filter = args.cwd.clone();
+        let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
+        let mut infos: Vec<acp::SessionInfo> = sessions
+            .keys()
+            .map(|session_id| acp::SessionInfo::new(session_id.clone(), self.config.workspace.clone()))
+            .collect();
+        drop(sessions);
+        infos.sort_by(|left, right| left.session_id.0.cmp(&right.session_id.0));
+        if let Some(cwd) = cwd_filter
+            && cwd != self.config.workspace
+        {
+            infos.clear();
+        }
+        Ok(acp::ListSessionsResponse::new(infos))
+    }
+
+    /// Programmatic equivalent of the SACP `session/resume` handler.
+    ///
+    /// Live-only reattach (v1 `resume` has no replay). Unknown sessions fail
+    /// with `unknown_session`; use `session/load` to attach archived history.
+    pub(crate) async fn resume_session(
+        &self,
+        args: acp::ResumeSessionRequest,
+    ) -> Result<acp::ResumeSessionResponse, acp::Error> {
+        ensure_absolute_cwd(&args.cwd)?;
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(acp::Error::invalid_params().data(serde_json::json!({
+                "reason": "unknown_session",
+            })));
+        };
+
+        if let Err(error) = self.send_available_commands_update(&args.session_id).await {
+            warn!(%error, "Failed to advertise slash commands on session resume");
+        }
+
+        let config_options = self.current_session_config_options(&session);
+        Ok(acp::ResumeSessionResponse::new().config_options(config_options))
+    }
+
+    /// Programmatic equivalent of the SACP `session/close` handler.
+    ///
+    /// Cancels in-flight work (like `session/cancel`) and drops the live handle.
+    /// A later `resume` for the id fails; `load` may still attach archived
+    /// history by identifier (disaster recovery, not a reopen).
+    pub(crate) async fn close_session(
+        &self,
+        args: acp::CloseSessionRequest,
+    ) -> Result<acp::CloseSessionResponse, acp::Error> {
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(acp::Error::invalid_params().data(serde_json::json!({
+                "reason": "unknown_session",
+            })));
+        };
+        session.cancel_flag.store(true, Ordering::Relaxed);
+        drop(self.sessions.lock().unwrap_or_else(|e| e.into_inner()).remove(&args.session_id));
+        Ok(acp::CloseSessionResponse::new())
+    }
+
+    /// Programmatic equivalent of the SACP `session/delete` handler.
+    ///
+    /// Matches `close`: cancel work and drop the live handle. Unknown ids fail
+    /// with `unknown_session` (consistent with `close`/`resume`). Archive files
+    /// are retained, so `load` by archived identifier can still attach history.
+    pub(crate) async fn delete_session(
+        &self,
+        args: acp::DeleteSessionRequest,
+    ) -> Result<acp::DeleteSessionResponse, acp::Error> {
+        let Some(session) = self.session_handle(&args.session_id) else {
+            return Err(acp::Error::invalid_params().data(serde_json::json!({
+                "reason": "unknown_session",
+            })));
+        };
+        session.cancel_flag.store(true, Ordering::Relaxed);
+        drop(self.sessions.lock().unwrap_or_else(|e| e.into_inner()).remove(&args.session_id));
+        Ok(acp::DeleteSessionResponse::new())
     }
 
     /// Programmatic equivalent of the SACP `session/set_config_option`
@@ -524,6 +634,15 @@ impl ZedAgent {
         let config_options = self.current_session_config_options(&session);
         Ok(acp::SetSessionConfigOptionResponse::new(config_options))
     }
+}
+
+fn ensure_absolute_cwd(cwd: &Path) -> Result<(), acp::Error> {
+    if cwd.is_absolute() {
+        return Ok(());
+    }
+    Err(acp::Error::invalid_params().data(serde_json::json!({
+        "reason": "invalid_cwd",
+    })))
 }
 
 #[cfg(test)]
@@ -743,5 +862,179 @@ Research primary prompt."#,
 
         assert_eq!(config_options.len(), 3);
         assert_eq!(config_options[0].id, acp::SessionConfigId::new("primary_agent"));
+    }
+
+    #[tokio::test]
+    async fn list_sessions_returns_registered_sessions_and_filters_cwd() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let first = agent.register_session();
+        let second = agent.register_session();
+
+        let all = agent.list_sessions(acp::ListSessionsRequest::new()).await.unwrap();
+        assert_eq!(all.sessions.len(), 2);
+        assert!(all.sessions.iter().any(|info| info.session_id == first));
+        assert!(all.sessions.iter().any(|info| info.session_id == second));
+        assert!(
+            all.sessions.iter().all(|info| info.cwd == temp.path().to_path_buf()),
+            "single-workspace bridge reports workspace cwd"
+        );
+
+        let matching = agent
+            .list_sessions(acp::ListSessionsRequest::new().cwd(temp.path().to_path_buf()))
+            .await
+            .unwrap();
+        assert_eq!(matching.sessions.len(), 2);
+
+        let other_cwd = temp.path().join("other-workspace");
+        assert_ne!(other_cwd, temp.path().to_path_buf());
+        let other = agent
+            .list_sessions(acp::ListSessionsRequest::new().cwd(other_cwd))
+            .await
+            .unwrap();
+        assert!(other.sessions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resume_existing_session_returns_config_options() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let response = agent
+            .resume_session(acp::ResumeSessionRequest::new(session_id.clone(), temp.path()))
+            .await
+            .unwrap();
+        assert!(!response.config_options.unwrap_or_default().is_empty());
+        assert!(agent.session_handle(&session_id).is_some());
+    }
+
+    #[tokio::test]
+    async fn resume_unknown_session_fails_closed() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+
+        let result = agent
+            .resume_session(acp::ResumeSessionRequest::new(
+                acp::SessionId::new("vtcode-zed-session-missing"),
+                temp.path(),
+            ))
+            .await;
+        let error = format!("{:?}", result.expect_err("unknown session must fail"));
+        assert!(error.contains("unknown_session"));
+    }
+
+    #[tokio::test]
+    async fn close_session_removes_handle_and_second_close_fails() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        drop(
+            agent
+                .close_session(acp::CloseSessionRequest::new(session_id.clone()))
+                .await
+                .unwrap(),
+        );
+        assert!(agent.session_handle(&session_id).is_none());
+
+        let listed = agent.list_sessions(acp::ListSessionsRequest::new()).await.unwrap();
+        assert!(!listed.sessions.iter().any(|info| info.session_id == session_id));
+
+        let again = agent.close_session(acp::CloseSessionRequest::new(session_id)).await;
+        let error = format!("{:?}", again.expect_err("second close must fail"));
+        assert!(error.contains("unknown_session"));
+    }
+
+    #[tokio::test]
+    async fn delete_session_clears_live_handle_but_list_stays_consistent() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let keep = agent.register_session();
+        let remove = agent.register_session();
+
+        drop(
+            agent
+                .delete_session(acp::DeleteSessionRequest::new(remove.clone()))
+                .await
+                .unwrap(),
+        );
+        assert!(agent.session_handle(&remove).is_none());
+        assert!(agent.session_handle(&keep).is_some());
+
+        let listed = agent.list_sessions(acp::ListSessionsRequest::new()).await.unwrap();
+        assert!(listed.sessions.iter().any(|info| info.session_id == keep));
+        assert!(!listed.sessions.iter().any(|info| info.session_id == remove));
+    }
+
+    #[tokio::test]
+    async fn new_session_rejects_relative_cwd() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+
+        let result = agent.new_session(acp::NewSessionRequest::new("relative/path")).await;
+        let error = format!("{:?}", result.expect_err("relative cwd must fail"));
+        assert!(error.contains("invalid_cwd"));
+    }
+
+    #[tokio::test]
+    async fn resume_rejects_relative_cwd() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        let result = agent
+            .resume_session(acp::ResumeSessionRequest::new(session_id, "relative/path"))
+            .await;
+        let error = format!("{:?}", result.expect_err("relative cwd must fail"));
+        assert!(error.contains("invalid_cwd"));
+    }
+
+    #[tokio::test]
+    async fn resume_after_close_fails_closed() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        drop(
+            agent
+                .close_session(acp::CloseSessionRequest::new(session_id.clone()))
+                .await
+                .unwrap(),
+        );
+        let result = agent
+            .resume_session(acp::ResumeSessionRequest::new(session_id, temp.path()))
+            .await;
+        let error = format!("{:?}", result.expect_err("resume after close must fail"));
+        assert!(error.contains("unknown_session"));
+    }
+
+    #[tokio::test]
+    async fn delete_unknown_session_fails_closed() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+
+        let result = agent
+            .delete_session(acp::DeleteSessionRequest::new(acp::SessionId::new("vtcode-zed-session-missing")))
+            .await;
+        let error = format!("{:?}", result.expect_err("unknown delete must fail"));
+        assert!(error.contains("unknown_session"));
+    }
+
+    #[tokio::test]
+    async fn delete_after_delete_fails_closed() {
+        let temp = TempDir::new().unwrap();
+        let agent = build_agent(temp.path()).await;
+        let session_id = agent.register_session();
+
+        drop(
+            agent
+                .delete_session(acp::DeleteSessionRequest::new(session_id.clone()))
+                .await
+                .unwrap(),
+        );
+        let again = agent.delete_session(acp::DeleteSessionRequest::new(session_id)).await;
+        let error = format!("{:?}", again.expect_err("second delete must fail"));
+        assert!(error.contains("unknown_session"));
     }
 }

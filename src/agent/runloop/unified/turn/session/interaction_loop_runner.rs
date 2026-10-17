@@ -29,14 +29,14 @@ use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, memory_prompt, slash_command_handler, tool_dispatch,
 };
 use status_refresh::{StatusRefreshContext, StatusRefreshReason, StatusRefreshRequest, refresh_interaction_ui};
+pub(crate) use support::handle_select_primary_agent;
 use support::{
     InlineLoopActionResolution, apply_live_theme_and_appearance, build_durable_scheduler_daemon,
-    build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview,
-    refresh_ide_context_before_user_turn, replace_submitted_input_text, resolve_inline_loop_action, scheduler_enabled,
-    selected_model_supports_image_input, stalled_follow_up_recovery_prompt, stalled_verification_resume_directive,
-    submitted_images_are_unsupported, sync_mcp_approval_policy_for_context,
+    build_user_message_content, extract_recent_follow_up_hint, fallback_args_preview, replace_submitted_input_text,
+    resolve_inline_loop_action, scheduler_enabled, selected_model_supports_image_input,
+    stalled_follow_up_recovery_prompt, stalled_verification_resume_directive, submitted_images_are_unsupported,
+    sync_mcp_approval_policy_for_context,
 };
-pub(crate) use support::{handle_select_primary_agent, try_resume_latest_session};
 use vtcode_config::loader::SimpleConfigWatcher;
 
 /// Shared by both repeated-follow-up directives: structured next-step fields
@@ -58,6 +58,15 @@ fn repeated_follow_up_directive(stalled: bool) -> String {
 }
 const SCHEDULED_PROMPT_INACTIVITY_GRACE: Duration = Duration::from_secs(2);
 const DURABLE_SCHEDULER_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+fn idle_completion_outcome(
+    action: &InlineLoopAction,
+    ordinary_completions: usize,
+    matrix_ready: bool,
+) -> Option<InteractionOutcome> {
+    (matches!(action, InlineLoopAction::Continue) && (ordinary_completions > 0 || matrix_ready))
+        .then_some(InteractionOutcome::BackgroundCompletionReady)
+}
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(super) async fn run_interaction_loop_impl(
@@ -177,6 +186,26 @@ pub(super) async fn run_interaction_loop_impl(
             return Ok(InteractionOutcome::Exit { reason: SessionEndReason::Exit });
         }
 
+        // This loop runs only at the idle input boundary. Reevaluate the live
+        // provider and mode after settings/auth changes, with a session latch.
+        crate::agent::runloop::unified::fast_mode::maybe_render_fast_mode_suggestion(
+            ctx.renderer,
+            ctx.config,
+            ctx.vt_cfg.as_ref(),
+            ctx.session_stats,
+        )?;
+        let applicable = crate::agent::runloop::unified::auto_permission::decisions_suggestion_applicable(
+            ctx.renderer.supports_inline_ui(),
+            true,
+            ctx.tool_registry.is_planning_active(),
+            ctx.provider_client.as_ref(),
+            ctx.vt_cfg.as_ref(),
+        );
+        if ctx.session_stats.take_decisions_probe_suggestion(applicable) {
+            ctx.renderer
+                .line(MessageStyle::Info, crate::agent::runloop::unified::auto_permission::DECISIONS_SUGGESTION)?;
+        }
+
         let interrupts = InlineInterruptCoordinator::new(ctx.ctrl_c_state.as_ref());
         let use_unicode = ctx.renderer.should_use_unicode_formatting();
         let idle_wake_delay = STATUS_REFRESH_INTERVAL.saturating_sub(last_status_refresh.elapsed());
@@ -211,6 +240,7 @@ pub(super) async fn run_interaction_loop_impl(
             editor_open_sender: ctx.editor_open_sender,
             editor_open_dispatcher: ctx.editor_open_dispatcher.clone(),
             exec_sessions: Some(ctx.tool_registry.exec_session_manager()),
+            tool_registry: Some(ctx.tool_registry.clone()),
             background_completion_notify: ctx.background_completion_notify.clone(),
             exec_completion_notify: ctx.exec_completion_notify.clone(),
             webmcp_prompt_receiver: ctx.webmcp_prompt_receiver,
@@ -255,15 +285,19 @@ pub(super) async fn run_interaction_loop_impl(
                     let _ = emitter.emit(background_completion_thread_event(event));
                 }
             }
-            if completion_drain.added.saturating_add(exec_completion_drain.added) > 0 {
-                let controller = ctx.tool_registry.subagent_controller();
+            let controller = ctx.tool_registry.subagent_controller();
+            if let Some(outcome) = idle_completion_outcome(
+                &inline_action,
+                completion_drain.added.saturating_add(exec_completion_drain.added),
+                controller.as_ref().is_some_and(|controller| controller.has_matrix_completion()),
+            ) {
                 if let Err(error) =
                     refresh_local_agents(ctx.handle, controller.as_ref(), ctx.tool_registry.exec_session_manager())
                         .await
                 {
                     tracing::warn!(%error, "Failed to synchronize Local Agents after background completion");
                 }
-                return Ok(InteractionOutcome::BackgroundCompletionReady);
+                return Ok(outcome);
             }
         }
 
@@ -375,6 +409,11 @@ pub(super) async fn run_interaction_loop_impl(
         if submitted_input.is_empty() {
             continue;
         }
+
+        let submission_progress = ctx
+            .handle
+            .begin_progress(vtcode_commons::ui_protocol::ProgressPhase::PreparingContext);
+        tracing::debug!(target: "vtcode.response_latency", operation_id = submission_progress.operation().id(), "submission accepted");
 
         // A fresh submitted input starts a new turn. Clear any stale local cancel
         // latch left behind by a prior interrupted turn so permission modals and
@@ -614,6 +653,7 @@ pub(super) async fn run_interaction_loop_impl(
                         crate::agent::runloop::unified::turn::tool_outcomes::helpers::resolve_harness_verifier_command(
                             ctx.vt_cfg.as_ref(),
                             ctx.config.workspace.as_path(),
+                            ctx.conversation_history,
                         );
                     ctx.conversation_history
                         .push(uni::Message::system(stalled_verification_resume_directive(verifier.as_deref())));
@@ -652,7 +692,6 @@ pub(super) async fn run_interaction_loop_impl(
         let input = submitted_input.text.as_str();
 
         let refined_content = build_user_message_content(ctx, &submitted_input).await;
-        refresh_ide_context_before_user_turn(ctx);
 
         display_user_message(ctx.renderer, input)?;
 
@@ -663,6 +702,7 @@ pub(super) async fn run_interaction_loop_impl(
 
         let prompt_message_index = ctx.conversation_history.len();
         ctx.conversation_history.push(user_message);
+        submission_progress.transfer();
         return Ok(InteractionOutcome::Continue {
             input: input.to_string(),
             prompt_message_index: Some(prompt_message_index),
@@ -670,3 +710,6 @@ pub(super) async fn run_interaction_loop_impl(
         });
     }
 }
+
+#[cfg(test)]
+mod tests;

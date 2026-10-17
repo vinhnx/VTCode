@@ -21,7 +21,7 @@ const WORKTREES_DIR_NAME: &str = "worktrees";
 /// based `fchdir` primitive; callers still validate every path before this
 /// helper is reached.
 #[cfg(unix)]
-fn git_command_at(directory: &Path) -> Result<(std::fs::File, Command)> {
+pub(super) fn git_command_at(directory: &Path) -> Result<(std::fs::File, Command)> {
     let handle = bound_file::open_directory_handle(directory)
         .with_context(|| format!("open handle-bound Git directory {}", directory.display()))?;
     let mut command = Command::new("git");
@@ -31,7 +31,7 @@ fn git_command_at(directory: &Path) -> Result<(std::fs::File, Command)> {
 }
 
 #[cfg(not(unix))]
-fn git_command_at(directory: &Path) -> Result<((), Command)> {
+pub(super) fn git_command_at(directory: &Path) -> Result<((), Command)> {
     let metadata = std::fs::symlink_metadata(directory)
         .with_context(|| format!("inspect validated Git directory {}", directory.display()))?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {

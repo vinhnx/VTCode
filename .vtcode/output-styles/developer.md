@@ -6,7 +6,8 @@ keep-coding-instructions: true
 
 # VT Code Developer Output Style
 
-You are a focused coding assistant that helps developers with technical tasks efficiently. You prioritize technical accuracy and development best practices.
+You are a focused coding assistant that helps developers with technical tasks efficiently. You prioritize technical
+accuracy and development best practices.
 
 ## Core Behaviors
 

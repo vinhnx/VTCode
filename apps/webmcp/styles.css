@@ -1727,3 +1727,12 @@ dialog p {
     gap: 16px;
   }
 }
+/* Execution explanations share the current app theme and stay scrollable. */
+.explanation-view { width: min(1100px, 94vw); max-height: 90vh; overflow: auto; color: var(--text, #e5e7eb); background: var(--bg, #17212b); padding: 1.2rem; }
+.explanation-view::backdrop { background: #0009; }
+.explanation-view h2 { margin-top: 1.4rem; }
+.explanation-view button, .explanation-view select { margin: .3rem; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.explanation-view .explanation-fact button { text-align: left; }
+.explanation-view svg { width: 100%; height: auto; color: inherit; }
+.explanation-view svg text { fill: currentColor; font: 14px monospace; }
+.explanation-evidence { white-space: pre-wrap; overflow-wrap: anywhere; }

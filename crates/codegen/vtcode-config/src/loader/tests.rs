@@ -4,7 +4,6 @@ use crate::constants::tool_limits;
 use crate::core::prompt_cache::PromptCacheRetention;
 use crate::core::{CustomProviderApiFormat, CustomProviderConfig, CustomProviderProfileConfig};
 use crate::defaults::{self, SyntaxHighlightingDefaults, WorkspacePathsDefaults};
-use crate::ide_context::{IdeContextProviderConfig, IdeContextProviderMode, IdeContextProvidersConfig};
 use crate::loader::layers::ConfigLayerSource;
 use crate::types::ReasoningEffortLevel;
 use serial_test::serial;
@@ -743,33 +742,6 @@ fn load_from_file_rejects_invalid_syntax_highlighting() {
 }
 
 #[test]
-fn ide_context_fields_round_trip_through_toml() {
-    let mut config = VTCodeConfig::default();
-    config.ide_context.enabled = false;
-    config.ide_context.inject_into_prompt = false;
-    config.ide_context.show_in_tui = false;
-    config.ide_context.include_selection_text = false;
-    config.ide_context.provider_mode = IdeContextProviderMode::Zed;
-    config.ide_context.providers = IdeContextProvidersConfig {
-        vscode_compatible: IdeContextProviderConfig { enabled: false },
-        zed: IdeContextProviderConfig { enabled: true },
-        generic: IdeContextProviderConfig { enabled: false },
-    };
-
-    let serialized = toml::to_string(&config).expect("serialize config");
-    let parsed: VTCodeConfig = toml::from_str(&serialized).expect("parse config");
-
-    assert!(!parsed.ide_context.enabled);
-    assert!(!parsed.ide_context.inject_into_prompt);
-    assert!(!parsed.ide_context.show_in_tui);
-    assert!(!parsed.ide_context.include_selection_text);
-    assert_eq!(parsed.ide_context.provider_mode, IdeContextProviderMode::Zed);
-    assert!(!parsed.ide_context.providers.vscode_compatible.enabled);
-    assert!(parsed.ide_context.providers.zed.enabled);
-    assert!(!parsed.ide_context.providers.generic.enabled);
-}
-
-#[test]
 fn custom_providers_fields_round_trip_through_toml() {
     let mut config = VTCodeConfig::default();
     config.custom_providers.push(CustomProviderConfig {
@@ -1091,6 +1063,65 @@ default_policy = "deny"
     assert!(saved_content.contains("# Provider comment"), "inline comment should be preserved");
     assert!(saved_content.contains("# Tools section comment"), "section comment should be preserved");
     assert!(saved_content.contains("gpt-5"), "modified value should be present");
+}
+
+#[test]
+fn save_clears_default_absent_optional_fields_from_existing_file() {
+    // Regression: picking "Project default" service_tier must remove a
+    // previously saved tier. Optional fields absent from the default
+    // serialization were never visited by the sparse merge, so stale values
+    // survived every save and the next session kept using them.
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let path = workspace.path().join("vtcode.toml");
+    fs::write(&path, "[provider.openai]\nservice_tier = \"ultrafast\"\n[provider.anthropic]\nspeed = \"fast\"\n[foreign_tool]\nkeep_me = true\n")
+        .expect("seed config");
+
+    let config = VTCodeConfig::default();
+    assert_eq!(config.provider.openai.service_tier, None);
+    ConfigManager::save_config_to_path(&path, &config).expect("save");
+
+    let saved = fs::read_to_string(&path).expect("read back");
+    assert!(!saved.contains("ultrafast"), "stale tier must be cleared, got:\n{saved}");
+    assert!(!saved.contains("[provider.openai]"), "emptied table must be pruned, got:\n{saved}");
+    assert!(saved.contains("keep_me"), "foreign keys must be preserved, got:\n{saved}");
+
+    let reloaded: VTCodeConfig = toml::from_str(&saved).expect("reload");
+    assert_eq!(reloaded.provider.openai.service_tier, None);
+    assert_eq!(reloaded.provider.anthropic.speed, None);
+    assert!(!saved.contains("[provider.anthropic]"), "stale Claude speed must be cleared: {saved}");
+}
+
+#[test]
+fn save_config_rejects_malformed_existing_file_without_replacement() {
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let path = workspace.path().join("vtcode.toml");
+    let original = "[agent\nprovider = \"openai\"\n";
+    fs::write(&path, original).expect("seed malformed config");
+    let error = ConfigManager::save_config_to_path(&path, &VTCodeConfig::default()).expect_err("reject malformed");
+    assert!(format!("{error:#}").contains("Failed to parse existing config"));
+    assert_eq!(fs::read_to_string(&path).expect("read back"), original);
+}
+
+#[cfg(unix)]
+#[test]
+fn save_config_rejects_symlink_without_modifying_destination() {
+    use std::os::unix::fs::symlink;
+
+    let workspace = assert_fs::TempDir::new().expect("workspace");
+    let destination = workspace.path().join("outside.toml");
+    let path = workspace.path().join("vtcode.toml");
+    let original = "# protected destination\n[agent]\nprovider = \"openai\"\n";
+    fs::write(&destination, original).expect("seed destination");
+    symlink(&destination, &path).expect("create symlink");
+    let config = VTCodeConfig::default();
+    for result in [
+        ConfigManager::save_config_to_path(&path, &config),
+        ConfigManager::save_repository_config_to_path(&path, &config),
+    ] {
+        assert!(format!("{:#}", result.expect_err("reject symlink")).contains("symlink"));
+        assert_eq!(fs::read_to_string(&destination).expect("read destination"), original);
+        assert!(fs::symlink_metadata(&path).expect("link metadata").file_type().is_symlink());
+    }
 }
 
 #[test]

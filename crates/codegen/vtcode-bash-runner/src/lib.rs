@@ -53,7 +53,7 @@ pub use executor::{CommandCategory, CommandExecutor, CommandInvocation, CommandO
 pub use policy::{AllowAllPolicy, CommandPolicy, WorkspaceGuardPolicy};
 
 // Runner
-pub use runner::BashRunner;
+pub use runner::{BashRunner, RmOptions};
 
 // Stream utilities
 pub(crate) use stream::{ReadLineResult, read_line_with_limit};

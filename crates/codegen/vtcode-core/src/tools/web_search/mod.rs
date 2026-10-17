@@ -19,13 +19,13 @@
 use super::traits::Tool;
 use crate::config::constants::tools;
 use anyhow::{Context, Result, anyhow};
+use astral_html::Token;
 use async_trait::async_trait;
-use regex::Regex;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use url::Url;
 use vtcode_config::{WebSearchConfig, WebSearchProvider};
@@ -367,13 +367,13 @@ fn build_youcom_client(timeout_secs: u64) -> Result<reqwest::Client> {
 
 // ---------------------------------------------------------------------------
 // DuckDuckGo (keyless, best-effort HTML scraping)
+//
+// Result extraction is tokenized with `astral-html`'s streaming `Reader`
+// (pinned pilot dependency, vtcode-core only): tag and attribute names
+// arrive ASCII-lowercased, text in `script`/`style` stays raw text instead
+// of spurious tags, and each snippet is collected from its own anchor's
+// window so a missing snippet yields empty rather than the next result's.
 // ---------------------------------------------------------------------------
-
-static DDG_RESULT_ANCHOR: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?s)<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>"#).expect("valid DDG anchor regex")
-});
-static DDG_SNIPPET: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?s)class="result__snippet"[^>]*>(.*?)</a>"#).expect("valid DDG snippet regex"));
 
 async fn duckduckgo_search(query: &str, max_results: usize, timeout_secs: u64) -> Result<Vec<SearchResult>> {
     let client = build_client(timeout_secs)?;
@@ -401,38 +401,170 @@ async fn duckduckgo_search(query: &str, max_results: usize, timeout_secs: u64) -
         ));
     }
 
-    let body = response.text().await.context("failed to read DuckDuckGo response body")?;
+    let body = read_capped_ddg_body(response).await?;
 
     Ok(parse_duckduckgo_html(&body, max_results))
 }
 
+/// Upper bound for a DuckDuckGo HTML answer body. Result pages are a few
+/// hundred kilobytes; the cap only bites on adversarial responses, and the
+/// streaming parser stops at `max_results` well before it anyway.
+const MAX_DDG_BODY_BYTES: usize = 1_000_000;
+
+/// Read a DDG response body with an explicit byte cap. Decoding is lossy
+/// rather than fallible: DuckDuckGo serves UTF-8, and a corrupt byte must
+/// not turn into a hard error when partial results will do.
+async fn read_capped_ddg_body(response: reqwest::Response) -> Result<String> {
+    let bytes = response.bytes().await.context("failed to read DuckDuckGo response body")?;
+    Ok(capped_body_text(&bytes))
+}
+
+/// Pure, testable core of [`read_capped_ddg_body`]: cap at
+/// `MAX_DDG_BODY_BYTES`, then lossy-decode (never panics, even on a split
+/// trailing char or leading garbage).
+fn capped_body_text(bytes: &[u8]) -> String {
+    let end = bytes.len().min(MAX_DDG_BODY_BYTES);
+    String::from_utf8_lossy(&bytes[..end]).into_owned()
+}
+
 /// Extract ranked results from a DuckDuckGo HTML body. Pure function so it can
 /// be exercised in unit tests against a local fixture (no live network).
+///
+/// Single streaming pass: a result anchor opens title collection, its first
+/// `</a>` completes it, and the following `result__snippet` element (before
+/// the next result anchor) supplies the snippet. First-close-wins keeps
+/// parity with the previous extractor on well-formed markup.
 pub fn parse_duckduckgo_html(body: &str, max_results: usize) -> Vec<SearchResult> {
-    let snippets: Vec<String> = DDG_SNIPPET.captures_iter(body).map(|c| clean_html(&c[1])).collect();
-
     let mut results = Vec::new();
-    for (idx, caps) in DDG_RESULT_ANCHOR.captures_iter(body).enumerate() {
+    let mut state = DdgSection::Idle;
+    for token in astral_html::Reader::new(body) {
         if results.len() >= max_results {
             break;
         }
-        let raw_href = &caps[1];
-        let title = clean_html(&caps[2]);
-        let Some(url) = normalize_ddg_url(raw_href) else {
-            continue;
-        };
-        if title.is_empty() {
-            continue;
+        match token {
+            Token::StartTag(tag) => {
+                if tag.name == "a" && has_ddg_class(&tag, "result__a") {
+                    // A new result anchor ends the pending one (keeping an
+                    // empty snippet) and drops any partial buffers.
+                    if let DdgSection::AfterTitle { url, title } = std::mem::replace(&mut state, DdgSection::Idle) {
+                        push_ddg_result(&mut results, url, title, String::new(), max_results);
+                        if results.len() >= max_results {
+                            break;
+                        }
+                    }
+                    if !tag.self_closing {
+                        if let Some(href) = ddg_attr(&tag, "href") {
+                            state = DdgSection::InTitle { href: href.to_string(), buf: String::new() };
+                        }
+                    }
+                } else if matches!(state, DdgSection::AfterTitle { .. }) && has_ddg_class(&tag, "result__snippet") {
+                    if let DdgSection::AfterTitle { url, title } = std::mem::replace(&mut state, DdgSection::Idle) {
+                        if tag.self_closing {
+                            push_ddg_result(&mut results, url, title, String::new(), max_results);
+                        } else {
+                            state = DdgSection::InSnippet {
+                                url,
+                                title,
+                                name: tag.name.to_string(),
+                                buf: String::new(),
+                            };
+                        }
+                    }
+                }
+                // All other tags are content or noise: nested formatting
+                // text arrives as Text tokens; nothing to do here.
+            }
+            Token::Text(text) => match &mut state {
+                DdgSection::InTitle { buf, .. } | DdgSection::InSnippet { buf, .. } => {
+                    buf.push_str(&text);
+                }
+                DdgSection::Idle | DdgSection::AfterTitle { .. } => {}
+            },
+            Token::EndTag(tag) => {
+                if tag.name == "a" && matches!(state, DdgSection::InTitle { .. }) {
+                    if let DdgSection::InTitle { href, buf } = std::mem::replace(&mut state, DdgSection::Idle) {
+                        let title = buf.trim().to_string();
+                        if !title.is_empty() {
+                            if let Some(url) = normalize_ddg_url(&href) {
+                                state = DdgSection::AfterTitle { url, title };
+                            }
+                        }
+                    }
+                } else if matches!(state, DdgSection::InSnippet { .. }) {
+                    let done = if let DdgSection::InSnippet { name, .. } = &state {
+                        tag.name == *name
+                    } else {
+                        false
+                    };
+                    if done {
+                        if let DdgSection::InSnippet { url, title, buf, .. } =
+                            std::mem::replace(&mut state, DdgSection::Idle)
+                        {
+                            push_ddg_result(&mut results, url, title, buf, max_results);
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
-        let snippet = snippets.get(idx).cloned().unwrap_or_default();
-        results.push(SearchResult {
-            title: truncate_chars(&title, MAX_TITLE_CHARS),
-            url,
-            snippet: truncate_chars(&snippet, MAX_SNIPPET_CHARS),
-        });
     }
-
+    // Trailing result without a snippet element keeps an empty snippet.
+    if let DdgSection::AfterTitle { url, title } = state {
+        push_ddg_result(&mut results, url, title, String::new(), max_results);
+    }
     results
+}
+
+/// Tokenizer position while extracting one result: idle, collecting the
+/// anchor title, holding a completed title, or collecting its snippet.
+enum DdgSection {
+    Idle,
+    InTitle {
+        href: String,
+        buf: String,
+    },
+    AfterTitle {
+        url: String,
+        title: String,
+    },
+    InSnippet {
+        url: String,
+        title: String,
+        name: String,
+        buf: String,
+    },
+}
+
+/// Decoded value of attribute `name` on `tag`, if present. Attribute names
+/// are ASCII-lowercased by the tokenizer, so plain equality applies.
+fn ddg_attr(tag: &astral_html::Tag<'_>, name: &str) -> Option<String> {
+    tag.attributes
+        .iter()
+        .find(|attr| attr.name == name)
+        .map(|attr| attr.value().to_string())
+}
+
+/// Whether the tag's `class` attribute carries `class` as a whitespace
+/// separated token (ASCII case-insensitive, matching DDG's lowercase).
+fn has_ddg_class(tag: &astral_html::Tag<'_>, class: &str) -> bool {
+    tag.attributes
+        .iter()
+        .find(|attr| attr.name == "class")
+        .is_some_and(|attr| attr.value().split_whitespace().any(|token| token.eq_ignore_ascii_case(class)))
+}
+
+/// Append one validated result unless the cap is reached. Callers validate
+/// the URL and require a non-empty title before reaching `AfterTitle`, so
+/// this only truncates and pushes.
+fn push_ddg_result(results: &mut Vec<SearchResult>, url: String, title: String, snippet: String, max_results: usize) {
+    if results.len() >= max_results {
+        return;
+    }
+    results.push(SearchResult {
+        title: truncate_chars(&title, MAX_TITLE_CHARS),
+        url,
+        snippet: truncate_chars(&snippet, MAX_SNIPPET_CHARS),
+    });
 }
 
 /// Resolve a DuckDuckGo result href into a real https/http URL.
@@ -590,35 +722,8 @@ fn parsed_web_hits(response: YoucomSearchResponse) -> impl Iterator<Item = Youco
 // Helpers
 // ---------------------------------------------------------------------------
 
-static HTML_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<[^>]+>").expect("valid html tag regex"));
-
-/// Strip HTML tags and decode common entities from a snippet/title fragment.
-fn clean_html(input: &str) -> String {
-    let without_tags = HTML_TAG.replace_all(input, "");
-    decode_html_entities(without_tags.trim())
-}
-
-fn decode_html_entities(input: &str) -> String {
-    input
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&#x27;", "'")
-        .replace("&#x2F;", "/")
-        .replace("&nbsp;", " ")
-        .replace("&hellip;", "…")
-}
-
 fn truncate_chars(input: &str, max_chars: usize) -> String {
-    let trimmed = input.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_string();
-    }
-    let mut out: String = trimmed.chars().take(max_chars).collect();
-    out.push('…');
-    out
+    vtcode_commons::formatting::truncate_text(input.trim(), max_chars, "…")
 }
 
 #[async_trait]
@@ -639,11 +744,7 @@ impl Tool for WebSearchTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clean_html_strips_tags_and_decodes_entities() {
-        assert_eq!(clean_html("<b>Rust</b> &amp; <i>Cargo</i> &#39;build&#39;"), "Rust & Cargo 'build'");
-    }
+    use crate::tools::web_fetch::classify_helpers::decode_html_entities;
 
     #[test]
     fn normalize_ddg_url_extracts_uddg_target() {
@@ -740,6 +841,153 @@ mod tests {
         // how to surface this to the agent.
         let challenge = r#"<html><body>Anomaly detected.</body></html>"#;
         assert!(parse_duckduckgo_html(challenge, 10).is_empty());
+    }
+
+    #[test]
+    fn parse_accepts_href_before_class_and_single_quotes() {
+        // Asymmetric attribute order + quote style: the old regex required
+        // `class="result__a"` before `href="..."` with double quotes.
+        let body = r#"
+            <a href='https://example.com/b-first' class='result__a'>B first</a>
+            <a class="result__snippet">Snippet B.</a>
+            <a href="https://example.com/a-second" class="result__a extra">A second</a>
+            <a class="result__snippet">Snippet A.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].url, "https://example.com/b-first");
+        assert_eq!(results[0].snippet, "Snippet B.");
+        assert_eq!(results[1].url, "https://example.com/a-second");
+        assert_eq!(results[1].snippet, "Snippet A.");
+    }
+
+    #[test]
+    fn parse_accepts_uppercase_tags_and_classes() {
+        let body = r#"
+            <A CLASS="RESULT__A" HREF="https://example.com/upper">Upper Title</A>
+            <A CLASS="RESULT__SNIPPET">Upper snippet.</A>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Upper Title");
+        assert_eq!(results[0].snippet, "Upper snippet.");
+    }
+
+    #[test]
+    fn parse_missing_first_snippet_does_not_shift_second() {
+        // Regression for index-aligned snippet lookup: a missing snippet for
+        // the first result must yield empty, not the second result's snippet.
+        let body = r#"
+            <a class="result__a" href="https://example.com/no-snippet">No Snippet</a>
+            <a class="result__a" href="https://example.com/with-snippet">With Snippet</a>
+            <a class="result__snippet">Second snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].snippet, "");
+        assert_eq!(results[1].snippet, "Second snippet.");
+    }
+
+    #[test]
+    fn parse_skipped_anchors_do_not_steal_snippets() {
+        // Asymmetric: [bad, good] vs [good, bad]. A skipped `javascript:`
+        // anchor must not consume or shift the good result's snippet.
+        let bad_first = r#"
+            <a class="result__a" href="javascript:alert(1)">Bad</a>
+            <a class="result__snippet">Bad snippet.</a>
+            <a class="result__a" href="https://example.com/good">Good</a>
+            <a class="result__snippet">Good snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(bad_first, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].url, "https://example.com/good");
+        assert_eq!(results[0].snippet, "Good snippet.");
+
+        let good_first = r#"
+            <a class="result__a" href="https://example.com/good">Good</a>
+            <a class="result__snippet">Good snippet.</a>
+            <a class="result__a" href="javascript:alert(1)">Bad</a>
+            <a class="result__snippet">Bad snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(good_first, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].snippet, "Good snippet.");
+    }
+
+    #[test]
+    fn parse_ignores_anchors_inside_script() {
+        // Tokenizer advantage over regex: `script` content is raw text, so
+        // a fake anchor inside JavaScript never becomes a result.
+        let body = concat!(
+            "<script>var x = '<a class=\"result__a\" href=\"https://example.com/evil\">Evil</a>';</script>",
+            "<a class=\"result__a\" href=\"https://example.com/good\">Good</a>",
+            "<a class=\"result__snippet\">Good snippet.</a>",
+        );
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].url, "https://example.com/good");
+        assert_eq!(results[0].snippet, "Good snippet.");
+    }
+
+    #[test]
+    fn parse_collects_nested_formatting_text_in_title() {
+        let body = concat!(
+            "<a class=\"result__a\" href=\"https://example.com/fmt\">Hello <b>Bold</b> tail</a>",
+            "<a class=\"result__snippet\">S.</a>",
+        );
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Hello Bold tail");
+    }
+
+    #[test]
+    fn capped_body_text_passes_small_bodies_through() {
+        assert_eq!(capped_body_text(b"<html>hi</html>"), "<html>hi</html>");
+        assert_eq!(capped_body_text(b""), "");
+    }
+
+    #[test]
+    fn capped_body_text_truncates_huge_bodies_without_panicking_on_split_chars() {
+        // 999_999 ASCII bytes + one 2-byte `é`: the 1MB cap lands mid-char.
+        // The ASCII prefix survives; the split tail becomes U+FFFD.
+        let mut bytes = vec![b'a'; 999_999];
+        bytes.extend_from_slice("é".as_bytes());
+        let text = capped_body_text(&bytes);
+        assert!(text[..999_999].bytes().all(|b| b == b'a'));
+
+        let huge = vec![b'a'; MAX_DDG_BODY_BYTES + 5];
+        assert_eq!(capped_body_text(&huge).len(), MAX_DDG_BODY_BYTES);
+    }
+
+    #[test]
+    fn capped_body_text_is_lossy_not_panicky_on_invalid_utf8() {
+        let text = capped_body_text(b"\xff\xfe<html></html>");
+        assert!(text.contains("<html>"), "got: {text}");
+    }
+
+    #[test]
+    fn decode_numeric_hex_and_named_entities() {
+        assert_eq!(decode_html_entities("&#65;&#x42;&#X43;"), "ABC");
+        assert_eq!(decode_html_entities("&rsquo;&ldquo;&mdash;"), "’“—");
+        assert_eq!(decode_html_entities("&amp;lt;"), "&lt;");
+        assert_eq!(decode_html_entities("&#9999999;"), "&#9999999;");
+    }
+
+    #[test]
+    fn parse_accepts_unquoted_href_and_td_closed_snippet() {
+        let body = r#"
+            <a class=result__a href=https://example.com/unquoted>Unquoted</a>
+            <td class="result__snippet">TD snippet.</td>
+            <abbr title="abbreviation">abbr</abbr>
+            <a class="result__a" href="https://example.com/second">Second</a>
+            <a class="result__snippet">Second snippet.</a>
+        "#;
+        let results = parse_duckduckgo_html(body, 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].url, "https://example.com/unquoted");
+        assert_eq!(results[0].snippet, "TD snippet.");
+        assert_eq!(results[1].url, "https://example.com/second");
+        assert_eq!(results[1].snippet, "Second snippet.");
     }
 
     #[test]

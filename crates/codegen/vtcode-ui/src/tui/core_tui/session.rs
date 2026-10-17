@@ -47,6 +47,7 @@ mod message;
 pub mod modal;
 pub mod mouse_selection;
 mod navigation;
+mod progress;
 mod queue;
 pub(crate) mod render;
 mod render_state;
@@ -74,6 +75,7 @@ mod reflow;
 pub(crate) mod reverse_search;
 mod spinner;
 mod state;
+mod sticky_prompt;
 pub mod terminal_capabilities;
 pub(crate) mod terminal_title;
 #[cfg(test)]
@@ -230,15 +232,20 @@ pub struct Session {
     placeholder: Option<String>,
     placeholder_style: Option<InlineTextStyle>,
     pub(crate) input_status_left: Option<String>,
+    footer_context_status: Option<String>,
+    footer_context_right: Option<String>,
+    footer_context_configured: bool,
     pub(crate) input_status_right: Option<String>,
     /// Transient "copied"/"copy failed" confirmation shown in the input status row.
     copy_notification_until: Option<Instant>,
     copy_notification_failed: bool,
+    copy_notification_chars: usize,
     input_compact_mode: bool,
 
     // --- UI State ---
     navigation_state: ListState,
     input_enabled: bool,
+    pub(crate) program_status: super::program_status::ProgramStatus,
     pub(crate) activity_state: ActivityState,
     image_input_enabled: bool,
     cursor_visible: bool,
@@ -272,6 +279,9 @@ pub struct Session {
     pub(crate) transcript_width: u16,
     pub(crate) transcript_view_top: usize,
     areas: SessionAreas,
+    sticky_prompt_target: Option<sticky_prompt::StickyPromptTarget>,
+    sticky_prompt_preview_cache: Option<sticky_prompt::StickyPromptPreviewCache>,
+    leading_user_prompt_truncated: bool,
     transcript_file_link_targets: Vec<TranscriptFileLinkTarget>,
     modal_link_targets: Vec<TranscriptFileLinkTarget>,
     hovered_transcript_file_link: Option<usize>,
@@ -316,6 +326,7 @@ pub struct Session {
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
     pub(crate) shimmer_state: ShimmerState,
+    pub(crate) progress: progress::TransientProgress,
 
     // --- Reverse Search ---
     pub(crate) reverse_search_state: reverse_search::ReverseSearchState,
@@ -349,10 +360,14 @@ pub struct Session {
     pub(crate) fullscreen: FullscreenSessionState,
 
     // --- Performance Caching ---
-    header_lines_cache: Option<Vec<Line<'static>>>,
+    header_lines_cache: Option<Arc<Vec<Line<'static>>>>,
+    header_block_title_cache: Option<Line<'static>>,
     header_height_cache: hashbrown::HashMap<u16, u16>,
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
     subprocess_entries_preview_cache: Option<Vec<String>>,
+    /// Fingerprint of the last `build_input_render` inputs (width, height,
+    /// content_hash, cursor, compact, suggested) plus the built result.
+    input_render_cache: Option<(u16, u16, u64, usize, bool, bool, input::InputRender)>,
 
     // --- Terminal Title ---
     /// Product/app name used in terminal title branding

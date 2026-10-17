@@ -72,6 +72,18 @@ pub fn process_declaration_file(
     source_cache.insert(canonical, source);
 }
 
+/// Per-file caches shared across a code-search aggregation pass.
+///
+/// `sources` memoizes file text; `trees` memoizes the parsed tree so a file
+/// with many literal hits is parsed once rather than once per hit.
+#[derive(Default)]
+pub struct SourceTreeCache {
+    /// Canonical-path-keyed file text, shared with `process_declaration_file`.
+    pub sources: HashMap<PathBuf, String>,
+    /// Canonical-path-keyed parse result (`None` caches a parse failure).
+    pub trees: HashMap<PathBuf, Option<tree_sitter::Tree>>,
+}
+
 pub fn classify_literal_candidates(
     scope: &ResolvedSearchScope,
     languages: &[AstGrepLanguage],
@@ -79,7 +91,7 @@ pub fn classify_literal_candidates(
     usage_enabled: bool,
     text_enabled: bool,
     outline_stream_complete: bool,
-    source_cache: &mut HashMap<PathBuf, String>,
+    caches: &mut SourceTreeCache,
     inventories: &HashMap<PathBuf, DeclarationInventory>,
     candidates: &mut Vec<RankedCandidate>,
 ) {
@@ -99,13 +111,20 @@ pub fn classify_literal_candidates(
         let can_classify_usage = usage_enabled
             && language.is_some_and(|language| usage_node_kind_allowlist(language).is_some())
             && inventory.map_or(outline_stream_complete, |inventory| inventory.complete);
-        let is_usage = if can_classify_usage {
-            let source = source_cache
+        let is_usage = if can_classify_usage && let Some(language) = language {
+            let source = caches
+                .sources
                 .entry(canonical.clone())
                 .or_insert_with(|| std::fs::read_to_string(&canonical).unwrap_or_default());
-            language
-                .and_then(|language| parse_source(language, source).ok().map(|tree| (language, tree)))
-                .is_some_and(|(language, tree)| is_exact_usage_identifier(&tree, language, range))
+            // Parse once per file: a file with N literal hits was previously
+            // re-parsed N times. `Tree` is refcounted, so the cache lookup is
+            // cheap and `is_exact_usage_identifier` only needs a borrow.
+            let tree = caches
+                .trees
+                .entry(canonical.clone())
+                .or_insert_with(|| parse_source(language, source).ok());
+            tree.as_ref()
+                .is_some_and(|tree| is_exact_usage_identifier(tree, language, range))
         } else {
             false
         };

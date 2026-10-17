@@ -6,6 +6,80 @@
 use super::*;
 
 #[tokio::test]
+async fn headless_planning_prompt_preserves_canonical_contract_at_both_densities() {
+    use crate::config::types::{ShellPromptProfile, SystemPromptMode};
+    use crate::prompts::system::*;
+
+    for mode in [
+        SystemPromptMode::Default,
+        SystemPromptMode::Minimal,
+        SystemPromptMode::Lightweight,
+        SystemPromptMode::Specialized,
+    ] {
+        for environment in [false, true] {
+            for budget in [100_000, 1] {
+                let temp = TempDir::new().expect("workspace");
+                let mut config = VTCodeConfig::default();
+                config.agent.system_prompt_mode = mode;
+                config.agent.include_temporal_context = false;
+                config.agent.include_working_directory = environment;
+                config.agent.instruction_max_bytes = 0;
+                config.agent.shell_prompt_profile = ShellPromptProfile::UnixLike;
+                config.agent.max_system_prompt_tokens = budget;
+                config.agent.trim_system_prompt = false;
+                config.tools.profile = ToolProfile::AdvancedVtCode;
+                let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
+                    AgentType::Single,
+                    ModelId::default(),
+                    "test-key".to_string(),
+                    temp.path().to_path_buf(),
+                    "thread-planning-contract".to_string(),
+                    RunnerSettings { reasoning_effort: None, verbosity: None },
+                    None,
+                    ThreadBootstrap::new(None),
+                    Some(config),
+                    None,
+                ))
+                .await
+                .expect("runner");
+                runner.provider_client = Box::new(RecordingQueuedProvider::new(Vec::new()));
+                runner.tool_registry.enable_planning();
+                let bundle = runner
+                    .build_validated_runtime_prompt_bundle(false)
+                    .await
+                    .expect("planning prompt bundle");
+                let prompt = bundle.request_envelope.system_prompt();
+                for line in [
+                    PLANNING_WORKFLOW_PLAN_PERSISTENCE_POLICY_LINE,
+                    PLANNING_WORKFLOW_PLAN_QUALITY_LINE,
+                    PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
+                    PLANNING_WORKFLOW_PLAN_POLICY_LINE,
+                ] {
+                    assert_eq!(prompt.matches(line).count(), 1, "{mode:?}, environment={environment}, budget={budget}");
+                }
+                assert_eq!(prompt.matches("## Active Tools").count(), 1);
+                assert_eq!(prompt.matches("## Environment").count(), usize::from(environment));
+                assert!(prompt.contains(PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE));
+                for duplicate in [
+                    "Monitor the available planning tool-loop budget",
+                    "Every implementation step in the final plan must",
+                    "emit only one `<proposed_plan>` block",
+                    "Stop research when the plan is specified or the budget is near",
+                ] {
+                    assert!(!prompt.contains(duplicate));
+                }
+                assert_eq!(prompt.contains("- Planning is read-only."), budget == 1);
+                let rebuilt = runner
+                    .build_validated_runtime_prompt_bundle(false)
+                    .await
+                    .expect("rebuilt bundle");
+                assert_eq!(prompt, rebuilt.request_envelope.system_prompt());
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn full_auto_allowlist_retains_explicit_internal_tool_without_advertising_it() {
     let temp = TempDir::new().expect("tempdir");
     let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
@@ -241,6 +315,136 @@ async fn active_primary_agent_policy_filters_provider_exposure_and_execution() {
         .expect_err("primary-agent deny should block execution");
 
     assert!(denied.to_string().contains("denied by active primary agent 'auto'"));
+}
+
+#[tokio::test]
+async fn advertisement_and_admission_preserve_global_and_agent_permission_precedence() {
+    struct PermissionCase {
+        global_deny: bool,
+        global_ask: bool,
+        agent_default: Option<PermissionDefault>,
+        agent_deny: bool,
+        exposed: bool,
+    }
+
+    for case in [
+        PermissionCase {
+            global_deny: true,
+            global_ask: false,
+            agent_default: Some(PermissionDefault::Auto),
+            agent_deny: false,
+            exposed: false,
+        },
+        PermissionCase {
+            global_deny: false,
+            global_ask: false,
+            agent_default: Some(PermissionDefault::Auto),
+            agent_deny: true,
+            exposed: false,
+        },
+        PermissionCase {
+            global_deny: false,
+            global_ask: true,
+            agent_default: Some(PermissionDefault::Auto),
+            agent_deny: false,
+            exposed: true,
+        },
+        PermissionCase {
+            global_deny: false,
+            global_ask: true,
+            agent_default: Some(PermissionDefault::Deny),
+            agent_deny: false,
+            exposed: false,
+        },
+        PermissionCase {
+            global_deny: true,
+            global_ask: false,
+            agent_default: None,
+            agent_deny: false,
+            exposed: false,
+        },
+        PermissionCase {
+            global_deny: false,
+            global_ask: true,
+            agent_default: None,
+            agent_deny: false,
+            exposed: true,
+        },
+    ] {
+        let temp = TempDir::new().expect("workspace");
+        let mut config = VTCodeConfig::default();
+        config.permissions.allow = vec!["Bash".to_string()];
+        if case.global_deny {
+            config.permissions.deny = vec!["Bash".to_string()];
+        }
+        if case.global_ask {
+            config.permissions.ask = vec!["Bash".to_string()];
+        }
+        let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
+            AgentType::Single,
+            ModelId::default(),
+            "test-key".to_string(),
+            temp.path().to_path_buf(),
+            "thread-permission-precedence".to_string(),
+            RunnerSettings { reasoning_effort: None, verbosity: None },
+            None,
+            ThreadBootstrap::new(None),
+            Some(config),
+            None,
+        ))
+        .await
+        .expect("runner");
+        runner.active_primary_agent = case.agent_default.map(|default| {
+            let mut spec = vtcode_config::builtin_primary_auto_agent();
+            spec.permissions = AgentPermissionsConfig::new(default);
+            if case.agent_deny {
+                spec.permissions.deny = vec!["Bash".to_string()];
+                spec.permissions.allow = vec!["Bash".to_string()];
+            }
+            ActivePrimaryAgent::from_spec(&spec)
+        });
+
+        assert_eq!(runner.is_tool_exposed(tools::EXEC_COMMAND).await, case.exposed);
+        let mut state = AgentSessionState::new("thread-permission-precedence".to_string(), 1, 1, 8_000);
+        assert_eq!(
+            runner
+                .admit_tool_call(tools::EXEC_COMMAND, json!({"cmd": "true"}), &mut state)
+                .is_ok(),
+            case.exposed
+        );
+    }
+}
+
+#[tokio::test]
+async fn advertisement_keeps_multi_action_tools_conservative_with_and_without_an_agent() {
+    for has_agent in [false, true] {
+        for deny_write in [false, true] {
+            let temp = TempDir::new().expect("workspace");
+            let mut config = VTCodeConfig::default();
+            if deny_write {
+                config.permissions.deny = vec!["Write".to_string()];
+            }
+            let mut runner = Box::pin(AgentRunner::new_with_bootstrap(
+                AgentType::Single,
+                ModelId::default(),
+                "test-key".to_string(),
+                temp.path().to_path_buf(),
+                "thread-multi-action-permissions".to_string(),
+                RunnerSettings { reasoning_effort: None, verbosity: None },
+                None,
+                ThreadBootstrap::new(None),
+                Some(config),
+                None,
+            ))
+            .await
+            .expect("runner");
+            runner.active_primary_agent =
+                has_agent.then(|| ActivePrimaryAgent::from_spec(&vtcode_config::builtin_primary_auto_agent()));
+
+            assert_eq!(runner.is_tool_permitted_for_advertisement(tools::UNIFIED_FILE).await, !deny_write);
+            assert!(runner.is_tool_exposed(tools::APPLY_PATCH).await);
+        }
+    }
 }
 
 #[tokio::test]

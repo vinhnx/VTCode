@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::runtime::{Builder, Runtime};
 use vtcode_commons::canonicalize;
-use vtcode_core::tools::validation::unified_path::validate_and_resolve_path;
+use vtcode_commons::paths::ensure_path_within_workspace_resolved;
 
 const MAX_INPUT_BYTES: usize = 1024;
 
@@ -64,7 +64,11 @@ fuzz_target!(|data: &[u8]| {
         candidate
     };
 
-    let result = runtime().block_on(validate_and_resolve_path(&workspace_root, &path_input));
+    let candidate_path = workspace_root.join(&path_input);
+    let result = runtime().block_on(ensure_path_within_workspace_resolved(
+        &candidate_path,
+        &workspace_root,
+    ));
     if let Ok(resolved) = result {
         let canonical_root = canonical_or_fallback(&workspace_root);
         let canonical_resolved = canonical_or_fallback(&resolved);

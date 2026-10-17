@@ -183,12 +183,21 @@ struct MonitorState {
     watched_parents: HashSet<PathBuf>,
 }
 
+impl MonitorState {
+    fn tracked_entry(&mut self, path: &Path) -> &mut TrackedFileState {
+        self.tracked_files
+            .entry(path.to_path_buf())
+            .or_insert_with(TrackedFileState::new)
+    }
+}
+
 struct EditedFileMonitorInner {
     state: Mutex<MonitorState>,
     watcher: StdMutex<Option<RecommendedWatcher>>,
     audit_log: Mutex<Option<FileConflictAuditLog>>,
     next_mutation_id: AtomicU64,
     debounce_duration: Duration,
+    inspection: crate::tools::source_inspection::SourceInspection,
 }
 
 #[derive(Clone)]
@@ -265,6 +274,10 @@ impl Drop for MutationLease {
 }
 
 impl EditedFileMonitor {
+    pub fn source_inspection(&self) -> &crate::tools::source_inspection::SourceInspection {
+        &self.inner.inspection
+    }
+
     pub fn new() -> Self {
         let (event_tx, event_rx) = mpsc::channel::<PathBuf>();
         let watcher = RecommendedWatcher::new(
@@ -291,6 +304,7 @@ impl EditedFileMonitor {
             audit_log: Mutex::new(None),
             next_mutation_id: AtomicU64::new(1),
             debounce_duration: Duration::from_millis(250),
+            inspection: Default::default(),
         });
 
         let monitor = Self { inner: Arc::clone(&inner) };
@@ -331,7 +345,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             entry.last_read_snapshot = Some(snapshot.clone());
             entry.last_known_disk_snapshot = Some(snapshot);
             entry.stale_conflict = None;
@@ -348,7 +362,7 @@ impl EditedFileMonitor {
         let path = normalize_event_path(path);
         {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             let snap_for_disk = snapshot.clone();
             entry.last_read_snapshot = Some(snap_for_disk);
             entry.last_known_disk_snapshot = Some(snapshot.clone());
@@ -356,6 +370,42 @@ impl EditedFileMonitor {
             entry.stale_conflict = None;
         }
         self.watch_parent(&path);
+        Ok(())
+    }
+
+    pub(crate) async fn record_agent_write(&self, path: &Path) -> Result<()> {
+        let root = normalize_event_path(path);
+        let mut paths = self
+            .tracked_paths()
+            .into_iter()
+            .filter(|path| path.starts_with(&root))
+            .collect::<Vec<_>>();
+        paths.push(root);
+        self.record_agent_paths(paths).await
+    }
+
+    pub(crate) async fn record_agent_move(&self, source: &Path, destination: &Path) -> Result<()> {
+        let source = normalize_event_path(source);
+        let destination = normalize_event_path(destination);
+        let mut paths = vec![source.clone(), destination.clone()];
+        for path in self.tracked_paths() {
+            if let Ok(relative) = path.strip_prefix(&source) {
+                paths.push(destination.join(relative));
+                paths.push(path);
+            } else if path.starts_with(&destination) {
+                paths.push(path);
+            }
+        }
+        self.record_agent_paths(paths).await
+    }
+
+    async fn record_agent_paths(&self, mut paths: Vec<PathBuf>) -> Result<()> {
+        paths.sort();
+        paths.dedup();
+        for path in paths {
+            let snapshot = snapshot_path_async(path.clone()).await?;
+            self.record_agent_write_snapshot(&path, snapshot)?;
+        }
         Ok(())
     }
 
@@ -429,9 +479,10 @@ impl EditedFileMonitor {
         let mut pending_guard = PendingMutationGuard::new(Arc::clone(&self.inner), path.clone(), mutation_id);
 
         loop {
-            let notify = {
+            let notify: Arc<Notify>;
+            let waiter = {
                 let mut state = self.inner.state.lock();
-                let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+                let entry = state.tracked_entry(&path);
 
                 if entry.active_mutation.is_none() {
                     if let Some(front) = entry.pending_mutations.front() {
@@ -462,10 +513,18 @@ impl EditedFileMonitor {
                     entry.pending_mutations.push_back(mutation_id);
                 }
 
-                entry.notify.clone()
+                notify = entry.notify.clone();
+                // Register waiter interest while still holding the state lock.
+                // Release paths call `notify_waiters()` under the same lock,
+                // so a release can neither slip between the condition check
+                // above and this registration (lost wakeup -> hang) nor wake
+                // a future that is never awaited.
+                let mut waiter = Box::pin(notify.notified());
+                waiter.as_mut().enable();
+                waiter
             };
 
-            notify.notified().await;
+            waiter.await;
         }
     }
 
@@ -481,7 +540,7 @@ impl EditedFileMonitor {
 
         let maybe_conflict = {
             let mut state = self.inner.state.lock();
-            let entry = state.tracked_files.entry(path.clone()).or_insert_with(TrackedFileState::new);
+            let entry = state.tracked_entry(&path);
             entry.last_known_disk_snapshot = Some(current_snapshot.clone());
 
             if entry
@@ -844,6 +903,45 @@ mod tests {
         drop(first);
         let acquired = waiter.await?;
         assert_eq!(acquired, normalized_file);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_mutation_waiters_all_acquire_without_stall() -> Result<()> {
+        let temp = TempDir::new()?;
+        let file = temp.path().join("sample.txt");
+        std::fs::write(&file, "hello\n")?;
+        let monitor = Arc::new(EditedFileMonitor::new());
+        let normalized_file = normalize_event_path(&file);
+
+        let first = monitor.acquire_mutation(&file).await;
+        let mut waiters = Vec::new();
+        for _ in 0..8 {
+            let monitor_clone = Arc::clone(&monitor);
+            let file_clone = file.clone();
+            waiters.push(tokio::spawn(async move {
+                let lease = monitor_clone.acquire_mutation(&file_clone).await;
+                lease.path().to_path_buf()
+            }));
+        }
+
+        // Let every waiter park inside `acquire_mutation` so the release below
+        // must wake a registered waiter. A lost wakeup would stall here.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        drop(first);
+
+        let acquired = tokio::time::timeout(Duration::from_secs(10), async {
+            let mut paths = Vec::new();
+            for waiter in waiters {
+                paths.push(waiter.await?);
+            }
+            Ok::<_, anyhow::Error>(paths)
+        })
+        .await??;
+        assert_eq!(acquired.len(), 8);
+        for path in &acquired {
+            assert_eq!(*path, normalized_file);
+        }
         Ok(())
     }
 

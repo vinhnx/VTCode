@@ -83,6 +83,7 @@ impl Session {
                 area,
                 row,
                 wizard.numbered_shortcuts(),
+                false,
             );
         }
 
@@ -97,6 +98,7 @@ impl Session {
             area,
             row,
             modal.search.is_none(),
+            modal.status.is_some(),
         )
     }
 
@@ -228,6 +230,9 @@ impl Session {
                 }
                 MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                     self.clear_pending_link_click();
+                    if self.handle_sticky_prompt_click(mouse_event) {
+                        return;
+                    }
                     if self.queue_link_click_action(self.transcript_file_link_click_action(
                         mouse_event.column,
                         mouse_event.row,
@@ -267,7 +272,8 @@ impl Session {
                             }
 
                             self.mouse_drag_target = MouseDragTarget::ModalText;
-                            self.mouse_selection.start_selection(mouse_event.column, mouse_event.row);
+                            self.mouse_selection
+                                .start_overlay_selection(mouse_event.column, mouse_event.row);
                             self.mark_dirty();
                             return;
                         }

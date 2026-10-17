@@ -177,7 +177,26 @@ impl ToolHandler for ShellHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let resolved = self.parse_params(&invocation)?;
-        let output = self.execute_command(&resolved.params, &invocation.turn.cwd, None).await?;
+        let fallback = crate::tools::source_inspection::SourceInspection::default();
+        let requested_cwd = invocation.turn.resolve_path_ref(resolved.params.workdir.as_deref());
+        let cwd = vtcode_commons::paths::ensure_path_within_workspace_resolved(
+            &requested_cwd,
+            invocation.session.workspace_root(),
+        )
+        .await
+        .map_err(|error| ToolCallError::respond(error.to_string()))?;
+        let command = match resolved.params.command.as_slice() {
+            [script] => serde_json::Value::String(script.clone()),
+            argv => json!(argv),
+        };
+        let args = json!({"command": command});
+        invocation
+            .session
+            .source_inspection()
+            .unwrap_or(&fallback)
+            .check_shell(&args, &cwd)
+            .map_err(|error| ToolCallError::respond(error.to_string()))?;
+        let output = self.execute_command(&resolved.params, &cwd, None).await?;
 
         // Sanitize output to remove any secrets before display/storage
         let sanitized = output.sanitize_secrets();
@@ -292,6 +311,52 @@ mod tests {
 
         // Test that handler kind is correct
         assert_eq!(handler.kind(), ToolKind::Function);
+    }
+
+    #[tokio::test]
+    async fn direct_shell_handler_allows_reads_in_the_bound_cwd_and_rejects_authored_writes() {
+        use super::super::adapter::DefaultToolSession;
+        use super::super::tool_handler::{Constrained, ShellEnvironmentPolicy, ToolSession, TurnContext};
+        use std::sync::Arc;
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join("nested")).unwrap();
+        std::fs::write(root.path().join("sample.txt"), "root-only\n").unwrap();
+        std::fs::write(root.path().join("nested/sample.txt"), "nested-only\n").unwrap();
+        let session = Arc::new(DefaultToolSession::new(root.path().to_path_buf()));
+        session
+            .source_inspection()
+            .unwrap()
+            .set_mode(vtcode_config::core::agent::InspectionMode::Enforce);
+        let turn = Arc::new(TurnContext {
+            cwd: root.path().to_path_buf(),
+            turn_id: "direct".into(),
+            sub_id: None,
+            shell_environment_policy: ShellEnvironmentPolicy::default(),
+            approval_policy: Constrained::default(),
+            linux_sandbox_launcher: None,
+            sandbox_policy: Constrained::default(),
+        });
+        for (command, succeeds) in [("cat sample.txt", true), ("printf bad > sample.txt", false)] {
+            let invocation = ToolInvocation {
+                session: session.clone(),
+                turn: turn.clone(),
+                tracker: None,
+                call_id: command.into(),
+                tool_name: tools::SHELL.into(),
+                payload: ToolPayload::Function {
+                    arguments: json!({"command":command,"workdir":"nested"}).to_string(),
+                },
+            };
+            let result = ShellHandler::new().handle(invocation).await;
+            if succeeds {
+                let result = result.unwrap();
+                assert!(result.content().unwrap().contains("nested-only"));
+                assert!(!result.content().unwrap().contains("root-only"));
+            } else {
+                assert!(result.unwrap_err().to_string().contains("source_inspection_shell_write"));
+            }
+        }
+        assert_eq!(std::fs::read_to_string(root.path().join("nested/sample.txt")).unwrap(), "nested-only\n");
     }
 
     #[test]

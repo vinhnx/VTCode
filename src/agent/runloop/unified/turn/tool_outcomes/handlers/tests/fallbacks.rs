@@ -116,6 +116,20 @@ fn validation_error_payload_includes_fallback_metadata() {
 }
 
 #[test]
+fn planning_validation_payload_preserves_policy_guidance() {
+    let payload = build_validation_error_content_with_fallback(
+        "tool denied by planning workflow: unknown Python script".to_owned(),
+        "preflight",
+        None,
+        None,
+    );
+    let parsed: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(parsed["error_class"], "policy_denied");
+    assert!(parsed["next_action"].as_str().unwrap().contains("command -v"));
+    assert!(parsed["error"].as_str().unwrap().contains("unknown Python script"));
+}
+
+#[test]
 fn validation_error_payload_marks_loop_detection_without_prose_hint() {
     let payload = build_validation_error_content_with_fallback(
         "Tool 'read_file' is blocked due to excessive repetition (Loop Detected).".to_string(),

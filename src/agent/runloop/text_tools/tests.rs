@@ -2,6 +2,19 @@ use super::*;
 use super::{parse_channel, parse_tagged};
 use vtcode_core::config::constants::tools;
 
+#[test]
+fn enclosed_regions_keep_unicode_byte_offsets_and_unclosed_tail() {
+    let text = "é<tool_call>a</tool_call>日本<tool_call>b</tool_call>尾<tool_call>未完";
+    let mut regions = Vec::new();
+    collect_enclosed_regions(text, "<tool_call>", "</tool_call>", &mut regions);
+    assert_eq!(regions, vec![(2, 26), (32, 56), (59, text.len())]);
+    assert_eq!(&text[regions[2].0..regions[2].1], "<tool_call>未完");
+
+    let mut absent = Vec::new();
+    collect_enclosed_regions("日本</tool_call>", "<tool_call>", "</tool_call>", &mut absent);
+    assert!(absent.is_empty());
+}
+
 // ── contains_pseudo_tool_call_markers ─────────────────────────────────────────
 
 #[test]

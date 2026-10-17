@@ -2,9 +2,8 @@
 
 Passive JSON schemas for VT Code utility, file, scheduling, and collaboration tool surfaces.
 
-This crate provides ready-made `serde_json::Value` parameter schemas for the
-built-in tool surfaces (apply-patch, cron, exec, search, and collaboration/HITL tools)
-so that callers never have to hand-roll JSON Schema objects.
+This crate provides ready-made `serde_json::Value` parameter schemas for the built-in tool surfaces (apply-patch, cron,
+exec, search, and collaboration/HITL tools) so that callers never have to hand-roll JSON Schema objects.
 
 <!-- cargo-rdme start -->
 
@@ -42,7 +41,8 @@ See [docs.rs/vtcode-utility-tool-specs](https://docs.rs/vtcode-utility-tool-spec
 - `SEARCH_TOOLS_DESCRIPTION` – model-visible description of the search_tools tool
 - `MCP_DESCRIPTION` – model-visible description of the mcp tool
 - `AGENT_DESCRIPTION` – model-visible description of the agent tool
-- `SUBAGENT_REASONING_EFFORT_VALUES` – reasoning effort values accepted by the agent tool override (from `vtcode-commons`)
+- `SUBAGENT_REASONING_EFFORT_VALUES` – reasoning effort values accepted by the agent tool override (from
+  `vtcode-commons`)
 - `EXEC_COMMAND_DESCRIPTION` – model-visible description of the exec_command tool
 
 ### Schema functions
@@ -57,16 +57,16 @@ Each returns a `serde_json::Value` representing a JSON Schema object:
 
 ### Collaboration / HITL functions
 
-| Function | Description |
-|---|---|
-| `spawn_agent_parameters()` | Schema for spawning a delegated child thread. |
-| `spawn_background_subprocess_parameters()` | Schema for launching a managed background subprocess. |
-| `send_input_parameters()` | Schema for sending follow-up input to a child agent. |
-| `wait_agent_parameters()` | Schema for blocking until child agents complete. |
-| `resume_agent_parameters()` | Schema for resuming a paused child agent. |
-| `close_agent_parameters()` | Schema for closing a child agent. |
-| `request_user_input_parameters()` | Schema for the HITL tool that prompts the user with 1-3 questions. |
-| `request_user_input_description()` | Static description string for the HITL tool. |
+| Function                                   | Description                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `spawn_agent_parameters()`                 | Schema for spawning a delegated child thread.                      |
+| `spawn_background_subprocess_parameters()` | Schema for launching a managed background subprocess.              |
+| `send_input_parameters()`                  | Schema for sending follow-up input to a child agent.               |
+| `wait_agent_parameters()`                  | Schema for blocking until child agents complete.                   |
+| `resume_agent_parameters()`                | Schema for resuming a paused child agent.                          |
+| `close_agent_parameters()`                 | Schema for closing a child agent.                                  |
+| `request_user_input_parameters()`          | Schema for the HITL tool that prompts the user with 1-3 questions. |
+| `request_user_input_description()`         | Static description string for the HITL tool.                       |
 
 ### Helpers
 
@@ -74,11 +74,11 @@ Each returns a `serde_json::Value` representing a JSON Schema object:
 
 ### Modules
 
-| Module | Key types |
-|---|---|
-| `json_schema` | `JsonSchema`, `AdditionalProperties`, `parse_tool_input_schema` |
-| `mcp_tool` | `ParsedMcpTool`, `parse_mcp_tool` |
-| `responses_api` | `FreeformTool`, `FreeformToolFormat`, `ResponsesApiTool` |
+| Module          | Key types                                                       |
+| --------------- | --------------------------------------------------------------- |
+| `json_schema`   | `JsonSchema`, `AdditionalProperties`, `parse_tool_input_schema` |
+| `mcp_tool`      | `ParsedMcpTool`, `parse_mcp_tool`                               |
+| `responses_api` | `FreeformTool`, `FreeformToolFormat`, `ResponsesApiTool`        |
 
 ## Dependencies
 

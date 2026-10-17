@@ -1,6 +1,7 @@
 # VT Code Documentation Hub
 
-Welcome to the comprehensive documentation for **VT Code**, a Rust-based terminal coding agent with modular architecture supporting multiple LLM providers and advanced code analysis capabilities.
+Welcome to the comprehensive documentation for **VT Code**, a Rust-based terminal coding agent with modular architecture
+supporting multiple LLM providers and advanced code analysis capabilities.
 
 ## Quick Installation
 
@@ -36,26 +37,31 @@ Download from [GitHub Releases](https://github.com/vinhnx/vtcode/releases) for L
 VT Code represents a modern approach to AI-powered software development, featuring:
 
 - **Single-Agent Reliability (default)** - Streamlined, linear agent with robust context engineering
+- **HOVER Self-Correction** - Hypothesize, Observe, Verify, Evaluate, Revise, Repeat on tool mismatch with
+  evidence-backed revision guidance. See [validation](./development/hypothesis-revision-validation.md).
 - **Decision Ledger** - Structured, compact record of key decisions injected each turn for consistency
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and context preservation
 - **Conversation Summarization** - Automatic compression when exceeding thresholds with quality assessment
-- **Multi-Provider LLM Support** - 27+ providers including Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, OpenRouter, Vercel AI Gateway, Merge Gateway, Evolink, Qwen, StepFun, Poolside, NVIDIA, Ollama, LM Studio, Xiaomi MiMo, Z.AI, Moonshot, MiniMax, HuggingFace
+- **Multi-Provider LLM Support** - 27+ providers including Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek,
+  OpenRouter, Vercel AI Gateway, Merge Gateway, Evolink, Qwen, StepFun, Poolside, NVIDIA, Ollama, LM Studio, Xiaomi
+  MiMo, Z.AI, Moonshot, MiniMax, HuggingFace
 - **LLM-Native Code Understanding** - Precise semantic analysis across all modern languages
 - **Bash Safety Parsing** - Accurate shell command validation via tree-sitter-bash
 - **Enterprise-Grade Safety** - Comprehensive security controls and path validation
 - **Flexible Configuration** - TOML-based configuration with granular policies
-- **Workspace-First Execution** - Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in indexing workflows
+- **Workspace-First Execution** - Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in
+  indexing workflows
 
 ### Provider index
 
-| Category | Providers |
-| --- | --- |
-| Cloud LLMs | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun |
-| Gateways | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute |
-| Local inference | Ollama, LM Studio, llama.cpp |
+| Category        | Providers                                                                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud LLMs      | Gemini, OpenAI, Anthropic, Meta AI, xAI, DeepSeek, Z.AI, Moonshot, MiniMax, Mistral, Qwen, StepFun                                                                     |
+| Gateways        | OpenRouter, **[Vercel AI Gateway](./providers/vercel-ai-gateway.md)**, **[Merge Gateway](./providers/merge-gateway.md)**, Evolink, HuggingFace, Atlas Cloud, OmniRoute |
+| Local inference | Ollama, LM Studio, llama.cpp                                                                                                                                           |
 
-See the complete [Provider Guides](./providers/PROVIDER_GUIDES.md) index for
-authentication, endpoints, model catalogs, and setup details.
+See the complete [Provider Guides](./providers/PROVIDER_GUIDES.md) index for authentication, endpoints, model catalogs,
+and setup details.
 
 ## Documentation Overview
 
@@ -65,18 +71,36 @@ This documentation is organized to support different user personas and use cases
 
 VT Code has undergone significant improvements:
 
-- **Loop Engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state persistence (`.vtcode/state/`), and token-cost guardrails. See [Loop Engineering](./loop-engineering.md).
+- **Loop Engineering** - Worktree isolation for parallel agents, propose/verify sub-agent separation, durable loop state
+  persistence (`.vtcode/state/`), and token-cost guardrails. See [Loop Engineering](./loop-engineering.md).
 
-- **Agent Plugins** - Support for the [Agent Plugins](https://agent-plugins.org/specification) portable package format: install plugins that bundle Agent Skills and MCP servers under a root `plugin.json` manifest with `vtcode plugins list/info/validate/add/remove`. Plugin skills and MCP servers are discovered automatically at session startup. See [Agent Plugins Guide](./guides/agent-plugins.md) and [Agent Plugins User Guide](./user-guide/agent-plugins.md).
+- **Agent Plugins** - Support for the [Agent Plugins](https://agent-plugins.org/specification) portable package format:
+  install plugins that bundle Agent Skills and MCP servers under a root `plugin.json` manifest with
+  `vtcode plugins list/info/validate/add/remove`. Plugin skills and MCP servers are discovered automatically at session
+  startup. See [Agent Plugins Guide](./guides/agent-plugins.md) and
+  [Agent Plugins User Guide](./user-guide/agent-plugins.md).
 
-- **Planning Workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent. The agent can propose planning itself via an "Enter Planning workflow?" confirmation prompt, and you steer it with intent phrases (`approve`/`implement` to exit, `stay in planning` to remain). Approve via a structured review gate and hand off to `build`/`auto`. See [Planning Workflow](./guides/planning-workflow.md).
-- **WebMCP Browser Bridge** - Connect a supported browser editor to an active VT Code session or a bounded standalone workspace bridge through authenticated pairing, origin validation, and terminal-owned approval. See [WebMCP Browser Bridge](./user-guide/webmcp.md).
-- **Primary Agent Switching & Mode Guard** - Switch main-session agents (`plan`/`build`/`auto`) with `Shift+Tab`; mode switches lock during a turn to keep tool-access and instructions consistent. See [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md#agent-and-mode-switching).
-- **Automatic Compaction & Memory Envelope** - Unified compaction orchestration with a shared memory envelope as the single source of truth for both runloops.
-- **`/checkup` Command** - Configuration diagnostics that surface reversible, confirm-before-apply optimizations (e.g. tool-result clearing, client tool search, token-efficiency warnings).
+- **Planning Workflow** - Iterate on a build plan with `/plan` and the `plan` primary agent. The agent can propose
+  planning itself via an "Enter Planning workflow?" confirmation prompt, and you steer it with intent phrases
+  (`approve`/`implement` to exit, `stay in planning` to remain). Approve via a structured review gate and hand off to
+  `build`/`auto`. See [Planning Workflow](./guides/planning-workflow.md).
+- **WebMCP Browser Bridge** - Connect a supported browser editor to an active VT Code session or a bounded standalone
+  workspace bridge through authenticated pairing, origin validation, and terminal-owned approval. See
+  [WebMCP Browser Bridge](./user-guide/webmcp.md).
+- **Primary Agent Switching & Mode Guard** - Switch main-session agents (`plan`/`build`/`auto`) with `Shift+Tab`; mode
+  switches lock during a turn to keep tool-access and instructions consistent. See
+  [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md#agent-and-mode-switching).
+- **Context Clearing & Automatic Compaction** - Request-only clearing protects complete recent tool batches, and headless
+  runs measure the cleared projection before summarizing. Both runloops share the compaction engine and memory envelope;
+  canonical `ThreadEvent` history remains authoritative. See
+  [context architecture](./ARCHITECTURE.md#request-projection-and-context-budgets) and the
+  [Compaction Engine](./development/compaction.md).
+- **`/config checkup` Command** - Configuration diagnostics that surface reversible, confirm-before-apply optimizations
+  (e.g. tool-result clearing, client tool search, token-efficiency warnings).
 - **GPT-5.6 Models** - Added support for OpenAI's GPT-5.6 family across configurations.
 
-- **GLM-5.3 Model Support** - Z.ai's flagship coding model with frontier long-horizon agentic performance and 1M-token context, as the new ZAI provider default
+- **GLM-5.3 Model Support** - Z.ai's flagship coding model with frontier long-horizon agentic performance and 1M-token
+  context, as the new ZAI provider default
 - **Byte-Range File Reading** - Large file reading with offset and page size parameters for efficient partial reads
 - **Kimi K2.7 Code Model** - Moonshot's latest code-focused model across all configurations
 - **GPT-5-Codex Integration** - OpenAI's Codex model with Responses API support
@@ -86,11 +110,14 @@ VT Code has undergone significant improvements:
 - **Provider Stream Refactoring** - Simplified stream handling across DeepSeek, StepFun, and ZAI providers
 - **Decision Transparency System** - Complete audit trail with reasoning and confidence scores
 - **Error Recovery & Resilience** - Intelligent error handling with pattern detection and multiple recovery strategies
-- **Advanced Code Search** - Bounded definitions, syntactic usages, literal text, and matching paths through `code_search` in the advanced VT Code profile
-- **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped approval caching
-- **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary file cleanup
+- **Advanced Code Search** - Bounded definitions, syntactic usages, literal text, and matching paths through
+  `code_search` in the advanced VT Code profile
+- **Web Search & Fetch** — `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist and domain-scoped
+  approval caching
+- **Post-Tool Recovery Cycles** — Automatic detection and cap enforcement for post-tool recovery loops with temporary
+  file cleanup
 - **CLI `did you mean?`** — Fuzzy suggestions for unrecognized commands with colorized output
-- **Session Resume** — `/continue` slash command to resume the most recent session
+- **Session Resume** — `/resume` picker (CLI: `vtcode --continue`) to resume archived sessions
 - **Loop Detection Hardening** — Blocked-streak fuse prevents false positives; read-extent-aware duplicate detection
 
 See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
@@ -100,18 +127,27 @@ See [CHANGELOG](../CHANGELOG.md) for complete details on these improvements.
 New to VT Code? Start with installation and basic usage:
 
 - **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
-- **[Subagents](./user-guide/subagents.md)** - Create, configure, invoke, and switch between delegated child agents with VT Code-native tool metadata
-- **[Agent Plugins](./user-guide/agent-plugins.md)** - Install portable plugins that bundle Agent Skills and MCP servers under a `plugin.json` manifest
-- **[Memcode MCP](./guides/memcode-mcp.md)** - Connect a remote memory provider with PKCE OAuth and explicit write consent
-- **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Terminal workflows (shortcuts: [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md))
-- **[WebMCP Browser Bridge User Guide](./user-guide/webmcp.md)** - Connect a browser editor to an active VT Code session or a bounded standalone workspace bridge
+- **[Subagents](./user-guide/subagents.md)** - Create, configure, invoke, and switch between delegated child agents with
+  VT Code-native tool metadata
+- **[Agent Plugins](./user-guide/agent-plugins.md)** - Install portable plugins that bundle Agent Skills and MCP servers
+  under a `plugin.json` manifest
+- **[Memcode MCP](./guides/memcode-mcp.md)** - Connect a remote memory provider with PKCE OAuth and explicit write
+  consent
+- **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Terminal workflows (shortcuts:
+  [Keyboard Shortcuts](./user-guide/keyboard-shortcuts.md))
+- **[WebMCP Browser Bridge User Guide](./user-guide/webmcp.md)** - Connect a browser editor to an active VT Code session
+  or a bounded standalone workspace bridge
 - **[Scheduled Tasks](./user-guide/scheduled-tasks.md)** - Reminders and durable `vtcode schedule` automations
-- [Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking) - How decisions are tracked and injected
+- [Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking) - How decisions are
+  tracked and injected
 - **[Configuration Guide](./config/config.md)** - Comprehensive configuration options
-- **[User Data Directories](./guides/user-data-directories.md)** - XDG/native storage paths, migration, permissions, and troubleshooting
+- **[User Data Directories](./guides/user-data-directories.md)** - XDG/native storage paths, migration, permissions, and
+  troubleshooting
 - **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
-- **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the OpenAI Responses API
-- **[External Editor Configuration](./tools/EDITOR_CONFIG.md)** - Setup and usage of the `/edit` command with your preferred editor
+- **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the
+  OpenAI Responses API
+- **[External Editor Configuration](./tools/EDITOR_CONFIG.md)** - Setup and usage of the external editor (Ctrl+G) with
+  your preferred editor
 
 ### For Developers
 
@@ -120,11 +156,13 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
-- **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the Codex-style default tools
+- **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the
+  Codex-style default tools
 - **[Web Search Tool](./tools/web_search.md)** - Web search configuration and guard rails
 - **[Defuddle Fetch](./tools/defuddle_fetch.md)** - Markdown extraction fallback for complex pages
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
-- **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and per-repository persistent memory
+- **[Memory Management](./guides/memory-management.md)** - Configure authored guidance, `.vtcode/rules/`, and
+  per-repository persistent memory
 
 ### For Organizations
 
@@ -135,11 +173,11 @@ Deploying VT Code in production? Focus on enterprise features:
 - **[Process Hardening](./development/PROCESS_HARDENING.md)** - Security controls and runtime hardening
 - **[Performance Analysis](./benchmarks/README.md)** - Optimization and benchmarking
 - **[Provider Guides](./providers/PROVIDER_GUIDES.md)** - LLM provider integration guides
-    - [OpenRouter Integration](./providers/openrouter.md)
-    - [Vercel AI Gateway Integration](./providers/vercel-ai-gateway.md)
-    - [Merge Gateway Integration](./providers/merge-gateway.md)
-    - [Merge Gateway Quick Reference](./providers/merge-gateway-quick-reference.md)
-    - [llama.cpp Provider Guide](./providers/llamacpp.md)
+  - [OpenRouter Integration](./providers/openrouter.md)
+  - [Vercel AI Gateway Integration](./providers/vercel-ai-gateway.md)
+  - [Merge Gateway Integration](./providers/merge-gateway.md)
+  - [Merge Gateway Quick Reference](./providers/merge-gateway-quick-reference.md)
+  - [llama.cpp Provider Guide](./providers/llamacpp.md)
 
 ## Core Capabilities
 
@@ -147,7 +185,8 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **Decision Ledger** - Persistent, compact history of key decisions and constraints
 - **Error Recovery** - Intelligent error handling with pattern detection and context preservation
-- **Smart Summarization (EXPERIMENTAL)** - Automatic conversation compression with importance scoring, semantic similarity detection, and advanced error analysis (disabled by default)
+- **Smart Summarization (EXPERIMENTAL)** - Automatic conversation compression with importance scoring, semantic
+  similarity detection, and advanced error analysis (disabled by default)
 - **Conversation Summarization** - Automatic compression for long sessions with quality scoring
 - **Context Compression** - Summarizes older turns while preserving ledger, errors, and recent activity
 - **Tool Traces** - Tool inputs/outputs summarized and fed back for continuity
@@ -156,7 +195,8 @@ Deploying VT Code in production? Focus on enterprise features:
 
 - **Semantic Analysis** - Deep code understanding across Rust, Python, JavaScript, TypeScript, Go, Java, and more
 - **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
-- **Intelligent Search** - Ripgrep shell search through `exec_command.cmd` and focused literal `code_search` in the advanced profile
+- **Intelligent Search** - Ripgrep shell search through `exec_command.cmd` and focused literal `code_search` in the
+  advanced profile
 - **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
 - **Symbol Analysis** - LLM-native function, class, and variable extraction
 - **Dependency Mapping** - Import relationship analysis
@@ -173,7 +213,8 @@ Deploying VT Code in production? Focus on enterprise features:
 
 ### Safety & Security
 
-VT Code implements a **multi-layered security model** to protect against prompt injection and argument injection attacks:
+VT Code implements a **multi-layered security model** to protect against prompt injection and argument injection
+attacks:
 
 - **Execution Policy** - Command allowlist with per-command argument validation (only 9 safe commands allowed)
 - **Argument Injection Protection** - Explicit blocking of dangerous flags (e.g., `--pre`, `-exec`, `-e`)
@@ -204,28 +245,31 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 
 1. **[Architecture Overview](./ARCHITECTURE.md)** - Understand the system design
 2. **[Development Setup](./development/README.md)** - Configure development environment
-3. **[Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking)** - Learn decision tracking and context engineering
+3. **[Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking)** - Learn decision
+   tracking and context engineering
 
 ### Quick Start for Organizations
 
 1. **[Security Implementation](./development/PROCESS_HARDENING.md)** - Enterprise security features
-2. **[Provider Integration](./providers/PROVIDER_GUIDES.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, Meta AI, OpenRouter, Merge Gateway)
+2. **[Provider Integration](./providers/PROVIDER_GUIDES.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, Meta AI,
+   OpenRouter, Merge Gateway)
 3. **[Performance Tuning](./benchmarks/README.md)** - Optimization strategies
 
 ## Usage Patterns
 
 ### Usage Notes
 
-**Trajectory Logs:**
-Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
+**Trajectory Logs:** Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
 
 ### Workspace-First Operations
 
 - `WORKSPACE_DIR` always points to the active project root; treat it as the default scope for every command and edit.
-- Use targeted indexing (directory walks, dependency introspection, metadata extraction) before large changes to stay aligned with the current codebase.
+- Use targeted indexing (directory walks, dependency introspection, metadata extraction) before large changes to stay
+  aligned with the current codebase.
 - Keep shell commands and scripts within the workspace unless the workflow explicitly requires external paths.
 - Ask for confirmation before operating outside `WORKSPACE_DIR` or when interacting with untrusted downloads.
-- Launch sessions against another repository with `vtcode /abs/path`; you can also pass `--workspace-dir` (alias: `--workspace`) to other commands when needed.
+- Launch sessions against another repository with `vtcode /abs/path`; you can also pass `--workspace-dir` (alias:
+  `--workspace`) to other commands when needed.
 
 ### Single-Agent Workflows
 
@@ -256,7 +300,8 @@ Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
 ./run.sh config --validate
 ```
 
-**Smart Configuration Generation**: The `config` command implements two-way synchronization that reads your existing `vtcode.toml` and generates a complete template while preserving all your customizations.
+**Smart Configuration Generation**: The `config` command implements two-way synchronization that reads your existing
+`vtcode.toml` and generates a complete template while preserving all your customizations.
 
 ## Benchmarks & Performance
 
@@ -274,8 +319,7 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 | Cost           | $0.00 (free tier) |
 
 **[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**
-**[Model Comparison](./benchmarks/COMPARISON.md)**
-**[Run Your Own Benchmarks](./benchmarks/README.md)**
+**[Model Comparison](./benchmarks/COMPARISON.md)** **[Run Your Own Benchmarks](./benchmarks/README.md)**
 
 ### Running Benchmarks
 
@@ -340,12 +384,14 @@ cargo clippy && cargo fmt
 
 - **GitHub Issues** - Report bugs and request features
 - **GitHub Discussions** - Community discussions and support
-- **Community Wiki** - [VT Code Wiki](https://github.com/vinhnx/VTCode/wiki) - getting started, configuration, providers, local models, skills, MCP, automation, security, and FAQ
+- **Community Wiki** - [VT Code Wiki](https://github.com/vinhnx/VTCode/wiki) - getting started, configuration,
+  providers, local models, skills, MCP, automation, security, and FAQ
 - **Documentation** - Comprehensive guides and tutorials
 
 ### Community Resources
 
-- **[Community Wiki](https://github.com/vinhnx/VTCode/wiki)** - getting started, configuration, providers, local models, skills, MCP, automation, security, and FAQ
+- **[Community Wiki](https://github.com/vinhnx/VTCode/wiki)** - getting started, configuration, providers, local models,
+  skills, MCP, automation, security, and FAQ
 - **[Main README](../README.md)** - Project overview and quick reference
 - **[GitHub Repository](https://github.com/vinhnx/vtcode)** - Source code and collaboration
 - **[Discussions](https://github.com/vinhnx/vtcode/discussions)** - Community support
@@ -359,17 +405,16 @@ cargo clippy && cargo fmt
 
 ## License & Attribution
 
-This documentation is part of the VT Code project, licensed under
-**MIT OR Apache-2.0**. See the main [README](../README.md) for details.
+This documentation is part of the VT Code project, licensed under **MIT OR Apache-2.0**. See the main
+[README](../README.md) for details.
 
 ### Third-Party Attribution
 
 VT Code builds upon key developments in AI agent technology:
 
-- **OpenAI Codex** (Apache-2.0) — OAuth flow, PTY process handling, MCP client
-  architecture, Ollama and LM Studio provider integrations, tool handler
-  patterns. See [THIRD-PARTY-NOTICES](../THIRD-PARTY-NOTICES) for details.
-  Source: <https://github.com/openai/codex>
+- **OpenAI Codex** (Apache-2.0) — OAuth flow, PTY process handling, MCP client architecture, Ollama and LM Studio
+  provider integrations, tool handler patterns. See [THIRD-PARTY-NOTICES](../THIRD-PARTY-NOTICES) for details. Source:
+  <https://github.com/openai/codex>
 - **Anthropic's Agent Patterns** - Tool design and safety principles
 - **Cognition's Context Engineering** - Long-running agent reliability and Decision Ledger
 - **Single-Agent Architecture** - Reliable coordination patterns
@@ -378,9 +423,7 @@ VT Code builds upon key developments in AI agent technology:
 
 ---
 
-**Documentation Version:** 3.1.0
-**Last Updated:** June 28, 2026
-**VT Code Version:** 0.133.21
+**Documentation Version:** 3.1.0 **Last Updated:** June 28, 2026 **VT Code Version:** 0.133.21
 
 **Ready to get started?** **[Installation Guide](../README.md#quick-start)**
 
@@ -397,9 +440,10 @@ This documentation reflects version 0.133.21 of VT Code, which includes signific
 - Conversation summarization for long-running sessions
 - Enhanced Terminal User Interface (TUI) with improved mouse support and text selection
 - `web_search` and `defuddle_fetch` tools with TOML-driven network allowlist
-- query-led `code_search` for definitions, syntactic usages, literal text, and matching paths in the advanced VT Code profile
+- query-led `code_search` for definitions, syntactic usages, literal text, and matching paths in the advanced VT Code
+  profile
 - Post-tool recovery cycle tracking with cap checks and temporary file cleanup
 - CLI `did you mean?` suggestions for unrecognized commands
-- `/continue` command to resume the most recent session
+- `/resume` picker (CLI: `vtcode --continue`) to resume archived sessions
 - Loop detection improvements with blocked-streak fuse and read-extent awareness
 - Colorized CLI suggestions and case-insensitive `StatusLineMode` deserialization

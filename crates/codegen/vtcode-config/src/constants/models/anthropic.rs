@@ -1,7 +1,9 @@
 // Claude 5.x series - Latest Anthropic models
 pub const DEFAULT_MODEL: &str = "claude-sonnet-5";
 pub const SUPPORTED_MODELS: &[&str] = &[
-    "claude-sonnet-5",  // Latest balanced flagship with adaptive thinking on by default
+    "claude-sonnet-5-5", // Latest Sonnet: best speed/intelligence balance, 1M context, between_tools is the lowest thinking setting
+    "claude-sonnet-5",   // Previous Sonnet generation with adaptive thinking on by default
+    "claude-haiku-5-5", // High-volume latency-sensitive work: classification, routing, extraction, subagents; adaptive thinking, 1M context, 128K output
     "claude-fable-5",   // Most capable widely released model
     "claude-fable-5-1", // Successor to Fable 5, 1M context, cache reads at 1/4 cost
     "claude-opus-5",    // Opus-tier premium flagship with adaptive thinking, 1M context
@@ -12,12 +14,16 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 pub const CLAUDE_OPUS_5: &str = "claude-opus-5";
 pub const CLAUDE_OPUS_5_5: &str = "claude-opus-5-5";
 pub const CLAUDE_SONNET_5: &str = "claude-sonnet-5";
+pub const CLAUDE_SONNET_5_5: &str = "claude-sonnet-5-5";
+pub const CLAUDE_HAIKU_5_5: &str = "claude-haiku-5-5";
 pub const CLAUDE_FABLE_5: &str = "claude-fable-5";
 pub const CLAUDE_FABLE_5_1: &str = "claude-fable-5-1";
 
 /// Models that accept the reasoning effort parameter or extended thinking
 pub const REASONING_MODELS: &[&str] = &[
+    CLAUDE_SONNET_5_5,
     CLAUDE_SONNET_5,
+    CLAUDE_HAIKU_5_5,
     CLAUDE_FABLE_5,
     CLAUDE_FABLE_5_1,
     CLAUDE_OPUS_5,
@@ -43,9 +49,14 @@ pub fn normalize_model_id(model: &str) -> &str {
 /// Higher is more capable. Used to enforce that the advisor model is at least as
 /// capable as the executor model. Self-advising models (Fable 5) are
 /// handled separately because they may only advise themselves.
+///
+/// Claude Sonnet 5.5 sits just above Sonnet 5: a Sonnet 5.5 executor rejects a
+/// Sonnet 5 advisor (400), so its tier must stay strictly above Sonnet 5's.
 fn advisor_tier(model: &str) -> Option<u8> {
     match normalize_model_id(model) {
+        CLAUDE_HAIKU_5_5 => Some(2),
         CLAUDE_SONNET_5 => Some(3),
+        CLAUDE_SONNET_5_5 => Some(4),
         CLAUDE_OPUS_5 => Some(6),
         CLAUDE_OPUS_5_5 => Some(7),
         CLAUDE_FABLE_5 => Some(8),
@@ -97,7 +108,9 @@ pub fn validate_advisor_pair(executor: &str, advisor: &str) -> Result<(), String
 /// executor is unknown or unversioned.
 pub fn default_advisor_model(executor: &str) -> &'static str {
     match normalize_model_id(executor) {
+        CLAUDE_HAIKU_5_5 => CLAUDE_OPUS_5,
         CLAUDE_SONNET_5 => CLAUDE_OPUS_5,
+        CLAUDE_SONNET_5_5 => CLAUDE_OPUS_5,
         CLAUDE_OPUS_5 => CLAUDE_OPUS_5,
         CLAUDE_OPUS_5_5 => CLAUDE_OPUS_5_5,
         CLAUDE_FABLE_5 => CLAUDE_FABLE_5,

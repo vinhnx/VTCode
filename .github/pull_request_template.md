@@ -2,7 +2,8 @@
 
 ## Description
 
-Please include a summary of the changes and the issue that this PR addresses. Include relevant motivation and context. List any dependencies that are required for this change.
+Please include a summary of the changes and the issue that this PR addresses. Include relevant motivation and context.
+List any dependencies that are required for this change.
 
 Fixes # (issue number)
 
@@ -17,19 +18,21 @@ Please delete options that are not relevant.
 
 ## How Has This Been Tested?
 
-Please describe the tests that you ran to verify your changes. Provide instructions so others can reproduce. Include any relevant details for your test configuration.
+Please describe the tests that you ran to verify your changes. Provide instructions so others can reproduce. Include any
+relevant details for your test configuration.
 
 - [ ] Rust tests: `cargo test`
-- [ ] Linting: `cargo clippy` 
+- [ ] Linting: `cargo clippy`
 - [ ] Formatting: `cargo fmt`
 - [ ] Build: `cargo build`
 
 **Test Configuration**:
-* Rust version:
-* Operating system:
-* Toolchain:
 
-## Checklist:
+- Rust version:
+- Operating system:
+- Toolchain:
+
+## Checklist
 
 - [ ] My code follows the style guidelines of this project (Rust conventions, naming, etc.)
 - [ ] I have performed a self-review of my code

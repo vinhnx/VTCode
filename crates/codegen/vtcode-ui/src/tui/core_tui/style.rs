@@ -95,30 +95,24 @@ mod tests {
     #[test]
     fn agent_color_style_is_theme_aware_and_distinct_per_mode() {
         let fallback = Color::LightMagenta;
-        // On a dark terminal each mode resolves to its bright variant.
+        // Build is a fixed hex token: identical on both appearances.
+        let build = Color::Rgb(0x73, 0xA1, 0x8E);
+        // On a dark terminal each hue resolves to its bright variant.
         let dark = [
             resolve_agent_color(AGENT_COLOR_BUILD, fallback, false),
             resolve_agent_color(AGENT_COLOR_AUTO, fallback, false),
             resolve_agent_color(AGENT_COLOR_PLAN, fallback, false),
             resolve_agent_color(AGENT_COLOR_DUCK, fallback, false),
         ];
-        assert_eq!(
-            dark,
-            [
-                Color::LightRed,
-                Color::LightGreen,
-                Color::LightBlue,
-                Color::LightMagenta
-            ]
-        );
-        // On a light terminal each mode resolves to its base variant.
+        assert_eq!(dark, [build, Color::LightGreen, Color::LightBlue, Color::LightMagenta]);
+        // On a light terminal each hue resolves to its base variant.
         let light = [
             resolve_agent_color(AGENT_COLOR_BUILD, fallback, true),
             resolve_agent_color(AGENT_COLOR_AUTO, fallback, true),
             resolve_agent_color(AGENT_COLOR_PLAN, fallback, true),
             resolve_agent_color(AGENT_COLOR_DUCK, fallback, true),
         ];
-        assert_eq!(light, [Color::Red, Color::Green, Color::Blue, Color::Magenta]);
+        assert_eq!(light, [build, Color::Green, Color::Blue, Color::Magenta]);
         // The four modes must remain visually distinct in both appearances.
         assert_eq!(dark.iter().collect::<std::collections::HashSet<_>>().len(), 4);
         assert_eq!(light.iter().collect::<std::collections::HashSet<_>>().len(), 4);

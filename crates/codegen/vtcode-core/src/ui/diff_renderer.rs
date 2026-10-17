@@ -231,6 +231,32 @@ pub struct DiffRenderer {
     cached_styles: CachedStyles,
 }
 
+/// Named options for [`DiffRenderer`] and [`DiffChatRenderer`].
+///
+/// Stable-Rust emulation of named/optional arguments: call sites use named
+/// fields with struct-update defaults instead of positional
+/// `(show_line_numbers, context_lines, use_colors)`, avoiding bool-trap
+/// swaps and making `context_lines` omission extensible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiffRendererOptions {
+    /// Prefix rows with old/new line numbers.
+    pub show_line_numbers: bool,
+    /// Unchanged lines retained around each change.
+    pub context_lines: usize,
+    /// Emit ANSI styles (false keeps output plain/deterministic).
+    pub use_colors: bool,
+}
+
+impl Default for DiffRendererOptions {
+    fn default() -> Self {
+        Self {
+            show_line_numbers: true,
+            context_lines: 3,
+            use_colors: false,
+        }
+    }
+}
+
 /// Pre-rendered ANSI escape codes to avoid repeated calls to style.render()
 struct CachedStyles {
     bullet: String,
@@ -284,12 +310,17 @@ impl CachedStyles {
 impl DiffRenderer {
     /// Create a new renderer with default ANSI color palette.
     pub fn new(show_line_numbers: bool, context_lines: usize, use_colors: bool) -> Self {
-        let palette = GitDiffPalette::new(use_colors);
-        let cached_styles = CachedStyles::new(&palette, use_colors);
+        Self::with_options(DiffRendererOptions { show_line_numbers, context_lines, use_colors })
+    }
+
+    /// Create a renderer from named options.
+    pub fn with_options(options: DiffRendererOptions) -> Self {
+        let palette = GitDiffPalette::new(options.use_colors);
+        let cached_styles = CachedStyles::new(&palette, options.use_colors);
         Self {
-            show_line_numbers,
-            context_lines,
-            use_colors,
+            show_line_numbers: options.show_line_numbers,
+            context_lines: options.context_lines,
+            use_colors: options.use_colors,
             cached_styles,
         }
     }
@@ -301,12 +332,17 @@ impl DiffRenderer {
         use_colors: bool,
         config: &GitColorConfig,
     ) -> Self {
-        let palette = GitDiffPalette::from_git_config(config, use_colors);
-        let cached_styles = CachedStyles::new(&palette, use_colors);
+        Self::with_git_config_options(DiffRendererOptions { show_line_numbers, context_lines, use_colors }, config)
+    }
+
+    /// Create renderer with colors from Git config and named options.
+    pub fn with_git_config_options(options: DiffRendererOptions, config: &GitColorConfig) -> Self {
+        let palette = GitDiffPalette::from_git_config(config, options.use_colors);
+        let cached_styles = CachedStyles::new(&palette, options.use_colors);
         Self {
-            show_line_numbers,
-            context_lines,
-            use_colors,
+            show_line_numbers: options.show_line_numbers,
+            context_lines: options.context_lines,
+            use_colors: options.use_colors,
             cached_styles,
         }
     }
@@ -522,9 +558,12 @@ pub struct DiffChatRenderer {
 impl DiffChatRenderer {
     /// Create a new chat renderer with default ANSI color palette.
     pub fn new(show_line_numbers: bool, context_lines: usize, use_colors: bool) -> Self {
-        Self {
-            diff_renderer: DiffRenderer::new(show_line_numbers, context_lines, use_colors),
-        }
+        Self::with_options(DiffRendererOptions { show_line_numbers, context_lines, use_colors })
+    }
+
+    /// Create a chat renderer from named options.
+    pub fn with_options(options: DiffRendererOptions) -> Self {
+        Self { diff_renderer: DiffRenderer::with_options(options) }
     }
 
     /// Create renderer with colors from Git config
@@ -534,8 +573,13 @@ impl DiffChatRenderer {
         use_colors: bool,
         config: &GitColorConfig,
     ) -> Self {
+        Self::with_git_config_options(DiffRendererOptions { show_line_numbers, context_lines, use_colors }, config)
+    }
+
+    /// Create renderer with colors from Git config and named options.
+    pub fn with_git_config_options(options: DiffRendererOptions, config: &GitColorConfig) -> Self {
         Self {
-            diff_renderer: DiffRenderer::with_git_config(show_line_numbers, context_lines, use_colors, config),
+            diff_renderer: DiffRenderer::with_git_config_options(options, config),
         }
     }
 
@@ -838,6 +882,35 @@ pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_options_match_positional_constructors() {
+        let options = DiffRendererOptions {
+            show_line_numbers: true,
+            context_lines: 3,
+            use_colors: false,
+        };
+        let from_named = DiffRenderer::with_options(options);
+        let from_positional = DiffRenderer::new(true, 3, false);
+        assert_eq!(
+            from_named.render_diff(&from_positional.generate_diff("a", "b", "f")),
+            from_positional.render_diff(&from_positional.generate_diff("a", "b", "f"))
+        );
+
+        let chat_named = DiffChatRenderer::with_options(options);
+        let preview_named = chat_named.render_file_change(Path::new("f"), "a", "b");
+        let chat_positional = DiffChatRenderer::new(true, 3, false);
+        let preview_positional = chat_positional.render_file_change(Path::new("f"), "a", "b");
+        assert_eq!(preview_named, preview_positional);
+
+        let config = GitColorConfig::default();
+        let git_named = DiffRenderer::with_git_config_options(options, &config);
+        let git_positional = DiffRenderer::with_git_config(true, 3, false, &config);
+        assert_eq!(
+            git_named.render_diff(&git_positional.generate_diff("a", "b", "f")),
+            git_positional.render_diff(&git_positional.generate_diff("a", "b", "f"))
+        );
+    }
 
     #[test]
     fn test_suppression_check_no_suppression() {

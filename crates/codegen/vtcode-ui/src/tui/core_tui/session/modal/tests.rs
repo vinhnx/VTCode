@@ -16,6 +16,7 @@ fn base_item(title: &str) -> InlineListItem {
         indent: 0,
         selection: None,
         search_value: None,
+        ..Default::default()
     }
 }
 
@@ -53,6 +54,7 @@ fn sample_list_modal() -> ModalState {
         restore_cursor: true,
         search: Some(search_state),
         is_help_modal: false,
+        status: None,
     };
 
     if let Some(list) = modal.list.as_mut()
@@ -592,6 +594,7 @@ fn sample_list_modal_with_count(count: usize) -> ModalState {
         restore_cursor: true,
         search: None,
         is_help_modal: false,
+        status: None,
     }
 }
 
@@ -967,6 +970,7 @@ fn list_modal_space_no_longer_submits_config_action() {
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction("permissions.default:cycle".to_owned())),
                 search_value: None,
+                ..Default::default()
             }],
             None,
         )),
@@ -975,6 +979,7 @@ fn list_modal_space_no_longer_submits_config_action() {
         restore_cursor: true,
         search: None,
         is_help_modal: false,
+        status: None,
     };
 
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
@@ -984,7 +989,7 @@ fn list_modal_space_no_longer_submits_config_action() {
 }
 
 #[test]
-fn list_modal_alt_d_is_swallowed_without_changing_density() {
+fn list_modal_alt_d_is_swallowed() {
     let mut modal = ModalState {
         title: "Config".to_owned(),
         lines: vec![],
@@ -998,6 +1003,7 @@ fn list_modal_alt_d_is_swallowed_without_changing_density() {
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction("permissions.default:cycle".to_owned())),
                 search_value: None,
+                ..Default::default()
             }],
             None,
         )),
@@ -1006,9 +1012,8 @@ fn list_modal_alt_d_is_swallowed_without_changing_density() {
         restore_cursor: true,
         search: None,
         is_help_modal: false,
+        status: None,
     };
-
-    assert!(modal.list.as_ref().expect("config list should exist").compact_rows());
 
     let result = modal.handle_list_key_event(
         &KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT),
@@ -1016,12 +1021,26 @@ fn list_modal_alt_d_is_swallowed_without_changing_density() {
     );
 
     assert!(matches!(result, ModalListKeyResult::HandledNoRedraw));
-    assert!(modal.list.as_ref().expect("config list should exist").compact_rows());
 }
 
 #[test]
-fn subtitle_lists_default_to_compact_density() {
-    let list = ModalListState::new(
+fn density_behavior_still_drives_summary_hints() {
+    // Row spacing is now universal, but `density_behavior` still decides the
+    // summary line: config lists always show the shared navigation hint,
+    // other lists only echo an explicit footer.
+    let config_list = ModalListState::new(
+        vec![InlineListItem {
+            title: "Permission default".to_owned(),
+            subtitle: Some("permissions.default = ask".to_owned()),
+            badge: Some("Toggle".to_owned()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction("permissions.default:cycle".to_owned())),
+            search_value: None,
+            ..Default::default()
+        }],
+        None,
+    );
+    let model_list = ModalListState::new(
         vec![InlineListItem {
             title: "gpt-5".to_owned(),
             subtitle: Some("High-quality general reasoning model".to_owned()),
@@ -1029,28 +1048,14 @@ fn subtitle_lists_default_to_compact_density() {
             indent: 0,
             selection: Some(InlineListSelection::Model(0)),
             search_value: Some("gpt-5".to_owned()),
+            ..Default::default()
         }],
         None,
     );
 
-    assert!(list.compact_rows(), "subtitle lists should default to compact row density");
-}
-
-#[test]
-fn single_line_lists_keep_compact_flag_cleared() {
-    let list = ModalListState::new(
-        vec![InlineListItem {
-            title: "Approve".to_owned(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: None,
-        }],
-        None,
-    );
-
-    assert!(!list.compact_rows(), "single-line lists need no compact flag");
+    assert_eq!(config_list.non_filter_summary_text(None), Some(crate::design::keys::list_hint()));
+    assert_eq!(model_list.non_filter_summary_text(None), None);
+    assert_eq!(model_list.non_filter_summary_text(Some("Esc close")), Some("Esc close".to_string()));
 }
 
 #[test]
@@ -1121,6 +1126,7 @@ fn searchless_approval_modal() -> ModalState {
             indent: 0,
             selection: Some(selection),
             search_value: None,
+            ..Default::default()
         }
     }
     ModalState {
@@ -1139,6 +1145,7 @@ fn searchless_approval_modal() -> ModalState {
                     indent: 0,
                     selection: None,
                     search_value: None,
+                    ..Default::default()
                 },
                 option("Deny once", InlineListSelection::Model(2)),
             ],
@@ -1148,6 +1155,7 @@ fn searchless_approval_modal() -> ModalState {
         restore_input: true,
         restore_cursor: true,
         search: None,
+        status: None,
         is_help_modal: false,
     }
 }
@@ -1246,6 +1254,7 @@ fn numbered_shortcuts_gate_covers_empty_and_crowded_lists() {
             indent: 0,
             selection: Some(InlineListSelection::Model(index)),
             search_value: None,
+            ..Default::default()
         })
         .collect();
     let nine = ModalListState::new(nine, None);
@@ -1260,6 +1269,7 @@ fn numbered_shortcuts_gate_covers_empty_and_crowded_lists() {
             indent: 0,
             selection: Some(InlineListSelection::Model(index)),
             search_value: None,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
     ten.push(InlineListItem {
@@ -1269,6 +1279,7 @@ fn numbered_shortcuts_gate_covers_empty_and_crowded_lists() {
         indent: 0,
         selection: None,
         search_value: None,
+        ..Default::default()
     });
     let ten = ModalListState::new(ten, None);
     assert!(!ten.numbered_shortcuts(), "crowded lists offer no digits");
@@ -1440,4 +1451,55 @@ fn list_modal_page_navigation_respects_viewport() {
 
     let selection = modal.list.as_ref().and_then(|state| state.current_selection());
     assert_eq!(selection, Some(InlineListSelection::Model(0)));
+}
+
+#[test]
+fn apply_search_matches_title_and_description_without_search_value() {
+    let mut list = ModalListState::new(
+        vec![
+            InlineListItem {
+                title: "Tool Display Mode".to_string(),
+                subtitle: Some("expanded compact".to_string()),
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::Model(0)),
+                search_value: None,
+                ..Default::default()
+            },
+            InlineListItem {
+                title: "Other".to_string(),
+                subtitle: Some("unrelated".to_string()),
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::Model(1)),
+                search_value: None,
+                ..Default::default()
+            },
+        ],
+        None,
+    );
+    list.apply_search("display", false);
+    assert_eq!(list.visible_indices, vec![0]);
+    list.apply_search("compact", false);
+    assert_eq!(list.visible_indices, vec![0]);
+}
+
+#[test]
+fn apply_search_prefers_explicit_search_value_over_title() {
+    let mut list = ModalListState::new(
+        vec![InlineListItem {
+            title: "Hidden title terms".to_string(),
+            subtitle: None,
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::Model(0)),
+            search_value: Some("only-this".to_string()),
+            ..Default::default()
+        }],
+        None,
+    );
+    list.apply_search("hidden", false);
+    assert!(list.visible_indices.is_empty(), "search_value is the sole corpus when set");
+    list.apply_search("only-this", false);
+    assert_eq!(list.visible_indices, vec![0]);
 }

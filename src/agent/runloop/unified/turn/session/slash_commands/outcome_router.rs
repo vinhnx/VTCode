@@ -15,24 +15,21 @@ pub(super) async fn route_outcome(
         SlashCommandOutcome::ThemeChanged(_)
         | SlashCommandOutcome::StartThemePalette { .. }
         | SlashCommandOutcome::StartSessionPalette { .. }
-        | SlashCommandOutcome::ContinueLatest { .. }
         | SlashCommandOutcome::StartHistoryPicker
         | SlashCommandOutcome::StartFileBrowser { .. }
         | SlashCommandOutcome::StartStatuslineSetup { .. }
         | SlashCommandOutcome::StartTerminalTitleSetup
         | SlashCommandOutcome::StartModelSelection
+        | SlashCommandOutcome::ToggleFastMode { .. }
         | SlashCommandOutcome::StartModePalette
         | SlashCommandOutcome::SelectPrimaryAgent { .. }
-        | SlashCommandOutcome::SetEffort { .. }
-        | SlashCommandOutcome::ToggleIdeContext
         | SlashCommandOutcome::ToggleVimMode { .. }
         | SlashCommandOutcome::InitializeWorkspace { .. }
         | SlashCommandOutcome::ShowSettings
         | SlashCommandOutcome::ShowSettingsReset
         | SlashCommandOutcome::ShowSettingsAtPath { .. }
         | SlashCommandOutcome::ShowMemoryConfig
-        | SlashCommandOutcome::ShowPermissions
-        | SlashCommandOutcome::ShowMemory => route_ui_and_settings_outcome(outcome, ctx).await,
+        | SlashCommandOutcome::ShowPermissions => route_ui_and_settings_outcome(outcome, ctx).await,
         outcome @ (SlashCommandOutcome::ClearScreen
         | SlashCommandOutcome::ClearConversation
         | SlashCommandOutcome::CompactConversation { .. }
@@ -41,6 +38,7 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::ShowJobsPanel
         | SlashCommandOutcome::ShowStatus
         | SlashCommandOutcome::ShowTranscriptStats
+        | SlashCommandOutcome::Explain { .. }
         | SlashCommandOutcome::ExportTranscript { .. }
         | SlashCommandOutcome::ShowWebmcpStatus
         | SlashCommandOutcome::ShowWebmcpHelp
@@ -59,14 +57,12 @@ pub(super) async fn route_outcome(
         | SlashCommandOutcome::OpenDocs
         | SlashCommandOutcome::OpenFeedback
         | SlashCommandOutcome::OpenDonateLinks
-        | SlashCommandOutcome::LaunchEditor { .. }
         | SlashCommandOutcome::ManageSkills { .. }
         | SlashCommandOutcome::ManagePlugins { .. }
         | SlashCommandOutcome::ManageAgents { .. }
         | SlashCommandOutcome::ManageSubprocesses { .. }
         | SlashCommandOutcome::OpenRewindPicker
         | SlashCommandOutcome::Redo
-        | SlashCommandOutcome::RewindRecover
         | SlashCommandOutcome::RewindToTurn { .. }
         | SlashCommandOutcome::RewindLatest { .. }
         | SlashCommandOutcome::ShareLog { .. }
@@ -91,7 +87,6 @@ async fn route_ui_and_settings_outcome(
         SlashCommandOutcome::StartSessionPalette { mode, limit, show_all } => {
             handlers::handle_start_session_palette(ctx, mode, limit, show_all).await
         }
-        SlashCommandOutcome::ContinueLatest { show_all } => handlers::handle_continue_latest(ctx, show_all),
         SlashCommandOutcome::StartHistoryPicker => handlers::handle_start_history_picker(ctx).await,
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await
@@ -101,12 +96,11 @@ async fn route_ui_and_settings_outcome(
         }
         SlashCommandOutcome::StartTerminalTitleSetup => handlers::handle_start_terminal_title_setup(ctx).await,
         SlashCommandOutcome::StartModelSelection => handlers::handle_start_model_selection(ctx).await,
+        SlashCommandOutcome::ToggleFastMode { enable } => handlers::handle_toggle_fast_mode(ctx, enable).await,
         SlashCommandOutcome::StartModePalette => handlers::handle_start_mode_palette(ctx).await,
         SlashCommandOutcome::SelectPrimaryAgent { name } => {
             handlers::handle_select_primary_agent_from_slash(ctx, &name).await
         }
-        SlashCommandOutcome::SetEffort { level, persist } => handlers::handle_set_effort(ctx, level, persist).await,
-        SlashCommandOutcome::ToggleIdeContext => handlers::handle_toggle_ide_context(ctx).await,
         SlashCommandOutcome::ToggleVimMode { enable } => handlers::handle_toggle_vim_mode(ctx, enable).await,
         SlashCommandOutcome::InitializeWorkspace { force } => handlers::handle_initialize_workspace(ctx, force).await,
         SlashCommandOutcome::ShowSettings => handlers::handle_show_settings(ctx).await,
@@ -116,7 +110,6 @@ async fn route_ui_and_settings_outcome(
         }
         SlashCommandOutcome::ShowMemoryConfig => handlers::handle_show_memory_config(ctx).await,
         SlashCommandOutcome::ShowPermissions => handlers::handle_show_permissions(ctx).await,
-        SlashCommandOutcome::ShowMemory => handlers::handle_show_memory(ctx).await,
         _ => anyhow::bail!("unexpected ui/settings outcome"),
     }
 }
@@ -129,6 +122,7 @@ async fn route_runtime_outcome(
         SlashCommandOutcome::ClearScreen => handlers::handle_clear_screen(ctx).await,
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
         SlashCommandOutcome::ShowTranscriptStats => handlers::handle_show_transcript_stats(ctx).await,
+        SlashCommandOutcome::Explain { args } => super::explain::handle_explain(ctx, &args).await,
         SlashCommandOutcome::ExportTranscript { path } => handlers::handle_export_transcript(ctx, path).await,
         SlashCommandOutcome::CompactConversation { command } => {
             handlers::handle_compact_conversation(ctx, command).await
@@ -169,14 +163,12 @@ async fn route_navigation_outcome(
         SlashCommandOutcome::OpenDocs => handlers::handle_open_docs(ctx).await,
         SlashCommandOutcome::OpenFeedback => handlers::handle_open_feedback(ctx).await,
         SlashCommandOutcome::OpenDonateLinks => handlers::handle_open_donate_links(ctx).await,
-        SlashCommandOutcome::LaunchEditor { file } => handlers::handle_launch_editor(ctx, file).await,
         SlashCommandOutcome::ManageSkills { action } => handlers::handle_manage_skills(ctx, action).await,
         SlashCommandOutcome::ManagePlugins { action } => handlers::handle_manage_plugins(ctx, action).await,
         SlashCommandOutcome::ManageAgents { action } => handlers::handle_manage_agents(ctx, action).await,
         SlashCommandOutcome::ManageSubprocesses { action } => handlers::handle_manage_subprocesses(ctx, action).await,
         SlashCommandOutcome::OpenRewindPicker => handlers::handle_open_rewind_picker(ctx).await,
         SlashCommandOutcome::Redo => handlers::handle_redo(ctx).await,
-        SlashCommandOutcome::RewindRecover => handlers::handle_rewind_recover(ctx).await,
         SlashCommandOutcome::RewindToTurn { turn, scope } => handlers::handle_rewind_to_turn(ctx, turn, scope).await,
         SlashCommandOutcome::RewindLatest { scope } => handlers::handle_rewind_latest(ctx, scope).await,
         SlashCommandOutcome::ShareLog { format } => handlers::handle_share_log(ctx, format).await,

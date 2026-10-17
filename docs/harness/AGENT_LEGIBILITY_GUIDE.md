@@ -1,6 +1,7 @@
 # Agent Legibility Guide
 
-In VT Code, "legibility" means that information is easily parseable by both AI agents and humans. We favor mechanical structure over aesthetic prose.
+In VT Code, "legibility" means that information is easily parseable by both AI agents and humans. We favor mechanical
+structure over aesthetic prose.
 
 ## Core Rules
 
@@ -13,40 +14,45 @@ In VT Code, "legibility" means that information is easily parseable by both AI a
 
 ### 1. Status Reporting
 
-**Bad (Prose-heavy)**:
-I successfully updated the controller.rs file to handle the new variants. I also modified the tests.rs file to include the missing imports, which fixed the compilation error. Finally, I ran cargo check and it passed.
+**Bad (Prose-heavy)**: I successfully updated the controller.rs file to handle the new variants. I also modified the
+tests.rs file to include the missing imports, which fixed the compilation error. Finally, I ran cargo check and it
+passed.
 
 **Good (Structured Table)**:
-| Component | File | Change | Outcome |
-|-----------|------|--------|---------|
-| Controller | `controller.rs` | Updated `SteeringMessage` handling | Refined steering logic |
-| Tests | `tests.rs` | Added `TaskOutcome` import | Fixed compilation error |
-| Validation | N/A | Ran `cargo check` | **PASSED** |
+
+| Component  | File            | Change                             | Outcome                 |
+| ---------- | --------------- | ---------------------------------- | ----------------------- |
+| Controller | `controller.rs` | Updated `SteeringMessage` handling | Refined steering logic  |
+| Tests      | `tests.rs`      | Added `TaskOutcome` import         | Fixed compilation error |
+| Validation | N/A             | Ran `cargo check`                  | **PASSED**              |
 
 ### 2. Error Reporting
 
-**Bad**:
-The file `src/main.rs` is too long. Please fix it.
+**Bad**: The file `src/main.rs` is too long. Please fix it.
 
-**Good**:
-**Violation**: File `src/main.rs` exceeds 500-line invariant (currently 602 lines).
-**Remediation**: Split `src/main.rs` into focused submodules. Extract logical sections into separate files and re-export from `mod.rs`.
+**Good**: **Violation**: File `src/main.rs` exceeds 500-line invariant (currently 602 lines). **Remediation**: Split
+`src/main.rs` into focused submodules. Extract logical sections into separate files and re-export from `mod.rs`.
 
 ## Why It Matters
 
-Structured information survives "context loss" better. If an agent picks up a task mid-way, it can scan a table 10x faster than reading through conversational history.
+Structured information survives "context loss" better. If an agent picks up a task mid-way, it can scan a table 10x
+faster than reading through conversational history.
 
 ## Active Monitoring
 
-Design outputs for human oversight, not just approval. Users should be able to monitor the "pulse" of the agent and interrupt only if necessary.
+Design outputs for human oversight, not just approval. Users should be able to monitor the "pulse" of the agent and
+interrupt only if necessary.
 
-1. **Step-Level Visibility**: Update your plan or task tracker after every verification step, not just at the end of a phase.
-2. **Intervention Hooks**: When performing a dangerous or high-risk operation, briefly explain the safety guard you have in place (e.g., "Using the planning agent first to audit the diff").
-3. **Loop Transparency**: If you hit a repetition guard or tool stall, explain exactly what the root cause is before attempting a pivot.
+1. **Step-Level Visibility**: Update your plan or task tracker after every verification step, not just at the end of a
+   phase.
+2. **Intervention Hooks**: When performing a dangerous or high-risk operation, briefly explain the safety guard you have
+   in place (e.g., "Using the planning agent first to audit the diff").
+3. **Loop Transparency**: If you hit a repetition guard or tool stall, explain exactly what the root cause is before
+   attempting a pivot.
 
 **Example (Monitoring Friendly)**:
 
-```
+```text
 • [x] Update schema.rs (outcome: added UserStats table)
 • [>] Run migrations (verification: checking pg_dump)
   └ Still waiting for DB lock... (30s)
@@ -65,7 +71,8 @@ Before "fixing" code, report the environment state to prevent misdiagnosing infr
 
 Proactively surface doubts to reduce "Deployment Overhang".
 
-- **Pulse**: "I have 80% confidence in the regex, but 20% uncertainty if it handles nested quotes correctly. Proceeding with a test-first approach."
+- **Pulse**: "I have 80% confidence in the regex, but 20% uncertainty if it handles nested quotes correctly. Proceeding
+  with a test-first approach."
 
 ## Strategic Adaptation & Planning
 
@@ -77,19 +84,23 @@ Use `task_boundary` and `task.md` religiously. High success is correlated with s
 
 ### 2. Navigation Loops & Action Bias
 
-Avoid repeatedly reading files without taking action. If you have read 5 files without a command or write call, pause and re-evaluate your strategy.
+Avoid repeatedly reading files without taking action. If you have read 5 files without a command or write call, pause
+and re-evaluate your strategy.
 
 - **Rule**: Prefer "Edit-Test" loops over "Read-Read" loops.
 
 ## Cross-Turn Exec-Session Resume
 
-When a turn starts with a still-running foreground command, you receive a bounded resume hint. Retained background commands continue asynchronously and are not mandatory to settle before starting new work.
+When a turn starts with a still-running foreground command, you receive a bounded resume hint. Retained background
+commands continue asynchronously and are not mandatory to settle before starting new work.
 
-| Field | Meaning |
-|-------|---------|
-| Session line | `- <session_id> (`<command>`, running <secs>s)` — at most 4, newest first |
-| Wait shape | `write_stdin {"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}` |
-| Budget | `wait`/`inspect` are exempt from the per-turn tool-call budget |
-| Deadline | A deadline-expired wait returns in-progress; wait again |
+| Field        | Meaning                                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| Session line | `- <session_id> (``<command>``, running <secs>s)` — at most 4, newest first               |
+| Wait shape   | `write_stdin {"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}` verbatim |
+| Budget       | `wait`/`inspect` are exempt from the per-turn tool-call budget                            |
+| Deadline     | A deadline-expired wait returns in-progress; wait again with the same id                   |
+| Peek vs wait | `wait` blocks until exit/deadline (preferred); `poll` returns immediately; `inspect` is snapshot-only |
 
-**Remediation**: call the pre-filled `write_stdin` wait for the listed `session_id` before launching new commands. Never guess the id — it is in the hint. See invariant #22 in `docs/harness/ARCHITECTURAL_INVARIANTS.md`.
+**Remediation**: call the pre-filled `write_stdin` wait verbatim for the listed `session_id` before launching new commands (repeat per id newest-first with several sessions). Never
+guess the id — it is in the hint. See invariant #22 in `docs/harness/ARCHITECTURAL_INVARIANTS.md`.

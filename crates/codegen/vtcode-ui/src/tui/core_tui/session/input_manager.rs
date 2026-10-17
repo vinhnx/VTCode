@@ -569,6 +569,7 @@ impl InputManager {
         true
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub fn insert_char(&mut self, ch: char) {
         if let Some((start, end)) = self.selection_range() {
             let mut buf = [0_u8; 4];

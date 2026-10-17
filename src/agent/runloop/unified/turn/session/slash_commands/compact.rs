@@ -151,13 +151,9 @@ async fn execute_manual_compaction(
     let outcome = match outcome {
         Ok(outcome) => outcome,
         Err(err) => {
-            // Use the alternate Display (`{err:#}`) so the full anyhow context
-            // chain is surfaced. Plain `{err}` prints only the outermost
-            // "Failed to generate compaction summary" context and hides the
-            // underlying provider error, which is the actual cause.
-            let prefix = crate::agent::runloop::unified::turn::compaction::format_compaction_failed(elapsed);
-            ctx.renderer
-                .line(MessageStyle::Error, &format!("{prefix} Compaction failed: {err:#}"))?;
+            tracing::warn!(error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err), "Manual context compaction failed");
+            let label = crate::agent::runloop::unified::turn::compaction::format_compaction_failed(elapsed, &err);
+            ctx.renderer.line(MessageStyle::Error, &label)?;
             return Ok(SlashCommandControl::Continue);
         }
     };

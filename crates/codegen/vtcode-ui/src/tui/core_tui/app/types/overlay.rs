@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use super::diff::{DiffHunk, DiffPreviewMode, TrustMode};
 use crate::tui::core_tui::types::{
-    InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig, WizardModalMode, WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineStatus, SecurePromptConfig, WizardModalMode,
+    WizardStep,
 };
 use vtcode_commons::ui_protocol::TaskItemStatus;
 
@@ -23,6 +24,8 @@ pub struct ListOverlayRequest {
     pub selected: Option<InlineListSelection>,
     pub search: Option<InlineListSearchConfig>,
     pub hotkeys: Vec<TransientHotkey>,
+    /// Latest apply/save feedback rendered as a toned status strip.
+    pub status: Option<InlineStatus>,
 }
 
 #[derive(Clone, Debug)]
@@ -247,6 +250,7 @@ impl From<ListOverlayRequest> for crate::tui::core_tui::types::ListOverlayReques
             selected: value.selected,
             search: value.search,
             hotkeys: value.hotkeys.into_iter().map(Into::into).collect(),
+            status: value.status,
         }
     }
 }

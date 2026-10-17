@@ -6,11 +6,46 @@ use crate::core::agent::compaction_checkpoint::write_compaction_checkpoint_async
 use crate::core::agent::context_reset::maybe_write_reset_after_compaction_with_context_async;
 use crate::core::agent::conversation::conversation_from_messages;
 use crate::core::agent::session::AgentSessionState;
+use crate::core::agent::state::{
+    clear_old_tool_results_with_recent_batches, normalize_history_for_request_shared,
+    resolve_tool_result_clearing_trigger, should_apply_local_tool_result_clearing,
+};
 use crate::exec::events::CompactionTrigger;
+use crate::llm::provider::Message;
 use std::sync::Arc;
 use tracing::{info, warn};
 
 impl AgentRunner {
+    pub(super) fn project_request_history(
+        &self,
+        session_state: &AgentSessionState,
+        turn_model: &str,
+        prompt_overhead_tokens: usize,
+        reserved_output_tokens: usize,
+    ) -> Arc<Vec<Message>> {
+        let normalized = normalize_history_for_request_shared(Arc::clone(&session_state.messages));
+        let clearing = &self.config().agent.harness.tool_result_clearing;
+        // Headless requests attach no native context_management edits. A
+        // provider capability alone must not suppress the local fallback.
+        if !should_apply_local_tool_result_clearing(self.provider_client.name(), false, clearing.enabled) {
+            return normalized;
+        }
+        Arc::new(clear_old_tool_results_with_recent_batches(
+            &normalized,
+            resolve_tool_result_clearing_trigger(
+                self.config(),
+                self.provider_client.as_ref(),
+                turn_model,
+                prompt_overhead_tokens,
+                reserved_output_tokens,
+            ),
+            clearing.keep_tool_uses,
+            clearing.keep_recent_tool_batches,
+            clearing.clear_at_least_tokens,
+            clearing.clear_tool_inputs,
+        ))
+    }
+
     /// Compress the conversation trace when automatic compaction should fire.
     ///
     /// Delegates to the shared compaction orchestrator (the same path the
@@ -26,56 +61,59 @@ impl AgentRunner {
         event_recorder: &mut crate::core::agent::events::ExecEventRecorder,
         turn_model: &str,
         preserve_recent_turns: usize,
-        prompt_overhead_tokens: usize,
+        projected_token_usage: usize,
         reserved_output_tokens: usize,
         request_envelope: &mut crate::core::agent::request_envelope::SessionRequestEnvelope,
-    ) {
+    ) -> bool {
         let mut engine_cfg = local_compaction_config(Some(self.config()), false);
         // Honor the existing `context.preserve_recent_turns` knob: keep at least
         // this many recent messages verbatim before any summarization fires.
         engine_cfg.keep_last_messages = preserve_recent_turns;
-        let outcome = match auto_compact_messages(
-            AutoCompactionInput {
-                provider: self.provider_client.as_ref(),
-                model: turn_model,
-                session_id: &self.session_id,
-                workspace_root: self._workspace.as_path(),
-                vt_cfg: Some(self.config()),
-                current_token_usage: session_state.total_tokens().saturating_add(prompt_overhead_tokens),
-                reserved_output_tokens,
-                touched_files: &session_state.modified_files,
-                engine_cfg,
-                manual_options: crate::compaction::ManualCompactionOptions::default(),
-                placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
-                prefire: None,
-                auto_compact_suppressed: &mut session_state.auto_compact_suppressed,
-                force_compaction: false,
-                steering_update: None,
-                // Cache-safe forking: reuse the live segment's exact system
-                // prompt + ordered tools so the compaction fork hits the
-                // provider prompt cache instead of re-paying full input cost.
-                parent_context: Some(CompactionParentContext {
-                    system_prompt: Some(request_envelope.system_prompt()),
-                    tools: {
-                        let tools = request_envelope.ordered_tools();
-                        (!tools.is_empty()).then_some(tools)
-                    },
-                }),
-            },
-            Arc::make_mut(&mut session_state.messages),
-        )
-        .await
-        {
-            Ok(Some(outcome)) => outcome,
-            Ok(None) => return,
+        let input = AutoCompactionInput {
+            provider: self.provider_client.as_ref(),
+            model: turn_model,
+            session_id: &self.session_id,
+            workspace_root: self._workspace.as_path(),
+            vt_cfg: Some(self.config()),
+            current_token_usage: projected_token_usage,
+            reserved_output_tokens,
+            touched_files: &session_state.modified_files,
+            engine_cfg,
+            manual_options: crate::compaction::ManualCompactionOptions::default(),
+            placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+            prefire: None,
+            auto_compact_suppressed: &mut session_state.auto_compact_suppressed,
+            force_compaction: false,
+            steering_update: None,
+            // Cache-safe forking: reuse the live segment's exact system
+            // prompt + ordered tools so the compaction fork hits the
+            // provider prompt cache instead of re-paying full input cost.
+            parent_context: Some(CompactionParentContext {
+                system_prompt: Some(request_envelope.system_prompt()),
+                tools: {
+                    let tools = request_envelope.ordered_tools();
+                    (!tools.is_empty()).then_some(tools)
+                },
+            }),
+        };
+        if !input.should_compact() {
+            return false;
+        }
+        let outcome = match auto_compact_messages(input, Arc::make_mut(&mut session_state.messages)).await {
+            Ok(Some(outcome)) => {
+                session_state.stats.prompt_cache_health.record_compaction_boundary();
+                outcome
+            }
+            Ok(None) => return false,
             Err(error) => {
                 warn!(
                     error = ?error,
                     "Automatic context compaction failed; continuing with full history"
                 );
-                return;
+                return false;
             }
         };
+        session_state.stats.prompt_cache_health.record_compaction_boundary();
 
         // Rebuild the Gemini `conversation` view from the compacted universal
         // `messages` and keep the processed-message cursor consistent.
@@ -142,5 +180,6 @@ impl AgentRunner {
             compaction_mode = %outcome.mode.as_str(),
             "Applied automatic conversation compaction (core loop)"
         );
+        true
     }
 }

@@ -1204,6 +1204,61 @@ fn gemini3_flash_extended_thinking_levels() {
 
     let pro_levels = GeminiProvider::supported_thinking_levels("gemini-3-pro");
     assert_eq!(pro_levels, vec!["low", "high"]);
+
+    // Gemini 4 Argon supports low/medium/high (medium default), no minimal
+    let argon_levels = GeminiProvider::supported_thinking_levels(models::google::GEMINI_4_ARGON);
+    assert_eq!(argon_levels, vec!["low", "medium", "high"]);
+}
+
+#[test]
+fn gemini4_argon_medium_thinking_mapping() {
+    use vtcode_config::constants::models;
+    use vtcode_config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Argon natively supports medium: it must not fall back to high
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_4_ARGON.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::Medium),
+        ..Default::default()
+    };
+
+    let gemini_request = provider.convert_to_gemini_request(&request).expect("conversion should succeed");
+
+    let generation_config = gemini_request.generation_config.expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(
+        thinking_config.thinking_level.as_deref().unwrap(),
+        "medium",
+        "Gemini 4 Argon should map medium reasoning effort to medium thinking level"
+    );
+}
+
+#[test]
+fn gemini4_argon_output_limit_validation() {
+    use vtcode_config::constants::models;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // 64K sync output limit applies to Gemini 4 models, not the 8K legacy default
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())].into(),
+        model: models::google::GEMINI_4_ARGON.to_string(),
+        max_tokens: Some(65_536),
+        ..Default::default()
+    };
+    assert!(provider.validate_request(&request).is_ok(), "Gemini 4 Argon should accept max_tokens up to 65536");
+
+    let over_limit = LLMRequest { max_tokens: Some(65_537), ..request };
+    assert!(
+        provider.validate_request(&over_limit).is_err(),
+        "Gemini 4 Argon should reject max_tokens above the 65536 sync limit"
+    );
 }
 
 #[test]
@@ -1712,6 +1767,233 @@ mod caching_tests {
         let system_str = serde_json::to_string(&gemini_req.system_instruction).unwrap_or_default();
         assert!(!system_str.contains("ttlSeconds"), "no inline TTL part on the wire");
         assert!(gemini_req.system_instruction.is_some(), "System instruction should be set");
+    }
+
+    /// Explicit-cache provider pointed at a mock server.
+    fn explicit_cache_provider(server_uri: &str, model: &str) -> GeminiProvider {
+        let mut config = PromptCachingConfig { enabled: true, ..Default::default() };
+        config.providers.gemini.enabled = true;
+        config.providers.gemini.mode = GeminiPromptCacheMode::Explicit;
+        config.providers.gemini.explicit_ttl_seconds = Some(1200);
+        GeminiProvider::from_config(
+            Some("test-key".to_string()),
+            Some(model.to_string()),
+            Some(server_uri.to_string()),
+            Some(config),
+            None,
+            None,
+            None,
+        )
+    }
+
+    use crate::providers::test_support::start_mock_server_or_skip;
+
+    /// First attempt carries `cachedContent` and gets a stale-cache 404; the
+    /// uncached retry gets a minimal SSE success.
+    fn stale_cache_then_stream(request: &wiremock::Request) -> wiremock::ResponseTemplate {
+        let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
+        if body.get("cachedContent").is_some() {
+            return wiremock::ResponseTemplate::new(404).set_body_json(json!({
+                "error": {
+                    "code": 404,
+                    "message": "CachedContent not found: cachedContents/vtcode-test",
+                    "status": "NOT_FOUND"
+                }
+            }));
+        }
+        wiremock::ResponseTemplate::new(200)
+            .insert_header("content-type", "text/event-stream")
+            .set_body_raw("data: {\"candidates\":[]}\n\n", "text/event-stream")
+    }
+
+    /// Explicit-cache creation succeeds against `{base}/cachedContents`.
+    fn cached_contents_mock() -> wiremock::Mock {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        Mock::given(method("POST"))
+            .and(path("/cachedContents"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "name": "cachedContents/vtcode-test" })))
+    }
+
+    fn stream_attempts(requests: &[wiremock::Request]) -> Vec<&wiremock::Request> {
+        requests
+            .iter()
+            .filter(|request| request.url.path().ends_with(":streamGenerateContent"))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn stream_recovers_from_stale_explicit_cache_with_uncached_retry() {
+        use wiremock::Mock;
+        use wiremock::matchers::{method, path};
+
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
+        let model = models::google::GEMINI_3_FLASH_PREVIEW;
+
+        cached_contents_mock().mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path(format!("/models/{model}:streamGenerateContent")))
+            .respond_with(stale_cache_then_stream)
+            .mount(&server)
+            .await;
+
+        let provider = explicit_cache_provider(&server.uri(), model);
+        let request = LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        };
+        if let Err(err) = provider.stream(request).await {
+            panic!("a stale cachedContent must not fail the streaming turn: {err}");
+        }
+
+        let requests = server.received_requests().await.expect("received requests");
+        let attempts = stream_attempts(&requests);
+        assert_eq!(attempts.len(), 2, "the stale cache name must be retried exactly once");
+        let cached: Value = serde_json::from_slice(&attempts[0].body).expect("cached attempt body");
+        let retried: Value = serde_json::from_slice(&attempts[1].body).expect("retry body");
+        assert_eq!(cached["cachedContent"], "cachedContents/vtcode-test");
+        assert!(cached.get("systemInstruction").is_none(), "the cached attempt supplies the prefix from the cache");
+        assert!(cached.get("toolConfig").is_none(), "the API rejects toolConfig alongside cachedContent");
+        assert!(retried.get("cachedContent").is_none(), "the retry must not reuse the expired cache name");
+        assert!(retried.get("systemInstruction").is_some(), "the retry must resend the full system instruction");
+        assert!(
+            provider.explicit_cache.current().is_none(),
+            "the dead cache slot must be cleared so the next turn rebuilds it"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_stale_stream_failure_is_not_retried_without_cache() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
+        let model = models::google::GEMINI_3_FLASH_PREVIEW;
+
+        cached_contents_mock().mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path(format!("/models/{model}:streamGenerateContent")))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+                "error": { "code": 400, "message": "Invalid request: unsupported generationConfig field" }
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = explicit_cache_provider(&server.uri(), model);
+        let request = LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        };
+        assert!(provider.stream(request).await.is_err(), "a non-stale 400 must surface as an error");
+
+        let requests = server.received_requests().await.expect("received requests");
+        assert_eq!(stream_attempts(&requests).len(), 1, "only stale-cache failures may trigger the uncached retry");
+        assert!(
+            provider.explicit_cache.current().is_some(),
+            "an unrelated failure must keep the cache slot for the next request"
+        );
+    }
+
+    /// The API forbids `toolConfig` next to `cachedContent`, so a request that
+    /// constrains tool use must keep the implicit shape and send the config
+    /// itself; otherwise the constraint is silently lost. The segment entry
+    /// must survive that skip so later default-config turns reuse it.
+    #[tokio::test]
+    async fn constrained_tool_choice_skips_cache_without_losing_the_segment_entry() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+
+        let Some(server) = start_mock_server_or_skip().await else {
+            return;
+        };
+        let model = models::google::GEMINI_3_FLASH_PREVIEW;
+
+        cached_contents_mock().mount(&server).await;
+        Mock::given(method("POST"))
+            .and(path(format!("/models/{model}:streamGenerateContent")))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/event-stream")
+                    .set_body_raw("data: {\"candidates\":[]}\n\n", "text/event-stream"),
+            )
+            .mount(&server)
+            .await;
+
+        let provider = explicit_cache_provider(&server.uri(), model);
+        let default_request = |tool_choice: Option<ToolChoice>| LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "search_workspace".to_string(),
+                "Search project files".to_string(),
+                json!({
+                    "type": "object",
+                    "properties": { "query": { "type": "string" } },
+                    "required": ["query"]
+                }),
+            )])),
+            tool_choice,
+            ..Default::default()
+        };
+
+        // 1. A default-config turn installs the segment entry.
+        if let Err(err) = provider.stream(default_request(None)).await {
+            panic!("the default-config turn must succeed: {err}");
+        }
+        let installed = provider
+            .explicit_cache
+            .current()
+            .expect("the default-config turn installs a segment entry")
+            .0;
+        assert_eq!(installed, "cachedContents/vtcode-test");
+
+        // 2. The constrained turn keeps its config on the body and must not
+        //    clear or replace the installed entry.
+        if let Err(err) = provider.stream(default_request(Some(ToolChoice::None))).await {
+            panic!("a constrained tool choice must stay enforceable on the wire: {err}");
+        }
+        assert_eq!(
+            provider.explicit_cache.current().map(|(name, _)| name).as_deref(),
+            Some(installed.as_str()),
+            "skipping the cache must not lose the segment entry"
+        );
+
+        // 3. The next default-config turn reuses that same entry.
+        if let Err(err) = provider.stream(default_request(None)).await {
+            panic!("the following default-config turn must succeed: {err}");
+        }
+
+        let requests = server.received_requests().await.expect("received requests");
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request.url.path().ends_with("/cachedContents"))
+                .count(),
+            1,
+            "only the default-config turn may create the cache"
+        );
+        let attempts = stream_attempts(&requests);
+        assert_eq!(attempts.len(), 3, "each turn issues exactly one stream request");
+        let body = |index: usize| -> Value { serde_json::from_slice(&attempts[index].body).expect("stream body") };
+        assert_eq!(body(0)["cachedContent"], "cachedContents/vtcode-test");
+        assert!(body(1).get("cachedContent").is_none(), "the constraint cannot travel alongside cachedContent");
+        assert_eq!(
+            body(1)["toolConfig"]["functionCallingConfig"]["mode"],
+            "NONE",
+            "the disabled-tool constraint must reach the provider"
+        );
+        assert_eq!(
+            body(2)["cachedContent"],
+            "cachedContents/vtcode-test",
+            "the following default-config turn must reuse the surviving entry"
+        );
     }
 }
 

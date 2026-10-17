@@ -39,23 +39,41 @@ use super::*;
 
 impl SubagentController {
     pub(super) async fn launch_child(&self, child_id: &str) -> Result<()> {
-        // Acquire the lock first to set up the record state, then release it
-        // before spawning the task. This avoids the spawned task immediately
-        // contending on the write lock.
-        {
-            let mut state = self.state.write().await;
-            let record = state
-                .children
-                .get_mut(child_id)
-                .ok_or_else(|| anyhow!("Unknown subagent id {child_id}"))?;
-            record.status = SubagentStatus::Queued;
-            record.updated_at = Utc::now();
-        }
+        let permit = Arc::clone(&self.admission)
+            .try_acquire_owned()
+            .context("Subagent concurrency limit reached")?;
+        self.launch_child_reserved(child_id, permit).await
+    }
 
-        // Spawn the task after releasing the lock.
+    pub(super) async fn launch_child_reserved(
+        &self,
+        child_id: &str,
+        permit: tokio::sync::OwnedSemaphorePermit,
+    ) -> Result<()> {
+        self.ensure_ordinary_delegation_allowed()?;
+        // Record the handle under the same lock as admission so concurrent
+        // shutdown cannot miss a newly launched child.
+        let mut state = self.state.write().await;
+        anyhow::ensure!(
+            !self.shutdown_requested.load(Ordering::Acquire) && !self.closing.load(Ordering::Acquire),
+            "Subagent controller is shutting down"
+        );
+        let record = state
+            .children
+            .get_mut(child_id)
+            .ok_or_else(|| anyhow!("Unknown subagent id {child_id}"))?;
+        anyhow::ensure!(
+            record.handle.as_ref().is_none_or(|handle| handle.is_finished()),
+            "Subagent already has a running launch"
+        );
+        record.status = SubagentStatus::Queued;
+        record.updated_at = Utc::now();
+
+        // Install the task handle before releasing the admission lock.
         let controller = self.clone();
         let target = child_id.to_string();
         let handle = tokio::spawn(async move {
+            let _permit = permit;
             Box::pin(controller.child_loop(&target)).await;
 
             // After child_loop completes, reconcile worktree if needed.
@@ -76,11 +94,7 @@ impl SubagentController {
             }
         });
 
-        // Store the handle in the record.
-        let mut state = self.state.write().await;
-        if let Some(record) = state.children.get_mut(child_id) {
-            record.handle = Some(handle);
-        }
+        record.handle = Some(handle);
         Ok(())
     }
 
@@ -96,7 +110,6 @@ impl SubagentController {
             let Some(request) = request else {
                 let mut state = self.state.write().await;
                 if let Some(record) = state.children.get_mut(child_id) {
-                    record.handle = None;
                     record.updated_at = Utc::now();
                 }
                 return;
@@ -179,7 +192,6 @@ impl SubagentController {
             {
                 let mut state = self.state.write().await;
                 if let Some(record) = state.children.get_mut(child_id) {
-                    record.handle = None;
                     record.updated_at = Utc::now();
                 }
             }

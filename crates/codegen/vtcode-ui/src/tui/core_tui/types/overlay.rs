@@ -1,6 +1,7 @@
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig, WizardModalMode, WizardStep,
 };
+use super::style::InlineStatus;
 
 #[derive(Clone, Debug)]
 pub struct ModalOverlayRequest {
@@ -19,6 +20,8 @@ pub struct ListOverlayRequest {
     pub(crate) selected: Option<InlineListSelection>,
     pub(crate) search: Option<InlineListSearchConfig>,
     pub(crate) hotkeys: Vec<OverlayHotkey>,
+    /// Latest apply/save feedback rendered as a toned status strip.
+    pub(crate) status: Option<InlineStatus>,
 }
 
 #[derive(Clone, Debug)]

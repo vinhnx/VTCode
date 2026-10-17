@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::anyhow;
 
 mod applicator;
+pub(crate) use applicator::inspection_replacements;
 mod error;
 mod matcher;
 mod parser;

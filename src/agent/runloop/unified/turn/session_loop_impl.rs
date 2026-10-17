@@ -9,15 +9,6 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 
-/// Optimization: Pre-computed idle detection thresholds to avoid repeated config lookups
-#[derive(Clone, Copy)]
-struct IdleDetectionConfig {
-    timeout_ms: u64,
-    backoff_ms: u64,
-    max_cycles: usize,
-    enabled: bool,
-}
-
 use crate::agent::runloop::ResumeSession;
 
 #[path = "session_loop_runner/mod.rs"]
@@ -28,27 +19,6 @@ pub(crate) use session_loop_runner::{
 };
 
 const RECENT_MESSAGE_LIMIT: usize = 16;
-
-/// Optimization: Extract idle detection config once to avoid repeated Option unwrapping
-#[inline]
-fn extract_idle_config(vt_cfg: Option<&VTCodeConfig>) -> IdleDetectionConfig {
-    vt_cfg
-        .map(|cfg| {
-            let idle_config = &cfg.optimization.agent_execution;
-            IdleDetectionConfig {
-                timeout_ms: idle_config.idle_timeout_ms,
-                backoff_ms: idle_config.idle_backoff_ms,
-                max_cycles: idle_config.max_idle_cycles,
-                enabled: idle_config.idle_timeout_ms > 0,
-            }
-        })
-        .unwrap_or(IdleDetectionConfig {
-            timeout_ms: 0,
-            backoff_ms: 0,
-            max_cycles: 0,
-            enabled: false,
-        })
-}
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(crate) async fn run_single_agent_loop_unified(
@@ -74,9 +44,12 @@ pub(crate) async fn run_single_agent_loop_unified(
     .await
 }
 
-/// Guard that ensures terminal is restored to a clean state when dropped
-/// This handles cases where the TUI doesn't shutdown cleanly or the session
-/// exits early (e.g., due to Ctrl+C or other signals)
+/// Guard that ensures terminal is restored to a clean state when dropped.
+/// Backstop for paths where the TUI doesn't shut down cleanly or the session
+/// exits early (Ctrl+C, SIGTERM, panic). Delegates to the canonical
+/// `restore_tui()` (idempotent via `RESTORE_DONE`) so fullscreen teardown
+/// emits each escape sequence once and never leaks alternate-buffer frames
+/// into the shell scrollback.
 struct TerminalCleanupGuard;
 
 impl TerminalCleanupGuard {

@@ -76,6 +76,7 @@ impl ModelPickerState {
             return Err(anyhow!("API key requested before selecting a model"));
         };
         if self.settings.inline_enabled {
+            self.status_wait = renderer.program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
             show_secure_api_modal(renderer, selection, self.settings.workspace.as_deref());
             return Ok(());
         }
@@ -98,6 +99,9 @@ impl ModelPickerState {
                 .map(Some),
             Ok(Some(ServiceTierChoice::Priority)) => self
                 .apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority))
+                .map(Some),
+            Ok(Some(ServiceTierChoice::Ultrafast)) => self
+                .apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Ultrafast))
                 .map(Some),
             Ok(None) => {
                 prompt_service_tier_plain(renderer, selection, self.settings.current_service_tier)?;
@@ -223,12 +227,111 @@ impl ModelPickerState {
     }
 
     fn finish_after_service_tier(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
+        if self.anthropic_speed_eligible() {
+            self.step = PickerStep::AwaitAnthropicSpeed;
+            return self.prompt_anthropic_speed(renderer);
+        }
+        self.finish_after_speed(renderer)
+    }
+
+    pub(super) fn finish_after_speed(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
         if self.selection.as_ref().map(|detail| detail.requires_api_key).unwrap_or(false) {
             self.step = PickerStep::AwaitApiKey;
             self.prompt_api_key_step(renderer)?;
             return Ok(ModelPickerProgress::InProgress);
         }
 
+        self.maybe_prompt_decisions_probe(renderer)
+    }
+
+    pub(super) fn decisions_probe_eligible(&self) -> bool {
+        if self.settings.current_decisions_probe {
+            return false;
+        }
+        let Some(selection) = self.selection.as_ref() else {
+            return false;
+        };
+        if selection.provider_enum != Some(Provider::OpenAI) {
+            return false;
+        }
+        if selection.uses_chatgpt_auth {
+            return false;
+        }
+        if let Some(base_url) = configured_openai_base_url(self.settings.vt_cfg.as_ref())
+            && !standard_decisions_endpoint(&base_url)
+        {
+            return false;
+        }
+        true
+    }
+
+    fn maybe_prompt_decisions_probe(&mut self, renderer: &mut AnsiRenderer) -> Result<ModelPickerProgress> {
+        if !self.decisions_probe_eligible() {
+            let result = self.build_result();
+            return Ok(ModelPickerProgress::Completed(result?));
+        }
+        self.step = PickerStep::AwaitDecisionsProbe;
+        if let Some(progress) = self.prompt_decisions_probe_step(renderer)? {
+            return Ok(progress);
+        }
+        Ok(ModelPickerProgress::InProgress)
+    }
+
+    fn prompt_decisions_probe_step(&mut self, renderer: &mut AnsiRenderer) -> Result<Option<ModelPickerProgress>> {
+        let Some(selection) = self.selection.as_ref() else {
+            return Err(anyhow!("Decisions probe requested before selecting a model"));
+        };
+        if self.settings.inline_enabled {
+            render_decisions_probe_inline(renderer, selection)?;
+            return Ok(None);
+        }
+        match select_decisions_probe_with_ratatui() {
+            Ok(Some(enabled)) => self.apply_decisions_probe_choice(enabled).map(Some),
+            Ok(None) => {
+                prompt_decisions_probe_plain(renderer, selection)?;
+                Ok(None)
+            }
+            Err(err) => {
+                if err.is::<SelectionInterrupted>() {
+                    return Err(err);
+                }
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Interactive Decisions selector unavailable ({err}). Falling back to manual input."),
+                )?;
+                prompt_decisions_probe_plain(renderer, selection)?;
+                Ok(None)
+            }
+        }
+    }
+
+    pub(super) fn handle_decisions_probe(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        input: &str,
+    ) -> Result<ModelPickerProgress> {
+        if self.selection.is_none() {
+            return Err(anyhow!("Decisions probe requested before selecting a model"));
+        }
+        match input.trim().to_ascii_lowercase().as_str() {
+            "yes" | "y" | "enable" | "on" | "true" => self.apply_decisions_probe_choice(Some(true)),
+            "no" | "n" | "disable" | "off" | "false" => self.apply_decisions_probe_choice(Some(false)),
+            "skip" => self.apply_decisions_probe_choice(None),
+            _ => {
+                renderer.line(MessageStyle::Error, "Unknown Decisions option. Use 'yes', 'no', or 'skip'.")?;
+                if let Some(progress) = self.prompt_decisions_probe_step(renderer)? {
+                    return Ok(progress);
+                }
+                Ok(ModelPickerProgress::InProgress)
+            }
+        }
+    }
+
+    pub(super) fn apply_decisions_probe_choice(&mut self, enabled: Option<bool>) -> Result<ModelPickerProgress> {
+        if self.selection.is_none() {
+            return Err(anyhow!("Decisions probe requested before selecting a model"));
+        }
+        self.selected_decisions_probe = enabled;
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
     }
@@ -333,6 +436,9 @@ impl ModelPickerState {
 
     pub(super) fn build_result(&self) -> Result<ModelSelectionResult> {
         let selection = self.selection.as_ref().ok_or_else(|| anyhow!("Model selection missing"))?;
+        if self.selected_anthropic_speed.is_some() && !self.anthropic_speed_eligible() {
+            anyhow::bail!("Claude speed requires a supported native Anthropic route");
+        }
         // A model switch can land on a route that exposes structured reasoning
         // but no configurable effort. Never carry the previous route's effort
         // into that result; `None` is the explicit disable value for the new
@@ -345,6 +451,9 @@ impl ModelPickerState {
         let reasoning_changed = chosen_reasoning != self.settings.current_reasoning;
         let chosen_service_tier = self.selected_service_tier.unwrap_or(self.settings.current_service_tier);
         let service_tier_changed = chosen_service_tier != self.settings.current_service_tier;
+        let decisions_probe = self.selected_decisions_probe;
+        let decisions_probe_changed =
+            decisions_probe.is_some_and(|enabled| enabled != self.settings.current_decisions_probe);
 
         Ok(ModelSelectionResult {
             provider: selection.provider_key.clone(),
@@ -360,6 +469,9 @@ impl ModelPickerState {
             service_tier_supported: selection.service_tier_supported,
             service_tier: chosen_service_tier,
             service_tier_changed,
+            anthropic_speed: self.selected_anthropic_speed,
+            decisions_probe,
+            decisions_probe_changed,
             api_key: self.pending_api_key.clone(),
             credential_source: self.pending_credential_source,
             env_key: selection.env_key.clone(),
@@ -409,15 +521,26 @@ impl ModelPickerState {
         }
         if provider_changed {
             self.selected_service_tier = None;
+            self.selected_anthropic_speed = None;
             self.selected_mimo_auth = None;
+            self.selected_decisions_probe = None;
         }
         let mut selection = selection;
-        if !selection.env_key.trim().is_empty()
-            && let Some(resolved) = self.resolve_selection_credential(&selection)?
-        {
-            let message = existing_credential_message(&selection, &resolved);
-            self.apply_resolved_credential(&mut selection, resolved);
-            renderer.line(MessageStyle::Info, &message)?;
+        if !selection.env_key.trim().is_empty() {
+            if let Some(resolved) = self.resolve_selection_credential(&selection)? {
+                let message = existing_credential_message(&selection, &resolved);
+                self.apply_resolved_credential(&mut selection, resolved);
+                renderer.line(MessageStyle::Info, &message)?;
+            } else if selection.provider_enum == Some(Provider::OpenAI)
+                && self
+                    .settings
+                    .vt_cfg
+                    .as_ref()
+                    .is_some_and(|cfg| cfg.auth.openai.preferred_method == vtcode_config::OpenAIPreferredMethod::ApiKey)
+            {
+                selection.requires_api_key = true;
+                selection.uses_chatgpt_auth = false;
+            }
         }
 
         if selection.requires_api_key && self.pending_api_key.is_some() {
@@ -468,11 +591,26 @@ impl ModelPickerState {
         match input.to_ascii_lowercase().as_str() {
             "flex" => self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Flex)),
             "priority" => self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Priority)),
+            "ultrafast" | "ultra-fast" | "ultra" => {
+                let offered =
+                    selection::available_service_tiers(selection).contains(&Some(OpenAIServiceTier::Ultrafast));
+                if !offered {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Ultrafast is only available for native OpenAI models. Use flex, priority, default, or skip.",
+                    )?;
+                    prompt_service_tier_plain(renderer, selection, self.settings.current_service_tier)?;
+                    return Ok(ModelPickerProgress::InProgress);
+                }
+                self.apply_service_tier_choice(renderer, Some(OpenAIServiceTier::Ultrafast))
+            }
             "default" | "project" | "inherit" => self.apply_service_tier_choice(renderer, None),
             "skip" => self.apply_service_tier_choice(renderer, self.settings.current_service_tier),
             _ => {
-                renderer
-                    .line(MessageStyle::Error, "Unknown service tier option. Use flex, priority, default, or skip.")?;
+                renderer.line(
+                    MessageStyle::Error,
+                    "Unknown service tier option. Use flex, priority, ultrafast, default, or skip.",
+                )?;
                 prompt_service_tier_plain(renderer, selection, self.settings.current_service_tier)?;
                 Ok(ModelPickerProgress::InProgress)
             }
@@ -510,12 +648,12 @@ impl ModelPickerState {
             return self.handle_skip_api_key(renderer, selection.clone()).await;
         }
 
+        self.status_wait = None;
         self.pending_api_key = Some(input.trim().to_string());
         self.pending_credential_source = None;
         renderer.close_modal();
 
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.maybe_prompt_decisions_probe(renderer)
     }
 
     async fn handle_openai_login(
@@ -566,7 +704,10 @@ impl ModelPickerState {
         let Some(ctrl_c_notify) = self.settings.ctrl_c_notify.as_ref() else {
             return Err(anyhow!("OAuth login requires Ctrl+C notifications"));
         };
-        match complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await {
+        let _auth_wait = renderer.program_status_wait(vtcode_commons::program_status::InteractionKind::Auth);
+        let login_result = complete_openai_login_with_tui_cancel(started, ctrl_c_state, ctrl_c_notify).await;
+        self.status_wait = None;
+        match login_result {
             Ok(_) => {}
             Err(err) if is_oauth_flow_cancelled(&err) => {
                 if ctrl_c_state.is_exit_requested() {
@@ -587,8 +728,7 @@ impl ModelPickerState {
             current.requires_api_key = false;
             current.uses_chatgpt_auth = true;
         }
-        let result = self.build_result();
-        Ok(ModelPickerProgress::Completed(result?))
+        self.maybe_prompt_decisions_probe(renderer)
     }
 
     async fn handle_skip_api_key(
@@ -606,8 +746,8 @@ impl ModelPickerState {
                 self.apply_resolved_credential(&mut selection, resolved);
                 renderer.line(MessageStyle::Info, &message)?;
                 self.selection = Some(selection);
-                let result = self.build_result();
-                Ok(ModelPickerProgress::Completed(result?))
+                self.status_wait = None;
+                self.maybe_prompt_decisions_probe(renderer)
             }
             None => {
                 renderer.line(
@@ -627,12 +767,47 @@ impl ModelPickerState {
         &self,
         selection: &SelectionDetail,
     ) -> Result<Option<vtcode_config::api_keys::ResolvedCredential>> {
-        vtcode_config::api_keys::resolve_credential_with_mode(
+        let mut resolved = vtcode_config::api_keys::resolve_credential_with_mode(
             &selection.provider_key,
             &selection.env_key,
             self.settings.workspace.as_deref(),
             self.storage_mode(),
-        )
+        )?;
+        if selection.provider_enum == Some(Provider::OpenAI)
+            && selection.env_key.eq_ignore_ascii_case(Provider::OpenAI.default_api_key_env())
+            && let Some(cfg) = self.settings.vt_cfg.as_ref()
+        {
+            // Generic key discovery can prefer an API key even when runtime
+            // auth prefers ChatGPT. Resolve the same policy before displaying
+            // the source or offering the API-key-only Decisions follow-up.
+            if cfg.auth.openai.preferred_method == vtcode_config::OpenAIPreferredMethod::ApiKey
+                && resolved.as_ref().and_then(|credential| credential.secret.as_ref()).is_none()
+            {
+                resolved = if let Some(secret) =
+                    vtcode_config::api_keys::load_stored_api_key_with_mode("openai", self.storage_mode())?
+                {
+                    let identity = vtcode_config::api_keys::credential_identity("openai", &selection.env_key)?
+                        .ok_or_else(|| anyhow!("OpenAI credential identity is unavailable"))?;
+                    Some(vtcode_config::api_keys::ResolvedCredential {
+                        identity,
+                        source: vtcode_config::api_keys::CredentialSource::SecureStorage,
+                        secret: Some(secret),
+                        env_var: None,
+                    })
+                } else {
+                    None
+                };
+            }
+            if let Some(credential) = resolved.take() {
+                let auth = vtcode_config::resolve_openai_auth(
+                    &cfg.auth.openai,
+                    self.storage_mode(),
+                    credential.secret.clone(),
+                )?;
+                return Ok(Some(credential_for_openai_auth(credential, auth)));
+            }
+        }
+        Ok(resolved)
     }
 
     fn apply_resolved_credential(
@@ -648,6 +823,21 @@ impl ModelPickerState {
         self.pending_api_key = resolved.secret;
         self.pending_credential_source = Some(resolved.source);
     }
+}
+
+fn credential_for_openai_auth(
+    mut credential: vtcode_config::api_keys::ResolvedCredential,
+    auth: vtcode_config::auth::OpenAIResolvedAuth,
+) -> vtcode_config::api_keys::ResolvedCredential {
+    match auth {
+        vtcode_config::auth::OpenAIResolvedAuth::ApiKey { api_key } => credential.secret = Some(api_key),
+        vtcode_config::auth::OpenAIResolvedAuth::ChatGpt { .. } => {
+            credential.source = vtcode_config::api_keys::CredentialSource::OAuth;
+            credential.secret = None;
+            credential.env_var = None;
+        }
+    }
+    credential
 }
 
 fn existing_credential_message(
@@ -687,3 +877,36 @@ fn oauth_auth_message(selection: &SelectionDetail) -> String {
         format!("Using OAuth authentication for {}", selection.provider_label)
     }
 }
+
+/// Whether the effective OpenAI base URL is the standard Decisions endpoint.
+///
+/// An empty value means no override is configured, so the runtime uses the
+/// default standard endpoint. Non-empty values are validated by the shared
+/// runtime predicate so picker eligibility cannot drift from dispatch.
+pub(super) fn standard_decisions_endpoint(base_url: &str) -> bool {
+    let trimmed = base_url.trim();
+    trimmed.is_empty() || vtcode_core::llm::provider::is_standard_decisions_endpoint(trimmed)
+}
+
+/// The configured OpenAI base URL override the runtime would apply, mirroring
+/// `override_base_url`: explicit config `base_url` wins, then the
+/// `OPENAI_BASE_URL` environment variable. `None` means no override is set, so
+/// the runtime uses the built-in standard endpoint.
+pub(crate) fn configured_openai_base_url(vt_cfg: Option<&VTCodeConfig>) -> Option<String> {
+    let configured = vt_cfg
+        .and_then(|cfg| cfg.provider_overrides.get("openai"))
+        .and_then(|override_config| override_config.base_url.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    if configured.is_some() {
+        return configured;
+    }
+    std::env::var(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(test)]
+mod tests;

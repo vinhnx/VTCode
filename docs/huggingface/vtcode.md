@@ -1,22 +1,23 @@
 # VT Code
 
-VT Code is a powerful AI coding agent that integrates with Hugging Face Inference Providers to enable intelligent code analysis, generation, and automation within your development workflow.
+VT Code is a powerful AI coding agent that integrates with Hugging Face Inference Providers to enable intelligent code
+analysis, generation, and automation within your development workflow.
 
 ## Overview
 
 VT Code leverages Hugging Face Inference Providers to:
 
--   **Multi-provider LLM support** - Seamlessly switch between multiple inference providers
--   **Code understanding** - Uses Tree-Sitter integration for semantic code analysis
--   **Intelligent tool system** - 53+ specialized tools for code inspection, execution, and manipulation
--   **Real-time collaboration** - Interactive sessions with streaming output and feedback
--   **Provider failover** - Automatic fallback to alternate providers if one fails
+- **Multi-provider LLM support** - Seamlessly switch between multiple inference providers
+- **Code understanding** - Uses Tree-Sitter integration for semantic code analysis
+- **Intelligent tool system** - 53+ specialized tools for code inspection, execution, and manipulation
+- **Real-time collaboration** - Interactive sessions with streaming output and feedback
+- **Provider failover** - Automatic fallback to alternate providers if one fails
 
 ## Prerequisites
 
--   VT Code installed ([installation guide](https://github.com/vinhnx/vtcode))
--   Hugging Face account with [API token](https://huggingface.co/settings/tokens)
--   Your preferred Hugging Face Inference Provider configured
+- VT Code installed ([installation guide](https://github.com/vinhnx/vtcode))
+- Hugging Face account with [API token](https://huggingface.co/settings/tokens)
+- Your preferred Hugging Face Inference Provider configured
 
 ## Configuration
 
@@ -81,10 +82,10 @@ cargo run -- chat
 
 VT Code works with any model available through Hugging Face Inference Providers:
 
--   **Code-specific models**: Codestral, Code Llama, StarCoder
--   **General models**: Llama 2, Mistral, Zephyr
--   **Multi-modal models**: LLaVA and other vision models
--   **Custom fine-tuned models**: Deploy your own endpoints
+- **Code-specific models**: Codestral, Code Llama, StarCoder
+- **General models**: Llama 2, Mistral, Zephyr
+- **Multi-modal models**: LLaVA and other vision models
+- **Custom fine-tuned models**: Deploy your own endpoints
 
 ## Features with HF Integration
 
@@ -212,20 +213,21 @@ curl -H "Authorization: Bearer $HF_TOKEN" \
 
 ## Resources
 
--   [VT Code Repository](https://github.com/vinhnx/vtcode)
--   [VT Code Architecture Documentation](https://github.com/vinhnx/vtcode/blob/main/docs/ARCHITECTURE.md)
--   [Hugging Face Inference API Documentation](https://huggingface.co/docs/api-inference/index)
--   [Hugging Face Inference Endpoints](https://huggingface.co/docs/inference-endpoints/index)
--   [Supported Models on Hugging Face](https://huggingface.co/models)
+- [VT Code Repository](https://github.com/vinhnx/vtcode)
+- [VT Code Architecture Documentation](https://github.com/vinhnx/vtcode/blob/main/docs/ARCHITECTURE.md)
+- [Hugging Face Inference API Documentation](https://huggingface.co/docs/api-inference/index)
+- [Hugging Face Inference Endpoints](https://huggingface.co/docs/inference-endpoints/index)
+- [Supported Models on Hugging Face](https://huggingface.co/models)
 
 ## Support
 
 For issues or questions:
 
--   **GitHub Issues**: [VT Code Issues](https://github.com/vinhnx/vtcode/issues)
--   **Hugging Face Support**: [HF Support](https://huggingface.co/support)
--   **Documentation**: [VT Code Docs](https://github.com/vinhnx/vtcode/tree/main/docs)
+- **GitHub Issues**: [VT Code Issues](https://github.com/vinhnx/vtcode/issues)
+- **Hugging Face Support**: [HF Support](https://huggingface.co/support)
+- **Documentation**: [VT Code Docs](https://github.com/vinhnx/vtcode/tree/main/docs)
 
 ## Contributing
 
-VT Code is open source and welcomes contributions. See [CONTRIBUTING.md](https://github.com/vinhnx/vtcode/blob/main/CONTRIBUTING.md) for guidelines.
+VT Code is open source and welcomes contributions. See
+[CONTRIBUTING.md](https://github.com/vinhnx/vtcode/blob/main/CONTRIBUTING.md) for guidelines.

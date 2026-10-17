@@ -46,18 +46,55 @@ impl Default for AuthCredentialsStoreMode {
 
 impl AuthCredentialsStoreMode {
     /// Resolve `Auto` to the best available concrete backend.
-    /// `Keyring` and `File` pass through unchanged.
-    pub(crate) fn effective_mode(self) -> Self {
+    ///
+    /// Follows the "parse, don't validate" pattern: the return type is
+    /// [`ResolvedStoreMode`], which has no `Auto` variant, so downstream
+    /// code matches exhaustively and never needs an `unreachable!` arm.
+    pub(crate) fn effective_mode(self) -> ResolvedStoreMode {
         match self {
             Self::Auto => {
                 if super::keyring::is_functional() {
-                    Self::Keyring
+                    ResolvedStoreMode::Keyring
                 } else {
                     tracing::debug!("Keyring not available, falling back to file storage");
-                    Self::File
+                    ResolvedStoreMode::File
                 }
             }
-            mode => mode,
+            Self::Keyring => ResolvedStoreMode::Keyring,
+            Self::File => ResolvedStoreMode::File,
+        }
+    }
+}
+
+/// A concrete credential backend, with [`AuthCredentialsStoreMode::Auto`] resolved.
+///
+/// [`AuthCredentialsStoreMode::effective_mode`] parses the possibly-`Auto`
+/// configuration into this type once; every consumer then handles both
+/// backends exhaustively without a runtime `unreachable!` guard.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum ResolvedStoreMode {
+    /// Use the OS-specific keyring service.
+    Keyring,
+    /// Persist credentials in an encrypted file.
+    File,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AuthCredentialsStoreMode, ResolvedStoreMode};
+
+    #[test]
+    fn explicit_modes_pass_through_unchanged() {
+        assert_eq!(AuthCredentialsStoreMode::Keyring.effective_mode(), ResolvedStoreMode::Keyring);
+        assert_eq!(AuthCredentialsStoreMode::File.effective_mode(), ResolvedStoreMode::File);
+    }
+
+    #[test]
+    fn auto_resolves_to_a_concrete_backend() {
+        // `Auto` must never survive resolution: the match is exhaustive over
+        // the concrete variants, so there is no `Auto` case to assert against.
+        match AuthCredentialsStoreMode::Auto.effective_mode() {
+            ResolvedStoreMode::Keyring | ResolvedStoreMode::File => {}
         }
     }
 }

@@ -6,7 +6,7 @@ This guide documents rendering patterns and best practices specific to VT Code, 
 
 VT Code follows the **Ratatui recipe** of rendering everything in a single `terminal.draw()` closure per frame cycle.
 
-###   Anti-Pattern: Multiple Draws
+### Anti-Pattern: Multiple Draws
 
 ```rust
 loop {
@@ -22,9 +22,10 @@ loop {
 }
 ```
 
-**Why it fails:** Ratatui uses **double buffering**—only the last `draw()` call within a frame cycle gets rendered. The first two calls are overwritten.
+**Why it fails:** Ratatui uses **double buffering**—only the last `draw()` call within a frame cycle gets rendered. The
+first two calls are overwritten.
 
-###   Correct Pattern: Single Orchestrated Draw
+### Correct Pattern: Single Orchestrated Draw
 
 ```rust
 loop {
@@ -41,6 +42,7 @@ loop {
 File: `crates/codegen/vtcode-core/src/ui/tui/session.rs`
 
 The `Session::render()` method orchestrates all UI components:
+
 - Header (top bar with model/status)
 - Navigation pane (left sidebar)
 - Transcript (message history, center)
@@ -53,7 +55,8 @@ All rendering happens in one frame cycle.
 
 ### Single Buffer Concept
 
-Ratatui allocates one rendering buffer for the entire terminal area. When you call `terminal.draw()`, all widgets write to this buffer. At frame end, diffs are sent to the terminal.
+Ratatui allocates one rendering buffer for the entire terminal area. When you call `terminal.draw()`, all widgets write
+to this buffer. At frame end, diffs are sent to the terminal.
 
 **Impact on VT Code:**
 
@@ -76,6 +79,7 @@ fn render_ref(&self, area: Rect, buf: &mut Buffer) {
 ```
 
 **Best practices:**
+
 - Use `Rect::intersection(other)` to clamp to valid regions
 - Use `Rect::clamp(constraining_rect)` to clamp coordinates
 - Use `Rect::columns()` and `Rect::rows()` iterators (safe by design)
@@ -100,6 +104,7 @@ let chunks = Layout::default()
 ```
 
 **Safety guarantees:**
+
 - `Constraint::Length(n)` - Exactly n rows/cols
 - `Constraint::Percentage(p)` - p% of available space
 - `Constraint::Min(n)` - At least n, fill remaining
@@ -122,6 +127,7 @@ let y = (area.top() as u32 + offset).min(area.bottom() as u32) as u16;
 ```
 
 Better yet, use iterators:
+
 ```rust
 //   Safest: Iterator-based (can't go out of bounds)
 for (i, cell) in f.buffer_mut().content.iter_mut().enumerate() {
@@ -138,23 +144,25 @@ for (i, cell) in f.buffer_mut().content.iter_mut().enumerate() {
 VT Code composes widgets hierarchically. Each "pane" renders into its allocated area:
 
 **Structure:**
-```
+
+```text
 
  Header: Info, status, theme       Render size: full_width × 1
 
-  Nav  Transcript   Modal   
-        (messages)  (if     
-                     any)   
+  Nav  Transcript   Modal
+        (messages)  (if
+                     any)
 
  Input bar (user text)             Render size: full_width × 1-3
 
 ```
 
 **Implementation:**
+
 ```rust
 pub fn render(&mut self, f: &mut Frame) {
     let area = f.area();
-    
+
     // Split into main regions
     let [header_area, body_area, input_area] = Layout::vertical([
         Constraint::Length(1),
@@ -162,7 +170,7 @@ pub fn render(&mut self, f: &mut Frame) {
         Constraint::Length(3),
     ])
     .areas(area);
-    
+
     // Render each component
     self.render_header(f, header_area);
     self.render_body(f, body_area);      // Handles nav + transcript + modal
@@ -175,6 +183,7 @@ pub fn render(&mut self, f: &mut Frame) {
 VT Code uses Ratatui's widget trait (`Widget`) for reusable components. Rendering happens via `widget.render()` call.
 
 **Pattern:**
+
 ```rust
 // Stateless widget (implements Widget trait)
 impl Widget for MyCustomWidget {
@@ -196,6 +205,7 @@ f.render_widget(my_widget, area);
 VT Code's message transcript must reflow when terminal resizes. This is expensive, so VT Code caches reflowed text:
 
 **Pattern (from vtcode-core):**
+
 ```rust
 struct Message {
     text: String,
@@ -206,7 +216,7 @@ struct Message {
 fn get_reflowed_lines(&self, width: u16) -> Vec<String> {
     let mut cache = self.cached_lines.lock();
     let mut cache_width = self.cached_width.lock();
-    
+
     if *cache_width != width {
         // Reflow needed
         let lines = textwrap::wrap(&self.text, width);
@@ -214,7 +224,7 @@ fn get_reflowed_lines(&self, width: u16) -> Vec<String> {
         *cache_width = width;
         return lines;
     }
-    
+
     cache.clone().unwrap_or_default()
 }
 ```
@@ -222,6 +232,7 @@ fn get_reflowed_lines(&self, width: u16) -> Vec<String> {
 ### Handling Terminal Resize
 
 On `Event::Resize(w, h)`:
+
 1. Clear reflow caches
 2. Recalculate layout constraints
 3. Trigger next `Event::Render`
@@ -249,6 +260,7 @@ f.render_widget(
 ```
 
 **Portable color options:**
+
 - Named: `Color::Red`, `Color::Blue`, etc.
 - Indexed: `Color::Indexed(200)` (256-color palette)
 - RGB: `Color::Rgb(255, 0, 0)` (24-bit color, terminal permitting)
@@ -266,11 +278,13 @@ Converts ANSI SGR codes (like `\x1b[1;31m` for bold red) to Ratatui `Style`.
 ### Double Buffering Efficiency
 
 Ratatui's double buffer means:
+
 - Only cells that changed are sent to terminal
 - No "flicker" (frame is complete before display)
 - Terminal I/O is optimized via escape sequence diffing
 
 **VT Code optimization:**
+
 - Only send `Event::Render` at 60 FPS (not on every state change)
 - Batch state updates into `Event::Tick` (4 Hz)
 - Let Ratatui handle diff logic
@@ -279,10 +293,10 @@ Ratatui's double buffer means:
 
 VT Code uses the **Tick/Render split pattern**:
 
-```
+```text
 Event::Tick (4 Hz)
    Update internal state (messages, selection, etc.)
-  
+
 Event::Render (60 FPS)
    Redraw UI from state (Ratatui handles diffing)
 ```
@@ -335,12 +349,12 @@ VT Code includes render tests in `vtcode-core`:
 #[test]
 fn test_render_header() {
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-    
+
     terminal.draw(|f| {
         let mut session = Session::new();
         session.render_header(f, f.area());
     }).unwrap();
-    
+
     let buffer = terminal.backend().buffer();
     // Assert expected cell content
 }

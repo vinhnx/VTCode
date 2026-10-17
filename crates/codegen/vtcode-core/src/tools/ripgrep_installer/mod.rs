@@ -6,6 +6,7 @@
 mod platform;
 mod state;
 
+use crate::tools::install_support::run_version_probe;
 use crate::tools::ripgrep_binary::RIPGREP_INSTALL_COMMAND;
 use anyhow::{Result, anyhow};
 use std::process::Command;
@@ -28,7 +29,9 @@ impl RipgrepStatus {
     /// Check if ripgrep is currently available
     pub fn check() -> Self {
         debug_log("Checking ripgrep availability...");
-        match Command::new("rg").arg("--version").output() {
+        let mut command = Command::new("rg");
+        command.arg("--version");
+        match run_version_probe(command) {
             Ok(output) => {
                 if output.status.success() {
                     let version = String::from_utf8_lossy(&output.stdout).trim().to_string();

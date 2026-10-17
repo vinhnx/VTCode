@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -17,7 +19,7 @@ use vtcode_ui::tui::app::{
 use super::HitlDecision;
 use super::shell_approval::{ApprovalLearningTarget, PersistentApprovalTarget};
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
@@ -299,15 +301,8 @@ pub(super) fn shell_allows_persistent_decisions(tool_name: &str, tool_args: Opti
 
 #[cfg(test)]
 fn truncate_arg_preview(value: &str) -> String {
-    const MAX_CHARS: usize = 60;
-    const TRUNCATED_CHARS: usize = 57;
-    if value.chars().nth(MAX_CHARS).is_some() {
-        let mut truncated: String = value.chars().take(TRUNCATED_CHARS).collect();
-        truncated.push_str("...");
-        truncated
-    } else {
-        value.to_string()
-    }
+    // Canonical helper: hard 60-char budget with "..." reserving its own width.
+    vtcode_commons::formatting::truncate_within(value, 60, "...")
 }
 
 fn shell_command_preview_lines(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
@@ -634,39 +629,41 @@ fn build_tool_permission_options(
     prompt_kind: ToolPermissionPromptKind,
     persistent_approval_target: Option<&PersistentApprovalTarget>,
 ) -> Vec<vtcode_ui::tui::app::InlineListItem> {
-    use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+    use vtcode_ui::tui::app::InlineListSelection;
 
     let mut options = vec![
-        InlineListItem {
-            title: "Approve Once".to_string(),
-            subtitle: Some("Allow this time only".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: Some("approve yes allow once y 1".to_string()),
-        },
-        InlineListItem {
-            title: if prompt_kind == ToolPermissionPromptKind::Mcp {
-                "Approve this session".to_string()
+        ui_list::action(
+            "Approve Once",
+            "Allow this time only",
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ToolApproval(true)),
+        )
+        .with_search_value("approve yes allow once y 1".to_string()),
+        // Scope badge is load-bearing: "Always" rows persist, "Session" does not.
+        ui_list::action(
+            if prompt_kind == ToolPermissionPromptKind::Mcp {
+                "Approve this session"
             } else {
-                "Allow for Session".to_string()
+                "Allow for Session"
             },
-            subtitle: if prompt_kind == ToolPermissionPromptKind::Mcp {
-                Some("Remember for this session".to_string())
+            if prompt_kind == ToolPermissionPromptKind::Mcp {
+                "Remember for this session"
             } else {
-                Some("For the current session".to_string())
+                "For the current session"
             },
-            badge: Some("Session".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalSession),
-            search_value: Some("session temporary temp 2".to_string()),
-        },
+            Some("Session".to_string()),
+            Tone::Neutral,
+            Some(InlineListSelection::ToolApprovalSession),
+        )
+        .with_search_value("session temporary temp 2".to_string()),
     ];
 
     if let Some(target) = persistent_approval_target {
         let short_label = match target {
             PersistentApprovalTarget::ToolLevel => "this tool".to_string(),
             PersistentApprovalTarget::ExactInvocation { display_label }
+            | PersistentApprovalTarget::LearnedPattern { display_label, .. }
             | PersistentApprovalTarget::PrefixRule { display_label, .. } => {
                 // Middle-truncation keeps both the executable prefix and the
                 // trailing flags/destinations that can change what is
@@ -676,57 +673,56 @@ fn build_tool_permission_options(
             }
         };
         let subtitle = format!("Remember {short_label} in this workspace");
-        options.push(InlineListItem {
-            title: "Always approve and save to policy cache".to_string(),
-            subtitle: Some(subtitle),
-            badge: Some("Permanent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalPermanent),
-            search_value: Some("always permanent forever save 3".to_string()),
-        });
+        options.push(
+            ui_list::action(
+                "Always approve",
+                subtitle,
+                Some("Permanent".to_string()),
+                Tone::Neutral,
+                Some(InlineListSelection::ToolApprovalPermanent),
+            )
+            .with_search_value("always permanent forever save 3".to_string()),
+        );
     }
 
-    options.push(InlineListItem {
-        title: "".to_string(),
-        subtitle: None,
-        badge: None,
-        indent: 0,
-        selection: None,
-        search_value: None,
-    });
+    options.push(ui_list::group_divider());
 
-    options.push(InlineListItem {
-        title: if prompt_kind == ToolPermissionPromptKind::Mcp {
-            "Cancel".to_string()
-        } else {
-            "Deny Once".to_string()
-        },
-        subtitle: if prompt_kind == ToolPermissionPromptKind::Mcp {
-            Some("Cancel this tool call".to_string())
-        } else {
-            Some("Ask again next time".to_string())
-        },
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ToolApprovalDenyOnce),
-        search_value: Some(if prompt_kind == ToolPermissionPromptKind::Mcp {
+    options.push(
+        ui_list::action(
+            if prompt_kind == ToolPermissionPromptKind::Mcp {
+                "Cancel"
+            } else {
+                "Deny Once"
+            },
+            if prompt_kind == ToolPermissionPromptKind::Mcp {
+                "Cancel this tool call"
+            } else {
+                "Ask again next time"
+            },
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ToolApprovalDenyOnce),
+        )
+        .with_search_value(if prompt_kind == ToolPermissionPromptKind::Mcp {
             "cancel stop reject decline 4".to_string()
         } else {
             "deny no reject once temporary 4".to_string()
         }),
-    });
+    );
 
     if matches!(persistent_approval_target, Some(PersistentApprovalTarget::ToolLevel))
         && prompt_kind != ToolPermissionPromptKind::Mcp
     {
-        options.push(InlineListItem {
-            title: "Always Deny".to_string(),
-            subtitle: Some("Block this tool until policy is changed".to_string()),
-            badge: Some("Persistent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel never always 5".to_string()),
-        });
+        options.push(
+            ui_list::action(
+                "Always Deny",
+                "Block this tool until policy is changed",
+                Some("Persistent".to_string()),
+                Tone::Neutral,
+                Some(InlineListSelection::ToolApproval(false)),
+            )
+            .with_search_value("deny no reject cancel never always 5".to_string()),
+        );
     }
 
     options
@@ -832,8 +828,9 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     {
         tracing::debug!(error = %err, "Failed to emit HITL notification");
     }
+    handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {
@@ -844,7 +841,8 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             selected: Some(default_selection),
             search: None,
             hotkeys,
-        }),
+    status: None,
+}),
         ctrl_c_state,
         ctrl_c_notify,
         |submission| match submission {
@@ -898,7 +896,7 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     session: &mut S,
 ) -> Result<HitlDecision> {
-    use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+    use vtcode_ui::tui::app::InlineListSelection;
 
     let mut description_lines = vec![
         format!("Tool: {tool_name}"),
@@ -929,30 +927,23 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
     description_lines.push(choose_handling_line("this run"));
 
     let options = vec![
-        InlineListItem {
-            title: "Enable tool".to_string(),
-            subtitle: Some("Allow and continue execution".to_string()),
-            badge: Some("Fix Policy".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalEnable),
-            search_value: Some("enable allow fix policy continue yes 1".to_string()),
-        },
-        InlineListItem {
-            title: "".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Deny Once".to_string(),
-            subtitle: Some("Ask again next time".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalDenyOnce),
-            search_value: Some("deny no reject skip once 2".to_string()),
-        },
+        ui_list::action(
+            "Enable tool",
+            "Allow and continue execution",
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ToolApprovalEnable),
+        )
+        .with_search_value("enable allow fix policy continue yes 1".to_string()),
+        ui_list::group_divider(),
+        ui_list::action(
+            "Deny Once",
+            "Ask again next time",
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ToolApprovalDenyOnce),
+        )
+        .with_search_value("deny no reject skip once 2".to_string()),
     ];
 
     let navigation_hint = APPROVAL_NAVIGATE_DENY.to_string();
@@ -965,17 +956,28 @@ pub(super) async fn prompt_policy_denied_tool<S: UiSession + ?Sized>(
         selected: None,
         search: None,
         hotkeys: Vec::new(),
+        status: None,
     };
 
     let overlay = TransientRequest::List(request);
 
+    handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
     let result =
-        show_overlay_and_wait(handle, session, overlay, ctrl_c_state, ctrl_c_notify, |submission| match submission {
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => Some(HitlDecision::Enable),
-            TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => Some(HitlDecision::DeniedOnce),
-            TransientSubmission::Selection(_) => Some(HitlDecision::DeniedOnce),
-            _ => None,
-        })
+        show_permission_and_wait(
+            handle,
+            session,
+            overlay,
+            ctrl_c_state,
+            ctrl_c_notify,
+            |submission| match submission {
+                TransientSubmission::Selection(InlineListSelection::ToolApprovalEnable) => Some(HitlDecision::Enable),
+                TransientSubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
+                    Some(HitlDecision::DeniedOnce)
+                }
+                TransientSubmission::Selection(_) => Some(HitlDecision::DeniedOnce),
+                _ => None,
+            },
+        )
         .await?;
 
     match result {
@@ -1289,6 +1291,27 @@ mod tests {
     }
 
     #[test]
+    fn always_rows_carry_permanence_badges() {
+        let items = build_tool_permission_options(
+            ToolPermissionPromptKind::Standard,
+            Some(&PersistentApprovalTarget::ToolLevel),
+        );
+        let badge_for = |title: &str| {
+            items
+                .iter()
+                .find(|item| item.title == title)
+                .unwrap_or_else(|| panic!("{title} row must exist"))
+                .badge
+                .clone()
+        };
+        assert_eq!(badge_for("Always approve").as_deref(), Some("Permanent"));
+        assert_eq!(badge_for("Always Deny").as_deref(), Some("Persistent"));
+        assert_eq!(badge_for("Allow for Session").as_deref(), Some("Session"));
+        assert_eq!(badge_for("Approve Once"), None, "one-shot rows must not claim permanence");
+        assert_eq!(badge_for("Deny Once"), None);
+    }
+
+    #[test]
     fn shell_prompt_offers_policy_cache_option_for_exact_invocation() {
         let titles = build_tool_permission_options(
             ToolPermissionPromptKind::Standard,
@@ -1299,8 +1322,29 @@ mod tests {
         .into_iter()
         .map(|item| item.title)
         .collect::<Vec<_>>();
-        assert!(titles.iter().any(|title| title == "Always approve and save to policy cache"));
+        assert!(titles.iter().any(|title| title == "Always approve"));
         assert!(!titles.iter().any(|title| title == "Always Deny"));
+    }
+
+    #[test]
+    fn shell_prompt_labels_learned_family_permanent_option() {
+        let items = build_tool_permission_options(
+            ToolPermissionPromptKind::Standard,
+            Some(&PersistentApprovalTarget::LearnedPattern {
+                key: "shell-pattern:awk README.md|sandbox_permissions=\"use_default\"|additional_permissions=null"
+                    .to_string(),
+                display_label: "safe `awk` reads under `README.md`".to_string(),
+            }),
+        );
+        let permanent = items
+            .iter()
+            .find(|item| item.title == "Always approve")
+            .expect("permanent option");
+        assert_eq!(
+            permanent.subtitle.as_deref(),
+            Some("Remember safe `awk` reads under `README.md` in this workspace")
+        );
+        assert_eq!(permanent.badge.as_deref(), Some("Permanent"));
     }
 
     #[test]
@@ -1460,7 +1504,7 @@ mod tests {
         );
         let permanent = items
             .iter()
-            .find(|item| item.title == "Always approve and save to policy cache")
+            .find(|item| item.title == "Always approve")
             .expect("permanent option");
         let subtitle = permanent.subtitle.as_deref().expect("subtitle");
         assert!(subtitle.contains('…'), "long label should be truncated, got: {subtitle}");

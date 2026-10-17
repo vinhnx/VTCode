@@ -2,7 +2,7 @@
 
 ## Module Organization
 
-```
+```text
 session.rs (main coordinator)
  palette.rs       - File & prompt palette management
  editing.rs       - Text editing & cursor movement
@@ -26,36 +26,36 @@ session.rs (main coordinator)
 
 ### palette.rs
 
--   Manages file and prompt palette lifecycle
--   Handles palette triggers and key events
--   Inserts references into input
+- Manages file and prompt palette lifecycle
+- Handles palette triggers and key events
+- Inserts references into input
 
 ### editing.rs
 
--   All text insertion and deletion
--   Cursor movement (char, word, line)
--   History navigation (currently disabled)
+- All text insertion and deletion
+- Cursor movement (char, word, line)
+- History navigation (currently disabled)
 
 ### messages.rs
 
--   Message line operations (push, append, replace)
--   Tool code fence handling
--   Message styling and prefixes
+- Message line operations (push, append, replace)
+- Tool code fence handling
+- Message styling and prefixes
 
 ### reflow.rs
 
--   Transcript line wrapping
--   Tool and PTY output formatting
--   Diff line padding
--   Text justification for agent messages
+- Transcript line wrapping
+- Tool and PTY output formatting
+- Diff line padding
+- Text justification for agent messages
 
 ### state.rs
 
--   Session initialization
--   Exit and redraw management
--   Modal management
--   Scroll operations
--   Cache invalidation
+- Session initialization
+- Exit and redraw management
+- Modal management
+- Scroll operations
+- Cache invalidation
 
 ## Design Principles
 
@@ -67,8 +67,8 @@ session.rs (main coordinator)
 
 ## Benefits
 
--   **Reduced complexity**: Smaller, focused files
--   **Better navigation**: Clear where to find functionality
--   **Easier testing**: Isolated concerns
--   **Maintainability**: Changes localized to relevant modules
--   **Onboarding**: New developers can understand modules incrementally
+- **Reduced complexity**: Smaller, focused files
+- **Better navigation**: Clear where to find functionality
+- **Easier testing**: Isolated concerns
+- **Maintainability**: Changes localized to relevant modules
+- **Onboarding**: New developers can understand modules incrementally

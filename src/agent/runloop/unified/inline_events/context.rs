@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -42,6 +42,8 @@ pub(crate) struct InlineEventContext<'a> {
     editor_open_sender: Option<EditorOpenRequestSender>,
     editor_open_dispatcher: Option<Arc<EditorOpenDispatcher>>,
     exec_sessions: Option<ExecSessionManager>,
+    tool_registry: Option<vtcode_core::tools::registry::ToolRegistry>,
+    harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
 impl<'a> InlineEventContext<'a> {
@@ -99,6 +101,7 @@ impl<'a> InlineEventContext<'a> {
 
         Self {
             handle,
+            harness_emitter,
             state,
             modal,
             ctrl_c_state,
@@ -107,11 +110,16 @@ impl<'a> InlineEventContext<'a> {
             editor_open_sender: None,
             editor_open_dispatcher: None,
             exec_sessions: None,
+            tool_registry: None,
         }
     }
 
     pub(crate) fn set_exec_session_manager(&mut self, exec_sessions: ExecSessionManager) {
         self.exec_sessions = Some(exec_sessions);
+    }
+
+    pub(crate) fn set_tool_registry(&mut self, tool_registry: vtcode_core::tools::registry::ToolRegistry) {
+        self.tool_registry = Some(tool_registry);
     }
 
     pub(crate) fn set_editor_open_sink(
@@ -149,11 +157,18 @@ impl<'a> InlineEventContext<'a> {
                     )?;
                     self.modal.restore_input_draft(input);
                     InlineLoopAction::Continue
-                } else {
-                    // The queued intent is consumed via the steering channel
-                    // and applied to the live history at the next tool-call
-                    // boundary of the running turn (mid-turn steering).
+                } else if self.ctrl_c_state.take_steer_delivered() {
+                    // Callback already handed this steer to the live steering
+                    // channel (mid-turn injection). Stay passive so the message
+                    // is not queued twice.
                     self.input_processor().passive()
+                } else {
+                    // Steering was unavailable (no sender, closed channel, or
+                    // the callback never ran). Queue the message so it is
+                    // processed once the agent is ready instead of vanishing.
+                    self.state.reset_interrupt_state();
+                    let primary_agent = self.modal.active_primary_agent_name();
+                    self.input_processor().queue_submit(input, queue, primary_agent)
                 }
             }
             InlineEvent::Pause | InlineEvent::Resume => {
@@ -247,13 +262,7 @@ impl<'a> InlineEventContext<'a> {
                 }
             }
             InlineEvent::ExecSessionAction { id, action } => self.handle_exec_session_action(id, action).await?,
-            InlineEvent::LaunchEditor { draft } => {
-                if draft.is_empty() {
-                    self.input_processor().submit("/edit".into())
-                } else {
-                    InlineLoopAction::LaunchEditorWithDraft { draft }
-                }
-            }
+            InlineEvent::LaunchEditor { draft } => InlineLoopAction::LaunchEditorWithDraft { draft },
             InlineEvent::RequestInlinePromptSuggestion(draft) => {
                 self.state.reset_interrupt_state();
                 InlineLoopAction::RequestInlinePromptSuggestion(draft)
@@ -306,6 +315,39 @@ impl<'a> InlineEventContext<'a> {
                 InlineLoopAction::Continue
             }
             InlineEvent::OpenUrl(url) => {
+                if let Some(reference) = url.strip_prefix("vtcode-evidence:") {
+                    let mut fields = reference.split(':');
+                    let session = fields.next();
+                    let offset = fields.next().and_then(|s| s.parse::<u64>().ok());
+                    let digest = fields.next();
+                    if fields.next().is_none()
+                        && let Some(emitter) = self.harness_emitter
+                        && let (Some(session), Some(offset), Some(digest)) = (session, offset, digest)
+                    {
+                        let evidence = async {
+                            let model = emitter
+                                .explanation(vtcode_memory::explanation::ExplanationScope::Session)
+                                .await?;
+                            let reference = model
+                                .evidence_references()
+                                .into_iter()
+                                .find(|e| e.session_id == session && e.offset == offset && e.digest == digest)
+                                .context("evidence expired")?;
+                            emitter.evidence(reference, 0).await
+                        }
+                        .await;
+                        match evidence {
+                            Ok(page) => {
+                                self.handle.review_evidence(page.text.lines().map(str::to_owned).collect());
+                            }
+                            Err(_) => self
+                                .state
+                                .renderer()
+                                .line(MessageStyle::Warning, "Evidence is unavailable or expired.")?,
+                        }
+                    }
+                    return Ok(InlineLoopAction::Continue);
+                }
                 self.state.reset_interrupt_state();
                 self.modal.request_url_guard(self.state.renderer(), url)?
             }
@@ -326,7 +368,7 @@ impl<'a> InlineEventContext<'a> {
     async fn submit_to_focused_exec_session(&mut self, input: SubmittedInput) -> Result<InlineLoopAction> {
         // Slash commands are application actions, not stdin for the focused
         // process. This also keeps keyboard-generated commands such as
-        // `/subprocesses` and `/model` usable while a session is focused.
+        // `/config subprocess` and `/model` usable while a session is focused.
         if input.text.trim_start().starts_with('/') {
             return Ok(self.input_processor().submit(input));
         }
@@ -371,17 +413,28 @@ impl<'a> InlineEventContext<'a> {
     /// sessions are user-owned and stay untouched.
     async fn handle_force_cancel_pty_session(&mut self) -> Result<InlineLoopAction> {
         self.state.reset_interrupt_state();
-        let Some(exec_sessions) = self.exec_sessions.clone() else {
+        if self.tool_registry.is_none() && self.exec_sessions.is_none() {
             self.state
                 .renderer()
                 .line(MessageStyle::Warning, "No exec session manager is available to force-cancel.")?;
             return Ok(self.input_processor().passive());
-        };
-
+        }
         self.state
             .renderer()
             .line(MessageStyle::Status, "Force-cancelling foreground exec sessions...")?;
-        let (stopped, closed, failed) = exec_sessions.force_cancel_foreground_sessions().await;
+        // Prefer the registry-owned path so force-cancelled mutating sessions
+        // retire their verification boundary instead of stranding it. The
+        // manager-direct path is the fallback when no registry is wired; it
+        // cannot observe verification bookkeeping.
+        let (stopped, closed, failed) = if let Some(registry) = self.tool_registry.clone() {
+            registry.force_cancel_foreground_sessions_and_observe_cleanup().await
+        } else if let Some(exec_sessions) = self.exec_sessions.clone() {
+            exec_sessions.force_cancel_foreground_sessions().await
+        } else {
+            // Unreachable: availability was checked above. Fall through to
+            // the passive action without touching any session.
+            return Ok(self.input_processor().passive());
+        };
         if stopped + closed + failed == 0 {
             self.state
                 .renderer()
@@ -427,14 +480,14 @@ impl<'a> InlineEventContext<'a> {
             ExecSessionAction::Inspect => {
                 let snapshot = match exec_sessions.background_session_snapshot(&session_id).await {
                     Ok(snapshot) => snapshot,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 self.render_exec_session_inspection(&snapshot)?;
             }
             ExecSessionAction::Preview => {
                 let snapshot = match exec_sessions.background_session_snapshot(&session_id).await {
                     Ok(snapshot) => snapshot,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 self.handle.show_modal(
                     format!("Exec session {}", snapshot.metadata.id.as_str()),
@@ -462,7 +515,7 @@ impl<'a> InlineEventContext<'a> {
                     }
                     Ok(None) => {
                         if let Err(error) = exec_sessions.terminate_session(&session_id).await {
-                            return self.render_exec_session_error(&session_id, error);
+                            return self.render_exec_session_error(&session_id, action, error);
                         }
                         // Peek the retained preview so the drawer/inspect path
                         // shows output captured up to termination.
@@ -472,13 +525,13 @@ impl<'a> InlineEventContext<'a> {
                             &format!("Requested graceful termination for exec session {session_id}."),
                         )?;
                     }
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 }
             }
             ExecSessionAction::ForceTerminateOrClose => {
                 let already_exited = match exec_sessions.force_terminate_or_close(&session_id).await {
                     Ok(already_exited) => already_exited,
-                    Err(error) => return self.render_exec_session_error(&session_id, error),
+                    Err(error) => return self.render_exec_session_error(&session_id, action, error),
                 };
                 let message = if already_exited {
                     format!("Closed completed exec session {session_id}.")
@@ -496,7 +549,7 @@ impl<'a> InlineEventContext<'a> {
                     )?;
                 } else {
                     if let Err(error) = exec_sessions.focus_background_session(&session_id).await {
-                        return self.render_exec_session_error(&session_id, error);
+                        return self.render_exec_session_error(&session_id, action, error);
                     }
                     self.state.renderer().line(
                         MessageStyle::Info,
@@ -509,10 +562,28 @@ impl<'a> InlineEventContext<'a> {
         Ok(self.input_processor().passive())
     }
 
-    fn render_exec_session_error(&mut self, session_id: &str, error: anyhow::Error) -> Result<InlineLoopAction> {
-        self.state
-            .renderer()
-            .line(MessageStyle::Error, &format!("Exec session {session_id} action failed: {error}"))?;
+    fn render_exec_session_error(
+        &mut self,
+        session_id: &str,
+        action: ExecSessionAction,
+        error: anyhow::Error,
+    ) -> Result<InlineLoopAction> {
+        // Session-891943: the only debug ERROR was a UI action on an already
+        // exited session whose result was recorded. Log the action and cause
+        // chain so a missing session is not mistaken for a lost verifier
+        // result, and tell the user to reuse recorded output.
+        tracing::warn!(
+            session_id = %session_id,
+            action = ?action,
+            error = %format!("{error:#}"),
+            "exec session action failed"
+        );
+        self.state.renderer().line(
+            MessageStyle::Error,
+            &format!(
+                "Exec session {session_id} action {action:?} failed: {error:#}. If its command already exited, reuse the recorded output instead of rerunning."
+            ),
+        )?;
         Ok(self.input_processor().passive())
     }
 

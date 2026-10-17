@@ -81,18 +81,38 @@ commit_preprocessors = [
 
 # Protect commits from being parsed (e.g., version bumps, release commits)
 commit_parsers = [
+    # Skip owner-only TODO churn (docs/project/TODO.md) to reduce release noise.
+    # Must come before type grouping so `docs: update project TODO` etc. don't
+    # leak into Documentation/Other sections.
+    #
+    # NOTE: git-cliff matches commit_parsers against the
+    # FULL commit message (subject + body). An unanchored pattern such as
+    # `TODO\.md` therefore dropped real commits whose body merely mentions the
+    # file (e.g. merge-conflict notes like "# Conflicts: docs/project/TODO.md").
+    # Every skip pattern below is anchored to the subject line: `^` matches
+    # message start and `[^\n]*` cannot cross a newline, so a match never
+    # extends into the body.
+    { message = "(?i)^update[^\\n]*todo", skip = true },
+    { message = "(?i)^docs\\(todos?\\)", skip = true },
+    { message = "(?i)^docs\\(project\\)[^\\n]*todo", skip = true },
+    { message = "(?i)^docs: update[^\\n]*todo", skip = true },
+    { message = "(?i)^update project$", skip = true },
+    # Skip bare non-conventional Update... subjects (owner maintenance noise
+    # such as "Update README", "Update docs", "Update TODO"). Anchored to the
+    # subject line (see the NOTE above). Conventional commits are unaffected:
+    # they start with a `type:` prefix, never with "update".
+    { message = "(?i)^updates?(\\s|:|$)", skip = true },
     # Skip changelog update commits (must come before other parsers)
-    { message = "^[a-zA-Z]+: update changelog for", skip = true },
-    { message = "update changelog for", skip = true },
-    { message = "\\[skip ci\\]", skip = true },
+    { message = "(?i)^[^\\n]*update changelog for", skip = true },
+    { message = "^[^\\n]*\\[skip ci\\]", skip = true },
 
     # Skip release and version bump commits (be specific to avoid false positives)
     { message = "^chore\\(release\\):", skip = true },
     { message = "^chore: Release$", skip = true },
     { message = "^chore: update homebrew", skip = true },
-    { message = "bump version.*to", skip = true },
-    { message = "update version.*number", skip = true },
-    { message = "version bump", skip = true },
+    { message = "^[^\\n]*bump version.*to", skip = true },
+    { message = "^[^\\n]*update version.*number", skip = true },
+    { message = "^[^\\n]*version bump", skip = true },
 
     # Skip merge commits - show original commits with their actual authors instead
     { message = "^Merge pull request", skip = true },
@@ -147,9 +167,10 @@ commit_parsers = [
     { message = "^chore", group = "Chores", skip = true },
     { message = "^chore\\(.*\\):", group = "Chores", skip = true },
 
-    # Skip commits that only update docs/project/TODO.md
-    { message = "docs/project/TODO\\.md", skip = true },
-    { message = "TODO\\.md", skip = true },
+    # Skip commits whose subject only touches the TODO tracker file.
+    # Anchored to the subject line (see the NOTE above) so bodies that merely
+    # mention TODO.md (merge-conflict notes) cannot drop the commit.
+    { message = "^[^\\n]*TODO\\.md", skip = true },
 
     # Skip generic/non-descriptive commits
     { message = "^Update commit$", skip = true },
@@ -172,29 +193,7 @@ tag_pattern = "[vV]?[0-9]+\\.[0-9]+\\.[0-9]+"
 # Pattern to match tags with optional 'v' prefix
 tag_regex = "(?P<version>[vV]?[0-9]+\\.[0-9]+\\.[0-9]+)"
 
-# Regex to exclude commits from the changelog (matches your current config)
-exclude_patterns = [
-    "chore\\(release\\):",
-    "bump version",
-    "update version",
-    "version bump",
-    "release v?\\d+\\.\\d+\\.\\d+",
-    "chore.*version",
-    "chore.*release",
-    "build.*version",
-    "update.*version.*number",
-    "bump.*version.*to",
-    "update homebrew",
-    "Update changelog for",
-    "update changelog for",
-    "\\[skip ci\\]",
-    "Merge branch",
-    # Exclude TODO.md updates
-    "docs/project/TODO\\.md",
-    "TODO\\.md",
-    # Exclude merge commits - we want to show the original commits with their actual authors
-    "Merge pull request",
-]
+
 
 # Sort commits within a tag
 sort_commits = "oldest"

@@ -17,6 +17,7 @@ keywords = ["vt", "safety", "sandbox", "policy", "command"]
 anyhow = { workspace = true }
 dirs = { workspace = true }
 hashbrown = { workspace = true }
+lru = "0.18"
 nix = { workspace = true, features = ["user", "signal", "process", "resource"] }
 once_cell = { workspace = true }
 rustc-hash = { workspace = true }
@@ -28,7 +29,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"] }
 tokio-util = { workspace = true, features = ["codec"] }
 toml = { workspace = true }
-tree-sitter = "0.26"
+tree-sitter = "0.27"
 tree-sitter-bash = "0.25"
 tracing = { workspace = true }
 vtcode-commons = { workspace = true }
@@ -39,8 +40,13 @@ libc = { workspace = true }
 seccompiler = "0.5"
 
 [dev-dependencies]
+criterion = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+
+[[bench]]
+name = "shell_classification"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

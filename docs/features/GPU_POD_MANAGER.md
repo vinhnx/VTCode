@@ -1,18 +1,17 @@
 # GPU Pod Manager
 
-VT Code includes a `pods` command family for managing remote GPU-backed model pods over SSH.
-It is a backend + CLI feature in v1, with no TUI integration and no `vtcode.toml` section.
+VT Code includes a `pods` command family for managing remote GPU-backed model pods over SSH. It is a backend + CLI
+feature in v1, with no TUI integration and no `vtcode.toml` section.
 
 ## Overview
 
-The pod manager keeps a small amount of state under the user state directory's
-`pods/` path:
+The pod manager keeps a small amount of state under the user state directory's `pods/` path:
 
 - `state.json` stores the active pod, running model names, ports, PIDs, and GPU assignments.
 - `catalog.json` stores the model/profile catalog used by `pods known-models` and `pods start`.
 
-The current implementation is SSH-only. VT Code uploads a run script and a wrapper script to the
-remote host, starts the model in a detached session, and tracks the process locally.
+The current implementation is SSH-only. VT Code uploads a run script and a wrapper script to the remote host, starts the
+model in a detached session, and tracks the process locally.
 
 ## Commands
 
@@ -58,8 +57,8 @@ Streams the remote log file for the selected model.
 
 ### `known-models`
 
-Splits the catalog into compatible and incompatible profiles for the active pod.
-Compatibility is based on the pod's GPU inventory and the profile's GPU requirements.
+Splits the catalog into compatible and incompatible profiles for the active pod. Compatibility is based on the pod's GPU
+inventory and the profile's GPU requirements.
 
 ### `stop` and `stop-all`
 

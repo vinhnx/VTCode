@@ -50,6 +50,14 @@ pub struct SessionCostEstimate {
     pub effective_usd: f64,
 }
 
+/// Base price for the bounded, standard-endpoint Decisions probe, not generation.
+/// OpenAI charges $0.10 per million input tokens and no output/cache surcharge.
+/// Regional and long-context premiums are outside this bounded probe route.
+pub fn estimate_decisions_cost(usage: &ProviderUsage) -> SessionCostEstimate {
+    let cost = f64::from(usage.prompt_tokens) * 0.10 / 1_000_000.0;
+    SessionCostEstimate { raw_usd: cost, effective_usd: cost }
+}
+
 /// Accumulates independently priced turns without repricing earlier model routes.
 /// Once a turn cannot be priced, a complete session total remains unknown.
 #[derive(Debug, Clone)]
@@ -135,9 +143,10 @@ pub fn estimate_session_costs_with_pricing(
 
     // Heuristic fallbacks when a model's catalog entry does not specify
     // dedicated cache rates: cache reads are assumed to cost roughly 10% of
-    // the input rate, and cache writes roughly 125% of the input rate.
+    // the input rate, and cache writes roughly 125% of the input rate
+    // (2x for Anthropic 1h extended TTL).
     let read_rate = pricing.cache_read.unwrap_or(input_rate * 0.10);
-    let write_rate = pricing.cache_write.unwrap_or(input_rate * 1.25);
+    let write_rate = pricing.cache_write.unwrap_or(input_rate * DEFAULT_CACHE_WRITE_MULTIPLIER);
 
     let uncached_tokens = usage
         .input_tokens
@@ -150,6 +159,40 @@ pub fn estimate_session_costs_with_pricing(
         + output_tokens * output_rate;
 
     (raw_usd.is_finite() && effective_usd.is_finite()).then_some(SessionCostEstimate { raw_usd, effective_usd })
+}
+
+/// Default cache-write multiplier versus uncached input (5m TTL).
+pub const DEFAULT_CACHE_WRITE_MULTIPLIER: f64 = 1.25;
+
+/// Anthropic 1h extended-TTL cache writes cost 2x base input.
+pub const EXTENDED_TTL_CACHE_WRITE_MULTIPLIER: f64 = 2.0;
+
+/// Effective cache-write rate. `extended_ttl` selects the 2x 1h multiplier
+/// when the catalog does not declare an explicit write rate.
+#[must_use]
+pub fn cache_write_rate(input_rate: f64, configured: Option<f64>, extended_ttl: bool) -> f64 {
+    if let Some(rate) = configured {
+        return rate;
+    }
+    let multiplier = if extended_ttl {
+        EXTENDED_TTL_CACHE_WRITE_MULTIPLIER
+    } else {
+        DEFAULT_CACHE_WRITE_MULTIPLIER
+    };
+    input_rate * multiplier
+}
+
+/// Prompt volume that counts toward provider TPM-style rate limits. Cached
+/// and cache-write tokens are cheaper but still consume provider capacity.
+#[must_use]
+pub fn prompt_tokens_for_rate_limit(usage: &vtcode_exec_events::Usage) -> u64 {
+    let uncached = usage
+        .input_tokens
+        .saturating_sub(usage.cached_input_tokens)
+        .saturating_sub(usage.cache_creation_tokens);
+    uncached
+        .saturating_add(usage.cached_input_tokens)
+        .saturating_add(usage.cache_creation_tokens)
 }
 
 #[cfg(test)]
@@ -291,5 +334,28 @@ mod tests {
             ..Default::default()
         };
         assert!(estimate_session_costs_with_pricing(pricing, &usage).is_none());
+    }
+
+    #[test]
+    fn cache_write_rate_uses_extended_ttl_multiplier() {
+        #[allow(clippy::float_cmp, reason = "exact constants under test")]
+        {
+            assert_eq!(cache_write_rate(1.0, None, false), DEFAULT_CACHE_WRITE_MULTIPLIER);
+            assert_eq!(cache_write_rate(1.0, None, true), EXTENDED_TTL_CACHE_WRITE_MULTIPLIER);
+            // Explicit catalog rates win over the heuristic multipliers.
+            assert_eq!(cache_write_rate(1.0, Some(0.5), true), 0.5);
+        }
+    }
+
+    #[test]
+    fn prompt_tokens_for_rate_limit_count_cache_traffic() {
+        let usage = vtcode_exec_events::Usage {
+            input_tokens: 1000,
+            cached_input_tokens: 400,
+            cache_creation_tokens: 200,
+            output_tokens: 50,
+        };
+        // Uncached (400) + cached (400) + creation (200) = 1000.
+        assert_eq!(prompt_tokens_for_rate_limit(&usage), 1000);
     }
 }

@@ -261,15 +261,27 @@ fn stable_family_label(name: &str) -> Cow<'_, str> {
 pub(crate) fn low_signal_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
     let label = stable_family_label(canonical_tool_name);
     match canonical_tool_name {
-        tool_names::READ_FILE => read_file_path_arg(args)
-            .map(|path| format!("{label}::{}{}", compact_loop_key_part(path, 120), read_file_slice_suffix(args),)),
+        // Paths are lexically normalized so spelling variants (`./x`,
+        // `docs/../x`) share one loop family. Leading `..` is preserved
+        // (fail-closed: never collides with in-workspace entries).
+        tool_names::READ_FILE => read_file_path_arg(args).map(|path| {
+            format!(
+                "{label}::{}{}",
+                compact_loop_key_part(&vtcode_core::tools::normalised_code_search_path(path), 120),
+                read_file_slice_suffix(args),
+            )
+        }),
         tool_names::UNIFIED_FILE => {
             let action = tool_intent::file_operation_action(args).unwrap_or("read");
             if !action.eq_ignore_ascii_case("read") {
                 return None;
             }
             read_file_path_arg(args).map(|path| {
-                format!("{label}::read::{}{}", compact_loop_key_part(path, 120), read_file_slice_suffix(args),)
+                format!(
+                    "{label}::read::{}{}",
+                    compact_loop_key_part(&vtcode_core::tools::normalised_code_search_path(path), 120),
+                    read_file_slice_suffix(args),
+                )
             })
         }
         tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND => {
@@ -512,6 +524,21 @@ mod tests {
             }),
         );
         assert_eq!(first, second, "identical slice retries must share a family key");
+    }
+
+    #[test]
+    fn low_signal_family_key_groups_path_spelling_variants() {
+        // Asymmetric sides: `./x` and `docs/../x` are the same file and must
+        // share a family, while a leading `../` escapes the workspace and
+        // must stay distinct (fail-closed, never collides with local reads).
+        let bare = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "src/lib.rs"}));
+        let dotted = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "./src/lib.rs"}));
+        let dotdot_inner = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "src/docs/../lib.rs"}));
+        let escaping = low_signal_family_key(tool_names::READ_FILE, &json!({"path": "../src/lib.rs"}));
+        assert_eq!(bare.as_deref(), Some("read_file::src/lib.rs"));
+        assert_eq!(dotted, bare);
+        assert_eq!(dotdot_inner, bare);
+        assert_ne!(escaping, bare);
     }
 
     #[test]

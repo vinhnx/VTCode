@@ -368,6 +368,7 @@ impl FilesystemWorkspace {
 impl RuntimeAdapter for FilesystemWorkspace {
     async fn status(&self) -> Result<RuntimeStatus> {
         Ok(RuntimeStatus {
+            explanations_available: false,
             workspace_root: self.root.display().to_string(),
             connected: true,
             turns_available: false,

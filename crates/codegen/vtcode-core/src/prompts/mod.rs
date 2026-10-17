@@ -4,7 +4,6 @@
 //! template-based composition and context-aware customization.
 
 pub mod cache_aware;
-pub mod config;
 pub mod context;
 pub mod few_shot;
 pub mod guidelines;
@@ -23,15 +22,13 @@ pub mod temporal;
 
 // Re-export main types for backward compatibility
 pub use cache_aware::sort_tool_definitions;
-pub use config::SystemPromptConfig;
 pub use context::PromptContext;
 pub use few_shot::{
     DEFAULT_FEW_SHOT_BUDGET_TOKENS, FEW_SHOT_SECTION_HEADER, FewShotExample, FewShotStore, render_few_shot_section,
 };
 pub use guidelines::{
-    append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections,
-    append_runtime_tool_prompt_sections_for_model, append_runtime_tool_prompt_sections_for_profile,
-    generate_tool_guidelines, infer_capability_level,
+    append_deferred_tools_prompt_section, append_runtime_tool_prompt_sections_for_model,
+    append_runtime_tool_prompt_sections_for_profile,
 };
 pub use harness_limits::upsert_harness_limits_section;
 pub use resources::{
@@ -45,9 +42,8 @@ pub use static_prompts::{
 };
 pub use system::SystemPromptReport;
 pub use system::{
-    apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,
-    generate_system_instruction_with_context_and_report, measure_system_prompt_size,
+    apply_coordinator_role_guidance, apply_output_style, generate_lightweight_instruction,
+    generate_specialized_instruction, generate_system_instruction_with_context_and_report, measure_system_prompt_size,
 };
 pub use system_prompt_cache::{PROMPT_CACHE, SystemPromptCache};
-pub use temporal::generate_temporal_context;
 pub use temporal::generate_temporal_date_context;

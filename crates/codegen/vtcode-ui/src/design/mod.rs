@@ -7,10 +7,14 @@
 //! - **Layout**: Responsive layout mode logic
 //! - **Panel**: Base panel widget primitive
 //! - **Diff formatting**: Unified diff rendering with ANSI colors
+//! - **List rows**: Canonical modal/command row builders ([`list`])
+//! - **Keyboard copy**: Shared interaction hints ([`keys`])
 
 pub(crate) mod color;
 pub mod constants;
 pub mod diff;
+pub mod keys;
 pub mod layout;
+pub mod list;
 pub mod panel;
 pub(crate) mod style;

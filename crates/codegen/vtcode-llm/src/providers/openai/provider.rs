@@ -39,9 +39,11 @@ use super::backend_setup::{OpenAIBackendSetup, OpenAIRequestAuth};
 use super::harmony;
 use super::request_builder;
 use super::response_parser;
-use super::responses_api::parse_responses_payload;
+use super::responses_api::parse_responses_completion;
 use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, ResponsesApiState};
 
+mod cache_diagnostics;
+mod decisions;
 mod generation;
 mod streaming;
 mod websocket;
@@ -68,6 +70,7 @@ pub struct OpenAIProvider {
     api_format_override: Option<CustomProviderApiFormat>,
     openai_chatgpt_auth: Option<OpenAIChatGptAuthHandle>,
     http_client: HttpClient,
+    decisions_client: Result<HttpClient, reqwest::Error>,
     base_url: Arc<str>,
     responses_url: Arc<str>,
     responses_compact_url: Arc<str>,
@@ -78,6 +81,7 @@ pub struct OpenAIProvider {
     context_window_override: Option<usize>,
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
+    prompt_cache_hints_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
     model_behavior: Option<ModelConfig>,
     websocket_mode: bool,
@@ -85,12 +89,14 @@ pub struct OpenAIProvider {
     responses_include: Vec<String>,
     service_tier: Option<OpenAIServiceTier>,
     hosted_shell: OpenAIHostedShellConfig,
-    websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
-    websocket_continuation_cache: Mutex<Option<OpenAIResponsesWebSocketContinuationCache>>,
+    websocket_session: Arc<AsyncMutex<Option<OpenAIResponsesWebSocketSession>>>,
+    websocket_continuation_cache: Arc<Mutex<Option<OpenAIResponsesWebSocketContinuationCache>>>,
+    websocket_streaming_ceiling: Duration,
     /// Cache of models where `service_tier=flex` was rejected by the backend.
     /// Once a model is marked unsupported, subsequent requests skip the flex
     /// tier entirely, avoiding the wasted first request + retry round-trip.
-    service_tier_unsupported_cache: Mutex<HashMap<String, bool>>,
+    service_tier_unsupported_cache: Arc<Mutex<HashMap<String, bool>>>,
+    cache_comparison: Arc<Mutex<Option<cache_diagnostics::CacheComparison>>>,
 }
 
 impl OpenAIProvider {
@@ -156,7 +162,7 @@ impl OpenAIProvider {
         model: String,
         http_client: reqwest::Client,
         base_url: String,
-        _timeouts: TimeoutsConfig,
+        timeouts: TimeoutsConfig,
     ) -> Self {
         use hashbrown::HashMap;
         use std::sync::Arc;
@@ -176,6 +182,7 @@ impl OpenAIProvider {
             api_format_override: None,
             openai_chatgpt_auth,
             http_client,
+            decisions_client: crate::http_client::HttpClientFactory::for_llm_without_redirects(&timeouts),
             base_url: Arc::from(base_url.as_str()),
             responses_url: Arc::from(format!("{base_url}/responses")),
             responses_compact_url: Arc::from(format!("{base_url}/responses/compact")),
@@ -185,6 +192,7 @@ impl OpenAIProvider {
             supported_models_override: None,
             context_window_override: None,
             prompt_cache_enabled: false,
+            prompt_cache_hints_enabled: true,
             prompt_cache_settings: Default::default(),
             responses_api_modes: Mutex::new(HashMap::new()),
             model_behavior: None,
@@ -193,9 +201,15 @@ impl OpenAIProvider {
             responses_include: Vec::new(),
             service_tier: None,
             hosted_shell: OpenAIHostedShellConfig::default(),
-            websocket_session: AsyncMutex::new(None),
-            websocket_continuation_cache: Mutex::new(None),
-            service_tier_unsupported_cache: Mutex::new(HashMap::new()),
+            websocket_session: Arc::new(AsyncMutex::new(None)),
+            websocket_continuation_cache: Arc::new(Mutex::new(None)),
+            websocket_streaming_ceiling: Duration::from_secs(if timeouts.streaming_ceiling_seconds == 0 {
+                600
+            } else {
+                timeouts.streaming_ceiling_seconds
+            }),
+            service_tier_unsupported_cache: Arc::new(Mutex::new(HashMap::new())),
+            cache_comparison: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -286,6 +300,9 @@ impl OpenAIProvider {
         openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
+        let prompt_cache_hints_enabled = prompt_cache
+            .as_ref()
+            .is_none_or(|cfg| cfg.enabled && cfg.providers.openai.enabled);
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
             |providers| &providers.openai,
@@ -333,6 +350,7 @@ impl OpenAIProvider {
 
         use crate::http_client::HttpClientFactory;
         let http_client = HttpClientFactory::for_llm(&timeouts);
+        let decisions_client = HttpClientFactory::for_llm_without_redirects(&timeouts);
 
         Self {
             api_key: Arc::from(api_key.as_str()),
@@ -343,6 +361,7 @@ impl OpenAIProvider {
             openai_chatgpt_auth,
             http_client,
             base_url: Arc::from(resolved_base_url.as_str()),
+            decisions_client,
             responses_url: Arc::from(format!("{resolved_base_url}/responses")),
             responses_compact_url: Arc::from(format!("{resolved_base_url}/responses/compact")),
             chat_completions_url: Arc::from(format!("{resolved_base_url}/chat/completions")),
@@ -352,6 +371,7 @@ impl OpenAIProvider {
             context_window_override: None,
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
+            prompt_cache_hints_enabled,
             prompt_cache_settings,
             model_behavior,
             websocket_mode,
@@ -359,9 +379,15 @@ impl OpenAIProvider {
             responses_include,
             service_tier,
             hosted_shell,
-            websocket_session: AsyncMutex::new(None),
-            websocket_continuation_cache: Mutex::new(None),
-            service_tier_unsupported_cache: Mutex::new(HashMap::new()),
+            websocket_session: Arc::new(AsyncMutex::new(None)),
+            websocket_continuation_cache: Arc::new(Mutex::new(None)),
+            websocket_streaming_ceiling: Duration::from_secs(if timeouts.streaming_ceiling_seconds == 0 {
+                600
+            } else {
+                timeouts.streaming_ceiling_seconds
+            }),
+            service_tier_unsupported_cache: Arc::new(Mutex::new(HashMap::new())),
+            cache_comparison: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -429,8 +455,10 @@ impl OpenAIProvider {
     }
 
     fn supports_responses_allowed_tools(&self, model: &str) -> bool {
+        // `gpt-5` requires the Responses API but is intentionally absent from
+        // `RESPONSES_API_MODELS`; the resolved state (Required/Allowed vs
+        // Disabled) is the single source of truth for eligibility here.
         self.supports_tools(model)
-            && Self::is_responses_api_model(model)
             && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
             && (self.is_native_openai_api() || self.is_chatgpt_backend())
     }
@@ -666,7 +694,7 @@ impl OpenAIProvider {
 
     fn convert_to_openai_format(&self, request: &provider::LLMRequest) -> Result<Value, provider::LLMError> {
         let is_native_openai = self.is_native_openai_api();
-        let prompt_cache_key = if is_native_openai {
+        let prompt_cache_key = if self.prompt_cache_hints_enabled && is_native_openai {
             request.prompt_cache_key.as_deref()
         } else {
             None
@@ -693,7 +721,7 @@ impl OpenAIProvider {
         Self::validate_inline_file_inputs(request)?;
 
         let is_native_openai = self.is_native_openai_api();
-        let prompt_cache_key = if is_native_openai || self.is_chatgpt_backend() {
+        let prompt_cache_key = if self.prompt_cache_hints_enabled && (is_native_openai || self.is_chatgpt_backend()) {
             request.prompt_cache_key.as_deref()
         } else {
             None
@@ -714,13 +742,15 @@ impl OpenAIProvider {
             supports_reasoning: self.supports_reasoning(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             include_max_output_tokens: is_native_openai,
-            include_output_types: backend_defaults.include_output_types,
+            include_output_types: !is_native_openai && backend_defaults.include_output_types,
             include_sampling_parameters: backend_defaults.include_sampling_parameters,
             force_response_store_false: true,
             include_assistant_phase: is_native_openai,
             prompt_cache_key,
-            include_prompt_cache_retention: backend_defaults.include_prompt_cache_retention,
+            include_prompt_cache_retention: self.prompt_cache_hints_enabled
+                && backend_defaults.include_prompt_cache_retention,
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_ref().map(|r| r.as_str()),
+            include_explicit_cache_breakpoints: self.prompt_cache_hints_enabled && is_native_openai,
             default_service_tier,
             default_response_store: self.responses_store,
             default_responses_include: (!self.responses_include.is_empty())
@@ -734,7 +764,11 @@ impl OpenAIProvider {
             safety_identifier: None,
         };
 
-        request_builder::build_responses_request(request, &ctx)
+        let mut payload = request_builder::build_responses_request(request, &ctx)?;
+        if let Some(tracker) = self.cache_comparison_tracker(request) {
+            tracker.add_comparison(&mut payload);
+        }
+        Ok(payload)
     }
 
     fn parse_openai_response(
@@ -754,7 +788,7 @@ impl OpenAIProvider {
         model: String,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_metrics = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        let response = parse_responses_payload(response_json, model.clone(), include_metrics)?;
+        let response = parse_responses_completion(response_json, model.clone(), include_metrics)?;
         Ok(Self::normalize_reasoning_output(&model, response))
     }
 }

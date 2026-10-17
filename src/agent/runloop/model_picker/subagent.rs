@@ -3,6 +3,8 @@
 //! This module handles the interactive model picker for delegated/subagent sessions,
 //! including shortcut aliases, concrete model selection, and reasoning override configuration.
 
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -15,9 +17,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::ModelResolver;
 use vtcode_core::ui::{InlineListSearchConfig, InlineListSelection};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::{
-    InlineHandle, InlineListItem, InlineSession, TransientSubmission, WizardModalMode, WizardStep,
-};
+use vtcode_ui::tui::app::{InlineHandle, InlineSession, TransientSubmission, WizardModalMode, WizardStep};
 
 use super::DynamicModelRegistry;
 use super::options::{ModelOption, build_filtered_options, find_option_index};
@@ -141,16 +141,16 @@ async fn select_subagent_model_target(
 ) -> Result<Option<SubagentModelChoice>> {
     let mut items = Vec::new();
     for (shortcut, description) in subagent_model_shortcuts() {
-        items.push(InlineListItem {
-            title: (*shortcut).to_string(),
-            subtitle: Some((*description).to_string()),
-            badge: Some("Shortcut".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}"
-            ))),
-            search_value: Some(format!("{shortcut} shortcut alias delegated model {description}")),
-        });
+        items.push(
+            ui_list::action(
+                (*shortcut).to_string(),
+                (*description).to_string(),
+                Some("Shortcut".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_MODEL_ACTION_PREFIX}shortcut:{shortcut}"))),
+            )
+            .with_search_value(format!("{shortcut} shortcut alias delegated model {description}")),
+        );
     }
 
     for (index, option) in options.iter().enumerate() {
@@ -159,23 +159,25 @@ async fn select_subagent_model_target(
         } else {
             ""
         };
-        items.push(InlineListItem {
-            title: option.display.to_string(),
-            subtitle: Some(join_with_label(
-                option.provider.label(),
-                static_model_subtitle(option, current_provider, current_model),
-            )),
-            badge: Some(option.provider.label().to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::Model(index)),
-            search_value: Some(model_search_value(
+        items.push(
+            ui_list::action(
+                option.display.to_string(),
+                join_with_label(
+                    option.provider.label(),
+                    static_model_subtitle(option, current_provider, current_model),
+                ),
+                Some(option.provider.label().to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::Model(index)),
+            )
+            .with_search_value(model_search_value(
                 option.provider,
                 &option.display,
                 &option.id,
                 Some(&option.description),
                 &static_model_search_terms(&option.model, option.supports_reasoning),
             )),
-        });
+        );
     }
 
     for entry_index in parseable_subagent_dynamic_indexes(dynamic_models) {
@@ -190,47 +192,53 @@ async fn select_subagent_model_target(
         } else {
             ""
         };
-        items.push(InlineListItem {
-            title: detail.model_display.clone(),
-            subtitle: Some(join_with_label(
-                provider.label(),
-                dynamic_model_subtitle(
-                    provider,
-                    &detail.model_id,
-                    detail.reasoning_supported,
-                    current_provider,
-                    current_model,
+        items.push(
+            ui_list::action(
+                detail.model_display.clone(),
+                join_with_label(
+                    provider.label(),
+                    dynamic_model_subtitle(
+                        provider,
+                        &detail.model_id,
+                        detail.reasoning_supported,
+                        current_provider,
+                        current_model,
+                    ),
                 ),
-            )),
-            badge: Some(provider.label().to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::DynamicModel(entry_index)),
-            search_value: Some(model_search_value(
+                Some(provider.label().to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::DynamicModel(entry_index)),
+            )
+            .with_search_value(model_search_value(
                 provider,
                 &detail.model_display,
                 &detail.model_id,
                 None,
                 &[provider.label().to_string(), "dynamic".to_string()],
             )),
-        });
+        );
     }
 
-    items.push(InlineListItem {
-        title: "Refresh local models".to_string(),
-        subtitle: Some("Re-query dynamic model inventories without changing workspace config.".to_string()),
-        badge: Some("Refresh".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::RefreshDynamicModels),
-        search_value: Some("refresh dynamic local models".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Enter exact model id".to_string(),
-        subtitle: Some("Provide a concrete VT Code model id such as `gpt-5.4` or `claude-sonnet-4-6`.".to_string()),
-        badge: Some("Manual".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::CustomModel),
-        search_value: Some("manual exact model id".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Refresh local models",
+            "Re-query dynamic model inventories without changing workspace config.".to_string(),
+            Some("Refresh".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::RefreshDynamicModels),
+        )
+        .with_search_value("refresh dynamic local models".to_string()),
+    );
+    items.push(
+        ui_list::action(
+            "Enter exact model id",
+            "Provide a concrete VT Code model id such as `gpt-5.4` or `claude-sonnet-4-6`.".to_string(),
+            Some("Custom".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::CustomModel),
+        )
+        .with_search_value("custom manual exact model id".to_string()),
+    );
 
     let selected = preferred_subagent_model_selection(options, dynamic_models, current_model)
         .or_else(|| items.first().and_then(|item| item.selection.clone()));
@@ -294,36 +302,36 @@ async fn select_subagent_reasoning(
     let current_reasoning_level = normalized_subagent_reasoning(&target, current_reasoning_effort);
     let current_label = current_reasoning_level.map(reasoning_level_label).unwrap_or("unset");
     let mut items = vec![
-        InlineListItem {
-            title: format!("Keep current ({current_label})"),
-            subtitle: Some("Retain the current reasoning override for this subagent.".to_string()),
-            badge: Some("Current".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep"))),
-            search_value: Some("keep current reasoning".to_string()),
-        },
-        InlineListItem {
-            title: "Unset reasoning override".to_string(),
-            subtitle: Some("Do not store a `reasoning_effort` override for this subagent.".to_string()),
-            badge: Some("Unset".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}unset"))),
-            search_value: Some("unset clear reasoning".to_string()),
-        },
+        ui_list::current_choice(
+            format!("Keep current ({current_label})"),
+            Some("Retain the current reasoning override for this subagent.".to_string()),
+            Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}keep"))),
+        )
+        .with_search_value("keep current reasoning".to_string()),
+        ui_list::action(
+            "Unset reasoning override",
+            "Do not store a `reasoning_effort` override for this subagent.".to_string(),
+            Some("Unset".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{SUBAGENT_REASONING_ACTION_PREFIX}unset"))),
+        )
+        .with_search_value("unset clear reasoning".to_string()),
     ];
 
     for level in subagent_reasoning_levels(target.model(), target.supports_reasoning()) {
-        items.push(InlineListItem {
-            title: reasoning_level_label(level).to_string(),
-            subtitle: Some(reasoning_level_description(level).to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{SUBAGENT_REASONING_ACTION_PREFIX}{}",
-                level.as_str()
-            ))),
-            search_value: Some(format!("{} {}", level.as_str(), reasoning_level_label(level))),
-        });
+        items.push(
+            ui_list::action(
+                reasoning_level_label(level).to_string(),
+                reasoning_level_description(level).to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!(
+                    "{SUBAGENT_REASONING_ACTION_PREFIX}{}",
+                    level.as_str()
+                ))),
+            )
+            .with_search_value(format!("{} {}", level.as_str(), reasoning_level_label(level))),
+        );
     }
 
     handle.show_list_modal(
@@ -385,21 +393,14 @@ async fn prompt_subagent_model_id(
             vec![WizardStep {
                 title: "Model id".to_string(),
                 question: "Enter a concrete VT Code model id. Shortcut aliases such as `inherit` and `small` are available in the list view.".to_string(),
-                items: vec![InlineListItem {
-                    title: "Enter a model id".to_string(),
-                    subtitle: Some(
+                items: vec![ui_list::action("Enter a model id", 
                         "Press Tab to type inline, then Enter to confirm the model id."
                             .to_string(),
-                    ),
-                    badge: Some("Input".to_string()),
-                    indent: 0,
-                    selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    Some("Input".to_string()), Tone::Accent, Some(InlineListSelection::RequestUserInputAnswer {
                         question_id: SUBAGENT_MODEL_PROMPT_ID.to_string(),
                         selected: vec![],
                         other: Some(String::new()),
-                    }),
-                    search_value: Some("manual model id".to_string()),
-                }],
+                    })).with_search_value("manual model id".to_string())],
                 completed: false,
                 answer: None,
                 allow_freeform: true,

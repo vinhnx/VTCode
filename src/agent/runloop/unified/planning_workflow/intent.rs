@@ -10,6 +10,7 @@
 //! explicitly handled, preventing implicit fallthrough bugs. The detection
 //! functions are pure (no side effects) and independently testable.
 
+use crate::agent::runloop::unified::turn::context::last_user_message_index;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::planning;
 
@@ -93,7 +94,7 @@ pub(crate) fn detect_enter_planning_intent(text: &str) -> bool {
 /// message before the last user message, then checks if it contains
 /// implementation-related cues.
 pub(crate) fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) -> bool {
-    let Some(last_user_index) = working_history.iter().rposition(|msg| msg.role == uni::MessageRole::User) else {
+    let Some(last_user_index) = last_user_message_index(working_history) else {
         return false;
     };
 

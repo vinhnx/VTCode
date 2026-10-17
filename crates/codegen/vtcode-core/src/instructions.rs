@@ -305,17 +305,21 @@ pub fn render_instruction_markdown(
     truncated: bool,
     project_root: &Path,
     home_dir: Option<&Path>,
-    highlight_limit: usize,
     truncation_note: &str,
 ) -> String {
     let combined_len = segments.iter().map(|segment| segment.contents.len()).sum::<usize>();
     let mut section = String::with_capacity(combined_len.saturating_add(512));
     let _ = writeln!(section, "## {title}\n");
-    section.push_str(
-        "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
-    );
 
-    if !segments.is_empty() {
+    // Full segment bodies are inlined below, so a "Key points" highlight list
+    // is a pure echo of content the model already receives (AGENTS.md alone
+    // re-printed ~1.2 KB of the first bullets). Skip it. The map and
+    // precedence sentence only pay for themselves with multiple sources.
+    let show_map = segments.len() > 1;
+    if show_map {
+        section.push_str(
+            "Instructions are listed from lowest to highest precedence. When conflicts exist, defer to the later entries.\n\n",
+        );
         section.push_str("### Instruction map\n");
         for (index, segment) in segments.iter().enumerate() {
             let _ = writeln!(
@@ -326,15 +330,9 @@ pub fn render_instruction_markdown(
                 instruction_source_label(&segment.source),
             );
         }
+    }
 
-        let highlights = extract_instruction_highlights(segments, highlight_limit);
-        if !highlights.is_empty() {
-            section.push_str("\n### Key points\n");
-            for highlight in highlights {
-                let _ = writeln!(section, "- {highlight}");
-            }
-        }
-
+    if !segments.is_empty() {
         for (index, segment) in segments.iter().enumerate() {
             let _ = writeln!(
                 section,

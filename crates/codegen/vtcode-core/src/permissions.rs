@@ -1239,6 +1239,7 @@ mod tests {
             tools::READ_FILE,
             tools::LIST_FILES,
             tools::REQUEST_USER_INPUT,
+            tools::RECORD_DECISION,
         ] {
             let requests = build_advertised_permission_requests(&workspace, &cwd, tool);
             assert!(!requests.is_empty(), "{tool} must advertise at least one permission request");

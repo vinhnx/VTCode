@@ -20,7 +20,7 @@ futures = { workspace = true }
 hashbrown = { workspace = true }
 http = { workspace = true }
 libc = { workspace = true }
-rmcp = { version = "3.4.0", features = ["server", "macros", "transport-streamable-http-server"] }
+rmcp = { workspace = true, features = ["server", "macros", "transport-streamable-http-server"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -36,6 +36,7 @@ uuid = { workspace = true, features = ["v4"] }
 vtcode-commons = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
 vtcode-exec-events = { workspace = true }
+vtcode-memory = { workspace = true }
 vtcode-safety = { workspace = true }
 
 [dev-dependencies]

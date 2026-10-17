@@ -1,6 +1,6 @@
 //! Enter-planning tool: `start_planning`.
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -99,7 +99,7 @@ fn resolve_plan_file_target(
     default_plan_file: PathBuf,
     fallback_plan_name: &str,
 ) -> (PathBuf, String) {
-    if let Some(raw_path) = requested_path {
+    if let Some(raw_path) = requested_path.filter(|path| !path.trim().is_empty()) {
         let resolved = resolve_plan_path(workspace_root, raw_path);
         let seed = plan_title_seed(&resolved, fallback_plan_name);
         return (resolved, seed);
@@ -114,16 +114,21 @@ fn resolve_plan_file_target(
     (default_plan_file, fallback_plan_name.to_string())
 }
 
+// Validate before publishing planning state; directories and I/O failures must
+// never leave the session active with an unusable destination.
+async fn validate_plan_file_target(path: &Path) -> Result<bool> {
+    match tokio::fs::metadata(path).await {
+        Ok(metadata) if metadata.is_file() => Ok(true),
+        Ok(_) => bail!("Plan destination is not a regular file: {}", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).with_context(|| format!("Failed to inspect plan destination: {}", path.display())),
+    }
+}
+
 #[async_trait]
 impl Tool for StartPlanningTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let args: StartPlanningArgs = serde_json::from_value(args).unwrap_or(StartPlanningArgs {
-            plan_name: None,
-            description: None,
-            plan_path: None,
-            require_confirmation: false,
-            approved: false,
-        });
+        let args: StartPlanningArgs = serde_json::from_value(args).context("Invalid start_planning arguments")?;
 
         let workspace_root = self.state.workspace_root().unwrap_or_else(|| PathBuf::from("."));
         let validation_workspace = workspace_root.clone();
@@ -136,28 +141,24 @@ impl Tool for StartPlanningTool {
         if self.state.is_active() {
             let fallback_plan_name = self.generate_plan_name(args.plan_name.as_deref());
             let existing_plan_file = self.state.get_plan_file().await;
-            let existing_plan_file_exists = match existing_plan_file.as_ref() {
-                Some(path) => tokio::fs::try_exists(path).await.unwrap_or(false),
-                None => false,
-            };
-
-            if existing_plan_file_exists {
-                return Ok(json!({
-                    "status": "already_active",
-                    "message": "Planning workflow is already active. Continue with your planning workflow.",
-                    "plan_file": existing_plan_file.map(|path| self.display_path(&path))
-                }));
-            }
-
+            let requested_path = args.plan_path.as_deref().filter(|path| !path.trim().is_empty());
             let (plan_file, plan_title_seed) = resolve_plan_file_target(
                 &workspace_root,
-                args.plan_path.as_deref(),
+                requested_path,
                 existing_plan_file.as_deref(),
                 self.state.plans_dir().join(format!("{fallback_plan_name}.md")),
                 &fallback_plan_name,
             );
             let plan_title = title_from_plan_name(&plan_title_seed);
 
+            let plan_file_exists = validate_plan_file_target(&plan_file).await?;
+            if plan_file_exists && requested_path.is_none() && existing_plan_file.is_some() {
+                return Ok(json!({
+                    "status": "already_active",
+                    "message": "Planning workflow is already active. Continue with your planning workflow.",
+                    "plan_file": self.display_path(&plan_file)
+                }));
+            }
             if let Some(parent) = plan_file.parent() {
                 ensure_dir_exists(parent)
                     .await
@@ -165,7 +166,7 @@ impl Tool for StartPlanningTool {
             }
 
             let mut created_plan_file = false;
-            if !tokio::fs::try_exists(&plan_file).await.unwrap_or(false) {
+            if !plan_file_exists {
                 created_plan_file = true;
                 let plan_file_display = self.display_path(&plan_file);
                 initialize_plan_file(
@@ -216,8 +217,7 @@ impl Tool for StartPlanningTool {
             }));
         }
 
-        // Enable planning workflow only after explicit approval.
-        self.state.enable();
+        validate_plan_file_target(&plan_file).await?;
 
         if let Some(parent) = plan_file.parent() {
             ensure_dir_exists(parent)
@@ -239,6 +239,7 @@ impl Tool for StartPlanningTool {
         self.state.set_plan_file(Some(plan_file.clone())).await;
         let baseline = plan_file_baseline(&plan_file).await;
         self.state.set_plan_baseline(Some(baseline)).await;
+        self.state.enable();
 
         Ok(json!({
             "status": "success",

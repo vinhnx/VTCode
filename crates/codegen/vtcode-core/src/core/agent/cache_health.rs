@@ -32,14 +32,13 @@ pub const HIT_RATE_WINDOW_TURNS: u32 = 8;
 pub const HIT_RATE_FLOOR_PERCENT: f64 = 25.0;
 
 /// A turn counts as degraded when its cache hit rate is below this floor.
-/// Partial reuse still counts as healthy; only turns that re-pay (nearly)
-/// everything move the needle.
+/// Partial reuse below this threshold counts as degraded, too.
 pub const DEGRADED_TURN_HIT_RATE_PERCENT: f64 = 50.0;
 
 /// Session-scoped prompt-cache health alert.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CacheHealthAlert {
-    /// Several consecutive measured turns re-paid (nearly) full input cost.
+    /// Several consecutive measured requests reused less than half their input.
     SustainedMisses {
         consecutive: u32,
         hit_rate: f64,
@@ -57,8 +56,8 @@ impl CacheHealthAlert {
     pub fn message(&self) -> String {
         match self {
             Self::SustainedMisses { consecutive, hit_rate, measured_turns } => format!(
-                "Prompt cache suffered {consecutive} consecutive near-full misses (hit rate {hit_rate:.0}% over {measured_turns} measured turns); recent requests re-paid full input cost. \
-                 Check earlier warnings for model/reasoning switches, MCP refreshes, planning toggles, or idle-gap expiry, or inspect the trajectory log for prefix/catalog hash changes."
+                "Prompt cache reuse stayed below {DEGRADED_TURN_HIT_RATE_PERCENT:.0}% for {consecutive} consecutive requests (overall hit rate {hit_rate:.0}% over {measured_turns} measured requests). \
+                 Check earlier warnings for model/reasoning switches, MCP refreshes, planning toggles, or idle-gap expiry, or inspect the trajectory log for prefix/catalog hash changes. Cache misses alone do not establish client-side prefix churn."
             ),
             Self::LowHitRate { hit_rate, measured_turns } => format!(
                 "Prompt cache hit rate is {hit_rate:.0}% over {measured_turns} measured turns (floor {HIT_RATE_FLOOR_PERCENT:.0}%). \
@@ -89,6 +88,12 @@ impl PromptCacheHealthMonitor {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Successful compaction replaces the reusable history. Start a new
+    /// consecutive streak while retaining session totals and one-shot alerts.
+    pub fn record_compaction_boundary(&mut self) {
+        self.consecutive_degraded = 0;
     }
 
     /// Record one turn's normalized usage. Returns an alert the first time a
@@ -162,6 +167,70 @@ mod tests {
             cache_creation_tokens: creation,
             output_tokens: 10,
         }
+    }
+
+    #[test]
+    fn compaction_separates_observed_session_misses_without_losing_totals() {
+        let mut monitor = PromptCacheHealthMonitor::new();
+        assert!(monitor.record_turn(&usage(12645, 0, 12642)).is_none());
+        assert!(monitor.record_turn(&usage(12669, 5710, 5575)).is_none());
+        monitor.record_compaction_boundary();
+        let miss = usage(12740, 0, 5212);
+        assert!(monitor.record_turn(&miss).is_none());
+        assert_eq!(monitor.window_input_tokens, 38054);
+        assert_eq!(monitor.window_read_tokens, 5710);
+        assert!(monitor.record_turn(&miss).is_none());
+        assert!(matches!(
+            monitor.record_turn(&miss),
+            Some(CacheHealthAlert::SustainedMisses { consecutive: 3, measured_turns: 5, .. })
+        ));
+        monitor.record_compaction_boundary();
+        assert!(monitor.record_turn(&miss).is_none());
+        assert!(monitor.record_turn(&miss).is_none());
+        assert!(matches!(monitor.record_turn(&miss), Some(CacheHealthAlert::LowHitRate { measured_turns: 8, .. })));
+        assert!(monitor.record_turn(&miss).is_none());
+    }
+
+    #[test]
+    fn partial_hits_are_reported_as_low_reuse_not_full_cost_misses() {
+        let mut monitor = PromptCacheHealthMonitor::new();
+        assert!(monitor.record_turn(&usage(40000, 12000, 0)).is_none());
+        assert!(monitor.record_turn(&usage(40000, 18000, 0)).is_none());
+        let message = monitor.record_turn(&usage(40000, 16000, 0)).expect("degraded streak").message();
+        assert!(message.contains("below 50%"));
+        assert!(message.contains("38%"));
+        assert!(!message.contains("near-full"));
+        assert!(!message.contains("full input cost"));
+    }
+
+    #[test]
+    fn observed_constant_reuse_plateau_reports_weighted_session_rate() {
+        // First six requests in the 2026-10-15T06:35:33 session: the reused
+        // prefix plateaus while input grows. This measures reuse, not churn.
+        let mut monitor = PromptCacheHealthMonitor::new();
+        for (input, cached) in [
+            (19126, 0),
+            (20309, 13708),
+            (25677, 13708),
+            (30443, 13708),
+            (30686, 13708),
+        ] {
+            assert!(monitor.record_turn(&usage(input, cached, input - cached - 3)).is_none());
+        }
+        let alert = monitor
+            .record_turn(&usage(30932, 13708, 17221))
+            .expect("three low-reuse requests");
+        let CacheHealthAlert::SustainedMisses { consecutive, hit_rate, measured_turns } = &alert else {
+            panic!("expected sustained low reuse");
+        };
+        assert_eq!((*consecutive, *measured_turns), (3, 6));
+        assert!((hit_rate - 43.6079988293).abs() < 0.000001);
+        assert!(alert.message().contains("44% over 6 measured requests"));
+        assert!(
+            alert
+                .message()
+                .contains("Cache misses alone do not establish client-side prefix churn")
+        );
     }
 
     #[test]

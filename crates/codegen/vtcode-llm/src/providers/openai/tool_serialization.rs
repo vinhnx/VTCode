@@ -39,6 +39,7 @@ fn serialize_responses_hosted_tool(tool_type: &str, config: Option<&Value>) -> O
 fn serialize_responses_function_tool(func: &provider::FunctionDefinition, defer_loading: bool) -> Value {
     let mut value = json!({
         "type": "function",
+        "strict": false,
         "name": &func.name,
         "description": &func.description,
         "parameters": sanitize_openai_function_parameters(
@@ -347,6 +348,10 @@ fn serialize_openai_hosted_shell(config: &OpenAIHostedShellConfig) -> Option<Val
     }))
 }
 
+/// NOTE: unlike `serialize_tools_for_responses` below, the Chat path keeps
+/// `defer_loading` markers as-is; only the Responses path strips them when no
+/// `tool_search` is present. Keep this divergence — do not unify the two
+/// without covering both wire contracts.
 pub(crate) fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
     if tools.is_empty() {
         return None;
@@ -432,7 +437,7 @@ pub(crate) fn serialize_tools_for_responses(
     }
 
     let mut seen_names = HashSet::new();
-    let serialized_tools = tools
+    let mut serialized_tools = tools
         .iter()
         .filter_map(|tool| {
             let serialized = match tool.tool_type.as_str() {
@@ -441,29 +446,27 @@ pub(crate) fn serialize_tools_for_responses(
                     if func.name == tools::SHELL {
                         hosted_shell
                             .and_then(serialize_openai_hosted_shell)
-                            .or_else(|| {
-                                Some(serialize_responses_function_tool(
-                                    func,
-                                    tool.defer_loading == Some(true),
-                                ))
-                            })
+                            .or_else(|| Some(serialize_responses_function_tool(func, tool.defer_loading == Some(true))))
                     } else {
-                        Some(serialize_responses_function_tool(
-                            func,
-                            tool.defer_loading == Some(true),
-                        ))
+                        Some(serialize_responses_function_tool(func, tool.defer_loading == Some(true)))
                     }
                 }
                 tools::APPLY_PATCH => {
                     if let Some(func) = tool.function.as_ref() {
                         Some(serialize_responses_function_tool(func, false))
                     } else {
-                        Some(json!({
-                            "type": "function",
-                            "name": tools::APPLY_PATCH,
-                            "description": vtcode_utility_tool_specs::with_semantic_anchor_guidance(vtcode_utility_tool_specs::DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION),
-                            "parameters": vtcode_utility_tool_specs::apply_patch_parameter_schema(vtcode_utility_tool_specs::DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION)
-                        }))
+                        Some(serialize_responses_function_tool(
+                            &provider::FunctionDefinition {
+                                name: tools::APPLY_PATCH.to_string(),
+                                description: vtcode_utility_tool_specs::with_semantic_anchor_guidance(
+                                    vtcode_utility_tool_specs::DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION,
+                                ),
+                                parameters: vtcode_utility_tool_specs::apply_patch_parameter_schema(
+                                    vtcode_utility_tool_specs::DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION,
+                                ),
+                            },
+                            false,
+                        ))
                     }
                 }
                 tools::SHELL => hosted_shell.and_then(serialize_openai_hosted_shell),
@@ -494,10 +497,9 @@ pub(crate) fn serialize_tools_for_responses(
                 }),
                 "tool_search" => Some(json!({ "type": "tool_search" })),
                 "web_search" => serialize_responses_hosted_tool("web_search", tool.web_search.as_ref()),
-                "file_search" | "mcp" => serialize_responses_hosted_tool(
-                    tool.tool_type.as_str(),
-                    tool.hosted_tool_config.as_ref(),
-                ),
+                "file_search" | "mcp" => {
+                    serialize_responses_hosted_tool(tool.tool_type.as_str(), tool.hosted_tool_config.as_ref())
+                }
                 _ => tool
                     .function
                     .as_ref()
@@ -511,6 +513,25 @@ pub(crate) fn serialize_tools_for_responses(
             Some(serialized)
         })
         .collect::<Vec<Value>>();
+
+    // `defer_loading` markers are only valid alongside a `tool_search`
+    // discovery tool: backends reject deferred tools without one (400
+    // "Deferred tools require tools.tool_search", and the deferred names
+    // are then also unreferenceable from `allowed_tools` tool_choice).
+    // Without a search tool on the wire there is no discovery mechanism,
+    // so send eager definitions and keep every listed tool directly
+    // callable. Core-side deferral state is untouched; this only shapes
+    // the wire payload.
+    let has_search_tool = serialized_tools
+        .iter()
+        .any(|tool| tool.get("type").and_then(Value::as_str) == Some("tool_search"));
+    if !has_search_tool {
+        for tool in &mut serialized_tools {
+            if let Some(obj) = tool.as_object_mut() {
+                obj.remove("defer_loading");
+            }
+        }
+    }
 
     Some(Value::Array(serialized_tools))
 }
@@ -528,8 +549,57 @@ fn is_gpt5_or_newer(model: &str) -> bool {
 mod tests {
     use super::serialize_tools_for_responses;
     use crate::provider::ToolDefinition;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use vtcode_config::constants::tools;
+
+    #[test]
+    fn responses_functions_explicitly_opt_out_of_strict_normalization() {
+        let function = ToolDefinition::function(
+            "task_tracker".into(),
+            "Tracker".into(),
+            json!({"type":"object","properties":{"action":{"type":"string"},"index":{"type":"integer"}},"required":["action"]}),
+        );
+        let mut shell = function.clone();
+        shell.function.as_mut().unwrap().name = tools::SHELL.into();
+        let mut fallback = function.clone();
+        fallback.tool_type = "legacy_tool".into();
+        fallback.function.as_mut().unwrap().name = "legacy".into();
+        let patch: ToolDefinition = serde_json::from_value(json!({"type":tools::APPLY_PATCH})).unwrap();
+        let payload = serialize_tools_for_responses(&[function.clone(), shell, fallback, patch], None).unwrap();
+        assert_eq!(payload.as_array().unwrap().len(), 4);
+        for tool in payload.as_array().unwrap() {
+            assert_eq!(tool["type"], "function");
+            assert_eq!(tool["strict"], false);
+        }
+        assert_eq!(payload[0]["parameters"]["required"], json!(["action"]));
+        let chat = super::serialize_tools(&[function], "gpt-6").unwrap();
+        assert!(chat[0].get("strict").is_none());
+        assert!(chat[0]["function"].get("strict").is_none());
+    }
+
+    #[test]
+    fn responses_strictness_does_not_change_custom_or_hosted_contracts() {
+        let mut custom =
+            ToolDefinition::function("custom_input".into(), "Custom".into(), json!({"format":{"type":"text"}}));
+        custom.tool_type = "custom".into();
+        let hosted: ToolDefinition = serde_json::from_value(json!({"type":"web_search","web_search":{}})).unwrap();
+        let payload = serialize_tools_for_responses(
+            &[
+                custom,
+                hosted,
+                ToolDefinition::grammar("lark".into(), "start: \"patch\"".into()),
+            ],
+            None,
+        )
+        .unwrap();
+        assert_eq!(payload.as_array().unwrap().len(), 3);
+        for tool in payload.as_array().unwrap() {
+            assert!(tool.get("strict").is_none());
+        }
+        assert_eq!(payload[0]["type"], "custom");
+        assert_eq!(payload[1]["type"], "web_search");
+        assert_eq!(payload[2]["type"], "custom");
+    }
 
     #[test]
     fn apply_patch_fallback_schema_requires_workspace_relative_paths() {
@@ -564,5 +634,53 @@ mod tests {
         assert!(description.contains("absolute paths"));
         assert!(description.contains("`..`"));
         assert!(description.contains("traversal-like forms"));
+    }
+
+    #[test]
+    fn deferred_markers_require_a_search_tool_on_the_wire() {
+        let deferred = ToolDefinition::function(
+            "search_docs".to_owned(),
+            "Search internal docs".to_owned(),
+            json!({"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}),
+        )
+        .with_defer_loading(true);
+
+        // Without a `tool_search` discovery tool, backends reject deferred
+        // tools (400 "Deferred tools require tools.tool_search"), so the
+        // marker is stripped while the eager definition stays callable.
+        let other =
+            ToolDefinition::function("other_tool".to_owned(), "Another tool".to_owned(), json!({"type": "object"}))
+                .with_defer_loading(true);
+        let payload = serialize_tools_for_responses(&[deferred.clone(), other], None).expect("serialized tool list");
+        let arr = payload.as_array().expect("tool array");
+        assert_eq!(arr.len(), 2, "both definitions stay on the wire");
+        for tool in arr {
+            assert!(tool.get("defer_loading").is_none(), "defer_loading must be stripped without a search tool");
+        }
+        let tool = arr
+            .iter()
+            .find(|t| t.get("name").and_then(Value::as_str) == Some("search_docs"))
+            .expect("stripped tool stays present");
+        assert_eq!(tool["name"].as_str(), Some("search_docs"));
+        // The eager definition must stay fully callable: description and
+        // parameters survive stripping.
+        assert_eq!(tool["description"].as_str(), Some("Search internal docs"));
+        assert_eq!(
+            tool["parameters"]["properties"]["query"]["type"].as_str(),
+            Some("string"),
+            "stripping must not touch the schema body"
+        );
+
+        // With a `tool_search` tool present, the deferral protocol is
+        // intact and the marker is preserved.
+        let payload = serialize_tools_for_responses(&[ToolDefinition::hosted_tool_search(), deferred], None)
+            .expect("serialized tool list");
+        let arr = payload.as_array().expect("tool array");
+        assert!(arr.iter().any(|t| t.get("type").and_then(Value::as_str) == Some("tool_search")));
+        let deferred = arr
+            .iter()
+            .find(|t| t.get("name").and_then(Value::as_str) == Some("search_docs"))
+            .expect("deferred function should be present");
+        assert_eq!(deferred["defer_loading"], json!(true));
     }
 }

@@ -91,7 +91,7 @@ pub(crate) fn hex_to_ratatui_color(hex: &str) -> Option<Color> {
 ///
 /// Tries, in order:
 /// 1. A known primary-agent mode name (e.g. `"build"`) — mapped via the
-///    `vtcode-config` canonical table to a standard ANSI hue.
+///    `vtcode-config` canonical table to its color token.
 /// 2. A raw standard ANSI hue name (e.g. `"green"`) — used directly (this is
 ///    what the plan-approval overlay emits).
 /// 3. A `#rrggbb` hex string — retained for back-compat with custom agents.
@@ -103,7 +103,7 @@ pub(crate) fn resolve_agent_color(token: &str, fallback: Color, light: bool) -> 
     use vtcode_config::constants::ui::agent_mode_hue;
 
     agent_mode_hue(token)
-        .and_then(|h| ansi_hue_variant(h, light))
+        .and_then(|h| ansi_hue_variant(h, light).or_else(|| hex_to_ratatui_color(h)))
         .or_else(|| ansi_hue_variant(token, light))
         .or_else(|| hex_to_ratatui_color(token))
         .unwrap_or(fallback)
@@ -160,6 +160,17 @@ mod tests {
     #[test]
     fn non_ascii_hex_is_rejected_without_panicking() {
         assert!(hex_to_ratatui_color("红色").is_none());
+    }
+
+    #[test]
+    fn mode_names_resolve_through_the_canonical_table() {
+        let fallback = Color::Magenta;
+        // Hex-backed mode resolves identically in both appearances.
+        assert_eq!(resolve_agent_color("build", fallback, false), Color::Rgb(0x73, 0xA1, 0x8E));
+        assert_eq!(resolve_agent_color("build", fallback, true), Color::Rgb(0x73, 0xA1, 0x8E));
+        // Hue-backed modes keep their dark/light variants.
+        assert_eq!(resolve_agent_color("plan", fallback, false), Color::LightBlue);
+        assert_eq!(resolve_agent_color("plan", fallback, true), Color::Blue);
     }
 
     #[test]

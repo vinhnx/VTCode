@@ -25,9 +25,9 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_par
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, agent_parameters,
-    apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters, list_files_parameters,
-    mcp_parameters, search_tools_parameters, write_stdin_parameters,
+    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
+    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
+    list_files_parameters, mcp_parameters, search_tools_parameters, write_stdin_parameters,
 };
 
 use super::distributed::{BUILTIN_TOOLS, tool_config};
@@ -92,6 +92,14 @@ fn register_memory(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistrat
     ToolRegistration::new(tools::MEMORY, CapabilityLevel::Basic, false, ToolRegistry::memory_executor)
         .with_description(native_memory::MEMORY_TOOL_DESCRIPTION)
         .with_parameter_schema(native_memory::parameter_schema())
+        .with_permission(ToolPolicy::Allow)
+}
+
+#[distributed_slice(BUILTIN_TOOLS)]
+pub(super) fn register_record_decision(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
+    ToolRegistration::new(tools::RECORD_DECISION, CapabilityLevel::Basic, false, ToolRegistry::record_decision_executor)
+        .with_description("Use to record consequential choices, rejected approaches, or recovery changes with public rationale. Optional evidence IDs must belong to the current session task. Rationale is agent-reported; ordinary commands need no record.")
+        .with_parameter_schema(vtcode_utility_tool_specs::record_decision_parameters())
         .with_permission(ToolPolicy::Allow)
 }
 
@@ -346,7 +354,7 @@ fn register_exec_pty_cmd(_plan_state: Option<&PlanningWorkflowState>) -> ToolReg
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_write_stdin(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
     ToolRegistration::new(tools::WRITE_STDIN, CapabilityLevel::Bash, false, ToolRegistry::write_stdin_executor)
-        .with_description("Write characters to an active exec_command session, poll for fresh output, or use action=wait to block until it exits. Wait deadlines return a reusable in-progress session and never kill the process.")
+        .with_description(WRITE_STDIN_DESCRIPTION)
         .with_parameter_schema(write_stdin_parameters())
         .with_permission(ToolPolicy::Allow)
 }
@@ -505,9 +513,22 @@ fn with_builtin_network_access(registration: ToolRegistration) -> ToolRegistrati
         | "run_pty_cmd" | "send_pty_input" | "create_pty_session" | "mcp" | "agent" | "cron" => {
             ToolNetworkAccess::Network
         }
-        "read_file" | "list_files" | "write_file" | "edit_file" | "apply_patch" | "code_search"
-        | "request_user_input" | "memory" | "start_planning" | "task_tracker" | "search_tools" | "read_pty_session"
-        | "list_pty_sessions" | "close_pty_session" | "get_errors" => ToolNetworkAccess::Local,
+        "read_file"
+        | "list_files"
+        | "write_file"
+        | "edit_file"
+        | "apply_patch"
+        | "code_search"
+        | "request_user_input"
+        | "memory"
+        | "start_planning"
+        | "task_tracker"
+        | tools::RECORD_DECISION
+        | "search_tools"
+        | "read_pty_session"
+        | "list_pty_sessions"
+        | "close_pty_session"
+        | "get_errors" => ToolNetworkAccess::Local,
         _ => ToolNetworkAccess::Unknown,
     };
     registration.with_network_access(access)
@@ -753,6 +774,7 @@ mod tests {
         let verb_cues = [
             "Use ",
             "Create ",
+            "Control ",
             "List ",
             "Fetch ",
             "Search ",
@@ -893,11 +915,35 @@ mod tests {
         // review.
         let registrations = builtin_tool_registrations(None);
         let exposed: usize = registrations.iter().filter(|registration| registration.expose_in_llm()).count();
+        // The optional canonical public-decision surface is the fifteenth builtin.
         assert!(
-            exposed <= 14,
-            "exposed built-in tool count is {exposed}; expected <= 14. \
+            exposed <= 15,
+            "exposed built-in tool count is {exposed}; expected <= 15. \
              Consolidate, defer, or raise the cap in review."
         );
+    }
+
+    #[test]
+    fn public_decision_is_available_in_interactive_and_headless_planning_and_execution() {
+        use crate::config::ToolDocumentationMode;
+        use crate::tools::handlers::{SessionSurface, SessionToolCatalog, SessionToolsConfig, ToolModelCapabilities};
+        let catalog = SessionToolCatalog::rebuild_from_registrations(builtin_tool_registrations(None));
+        for surface in [SessionSurface::Interactive, SessionSurface::AgentRunner] {
+            for planning in [false, true] {
+                let config = SessionToolsConfig::full_public(
+                    surface,
+                    CapabilityLevel::CodeSearch,
+                    ToolDocumentationMode::Full,
+                    ToolModelCapabilities::default(),
+                )
+                .with_planning_active(planning);
+                let names = catalog.public_tool_names(config);
+                assert!(
+                    names.iter().any(|name| name == tools::RECORD_DECISION),
+                    "decision missing on {surface:?}, planning={planning}"
+                );
+            }
+        }
     }
 
     /// End-to-end regression for the tool-consolidation work: builds the real
@@ -983,11 +1029,12 @@ mod tests {
         // that follow tool definitions literally act on the whole text. The
         // cap is the harness-tax gate (HarnessTax): keep the emitted schema
         // envelope tight so first-call fixed overhead stays low. Measured
-        // ~1,793 on the Codex-4 default profile; 2,000 leaves ~10% headroom
-        // for small description tweaks without re-opening the tax.
+        // ~2,336 on the Codex-4 default profile with public decision recording
+        // in the initial catalog and discovery surface. Retain a bounded
+        // 2,400-token envelope.
         assert!(
-            total_tokens <= 2_000,
-            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 2_000"
+            total_tokens <= 2_400,
+            "emitted model tool schema tokens in Progressive mode is {total_tokens}; expected <= 2_400"
         );
     }
 

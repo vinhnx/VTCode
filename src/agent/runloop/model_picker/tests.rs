@@ -16,6 +16,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
 use self::options::{MODEL_OPTIONS, build_filtered_options, find_option_index, option_indexes_for_provider};
+use super::selection::available_service_tiers;
 
 fn has_model(options: &[ModelOption], model: ModelId) -> bool {
     let id = model.as_str();
@@ -328,7 +329,8 @@ fn static_model_subtitle_formats_current_capabilities() {
 
     let subtitle = static_model_subtitle(option, "openai", "gpt-5.6-sol");
 
-    assert_eq!(subtitle, Some("Current • 1M • Reasoning • Tools • image".to_string()));
+    // `Current` is a badge (tone `Current`), not subtitle text.
+    assert_eq!(subtitle, Some("1M context • Reasoning • Tools • image".to_string()));
 }
 
 #[test]
@@ -336,13 +338,13 @@ fn dynamic_model_subtitle_stays_conservative_for_unknown_local_models() {
     let subtitle =
         dynamic_model_subtitle(Provider::Ollama, "custom-local-model", false, "ollama", "custom-local-model");
 
-    assert_eq!(subtitle, Some("Current • Local".to_string()));
+    assert_eq!(subtitle, Some("Local".to_string()));
 }
 
 #[test]
 fn current_model_line_shows_effective_anthropic_context_window() {
     let line = rendering::current_model_line("anthropic", "claude-sonnet-5");
-    assert_eq!(line, "Current: anthropic / claude-sonnet-5 • 1M");
+    assert_eq!(line, "Current: anthropic / claude-sonnet-5 • 1M context");
 }
 
 #[test]
@@ -368,6 +370,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
             provider_order: picker_provider_order().to_vec(),
             current_reasoning: ReasoningEffortLevel::Medium,
             current_service_tier: None,
+            current_decisions_probe: false,
             current_provider: current_provider.to_string(),
             current_model: current_model.to_string(),
         },
@@ -377,10 +380,13 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
         dynamic_models: DynamicModelRegistry::default(),
         selected_reasoning: None,
         selected_service_tier: None,
+        selected_anthropic_speed: None,
         selected_mimo_auth: None,
+        selected_decisions_probe: None,
         pending_api_key: None,
         pending_credential_source: None,
         plain_mode_active: false,
+        status_wait: None,
     }
 }
 
@@ -519,9 +525,14 @@ fn picker_separates_openrouter_reasoning_from_effort_support() {
         .expect("OpenRouter Muse Spark route should exist");
     let detail = selection_from_option(option);
 
+    // The OpenRouter marketplace route advertises reasoning but no explicit
+    // effort levels in the generated catalog (empty `reasoning_efforts`);
+    // official Meta models own the effort set. This mirrors
+    // `resolver_separates_structured_reasoning_from_effort_support` in
+    // vtcode-llm.
     assert!(detail.reasoning_supported);
-    assert!(detail.reasoning_effort_supported);
-    assert!(!detail.reasoning_effort_levels().is_empty());
+    assert!(!detail.reasoning_effort_supported);
+    assert!(detail.reasoning_effort_levels().is_empty());
 }
 
 #[test]
@@ -545,8 +556,10 @@ fn openai_codex_reasoning_helpers_match_supported_variants() {
     assert!(!supports_xhigh_reasoning("gpt-5.1-codex-max"));
 
     assert!(supports_xhigh_reasoning("claude-sonnet-5"));
+    assert!(supports_xhigh_reasoning("claude-sonnet-5-5"));
     assert!(supports_xhigh_reasoning("claude-fable-5"));
     assert!(supports_max_reasoning("claude-sonnet-5"));
+    assert!(supports_max_reasoning("claude-sonnet-5-5"));
     assert!(supports_max_reasoning("claude-fable-5"));
     // The GPT-5.6 family supports Max adaptive reasoning.
     assert!(supports_max_reasoning("gpt-5.6-sol"));
@@ -610,6 +623,58 @@ fn build_result_uses_selected_flex_service_tier() {
 
     assert_eq!(result.service_tier, Some(OpenAIServiceTier::Flex));
     assert!(result.service_tier_changed);
+}
+
+#[test]
+fn available_service_tiers_hides_ultrafast_outside_native_openai() {
+    fn detail(provider: Option<Provider>, model: &str, supported: bool) -> SelectionDetail {
+        SelectionDetail {
+            provider_key: String::new(),
+            provider_label: String::new(),
+            provider_enum: provider,
+            model_id: model.to_string(),
+            model_display: model.to_string(),
+            known_model: true,
+            context_window: None,
+            reasoning_supported: false,
+            reasoning_effort_supported: false,
+            reasoning_optional: false,
+            reasoning_off_model: None,
+            service_tier_supported: supported,
+            requires_api_key: false,
+            uses_chatgpt_auth: false,
+            env_key: String::new(),
+            mimo_auth_method: None,
+        }
+    }
+
+    use OpenAIServiceTier::{Flex, Priority, Ultrafast};
+
+    // Native OpenAI offers every tier on supported models.
+    assert_eq!(
+        available_service_tiers(&detail(Some(Provider::OpenAI), "gpt-6.1-sol", true)),
+        vec![None, Some(Flex), Some(Priority), Some(Ultrafast)]
+    );
+    // Other OpenAI models retain flex/priority without ultrafast.
+    for model in ["gpt-5", "gpt-5.6-sol"] {
+        assert_eq!(
+            available_service_tiers(&detail(Some(Provider::OpenAI), model, true)),
+            vec![None, Some(Flex), Some(Priority)]
+        );
+    }
+    // Merge Gateway and other compatibles offer flex/priority but never ultrafast.
+    assert_eq!(
+        available_service_tiers(&detail(Some(Provider::MergeGateway), "openai/gpt-6.1-sol", true)),
+        vec![None, Some(Flex), Some(Priority)]
+    );
+    assert_eq!(
+        available_service_tiers(&detail(Some(Provider::XAI), "grok-4.7", true)),
+        vec![None, Some(Flex), Some(Priority)]
+    );
+    // Custom providers (no builtin enum) never offer ultrafast.
+    assert_eq!(available_service_tiers(&detail(None, "my-model", true)), vec![None, Some(Flex), Some(Priority)]);
+    // Routes without tier support offer nothing.
+    assert!(available_service_tiers(&detail(Some(Provider::Anthropic), "claude-sonnet-5", false)).is_empty());
 }
 
 #[test]
@@ -718,3 +783,137 @@ fn filter_options_by_whitelist_empty_returns_all() {
     let filtered = filter_options_by_whitelist(Cow::Borrowed(MODEL_OPTIONS.as_slice()), &[]);
     assert_eq!(filtered.len(), MODEL_OPTIONS.len());
 }
+
+#[test]
+fn step_one_divider_item_is_unselectable_untitled_separator() {
+    let divider = rendering::divider_item();
+
+    assert!(divider.selection.is_none(), "divider must not be selectable");
+    assert!(divider.subtitle.is_none());
+    assert!(divider.badge.is_none());
+    assert!(
+        divider.title.is_empty(),
+        "divider must use the canonical untitled form so the renderer spans content width: {}",
+        divider.title
+    );
+}
+
+fn openai_api_key_detail() -> SelectionDetail {
+    SelectionDetail {
+        provider_key: "openai".to_string(),
+        provider_label: "OpenAI".to_string(),
+        provider_enum: Some(Provider::OpenAI),
+        model_id: "gpt-5.6-sol".to_string(),
+        model_display: "GPT-5.6 Sol".to_string(),
+        known_model: true,
+        context_window: None,
+        reasoning_supported: true,
+        reasoning_effort_supported: true,
+        reasoning_optional: false,
+        reasoning_off_model: None,
+        service_tier_supported: false,
+        requires_api_key: false,
+        uses_chatgpt_auth: false,
+        env_key: "OPENAI_API_KEY".to_string(),
+        mimo_auth_method: None,
+    }
+}
+
+#[test]
+fn decisions_probe_eligible_only_for_openai_api_key_standard_endpoint() {
+    // Hold the process-wide env lock for the whole test: `configured_openai_base_url`
+    // reads `OPENAI_BASE_URL`, so the assertions must not race an ambient value.
+    let env = vtcode_commons::env_lock::lock();
+    let previous = std::env::var_os(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL);
+    env.remove_var(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL);
+
+    let mut picker = base_picker_state("openai", "gpt-5.6-sol");
+    picker.selection = Some(openai_api_key_detail());
+    assert!(picker.decisions_probe_eligible());
+
+    // Already enabled never prompts again.
+    picker.settings.current_decisions_probe = true;
+    assert!(!picker.decisions_probe_eligible());
+    picker.settings.current_decisions_probe = false;
+
+    // ChatGPT subscription auth is ineligible.
+    picker.selection.as_mut().expect("selection").uses_chatgpt_auth = true;
+    assert!(!picker.decisions_probe_eligible());
+    picker.selection.as_mut().expect("selection").uses_chatgpt_auth = false;
+
+    // Non-OpenAI providers are ineligible.
+    picker.selection.as_mut().expect("selection").provider_enum = Some(Provider::Anthropic);
+    assert!(!picker.decisions_probe_eligible());
+    picker.selection.as_mut().expect("selection").provider_enum = Some(Provider::OpenAI);
+
+    // Custom endpoints are ineligible; empty/default remains eligible.
+    let mut cfg = VTCodeConfig::default();
+    cfg.provider_overrides.insert(
+        "openai".to_string(),
+        ProviderOverrideConfig {
+            base_url: Some("https://gateway.example/v1".to_string()),
+            ..ProviderOverrideConfig::default()
+        },
+    );
+    picker.settings.vt_cfg = Some(cfg);
+    assert!(!picker.decisions_probe_eligible());
+
+    // `OPENAI_BASE_URL` (honored by the runtime) is also ineligible.
+    picker.settings.vt_cfg = None;
+    env.set_var(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL, "https://proxy.example/v1");
+    assert!(!picker.decisions_probe_eligible());
+    env.remove_var(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL);
+    assert!(picker.decisions_probe_eligible());
+
+    env.restore_var(vtcode_core::config::constants::env_vars::OPENAI_BASE_URL, previous);
+}
+
+#[test]
+fn standard_decisions_endpoint_accepts_only_default_origin_path() {
+    use super::state_machine::standard_decisions_endpoint;
+    assert!(standard_decisions_endpoint(""));
+    assert!(standard_decisions_endpoint("https://api.openai.com/v1"));
+    assert!(standard_decisions_endpoint("https://api.openai.com/v1/"));
+    assert!(!standard_decisions_endpoint("https://gateway.example/v1"));
+    assert!(!standard_decisions_endpoint("https://api.openai.com/v1/gateway"));
+}
+
+#[test]
+fn build_result_tracks_decisions_probe_change() {
+    let mut picker = base_picker_state("openai", "gpt-5.6-sol");
+    picker.selection = Some(openai_api_key_detail());
+    picker.selected_decisions_probe = Some(true);
+    let result = picker.build_result().expect("result should build");
+    assert_eq!(result.decisions_probe, Some(true));
+    assert!(result.decisions_probe_changed);
+
+    picker.selected_decisions_probe = None;
+    let result = picker.build_result().expect("result should build");
+    assert_eq!(result.decisions_probe, None);
+    assert!(!result.decisions_probe_changed);
+}
+
+#[test]
+fn handle_decisions_probe_applies_yes_no_skip() {
+    let (handle, _session) = session_with_channels();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle, Default::default());
+    let mut picker = base_picker_state("openai", "gpt-5.6-sol");
+    picker.selection = Some(openai_api_key_detail());
+    picker.step = PickerStep::AwaitDecisionsProbe;
+
+    let progress = picker.handle_decisions_probe(&mut renderer, "yes").expect("yes should apply");
+    assert!(matches!(progress, ModelPickerProgress::Completed(_)));
+    assert_eq!(picker.selected_decisions_probe, Some(true));
+
+    picker.step = PickerStep::AwaitDecisionsProbe;
+    let progress = picker.handle_decisions_probe(&mut renderer, "no").expect("no should apply");
+    assert!(matches!(progress, ModelPickerProgress::Completed(_)));
+    assert_eq!(picker.selected_decisions_probe, Some(false));
+
+    picker.step = PickerStep::AwaitDecisionsProbe;
+    let progress = picker.handle_decisions_probe(&mut renderer, "skip").expect("skip should apply");
+    assert!(matches!(progress, ModelPickerProgress::Completed(_)));
+    assert_eq!(picker.selected_decisions_probe, None);
+}
+
+mod anthropic_speed;

@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::sync::Arc;
 
 use ratatui::{
     style::{Color, Modifier, Style},
@@ -16,6 +17,23 @@ use super::terminal_capabilities;
 use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
 use super::{Session, ratatui_color_from_ansi, ratatui_style_from_inline};
 
+fn ultrafast_badge_style(colors_enabled: bool, safe_colors_only: bool, bold_is_bright: bool) -> Style {
+    let mut style = Style::default().remove_modifier(Modifier::DIM | Modifier::REVERSED);
+    style = if !colors_enabled {
+        style.fg(Color::Reset).bg(Color::Reset).add_modifier(Modifier::REVERSED)
+    } else if safe_colors_only {
+        style.fg(Color::Black).bg(Color::Yellow)
+    } else {
+        // Black text on the premium #D99A4E fill exceeds WCAG AAA (7:1).
+        style.fg(Color::Rgb(0, 0, 0)).bg(Color::Rgb(0xD9, 0x9A, 0x4E))
+    };
+    if bold_is_bright {
+        style.remove_modifier(Modifier::BOLD)
+    } else {
+        style.add_modifier(Modifier::BOLD)
+    }
+}
+
 fn clean_reasoning_text(text: &str) -> String {
     vtcode_commons::formatting::clean_reasoning_text(text)
 }
@@ -32,7 +50,7 @@ fn format_model_summary_label(model: &str) -> String {
     model.split('-').map(capitalize_first_letter).collect::<Vec<_>>().join("-")
 }
 
-fn primary_agent_header_label(name: Option<&str>) -> String {
+pub(crate) fn primary_agent_header_label(name: Option<&str>) -> String {
     let Some(name) = name.map(str::trim).filter(|name| !name.is_empty()) else {
         return "Build".to_string();
     };
@@ -54,9 +72,9 @@ fn line_is_empty(spans: &[Span<'static>]) -> bool {
 }
 
 impl Session {
-    pub(crate) fn header_lines(&mut self) -> Vec<Line<'static>> {
+    pub(crate) fn header_lines(&mut self) -> Arc<Vec<Line<'static>>> {
         if let Some(cached) = &self.header_lines_cache {
-            return cached.clone();
+            return Arc::clone(cached);
         }
 
         let lines = if self.appearance.hide_header {
@@ -64,8 +82,19 @@ impl Session {
         } else {
             vec![self.header_compact_line()]
         };
-        self.header_lines_cache = Some(lines.clone());
-        lines
+        let arc = Arc::new(lines);
+        self.header_lines_cache = Some(Arc::clone(&arc));
+        arc
+    }
+
+    /// Cached border-block title (rebuilt only when the header cache drops).
+    pub(crate) fn header_block_title_cached(&mut self) -> Line<'static> {
+        if let Some(title) = &self.header_block_title_cache {
+            return title.clone();
+        }
+        let title = self.header_block_title();
+        self.header_block_title_cache = Some(title.clone());
+        title
     }
 
     pub(crate) fn header_height_from_lines(&mut self, width: u16, lines: &[Line<'static>]) -> u16 {
@@ -117,7 +146,7 @@ impl Session {
     #[cfg(test)]
     pub(crate) fn header_height_for_width(&mut self, width: u16) -> u16 {
         let lines = self.header_lines();
-        self.header_height_from_lines(width, &lines)
+        self.header_height_from_lines(width, lines.as_slice())
     }
 
     fn header_block_title(&self) -> Line<'static> {
@@ -223,6 +252,13 @@ impl Session {
             spans.push(Span::styled(reasoning, value_style));
         }
 
+        if let Some(tier) = self.header_service_tier_short_value() {
+            if !spans.is_empty() {
+                spans.push(Span::styled(" · ".to_owned(), self.header_secondary_style()));
+            }
+            spans.push(self.header_service_tier_span(&tier));
+        }
+
         spans
     }
 
@@ -265,6 +301,13 @@ impl Session {
             }
 
             spans.push(Span::styled(reasoning.to_string(), style));
+        }
+
+        if let Some(tier) = self.header_service_tier_short_value() {
+            if !spans.is_empty() {
+                spans.push(Span::raw(" "));
+            }
+            spans.push(self.header_service_tier_span(&tier));
         }
 
         if spans.is_empty() {
@@ -372,6 +415,31 @@ impl Session {
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX).trim().to_owned()
     }
 
+    fn header_service_tier_short_value(&self) -> Option<String> {
+        let raw = self.header_context.service_tier.as_deref()?;
+        let tier = Self::strip_prefix(raw, ui::HEADER_SERVICE_TIER_PREFIX).trim();
+        (!tier.is_empty() && !tier.eq_ignore_ascii_case(ui::HEADER_UNKNOWN_PLACEHOLDER)).then(|| tier.to_owned())
+    }
+
+    fn header_service_tier_span(&self, tier: &str) -> Span<'static> {
+        if tier.eq_ignore_ascii_case("ultrafast") || tier.eq_ignore_ascii_case("fast") {
+            Span::styled(
+                if tier.eq_ignore_ascii_case("fast") {
+                    " FAST "
+                } else {
+                    " ULTRAFAST "
+                },
+                ultrafast_badge_style(
+                    vtcode_commons::color_policy::current_color_output_policy().enabled,
+                    crate::theme::is_safe_colors_only(),
+                    crate::theme::is_bold_bright_mode(),
+                ),
+            )
+        } else {
+            Span::styled(capitalize_first_letter(tier), self.header_secondary_style())
+        }
+    }
+
     pub fn header_chain_values(&self) -> Vec<String> {
         let mut values = Vec::new();
 
@@ -468,6 +536,23 @@ impl Session {
                 format!("{} +{}", badge.text, hidden)
             };
             push_badge(&mut spans, format!(" {label} "), badge_style, &mut first_section);
+        }
+
+        // Persistent background-work badge. The bottom-line background copy is
+        // idle-only (loading moves to the transcript progress row), so the
+        // header carries the always-visible count with short static text that
+        // never shimmers or changes width per-second.
+        if let Some(badge) = self.background_header_badge_text() {
+            let style = if self.has_background_activity() {
+                // Live work stays prominent: undimmed primary bold, unlike the
+                // dimmed secondary used for retained history below.
+                self.header_primary_style()
+                    .remove_modifier(Modifier::DIM)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                self.header_secondary_style().add_modifier(Modifier::DIM)
+            };
+            push_badge(&mut spans, badge, style, &mut first_section);
         }
 
         // Show blocked/recovery badge so a stalled turn is visible in the header,
@@ -656,7 +741,7 @@ impl Session {
         style
     }
 
-    fn header_primary_style(&self) -> Style {
+    pub(crate) fn header_primary_style(&self) -> Style {
         let mut style = self.styles.default_style().add_modifier(Modifier::DIM);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
@@ -674,5 +759,32 @@ impl Session {
 
     fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
         value.strip_prefix(prefix).unwrap_or(value)
+    }
+}
+
+#[cfg(test)]
+mod badge_tests {
+    use super::*;
+
+    #[test]
+    fn ultrafast_badge_color_policy_and_bold_is_bright() {
+        for bold_is_bright in [false, true] {
+            for (colors_enabled, safe_colors_only, foreground, background, reversed) in [
+                (true, false, Color::Rgb(0, 0, 0), Color::Rgb(0xD9, 0x9A, 0x4E), false),
+                (true, true, Color::Black, Color::Yellow, false),
+                (false, false, Color::Reset, Color::Reset, true),
+                (false, true, Color::Reset, Color::Reset, true),
+            ] {
+                let style = ultrafast_badge_style(colors_enabled, safe_colors_only, bold_is_bright);
+                let inherited = Style::default()
+                    .add_modifier(Modifier::DIM | Modifier::BOLD | Modifier::REVERSED)
+                    .patch(style);
+                assert_eq!(inherited.fg, Some(foreground));
+                assert_eq!(inherited.bg, Some(background));
+                assert_eq!(inherited.add_modifier.contains(Modifier::REVERSED), reversed);
+                assert_eq!(inherited.add_modifier.contains(Modifier::BOLD), !bold_is_bright);
+                assert!(!inherited.add_modifier.contains(Modifier::DIM));
+            }
+        }
     }
 }

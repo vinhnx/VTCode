@@ -19,6 +19,9 @@ use crate::agent::runloop::unified::tool_summary_helpers::{
 
 const LIVE_PREVIEW_HEAD_LINES: usize = 3;
 const MAX_BUFFERED_TAIL_LINES: usize = 64;
+/// Byte cap per buffered line so a newline-free stream cannot grow memory without bound.
+const MAX_BUFFERED_LINE_BYTES: usize = 8 * 1024;
+const LINE_TRUNCATION_MARKER: char = '…';
 
 type RenderedPtyPreview = (usize, Vec<Vec<InlineSegment>>, Vec<Vec<InlineLinkRange>>, Option<String>);
 
@@ -31,6 +34,7 @@ struct LegacyPtyStreamState {
     head_lines: Vec<String>,
     tail_lines: VecDeque<String>,
     current_line: String,
+    current_line_truncated: bool,
     total_lines: usize,
 }
 
@@ -40,8 +44,26 @@ impl LegacyPtyStreamState {
             head_lines: Vec::new(),
             tail_lines: VecDeque::new(),
             current_line: String::new(),
+            current_line_truncated: false,
             total_lines: 0,
         }
+    }
+
+    fn push_char(&mut self, ch: char) {
+        if self.current_line_truncated {
+            return;
+        }
+        if self.current_line.len() + ch.len_utf8() > MAX_BUFFERED_LINE_BYTES {
+            self.current_line.push(LINE_TRUNCATION_MARKER);
+            self.current_line_truncated = true;
+            return;
+        }
+        self.current_line.push(ch);
+    }
+
+    fn clear_current_line(&mut self) {
+        self.current_line.clear();
+        self.current_line_truncated = false;
     }
 
     fn apply_chunk(&mut self, chunk: &str) {
@@ -53,17 +75,18 @@ impl LegacyPtyStreamState {
                         let _ = chars.next();
                         self.push_line();
                     } else {
-                        self.current_line.clear();
+                        self.clear_current_line();
                     }
                 }
                 '\n' => self.push_line(),
-                _ => self.current_line.push(ch),
+                _ => self.push_char(ch),
             }
         }
     }
 
     fn push_line(&mut self) {
         let line = std::mem::take(&mut self.current_line);
+        self.current_line_truncated = false;
         if self.head_lines.len() < LIVE_PREVIEW_HEAD_LINES {
             self.head_lines.push(line);
         } else {

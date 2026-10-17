@@ -1,0 +1,39 @@
+# Shared CI configuration; local .config/nextest.toml is intentionally ignored.
+nextest-version = "0.9.140"
+
+[test-groups.slow]
+max-threads = 2
+
+[test-groups.integration]
+max-threads = 4
+
+[[profile.default.overrides]]
+filter = "binary(/integration|e2e|harness|pods_/)"
+test-group = "integration"
+
+[[profile.default.overrides]]
+filter = "test(/slow_|bench_|heavy/)"
+test-group = "slow"
+
+[profile.ci]
+fail-fast = false
+retries = 2
+status-level = "all"
+final-status-level = "all"
+failure-output = "immediate-final"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[profile.ci.junit]
+path = "ci-junit.xml"
+store-success-output = false
+store-failure-output = true
+
+# Separate profile directories preserve reports from each sequential CI suite.
+[profile.ci-harness]
+inherits = "ci"
+
+[profile.ci-windows-ui]
+inherits = "ci"
+
+[profile.ci-windows-terminal]
+inherits = "ci"

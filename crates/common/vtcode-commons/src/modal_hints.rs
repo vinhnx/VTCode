@@ -12,6 +12,18 @@ pub const APPROVAL_NAVIGATE_CANCEL: &str = "Use ↑↓ or Tab to navigate • En
 /// Navigate, select, or stop: tool-loop-limit variant.
 pub const APPROVAL_NAVIGATE_STOP: &str = "Use ↑↓ or Tab to navigate • Enter to select • Esc to stop";
 
+/// Model picker: navigate a long provider/model list with live filtering.
+pub const MODEL_PICKER_NAVIGATE_FILTER: &str =
+    "Use ↑↓ or Tab to navigate • Enter to select • Type to filter • Esc to cancel";
+/// Model picker follow-ups (reasoning, service tier): short single-choice list.
+/// Esc cancels the whole picker; `← Back to model list` returns to step 1.
+///
+/// Only pass this to lists without `InlineListSelection::ConfigAction` items:
+/// `ConfigAction` lists are `FixedComfortable` and render the shared
+/// `CONFIG_LIST_NAVIGATION_HINT`, dropping any explicit footer.
+pub const MODEL_PICKER_FOLLOW_UP_HINT: &str =
+    "Use ↑↓ or Tab to navigate • Enter to select • ← Back to model list • Esc cancels the picker";
+
 /// Trailing sentence before approval options, e.g. `choose_handling_line("this tool")`.
 pub fn choose_handling_line(object: &str) -> String {
     format!("Choose how to handle {object}:")
@@ -40,6 +52,16 @@ mod tests {
         assert!(APPROVAL_NAVIGATE_DENY.ends_with("deny"));
         assert!(APPROVAL_NAVIGATE_CANCEL.ends_with("cancel"));
         assert!(APPROVAL_NAVIGATE_STOP.ends_with("stop"));
+    }
+
+    #[test]
+    fn model_picker_hints_share_navigation_prefix() {
+        for hint in [MODEL_PICKER_NAVIGATE_FILTER, MODEL_PICKER_FOLLOW_UP_HINT] {
+            assert!(hint.starts_with("Use ↑↓ or Tab to navigate • Enter to "));
+        }
+        assert!(MODEL_PICKER_NAVIGATE_FILTER.contains("Type to filter"));
+        assert!(MODEL_PICKER_FOLLOW_UP_HINT.contains("Back to model list"));
+        assert!(MODEL_PICKER_FOLLOW_UP_HINT.contains("Esc"));
     }
 
     #[test]

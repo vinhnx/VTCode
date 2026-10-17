@@ -4,17 +4,18 @@ Model Context Protocol (MCP) client, connection pooling, and tool discovery for 
 
 ## Overview
 
-Layer 1 crate that provides MCP integration, enabling VT Code to connect to MCP servers for extended tool capabilities. Includes connection pooling, tool discovery, and schema validation.
+Layer 1 crate that provides MCP integration, enabling VT Code to connect to MCP servers for extended tool capabilities.
+Includes connection pooling, tool discovery, and schema validation.
 
 ## Module Groups
 
-| Area | Modules | Description |
-|------|---------|-------------|
-| Client | `client.rs`, `provider.rs`, `rmcp_client.rs` | MCP client implementations |
-| Transport | `rmcp_transport.rs`, `connection_pool.rs` | Transport layer and connection management |
-| Discovery | `tool_discovery.rs`, `tool_discovery_cache.rs`, `schema.rs` | Tool discovery and caching |
-| Types | `types.rs`, `traits.rs`, `errors.rs`, `enhanced_config.rs` | Type definitions and configuration |
-| Utils | `utils.rs` | Utility functions |
+| Area      | Modules                                                     | Description                               |
+| --------- | ----------------------------------------------------------- | ----------------------------------------- |
+| Client    | `client.rs`, `provider.rs`, `rmcp_client.rs`                | MCP client implementations                |
+| Transport | `rmcp_transport.rs`, `connection_pool.rs`                   | Transport layer and connection management |
+| Discovery | `tool_discovery.rs`, `tool_discovery_cache.rs`, `schema.rs` | Tool discovery and caching                |
+| Types     | `types.rs`, `traits.rs`, `errors.rs`, `enhanced_config.rs`  | Type definitions and configuration        |
+| Utils     | `utils.rs`                                                  | Utility functions                         |
 
 ## Key Components
 
@@ -53,6 +54,7 @@ servers = [
 ```
 
 Environment variables:
+
 - `DEFAULT_ENV_VARS` is platform-conditional (`#[cfg(unix)]` / `#[cfg(windows)]`)
 
 ## Dependencies

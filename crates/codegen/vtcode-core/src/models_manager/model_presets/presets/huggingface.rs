@@ -1,6 +1,7 @@
 //! huggingface_presets — provider preset definitions for huggingface.
 
 use super::super::{ModelPreset, ReasoningEffortPreset};
+use crate::config::constants::models;
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
@@ -101,6 +102,30 @@ pub(crate) fn huggingface_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(1_000_000),
+        },
+        ModelPreset {
+            id: "huggingface/muse-spark-open".to_string(),
+            model: models::huggingface::META_MUSE_SPARK_OPEN_BASETEN.to_string(),
+            display_name: "Muse Spark Open (HF/Baseten)".to_string(),
+            description: "Meta Muse Spark Open 816B-A42B open-weight flagship for coding and agentic work with 1M context via Baseten on HuggingFace router"
+                .to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Max,
+                    description: "Maximum thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
         },
     ]
 }

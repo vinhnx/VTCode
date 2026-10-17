@@ -1,6 +1,7 @@
 # VT Code Status Line Configuration
 
-This directory contains custom status line scripts for VT Code, inspired by the Claude Code status line configuration guide but adapted for VT Code's specific implementation.
+This directory contains custom status line scripts for VT Code, inspired by the Claude Code status line configuration
+guide but adapted for VT Code's specific implementation.
 
 ## Available Scripts
 

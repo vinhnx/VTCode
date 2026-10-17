@@ -15,8 +15,7 @@
 
 ### Phase 1: Foundation COMPLETE
 
-**Timeline**: November 2025
-**Status**: Production-ready
+**Timeline**: November 2025 **Status**: Production-ready
 
 Achievements:
 
@@ -37,14 +36,14 @@ Achievements:
 
 ## Document Guide
 
-| Document                                 | Purpose                 | Audience               |
-| ---------------------------------------- | ----------------------- | ---------------------- |
-| [README.md](README.md)                   | Overview and navigation | Everyone               |
-| [ARCHITECTURE.md](ARCHITECTURE.md)       | System design           | Architects/maintainers |
-| [STYLING_QUICK_START.md](STYLING_QUICK_START.md) | Usage guide    | Developers             |
-| [anstyle-crates-research.md](anstyle-crates-research.md) | Technical research | Advanced devs |
-| [quick-reference.md](quick-reference.md) | Cheat sheets            | Quick lookup           |
-| [styling_integration.md](styling_integration.md) | Integration patterns | Integration developers |
+| Document                                                 | Purpose                 | Audience               |
+| -------------------------------------------------------- | ----------------------- | ---------------------- |
+| [README.md](README.md)                                   | Overview and navigation | Everyone               |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                       | System design           | Architects/maintainers |
+| [STYLING_QUICK_START.md](STYLING_QUICK_START.md)         | Usage guide             | Developers             |
+| [anstyle-crates-research.md](anstyle-crates-research.md) | Technical research      | Advanced devs          |
+| [quick-reference.md](quick-reference.md)                 | Cheat sheets            | Quick lookup           |
+| [styling_integration.md](styling_integration.md)         | Integration patterns    | Integration developers |
 
 ## Quick Reference
 
@@ -105,7 +104,7 @@ All crates are in `vtcode-core/Cargo.toml`
 
 ## Architecture Overview
 
-```
+```text
 User Config (TOML)
     ↓
 System Config (Git/LS_COLORS)
@@ -161,5 +160,4 @@ For questions about:
 
 ---
 
-**Last Updated**: November 9, 2025
-**Status**: Phase 1 Complete
+**Last Updated**: November 9, 2025 **Status**: Phase 1 Complete

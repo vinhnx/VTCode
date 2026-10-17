@@ -11,6 +11,10 @@ pub struct GenerateContentRequest {
     pub(crate) tool_config: Option<ToolConfig>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "systemInstruction")]
     pub(crate) system_instruction: Option<SystemInstruction>,
+    /// Explicit context-cache name (`cachedContents/...`). When set, the
+    /// cached system/tools/prefix are supplied by the cache, not this body.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "cachedContent")]
+    pub(crate) cached_content: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

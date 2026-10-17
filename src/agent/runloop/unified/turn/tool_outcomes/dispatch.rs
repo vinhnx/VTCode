@@ -13,6 +13,10 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
         return Ok(None);
     }
     t_ctx.ctx.harness_state.record_requested_tool_calls(tool_calls.len());
+    if let Some(stop) = crate::agent::runloop::unified::stop_requests::stop_outcome(t_ctx.ctx.ctrl_c_state) {
+        super::handlers::drain_preflight_circuit_responses(t_ctx.ctx, tool_calls);
+        return Ok(Some(TurnHandlerOutcome::Break(stop)));
+    }
 
     let planning_started = Instant::now();
     let mut valid_calls = 0usize;
@@ -34,6 +38,7 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
                     tool_call.call_id(),
                     tool_call.tool_name(),
                     err,
+                    None,
                     None,
                 ) {
                     super::handlers::drain_preflight_circuit_responses(t_ctx.ctx, &tool_calls[index + 1..]);
@@ -74,6 +79,7 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
                     tool_call.tool_name(),
                     err,
                     None,
+                    None,
                 ) {
                     super::handlers::drain_preflight_circuit_responses(t_ctx.ctx, &tool_calls[index + 1..]);
                     flush_dispatch_recovery(t_ctx.ctx);
@@ -87,8 +93,15 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
                 if t_ctx.ctx.harness_state.blocked_tool_recovery_pending() {
                     super::handlers::drain_blocked_tool_recovery_responses(t_ctx.ctx, &tool_calls[index + 1..]);
                 }
-                if t_ctx.ctx.harness_state.consecutive_preflight_failures
-                    >= super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx)
+                if matches!(
+                    &o,
+                    TurnHandlerOutcome::Break(
+                        crate::agent::runloop::unified::turn::context::TurnLoopResult::Cancelled
+                            | crate::agent::runloop::unified::turn::context::TurnLoopResult::Exit
+                    )
+                ) || t_ctx.ctx.session_stats.preflight_recovery.exhausted()
+                    || t_ctx.ctx.harness_state.consecutive_preflight_failures
+                        >= super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx)
                 {
                     super::handlers::drain_preflight_circuit_responses(t_ctx.ctx, &tool_calls[index + 1..]);
                 }

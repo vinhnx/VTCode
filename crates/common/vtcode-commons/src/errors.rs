@@ -60,8 +60,11 @@ pub const ERR_PARSE_REQUEST_JSON: &str = "failed to parse request JSON";
 pub const ERR_PARSE_ARGS: &str = "failed to parse tokenized args";
 pub const ERR_PARSE_RESULT: &str = "failed to parse de-tokenized result";
 
-/// Helper macro for file operation errors with context
-/// Usage: file_err!("path", "read") -> "failed to read path"
+/// Helper macro for file operation errors with context.
+///
+/// Usage: `file_err!(path, read)` where `path` is an expression and the
+/// operation is matched as a bare identifier (not a string literal).
+/// Expands to `"failed to read <path>"`.
 #[macro_export]
 macro_rules! file_err {
     ($path:expr, read) => {
@@ -298,6 +301,22 @@ impl<E: std::error::Error + 'static> std::error::Error for MultiErrors<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_err_operations_format_path() {
+        // `file_err!` has no shape test; other relative paths in macros were
+        // also left invariant. Keep the message contract pinned.
+        let path = "config/vtcode.toml";
+        assert_eq!(file_err!(path, read), "failed to read config/vtcode.toml");
+        assert_eq!(file_err!(path, write), "failed to write config/vtcode.toml");
+        assert_eq!(file_err!(path, delete), "failed to delete config/vtcode.toml");
+        assert_eq!(file_err!(path, create), "failed to create config/vtcode.toml");
+    }
+
+    #[test]
+    fn ctx_err_joins_operation_and_context() {
+        assert_eq!(ctx_err!("llm factory", "lock poisoned"), "llm factory: lock poisoned");
+    }
 
     #[test]
     fn formatter_uses_display() {

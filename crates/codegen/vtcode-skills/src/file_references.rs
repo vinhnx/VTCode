@@ -6,6 +6,15 @@
 use hashbrown::HashSet;
 use regex::Regex;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+/// Markdown link target extractor (`[text](path)`).
+static MD_LINK_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[.*?\]\((.*?)\)").expect("valid markdown link regex"));
+
+/// Bare `scripts/`, `references/`, or `assets/` path tokens.
+static PLAIN_PATH_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b(scripts|references|assets)/[^\s\),\]`\"<>]+"#).expect("valid plain path regex"));
 
 /// Validates that file references in skill instructions follow the Agent Skills spec
 ///
@@ -37,6 +46,7 @@ impl FileReferenceValidator {
             }
         }
 
+        errors.sort();
         errors
     }
 
@@ -48,17 +58,28 @@ impl FileReferenceValidator {
     /// - `assets/image.png`
     fn extract_references(&self, instructions: &str) -> HashSet<String> {
         let mut references = HashSet::new();
-        let Ok(md_link_regex) = Regex::new(r"\[.*?\]\((.*?)\)") else {
-            return references;
-        };
-        let Ok(plain_path_regex) = Regex::new(r"\b(scripts|references|assets)/[^\s\),\]]+") else {
-            return references;
-        };
+        let md_link_regex = &*MD_LINK_REGEX;
+        let plain_path_regex = &*PLAIN_PATH_REGEX;
+
+        let link_ranges = md_link_regex
+            .find_iter(instructions)
+            .map(|matched| matched.range())
+            .collect::<Vec<_>>();
 
         // Extract markdown links
         for cap in md_link_regex.captures_iter(instructions) {
             if let Some(path_match) = cap.get(1) {
-                let path = path_match.as_str();
+                let path = path_match.as_str().trim().trim_matches(['<', '>']);
+                // External links and same-document anchors are not bundled
+                // file references. Do not validate them as local paths.
+                if path.starts_with('#')
+                    || path.starts_with("//")
+                    || path.contains("://")
+                    || path.starts_with("mailto:")
+                {
+                    continue;
+                }
+                let path = path.split('#').next().unwrap_or(path).trim_end_matches(['`', '.', ';', ':']);
                 references.insert(path.to_string());
             }
         }
@@ -66,7 +87,16 @@ impl FileReferenceValidator {
         // Extract plain paths
         for cap in plain_path_regex.captures_iter(instructions) {
             if let Some(path_match) = cap.get(0) {
-                references.insert(path_match.as_str().to_string());
+                if link_ranges.iter().any(|range| range.contains(&path_match.start())) {
+                    continue;
+                }
+                let token_start = instructions[..path_match.start()]
+                    .rfind(char::is_whitespace)
+                    .map_or(0, |offset| offset + 1);
+                if instructions[token_start..path_match.start()].contains("://") {
+                    continue;
+                }
+                references.insert(path_match.as_str().trim_end_matches(['.', ';', ':']).to_string());
             }
         }
 
@@ -164,6 +194,23 @@ mod tests {
         // Should have an error for references/REFERENCE.md (doesn't exist)
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("references/REFERENCE.md"));
+    }
+
+    #[test]
+    fn markdown_paths_are_normalized_and_external_links_ignored() {
+        let temp = TempDir::new().unwrap();
+        fs::create_dir(temp.path().join("scripts")).unwrap();
+        fs::write(temp.path().join("scripts/check.sh"), "exit 0").unwrap();
+        let validator = FileReferenceValidator::new(temp.path().to_path_buf());
+        let text = "Run `scripts/check.sh`. Then [check](scripts/check.sh#usage). See [upstream](https://github.com/astral-sh/hawk), [remote asset](https://example.com/assets/image.png), https://example.com/scripts/check.sh, [section](#usage), [mail](mailto:owner@example.com).";
+        assert!(validator.validate_references(text).is_empty());
+        let errors = validator.validate_references(
+            "Run `scripts/missing.sh`. See [missing](scripts/missing.sh). Run `scripts/other.sh`.",
+        );
+        assert_eq!(errors.len(), 2, "inline and linked copies must deduplicate");
+        assert!(errors[0].contains("'scripts/missing.sh'"));
+        assert!(errors[1].contains("'scripts/other.sh'"));
+        assert!(!errors.iter().any(|error| error.contains('`')));
     }
 
     #[test]

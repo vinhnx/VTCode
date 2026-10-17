@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct SessionFrameMetrics {
-    header_lines: Vec<Line<'static>>,
+    header_lines: Arc<Vec<Line<'static>>>,
     pub(crate) header_height: u16,
     pub(crate) input_core_height: u16,
 }
@@ -10,7 +10,7 @@ pub(crate) struct SessionFrameMetrics {
 #[derive(Clone)]
 pub(crate) struct SessionFrameLayout {
     pub(crate) viewport: Rect,
-    header_lines: Vec<Line<'static>>,
+    header_lines: Arc<Vec<Line<'static>>>,
     header_area: Rect,
     pub(crate) main_area: Rect,
     pub(crate) input_area: Rect,
@@ -18,6 +18,7 @@ pub(crate) struct SessionFrameLayout {
 
 impl Session {
     pub(crate) fn begin_frame(&mut self, frame: &mut Frame<'_>) -> Option<Rect> {
+        self.set_progress_area(None);
         let viewport = frame.area();
         if viewport.height == 0 || viewport.width == 0 {
             return None;
@@ -32,7 +33,7 @@ impl Session {
 
     pub(crate) fn measure_frame(&mut self, viewport: Rect) -> SessionFrameMetrics {
         let header_lines = self.header_lines();
-        let header_height = self.header_height_from_lines(viewport.width, &header_lines);
+        let header_height = self.header_height_from_lines(viewport.width, header_lines.as_slice());
         if header_height != self.header_rows {
             self.header_rows = header_height;
             self.recalculate_transcript_rows();
@@ -84,6 +85,7 @@ impl Session {
         Some(self.build_frame_layout(viewport, metrics, extra_bottom_height))
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn render_base_frame(
         &mut self,
         frame: &mut Frame<'_>,
@@ -93,7 +95,7 @@ impl Session {
         let navigation_area = Rect::new(layout.main_area.x, layout.main_area.y, 0, 0);
 
         SessionWidget::new(self)
-            .header_lines(layout.header_lines.clone())
+            .header_lines_arc(Arc::clone(&layout.header_lines))
             .header_area(layout.header_area)
             .transcript_area(transcript_area)
             .navigation_area(navigation_area)
@@ -105,11 +107,18 @@ impl Session {
             return;
         }
 
-        self.mouse_selection.apply_highlight(frame.buffer_mut(), viewport);
+        let selection_area = if (self.sticky_prompt_target.is_some() || self.progress.is_active())
+            && self.mouse_selection.is_transcript_selection()
+        {
+            self.transcript_area().unwrap_or(Rect::ZERO)
+        } else {
+            viewport
+        };
+        self.mouse_selection.apply_highlight(frame.buffer_mut(), selection_area);
 
         let auto_copy_requested = self.fullscreen.interaction.copy_on_select && self.mouse_selection.needs_copy();
         if self.mouse_selection.has_copy_request() || auto_copy_requested {
-            let text = self.mouse_selection.extract_text(frame.buffer_mut(), viewport);
+            let text = self.mouse_selection.extract_text(frame.buffer_mut(), selection_area);
             if !text.is_empty() {
                 self.copy_text_to_clipboard(&text);
             }

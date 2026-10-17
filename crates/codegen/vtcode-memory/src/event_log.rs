@@ -543,7 +543,7 @@ impl SessionEventLog {
         // needs the complete on-disk file before rewriting it.
         self.flush_write_buf_locked(&mut st)?;
 
-        let (evicted, remaining, previous_file_len) = {
+        let (evicted, mut remaining, previous_file_len) = {
             let mut file_slot = self.shared.file.lock().map_err(poison)?;
             let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
             let file_len = file
@@ -589,6 +589,32 @@ impl SessionEventLog {
         let evicted_events = decode_events(&evicted);
         (self.eviction_summary_hook)(&evicted_events)?;
 
+        // Matrix snapshots are complete session-level checkpoints. Preserve the
+        // latest evicted checkpoint only when no newer snapshot survives.
+        let mut matrix_checkpoints = BTreeMap::new();
+        for event in &evicted_events {
+            if let ThreadEvent::MatrixUpdated(snapshot) = event {
+                matrix_checkpoints.insert(snapshot.spec.id.clone(), event);
+            }
+        }
+        for event in decode_events(&remaining) {
+            if let ThreadEvent::MatrixUpdated(snapshot) = event {
+                matrix_checkpoints.remove(&snapshot.spec.id);
+            }
+        }
+        let mut checkpoint_prefix = Vec::new();
+        for event in matrix_checkpoints.values() {
+            serde_json::to_writer(&mut checkpoint_prefix, &VersionedThreadEvent::new((*event).clone()))
+                .map_err(|error| SessionStoreError::io(&self.events_path, std::io::Error::other(error)))?;
+            checkpoint_prefix.push(b'\n');
+        }
+        let checkpoint_bytes = checkpoint_prefix.len() as u64;
+        let checkpoint_count = matrix_checkpoints.len() as u64;
+        if !checkpoint_prefix.is_empty() {
+            checkpoint_prefix.extend_from_slice(&remaining);
+            remaining = checkpoint_prefix;
+        }
+
         let new_file_len = u64::try_from(remaining.len()).map_err(|error| {
             SessionStoreError::io(&self.events_path, std::io::Error::new(std::io::ErrorKind::InvalidData, error))
         })?;
@@ -600,6 +626,11 @@ impl SessionEventLog {
         let next_offset = self.replace_event_file_contents(&remaining)?;
         let mut st = self.shared.state.lock().map_err(poison)?;
         st.apply_cap_eviction(plan, next_offset);
+        for entry in &mut st.index.entries {
+            entry.start_offset += checkpoint_bytes;
+            entry.end_offset += checkpoint_bytes;
+        }
+        st.manifest.event_count += checkpoint_count;
         // The rewrite changed byte offsets and retained counts; persist the
         // derived metadata before exposing the append as successful.
         self.persist_meta_locked(&mut st)?;
@@ -676,6 +707,38 @@ impl SessionEventLog {
     #[must_use]
     pub fn event_count(&self) -> u64 {
         self.shared.state.lock().map_err(poison).map_or(0, |s| s.manifest.event_count)
+    }
+
+    /// Flush pending event bytes and metadata to the session store.
+    /// Visit one consistent retained range, including records outside turns.
+    /// Reads are streamed while cap rewrites and appends are excluded.
+    pub fn visit_snapshot<F>(&self, mut visitor: F) -> Result<SessionManifest, SessionStoreError>
+    where
+        F: FnMut(u64, &[u8]),
+    {
+        use std::io::{BufRead, BufReader};
+        let _eviction_guard = self.shared.eviction_lock.lock().map_err(poison)?;
+        let mut st = self.shared.state.lock().map_err(poison)?;
+        self.persist_meta_locked(&mut st)?;
+        let mut file_slot = self.shared.file.lock().map_err(poison)?;
+        let file = file_slot.as_mut().ok_or_else(|| self.event_file_unavailable())?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+        let mut reader = BufReader::new(file.take(st.next_offset));
+        let mut offset = 0;
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            let length = reader
+                .read_until(b'\n', &mut line)
+                .map_err(|e| SessionStoreError::io(&self.events_path, e))?;
+            if length == 0 {
+                break;
+            }
+            visitor(offset, &line);
+            offset += length as u64;
+        }
+        Ok(st.manifest.clone())
     }
 
     /// Flush pending event bytes and metadata to the session store.
@@ -1143,6 +1206,11 @@ pub struct SessionManifest {
 }
 
 impl SessionManifest {
+    /// Number of turns preceding the retained canonical range.
+    #[must_use]
+    pub fn evicted_turn_count(&self) -> u64 {
+        self.retained_turn_base.unwrap_or(1).saturating_sub(1)
+    }
     /// Create a fresh manifest for a session.
     #[must_use]
     pub(crate) fn new(session_id: &str) -> Self {
@@ -1264,6 +1332,7 @@ mod borrowed_envelope_tests {
             ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
             ThreadEvent::TurnStarted(TurnStartedEvent::default()),
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }),
@@ -1300,6 +1369,7 @@ mod lifecycle_state_machine_tests {
         );
         assert_eq!(
             LifecycleKind::from_event(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new()
             })),
@@ -1307,6 +1377,7 @@ mod lifecycle_state_machine_tests {
         );
         assert_eq!(
             LifecycleKind::from_event(&ThreadEvent::TurnFailed(TurnFailedEvent {
+                completed_at: None,
                 message: "err".to_string(),
                 usage: None,
             })),
@@ -1318,6 +1389,7 @@ mod lifecycle_state_machine_tests {
         );
         assert_eq!(
             LifecycleKind::from_event(&ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
+                completed_at: None,
                 thread_id: "x".to_string(),
                 session_id: "x".to_string(),
                 subtype: ThreadCompletionSubtype::Success,

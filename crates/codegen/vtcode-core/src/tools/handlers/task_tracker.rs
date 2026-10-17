@@ -13,28 +13,26 @@
 //! - `add`: Add a new item to an existing checklist
 
 use super::planning_task_tracker::{PlanningTaskTrackerArgs, PlanningTaskTrackerTool};
-use super::planning_workflow::{
-    PlanningWorkflowState, plan_file_for_tracker_file, sync_tracker_into_plan_file, tracker_file_for_plan_file,
-};
+use super::planning_workflow::{PlanningWorkflowState, plan_file_for_tracker_file, tracker_file_for_plan_file};
 use std::str::FromStr;
 
 use crate::config::constants::tools;
 use crate::tools::error_helpers::deserialize_tool_args;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskItemInput, TaskStepMetadata, TaskTrackingStatus, TaskTreeNode, append_notes, append_notes_section,
-    append_task_step_metadata, compact_task_tree_view, is_bulk_sync_update, metadata_from_input,
-    normalize_optional_text, normalize_string_items, parse_marked_status_prefix, parse_status_prefix,
-    validate_action_index_fields, validate_update_shape,
+    TASK_ITEMS_DESCRIPTION, TaskCounts, TaskItemInput, TaskMetadataRef, TaskStepMetadata, TaskTrackingStatus,
+    TaskTreeNode, TrackerArtifact, append_notes, append_notes_section, append_task_step_metadata, apply_metadata_input,
+    apply_metadata_line, compact_task_tree_view, is_bulk_sync_update, metadata_from_input, normalize_optional_text,
+    parse_marked_status_prefix, parse_status_prefix, parse_task_items, persist_tracker_artifacts,
+    task_files_property_schema, task_items_array_schema, task_status_property_schema, task_verify_property_schema,
+    tracker_schema_allof, validate_action_index_fields, validate_update_shape, write_tracker_artifact,
 };
-use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
+use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use vtcode_commons::workspace_relative_display;
 
 use crate::tools::traits::Tool;
@@ -132,45 +130,24 @@ impl TaskChecklist {
     }
 }
 
-fn parse_input_items(items: &[TaskItemInput]) -> Result<Vec<TaskItem>> {
-    items
+fn parse_input_items(items: &[TaskItemInput], previous: &[TaskItem]) -> Result<Vec<TaskItem>> {
+    let previous_metadata: Vec<_> = previous
         .iter()
-        .filter_map(|item| match item {
-            TaskItemInput::Text(raw) => {
-                let (status, description) = parse_status_prefix(raw);
-                let description = description.trim().to_string();
-                if description.is_empty() {
-                    return None;
-                }
-                Some(Ok((status, description, TaskStepMetadata::default())))
-            }
-            TaskItemInput::Structured(payload) => {
-                let (parsed_status, parsed_description) = parse_status_prefix(&payload.description);
-                let description = parsed_description.trim().to_string();
-                if description.is_empty() {
-                    return None;
-                }
-                let status = match payload.status.as_deref() {
-                    Some(raw) => match TaskStatus::from_str(raw) {
-                        Ok(status) => status,
-                        Err(err) => return Some(Err(err)),
-                    },
-                    None => parsed_status,
-                };
-                let metadata = metadata_from_input(
-                    payload.files.as_deref(),
-                    payload.outcome.as_deref(),
-                    payload.verify.as_deref(),
-                );
-                Some(Ok((status, description, metadata)))
-            }
+        .map(|item| TaskMetadataRef {
+            description: &item.description,
+            metadata: &item.metadata,
         })
+        .collect();
+    Ok(parse_task_items(items, &previous_metadata)?
+        .into_iter()
         .enumerate()
-        .map(|(idx, item)| {
-            let (status, description, metadata) = item?;
-            Ok(TaskItem { index: idx + 1, description, status, metadata })
+        .map(|(idx, item)| TaskItem {
+            index: idx + 1,
+            description: item.description,
+            status: item.status,
+            metadata: item.metadata,
         })
-        .collect()
+        .collect())
 }
 
 fn parse_single_index_from_path(index_path: &str) -> Result<usize> {
@@ -190,58 +167,9 @@ fn parse_single_index_from_path(index_path: &str) -> Result<usize> {
     Ok(parsed)
 }
 
-fn parse_files_metadata(value: &str) -> Vec<String> {
-    super::planning_workflow::split_bracket_items(value)
-        .into_iter()
-        .map(|item| item.trim().to_owned())
-        .filter(|item| !item.is_empty())
-        .collect()
-}
-
-fn apply_task_metadata_line(item: &mut TaskItem, raw: &str, in_verify_block: &mut bool) -> bool {
-    let trimmed = raw.trim_start();
-
-    if *in_verify_block {
-        if let Some(command) = trimmed
-            .strip_prefix("- ")
-            .or_else(|| trimmed.strip_prefix("* "))
-            .or_else(|| trimmed.strip_prefix("+ "))
-        {
-            if let Some(command) = normalize_optional_text(Some(command)) {
-                item.metadata.verify.push(command);
-            }
-            return true;
-        }
-        *in_verify_block = false;
-    }
-
-    if let Some(rest) = trimmed.strip_prefix("files:") {
-        item.metadata.files = parse_files_metadata(rest);
-        return true;
-    }
-
-    if let Some(rest) = trimmed.strip_prefix("outcome:") {
-        item.metadata.outcome = normalize_optional_text(Some(rest));
-        return true;
-    }
-
-    if trimmed == "verify:" {
-        item.metadata.verify.clear();
-        *in_verify_block = true;
-        return true;
-    }
-
-    if let Some(rest) = trimmed.strip_prefix("verify:") {
-        item.metadata.verify = normalize_string_items(Some(&[rest.to_string()]));
-        return true;
-    }
-
-    false
-}
-
 fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
     let mut title = String::new();
-    let mut items = Vec::new();
+    let mut items: Vec<TaskItem> = Vec::new();
     let mut notes_lines = Vec::new();
     let mut in_notes = false;
     let mut in_verify_block = false;
@@ -275,7 +203,7 @@ fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
 
         if let Some(last) = items.last_mut() {
             let indent = raw.chars().take_while(|c| *c == ' ').count();
-            if indent >= 2 && apply_task_metadata_line(last, raw, &mut in_verify_block) {
+            if indent >= 2 && apply_metadata_line(&mut last.metadata, raw, &mut in_verify_block) {
                 continue;
             }
             in_verify_block = false;
@@ -415,7 +343,6 @@ pub struct TaskTrackerArgs {
 pub struct TaskTrackerTool {
     workspace_root: PathBuf,
     planning_workflow_state: PlanningWorkflowState,
-    checklist: Arc<RwLock<Option<TaskChecklist>>>,
 }
 
 fn standard_task_tracker_parameter_schema() -> Value {
@@ -431,40 +358,7 @@ fn standard_task_tracker_parameter_schema() -> Value {
                 "type": "string",
                 "description": "Title for the checklist (used with 'create')."
             },
-            "items": {
-                "type": "array",
-                "items": {
-                    "anyOf": [
-                        { "type": "string" },
-                        {
-                            "type": "object",
-                            "properties": {
-                                "description": { "type": "string" },
-                                "status": {
-                                    "type": "string",
-                                    "enum": ["pending", "in_progress", "completed", "blocked"]
-                                },
-                                "files": {
-                                    "type": "array",
-                                    "items": { "type": "string" }
-                                },
-                                "outcome": { "type": "string" },
-                                "verify": {
-                                    "anyOf": [
-                                        { "type": "string" },
-                                        {
-                                            "type": "array",
-                                            "items": { "type": "string" }
-                                        }
-                                    ]
-                                }
-                            },
-                            "required": ["description"]
-                        }
-                    ]
-                },
-                "description": "Task descriptions or structured items. Supports [x]/[~]/[!]/[ ] prefixes for status sync."
-            },
+            "items": task_items_array_schema(TASK_ITEMS_DESCRIPTION),
             "index": {
                 "type": "integer",
                 "minimum": 0,
@@ -475,34 +369,17 @@ fn standard_task_tracker_parameter_schema() -> Value {
                 "pattern": "^[1-9][0-9]*$",
                 "description": "Action=update only: positive flat index path for compatibility (example: '2'). Hierarchical paths are accepted only by Planning workflow."
             },
-            "status": {
-                "type": "string",
-                "enum": ["pending", "in_progress", "completed", "blocked"],
-                "description": "New status for the item (used with single-item 'update')."
-            },
+            "status": task_status_property_schema("New status for the item (used with single-item 'update')."),
             "description": {
                 "type": "string",
                 "description": "Description for a new item (used with 'add')."
             },
-            "files": {
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Optional file paths associated with a single add/update item."
-            },
+            "files": task_files_property_schema("Optional file paths associated with a single add/update item."),
             "outcome": {
                 "type": "string",
                 "description": "Optional expected outcome associated with a single add/update item."
             },
-            "verify": {
-                "anyOf": [
-                    { "type": "string" },
-                    {
-                        "type": "array",
-                        "items": { "type": "string" }
-                    }
-                ],
-                "description": "Optional verification command or commands associated with a single add/update item."
-            },
+            "verify": task_verify_property_schema("Optional verification command or commands associated with a single add/update item."),
             "parent_index_path": {
                 "type": "string",
                 "description": "Optional parent path for add in Planning workflow (example: '2')."
@@ -513,99 +390,15 @@ fn standard_task_tracker_parameter_schema() -> Value {
             }
         },
         "required": ["action"],
-        "allOf": [
-            {
-                "if": {
-                    "properties": { "action": { "const": "create" } },
-                    "required": ["action"]
-                },
-                "then": {
-                    "required": ["items"]
-                }
-            },
-            {
-                "if": {
-                    "properties": { "action": { "const": "update" } },
-                    "required": ["action"]
-                },
-                "then": {
-                    "anyOf": [
-                        {
-                            "required": ["index", "status"],
-                            "not": {
-                                "anyOf": [
-                                    { "required": ["items"] },
-                                    { "required": ["index_path"] }
-                                ]
-                            }
-                        },
-                        {
-                            "required": ["index_path", "status"],
-                            "not": {
-                                "anyOf": [
-                                    { "required": ["items"] },
-                                    { "required": ["index"] }
-                                ]
-                            }
-                        },
-                        {
-                            "required": ["items"],
-                            "not": {
-                                "anyOf": [
-                                    { "required": ["index"] },
-                                    { "required": ["index_path"] },
-                                    { "required": ["status"] }
-                                ]
-                            }
-                        }
-                    ]
-                }
-            },
-            {
-                "if": {
-                    "properties": { "index": { "const": 0 } },
-                    "required": ["index"]
-                },
-                "then": {
-                    "properties": {
-                        "action": { "const": "update" },
-                        "status": { "const": "completed" }
-                    },
-                    "required": ["action", "status"]
-                }
-            },
-            {
-                "if": {
-                    "properties": { "action": { "enum": ["create", "list", "add"] } },
-                    "required": ["action"]
-                },
-                "then": {
-                    "not": {
-                        "anyOf": [
-                            { "required": ["index"] },
-                            { "required": ["index_path"] }
-                        ]
-                    }
-                }
-            },
-            {
-                "if": {
-                    "properties": { "action": { "const": "add" } },
-                    "required": ["action"]
-                },
-                "then": {
-                    "required": ["description"]
-                }
-            }
-        ]
+        "allOf": tracker_schema_allof(true)
     })
 }
 
 pub(crate) fn task_tracker_description_for_workflow(planning_active: bool) -> &'static str {
     if planning_active {
-        "Adaptive task tracking for planning. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add. Calling action=create again replaces the plan task list and its progress; use action=update or action=add to change it. For action=update, planning item indices are positive 1-based flat or hierarchical index_path values; index: 0 is invalid. Use items for bulk updates."
+        "Adaptive task tracking for planning. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add. Calling action=create again replaces the plan task list and its progress; use action=update or action=add to change it. For action=update, planning item indices are positive 1-based flat or hierarchical index_path values; index: 0 is invalid. Use items only to replace the full checklist with descriptions and explicit statuses, not indexed updates or JSON-encoded strings. Minimal calls: {\"action\":\"list\"}; {\"action\":\"update\",\"index\":1,\"status\":\"in_progress\"}; {\"action\":\"update\",\"items\":[\"[x] Done\",\"[ ] Remaining\"]}. List uses only action; choose one of index, index_path, or items for update; omit unused fields."
     } else {
-        "Track task progress through a single checklist API (action: create | update | list | add). Use with action=create at the start of a multi-step plan; action=update as work progresses; action=list to review current state. For action=update, item indices are 1-based; standard checklist-level completion alone may use index: 0 with status: completed. Planning workflow accepts only positive flat or hierarchical index paths. Use items for bulk updates. Calling action=create again replaces the current checklist and its progress, unless the title and items match the active checklist, in which case the call is a no-op; use action=update or action=add to change an existing checklist. Tracker state mirrors between .vtcode/tasks/current_task.md and active plan sidecar files when available."
+        "Track task progress through a single checklist API (action: create | update | list | add). Use action=create to start a multi-step plan; action=update as work progresses; action=list to review state. For action=update, item indices are 1-based; checklist-level completion alone may use index: 0 with status: completed. Planning workflow accepts only positive flat or hierarchical index paths. Use items only to replace the full checklist with descriptions and explicit statuses, not indexed updates or JSON-encoded strings. Minimal calls: {\"action\":\"list\"}; {\"action\":\"update\",\"index\":1,\"status\":\"in_progress\"}; {\"action\":\"update\",\"items\":[\"[x] Done\",\"[ ] Remaining\"]}. List uses only action; choose one of index, index_path, or items for update; omit unused fields. Calling action=create again replaces the checklist unless title and items match the active one (a no-op); use action=update or action=add to change it. Tracker state mirrors .vtcode/tasks/current_task.md and active plan sidecars when available."
     }
 }
 
@@ -617,13 +410,41 @@ pub(crate) fn task_tracker_parameter_schema_for_workflow(planning_active: bool) 
     }
 }
 
+/// Model-facing correction for `task_tracker` shape failures.
+///
+/// The schema uses conditional (`if`/`then`/`not`) rules, so a bare
+/// "required fields" hint is not enough: `create` forbids `index`/`index_path`,
+/// `update` needs exactly one shape, and `add`/`list` have their own shapes.
+/// Without this, a `create` bundled with update fields fails with a generic
+/// root error and the model retries blindly.
+///
+/// Note: the schema only *forbids* `index`/`index_path` on
+/// `create`/`list`/`add`; other single-item fields (`status`, `description`,
+/// `files`, `outcome`, `verify`) are ignored by those actions, not rejected.
+/// The wording below matches that enforced contract: it forbids only what the
+/// schema forbids and recommends (not requires) the minimal shapes.
+pub const TASK_TRACKER_ARGUMENT_CORRECTION: &str = r#"Invalid task_tracker shape. List: {"action":"list"}. Individual update: {"action":"update","index":1,"status":"in_progress"} OR {"action":"update","index_path":"2.1","status":"completed"} (planning). Bulk replacement: {"action":"update","items":["[x] Done","[ ] Remaining"]}. For create, index/index_path are forbidden (use title/items); add uses description; list/add also forbid index/index_path. Never combine index with index_path or items; omit unused fields and retry once."#;
+
+/// Whether a `task_tracker` schema error is a shape error (conditional
+/// `if`/`then`/`not`, `anyOf`/`oneOf`, missing required, fallback) rather
+/// than a single-field value error (`enum`, `type`, `const`, ...). The shape
+/// correction above only helps the former; appending it to a bad-enum error
+/// would point the model at the wrong axis.
+pub(crate) fn is_task_tracker_shape_error(error_msg: &str) -> bool {
+    const MARKERS: [&str; 6] = [
+        "must not include",
+        "does not match any allowed shape",
+        "matches more than one allowed shape",
+        "is forbidden by schema",
+        "missing required property",
+        "failed validation (schema",
+    ];
+    MARKERS.iter().any(|marker| error_msg.contains(marker))
+}
+
 impl TaskTrackerTool {
     pub fn new(workspace_root: PathBuf, planning_workflow_state: PlanningWorkflowState) -> Self {
-        Self {
-            workspace_root,
-            planning_workflow_state,
-            checklist: Arc::new(RwLock::new(None)),
-        }
+        Self { workspace_root, planning_workflow_state }
     }
 
     fn tasks_dir(&self) -> PathBuf {
@@ -649,35 +470,26 @@ impl TaskTrackerTool {
             .await
             .with_context(|| format!("Failed to create tasks directory: {}", dir.display()))?;
         let md = checklist.to_markdown();
-        write_file_with_context(&self.task_file(), &md, "task checklist")
+        write_tracker_artifact(&self.task_file(), &md, "task checklist")
             .await
             .with_context(|| "Failed to write task checklist")?;
         Ok(())
     }
 
     async fn save_plan_mirror_to_file(&self, tracker_file: &Path, checklist: &TaskChecklist) -> Result<()> {
-        if let Some(parent) = tracker_file.parent() {
-            ensure_dir_exists(parent)
-                .await
-                .with_context(|| format!("Failed to create plan tracker directory: {}", parent.display()))?;
-        }
-        write_file_with_context(tracker_file, &checklist.to_plan_markdown(), "plan task tracker file")
-            .await
-            .with_context(|| format!("Failed to write plan task tracker file: {}", tracker_file.display()))?;
-        if let Some(plan_file) = plan_file_for_tracker_file(tracker_file)
-            && tokio::fs::try_exists(&plan_file).await.unwrap_or(false)
-        {
-            sync_tracker_into_plan_file(&plan_file, &checklist.to_plan_markdown()).await?;
-        }
-        Ok(())
+        persist_tracker_artifacts(Self::plan_mirror_artifacts(tracker_file, checklist).await?).await
     }
 
-    async fn save_plan_mirror(&self, checklist: &TaskChecklist) -> Result<()> {
-        let Some(tracker_file) = self.plan_task_file().await else {
-            return Ok(());
-        };
-        self.save_plan_mirror_to_file(&tracker_file, checklist).await?;
-        Ok(())
+    async fn plan_mirror_artifacts(tracker_file: &Path, checklist: &TaskChecklist) -> Result<Vec<TrackerArtifact>> {
+        let markdown = checklist.to_plan_markdown();
+        let mut artifacts =
+            vec![TrackerArtifact::new(tracker_file.to_path_buf(), markdown.clone(), "plan task tracker file").await?];
+        if let Some(plan_file) = plan_file_for_tracker_file(tracker_file)
+            && let Some(artifact) = TrackerArtifact::embedded_plan(plan_file, &markdown).await?
+        {
+            artifacts.push(artifact);
+        }
+        Ok(artifacts)
     }
 
     async fn load_global_checklist(&self) -> Result<Option<TaskChecklist>> {
@@ -688,7 +500,7 @@ impl TaskTrackerTool {
         let content = read_file_with_context(&file, "task checklist").await?;
 
         let mut title = String::new();
-        let mut items = Vec::new();
+        let mut items: Vec<TaskItem> = Vec::new();
         let mut notes_lines = Vec::new();
         let mut in_notes = false;
         let mut in_verify_block = false;
@@ -710,7 +522,7 @@ impl TaskTrackerTool {
             }
             if let Some(last) = items.last_mut() {
                 let indent = line.chars().take_while(|c| *c == ' ').count();
-                if indent >= 2 && apply_task_metadata_line(last, line, &mut in_verify_block) {
+                if indent >= 2 && apply_metadata_line(&mut last.metadata, line, &mut in_verify_block) {
                     continue;
                 }
                 in_verify_block = false;
@@ -804,22 +616,36 @@ impl TaskTrackerTool {
         Ok(loaded)
     }
 
-    async fn ensure_checklist_loaded(&self) -> Result<()> {
-        let loaded = self.load_preferred_checklist().await?;
-        let mut guard = self.checklist.write().await;
-        *guard = loaded;
-        Ok(())
-    }
-
     async fn persist_edit_mode_snapshot(&self, checklist: &TaskChecklist) -> Result<()> {
-        self.save_checklist(checklist).await?;
-        self.save_plan_mirror(checklist).await?;
-        Ok(())
+        let mut artifacts =
+            vec![TrackerArtifact::new(self.task_file(), checklist.to_markdown(), "task checklist").await?];
+        if let Some(tracker_file) = self.plan_task_file().await {
+            artifacts.extend(Self::plan_mirror_artifacts(&tracker_file, checklist).await?);
+        }
+        persist_tracker_artifacts(artifacts).await
     }
 
     async fn persist_and_build_view(&self, checklist: &TaskChecklist) -> Result<(Value, Value)> {
         self.persist_edit_mode_snapshot(checklist).await?;
         Ok((checklist.summary(), checklist.view()))
+    }
+
+    async fn persist_update(
+        &self,
+        previous: Option<&TaskChecklist>,
+        checklist: &TaskChecklist,
+        message: String,
+    ) -> Result<Value> {
+        let unchanged = previous == Some(checklist);
+        if !unchanged {
+            self.persist_edit_mode_snapshot(checklist).await?;
+        }
+        Ok(json!({
+            "status": if unchanged { "unchanged" } else { "updated" },
+            "message": if unchanged { "Checklist already matches requested state.".to_string() } else { message },
+            "checklist": checklist.summary(),
+            "view": checklist.view(),
+        }))
     }
 
     fn to_plan_args(args: &TaskTrackerArgs) -> PlanningTaskTrackerArgs {
@@ -842,10 +668,7 @@ impl TaskTrackerTool {
     async fn execute_in_planning_workflow(&self, args: &TaskTrackerArgs) -> Result<Value> {
         let plan_tool = PlanningTaskTrackerTool::new(self.planning_workflow_state.clone());
         let mapped = Self::to_plan_args(args);
-        let output = plan_tool.execute(serde_json::to_value(mapped)?).await?;
-        self.ensure_checklist_loaded().await?;
-
-        Ok(output)
+        plan_tool.execute(serde_json::to_value(mapped)?).await
     }
 
     /// Check if a `create` call is idempotent (same checklist already active).
@@ -899,16 +722,15 @@ impl TaskTrackerTool {
             anyhow::bail!("At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]");
         }
 
-        let items = parse_input_items(item_descs)?;
+        let items = parse_input_items(item_descs, &[])?;
         if items.is_empty() {
             anyhow::bail!("No valid task items were provided for create.");
         }
         let notes = append_notes(None, args.notes.as_deref());
 
-        self.ensure_checklist_loaded().await?;
-        let guard = self.checklist.write().await;
+        let existing_checklist = self.load_preferred_checklist().await?;
         let mut existing_item_count = 0usize;
-        if let Some(existing) = guard.as_ref() {
+        if let Some(existing) = existing_checklist.as_ref() {
             existing_item_count = existing.items.len();
             if let Some(unchanged) =
                 Self::check_create_idempotency(existing, &title, &items, &self.display_path(&self.task_file()))
@@ -919,10 +741,7 @@ impl TaskTrackerTool {
 
         let checklist = TaskChecklist { title, items, notes };
 
-        drop(guard);
         let (summary, view) = self.persist_and_build_view(&checklist).await?;
-        let mut guard = self.checklist.write().await;
-        *guard = Some(checklist);
 
         let (status, message) = if existing_item_count > 0 {
             (
@@ -946,11 +765,14 @@ impl TaskTrackerTool {
         validate_update_shape(args.items.as_deref(), args.index, args.index_path.as_deref(), args.status.as_deref())?;
         let is_bulk_update =
             is_bulk_sync_update(args.items.as_deref(), args.index, args.index_path.as_deref(), args.status.as_deref());
-        self.ensure_checklist_loaded().await?;
-        let mut guard = self.checklist.write().await;
+        let mut current = self.load_preferred_checklist().await?;
+        let previous = current.clone();
         if is_bulk_update {
             let input_items = args.items.as_deref().unwrap_or(&[]);
-            let items = parse_input_items(input_items)?;
+            let items = parse_input_items(
+                input_items,
+                current.as_ref().map(|checklist| checklist.items.as_slice()).unwrap_or(&[]),
+            )?;
             if items.is_empty() {
                 anyhow::bail!("No valid items provided for checklist sync.");
             }
@@ -958,10 +780,10 @@ impl TaskTrackerTool {
             let title = args
                 .title
                 .clone()
-                .or_else(|| guard.as_ref().map(|checklist| checklist.title.clone()))
+                .or_else(|| current.as_ref().map(|checklist| checklist.title.clone()))
                 .unwrap_or_else(|| "Task Checklist".to_string());
 
-            let checklist = guard.get_or_insert(TaskChecklist {
+            let checklist = current.get_or_insert(TaskChecklist {
                 title: title.clone(),
                 items: Vec::new(),
                 notes: None,
@@ -971,17 +793,12 @@ impl TaskTrackerTool {
             checklist.items = items;
             checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
             let snapshot = checklist.clone();
-            drop(guard);
-            let (summary, view) = self.persist_and_build_view(&snapshot).await?;
-            return Ok(json!({
-                "status": "updated",
-                "message": "Checklist synchronized from provided items.",
-                "checklist": summary,
-                "view": view
-            }));
+            return self
+                .persist_update(previous.as_ref(), &snapshot, "Checklist synchronized from provided items.".to_string())
+                .await;
         }
 
-        let checklist = guard.as_mut().context("No active checklist. Use action='create' first.")?;
+        let checklist = current.as_mut().context("No active checklist. Use action='create' first.")?;
 
         let index = match (args.index, args.index_path.as_deref()) {
             (Some(idx), _) => idx,
@@ -1012,15 +829,14 @@ impl TaskTrackerTool {
             checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
 
             let snapshot = checklist.clone();
-            drop(guard);
-            let (summary, view) = self.persist_and_build_view(&snapshot).await?;
-
-            return Ok(json!({
-                "status": "updated",
-                "message": "Checklist-level completion acknowledged; checklist progress remains derived from item statuses.",
-                "checklist": summary,
-                "view": view
-            }));
+            return self
+                .persist_update(
+                    previous.as_ref(),
+                    &snapshot,
+                    "Checklist-level completion acknowledged; checklist progress remains derived from item statuses."
+                        .to_string(),
+                )
+                .await;
         }
 
         let item_count = checklist.items.len();
@@ -1033,34 +849,25 @@ impl TaskTrackerTool {
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
         let new_status_str = checklist.items[pos].status.to_string();
-        if let Some(files) = args.files.as_deref() {
-            checklist.items[pos].metadata.files = normalize_string_items(Some(files));
-        }
-        if args.outcome.is_some() {
-            checklist.items[pos].metadata.outcome = normalize_optional_text(args.outcome.as_deref());
-        }
-        if let Some(verify) = args.verify.as_deref() {
-            checklist.items[pos].metadata.verify = normalize_string_items(Some(verify));
-        }
+        apply_metadata_input(
+            &mut checklist.items[pos].metadata,
+            args.files.as_deref(),
+            args.outcome.as_deref(),
+            args.verify.as_deref(),
+        );
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
 
         let snapshot = checklist.clone();
-        drop(guard);
-        let (summary, view) = self.persist_and_build_view(&snapshot).await?;
-
-        Ok(json!({
-            "status": "updated",
-            "message": format!("Item {} status changed: {} → {}", index, old_status, new_status_str),
-            "checklist": summary,
-            "view": view
-        }))
+        self.persist_update(
+            previous.as_ref(),
+            &snapshot,
+            format!("Item {} status changed: {} → {}", index, old_status, new_status_str),
+        )
+        .await
     }
 
     async fn handle_list(&self) -> Result<Value> {
-        self.ensure_checklist_loaded().await?;
-        let guard = self.checklist.read().await;
-
-        match guard.as_ref() {
+        match self.load_preferred_checklist().await? {
             Some(checklist) => Ok(json!({
                 "status": "ok",
                 "checklist": checklist.summary(),
@@ -1082,9 +889,10 @@ impl TaskTrackerTool {
             );
         }
 
-        self.ensure_checklist_loaded().await?;
-        let mut guard = self.checklist.write().await;
-        let checklist = guard.as_mut().context("No active checklist. Use action='create' first.")?;
+        let mut checklist = self
+            .load_preferred_checklist()
+            .await?
+            .context("No active checklist. Use action='create' first.")?;
 
         let desc = args.description.as_deref().context("'description' is required for 'add'")?;
         let (status, parsed_description) = parse_status_prefix(desc);
@@ -1102,9 +910,7 @@ impl TaskTrackerTool {
         });
 
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
-        let snapshot = checklist.clone();
-        drop(guard);
-        let (summary, view) = self.persist_and_build_view(&snapshot).await?;
+        let (summary, view) = self.persist_and_build_view(&checklist).await?;
 
         Ok(json!({
             "status": "added",
@@ -1157,6 +963,9 @@ impl Tool for TaskTrackerTool {
         false // State management should be sequential
     }
 }
+
+#[cfg(test)]
+mod update_regressions;
 
 #[cfg(test)]
 mod tests {
@@ -1290,6 +1099,9 @@ mod tests {
         let schema = tool.parameter_schema().expect("task tracker schema");
 
         assert_eq!(schema["properties"]["index"]["minimum"], 0);
+        let items_description = schema["properties"]["items"]["description"].as_str().unwrap();
+        assert!(items_description.contains("Full checklist replacement"));
+        assert!(items_description.contains("never JSON-encoded strings"));
         assert_eq!(schema["properties"]["index_path"]["pattern"], "^[1-9][0-9]*$");
         let description = schema["properties"]["index"]["description"]
             .as_str()
@@ -1340,6 +1152,90 @@ mod tests {
         for args in invalid_cases {
             assert!(jsonschema::validate(&schema, &args).is_err(), "expected invalid args: {args}");
         }
+    }
+
+    #[test]
+    fn tracker_schemas_share_update_shapes_but_diverge_on_index_zero() {
+        let standard = standard_task_tracker_parameter_schema();
+        let planning = crate::tools::handlers::planning_task_tracker::planning_task_tracker_parameter_schema();
+
+        // Shared shapes: both address modes validate on both schemas,
+        // proving the normalized anyOf arm order is behavior-preserving.
+        for args in [
+            json!({"action": "update", "index": 1, "status": "completed"}),
+            json!({"action": "update", "index_path": "1", "status": "completed"}),
+            json!({"action": "update", "items": ["[x] Done"]}),
+            json!({"action": "create", "title": "T", "items": ["New item"]}),
+            json!({"action": "add", "description": "New item"}),
+            json!({"action": "list"}),
+        ] {
+            assert!(jsonschema::validate(&standard, &args).is_ok(), "standard rejects shared shape: {args}");
+            assert!(jsonschema::validate(&planning, &args).is_ok(), "planning rejects shared shape: {args}");
+        }
+
+        // Shared rejections on both schemas.
+        for args in [
+            json!({"action": "list", "index": 1}),
+            json!({"action": "create", "index": 1, "items": ["New item"]}),
+            json!({"action": "update", "index": 1, "index_path": "1", "status": "completed"}),
+        ] {
+            assert!(jsonschema::validate(&standard, &args).is_err(), "standard accepts rejected shape: {args}");
+            assert!(jsonschema::validate(&planning, &args).is_err(), "planning accepts rejected shape: {args}");
+        }
+
+        // Divergent boundary: index 0 completes a standard checklist but is
+        // invalid in planning (indices start at 1).
+        let zero_completion = json!({"action": "update", "index": 0, "status": "completed"});
+        assert!(jsonschema::validate(&standard, &zero_completion).is_ok());
+        assert!(jsonschema::validate(&planning, &zero_completion).is_err());
+    }
+
+    #[tokio::test]
+    async fn bulk_update_rejects_encoded_commands_without_resetting_completed_steps() {
+        let temp = TempDir::new().unwrap();
+        let (_state, tool) = setup_tool(&temp);
+        tool.execute(json!({
+            "action": "create",
+            "title": "Preserve progress",
+            "items": [
+                {"description": "Update introduction", "status": "completed", "files": ["README.md"], "outcome": "Clear overview", "verify": ["review headings"]},
+                {"description": "Review links", "status": "blocked", "outcome": "Await network"}
+            ]
+        })).await.unwrap();
+        let tracker_path = temp.path().join(".vtcode/tasks/current_task.md");
+        let persisted_before = std::fs::read_to_string(&tracker_path).unwrap();
+        let before = tool.execute(json!({"action": "list"})).await.unwrap();
+
+        for (action, encoded) in [
+            ("update", r#"{"index_path":"1","status":"completed","outcome":"Done","verify":"review headings"}"#),
+            ("update", r#"  [x] {"index_path":"1","status":"completed"}"#),
+            ("create", r#"{"index":1,"status":"completed"}"#),
+        ] {
+            let error = tool
+                .execute(json!({
+                    "action": action,
+                    "title": "Incorrect replacement",
+                    "items": ["Replacement must not leak", encoded]
+                }))
+                .await
+                .expect_err("encoded updates must not replace the tracker");
+            assert!(error.to_string().contains("JSON-encoded task updates"));
+            assert!(
+                error
+                    .to_string()
+                    .contains(r#"{"action":"update","index_path":"1","status":"completed"}"#)
+            );
+            assert_eq!(tool.execute(json!({"action": "list"})).await.unwrap(), before);
+            assert_eq!(std::fs::read_to_string(&tracker_path).unwrap(), persisted_before);
+        }
+
+        tool.execute(json!({"action": "update", "index_path": "2", "status": "completed"}))
+            .await
+            .unwrap();
+        let after = tool.execute(json!({"action": "list"})).await.unwrap();
+        assert_eq!(after["checklist"]["completed"], 2);
+        assert_eq!(after["checklist"]["items"][0]["description"], "Update introduction");
+        assert_eq!(after["checklist"]["items"][0]["files"], json!(["README.md"]));
     }
 
     #[tokio::test]
@@ -1780,11 +1676,5 @@ mod tests {
         assert_eq!(listed["status"], "ok");
         assert_eq!(listed["checklist"]["pending"], 1);
         assert_eq!(listed["checklist"]["completed"], 0);
-    }
-
-    #[test]
-    fn parse_files_metadata_keeps_quoted_commas_as_single_item() {
-        let items = parse_files_metadata("'src/a.rs, b.rs', src/c.rs");
-        assert_eq!(items, vec!["'src/a.rs, b.rs'".to_string(), "src/c.rs".to_string()]);
     }
 }

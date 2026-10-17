@@ -1,6 +1,11 @@
 import { BackendError, isRecord, type AppliedChange, type BridgeEvent, type BridgeSettings, type CanonicalRuntimeEvent, type CheckResult, type FileChange, type FileSnapshot, type PatchProposal, type RuntimeStatus, type StatusPayload, type TurnResult, type VersionedThreadEvent, type WorkspaceFile } from "./types.ts";
 
 export const PROTOCOL_VERSION = "1";
+import { isExplanationPage, isEvidencePage, type ExplanationPage, type EvidencePage, type EvidenceRef, type ExplanationScope } from "./explanation.ts";
+
+interface ExplanationGetRequest { readonly type: "explanation.get"; readonly request_id: string; readonly token: string; readonly scope: ExplanationScope; readonly offset?: number }
+interface ExplanationEvidenceRequest { readonly type: "explanation.evidence"; readonly request_id: string; readonly token: string; readonly reference: EvidenceRef; readonly offset?: number }
+interface ExplanationNavigateRequest { readonly type: "explanation.navigate"; readonly request_id: string; readonly token: string; readonly reference: EvidenceRef }
 export const MAX_REQUEST_ID_BYTES = 256;
 export const MAX_FRAME_BYTES = 1024 * 1024;
 
@@ -76,6 +81,7 @@ export interface CancelRequest {
 }
 
 export type BridgeRequest =
+  | ExplanationGetRequest | ExplanationEvidenceRequest | ExplanationNavigateRequest
   | PairRequest
   | StatusRequest
   | ListFilesRequest
@@ -88,6 +94,7 @@ export type BridgeRequest =
   | CancelRequest;
 
 export type BridgeOperation =
+  | "explanation.get" | "explanation.evidence" | "explanation.navigate"
   | "pair"
   | "status"
   | "workspace.list_files"
@@ -100,6 +107,9 @@ export type BridgeOperation =
   | "cancel";
 
 export interface RequestPayloads {
+  readonly "explanation.get": {scope: ExplanationScope; offset?: number};
+  readonly "explanation.evidence": {reference: EvidenceRef; offset?: number};
+  readonly "explanation.navigate": {reference: EvidenceRef};
   readonly pair: Omit<PairRequest, "type" | "request_id">;
   readonly status: Record<string, never>;
   readonly "workspace.list_files": Record<string, never>;
@@ -113,6 +123,9 @@ export interface RequestPayloads {
 }
 
 export interface OperationPayloads {
+  readonly "explanation.get": ExplanationPage;
+  readonly "explanation.evidence": EvidencePage;
+  readonly "explanation.navigate": {focused:boolean};
   readonly pair: PairPayload;
   readonly status: StatusPayload;
   readonly "workspace.list_files": WorkspaceFile[];
@@ -310,6 +323,9 @@ export function parseBridgeFrame(raw: unknown, maxFrameBytes = MAX_FRAME_BYTES):
 export function validateResponsePayload(operation: BridgeOperation, payload: unknown): unknown {
   const valid = (() => {
     switch (operation) {
+      case "explanation.get": return isExplanationPage(payload);
+      case "explanation.evidence": return isEvidencePage(payload);
+      case "explanation.navigate": return isRecord(payload) && typeof payload.focused === "boolean";
       case "pair": return isPairPayload(payload);
       case "status": return isStatusPayload(payload);
       case "workspace.list_files": return isWorkspaceFileList(payload);
@@ -341,6 +357,7 @@ function isRuntimeStatus(value: unknown): value is RuntimeStatus {
   return isRecord(value)
     && typeof value.workspace_root === "string"
     && typeof value.connected === "boolean"
+    && (!hasOwn(value, "explanations_available") || typeof value.explanations_available === "boolean")
     && typeof value.turns_available === "boolean"
     && typeof value.mutations_allowed === "boolean"
     && typeof value.checks_allowed === "boolean"

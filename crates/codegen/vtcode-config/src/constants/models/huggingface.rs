@@ -1,4 +1,5 @@
 pub const DEFAULT_MODEL: &str = OPENAI_GPT_OSS_120B;
+pub const META_MUSE_SPARK_OPEN_BASETEN: &str = "meta-models/Muse-Spark-Open-816B-A42B:baseten";
 pub const SUPPORTED_MODELS: &[&str] = &[
     OPENAI_GPT_OSS_120B,
     DEEPSEEK_R1,
@@ -12,6 +13,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // DeepInfra inference provider models
     // Additional Novita models
     MINIMAX_M3_NOVITA,
+    // Baseten inference provider models (Meta open-weight)
+    META_MUSE_SPARK_OPEN_BASETEN,
 ];
 
 pub(crate) const OPENAI_GPT_OSS_120B: &str = "openai/gpt-oss-120b:huggingface";
@@ -40,4 +43,5 @@ pub const REASONING_MODELS: &[&str] = &[
     ZAI_GLM_5_3_TOGETHER,
     MINIMAX_M3_NOVITA,
     KIMI_K3_TOGETHER,
+    META_MUSE_SPARK_OPEN_BASETEN,
 ];

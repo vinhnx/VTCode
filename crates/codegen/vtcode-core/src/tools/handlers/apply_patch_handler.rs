@@ -141,9 +141,26 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
             });
         }
 
+        let _leases = if let Some(monitor) = ctx.session.edited_file_monitor() {
+            crate::tools::source_inspection::SourceInspection::acquire_patch_leases(monitor, &patch, &req.cwd)
+                .await
+                .map_err(|error| ToolError::Rejected(error.to_string()))?
+        } else {
+            Vec::new()
+        };
+        let fallback = crate::tools::source_inspection::SourceInspection::default();
+        let inspection = ctx.session.source_inspection().unwrap_or(&fallback);
+        let inspection_plan = inspection
+            .prepare_patch(&patch, &req.cwd)
+            .await
+            .map_err(|error| ToolError::Rejected(error.to_string()))?;
         // Apply the patch
         match patch.apply(&req.cwd).await {
             Ok(results) => {
+                inspection.commit_patch(
+                    inspection_plan,
+                    crate::tools::source_inspection::call_key(tools::APPLY_PATCH, &json!({"input":req.patch})),
+                );
                 let output = results.join("\n");
                 Ok(ExecToolCallOutput {
                     stdout: output,
@@ -187,8 +204,12 @@ impl ToolHandler for ApplyPatchHandler {
         // Extract patch input from payload
         let patch_input = match payload {
             ToolPayload::Function { arguments } => {
-                let args: Value = serde_json::from_str(&arguments)
-                    .map_err(|e| ToolCallError::respond(format!("Failed to parse function arguments: {e}")))?;
+                let args: Value = serde_json::from_str(&arguments).map_err(|e| {
+                    ToolCallError::respond(format!(
+                        "Failed to parse function arguments: {e}. {}",
+                        crate::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION
+                    ))
+                })?;
                 crate::tools::apply_patch::decode_apply_patch_input(&args)
                     .map_err(|e| ToolCallError::respond(format!("Failed to decode patch input: {e}")))?
                     .map(|input| input.text)

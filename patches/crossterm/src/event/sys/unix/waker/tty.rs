@@ -13,9 +13,7 @@ pub(crate) struct Waker {
 impl Waker {
     /// Create a new `Waker`.
     pub(crate) fn new(writer: UnixStream) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(writer)),
-        }
+        Self { inner: Arc::new(Mutex::new(writer)) }
     }
 
     /// Wake up the [`Poll`] associated with this `Waker`.

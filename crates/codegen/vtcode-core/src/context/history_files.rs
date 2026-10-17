@@ -386,16 +386,10 @@ impl HistoryFileManager {
 
 /// Sanitize session ID for use in filename
 fn sanitize_session_id(id: &str) -> String {
-    id.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '_' || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .take(32)
-        .collect()
+    // Delegates to the canonical envelope-id contract: history filenames and
+    // memory-envelope names must derive the same 32-char prefix from a session
+    // id, so keep a single implementation (see `harness_artifacts`).
+    crate::compaction::memory_envelope::sanitize_session_id(id)
 }
 
 fn history_text_from_message_content(content: &MessageContent) -> String {

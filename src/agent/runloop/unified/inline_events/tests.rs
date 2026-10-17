@@ -123,6 +123,7 @@ async fn focused_exec_session_does_not_capture_slash_commands() {
             "command": "read line; printf received",
             "tty": false,
             "background": true,
+            "stdin": true,
             "yield_time_ms": 250,
         }))
         .await
@@ -202,7 +203,79 @@ async fn focused_exec_session_does_not_capture_slash_commands() {
 }
 
 #[tokio::test]
-async fn launch_editor_event_submits_edit_command() {
+async fn force_cancel_with_registry_closes_live_foreground_session() {
+    let temp_dir = tempfile::tempdir().expect("create workspace");
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let response = registry
+        .execute_harness_command_session(serde_json::json!({
+            "action": "run",
+            "command": "read line; printf received",
+            "tty": false,
+            "stdin": true,
+            "yield_time_ms": 250,
+        }))
+        .await
+        .expect("start foreground exec session");
+    let session_id = response["session_id"].as_str().expect("foreground session id").to_string();
+    let exec_sessions = registry.exec_session_manager();
+
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
+    );
+    context.set_exec_session_manager(exec_sessions.clone());
+    context.set_tool_registry(registry.clone());
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+
+    let action = context
+        .process_event(InlineEvent::ForceCancelPtySession, &mut queue)
+        .await
+        .expect("force-cancel live foreground session");
+    assert!(matches!(action, InlineLoopAction::Continue));
+    drop(context);
+    // The force-cancelled session is closed and removed: closing it again
+    // must fail. Verification reconciliation for terminated mutators is
+    // covered at the registry level; this pins the wired registry-first path.
+    assert!(registry.close_harness_exec_session(&session_id).await.is_err());
+}
+
+#[tokio::test]
+async fn launch_editor_event_opens_editor_directly() {
     let (handle, mut renderer) = renderer_with_handle();
     let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
     let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
@@ -250,7 +323,7 @@ async fn launch_editor_event_submits_edit_command() {
         .expect("process launch editor");
     assert!(matches!(
         action,
-        InlineLoopAction::Submit(ref command) if command.text == "/edit"
+        InlineLoopAction::LaunchEditorWithDraft { ref draft } if draft.is_empty()
     ));
 }
 
@@ -720,6 +793,7 @@ async fn settings_editor_selection_submits_editor_config_command() {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         }),
         esc_armed: false,
     });
@@ -793,6 +867,7 @@ async fn settings_string_selection_opens_value_editor() {
             last_selection: None,
             selection_by_view: BTreeMap::new(),
             pending_edit_path: None,
+            status: None,
         }),
         esc_armed: false,
     });
@@ -1191,16 +1266,149 @@ async fn steering_events_are_passive_in_idle_loop() {
     );
     let mut queued_inputs = VecDeque::new();
     let mut prefer_latest_once = false;
-    let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
 
-    for event in [
-        InlineEvent::Pause,
-        InlineEvent::Resume,
-        InlineEvent::Steer("keep going".into()),
-    ] {
-        let action = context.process_event(event, &mut queue).await.expect("process steering event");
+    {
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+        for event in [
+            InlineEvent::Pause,
+            InlineEvent::Resume,
+            InlineEvent::Steer("keep going".into()),
+        ] {
+            let action = context.process_event(event, &mut queue).await.expect("process steering event");
+            assert!(matches!(action, InlineLoopAction::Continue));
+        }
+    }
+
+    // Undelivered steers fall through to the durable queue so the message is
+    // processed once the agent is ready instead of vanishing.
+    assert_eq!(queued_inputs.len(), 1);
+    assert_eq!(queued_inputs.front().map(|q| q.input.text.as_str()), Some("keep going"));
+}
+
+#[tokio::test]
+async fn steered_input_already_delivered_is_not_queued_twice() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+
+    {
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+        // Simulate the UI callback accepting this steer on the live channel.
+        ctrl_c_state.mark_steer_delivered();
+        let action = context
+            .process_event(InlineEvent::Steer("already steered".into()), &mut queue)
+            .await
+            .expect("process delivered steer");
+        assert!(matches!(action, InlineLoopAction::Continue));
+
+        // A subsequent undelivered steer must still queue.
+        let action = context
+            .process_event(InlineEvent::Steer("needs queue".into()), &mut queue)
+            .await
+            .expect("process undelivered steer");
         assert!(matches!(action, InlineLoopAction::Continue));
     }
+    // Only the undelivered steer landed in the queue.
+    assert_eq!(queued_inputs.len(), 1);
+    assert_eq!(queued_inputs.front().map(|q| q.input.text.as_str()), Some("needs queue"));
+}
+
+#[tokio::test]
+async fn rapid_delivered_steers_are_not_double_queued() {
+    let (handle, mut renderer) = renderer_with_handle();
+    let (ctrl_c_state, ctrl_c_notify) = ctrl_c_handles();
+    let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
+    let mut ctrl_c_notice_displayed = false;
+    let mut model_picker_state: Option<ModelPickerState> = None;
+    let mut palette_state: Option<ActivePalette> = None;
+    let mut config = runtime_config();
+    let mut vt_cfg = None;
+    let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(DummyProvider);
+    let session_bootstrap = SessionBootstrap::default();
+    let mut header_context = vtcode_ui::tui::app::InlineHeaderContext::default();
+    let mut history = Vec::<uni::Message>::new();
+    let mut session_stats = SessionStats::default();
+    let mut context_manager = ContextManager::default_for_test();
+    let mut context = InlineEventContext::new(
+        &mut renderer,
+        &handle,
+        interrupts,
+        &mut ctrl_c_notice_displayed,
+        &mut header_context,
+        &mut model_picker_state,
+        &mut palette_state,
+        &mut config,
+        &mut vt_cfg,
+        &mut provider_client,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        &session_bootstrap,
+        false,
+        &mut history,
+        &mut session_stats,
+        &mut context_manager,
+        "test-session",
+        "test-thread",
+        None,
+        None,
+    );
+    let mut queued_inputs = VecDeque::new();
+    let mut prefer_latest_once = false;
+
+    {
+        let mut queue = InlineQueueState::new(&handle, &mut queued_inputs, &mut prefer_latest_once);
+        // Both steers are delivered to the live channel before the runloop
+        // drains either event — the common rapid-influx ordering.
+        ctrl_c_state.mark_steer_delivered();
+        ctrl_c_state.mark_steer_delivered();
+        for text in ["steer one", "steer two"] {
+            let action = context
+                .process_event(InlineEvent::Steer(text.into()), &mut queue)
+                .await
+                .expect("process delivered steer");
+            assert!(matches!(action, InlineLoopAction::Continue));
+        }
+    }
+    assert!(
+        queued_inputs.is_empty(),
+        "burst of delivered steers must not fall through to the queue, got {queued_inputs:?}"
+    );
 }
 
 #[tokio::test]
@@ -1396,6 +1604,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::Inline { .. } => "Inline",
         InlineCommand::ReplaceLast { .. } => "ReplaceLast",
         InlineCommand::RecordToolOutput { .. } => "RecordToolOutput",
+        InlineCommand::FocusTranscriptReview { .. } => "FocusTranscriptReview",
         InlineCommand::AppendToolOutputLine { .. } => "AppendToolOutputLine",
         InlineCommand::AppendCompactActivity(_) => "AppendCompactActivity",
         InlineCommand::RecordDiffReview(_) => "RecordDiffReview",
@@ -1407,7 +1616,10 @@ fn other_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetMessageLabels { .. } => "SetMessageLabels",
         InlineCommand::SetHeaderContext { .. } => "SetHeaderContext",
         InlineCommand::SetInputStatus { .. } => "SetInputStatus",
+        InlineCommand::SetConfiguredInputStatus { .. } => "SetConfiguredInputStatus",
+        InlineCommand::ProgramStatus(_) => "ProgramStatus",
         InlineCommand::SetActivityState(_) => "SetActivityState",
+        InlineCommand::UpdateProgress(_) => "UpdateProgress",
         InlineCommand::SetTerminalTitleItems { .. } => "SetTerminalTitleItems",
         InlineCommand::SetTerminalTitleThreadLabel { .. } => "SetTerminalTitleThreadLabel",
         InlineCommand::SetTerminalTitleGitBranch { .. } => "SetTerminalTitleGitBranch",

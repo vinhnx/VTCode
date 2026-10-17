@@ -1,19 +1,28 @@
+mod navigation_recovery;
+mod preflight_recovery;
+pub(crate) use navigation_recovery::{NAVIGATION_RECOVERY_BLOCK_REASON, NavigationRecovery};
+pub(crate) use preflight_recovery::{PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX, PreflightRecovery, ValidationCategory};
+mod ctrl_c;
+pub(crate) use ctrl_c::{CtrlCSignal, CtrlCState};
+mod follow_up;
+#[cfg(test)]
+pub(crate) use follow_up::FollowUpPromptAction;
+pub(crate) use follow_up::is_follow_up_prompt_like;
+mod prompt_cache;
+pub(crate) use prompt_cache::PromptCacheDiagnostics;
+mod verification;
+pub(crate) use verification::VerificationFailureSummary;
+mod request_envelope;
+pub(crate) use request_envelope::RequestSegmentTransition;
+use request_envelope::{RequestEnvelopeIdentity, ToolCatalogObservabilityIdentity};
+
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-fn is_local_llm_provider(provider_name: &str) -> bool {
-    matches!(
-        provider_name.trim().to_ascii_lowercase().as_str(),
-        "ollama" | "lmstudio" | "llamacpp" | "llama.cpp" | "local" | "local_server"
-    )
-}
+use std::time::Duration;
 
 use vtcode_core::compaction::PrefireState;
 use vtcode_core::config::WorkspaceTrustLevel;
-use vtcode_core::core::agent::harness_kernel::hash_value;
-use vtcode_core::core::agent::request_envelope::{SegmentBoundaryReason, SessionRequestEnvelope};
+use vtcode_core::core::agent::request_envelope::SessionRequestEnvelope;
 use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider::{
     Message, PromptCacheProfile, ResponsesContinuationState, ToolDefinition, responses_continuation_key,
@@ -29,35 +38,10 @@ pub(crate) struct AutoPermissionDenial {
     pub matched_exception: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum FollowUpPromptAction {
-    None,
-    ForceConclusion,
-    RecoverFromStall { stall_reason: Option<String> },
-}
-
-impl FollowUpPromptAction {
-    pub(crate) const fn should_force_autonomous_response(&self) -> bool {
-        !matches!(self, Self::None)
-    }
-
-    pub(crate) const fn is_stalled_recovery(&self) -> bool {
-        matches!(self, Self::RecoverFromStall { .. })
-    }
-
-    pub(crate) fn stall_reason(&self) -> Option<&str> {
-        match self {
-            Self::RecoverFromStall { stall_reason } => stall_reason.as_deref(),
-            Self::None | Self::ForceConclusion => None,
-        }
-    }
-}
-
-const FOLLOW_UP_STALLED_THRESHOLD: usize = 1;
-const FOLLOW_UP_DEFAULT_THRESHOLD: usize = 3;
-
 #[derive(Default)]
 pub(crate) struct SessionStats {
+    pub(crate) preflight_recovery: PreflightRecovery,
+    pub(crate) navigation_recovery: NavigationRecovery,
     tools: std::collections::BTreeSet<String>,
     pub task_panel_visible: bool,
     /// Auto permission classifier consecutive denial count.
@@ -111,8 +95,8 @@ pub(crate) struct SessionStats {
     /// clears, and when a tracker step completes (progress-reset) — not by
     /// `reset_verification_recovery_episode`.
     tracker_continuation_turns: u8,
-    /// Last observed completed checklist count for tracker progress-reset.
-    tracker_completed_count_last: u32,
+    /// Highest completed checklist count in the current user-request episode.
+    tracker_completed_count_high_water: u32,
     /// Cached incomplete tracker items used when the live probe fails so a
     /// transient tracker read error does not drop auto-queue.
     last_incomplete_tracker_items: Option<Vec<String>>,
@@ -146,6 +130,8 @@ pub(crate) struct SessionStats {
     last_prompt_cache_model: Option<String>,
     last_stable_prefix_hash: Option<u64>,
     last_tool_catalog_hash: Option<u64>,
+    last_wire_tool_count: Option<usize>,
+    last_recovery_prompt_reason: Option<String>,
     last_prompt_cache_change_reason: Option<String>,
     prompt_cache_observations: usize,
     prompt_cache_model_changes: usize,
@@ -161,6 +147,8 @@ pub(crate) struct SessionStats {
     last_tool_catalog_observability: Option<ToolCatalogObservabilityIdentity>,
     recent_touched_files: VecDeque<String>,
     total_usage: HarnessUsage,
+    decisions_probe_suggestion_shown: bool,
+    fast_mode_suggestion_shown: bool,
     /// Rolling prompt-cache health fed by every recorded turn. Shared
     /// `vtcode-core` monitor so thresholds and wording match the headless
     /// runloop; fires at most two session-scoped hit-rate alerts.
@@ -212,208 +200,7 @@ impl FirstCallComposition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RequestEnvelopeIdentity {
-    model: String,
-    provider: String,
-    mode: String,
-    /// Full prompt identity used to refresh dynamic suffix bytes in-place.
-    /// This is deliberately excluded from the stable segment identity below.
-    system_prompt_hash: u64,
-    prefix_hash: u64,
-    catalog_hash: Option<u64>,
-    instruction_digest: u64,
-    stable_prompt_hash: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ToolCatalogObservabilityIdentity {
-    ordered_wire_tool_names: Vec<String>,
-    catalog_tool_count: usize,
-    wire_tool_count: usize,
-    deferred_tool_count: usize,
-    active_loaded_skill_names: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RequestSegmentTransition {
-    pub boundary_reason: SegmentBoundaryReason,
-    pub previous_segment_id: Option<String>,
-    pub new_segment_id: String,
-    pub previous_prefix_hash: Option<String>,
-    pub previous_catalog_hash: Option<String>,
-}
-
 impl SessionStats {
-    pub(crate) fn begin_request_segment(&mut self, boundary_reason: SegmentBoundaryReason) -> RequestSegmentTransition {
-        let previous_segment_id = self.request_envelope.as_ref().map(|envelope| envelope.segment_id().to_string());
-        let previous_prefix_hash = self
-            .request_envelope
-            .as_ref()
-            .map(|envelope| format!("{:016x}", envelope.prefix_hash()));
-        let previous_catalog_hash = self
-            .request_envelope
-            .as_ref()
-            .and_then(SessionRequestEnvelope::catalog_hash)
-            .map(|hash| format!("{hash:016x}"));
-        self.request_segment_sequence = self.request_segment_sequence.saturating_add(1);
-        let new_segment_id = format!("segment-{:08}", self.request_segment_sequence);
-        self.pending_request_segment_id = Some(new_segment_id.clone());
-        self.request_envelope = None;
-        self.request_envelope_identity = None;
-        self.request_envelope_source_tools = None;
-        RequestSegmentTransition {
-            boundary_reason,
-            previous_segment_id,
-            new_segment_id,
-            previous_prefix_hash,
-            previous_catalog_hash,
-        }
-    }
-
-    #[allow(dead_code, reason = "retained as a Vec-based compatibility wrapper for state tests")]
-    pub(crate) fn request_envelope(
-        &mut self,
-        model: &str,
-        provider: &str,
-        mode: &str,
-        system_prompt: String,
-        tools: Vec<ToolDefinition>,
-        instruction_digest: u64,
-    ) -> SessionRequestEnvelope {
-        self.request_envelope_shared(
-            model,
-            provider,
-            mode,
-            system_prompt,
-            Some(Arc::new(tools)),
-            instruction_digest,
-            instruction_digest,
-        )
-    }
-
-    pub(crate) fn request_envelope_shared(
-        &mut self,
-        model: &str,
-        provider: &str,
-        mode: &str,
-        system_prompt: String,
-        tools: Option<Arc<Vec<ToolDefinition>>>,
-        instruction_digest: u64,
-        stable_prompt_hash: u64,
-    ) -> SessionRequestEnvelope {
-        let system_prompt_hash = hash_value(&system_prompt);
-        let source_matches = match (&self.request_envelope_source_tools, &tools) {
-            (None, None) => true,
-            (Some(previous), Some(current)) => Arc::ptr_eq(previous, current),
-            _ => false,
-        };
-        let identity_matches_without_catalog = self.request_envelope_identity.as_ref().is_some_and(|identity| {
-            identity.model == model
-                && identity.provider == provider
-                && identity.mode == mode
-                && identity.system_prompt_hash == system_prompt_hash
-                && identity.instruction_digest == instruction_digest
-                && identity.stable_prompt_hash == stable_prompt_hash
-        });
-        if source_matches
-            && identity_matches_without_catalog
-            && let Some(envelope) = self.request_envelope.as_ref()
-        {
-            return envelope.clone();
-        }
-
-        let stable_prefix_hash = hash_value(&(instruction_digest, stable_prompt_hash));
-        let candidate = SessionRequestEnvelope::with_prefix_hash(
-            "candidate",
-            system_prompt,
-            tools.as_ref().map_or_else(Vec::new, |tools| tools.as_ref().clone()),
-            instruction_digest,
-            stable_prefix_hash,
-        );
-        let identity = RequestEnvelopeIdentity {
-            model: model.to_string(),
-            provider: provider.to_string(),
-            mode: mode.to_string(),
-            system_prompt_hash,
-            prefix_hash: candidate.prefix_hash(),
-            catalog_hash: candidate.catalog_hash(),
-            instruction_digest,
-            stable_prompt_hash,
-        };
-        if self.request_envelope_identity.as_ref() == Some(&identity)
-            && let Some(envelope) = self.request_envelope.as_ref()
-        {
-            self.request_envelope_source_tools = tools;
-            return envelope.clone();
-        }
-
-        let same_stable_segment = self.request_envelope_identity.as_ref().is_some_and(|previous| {
-            previous.model == identity.model
-                && previous.provider == identity.provider
-                && previous.mode == identity.mode
-                && previous.prefix_hash == identity.prefix_hash
-                && previous.catalog_hash == identity.catalog_hash
-                && previous.instruction_digest == identity.instruction_digest
-                && previous.stable_prompt_hash == identity.stable_prompt_hash
-        });
-        if let Some(previous_identity) = self.request_envelope_identity.as_ref()
-            && !same_stable_segment
-        {
-            let boundary_reason = request_identity_boundary_reason(previous_identity, &identity);
-            self.begin_request_segment(boundary_reason);
-        }
-
-        let segment_id = if same_stable_segment {
-            self.request_envelope
-                .as_ref()
-                .map(|envelope| envelope.segment_id().to_owned())
-                .or_else(|| self.pending_request_segment_id.take())
-                .unwrap_or_else(|| {
-                    self.request_segment_sequence = self.request_segment_sequence.saturating_add(1);
-                    format!("segment-{:08}", self.request_segment_sequence)
-                })
-        } else if let Some(pending_segment_id) = self.pending_request_segment_id.take() {
-            pending_segment_id
-        } else {
-            self.request_segment_sequence = self.request_segment_sequence.saturating_add(1);
-            format!("segment-{:08}", self.request_segment_sequence)
-        };
-        let envelope = SessionRequestEnvelope::with_prefix_hash(
-            segment_id,
-            candidate.system_prompt(),
-            candidate.ordered_tools().as_ref().clone(),
-            candidate.instruction_digest(),
-            candidate.prefix_hash(),
-        );
-        self.request_envelope_identity = Some(identity);
-        self.request_envelope_source_tools = tools;
-        self.request_envelope = Some(envelope.clone());
-        envelope
-    }
-
-    pub(crate) fn note_tool_catalog_observability_change(
-        &mut self,
-        ordered_wire_tool_names: &[String],
-        catalog_tool_count: usize,
-        wire_tool_count: usize,
-        deferred_tool_count: usize,
-        active_loaded_skill_names: &[String],
-    ) -> bool {
-        let identity = ToolCatalogObservabilityIdentity {
-            ordered_wire_tool_names: ordered_wire_tool_names.to_vec(),
-            catalog_tool_count,
-            wire_tool_count,
-            deferred_tool_count,
-            active_loaded_skill_names: active_loaded_skill_names.to_vec(),
-        };
-        if self.last_tool_catalog_observability.as_ref() == Some(&identity) {
-            return false;
-        }
-        self.last_tool_catalog_observability = Some(identity);
-        true
-    }
-
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name =
             vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name).unwrap_or(name);
@@ -433,6 +220,38 @@ impl SessionStats {
             return;
         };
         self.total_usage.add(&usage_cost::normalized_turn_usage(provider, usage));
+    }
+
+    pub(crate) fn record_probe_attempt(
+        &mut self,
+        provider: &str,
+        usage: &Option<vtcode_core::llm::provider::Usage>,
+        cost: Option<usage_cost::SessionCostEstimate>,
+    ) {
+        // Auxiliary usage contributes to session totals, never cache health.
+        self.record_usage(provider, usage);
+        self.record_cost(cost);
+    }
+
+    /// Called only at idle boundaries; eligibility may change during a session.
+    pub(crate) fn take_decisions_probe_suggestion(&mut self, applicable: bool) -> bool {
+        if self.decisions_probe_suggestion_shown || !applicable {
+            return false;
+        }
+        self.decisions_probe_suggestion_shown = true;
+        true
+    }
+
+    pub(crate) fn take_fast_mode_suggestion(&mut self, applicable: bool) -> bool {
+        if self.fast_mode_suggestion_shown || !applicable {
+            return false;
+        }
+        self.fast_mode_suggestion_shown = true;
+        true
+    }
+
+    pub(crate) fn dismiss_fast_mode_suggestion(&mut self) {
+        self.fast_mode_suggestion_shown = true;
     }
 
     /// Record one turn's usage for prompt-cache health and return a
@@ -558,6 +377,7 @@ impl SessionStats {
         // discard every lineage, fingerprint, request-envelope, and response
         // diagnostic that belongs to the cleared conversational context.
         self.tools.clear();
+        self.preflight_recovery = PreflightRecovery::default();
         self.reset_auto_permission_review_state();
         self.follow_up_prompt_streak = 0;
         self.suppress_next_follow_up_prompt = false;
@@ -569,6 +389,8 @@ impl SessionStats {
         self.last_prompt_cache_model = None;
         self.last_stable_prefix_hash = None;
         self.last_tool_catalog_hash = None;
+        self.last_wire_tool_count = None;
+        self.last_recovery_prompt_reason = None;
         self.last_prompt_cache_change_reason = None;
         self.prompt_cache_observations = 0;
         self.prompt_cache_model_changes = 0;
@@ -588,231 +410,6 @@ impl SessionStats {
         self.auto_compact_suppressed = vtcode_core::compaction::SUPPRESS_NONE;
     }
 
-    pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> FollowUpPromptAction {
-        let suppression_active = self.consume_follow_up_prompt_suppression();
-        let is_follow_up = is_follow_up_prompt_like(input);
-
-        if is_follow_up {
-            if suppression_active {
-                return FollowUpPromptAction::None;
-            }
-            self.follow_up_prompt_streak = self.follow_up_prompt_streak.saturating_add(1);
-        } else {
-            self.follow_up_prompt_streak = 0;
-            self.turn_stalled = false;
-            self.turn_stall_reason = None;
-            self.reset_verification_recovery_episode();
-            self.reset_tracker_continuation_budget();
-            return FollowUpPromptAction::None;
-        }
-
-        let threshold = if self.turn_stalled {
-            FOLLOW_UP_STALLED_THRESHOLD
-        } else {
-            FOLLOW_UP_DEFAULT_THRESHOLD
-        };
-        if self.follow_up_prompt_streak < threshold {
-            return FollowUpPromptAction::None;
-        }
-
-        if self.turn_stalled {
-            FollowUpPromptAction::RecoverFromStall { stall_reason: self.turn_stall_reason.clone() }
-        } else {
-            FollowUpPromptAction::ForceConclusion
-        }
-    }
-
-    pub(crate) fn mark_turn_stalled(&mut self, stalled: bool, reason: Option<String>) {
-        self.turn_stalled = stalled;
-        if !stalled {
-            self.follow_up_prompt_streak = 0;
-            self.suppress_next_follow_up_prompt = false;
-            self.turn_stall_reason = None;
-        } else {
-            self.turn_stall_reason = reason;
-        }
-    }
-
-    /// Bundle counterpart to `LoopTracker::verification_snapshot`. Turn setup
-    /// and persistence must move both halves together; threading the tuple
-    /// through one call keeps a pending gate from losing its fix window.
-    pub(crate) fn verification_snapshot(&self) -> (bool, u8) {
-        (self.verification_pending, self.verification_fix_remaining)
-    }
-
-    pub(crate) fn set_verification_snapshot(&mut self, snapshot: (bool, u8)) {
-        self.verification_pending = snapshot.0;
-        self.verification_fix_remaining = if snapshot.0 { snapshot.1 } else { 0 };
-    }
-
-    /// Config-aware cross-turn recovery recorder; prefer it at call sites with
-    /// workspace config access so `[agent.harness.verification].cross_turn_turns`
-    /// is honored. Returns `true` when budget remained (the caller should
-    /// queue a recovery turn instead of writing a blocked handoff); `false`
-    /// once exhausted and manual `continue` is required.
-    pub(crate) fn record_verification_auto_recovery_turn_with_limit(&mut self, max_turns: u8) -> bool {
-        if self.verification_auto_recovery_turns >= max_turns {
-            return false;
-        }
-        self.verification_auto_recovery_turns = self.verification_auto_recovery_turns.saturating_add(1);
-        true
-    }
-
-    pub(crate) fn verification_auto_recovery_turns(&self) -> u8 {
-        self.verification_auto_recovery_turns
-    }
-
-    /// Record one tracker auto-continue turn. Returns `true` when budget
-    /// remained (`max_turns`); `false` once exhausted.
-    pub(crate) fn record_tracker_continuation_turn_with_limit(&mut self, max_turns: u8) -> bool {
-        if self.tracker_continuation_turns >= max_turns {
-            return false;
-        }
-        self.tracker_continuation_turns = self.tracker_continuation_turns.saturating_add(1);
-        true
-    }
-
-    pub(crate) fn tracker_continuation_turns(&self) -> u8 {
-        self.tracker_continuation_turns
-    }
-
-    pub(crate) fn reset_tracker_continuation_budget(&mut self) {
-        self.tracker_continuation_turns = 0;
-    }
-
-    /// Apply a live tracker probe to the incomplete-items cache.
-    ///
-    /// Successful `Complete` probes **clear** the cache so auto-continue stops
-    /// after the tracker finishes. `Unavailable` keeps the last value.
-    pub(crate) fn apply_tracker_probe(
-        &mut self,
-        probe: crate::agent::runloop::unified::turn::tool_outcomes::helpers::TrackerProbeOutcome,
-    ) -> Option<&[String]> {
-        crate::agent::runloop::unified::turn::tool_outcomes::helpers::apply_tracker_probe_to_cache(
-            &mut self.last_incomplete_tracker_items,
-            probe,
-        )
-    }
-
-    /// Observe the live completed checklist count. Returns `true` when progress
-    /// increased **or** the checklist was replaced with a lower completed
-    /// count (tracker recreate) — either restores the auto-continue episode.
-    pub(crate) fn note_tracker_completed_count(&mut self, completed: u32) -> bool {
-        let changed = completed != self.tracker_completed_count_last;
-        if changed {
-            self.tracker_completed_count_last = completed;
-        }
-        changed
-    }
-
-    /// Record one plan-mode auto-continue turn against its own budget.
-    pub(crate) fn record_plan_continuation_turn_with_limit(&mut self, max_turns: u8) -> bool {
-        if self.plan_continuation_turns >= max_turns {
-            return false;
-        }
-        self.plan_continuation_turns = self.plan_continuation_turns.saturating_add(1);
-        true
-    }
-
-    pub(crate) fn plan_continuation_turns(&self) -> u8 {
-        self.plan_continuation_turns
-    }
-
-    pub(crate) fn reset_plan_continuation_budget(&mut self) {
-        self.plan_continuation_turns = 0;
-        self.consecutive_plan_empty_fallbacks = 0;
-    }
-
-    pub(crate) fn consecutive_plan_empty_fallbacks(&self) -> u8 {
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn record_plan_empty_fallback(&mut self) -> u8 {
-        self.consecutive_plan_empty_fallbacks = self.consecutive_plan_empty_fallbacks.saturating_add(1);
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn reset_plan_empty_fallbacks(&mut self) {
-        self.consecutive_plan_empty_fallbacks = 0;
-    }
-
-    /// Record a failed harness auto-verification of `command`, keeping a
-    /// bounded tail of its output for the escalated handoff. Returns the new
-    /// consecutive-failure count so callers can compare against the
-    /// configured escalation threshold without a second accessor call.
-    pub(crate) fn record_verification_auto_failure(&mut self, command: String, excerpt: &str) -> u8 {
-        const BOUND: usize =
-            crate::agent::runloop::unified::turn::tool_outcomes::helpers::VERIFICATION_FAILURE_EXCERPT_CHARS;
-        // Keep the last BOUND chars (the tail usually holds the error
-        // summary) without materializing the full char vector.
-        let start = excerpt
-            .char_indices()
-            .rev()
-            .nth(BOUND.saturating_sub(1))
-            .map_or(0, |(idx, _)| idx);
-        let tail = excerpt[start..].to_string();
-        self.verification_consecutive_failures = self.verification_consecutive_failures.saturating_add(1);
-        let consecutive_failures = self.verification_consecutive_failures;
-        self.last_verification_failure =
-            Some(VerificationFailureSummary { command, excerpt_tail: tail, consecutive_failures });
-        consecutive_failures
-    }
-
-    /// Record a successful harness auto-verification: the suite is green, so
-    /// the consecutive-failure count and any stored failure tail are dropped.
-    pub(crate) fn record_verification_auto_success(&mut self) {
-        self.verification_consecutive_failures = 0;
-        self.last_verification_failure = None;
-    }
-
-    pub(crate) fn verification_consecutive_failures(&self) -> u8 {
-        self.verification_consecutive_failures
-    }
-
-    pub(crate) fn last_verification_failure(&self) -> Option<&VerificationFailureSummary> {
-        self.last_verification_failure.as_ref()
-    }
-
-    /// Reset the whole verification-recovery episode: cross-turn budget,
-    /// consecutive-failure count, and stored failure tail. Call on
-    /// `Completed` turns, cancellation/exit, fresh execution, and fresh user
-    /// instructions — every point where past verification struggles stop
-    /// being relevant to future work.
-    pub(crate) fn reset_verification_recovery_episode(&mut self) {
-        self.verification_auto_recovery_turns = 0;
-        self.verification_consecutive_failures = 0;
-        self.last_verification_failure = None;
-        // Tracker/plan continuation budgets are independent episode counters;
-        // do not wipe them here (Completed-turn verification resets must not
-        // silently restore full tracker auto-continue budgets).
-    }
-
-    /// Reset only the cross-turn auto-recovery turn budget, preserving the
-    /// consecutive-failure escalation counter. Called when tracker progress
-    /// proves long-running work is advancing: fresh verification misses for
-    /// new work get a new bounded recovery episode, while a genuinely
-    /// never-passing suite still escalates via the preserved failure count.
-    pub(crate) fn reset_verification_auto_recovery_turns(&mut self) {
-        self.verification_auto_recovery_turns = 0;
-    }
-
-    #[cfg(test)]
-    fn turn_stalled(&self) -> bool {
-        self.turn_stalled
-    }
-
-    pub(crate) fn turn_stall_reason(&self) -> Option<&str> {
-        self.turn_stall_reason.as_deref()
-    }
-
-    pub(crate) fn suppress_next_follow_up_prompt(&mut self) {
-        self.suppress_next_follow_up_prompt = true;
-    }
-
-    fn consume_follow_up_prompt_suppression(&mut self) -> bool {
-        std::mem::take(&mut self.suppress_next_follow_up_prompt)
-    }
-
     pub(crate) fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
         self.previous_response_chain_for(provider, model)
             .map(|chain| chain.response_id.clone())
@@ -824,111 +421,6 @@ impl SessionStats {
         model: &str,
     ) -> Option<&ResponsesContinuationState> {
         responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
-    }
-
-    pub(crate) fn set_prompt_cache_lineage_id(&mut self, lineage_id: Option<String>) {
-        self.prompt_cache_lineage_id = lineage_id;
-    }
-
-    pub(crate) fn prompt_cache_lineage_id(&self) -> Option<&str> {
-        self.prompt_cache_lineage_id.as_deref()
-    }
-
-    pub(crate) fn prompt_cache_diagnostics(&self) -> PromptCacheDiagnostics {
-        PromptCacheDiagnostics {
-            observations: self.prompt_cache_observations,
-            model_changes: self.prompt_cache_model_changes,
-            unchanged: self.prompt_cache_unchanged,
-            stable_prefix_changes: self.prompt_cache_stable_prefix_changes,
-            tool_catalog_changes: self.prompt_cache_tool_catalog_changes,
-            combined_changes: self.prompt_cache_combined_changes,
-            last_change_reason: self.last_prompt_cache_change_reason.clone(),
-            last_stable_prefix_hash: self.last_stable_prefix_hash,
-            last_tool_catalog_hash: self.last_tool_catalog_hash,
-        }
-    }
-
-    pub(crate) fn record_prompt_cache_fingerprint(
-        &mut self,
-        model: &str,
-        stable_prefix_hash: u64,
-        tool_catalog_hash: Option<u64>,
-    ) -> &'static str {
-        let reason = if self.last_prompt_cache_model.as_deref() != Some(model) {
-            "model"
-        } else {
-            match (
-                self.last_stable_prefix_hash == Some(stable_prefix_hash),
-                self.last_tool_catalog_hash == tool_catalog_hash,
-            ) {
-                (true, true) => "unchanged",
-                (false, true) => "stable_prefix",
-                (true, false) => "tool_catalog",
-                (false, false) => "stable_prefix+tool_catalog",
-            }
-        };
-
-        self.prompt_cache_observations = self.prompt_cache_observations.saturating_add(1);
-        *self.counter_for_reason(reason) += 1;
-
-        self.last_prompt_cache_model = Some(model.to_string());
-        self.last_stable_prefix_hash = Some(stable_prefix_hash);
-        self.last_tool_catalog_hash = tool_catalog_hash;
-        self.last_prompt_cache_change_reason = Some(reason.to_string());
-
-        reason
-    }
-
-    /// Advisory for mid-session model switches, derived from the last
-    /// recorded fingerprint. Prompt caches are unique per model, so a switch
-    /// rebuilds the cache at full input cost even when the rest of the prefix
-    /// is unchanged. Returns `Some` exactly on the first request carrying a
-    /// new model (the session-start recording is excluded via the
-    /// observations guard); callers should surface the message and keep
-    /// going — no state is consumed.
-    pub(crate) fn model_change_advisory(&self) -> Option<String> {
-        (self.prompt_cache_observations > 1
-            && self.last_prompt_cache_change_reason.as_deref() == Some("model"))
-        .then(|| {
-            "Model changed mid-session; provider prompt cache will be invalidated and the next request re-pays full \
-             input cost. Prefer resolving the model up front; expect one full-price request before hits resume."
-                .to_string()
-        })
-    }
-
-    /// One-shot advisory when a remote non-streaming-capable provider falls
-    /// back after stream first-token timeout: abandoned work may still be
-    /// billed and the retry re-sends the full prompt. Local providers are
-    /// excluded (no remote bill).
-    pub(crate) fn stream_timeout_billing_advisory(&mut self, provider_name: &str) -> Option<String> {
-        if self.stream_timeout_advisory_emitted || is_local_llm_provider(provider_name) {
-            return None;
-        }
-        self.stream_timeout_advisory_emitted = true;
-        let merge = provider_name.eq_ignore_ascii_case("merge-gateway");
-        if merge {
-            Some(
-                "Merge Gateway stream timed out before first token; falling back to non-streaming. Abandoned provider \
-                 streams may still be drained and billed, and the retry re-sends the full prompt."
-                    .to_string(),
-            )
-        } else {
-            Some(format!(
-                "LLM stream timed out on {provider_name} before first token; falling back to non-streaming. \
-                 Abandoned provider work may still be billed, and the retry re-sends the full prompt."
-            ))
-        }
-    }
-
-    fn counter_for_reason(&mut self, reason: &str) -> &mut usize {
-        match reason {
-            "model" => &mut self.prompt_cache_model_changes,
-            "unchanged" => &mut self.prompt_cache_unchanged,
-            "stable_prefix" => &mut self.prompt_cache_stable_prefix_changes,
-            "tool_catalog" => &mut self.prompt_cache_tool_catalog_changes,
-            "stable_prefix+tool_catalog" => &mut self.prompt_cache_combined_changes,
-            _ => &mut self.prompt_cache_unchanged,
-        }
     }
 
     #[allow(
@@ -1050,28 +542,6 @@ impl SessionStats {
     }
 }
 
-fn request_identity_boundary_reason(
-    previous: &RequestEnvelopeIdentity,
-    current: &RequestEnvelopeIdentity,
-) -> SegmentBoundaryReason {
-    if previous.model != current.model {
-        SegmentBoundaryReason::Model
-    } else if previous.provider != current.provider {
-        SegmentBoundaryReason::Provider
-    } else if previous.mode != current.mode {
-        SegmentBoundaryReason::Mode
-    } else if previous.instruction_digest != current.instruction_digest
-        || previous.stable_prompt_hash != current.stable_prompt_hash
-        || previous.prefix_hash != current.prefix_hash
-    {
-        SegmentBoundaryReason::Instructions
-    } else if previous.catalog_hash != current.catalog_hash {
-        SegmentBoundaryReason::ToolCatalogEpoch
-    } else {
-        SegmentBoundaryReason::PrimaryAgent
-    }
-}
-
 pub(crate) fn should_enforce_safe_mode_prompts(
     full_auto: bool,
     auto_permission_review_active: bool,
@@ -1089,247 +559,6 @@ pub(crate) fn should_enforce_safe_mode_prompts(
     !matches!(workspace_trust_level, Some(WorkspaceTrustLevel::FullAuto))
 }
 
-/// Bounded record of a failed harness auto-verification, kept for handoff
-/// enrichment so the eventual manual blocker names the failing command and
-/// shows its output tail instead of repeating the generic "run a verifier"
-/// recipe.
-#[derive(Debug, Clone, Default)]
-pub(crate) struct VerificationFailureSummary {
-    /// Verifier command that failed (e.g. `cargo check --locked`).
-    pub command: String,
-    /// Tail excerpt of the tool output, bounded to
-    /// `VERIFICATION_FAILURE_EXCERPT_CHARS` chars at record time.
-    pub excerpt_tail: String,
-    /// Consecutive failure count including this failure.
-    pub consecutive_failures: u8,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct PromptCacheDiagnostics {
-    pub observations: usize,
-    pub model_changes: usize,
-    pub unchanged: usize,
-    pub stable_prefix_changes: usize,
-    pub tool_catalog_changes: usize,
-    pub combined_changes: usize,
-    pub last_change_reason: Option<String>,
-    pub last_stable_prefix_hash: Option<u64>,
-    pub last_tool_catalog_hash: Option<u64>,
-}
-
-pub(crate) fn is_follow_up_prompt_like(input: &str) -> bool {
-    let normalized = input
-        .trim()
-        .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
-        .to_ascii_lowercase();
-    if normalized.starts_with("continue autonomously from the last stalled turn") {
-        return true;
-    }
-    let words: Vec<&str> = normalized.split_whitespace().collect();
-    matches!(
-        words.as_slice(),
-        ["continue"]
-            | ["retry"]
-            | ["proceed"]
-            | ["go", "on"]
-            | ["go", "ahead"]
-            | ["keep", "going"]
-            | ["please", "continue"]
-            | ["continue", "please"]
-            | ["please", "retry"]
-            | ["retry", "please"]
-            | ["continue", "with", "recommendation"]
-            | ["continue", "with", "your", "recommendation"]
-    )
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CtrlCSignal {
-    Cancel,
-    Exit,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(u8)]
-enum CtrlCPhase {
-    #[default]
-    Idle = 0,
-    CancelRequested = 1,
-    ExitArmed = 2,
-    ExitRequested = 3,
-}
-
-impl CtrlCPhase {
-    fn from_raw(value: u8) -> Self {
-        match value {
-            1 => Self::CancelRequested,
-            2 => Self::ExitArmed,
-            3 => Self::ExitRequested,
-            _ => Self::Idle,
-        }
-    }
-
-    fn signal(self) -> CtrlCSignal {
-        match self {
-            Self::ExitRequested => CtrlCSignal::Exit,
-            Self::Idle | Self::CancelRequested | Self::ExitArmed => CtrlCSignal::Cancel,
-        }
-    }
-}
-
-/// State machine for handling Ctrl+C signals with priority guarantees.
-///
-/// # Priority Guarantees
-///
-/// This state machine ensures that Ctrl+C (SIGINT) is always the highest priority
-/// and cannot be blocked by any other process. The following guarantees are enforced:
-///
-/// 1. **First Ctrl+C**: Immediately cancels the current operation (Cancel signal)
-/// 2. **Second Ctrl+C (within 1 second)**: Escalates to exit; a 200ms debounce
-///    sub-window suppresses accidental double-taps so a rapid second tap returns
-///    `Cancel` (debounced) rather than `Exit` (see State Machine below)
-/// 3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)`
-///    which bypasses all other operations and cleanup routines
-/// 4. **No signal masking**: SIGINT is never blocked or masked anywhere in the codebase
-/// 5. **Atomic operations**: All state transitions use lock-free atomic operations,
-///    ensuring no mutex contention can block signal handling
-///
-/// # Exit Command Priority
-///
-/// The `/exit`, `/quit`, `exit`, and `quit` commands are processed immediately
-/// and cannot be blocked by any other operation. They return
-/// `InteractionOutcome::Exit { reason: SessionEndReason::Exit }` which is checked
-/// at the top of every interaction loop iteration.
-///
-/// # State Machine
-///
-/// The state machine transitions through four phases:
-/// - `Idle` → First Ctrl+C → `CancelRequested` (returns `CtrlCSignal::Cancel`)
-/// - `CancelRequested` → Second Ctrl+C within 200ms → `CancelRequested` (returns `CtrlCSignal::Cancel`, debounced)
-/// - `CancelRequested` → Second Ctrl+C between 200ms and 1s → `ExitRequested` (returns `CtrlCSignal::Exit`)
-/// - `CancelRequested` → Second Ctrl+C after 1s → `CancelRequested` (returns `CtrlCSignal::Cancel`, window expired)
-/// - `ExitArmed` → Second Ctrl+C within 1s → `ExitRequested` (returns `CtrlCSignal::Exit`)
-/// - `ExitRequested` → Any subsequent Ctrl+C → `ExitRequested` (returns `CtrlCSignal::Exit`)
-///
-/// # Debounce Mechanism
-///
-/// A 200ms debounce window prevents rapid repeated signals from prematurely
-/// escalating the state machine. This ensures that accidental double-taps
-/// don't immediately exit the program. Only after 200ms has elapsed since
-/// the first signal will a second signal trigger escalation to exit.
-#[derive(Default)]
-pub(crate) struct CtrlCState {
-    phase: AtomicU8,
-    last_signal_time: AtomicU64,
-}
-
-const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_millis(1000);
-
-impl CtrlCState {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    fn phase(&self) -> CtrlCPhase {
-        CtrlCPhase::from_raw(self.phase.load(Ordering::SeqCst))
-    }
-
-    fn set_phase(&self, phase: CtrlCPhase) {
-        self.phase.store(phase as u8, Ordering::SeqCst);
-    }
-
-    /// Register a Ctrl+C signal and return the appropriate signal type.
-    ///
-    /// # Priority Guarantee
-    ///
-    /// This method is called from the signal handler and is guaranteed to:
-    /// 1. Always process the signal immediately (no blocking)
-    /// 2. Never be blocked by any other operation
-    /// 3. Return `CtrlCSignal::Exit` on double Ctrl+C, which triggers
-    ///    `emergency_terminal_cleanup()` → `std::process::exit(130)`
-    ///
-    /// # Debounce Behavior
-    ///
-    /// Rapid repeated signals (within 200ms) are debounced to prevent
-    /// accidental state escalation. However, if already in `ExitArmed` or
-    /// `ExitRequested` phase, rapid signals immediately escalate to exit.
-    ///
-    /// # Window Behavior
-    ///
-    /// The second Ctrl+C must arrive within 1 second of the first to trigger
-    /// exit. After this window, the state machine resets to `CancelRequested`
-    /// on the next signal.
-    pub(crate) fn register_signal(&self) -> CtrlCSignal {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-        let last = self.last_signal_time.swap(now, Ordering::SeqCst);
-        let current_phase = self.phase();
-
-        // Debounce repeated cancel signals, but allow an already-armed stop to
-        // escalate immediately so a quick second press can still exit.
-        if last > 0 && now.saturating_sub(last) < 200 {
-            if matches!(current_phase, CtrlCPhase::ExitArmed | CtrlCPhase::ExitRequested) {
-                self.set_phase(CtrlCPhase::ExitRequested);
-                return CtrlCSignal::Exit;
-            }
-            return current_phase.signal();
-        }
-
-        let window_ms = DOUBLE_CTRL_C_WINDOW.as_millis() as u64;
-        let is_within_window = last > 0 && now.saturating_sub(last) <= window_ms;
-
-        if matches!(current_phase, CtrlCPhase::CancelRequested | CtrlCPhase::ExitArmed) && is_within_window {
-            self.set_phase(CtrlCPhase::ExitRequested);
-            return CtrlCSignal::Exit;
-        }
-
-        if matches!(current_phase, CtrlCPhase::ExitRequested) {
-            return CtrlCSignal::Exit;
-        }
-
-        self.set_phase(CtrlCPhase::CancelRequested);
-        CtrlCSignal::Cancel
-    }
-
-    /// Request cancellation from the local TUI without arming the emergency
-    /// double-signal exit path used by the OS signal handler.
-    pub(crate) fn request_local_cancel(&self) {
-        if !matches!(self.phase(), CtrlCPhase::ExitRequested) {
-            self.set_phase(CtrlCPhase::CancelRequested);
-        }
-        self.last_signal_time.store(0, Ordering::SeqCst);
-    }
-
-    pub(crate) fn reset(&self) {
-        self.set_phase(CtrlCPhase::Idle);
-        self.last_signal_time.store(0, Ordering::SeqCst);
-    }
-
-    pub(crate) fn mark_cancel_handled(&self) {
-        if matches!(self.phase(), CtrlCPhase::CancelRequested) {
-            self.set_phase(CtrlCPhase::ExitArmed);
-        }
-    }
-
-    pub(crate) fn is_cancel_requested(&self) -> bool {
-        matches!(self.phase(), CtrlCPhase::CancelRequested)
-    }
-
-    pub(crate) fn is_exit_requested(&self) -> bool {
-        matches!(self.phase(), CtrlCPhase::ExitRequested)
-    }
-
-    /// Check if cancellation or exit has been requested and return an error if so
-    pub(crate) fn check_cancellation(&self) -> anyhow::Result<()> {
-        if self.is_exit_requested() {
-            anyhow::bail!("Exit requested");
-        }
-        if self.is_cancel_requested() {
-            anyhow::bail!("Operation cancelled");
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1337,8 +566,9 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PromptCacheDiagnostics, SessionStats,
-        is_follow_up_prompt_like, should_enforce_safe_mode_prompts,
+        AutoPermissionDenial, CtrlCSignal, CtrlCState, FollowUpPromptAction, PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX,
+        PromptCacheDiagnostics, SessionStats, ValidationCategory, is_follow_up_prompt_like,
+        should_enforce_safe_mode_prompts,
     };
     use vtcode_core::config::WorkspaceTrustLevel;
     use vtcode_core::config::constants::tools;
@@ -1347,6 +577,120 @@ mod tests {
 
     fn function_tool(name: &str) -> ToolDefinition {
         ToolDefinition::function(name.to_string(), name.to_string(), serde_json::json!({"type": "object"}))
+    }
+
+    #[test]
+    fn compaction_parent_context_reuses_arcs_only_for_matching_identity() {
+        let mut stats = SessionStats::default();
+        assert!(stats.compaction_parent_context("openai", "model-a").is_none());
+        let envelope = stats.request_envelope(
+            "model-a",
+            "openai",
+            "build",
+            "fixed instructions".into(),
+            vec![function_tool("zeta"), function_tool("alpha")],
+            7,
+        );
+        assert!(stats.compaction_parent_context("anthropic", "model-a").is_none());
+        assert!(stats.compaction_parent_context("openai", "model-b").is_none());
+        let parent = stats.compaction_parent_context("openai", "model-a").unwrap();
+        assert!(Arc::ptr_eq(parent.system_prompt.as_ref().unwrap(), &envelope.system_prompt()));
+        assert!(Arc::ptr_eq(parent.tools.as_ref().unwrap(), &envelope.ordered_tools()));
+        stats.begin_request_segment(SegmentBoundaryReason::Compaction);
+        assert!(stats.compaction_parent_context("openai", "model-a").is_none());
+        stats.request_envelope("model-b", "openai", "build", "new instructions".into(), vec![], 7);
+        let parent = stats.compaction_parent_context("openai", "model-b").unwrap();
+        assert_eq!(parent.system_prompt.as_deref(), Some("new instructions"));
+        assert!(parent.tools.is_none());
+    }
+
+    #[test]
+    fn preflight_internal_followups_preserve_episode_and_user_input_resets_it() {
+        let mut stats = SessionStats::default();
+        stats.record_tracker_continuation_turn_with_limit(3);
+        stats.preflight_recovery.reject(
+            "task_tracker",
+            ValidationCategory::Arguments,
+            Some(&serde_json::json!({"action":"list","index":1})),
+            6,
+            false,
+        );
+        stats.preflight_recovery.synthesis();
+        stats.preflight_recovery.begin_corrective_turn();
+        stats.register_follow_up_prompt(&format!("{PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX} repair arguments"));
+        stats.preflight_recovery.finish_corrective_turn();
+        assert!(stats.preflight_recovery.exhausted());
+        stats.register_follow_up_prompt("The task tracker still has incomplete steps: verify");
+        assert!(stats.preflight_recovery.exhausted());
+        assert_eq!(stats.tracker_continuation_turns(), 1);
+        stats.register_follow_up_prompt("continue");
+        assert!(!stats.preflight_recovery.exhausted());
+        assert!(stats.preflight_recovery.is_clear());
+        assert_eq!(
+            stats.tracker_continuation_turns(),
+            1,
+            "user resume retains existing tracker no-progress accounting"
+        );
+    }
+
+    #[test]
+    fn decisions_probe_accounting_preserves_unknown_cost_and_does_not_feed_cache_health() {
+        let mut stats = SessionStats::default();
+        let usage = Some(vtcode_core::llm::provider::Usage {
+            prompt_tokens: 2048,
+            completion_tokens: 0,
+            total_tokens: 2048,
+            cached_prompt_tokens: Some(1),
+            cache_read_tokens: Some(1),
+            cache_creation_tokens: None,
+            iterations: None,
+        });
+        for _ in 0..3 {
+            stats.record_probe_attempt(
+                "openai",
+                &usage,
+                usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
+            );
+        }
+        assert_eq!(stats.total_usage().input_tokens, 6144);
+        assert!((stats.total_cost_usd().unwrap() - 0.0006144).abs() < 1e-12);
+        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", &usage).is_some());
+        stats.record_probe_attempt("openai", &None, None);
+        assert!(stats.total_cost_usd().is_none());
+        stats.record_probe_attempt(
+            "openai",
+            &usage,
+            usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
+        );
+        assert!(stats.total_cost_usd().is_none());
+    }
+
+    #[test]
+    fn compaction_boundary_does_not_join_cache_misses_across_replay_windows() {
+        let mut stats = SessionStats::default();
+        let usage = |input, cached, creation| {
+            Some(vtcode_core::llm::provider::Usage {
+                prompt_tokens: input,
+                cached_prompt_tokens: Some(cached),
+                cache_read_tokens: Some(cached),
+                cache_creation_tokens: Some(creation),
+                ..Default::default()
+            })
+        };
+        for sample in [usage(12_645, 0, 12_642), usage(12_669, 5_710, 5_575)] {
+            stats.record_usage("openai", &sample);
+            assert!(stats.record_cache_turn_health("openai", &sample).is_none());
+        }
+        stats.begin_request_segment(SegmentBoundaryReason::Compaction);
+        let sample = usage(12_740, 0, 5_212);
+        stats.record_usage("openai", &sample);
+        assert!(stats.record_cache_turn_health("openai", &sample).is_none());
+        assert_eq!(stats.total_usage().input_tokens, 38_054);
+        assert_eq!(stats.total_usage().cached_input_tokens, 5_710);
+        assert!(stats.record_cache_turn_health("openai", &sample).is_none());
+        assert!(stats.record_cache_turn_health("openai", &sample).is_some());
     }
 
     #[test]
@@ -1573,6 +917,37 @@ mod tests {
     }
 
     #[test]
+    fn internal_continuations_cannot_reset_cross_turn_budgets() {
+        use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
+            plan_mode_continue_follow_up, recoverable_blocked_continue_follow_up, tracker_continue_follow_up,
+        };
+
+        let prompts = [
+            tracker_continue_follow_up(&["#1 README (blocked)".to_owned()]),
+            plan_mode_continue_follow_up(),
+            recoverable_blocked_continue_follow_up("preview budget exhausted"),
+        ];
+        for prompt in prompts {
+            let mut stats = SessionStats::default();
+            for turn in 1..=3 {
+                assert!(stats.record_tracker_continuation_turn_with_limit(3));
+                assert!(stats.record_plan_continuation_turn_with_limit(3));
+                assert!(stats.record_verification_auto_recovery_turn_with_limit(3));
+                assert_eq!(stats.register_follow_up_prompt(&prompt), FollowUpPromptAction::None);
+                assert_eq!(stats.tracker_continuation_turns(), turn);
+                assert_eq!(stats.plan_continuation_turns(), turn);
+                assert_eq!(stats.verification_auto_recovery_turns(), turn);
+            }
+            assert!(!stats.record_tracker_continuation_turn_with_limit(3));
+            assert!(!stats.record_plan_continuation_turn_with_limit(3));
+            assert!(!stats.record_verification_auto_recovery_turn_with_limit(3));
+            assert_eq!(stats.register_follow_up_prompt("Fix the README links"), FollowUpPromptAction::None);
+            assert_eq!(stats.tracker_continuation_turns(), 0);
+            assert_eq!(stats.verification_auto_recovery_turns(), 0);
+        }
+    }
+
+    #[test]
     fn record_tool_normalizes_exec_aliases() {
         let mut stats = SessionStats::default();
         stats.record_tool(tools::UNIFIED_EXEC);
@@ -1646,6 +1021,27 @@ mod tests {
             stats.tool_loop_grant_preauthorized(),
             "the one-time HITL latch is process-session scoped, not conversation-context scoped"
         );
+    }
+
+    #[test]
+    fn preflight_fresh_execution_clears_validation_without_restoring_continuations() {
+        let mut stats = SessionStats::default();
+        stats.record_tracker_continuation_turn_with_limit(3);
+        stats.record_plan_continuation_turn_with_limit(3);
+        stats
+            .preflight_recovery
+            .reject("task_tracker", ValidationCategory::Arguments, None, 6, false);
+        stats.preflight_recovery.synthesis();
+        stats.preflight_recovery.begin_corrective_turn();
+        stats.preflight_recovery.finish_corrective_turn();
+        assert!(stats.preflight_recovery.exhausted());
+
+        stats.reset_for_fresh_execution();
+
+        assert!(stats.preflight_recovery.is_clear());
+        assert!(!stats.preflight_recovery.exhausted());
+        assert_eq!(stats.tracker_continuation_turns(), 1);
+        assert_eq!(stats.plan_continuation_turns(), 1);
     }
 
     #[test]
@@ -1857,6 +1253,37 @@ mod tests {
                 last_stable_prefix_hash: Some(55),
                 last_tool_catalog_hash: Some(66),
             }
+        );
+    }
+
+    #[test]
+    fn prompt_cache_fingerprint_attributes_tools_omitted_and_recovery_reason() {
+        let mut stats = SessionStats::default();
+
+        assert_eq!(stats.record_prompt_cache_fingerprint_with_context("gpt-6", 1, Some(2), Some(10), None), "model");
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint_with_context("gpt-6", 1, Some(2), Some(10), None),
+            "unchanged"
+        );
+        // Dropping every tool from the wire is its own miss cause.
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint_with_context("gpt-6", 1, Some(2), Some(0), None),
+            "tools_omitted"
+        );
+        // Restoring tools then rotating the frozen recovery reason is next.
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint_with_context("gpt-6", 1, Some(2), Some(10), Some("loop detector")),
+            "unchanged"
+        );
+        assert_eq!(
+            stats.record_prompt_cache_fingerprint_with_context(
+                "gpt-6",
+                1,
+                Some(2),
+                Some(10),
+                Some("blocked tool-call fuse tripped")
+            ),
+            "recovery_reason"
         );
     }
 
@@ -2105,7 +1532,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_c_state_reset_clears_all_state() {
+    fn ctrl_c_state_reset_preserves_exit() {
         let state = CtrlCState::new();
 
         // Get to exit state
@@ -2114,13 +1541,12 @@ mod tests {
         assert!(matches!(state.register_signal(), CtrlCSignal::Exit));
         assert!(state.is_exit_requested());
 
-        // Reset should clear everything
+        // Only a new session may clear exit, by creating a new state.
         state.reset();
 
-        // Should be back to idle
         assert!(!state.is_cancel_requested());
-        assert!(!state.is_exit_requested());
-        assert!(state.check_cancellation().is_ok());
+        assert!(state.is_exit_requested());
+        assert!(state.check_cancellation().is_err());
     }
 
     #[test]

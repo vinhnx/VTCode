@@ -366,7 +366,7 @@ pub(crate) async fn update_input_status_if_changed(
     };
 
     if state.input_status_sync_pending || state.left != left || state.right != right {
-        handle.set_input_status(left.clone(), right.clone());
+        handle.set_configured_input_status(left.clone(), right.clone());
         state.left = left;
         state.right = right;
         state.input_status_sync_pending = false;
@@ -790,6 +790,109 @@ mod tests {
         assert!(state.last_git_refresh.is_none(), "Git visibility may have changed");
         assert!(state.last_command_refresh.is_none(), "a command/config change must run immediately");
         assert!(state.command_value.is_none(), "stale command output must not survive reload");
+    }
+
+    #[tokio::test]
+    async fn configured_status_modes_and_command_reload_preserve_existing_options() {
+        use vtcode_core::config::StatusLineMode;
+
+        struct StatusLineCase {
+            mode: StatusLineMode,
+            command: Option<&'static str>,
+            expected_left: Option<&'static str>,
+            expected_right: Option<&'static str>,
+        }
+
+        let workspace = tempfile::tempdir().unwrap();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut state = InputStatusState {
+            thread_context: Some("configured thread".into()),
+            ..Default::default()
+        };
+        for case in [
+            StatusLineCase {
+                mode: StatusLineMode::Auto,
+                command: None,
+                expected_left: None,
+                expected_right: Some("configured thread"),
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Command,
+                command: Some("printf 'Running custom dashboard\\n'"),
+                expected_left: Some("Running custom dashboard"),
+                expected_right: None,
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Command,
+                command: Some("printf 'custom reloaded\\n'"),
+                expected_left: Some("custom reloaded"),
+                expected_right: None,
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Hidden,
+                command: None,
+                expected_left: None,
+                expected_right: None,
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Command,
+                command: None,
+                expected_left: None,
+                expected_right: Some("configured thread"),
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Command,
+                command: Some(" "),
+                expected_left: None,
+                expected_right: Some("configured thread"),
+            },
+            StatusLineCase {
+                mode: StatusLineMode::Unknown,
+                command: None,
+                expected_left: None,
+                expected_right: Some("configured thread"),
+            },
+        ] {
+            let config = StatusLineConfig {
+                mode: case.mode,
+                command: case.command.map(str::to_owned),
+                refresh_interval_ms: 3_600_000,
+                command_timeout_ms: 2_000,
+                show_clock: false,
+            };
+            invalidate_for_config_reload(&mut state);
+            super::update_input_status_if_changed(
+                &handle,
+                workspace.path(),
+                "gpt-6.1-sol",
+                "high",
+                Some(&config),
+                &mut state,
+            )
+            .await
+            .unwrap();
+            match receiver.try_recv().unwrap() {
+                InlineCommand::SetConfiguredInputStatus { left, right } => {
+                    assert_eq!(left.as_deref(), case.expected_left);
+                    assert_eq!(right.as_deref(), case.expected_right);
+                }
+                _ => panic!("expected configured status command"),
+            }
+            assert!(state.clock.is_none(), "show_clock=false must remain effective");
+            assert!(receiver.try_recv().is_err(), "one atomic configured update");
+            super::update_input_status_if_changed(
+                &handle,
+                workspace.path(),
+                "gpt-6.1-sol",
+                "high",
+                Some(&config),
+                &mut state,
+            )
+            .await
+            .unwrap();
+            assert!(receiver.try_recv().is_err(), "unchanged status must stay deduplicated");
+        }
     }
 
     #[test]

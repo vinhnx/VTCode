@@ -10,13 +10,14 @@
 use std::path::Path;
 
 use serde_json::{Value, json};
+use vtcode_commons::formatting::truncate_byte_budget;
+use vtcode_commons::preview::condense_text_bytes;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::labels::tool_action_label;
 
 use super::super::ValidationResult;
 use super::common::push_guard_failure_messages;
-use crate::agent::runloop::unified::run_loop_context::SPOOL_PAGE_PREVIEW_CREDIT_BYTES;
 use crate::agent::runloop::unified::tool_reads::{
     read_spool_head_for_error_check, spool_content_looks_like_error, spool_page_source_path,
 };
@@ -60,23 +61,12 @@ async fn read_spool_preview_for_guard(workspace: &Path, path: &str) -> Option<St
             state: vtcode_core::tools::SpoolState::Pending,
         };
         let content = reference.read_pending_bounded(&workspace, SPOOL_CHUNK_INLINE_MAX_BYTES)?;
-        let len = content.len();
-        if len == 0 {
+        if content.is_empty() {
             return Ok(None);
         }
-        if content.len() <= SPOOL_CHUNK_INLINE_HEAD_BYTES + SPOOL_CHUNK_INLINE_TAIL_BYTES {
-            return Ok(Some(content));
-        }
-        let head: String = content.chars().take(SPOOL_CHUNK_INLINE_HEAD_BYTES).collect();
-        let tail: String = content
-            .chars()
-            .rev()
-            .take(SPOOL_CHUNK_INLINE_TAIL_BYTES)
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect();
-        Ok(Some(format!("{head}\n\n... [spool content truncated; full file is {len} bytes] ...\n\n{tail}")))
+        // This is only the bounded prefix read above, never the full file.
+        // Reuse byte-aware condensation so multibyte text cannot inflate it.
+        Ok(Some(condense_text_bytes(&content, SPOOL_CHUNK_INLINE_HEAD_BYTES, SPOOL_CHUNK_INLINE_TAIL_BYTES)))
     })
     .await
     .ok()?
@@ -170,8 +160,9 @@ async fn build_spool_chunk_guard_error_content(workspace: &Path, path: &str, max
             obj.insert(
                 "inline_content_note".to_string(),
                 Value::String(
-                    "Full spool content embedded inline; the per-turn cap \
-                     blocks further reads of this spool file."
+                    "Bounded snapshot of the spool prefix embedded inline; it \
+                     may omit later content and is not proof of completion. \
+                     The per-turn cap blocks further reads of this spool file."
                         .to_string(),
                 ),
             );
@@ -187,13 +178,7 @@ async fn build_spool_chunk_guard_error_content(workspace: &Path, path: &str, max
 /// Build the tool response payload for a short-circuited spool read of an
 /// error payload from a previous turn.
 fn build_previous_turn_error_spool_content(spool_path: &str, head: &str) -> String {
-    let preview = if head.len() > 1024 {
-        // Use char-aware truncation to avoid panicking on multi-byte UTF-8.
-        let truncated: String = head.chars().take(1024).collect();
-        format!("{truncated}... [truncated]")
-    } else {
-        head.to_string()
-    };
+    let preview = truncate_byte_budget(head, 1024, "... [truncated]");
     serde_json::json!({
         "spool_path": spool_path,
         "loop_detected": true,
@@ -251,12 +236,6 @@ pub(crate) async fn enforce_spool_chunk_read_guard(
     let max_reads_per_turn = max_sequential_spool_chunk_reads_per_turn(ctx);
     let streak = ctx.harness_state.record_spool_chunk_read();
     if streak <= max_reads_per_turn {
-        // Bank preview credit so this page stays model-visible even after the
-        // aggregate preview budget is exhausted. Paging is already bounded per
-        // result and capped sequentially here, so credit cannot grow the
-        // prompt without bound.
-        ctx.harness_state
-            .grant_spool_page_preview_credit(SPOOL_PAGE_PREVIEW_CREDIT_BYTES);
         return None;
     }
 
@@ -283,64 +262,4 @@ pub(crate) async fn enforce_spool_chunk_read_guard(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn spool_chunk_guard_error_resolves_to_pty_poll_for_run_prefix() {
-        let payload =
-            build_spool_chunk_guard_error_content(Path::new("/"), ".vtcode/context/tool_outputs/run-1.txt", 3).await;
-        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
-
-        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::WRITE_STDIN));
-        assert_eq!(parsed["fallback_tool_args"]["session_id"], "1");
-        assert_eq!(parsed["fallback_tool_args"]["chars"], "");
-        assert!(parsed.get("next_action").and_then(Value::as_str).is_some());
-        assert_eq!(parsed.get("loop_detected").and_then(Value::as_bool), Some(true));
-        assert_eq!(parsed.get("recovery_required").and_then(Value::as_bool), Some(true));
-    }
-
-    #[tokio::test]
-    async fn spool_chunk_guard_error_resolves_to_search_grep_for_search_prefix() {
-        let payload = build_spool_chunk_guard_error_content(
-            Path::new("/"),
-            ".vtcode/context/tool_outputs/unified_search_1782625284532136.txt",
-            3,
-        )
-        .await;
-        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
-
-        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::EXEC_COMMAND));
-        assert!(
-            parsed["fallback_tool_args"]["cmd"]
-                .as_str()
-                .is_some_and(|cmd| cmd.contains("unified_search_1782625284532136.txt"))
-        );
-        assert_eq!(parsed.get("loop_detected").and_then(Value::as_bool), Some(true));
-        assert_eq!(parsed.get("recovery_required").and_then(Value::as_bool), Some(true));
-    }
-
-    #[tokio::test]
-    async fn spool_chunk_guard_error_falls_back_to_warning_error_todo_for_unknown_prefix() {
-        let payload =
-            build_spool_chunk_guard_error_content(Path::new("/"), ".vtcode/context/tool_outputs/custom_tool_42.txt", 3)
-                .await;
-        let parsed: Value = serde_json::from_str(&payload).expect("spool chunk guard payload should be json");
-
-        assert_eq!(parsed.get("fallback_tool").and_then(Value::as_str), Some(tool_names::EXEC_COMMAND));
-        assert!(
-            parsed["fallback_tool_args"]["cmd"]
-                .as_str()
-                .is_some_and(|cmd| cmd.contains(SPOOL_CHUNK_GREP_PATTERN))
-        );
-    }
-
-    #[test]
-    fn derive_spool_fallback_recognizes_pty_session_id() {
-        let (tool, args) = derive_spool_fallback(".vtcode/context/tool_outputs/run-abc123.txt")
-            .expect("pty session spool should resolve to a fallback");
-        assert_eq!(tool, tool_names::WRITE_STDIN);
-        assert_eq!(args["session_id"], "abc123");
-        assert_eq!(args["chars"], "");
-    }
-}
+mod tests;

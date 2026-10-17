@@ -2,11 +2,13 @@
 
 ## Overview
 
-This document describes the refactoring of `prompt_user_for_tool()` to be TUI-only, removing all CLI-specific code and dependencies.
+This document describes the refactoring of `prompt_user_for_tool()` to be TUI-only, removing all CLI-specific code and
+dependencies.
 
 ## Problem Statement
 
-The original `prompt_user_for_tool()` function in `crates/codegen/vtcode-core/src/tool_policy.rs` contained CLI-specific code with a guard to prevent execution in TUI mode. This created several issues:
+The original `prompt_user_for_tool()` function in `crates/codegen/vtcode-core/src/tool_policy.rs` contained CLI-specific
+code with a guard to prevent execution in TUI mode. This created several issues:
 
 1. The function could corrupt the terminal if accidentally called in TUI mode
 2. It contained dialoguer (CLI) dependencies in the library crate
@@ -40,9 +42,9 @@ pub struct ToolPolicyManager {
 
 impl ToolPolicyManager {
     pub fn set_permission_handler(&mut self, handler: Box<dyn PermissionPromptHandler>);
-    
+
     pub fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision>;
-    
+
     // Updated to use handler
     pub async fn should_execute_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision>;
 }

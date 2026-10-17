@@ -137,8 +137,16 @@ async fn persisted_approval_hit_key(
     primary_target: &shell_approval::ApprovalLearningTarget,
     exact_shell_target: Option<&shell_approval::ApprovalLearningTarget>,
 ) -> Option<String> {
-    if tool_registry.has_persisted_approval(&primary_target.approval_key).await {
-        return Some(primary_target.approval_key.clone());
+    // Check every key the target contributes: the exact invocation first, then
+    // any learned family key. A persisted family key (e.g. a safe `awk` read
+    // family) auto-approves equivalent safe invocations whose exact arguments
+    // differ. The candidate's family is only attached when
+    // `learned_shell_pattern` proved it read-only, so a mutating sibling can
+    // never match.
+    for (key, _) in primary_target.iter_keys() {
+        if tool_registry.has_persisted_approval(key).await {
+            return Some(key.to_string());
+        }
     }
 
     let exact_target = exact_shell_target?;
@@ -169,6 +177,10 @@ fn session_approval_cache_keys<'a>(
     std::iter::once(cache_key)
         .chain(bare_if_different)
         .chain(std::iter::once(approval_learning_target.approval_key.as_str()))
+        // Also grant the learned family key for "Session" decisions, so a safe
+        // `awk`/`find`/`sed` family approved for the session covers equivalent
+        // invocations whose exact arguments change (e.g. a new `awk` line range).
+        .chain(approval_learning_target.pattern.iter().map(|pattern| pattern.key.as_str()))
         .chain(exact_shell_approval_target.map(|target| target.approval_key.as_str()))
 }
 
@@ -186,6 +198,21 @@ async fn persist_approval_cache_key(
             message = %log_message,
             "Failed to persist approval cache key"
         );
+    }
+}
+
+/// Persist an approval key and, when it carries the default permission scope,
+/// its scope-less variant too. Older cache entries predate scope suffixes, so
+/// writing both forms keeps lookups working across the legacy boundary.
+async fn persist_approval_key_with_default_scope(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    approval_key: &str,
+    log_message: &str,
+) {
+    persist_approval_cache_key(tool_registry, tool_name, approval_key, log_message).await;
+    if let Some(no_scope_key) = strip_default_scope_suffix(approval_key) {
+        persist_approval_cache_key(tool_registry, tool_name, no_scope_key, log_message).await;
     }
 }
 
@@ -606,41 +633,36 @@ async fn finalize_permission_decision(
                 }
             }
 
-            persist_approval_cache_key(
+            // Persist the learned family key too. Without it, "Always approve"
+            // on a safe family member (e.g. one `awk` line range) writes only
+            // the exact key, which changes with the next argument and re-prompts.
+            if let shell_approval::PersistentApprovalTarget::LearnedPattern { key, .. } = persistent_approval_target {
+                persist_approval_key_with_default_scope(
+                    tool_registry,
+                    tool_name,
+                    key,
+                    "Failed to persist learned shell family approval",
+                )
+                .await;
+            }
+
+            persist_approval_key_with_default_scope(
                 tool_registry,
                 tool_name,
                 &approval_learning_target.approval_key,
                 "Failed to persist approval cache entry",
             )
             .await;
-            if let Some(no_scope_key) = strip_default_scope_suffix(&approval_learning_target.approval_key) {
-                persist_approval_cache_key(
-                    tool_registry,
-                    tool_name,
-                    no_scope_key,
-                    "Failed to persist approval cache entry (no scope)",
-                )
-                .await;
-            }
             if let Some(exact_target) = exact_shell_approval_target
                 && exact_target.approval_key != approval_learning_target.approval_key
             {
-                persist_approval_cache_key(
+                persist_approval_key_with_default_scope(
                     tool_registry,
                     tool_name,
                     &exact_target.approval_key,
                     "Failed to persist exact shell approval cache entry",
                 )
                 .await;
-                if let Some(no_scope_key) = strip_default_scope_suffix(&exact_target.approval_key) {
-                    persist_approval_cache_key(
-                        tool_registry,
-                        tool_name,
-                        no_scope_key,
-                        "Failed to persist exact shell approval cache entry (no scope)",
-                    )
-                    .await;
-                }
             }
             persist_segment_approval_cache_keys(tool_registry, tool_name, normalized_tool_name, tool_args).await;
 
@@ -905,22 +927,13 @@ async fn persist_segment_approval_cache_keys(
     };
 
     for approval_key in approval_keys {
-        persist_approval_cache_key(
+        persist_approval_key_with_default_scope(
             tool_registry,
             tool_name,
             &approval_key,
             "Failed to persist segmented shell approval cache entry",
         )
         .await;
-        if let Some(no_scope_key) = strip_default_scope_suffix(&approval_key) {
-            persist_approval_cache_key(
-                tool_registry,
-                tool_name,
-                no_scope_key,
-                "Failed to persist segmented shell approval cache entry (no scope)",
-            )
-            .await;
-        }
     }
 }
 

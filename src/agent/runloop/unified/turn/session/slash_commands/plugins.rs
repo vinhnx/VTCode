@@ -4,6 +4,8 @@
 //! and in TUI sessions offers an interactive manager modal for browsing,
 //! installing, and removing portable Agent Plugins.
 
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Context, Result};
 use std::sync::Arc;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -152,18 +154,18 @@ async fn prompt_source(ctx: &mut SlashCommandContext<'_>) -> Result<Option<Strin
     let step = vtcode_ui::tui::app::WizardStep {
         title: "Source".to_string(),
         question: "Provide a git URL or local directory to install the plugin from.".to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some("Press Tab to type the source, then Enter to install.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: PLUGIN_ADD_SOURCE_QUESTION_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit source".to_string()),
-        }],
+        items: vec![
+            ui_list::choice(
+                "Submit",
+                Some("Press Tab to type the source, then Enter to install.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: PLUGIN_ADD_SOURCE_QUESTION_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("submit source".to_string()),
+        ],
         completed: false,
         answer: None,
         allow_freeform: true,
@@ -233,30 +235,32 @@ async fn pick_installed_plugin(
         .iter()
         .map(|entry| {
             let version = entry.version.as_deref().unwrap_or("unknown");
-            InlineListItem {
-                title: entry.name.clone(),
-                subtitle: Some(format!(
+            ui_list::action(
+                entry.name.clone(),
+                format!(
                     "v{version} — {} skill(s), {} MCP server(s) — {}",
                     entry.skill_count,
                     entry.mcp_server_count,
                     entry.scope.label()
-                )),
-                badge: None,
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(format!("{}{}", PLUGIN_PICK_PREFIX, entry.name))),
-                search_value: Some(format!("{} {} {}", entry.name, entry.description, entry.scope.label())),
-            }
+                ),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", PLUGIN_PICK_PREFIX, entry.name))),
+            )
+            .with_search_value(format!("{} {} {}", entry.name, entry.description, entry.scope.label()))
         })
         .collect();
 
-    items.push(InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Cancel and return".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(PLUGIN_PICK_BACK_ACTION.to_string())),
-        search_value: Some("back cancel".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Back",
+            "Cancel and return".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(PLUGIN_PICK_BACK_ACTION.to_string())),
+        )
+        .with_search_value("back cancel".to_string()),
+    );
 
     ctx.renderer.show_list_modal(
         title,
@@ -286,62 +290,63 @@ async fn pick_installed_plugin(
 
 fn show_plugins_manager_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let items = vec![
-        InlineListItem {
-            title: "List plugins".to_string(),
-            subtitle: Some("Show all installed plugins".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}list"))),
-            search_value: Some("list plugins".to_string()),
-        },
-        InlineListItem {
-            title: "Add plugin".to_string(),
-            subtitle: Some("Install a plugin from a git URL or local directory".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}add"))),
-            search_value: Some("install add plugin".to_string()),
-        },
-        InlineListItem {
-            title: "Remove plugin".to_string(),
-            subtitle: Some("Uninstall a plugin".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}remove"))),
-            search_value: Some("remove uninstall plugin".to_string()),
-        },
-        InlineListItem {
-            title: "Plugin details".to_string(),
-            subtitle: Some("Show metadata and components for a plugin".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}info"))),
-            search_value: Some("details info metadata plugin".to_string()),
-        },
-        InlineListItem {
-            title: "Refresh MCP providers".to_string(),
-            subtitle: Some("Re-discover plugin-provided MCP servers".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}refresh"))),
-            search_value: Some("refresh mcp providers".to_string()),
-        },
-        InlineListItem {
-            title: "Show help".to_string(),
-            subtitle: Some("Display `/plugin` command help".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}help"))),
-            search_value: Some("help commands plugin".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close plugin manager".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(PLUGIN_ACTION_BACK.to_string())),
-            search_value: Some("back close".to_string()),
-        },
+        InlineListItem::group_header("Actions"),
+        ui_list::action(
+            "List plugins",
+            "Show all installed plugins".to_string(),
+            Some("Recommended".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}list"))),
+        )
+        .with_search_value("list plugins".to_string()),
+        ui_list::action(
+            "Add plugin",
+            "Install a plugin from a git URL or local directory".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}add"))),
+        )
+        .with_search_value("install add plugin".to_string()),
+        ui_list::action(
+            "Remove plugin",
+            "Uninstall a plugin".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}remove"))),
+        )
+        .with_search_value("remove uninstall plugin".to_string()),
+        ui_list::action(
+            "Plugin details",
+            "Show metadata and components for a plugin".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}info"))),
+        )
+        .with_search_value("details info metadata plugin".to_string()),
+        ui_list::action(
+            "Refresh MCP providers",
+            "Re-discover plugin-provided MCP servers".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}refresh"))),
+        )
+        .with_search_value("refresh mcp providers".to_string()),
+        ui_list::action(
+            "Show help",
+            "Display `/plugin` command help".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{PLUGIN_ACTION_PREFIX}help"))),
+        )
+        .with_search_value("help commands plugin".to_string()),
+        ui_list::action(
+            "Back",
+            "Close plugin manager".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(PLUGIN_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back close".to_string()),
     ];
 
     ctx.renderer.show_list_modal(

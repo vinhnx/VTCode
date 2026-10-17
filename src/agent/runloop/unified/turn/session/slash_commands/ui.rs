@@ -15,7 +15,6 @@ use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, wait_fo
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, show_mode_palette, show_sessions_palette, show_theme_palette,
 };
-use crate::agent::runloop::unified::session_setup::apply_ide_context_snapshot;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
 #[path = "ui/statusline.rs"]
@@ -129,12 +128,6 @@ pub(crate) async fn handle_start_session_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) fn handle_continue_latest(_ctx: SlashCommandContext<'_>, show_all: bool) -> Result<SlashCommandControl> {
-    // Session existence and loading are handled downstream by the
-    // ResumeLatest control flow handler, avoiding a redundant query.
-    Ok(SlashCommandControl::ResumeLatest { show_all })
-}
-
 pub(crate) async fn handle_start_history_picker(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         ctx.renderer.line(
@@ -185,6 +178,7 @@ fn config_action_item(
         indent,
         selection: Some(InlineListSelection::ConfigAction(action.into())),
         search_value: Some(search_value.into()),
+        ..Default::default()
     }
 }
 
@@ -194,40 +188,6 @@ pub(crate) async fn handle_start_model_selection(mut ctx: SlashCommandContext<'_
     }
 
     start_model_picker(ctx).await
-}
-
-pub(crate) async fn handle_toggle_ide_context(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let enabled = ctx.context_manager.toggle_session_ide_context();
-
-    let latest_editor_snapshot = if let Some(bridge) = ctx.ide_context_bridge.as_mut() {
-        match bridge.refresh() {
-            Ok((snapshot, _)) => snapshot,
-            Err(err) => {
-                tracing::warn!(error = %err, "Failed to refresh IDE context while toggling /ide");
-                bridge.snapshot().cloned()
-            }
-        }
-    } else {
-        None
-    };
-
-    apply_ide_context_snapshot(
-        ctx.context_manager,
-        ctx.header_context,
-        ctx.handle,
-        ctx.config.workspace.as_path(),
-        ctx.vt_cfg.as_ref(),
-        latest_editor_snapshot.clone(),
-    );
-
-    let message = match (enabled, latest_editor_snapshot.is_some()) {
-        (true, true) => "IDE context enabled for this session.",
-        (true, false) => "IDE context enabled for this session. No IDE snapshot is currently available.",
-        (false, _) => "IDE context disabled for this session.",
-    };
-    ctx.renderer.line(MessageStyle::Info, message)?;
-
-    Ok(SlashCommandControl::Continue)
 }
 
 pub(crate) async fn handle_toggle_vim_mode(

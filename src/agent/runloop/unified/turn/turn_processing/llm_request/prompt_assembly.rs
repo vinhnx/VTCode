@@ -30,6 +30,25 @@ use super::{prompt_runtime, prompt_sections};
 
 pub(super) use prompt_runtime::render_primary_agent_runtime_context;
 
+/// Await a future, attaching a `vtcode.prompt` debug span when the
+/// `profiling` feature is enabled and awaiting plainly otherwise.
+/// Callers add `?` themselves when the future is fallible.
+macro_rules! profiled_await {
+    ($future:expr, $span_name:literal) => {{
+        #[cfg(feature = "profiling")]
+        {
+            use tracing::Instrument as _;
+            $future
+                .instrument(tracing::debug_span!(target: "vtcode.prompt", $span_name))
+                .await
+        }
+        #[cfg(not(feature = "profiling"))]
+        {
+            $future.await
+        }
+    }};
+}
+
 pub(super) struct PromptAssemblyInput<'a> {
     pub(super) turn: &'a TurnRequestSnapshot,
 }
@@ -41,35 +60,49 @@ pub(super) struct PromptAssemblyOutput {
     pub(super) few_shot_context: Option<String>,
 }
 
-fn append_recovery_mode_prompt(system_prompt: &mut String, planning_active: bool, recovery_reason: Option<&str>) {
-    system_prompt.push_str("\n[Recovery Mode]\n");
-    system_prompt.push_str("- tools_disabled: true\n");
-    system_prompt.push_str("- do_not_request_more_tools: true\n");
+/// Builds the tool-free recovery contract as a standalone tail-position
+/// system message. Keeping this text out of the system prompt preserves the
+/// prompt-cache prefix: a recovery dispatch's system prompt stays
+/// byte-identical to the tool-enabled turns that gathered the evidence being
+/// summarized. `build_turn_request` pushes the directive request-side and
+/// never persists it, so it cannot outlive the recovery episode.
+pub(super) fn recovery_mode_directive(planning_active: bool, recovery_reason: Option<&str>) -> String {
+    let mut directive = String::from("[Recovery Mode]\n");
+    directive.push_str("- tools_disabled: true\n");
+    directive.push_str("- tool_definitions_remain_for_cache_stability_only: true\n");
+    directive.push_str("- do_not_request_more_tools: true\n");
+    directive.push_str("- do_not_emit_tool_calls: true\n");
 
     if planning_active {
-        system_prompt.push_str(
+        directive.push_str(
             "- answer_mode: emit one complete approval-ready plan from evidence already collected in this turn\n",
         );
-        system_prompt.push_str("- required_output: exactly one `<proposed_plan>` block\n");
-        system_prompt.push_str(
+        directive.push_str("- required_output: exactly one `<proposed_plan>` block\n");
+        directive.push_str(
             "- required_headings: `## Summary`, `## Implementation Steps`, `## Test Cases and Validation`, `## Assumptions and Defaults`\n",
         );
-        system_prompt.push_str(
+        directive.push_str(
             "- step_format: `1. Action -> files: [concrete/path.rs] -> verify: [cargo check --locked]`; replace the examples with evidence-backed targets and one concrete command or observable check (build/test gates such as `cargo nextest run`, inspection commands such as `rg -n`/`sed -n`/`grep -n`, or an observable check); every step must name a concrete file, symbol, or behavior target and generic targets or vague checks are rejected\n",
         );
-        system_prompt.push_str(
+        directive.push_str(
             "- if evidence is incomplete: state a concrete assumption inside the plan; do not omit a required heading\n",
         );
-        system_prompt.push_str("- do_not_emit_prose_outside_plan: true\n");
+        directive.push_str("- do_not_emit_prose_outside_plan: true\n");
     } else {
-        system_prompt.push_str("- answer_mode: summarize only from evidence already collected in this turn\n");
-        system_prompt.push_str("- if evidence is incomplete, say so explicitly\n");
-        system_prompt.push_str("- keep_response_brief: true\n");
+        directive.push_str("- answer_mode: summarize only from evidence already collected in this turn\n");
+        directive.push_str("- if evidence is incomplete, say so explicitly\n");
+        directive.push_str("- keep_response_brief: true\n");
+    }
+
+    if recovery_reason == Some("preflight validation circuit breaker") {
+        directive.push_str("- summarize the rejected operation and validation errors; automatic recovery permits at most one fresh corrective turn under current policy, so do not ask the user to restate the request merely to refresh tools\n");
     }
 
     if let Some(reason) = recovery_reason {
-        let _ = writeln!(system_prompt, "- recovery_reason: {reason}");
+        let _ = writeln!(directive, "- recovery_reason: {reason}");
     }
+
+    directive
 }
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
@@ -93,21 +126,10 @@ async fn build_prompt_output(
                 planning_active: input.turn.planning_active,
                 request_user_input_enabled: input.turn.request_user_input_enabled,
             });
-    let mut system_prompt = {
-        #[cfg(feature = "profiling")]
-        {
-            use tracing::Instrument as _;
-            system_prompt_future
-                .instrument(tracing::debug_span!(target: "vtcode.prompt", "prompt_assembly.base_prompt"))
-                .await?
-        }
-        #[cfg(not(feature = "profiling"))]
-        {
-            system_prompt_future.await?
-        }
-    };
+    let mut system_prompt = profiled_await!(system_prompt_future, "prompt_assembly.base_prompt")?;
 
     let agent = &input.turn.active_primary_agent;
+    vtcode_core::prompts::apply_coordinator_role_guidance(&mut system_prompt, agent.name() == "coordinator");
     let agent_prompt_context = if agent.skills.is_empty() {
         None
     } else {
@@ -129,21 +151,12 @@ async fn build_prompt_output(
     }
 
     let tool_snapshot = {
-        if input.turn.tool_free_recovery {
-            append_recovery_mode_prompt(
-                &mut system_prompt,
-                input.turn.planning_active,
-                input.turn.recovery_reason.as_deref(),
-            );
-            SessionToolCatalogSnapshot::new(
-                ctx.tool_catalog.current_version(),
-                ctx.tool_catalog.current_epoch(),
-                input.turn.planning_active,
-                input.turn.request_user_input_enabled,
-                None,
-                false,
-            )
-        } else if !input.turn.capabilities.tools {
+        // Keep the real tool catalog during tool-free recovery so the wire
+        // tools array and the [Runtime Tool Catalog] section stay byte-stable
+        // with tool-enabled turns (prompt-cache prefix reuse). The recovery
+        // directive (a request-only tail message, see `build_turn_request`)
+        // plus `tool_choice: none` (or Merge's omitted choice) prevent calls.
+        if !input.turn.capabilities.tools {
             SessionToolCatalogSnapshot::new(
                 ctx.tool_catalog.current_version(),
                 ctx.tool_catalog.current_epoch(),
@@ -153,20 +166,17 @@ async fn build_prompt_output(
                 false,
             )
         } else {
-            let base_snapshot_future = ctx.tool_catalog.filtered_snapshot_with_stats(
+            let stable_catalog = ctx
+                .vt_cfg
+                .map(|cfg| cfg.prompt_cache.stable_tool_catalog_across_modes)
+                .unwrap_or(true);
+            let base_snapshot_future = ctx.tool_catalog.filtered_snapshot_with_stats_ex(
                 ctx.tools,
                 input.turn.planning_active,
                 input.turn.request_user_input_enabled,
+                stable_catalog,
             );
-            #[cfg(feature = "profiling")]
-            let base_snapshot = {
-                use tracing::Instrument as _;
-                base_snapshot_future
-                    .instrument(tracing::debug_span!(target: "vtcode.prompt", "prompt_assembly.tool_catalog"))
-                    .await
-            };
-            #[cfg(not(feature = "profiling"))]
-            let base_snapshot = base_snapshot_future.await;
+            let base_snapshot = profiled_await!(base_snapshot_future, "prompt_assembly.tool_catalog");
             apply_primary_agent_policy_to_tool_snapshot(
                 base_snapshot,
                 &input.turn.active_primary_agent,
@@ -193,15 +203,15 @@ async fn build_prompt_output(
             ctx.vt_cfg,
         );
 
-        if input.turn.client_local_tool_deferral && !input.turn.tool_free_recovery {
+        if input.turn.client_local_tool_deferral {
             // Client-local deferral omits deferred tools from the wire payload
             // (see `build_turn_request`); tell the model what it can still
             // reach through the relevant discovery tool. `tool_snapshot` still
             // carries the full, un-filtered tool list at this point, so
             // `deferred_count`/namespace metadata reflect what is actually
-            // being withheld this turn. Skip during tool-free recovery: that
-            // path sends `tools: None` (see `build_turn_request`), so the model
-            // cannot load deferred tools even if told about them.
+            // being withheld this turn. Recovery keeps the same wire filter
+            // for cache stability; tools are present but not callable
+            // (`tool_choice: none` / Merge omits the choice).
             append_deferred_tools_prompt_section(
                 &mut system_prompt,
                 tool_snapshot.snapshot.as_deref().map_or(&[], |tools| tools.as_slice()),
@@ -221,18 +231,7 @@ async fn build_prompt_output(
         if input.turn.tool_free_recovery {
             None
         } else {
-            let few_shot_future = prompt_sections::build_few_shot_section(ctx);
-            #[cfg(feature = "profiling")]
-            {
-                use tracing::Instrument as _;
-                few_shot_future
-                    .instrument(tracing::debug_span!(target: "vtcode.prompt", "prompt_assembly.few_shot"))
-                    .await
-            }
-            #[cfg(not(feature = "profiling"))]
-            {
-                few_shot_future.await
-            }
+            profiled_await!(prompt_sections::build_few_shot_section(ctx), "prompt_assembly.few_shot")
         }
     };
 
@@ -280,8 +279,9 @@ async fn validate_prompt_output_with_rebuild(
 mod tests {
     use std::sync::Arc;
 
+    use vtcode_core::config::types::ShellPromptProfile;
     use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
-    use vtcode_core::prompts::append_runtime_tool_prompt_sections;
+    use vtcode_core::prompts::append_runtime_tool_prompt_sections_for_profile;
 
     use super::{PromptAssemblyOutput, validate_prompt_output_alignment};
     use crate::agent::runloop::unified::turn::turn_processing::llm_request::snapshot::capture_turn_request_snapshot;
@@ -317,7 +317,12 @@ mod tests {
 
         let aligned_snapshot = make_snapshot();
         let mut aligned_prompt = "Base prompt".to_string();
-        append_runtime_tool_prompt_sections(&mut aligned_prompt, &aligned_snapshot, true);
+        append_runtime_tool_prompt_sections_for_profile(
+            &mut aligned_prompt,
+            &aligned_snapshot,
+            true,
+            ShellPromptProfile::Auto.resolve_for_current_platform(),
+        );
         let aligned_output = PromptAssemblyOutput {
             system_prompt: aligned_prompt,
             tool_snapshot: aligned_snapshot,
@@ -332,26 +337,27 @@ mod tests {
     }
 
     #[test]
-    fn planning_recovery_prompt_requires_complete_plan_artifact() {
-        let mut prompt = String::new();
-        super::append_recovery_mode_prompt(&mut prompt, true, Some("per-file read cap"));
+    fn planning_recovery_directive_requires_complete_plan_artifact() {
+        let directive = super::recovery_mode_directive(true, Some("per-file read cap"));
 
-        assert!(prompt.contains("exactly one `<proposed_plan>` block"));
-        assert!(prompt.contains("`## Summary`"));
-        assert!(prompt.contains("`## Implementation Steps`"));
-        assert!(prompt.contains("`## Test Cases and Validation`"));
-        assert!(prompt.contains("`## Assumptions and Defaults`"));
-        assert!(prompt.contains("Action -> files: [concrete/path.rs] -> verify: [cargo check --locked]"));
-        assert!(!prompt.contains("keep_response_brief"));
+        assert!(directive.contains("[Recovery Mode]"));
+        assert!(directive.contains("tools_disabled: true"));
+        assert!(directive.contains("exactly one `<proposed_plan>` block"));
+        assert!(directive.contains("`## Summary`"));
+        assert!(directive.contains("`## Implementation Steps`"));
+        assert!(directive.contains("`## Test Cases and Validation`"));
+        assert!(directive.contains("`## Assumptions and Defaults`"));
+        assert!(directive.contains("Action -> files: [concrete/path.rs] -> verify: [cargo check --locked]"));
+        assert!(directive.contains("recovery_reason: per-file read cap"));
+        assert!(!directive.contains("keep_response_brief"));
     }
 
     #[test]
-    fn execution_recovery_prompt_keeps_brief_summary_contract() {
-        let mut prompt = String::new();
-        super::append_recovery_mode_prompt(&mut prompt, false, Some("follow-up failure"));
+    fn execution_recovery_directive_keeps_brief_summary_contract() {
+        let directive = super::recovery_mode_directive(false, Some("follow-up failure"));
 
-        assert!(prompt.contains("summarize only from evidence"));
-        assert!(prompt.contains("keep_response_brief: true"));
-        assert!(!prompt.contains("exactly one `<proposed_plan>` block"));
+        assert!(directive.contains("summarize only from evidence"));
+        assert!(directive.contains("keep_response_brief: true"));
+        assert!(!directive.contains("exactly one `<proposed_plan>` block"));
     }
 }

@@ -22,7 +22,8 @@ vtcode --no-color
 
 ### Minimum Contrast (Ghostty-inspired)
 
-Inspired by [Ghostty's minimum-contrast feature](https://ghostty.org/docs/config/reference#minimum-contrast), VT Code enforces WCAG contrast ratios:
+Inspired by [Ghostty's minimum-contrast feature](https://ghostty.org/docs/config/reference#minimum-contrast), VT Code
+enforces WCAG contrast ratios:
 
 | Level      | Ratio | Use Case                                   |
 | ---------- | ----- | ------------------------------------------ |
@@ -41,7 +42,8 @@ minimum_contrast = 4.5  # WCAG AA (default)
 
 ### Safe ANSI Color Palette
 
-Based on [terminal color portability research](https://blog.xoria.org/terminal-colors/), only **11 of 32** ANSI colors are safe across common terminal themes (Basic, Tango, Solarized).
+Based on [terminal color portability research](https://blog.xoria.org/terminal-colors/), only **11 of 32** ANSI colors
+are safe across common terminal themes (Basic, Tango, Solarized).
 
 #### Safe Colors (Portable)
 
@@ -115,14 +117,11 @@ color_scheme_mode = "auto"
 
 ### Following Live Palette Changes
 
-With `color_scheme_mode = "auto"` on unix, VT Code also subscribes to
-unsolicited dark/light reports (the Contour VT extension via `CSI ? 2031 h`),
-so the theme follows the terminal live — for example when the OS switches
-between light and dark mode, or when the terminal profile changes. The
-replacement theme prefers a light/dark twin from the same theme suite (e.g.
-`catppuccin-mocha` ⇄ `catppuccin-latte`) and falls back to the default
-suggestion otherwise. Automatic switching never rewrites your saved theme
-preference; `"light"` and `"dark"` disable following entirely. Terminals that
+With `color_scheme_mode = "auto"` on unix, VT Code also subscribes to unsolicited dark/light reports (the Contour VT
+extension via `CSI ? 2031 h`), so the theme follows the terminal live — for example when the OS switches between light
+and dark mode, or when the terminal profile changes. The replacement theme prefers a light/dark twin from the same theme
+suite (e.g. `catppuccin-mocha` ⇄ `catppuccin-latte`) and falls back to the default suggestion otherwise. Automatic
+switching never rewrites your saved theme preference; `"light"` and `"dark"` disable following entirely. Terminals that
 do not support the extension simply never send reports.
 
 ## Bold-is-Bright Compatibility
@@ -144,25 +143,26 @@ bold_is_bright = true
 
 VT Code includes light and dark themes:
 
-| Theme                | Mode  | Description              |
-| -------------------- | ----- | ------------------------ |
-| ciapre               | Dark  | Default warm amber theme |
+| Theme                | Mode  | Description                  |
+| -------------------- | ----- | ---------------------------- |
+| ciapre               | Dark  | Default warm amber theme     |
 | ciapre-dark          | Dark  | Alternative warm amber theme |
-| ciapre-blue          | Dark  | Blue variant of Ciapre   |
-| ansi-classic         | Dark  | Classic ANSI palette     |
-| vitesse-black        | Dark  | Pure black background    |
-| vitesse-dark         | Dark  | Dark gray background     |
-| vitesse-dark-soft    | Dark  | Softer dark background   |
-| vitesse-light        | Light | White background         |
-| vitesse-light-soft   | Light | Cream background         |
-| catppuccin-latte     | Light | Pastel light theme       |
-| catppuccin-frappe    | Dark  | Muted dark theme         |
-| catppuccin-macchiato | Dark  | Rich dark theme          |
-| catppuccin-mocha     | Dark  | Deep dark theme          |
+| ciapre-blue          | Dark  | Blue variant of Ciapre       |
+| ansi-classic         | Dark  | Classic ANSI palette         |
+| vitesse-black        | Dark  | Pure black background        |
+| vitesse-dark         | Dark  | Dark gray background         |
+| vitesse-dark-soft    | Dark  | Softer dark background       |
+| vitesse-light        | Light | White background             |
+| vitesse-light-soft   | Light | Cream background             |
+| catppuccin-latte     | Light | Pastel light theme           |
+| catppuccin-frappe    | Dark  | Muted dark theme             |
+| catppuccin-macchiato | Dark  | Rich dark theme              |
+| catppuccin-mocha     | Dark  | Deep dark theme              |
 
 ## Theme Validation
 
-VT Code validates theme contrast at startup and logs warnings for colors that don't meet the configured minimum contrast ratio.
+VT Code validates theme contrast at startup and logs warnings for colors that don't meet the configured minimum contrast
+ratio.
 
 ## API Reference
 

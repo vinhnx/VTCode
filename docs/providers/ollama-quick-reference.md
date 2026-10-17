@@ -4,12 +4,12 @@ Quick lookup for the Ollama provider submodules added from OpenAI Codex.
 
 ## Modules
 
-| Module | Purpose | Key Types |
-|--------|---------|-----------|
-| `ollama::client` | Server interaction | `OllamaClient` |
-| `ollama::pull` | Progress reporting | `OllamaPullEvent`, `OllamaPullProgressReporter` |
-| `ollama::parser` | Event parsing | `pull_events_from_value()` |
-| `ollama::url` | URL utilities | `is_openai_compatible_base_url()`, `base_url_to_host_root()` |
+| Module           | Purpose            | Key Types                                                    |
+| ---------------- | ------------------ | ------------------------------------------------------------ |
+| `ollama::client` | Server interaction | `OllamaClient`                                               |
+| `ollama::pull`   | Progress reporting | `OllamaPullEvent`, `OllamaPullProgressReporter`              |
+| `ollama::parser` | Event parsing      | `pull_events_from_value()`                                   |
+| `ollama::url`    | URL utilities      | `is_openai_compatible_base_url()`, `base_url_to_host_root()` |
 
 ## Common Tasks
 
@@ -67,7 +67,7 @@ assert_eq!(host, "http://localhost:11434");
 
 ## Type Hierarchy
 
-```
+```text
 OllamaPullEvent (enum)
 ├── Status(String)
 ├── ChunkProgress { digest, total, completed }
@@ -101,7 +101,7 @@ pub trait OllamaPullProgressReporter {
 
 Connection errors include helpful messages:
 
-```
+```text
 No running Ollama server detected. Start it with: `ollama serve` (after installing)
 Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file
 ```
@@ -128,4 +128,4 @@ cargo test --lib ollama
 
 ## Source
 
-Adapted from https://github.com/openai/codex/tree/main/codex-rs/ollama
+Adapted from <https://github.com/openai/codex/tree/main/codex-rs/ollama>

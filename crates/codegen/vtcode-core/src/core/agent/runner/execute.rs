@@ -3,7 +3,7 @@ use super::continuation::{CompletionAssessment, VerificationResult};
 use super::escalation::{EscalationDecision, EscalationGate};
 use super::execute_helpers::{
     discard_refused_assistant_message, emit_blocked_handoff_events, prepare_responses_request_messages,
-    record_terminal_turn_event, stop_reason_from_finish_reason, summarize_verification_output,
+    record_terminal_turn_event, stop_reason_from_finish_reason,
 };
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
@@ -24,9 +24,6 @@ use crate::core::agent::hash_utils::stable_system_prefix_hash;
 use crate::core::agent::refusal;
 use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
-use crate::core::agent::state::{
-    clear_old_tool_results, normalize_history_for_request_shared, should_apply_local_tool_result_clearing,
-};
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{Message, ToolCall, ToolChoice, ToolDefinition, supports_responses_chaining};
@@ -88,6 +85,23 @@ enum AssessmentResolution {
     VerifyNotHandled,
 }
 
+/// An aborted headless parent cannot leave scheduler-owned commands running.
+struct MatrixExecutionCleanup(Option<Arc<crate::subagents::SubagentController>>);
+impl Drop for MatrixExecutionCleanup {
+    fn drop(&mut self) {
+        if let Some(controller) = self.0.take().filter(|controller| controller.matrix_is_driving()) {
+            controller.request_matrix_stop();
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    if let Err(error) = controller.cancel_matrix().await {
+                        tracing::warn!(%error, "failed to persist aborted matrix cancellation");
+                    }
+                });
+            }
+        }
+    }
+}
+
 impl AgentRunner {
     fn runtime_prompt_policy_hash(&self) -> u64 {
         let model = self.get_selected_model();
@@ -128,6 +142,7 @@ impl AgentRunner {
             self._workspace.as_path(),
             prompt_tools.iter().map(|tool| tool.function_name().to_string()),
         );
+        prompt_context.set_current_directory(self._workspace.clone());
         prompt_context.load_available_skills_async().await;
 
         let (prompt, report) =
@@ -217,6 +232,10 @@ impl AgentRunner {
         let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
             return;
         };
+        crate::prompts::apply_coordinator_role_guidance(
+            system_prompt,
+            active_primary_agent.identity.name == "coordinator",
+        );
 
         system_prompt.push_str("\n\n## Active Primary Agent Runtime State\n");
         system_prompt.push_str("- Active agent: ");
@@ -422,50 +441,6 @@ impl AgentRunner {
         }
     }
 
-    async fn run_verification_commands(
-        &self,
-        commands: &[String],
-        event_recorder: &mut ExecEventRecorder,
-    ) -> Result<Vec<VerificationResult>> {
-        let mut results = Vec::with_capacity(commands.len());
-        for command in commands {
-            let command_event = event_recorder.command_started(command);
-            let payload = json!({
-                "action": "run",
-                "command": command,
-                "workdir": self._workspace.display().to_string(),
-                "yield_time_ms": 1000,
-            });
-            let result = self.tool_registry.execute_harness_command_session(payload).await?;
-            let exit_code = result
-                .get("exit_code")
-                .and_then(serde_json::Value::as_i64)
-                .map(|value| value as i32);
-            let success = exit_code.unwrap_or(0) == 0;
-            let output = summarize_verification_output(&result);
-            event_recorder.command_finished(
-                &command_event,
-                if success {
-                    crate::exec::events::CommandExecutionStatus::Completed
-                } else {
-                    crate::exec::events::CommandExecutionStatus::Failed
-                },
-                exit_code,
-                &output,
-            );
-            results.push(VerificationResult {
-                command: command.clone(),
-                success,
-                exit_code,
-                output,
-            });
-            if !success {
-                break;
-            }
-        }
-        Ok(results)
-    }
-
     /// Emit the `ContinuationStarted` harness event for a forced-continuation
     /// assessment. Centralizes the (reason-only) event shape used by both the
     /// pre- and post-verification continuation paths.
@@ -493,7 +468,10 @@ impl AgentRunner {
                 None,
                 None,
             );
-        } else {
+        } else if !commands.is_empty()
+            && results.len() == commands.len()
+            && results.iter().all(|result| result.exit_code == Some(0))
+        {
             event_recorder.harness_event(
                 HarnessEventKind::VerificationPassed,
                 Some(format!("Verification passed: {}", commands.join(", "))),
@@ -508,6 +486,9 @@ impl AgentRunner {
 
     /// Execute a task with this agent
     pub async fn execute_task(&mut self, task: &Task, contexts: &[ContextItem]) -> Result<TaskResults> {
+        let _matrix_cleanup = MatrixExecutionCleanup(self.tool_registry.subagent_controller());
+        self.tool_registry.begin_tracker_request(false);
+        self.tool_registry.begin_patch_recovery_turn();
         // Phase 1: Setup — harness alignment, conversation building, session init,
         // orchestration planning. Extracted to `prepare_task_execution` for testability.
         let setup = self.prepare_task_execution(task, contexts).await?;
@@ -522,6 +503,8 @@ impl AgentRunner {
         let max_tool_loops = setup.max_tool_loops;
         let max_context_tokens = setup.max_context_tokens;
         let mut runtime = setup.runtime;
+        self.tool_registry
+            .restore_completion_verification_from_history(&runtime.state.messages);
         // Normalize usage from the provider actually serving this session;
         // configuration may contain an alias (or be inferred from the model).
         runtime.state.stats.provider_name = self.provider_client.name().to_string();
@@ -537,7 +520,6 @@ impl AgentRunner {
 
         let result: Result<_> = {
             for turn in 0..self.max_turns {
-                self.tool_registry.begin_turn_preview_window();
                 if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
                     self.runner_println(format_args!(
                         "{} {}",
@@ -558,7 +540,6 @@ impl AgentRunner {
                 }
 
                 if runtime.state.is_completed {
-                    runtime.state.outcome = TaskOutcome::Success;
                     break;
                 }
 
@@ -578,6 +559,7 @@ impl AgentRunner {
                 {
                     let message = error.to_string();
                     event_recorder.turn_blocked(vtcode_exec_events::TurnBlockedEvent {
+                        completed_at: None,
                         message: message.clone(),
                         last_tool: None,
                         blocked_streak: 0,
@@ -627,63 +609,6 @@ impl AgentRunner {
                     .max_tokens
                     .or(if is_simple_task { Some(800) } else { Some(2000) });
 
-                let context_budget = crate::compaction::effective_context_budget(
-                    Some(self.config()),
-                    self.provider_client.as_ref(),
-                    &turn_model,
-                );
-                runtime.state.constraints.max_context_tokens = context_budget;
-                let reserved_output_tokens = max_tokens
-                    .map_or(crate::compaction::memory_envelope::DEFAULT_OUTPUT_RESERVE_TOKENS, |value| value as usize);
-                let prompt_overhead_tokens = (prompt_bundle.system_prompt_report.token_estimate as usize)
-                    .saturating_add(prompt_bundle.tool_def_tokens as usize);
-                tracing::info!(
-                    turn, model = %turn_model, context_budget,
-                    reserved_output_tokens, prompt_overhead_tokens,
-                    "Resolved per-turn context budget denominator"
-                );
-                self.maybe_auto_compact(
-                    &mut runtime.state,
-                    &mut event_recorder,
-                    &turn_model,
-                    preserve_recent_turns,
-                    prompt_overhead_tokens,
-                    reserved_output_tokens,
-                    &mut prompt_bundle.request_envelope,
-                )
-                .await;
-                let (fits, estimated, budget) = runtime.state.preflight_token_check(
-                    prompt_bundle.system_prompt_report.token_estimate as usize,
-                    prompt_bundle.tool_def_tokens as usize,
-                    reserved_output_tokens,
-                );
-                if !fits {
-                    // Advisory only: the estimate can overshoot (un-droppable
-                    // messages, suppressed compaction), and the provider owns
-                    // the authoritative context limit. Aborting here turned a
-                    // recoverable situation into a dead `exec`/auto run.
-                    tracing::warn!(
-                        estimated,
-                        budget,
-                        "Pre-flight token check failed: prompt exceeds context budget after compaction"
-                    );
-                    #[allow(
-                        clippy::cast_sign_loss,
-                        reason = "Intentional compatibility, platform, or test-only suppression."
-                    )]
-                    let pct = (estimated as f64 / budget.max(1) as f64 * 100.0) as u32;
-                    runtime
-                        .state
-                        .warnings
-                        .push(format!("Pre-flight check: {pct}% of context budget used before LLM call"));
-                }
-
-                let parallel_tool_config = if self.provider_client.supports_parallel_tool_config(&turn_model) {
-                    Some(Box::new(crate::llm::provider::ParallelToolConfig::anthropic_optimized()))
-                } else {
-                    None
-                };
-
                 let provider_kind = turn_model
                     .parse::<ModelId>()
                     .map(|model| model.provider())
@@ -720,6 +645,87 @@ impl AgentRunner {
                     runtime.state.last_processed_message_idx = runtime.state.conversation.len();
                 }
 
+                let context_budget = crate::compaction::effective_context_budget(
+                    Some(self.config()),
+                    self.provider_client.as_ref(),
+                    &turn_model,
+                );
+                runtime.state.constraints.max_context_tokens = context_budget;
+                let reserved_output_tokens = max_tokens
+                    .map_or(crate::compaction::memory_envelope::DEFAULT_OUTPUT_RESERVE_TOKENS, |value| value as usize);
+                let prompt_overhead_tokens = (prompt_bundle.system_prompt_report.token_estimate as usize)
+                    .saturating_add(prompt_bundle.tool_def_tokens as usize);
+                tracing::info!(
+                    turn, model = %turn_model, context_budget,
+                    reserved_output_tokens, prompt_overhead_tokens,
+                    "Resolved per-turn context budget denominator"
+                );
+                let mut normalized_messages = self.project_request_history(
+                    &runtime.state,
+                    &turn_model,
+                    prompt_overhead_tokens,
+                    reserved_output_tokens,
+                );
+                let projected_token_usage = normalized_messages
+                    .iter()
+                    .map(Message::estimate_tokens)
+                    .fold(0usize, usize::saturating_add)
+                    .saturating_add(prompt_overhead_tokens);
+                let compacted = self
+                    .maybe_auto_compact(
+                        &mut runtime.state,
+                        &mut event_recorder,
+                        &turn_model,
+                        preserve_recent_turns,
+                        projected_token_usage,
+                        reserved_output_tokens,
+                        &mut prompt_bundle.request_envelope,
+                    )
+                    .await;
+                let estimated = if compacted {
+                    normalized_messages = self.project_request_history(
+                        &runtime.state,
+                        &turn_model,
+                        prompt_overhead_tokens,
+                        reserved_output_tokens,
+                    );
+                    normalized_messages
+                        .iter()
+                        .map(Message::estimate_tokens)
+                        .fold(0usize, usize::saturating_add)
+                        .saturating_add(prompt_overhead_tokens)
+                } else {
+                    projected_token_usage
+                };
+                let budget = context_budget.saturating_sub(reserved_output_tokens);
+                let fits = context_budget == 0 || estimated <= budget;
+                if !fits {
+                    // Advisory only: the estimate can overshoot (un-droppable
+                    // messages, suppressed compaction), and the provider owns
+                    // the authoritative context limit. Aborting here turned a
+                    // recoverable situation into a dead `exec`/auto run.
+                    tracing::warn!(
+                        estimated,
+                        budget,
+                        "Pre-flight token check failed: prompt exceeds context budget after compaction"
+                    );
+                    #[allow(
+                        clippy::cast_sign_loss,
+                        reason = "Intentional compatibility, platform, or test-only suppression."
+                    )]
+                    let pct = (estimated as f64 / budget.max(1) as f64 * 100.0) as u32;
+                    runtime
+                        .state
+                        .warnings
+                        .push(format!("Pre-flight check: {pct}% of context budget used before LLM call"));
+                }
+
+                let parallel_tool_config = if self.provider_client.supports_parallel_tool_config(&turn_model) {
+                    Some(Box::new(crate::llm::provider::ParallelToolConfig::anthropic_optimized()))
+                } else {
+                    None
+                };
+
                 let reasoning_mapping = turn_reasoning
                     .map(|requested| {
                         crate::llm::reasoning_effort::ReasoningEffortMapper::resolve(
@@ -735,6 +741,7 @@ impl AgentRunner {
                     Err(error) => {
                         let message = error.to_string();
                         event_recorder.turn_blocked(vtcode_exec_events::TurnBlockedEvent {
+                            completed_at: None,
                             message: message.clone(),
                             last_tool: None,
                             blocked_streak: 0,
@@ -817,30 +824,9 @@ impl AgentRunner {
                     top_p_override = top_p_override.filter(|value| *value >= 0.95);
                 }
 
-                let normalized_messages = normalize_history_for_request_shared(Arc::clone(&runtime.state.messages));
-                // Local stand-in for Anthropic `clear_tool_uses` on routes
-                // without context edits (same gate as the interactive
-                // runloop). Request-only: durable history is untouched.
-                let normalized_messages = {
-                    let clearing = &self.config().agent.harness.tool_result_clearing;
-                    // Headless requests never attach native context
-                    // management (`context_management: None` in the
-                    // HarnessRequestPlanInput below), so the gate must not
-                    // consume the provider capability: for Anthropic that
-                    // combination would apply neither native nor local
-                    // clearing and old tool bodies would ride every request.
-                    if should_apply_local_tool_result_clearing(&provider_name, false, clearing.enabled) {
-                        Arc::new(clear_old_tool_results(
-                            normalized_messages.as_slice(),
-                            clearing.trigger_tokens,
-                            clearing.keep_tool_uses,
-                            clearing.clear_at_least_tokens,
-                            clearing.clear_tool_inputs,
-                        ))
-                    } else {
-                        normalized_messages
-                    }
-                };
+                self.tool_registry
+                    .set_inspection_mode(self.config().agent.harness.inspection.mode);
+                self.tool_registry.reconcile_source_inspection(&normalized_messages);
                 let (request_messages, previous_response_id) = prepare_responses_request_messages(
                     &mut runtime.state.previous_response_chains,
                     &provider_name,
@@ -1222,7 +1208,60 @@ impl AgentRunner {
                     }
                 }
 
-                if !runtime.state.is_completed
+                if self
+                    .active_primary_agent
+                    .as_ref()
+                    .is_some_and(|agent| agent.identity.name == "coordinator")
+                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
+                    && let Some(controller) = self.tool_registry.subagent_controller()
+                    && let Some(snapshot) = controller.matrix_snapshot().await
+                {
+                    use crate::exec::events::matrix::MatrixLifecycle;
+                    match snapshot.lifecycle {
+                        MatrixLifecycle::Running | MatrixLifecycle::Verifying => {
+                            let settled = controller
+                                .wait_matrix_idle()
+                                .await
+                                .context("matrix disappeared before completion")?;
+                            anyhow::ensure!(
+                                !matches!(settled.lifecycle, MatrixLifecycle::Running | MatrixLifecycle::Verifying),
+                                "matrix stopped without a durable result; reconcile owned cleanup before continuation"
+                            );
+                            runtime.state.is_completed = false;
+                            runtime.state.add_user_message(format!(
+                                "Durable matrix results: {}. Report outcomes from this snapshot; matrix success requires Succeeded. Other states require a coordinator decision.",
+                                serde_json::to_string(&settled)?
+                            ));
+                            forced_continuation = true;
+                        }
+                        MatrixLifecycle::Succeeded => {
+                            runtime.state.is_completed = true;
+                            runtime.state.outcome = TaskOutcome::Success;
+                            break;
+                        }
+                        MatrixLifecycle::Cancelled => {
+                            runtime.state.outcome = TaskOutcome::Cancelled;
+                            break;
+                        }
+                        MatrixLifecycle::Blocked => {
+                            runtime.state.outcome = TaskOutcome::Failed {
+                                reason: "matrix requires a coordinator decision or confirmed owned cleanup".into(),
+                                accomplished: vec![],
+                                recovery_suggestion: Some(format!(
+                                    "Resume session and inspect matrix {} status",
+                                    snapshot.spec.id
+                                )),
+                                checkpoint_path: None,
+                            };
+                            should_write_blocked_handoff = true;
+                            break;
+                        }
+                        MatrixLifecycle::Created | MatrixLifecycle::Paused => {}
+                    }
+                }
+
+                if !forced_continuation
+                    && !runtime.state.is_completed
                     && effective_tool_calls.as_ref().is_none_or(|tool_calls| tool_calls.is_empty())
                     && !response.content_text().is_empty()
                 {
@@ -1238,7 +1277,9 @@ impl AgentRunner {
                         break;
                     }
 
-                    if check_completion_candidate(response.content_text()) {
+                    if check_completion_candidate(response.content_text())
+                        || self.tool_registry.completion_verification_pending()
+                    {
                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
@@ -1246,9 +1287,53 @@ impl AgentRunner {
                                 .green()
                                 .bold()
                         ));
-                        let assessment = continuation_controller
-                            .assess_completion(&effective_task, &runtime.state)
+                        let mut assessment = continuation_controller
+                            .assess_completion(
+                                &effective_task,
+                                &runtime.state,
+                                self.tool_registry.tracker_adopted_for_request(),
+                            )
                             .await?;
+
+                        if self.tool_registry.completion_verification_pending()
+                            && !matches!(assessment, CompletionAssessment::Continue { .. })
+                        {
+                            let mut commands = match &assessment {
+                                CompletionAssessment::Verify { commands } => commands.clone(),
+                                _ => Vec::new(),
+                            };
+                            if commands.is_empty() {
+                                commands = self.tool_registry.missing_required_completion_verifiers();
+                            }
+                            if commands.is_empty() {
+                                let override_command =
+                                    self.config().agent.harness.verification.default_verifier_override.as_deref();
+                                commands = override_command
+                                    .filter(|command| {
+                                        crate::tools::tool_intent::classify_shell_activity(
+                                            tools::EXEC_COMMAND,
+                                            &json!({"cmd":command}),
+                                        ) == crate::tools::tool_intent::ShellActivity::Verification
+                                    })
+                                    .map(str::to_owned)
+                                    .or_else(|| {
+                                        crate::tools::tool_intent::default_verifier_for_workspace(&self._workspace)
+                                    })
+                                    .into_iter()
+                                    .collect();
+                            }
+                            if commands.is_empty() {
+                                runtime.state.outcome = TaskOutcome::failed(
+                                    self.tool_registry.unverified_completion_reason(),
+                                    vec![],
+                                    None,
+                                    None,
+                                );
+                                should_write_blocked_handoff = true;
+                                break;
+                            }
+                            assessment = CompletionAssessment::Verify { commands };
+                        }
 
                         // Verify requires running verification commands before
                         // re-dispatching the after_verification result through the
@@ -1263,9 +1348,13 @@ impl AgentRunner {
                                 None,
                                 None,
                             );
-                            let verification_results =
-                                self.run_verification_commands(commands, &mut event_recorder).await?;
+                            let verification_results = self
+                                .run_verification_commands(commands, &mut event_recorder, &mut runtime)
+                                .await?;
                             self.emit_verification_outcome(&mut event_recorder, commands, &verification_results);
+                            if matches!(runtime.state.outcome, TaskOutcome::Cancelled) {
+                                break;
+                            }
 
                             let post_verification =
                                 continuation_controller.after_verification(&verification_results).await?;
@@ -1334,7 +1423,9 @@ impl AgentRunner {
                             let safety_handoff =
                                 crate::core::agent::completion::tracker_final_text_is_safety_handoff(status_text);
                             if !safety_handoff {
-                                let incomplete = continuation_controller.incomplete_tracker_labels().await?;
+                                let incomplete = continuation_controller
+                                    .incomplete_tracker_labels(self.tool_registry.tracker_adopted_for_request())
+                                    .await?;
                                 if !incomplete.is_empty() {
                                     let joined = incomplete.join(", ");
                                     let reason = format!("Task tracker is incomplete: {joined}.");
@@ -1375,6 +1466,58 @@ impl AgentRunner {
                     )
                     .await?;
                     super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
+
+                    if let Some(outcome) = self.tool_registry.matrix_worker_outcome() {
+                        runtime.state.outcome = if outcome == crate::exec::events::matrix::MatrixOutcome::Success {
+                            TaskOutcome::Success
+                        } else {
+                            TaskOutcome::failed(format!("Matrix worker reported {outcome:?}"), vec![], None, None)
+                        };
+                        runtime.state.is_completed = true;
+                        break;
+                    }
+
+                    if self
+                        .active_primary_agent
+                        .as_ref()
+                        .is_some_and(|agent| agent.identity.name == "coordinator")
+                        && let Some(controller) = self.tool_registry.subagent_controller()
+                        && let Some(snapshot) = controller.matrix_snapshot().await
+                        && (matches!(
+                            snapshot.lifecycle,
+                            crate::exec::events::matrix::MatrixLifecycle::Running
+                                | crate::exec::events::matrix::MatrixLifecycle::Verifying
+                        ) || controller.matrix_is_driving())
+                    {
+                        // Headless sessions await owned work before another model turn;
+                        // status polling must not exhaust the coordinator's loop budget.
+                        let settled = loop {
+                            tokio::select! {
+                                settled = controller.wait_matrix_idle() => break settled.context("matrix disappeared before completion")?,
+                                () = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                                    if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
+                                        controller.cancel_matrix().await?;
+                                        runtime.state.outcome = TaskOutcome::Cancelled;
+                                    }
+                                }
+                            }
+                        };
+                        anyhow::ensure!(
+                            !matches!(
+                                settled.lifecycle,
+                                crate::exec::events::matrix::MatrixLifecycle::Running
+                                    | crate::exec::events::matrix::MatrixLifecycle::Verifying
+                            ),
+                            "matrix stopped without a durable result; reconcile owned cleanup before continuation"
+                        );
+                        if matches!(runtime.state.outcome, TaskOutcome::Cancelled) {
+                            break;
+                        }
+                        runtime.state.add_user_message(format!(
+                            "Durable matrix results: {}. Report success only for Succeeded; other states require a coordinator decision.",
+                            serde_json::to_string(&settled)?
+                        ));
+                    }
                 }
 
                 // Refresh tool definitions if the catalog was mutated during tool
@@ -1482,7 +1625,20 @@ impl AgentRunner {
             }
 
             runtime.state.finalize_outcome(self.max_turns);
+            if runtime.state.outcome.is_success() && self.tool_registry.completion_verification_pending() {
+                runtime.state.is_completed = false;
+                runtime.state.outcome =
+                    TaskOutcome::failed(self.tool_registry.unverified_completion_reason(), vec![], None, None);
+                should_write_blocked_handoff = true;
+            }
 
+            if self.tool_registry.completion_verification_pending() && !runtime.state.outcome.is_success() {
+                runtime.state.warnings.push(format!(
+                    "{} Blocker: {}",
+                    self.tool_registry.unverified_completion_reason(),
+                    runtime.state.outcome.description()
+                ));
+            }
             let total_duration_ms = run_started_at.elapsed().as_millis();
 
             // Agent execution completed

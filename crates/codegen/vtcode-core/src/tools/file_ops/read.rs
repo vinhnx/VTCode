@@ -18,6 +18,8 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
+pub(crate) const PATCH_READ_CACHE_NONCE: &str = "__vtcode_patch_read_nonce";
+
 const SPOOL_CHUNK_DEFAULT_LIMIT_LINES: usize = DEFAULT_NEXT_READ_LIMIT;
 const SPOOL_CHUNK_MAX_LIMIT_LINES: usize = 50;
 const SPOOL_CHUNK_SENTINEL_MAX_TOKENS: usize = 4096;
@@ -172,6 +174,55 @@ fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
     }
 
     handler_args_json
+}
+
+/// Locate a verbatim line slice using the selected reader's coordinate system.
+pub(crate) fn source_line_offset(args: &Value) -> Option<usize> {
+    if !is_new_read_request(args) && is_legacy_read_request(args, false) {
+        // Legacy line paging is zero-based; modern slice offsets are one-based.
+        let input: Input = serde_json::from_value(args.clone()).ok()?;
+        return Some(input.offset_lines.unwrap_or(0));
+    }
+    let normalized = build_read_handler_args(args, Path::new("source"));
+    let read: ReadFileArgs = serde_json::from_value(normalized).ok()?;
+    if read.offset_bytes.is_some()
+        || read.page_size_bytes.is_some()
+        || !matches!(read.mode, crate::tools::handlers::read_file::ReadMode::Slice)
+    {
+        return None;
+    }
+    read.offset.checked_sub(1)
+}
+
+/// Admit recovery only for an explicit line range the selected reader honors.
+pub(crate) fn bounded_line_read_path(args: &Value, max_lines: usize) -> Option<String> {
+    let path_args: PathArgs = serde_json::from_value(args.clone()).ok()?;
+    let path = Path::new(&path_args.path);
+    if is_image_path(path) {
+        return None;
+    }
+    if is_new_read_request(args) || !is_legacy_read_request(args, false) {
+        let normalized = build_read_handler_args(args, path);
+        // A missing/zero bound uses the handler default, not a targeted range.
+        normalized.get("limit").and_then(parse_usize_value)?;
+        let read: ReadFileArgs = serde_json::from_value(normalized).ok()?;
+        if !(1..=max_lines).contains(&read.limit)
+            || read.effective_line_limit() > max_lines
+            || read.offset == 0
+            || read.offset_bytes.is_some()
+            || read.page_size_bytes.is_some()
+            || !matches!(read.mode, crate::tools::handlers::read_file::ReadMode::Slice)
+        {
+            return None;
+        }
+    } else {
+        let read: Input = serde_json::from_value(args.clone()).ok()?;
+        let limit = read.page_size_lines?;
+        if !(1..=max_lines).contains(&limit) || read.offset_bytes.is_some() || read.page_size_bytes.is_some() {
+            return None;
+        }
+    }
+    Some(path_args.path)
 }
 
 fn parse_usize_value(value: &Value) -> Option<usize> {
@@ -355,6 +406,11 @@ impl FileOpsTool {
     }
 
     pub async fn read_file(&self, args: Value) -> Result<Value> {
+        let use_cache = args.get(PATCH_READ_CACHE_NONCE).is_none();
+        self.read_file_with_cache(args, use_cache).await
+    }
+
+    async fn read_file_with_cache(&self, args: Value, use_cache: bool) -> Result<Value> {
         let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
 
         let path_args: PathArgs = PathArgs::deserialize(&args).map_err(|_e| {
@@ -414,7 +470,8 @@ impl FileOpsTool {
             let is_new_request = is_new_read_request(&args);
 
             let cache_config = file_read_cache_config();
-            let cache_key = if cache_config.enabled
+            let cache_key = if use_cache
+                && cache_config.enabled
                 && history_jsonl
                 && size_bytes >= cache_config.min_size_bytes as u64
                 && size_bytes <= cache_config.max_size_bytes as u64
@@ -495,7 +552,7 @@ impl FileOpsTool {
                                 builder = builder.field(
                                     "next_action",
                                     json!(
-                                        "Use the `next_read_args` field above to continue, or `exec_command.cmd` with `rg` and a specific pattern. Re-reading the same offset returns nothing new and counts toward the per-turn spool chunk cap, which blocks further reads."
+                                        "Call file read again with the `next_read_args` object above verbatim as arguments to get the next chunk, or narrow with `exec_command.cmd` using `rg` and a specific pattern. Re-reading the same offset returns nothing new and counts toward the per-turn spool chunk cap, which blocks further reads."
                                     ),
                                 );
                             }
@@ -519,10 +576,10 @@ impl FileOpsTool {
                             let next_offset = requested_offset.saturating_add(lines_returned);
                             let next_action = if capped_by_limit {
                                 "Read clamped to max_read_lines. \
-                                 Use `next_read_args` to continue reading subsequent chunks; \
+                                 Call file read again with `next_read_args` verbatim to get subsequent chunks; \
                                  do not re-read the same range."
                             } else {
-                                "Use `next_read_args` to continue reading subsequent chunks; \
+                                "Call file read again with `next_read_args` verbatim to get subsequent chunks; \
                                  do not re-read the same range."
                             };
                             builder = builder

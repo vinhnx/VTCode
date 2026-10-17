@@ -42,6 +42,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {
+                context: None,
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
@@ -54,6 +55,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
         }),
         ThreadEvent::ItemUpdated(ItemUpdatedEvent {
             item: ThreadItem {
+                context: None,
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
@@ -66,6 +68,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
         }),
         ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
@@ -77,6 +80,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
             },
         }),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage {
                 input_tokens: 128,
                 cached_input_tokens: 0,

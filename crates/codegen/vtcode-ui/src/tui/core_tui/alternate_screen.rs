@@ -158,6 +158,11 @@ impl AlternateScreenSession {
 
         // Restore in proper order to prevent leakage
 
+        // Clear the alternate viewport BEFORE leaving so the last TUI frame
+        // is not revealed in the main scrollback (mirrors the canonical
+        // `panic_hook::restore_tui` ordering).
+        let _ = execute!(stdout, Clear(ClearType::All));
+
         // 1. Leave alternate screen FIRST
         if let Err(e) = execute!(stdout, LeaveAlternateScreen) {
             tracing::warn!(%e, "failed to leave alternate screen");

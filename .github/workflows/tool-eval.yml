@@ -6,20 +6,9 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    paths:
-      - '**.rs'
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
-      - 'scripts/**'
-      - '.github/workflows/**'
-  pull_request:
-    paths:
-      - '**.rs'
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
-      - 'scripts/**'
-      - '.github/workflows/**'
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
 
 env:
   CARGO_INCREMENTAL: 0
@@ -39,6 +28,7 @@ jobs:
       contents: read
     env:
       SCCACHE_GHA_ENABLED: "true"
+      SCCACHE_CACHE_SIZE: "2G"
       RUSTC_WRAPPER: "sccache"
     steps:
       - name: Checkout
@@ -48,13 +38,18 @@ jobs:
           persist-credentials: false
 
       - name: Install ripgrep (for grep_search)
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y ripgrep
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          cache-bin: false
 
       - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
 
@@ -74,3 +69,5 @@ jobs:
           path: |
             tool-eval.log
             tool-eval.json
+          retention-days: 2
+          compression-level: 0

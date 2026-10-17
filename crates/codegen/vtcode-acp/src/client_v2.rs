@@ -1,3 +1,8 @@
+//! Legacy crate-internal HTTP client (JSON-RPC over `/rpc`+SSE).
+//!
+//! Not ACP stdio compliant despite the name. Do not extend; canonical client
+//! interop is the SACP agent in `zed/`.
+//!
 //! ACP Client V2 with full protocol compliance
 //!
 //! This module implements the ACP client with:

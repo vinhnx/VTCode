@@ -14,9 +14,8 @@ mod config_toml;
 mod control;
 #[path = "diagnostics.rs"]
 mod diagnostics;
-#[path = "effort.rs"]
-mod effort;
-pub(crate) use effort::{effort_description, persist_effort_preference};
+#[path = "fast.rs"]
+mod fast;
 #[path = "interactive.rs"]
 mod interactive;
 #[path = "local_server.rs"]
@@ -47,9 +46,7 @@ mod webmcp;
 mod workspace;
 
 pub(super) use agents::{handle_manage_agents, handle_manage_subprocesses};
-pub(super) use apps::{
-    handle_launch_editor, handle_new_session, handle_open_docs, handle_open_donate_links, handle_open_feedback,
-};
+pub(super) use apps::{handle_new_session, handle_open_docs, handle_open_donate_links, handle_open_feedback};
 pub(super) use compact::handle_compact_conversation;
 pub(super) use control::{
     handle_clear_conversation, handle_clear_screen, handle_copy_latest_assistant_reply, handle_exit,
@@ -58,8 +55,8 @@ pub(super) use control::{
     show_settings_at_path_from_context,
 };
 pub(super) use diagnostics::{
-    handle_run_checkup, handle_show_memory, handle_show_memory_config, handle_show_status,
-    handle_start_checkup_interactive, handle_start_terminal_setup,
+    handle_run_checkup, handle_show_memory_config, handle_show_status, handle_start_checkup_interactive,
+    handle_start_terminal_setup,
 };
 // Re-exported at the `slash_commands` level so sibling command modules (compact,
 // config_toml, the future checkup flow, etc.) share one tested
@@ -67,7 +64,7 @@ pub(super) use diagnostics::{
 // the ConfigManager dance inline.
 #[expect(unused_imports, reason = "guard-rail for the upcoming /checkup 7-step flow")]
 pub(super) use diagnostics::memory::config_persistence::persist_workspace_config_change;
-pub(super) use effort::handle_set_effort;
+pub(super) use fast::handle_toggle_fast_mode;
 pub(super) use interactive::{handle_show_jobs_panel, handle_toggle_tasks_panel};
 pub(super) use local_server::handle_manage_local_server;
 pub(super) use log_viewer::handle_show_log_viewer;
@@ -78,16 +75,14 @@ pub(super) use oauth::{
 };
 pub(super) use planning::handle_toggle_planning_workflow;
 pub(super) use plugins::handle_manage_plugins;
-pub(super) use rewind::{
-    handle_open_rewind_picker, handle_redo, handle_rewind_latest, handle_rewind_recover, handle_rewind_to_turn,
-};
+pub(super) use rewind::{handle_open_rewind_picker, handle_redo, handle_rewind_latest, handle_rewind_to_turn};
 pub(super) use share_log::handle_share_log;
 pub(super) use skills::handle_manage_skills;
 pub(super) use ui::{
-    handle_continue_latest, handle_select_primary_agent_from_slash, handle_start_file_browser,
-    handle_start_history_picker, handle_start_mode_palette, handle_start_model_selection, handle_start_session_palette,
+    handle_select_primary_agent_from_slash, handle_start_file_browser, handle_start_history_picker,
+    handle_start_mode_palette, handle_start_model_selection, handle_start_session_palette,
     handle_start_statusline_setup, handle_start_terminal_title_setup, handle_start_theme_palette, handle_theme_changed,
-    handle_toggle_ide_context, handle_toggle_vim_mode,
+    handle_toggle_vim_mode,
 };
 pub(super) use update::handle_update;
 pub(super) use webmcp::{handle_show_webmcp_help, handle_show_webmcp_status, handle_start_webmcp, handle_stop_webmcp};

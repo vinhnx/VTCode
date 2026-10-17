@@ -46,10 +46,6 @@ const COMMAND_PREVIEW_MAX_BYTES: usize = 6 * 1024;
 const COMMAND_PREVIEW_MAX_LINES: usize = 80;
 const PREVIEW_NOTICE_RESERVE_BYTES: usize = 64;
 
-fn is_command_session_tool_name(tool_name: &str) -> bool {
-    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some()
-}
-
 fn condense_content(content: &str) -> String {
     condense_text_bytes(content, CONDENSE_HEAD_BYTES, CONDENSE_TAIL_BYTES)
 }
@@ -73,13 +69,23 @@ fn command_preview_byte_limit(max_preview_bytes: Option<usize>) -> usize {
         .min(COMMAND_PREVIEW_MAX_BYTES)
 }
 
-fn inspection_preview_content(content: &str, max_preview_bytes: Option<usize>) -> String {
+/// Shared budget half of the bounded command previews below: the byte limit
+/// plus the content budget (limit minus notice reserve, at least 1 byte).
+/// Returns `None` when previews are disabled so inspection and verification
+/// share one zero-guard instead of drifting apart.
+fn preview_content_budget(max_preview_bytes: Option<usize>) -> Option<(usize, usize)> {
     let byte_limit = command_preview_byte_limit(max_preview_bytes);
     if byte_limit == 0 {
-        return String::new();
+        return None;
     }
+    Some((byte_limit, byte_limit.saturating_sub(PREVIEW_NOTICE_RESERVE_BYTES).max(1)))
+}
 
-    let content_budget = byte_limit.saturating_sub(PREVIEW_NOTICE_RESERVE_BYTES).max(1);
+fn inspection_preview_content(content: &str, max_preview_bytes: Option<usize>) -> String {
+    let Some((byte_limit, content_budget)) = preview_content_budget(max_preview_bytes) else {
+        return String::new();
+    };
+
     let head_bytes = content_budget.saturating_mul(2).div_ceil(3).min(INSPECTION_PREVIEW_HEAD_BYTES);
     let tail_bytes = content_budget.saturating_sub(head_bytes).min(INSPECTION_PREVIEW_TAIL_BYTES);
     let byte_bounded = condense_text_bytes(content, head_bytes, tail_bytes);
@@ -88,12 +94,10 @@ fn inspection_preview_content(content: &str, max_preview_bytes: Option<usize>) -
 }
 
 fn verification_preview_content(content: &str, max_preview_bytes: Option<usize>) -> String {
-    let byte_limit = command_preview_byte_limit(max_preview_bytes);
-    if byte_limit == 0 {
+    let Some((byte_limit, content_budget)) = preview_content_budget(max_preview_bytes) else {
         return String::new();
-    }
+    };
 
-    let content_budget = byte_limit.saturating_sub(PREVIEW_NOTICE_RESERVE_BYTES).max(1);
     let preview = tail_preview_text(content, content_budget, COMMAND_PREVIEW_MAX_LINES.saturating_sub(1));
     truncate_byte_budget(&preview, byte_limit, "")
 }
@@ -219,7 +223,31 @@ pub enum SpoolState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SpoolIntegrity {
     pub byte_count: u64,
+    pub line_count: u64,
     pub sha256: String,
+}
+
+/// Count physical lines across committed chunks, including an unterminated last line.
+#[derive(Default)]
+pub(crate) struct SpoolLineCounter {
+    newline_count: u64,
+    last_byte: Option<u8>,
+}
+
+impl SpoolLineCounter {
+    pub(crate) fn append(&mut self, bytes: &[u8]) {
+        self.newline_count = self
+            .newline_count
+            .saturating_add(bytes.iter().filter(|byte| **byte == b'\n').count() as u64);
+        if let Some(byte) = bytes.last() {
+            self.last_byte = Some(*byte);
+        }
+    }
+
+    pub(crate) fn line_count(&self) -> u64 {
+        self.newline_count
+            .saturating_add(u64::from(self.last_byte.is_some_and(|byte| byte != b'\n')))
+    }
 }
 
 pub(crate) fn encode_digest_hex(digest: impl AsRef<[u8]>) -> String {
@@ -448,9 +476,14 @@ pub(crate) fn ensure_spooled_reference_metadata(value: &mut Value) {
         .or_else(|| preview_source.as_ref().map(|preview| preview.len() as u64));
     if let Some(bytes) = spooled_bytes {
         object.entry("spooled_bytes").or_insert_with(|| json!(bytes));
+        let extent = object
+            .get("spool_line_count")
+            .and_then(Value::as_u64)
+            .map(|lines| format!(", {lines} lines; EOF at line {lines}"))
+            .unwrap_or_default();
         object.entry("spool_note").or_insert_with(|| {
             json!(format!(
-                "Large output ({bytes} bytes) spooled to `{spool_path}`. Use exec_command with cat, sed, or rg to inspect only the sections you need."
+                "Large output ({bytes} bytes{extent}) spooled to `{spool_path}`. Do not re-inline the full file. Use exec_command with sed or rg to inspect only missing sections; avoid overlapping reads."
             ))
         });
     } else {
@@ -569,7 +602,7 @@ impl ToolOutputSpooler {
                 );
                 json_to_string_pretty(value)
             }
-        } else if is_command_session_tool_name(tool_name) && !is_mcp {
+        } else if crate::tools::tool_intent::is_command_session_tool(tool_name) && !is_mcp {
             // For command-session tools and legacy PTY helpers,
             // extract the actual command output from the "output" field.
             // This ensures the spooled file contains the raw command output, not the JSON wrapper.
@@ -755,7 +788,7 @@ impl ToolOutputSpooler {
                 debug!(error = %e, "Periodic spool cleanup failed");
             }
         }
-        let condensed = if is_command_session_tool_name(tool_name) {
+        let condensed = if crate::tools::tool_intent::is_command_session_tool(tool_name) {
             command_preview_content(tool_name, &value, &spool_result.content, max_preview_bytes)
         } else {
             let condensed = condense_content(&spool_result.content);
@@ -769,7 +802,7 @@ impl ToolOutputSpooler {
             Value::Object(map) => Value::Object(map),
             _ => json!({}),
         };
-        let is_pty_tool = is_command_session_tool_name(tool_name);
+        let is_pty_tool = crate::tools::tool_intent::is_command_session_tool(tool_name);
         let use_output_field =
             is_pty_tool || response.get("output").and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty());
         let source_path = if tool_name == tools::READ_FILE || tool_name == tools::UNIFIED_FILE {
@@ -801,14 +834,9 @@ impl ToolOutputSpooler {
             obj.insert("spool_sha256".to_string(), json!(spool_result.sha256));
             obj.insert("spool_state".to_string(), json!("completed"));
             obj.insert("spool_complete".to_string(), json!(true));
-
-            // Keep the recovery guidance aligned with the model-facing command tools.
-            // Large data stays on disk and the model pulls only the sections it needs.
-            let spool_note = format!(
-                "Large output ({} bytes) spooled to `spool_path`. Do not re-inline the full file. Use `view_file` or `grep_search` (or `exec_command` if available) to inspect only the sections you need.",
-                spool_result.original_bytes
-            );
-            obj.insert("spool_note".to_string(), json!(spool_note));
+            let mut line_counter = SpoolLineCounter::default();
+            line_counter.append(spool_result.content.as_bytes());
+            obj.insert("spool_line_count".to_string(), json!(line_counter.line_count()));
 
             if let Some(src) = source_path {
                 obj.entry("source_path".to_string()).or_insert_with(|| json!(src));
@@ -818,6 +846,7 @@ impl ToolOutputSpooler {
             }
         }
 
+        ensure_spooled_reference_metadata(&mut response);
         Ok(response)
     }
 
@@ -862,7 +891,7 @@ impl ToolOutputSpooler {
 
     /// Age-based cleanup only, for startup paths.
     ///
-    /// The count budget relies on [`Self::pinned_files`], which is per-process:
+    /// The count budget relies on `pinned_files`, which is per-process:
     /// a second session starting in the same workspace cannot see a concurrent
     /// session's pinned or active spools, so enforcing the count budget at
     /// startup can delete young files the other session still reads from its
@@ -1277,6 +1306,23 @@ mod tests {
         assert!(result.get("spool_hint").is_none());
     }
 
+    #[test]
+    fn spool_line_counts_handle_empty_chunks_and_unterminated_lines() {
+        for (chunks, expected) in [
+            (vec![""], 0),
+            (vec!["abc", "", "def"], 1),
+            (vec!["a\n", "\n", ""], 2),
+            (vec!["first\r", "\nsecond\n", "last"], 3),
+            (vec!["日本語", "\n", "final"], 2),
+        ] {
+            let mut counter = SpoolLineCounter::default();
+            for chunk in chunks {
+                counter.append(chunk.as_bytes());
+            }
+            assert_eq!(counter.line_count(), expected);
+        }
+    }
+
     #[tokio::test]
     async fn test_exec_command_spools_raw_output() {
         let temp = tempdir().unwrap();
@@ -1303,6 +1349,8 @@ mod tests {
         let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
+        assert_eq!(result["spool_line_count"], 3);
+        assert!(result["spool_note"].as_str().unwrap().contains("EOF at line 3"));
         assert!(!spooled_content.contains("\"output\""));
         assert!(!spooled_content.contains("\"exit_code\""));
     }
@@ -1439,6 +1487,34 @@ mod tests {
         assert!(preview.contains("omitted"));
         assert!(preview.contains("line-199"));
         assert!(!preview.contains("line-1\n"));
+    }
+
+    #[test]
+    fn bounded_previews_share_one_budget_and_respect_tiny_limits() {
+        // Asymmetric across shapes: inspection keeps head+tail while
+        // verification keeps tail only, but both must honor the same
+        // explicit byte limit, and both go empty when it is zero. Content
+        // exceeds every budget so truncation actually engages. Note the
+        // degenerate edge: at budget 1 the multibyte omitted-notice (`…`)
+        // itself does not fit, so verification truncates to nothing; that
+        // tail-shape edge predates the shared budget helper.
+        let content = (0..200)
+            .map(|i| format!("line {i:03} with some payload text"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(content.len() > 1024);
+        for budget in [1usize, 64, 100, 1024] {
+            let inspection = inspection_preview_content(&content, Some(budget));
+            let verification = verification_preview_content(&content, Some(budget));
+            assert!(inspection.len() <= budget, "inspection must respect {budget}");
+            assert!(verification.len() <= budget, "verification must respect {budget}");
+        }
+        for budget in [64usize, 100, 1024] {
+            assert!(!inspection_preview_content(&content, Some(budget)).is_empty());
+            assert!(!verification_preview_content(&content, Some(budget)).is_empty());
+        }
+        assert!(inspection_preview_content(&content, Some(0)).is_empty());
+        assert!(verification_preview_content(&content, Some(0)).is_empty());
     }
 
     #[tokio::test]

@@ -49,6 +49,7 @@ pub async fn handle_ask_command(
             timeouts: None,
             openai: None,
             anthropic: None,
+            openrouter: None,
             model_behavior: config.model_behavior.clone(),
             workspace_root: Some(config.workspace.clone()),
         },

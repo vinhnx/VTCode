@@ -1,8 +1,14 @@
 use std::str::FromStr;
 
 use anyhow::{Result, bail};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+mod persistence;
+pub(crate) use persistence::{
+    TrackerArtifact, persist_tracker_artifacts, read_tracker_artifact, write_tracker_artifact,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStepMetadata {
@@ -32,6 +38,108 @@ pub struct TaskItemInputObject {
     pub outcome: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string_list")]
     pub verify: Option<Vec<String>>,
+}
+
+pub(crate) struct TaskMetadataRef<'a> {
+    pub description: &'a str,
+    pub metadata: &'a TaskStepMetadata,
+}
+
+pub(crate) struct ParsedTaskItem {
+    pub level: usize,
+    pub description: String,
+    pub status: TaskTrackingStatus,
+    pub metadata: TaskStepMetadata,
+}
+
+/// Normalize both tracker variants and preserve omitted metadata only when
+/// a description identifies exactly one old step and exactly one new step.
+/// Creates pass no previous items; explicit empty metadata still clears it.
+pub(crate) fn parse_task_items(
+    items: &[TaskItemInput],
+    previous: &[TaskMetadataRef<'_>],
+) -> Result<Vec<ParsedTaskItem>> {
+    validate_task_item_inputs(items)?;
+    let mut previous_by_description = HashMap::new();
+    for item in previous {
+        previous_by_description
+            .entry(item.description.trim())
+            .and_modify(|metadata| *metadata = None)
+            .or_insert(Some(item.metadata));
+    }
+    let mut description_counts = HashMap::new();
+    for item in items {
+        let raw = match item {
+            TaskItemInput::Text(raw) => raw,
+            TaskItemInput::Structured(input) => &input.description,
+        };
+        let (_, description) = parse_status_prefix(raw.trim());
+        *description_counts.entry(description.trim().to_owned()).or_insert(0usize) += 1;
+    }
+
+    let mut parsed_items = Vec::with_capacity(items.len());
+    for item in items {
+        let raw = match item {
+            TaskItemInput::Text(raw) => raw,
+            TaskItemInput::Structured(input) => &input.description,
+        };
+        let (mut status, description) = parse_status_prefix(raw.trim());
+        let description = description.trim().to_owned();
+        if description.is_empty() {
+            continue;
+        }
+        let previous_metadata = if description_counts.get(&description) == Some(&1) {
+            previous_by_description.get(description.as_str()).copied().flatten()
+        } else {
+            None
+        };
+        if previous_metadata.is_none()
+            && previous
+                .iter()
+                .any(|item| item.description.trim() == description && item.metadata != &TaskStepMetadata::default())
+            && !matches!(item, TaskItemInput::Structured(input) if input.files.is_some() && input.outcome.is_some() && input.verify.is_some())
+        {
+            bail!(
+                "Ambiguous task description '{description}': provide explicit files, outcome, and verify metadata for duplicate steps. Use empty arrays and an empty outcome to clear them. The checklist was not changed."
+            );
+        }
+        let mut metadata = previous_metadata.cloned().unwrap_or_default();
+        if let TaskItemInput::Structured(input) = item {
+            if let Some(raw_status) = input.status.as_deref() {
+                status = TaskTrackingStatus::from_str(raw_status)?;
+            }
+            apply_metadata_input(
+                &mut metadata,
+                input.files.as_deref(),
+                input.outcome.as_deref(),
+                input.verify.as_deref(),
+            );
+        }
+        parsed_items.push(ParsedTaskItem {
+            level: raw.chars().take_while(|character| *character == ' ').count() / 2,
+            description,
+            status,
+            metadata,
+        });
+    }
+    Ok(parsed_items)
+}
+
+pub(crate) fn apply_metadata_input(
+    metadata: &mut TaskStepMetadata,
+    files: Option<&[String]>,
+    outcome: Option<&str>,
+    verify: Option<&[String]>,
+) {
+    if let Some(files) = files {
+        metadata.files = normalize_string_items(Some(files));
+    }
+    if let Some(outcome) = outcome {
+        metadata.outcome = normalize_optional_text(Some(outcome));
+    }
+    if let Some(verify) = verify {
+        metadata.verify = normalize_string_items(Some(verify));
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -206,6 +314,222 @@ pub(crate) fn validate_action_index_fields(action: &str, index: Option<usize>, i
     Ok(())
 }
 
+pub(crate) const TASK_ITEMS_DESCRIPTION: &str = "Full checklist replacement for create or bulk update, not indexed updates. Send plain descriptions with [x]/[~]/[!]/[ ] status prefixes or actual objects with description and status; never JSON-encoded strings. Bulk updates preserve omitted metadata for unique unchanged descriptions. Explicit metadata replaces it; use empty arrays or an empty outcome to clear fields. Duplicate descriptions with existing metadata require explicit files, outcome, and verify.";
+
+/// Shared status values for every task-tracker schema (standard + planning,
+/// top-level and nested item objects). Single source so a future status
+/// addition cannot drift between the planning on/off variants.
+pub(crate) const TASK_STATUS_VALUES: [&str; 4] = ["pending", "in_progress", "completed", "blocked"];
+
+/// Base `status` type schema without a description (callers add their own).
+pub(crate) fn task_status_schema() -> Value {
+    json!({
+        "type": "string",
+        "enum": TASK_STATUS_VALUES
+    })
+}
+
+/// Base `files` type schema without a description.
+pub(crate) fn task_files_schema() -> Value {
+    json!({
+        "type": "array",
+        "items": { "type": "string" }
+    })
+}
+
+/// Base `verify` type schema without a description (string or string list).
+pub(crate) fn task_verify_schema() -> Value {
+    json!({
+        "anyOf": [
+            { "type": "string" },
+            {
+                "type": "array",
+                "items": { "type": "string" }
+            }
+        ]
+    })
+}
+
+fn with_description(mut schema: Value, description: &str) -> Value {
+    if let Value::Object(map) = &mut schema {
+        map.insert("description".to_string(), Value::String(description.to_string()));
+    }
+    schema
+}
+
+/// Shared `allOf` conditional blocks for both tracker parameter schemas.
+///
+/// The create, update, no-indices, and add blocks are identical across
+/// trackers; the update `anyOf` arms are order-normalized (validation is
+/// order-independent and no test indexes arm positions). The `index == 0`
+/// completion rule is standard-tracker-only (planning indices start at 1):
+/// `include_index_zero_rule` inserts it at position 2, preserving the
+/// `allOf[2]` contract asserted by the standard schema tests.
+pub(crate) fn tracker_schema_allof(include_index_zero_rule: bool) -> Vec<Value> {
+    let mut allof = vec![
+        json!({
+            "if": {
+                "properties": { "action": { "const": "create" } },
+                "required": ["action"]
+            },
+            "then": {
+                "required": ["items"]
+            }
+        }),
+        json!({
+            "if": {
+                "properties": { "action": { "const": "update" } },
+                "required": ["action"]
+            },
+            "then": {
+                "anyOf": [
+                    {
+                        "required": ["index", "status"],
+                        "not": {
+                            "anyOf": [
+                                { "required": ["items"] },
+                                { "required": ["index_path"] }
+                            ]
+                        }
+                    },
+                    {
+                        "required": ["index_path", "status"],
+                        "not": {
+                            "anyOf": [
+                                { "required": ["items"] },
+                                { "required": ["index"] }
+                            ]
+                        }
+                    },
+                    {
+                        "required": ["items"],
+                        "not": {
+                            "anyOf": [
+                                { "required": ["index"] },
+                                { "required": ["index_path"] },
+                                { "required": ["status"] }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }),
+        json!({
+            "if": {
+                "properties": { "action": { "enum": ["create", "list", "add"] } },
+                "required": ["action"]
+            },
+            "then": {
+                "not": {
+                    "anyOf": [
+                        { "required": ["index"] },
+                        { "required": ["index_path"] }
+                    ]
+                }
+            }
+        }),
+        json!({
+            "if": {
+                "properties": { "action": { "const": "add" } },
+                "required": ["action"]
+            },
+            "then": {
+                "required": ["description"]
+            }
+        }),
+    ];
+    if include_index_zero_rule {
+        allof.insert(
+            2,
+            json!({
+                "if": {
+                    "properties": { "index": { "const": 0 } },
+                    "required": ["index"]
+                },
+                "then": {
+                    "properties": {
+                        "action": { "const": "update" },
+                        "status": { "const": "completed" }
+                    },
+                    "required": ["action", "status"]
+                }
+            }),
+        );
+    }
+    allof
+}
+
+/// Shared nested item-object schema (description + optional status/files/
+/// outcome/verify). Used inside the `items` array of both tracker schemas.
+pub(crate) fn task_item_object_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "description": { "type": "string" },
+            "status": task_status_schema(),
+            "files": task_files_schema(),
+            "outcome": { "type": "string" },
+            "verify": task_verify_schema()
+        },
+        "required": ["description"]
+    })
+}
+
+/// Shared `items` array schema with a caller-supplied description.
+pub(crate) fn task_items_array_schema(items_description: &str) -> Value {
+    with_description(
+        json!({
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    { "type": "string" },
+                    task_item_object_schema()
+                ]
+            }
+        }),
+        items_description,
+    )
+}
+
+/// Top-level `status` property with its own description.
+pub(crate) fn task_status_property_schema(description: &str) -> Value {
+    with_description(task_status_schema(), description)
+}
+
+/// Top-level `files` property with its own description.
+pub(crate) fn task_files_property_schema(description: &str) -> Value {
+    with_description(task_files_schema(), description)
+}
+
+/// Top-level `verify` property with its own description.
+pub(crate) fn task_verify_property_schema(description: &str) -> Value {
+    with_description(task_verify_schema(), description)
+}
+
+/// Checklist replacement must not interpret encoded update commands as descriptions.
+pub(crate) fn validate_task_item_inputs(items: &[TaskItemInput]) -> Result<()> {
+    for item in items {
+        let TaskItemInput::Text(text) = item else {
+            continue;
+        };
+        let (_, description) = parse_status_prefix(text.trim());
+        if let Ok(Value::Object(object)) = serde_json::from_str::<Value>(&description)
+            && ["index", "index_path", "description", "status"]
+                .iter()
+                .any(|key| object.contains_key(*key))
+        {
+            bail!(
+                "'items' replaces the complete checklist; JSON-encoded task updates are not task descriptions. \
+                 Update an existing step directly: {{\"action\":\"update\",\"index_path\":\"1\",\"status\":\"completed\"}}. \
+                 For full synchronization, send descriptions with statuses, for example \
+                 {{\"action\":\"update\",\"items\":[{{\"description\":\"Original step\",\"status\":\"completed\"}}]}}. \
+                 The checklist was not changed. Retry once with the intended shape."
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn is_bulk_sync_update<T>(
     items: Option<&[T]>,
     index: Option<usize>,
@@ -247,6 +571,57 @@ pub fn normalize_optional_text(value: Option<&str>) -> Option<String> {
     value.map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
 }
 
+/// Parse a `files: [...]` metadata value into trimmed non-empty paths.
+/// Commas inside single/double quotes stay part of one item.
+pub fn parse_files_metadata(value: &str) -> Vec<String> {
+    super::planning_workflow::split_bracket_items(value)
+        .into_iter()
+        .map(|item| item.trim().to_owned())
+        .filter(|item| !item.is_empty())
+        .collect()
+}
+
+/// Consume one indented markdown metadata line (`files:`, `outcome:`,
+/// `verify:`) into `metadata`, tracking multi-line `verify:` blocks through
+/// `in_verify_block`. Returns `true` when the line was metadata.
+pub fn apply_metadata_line(metadata: &mut TaskStepMetadata, raw: &str, in_verify_block: &mut bool) -> bool {
+    let trimmed = raw.trim_start();
+
+    if *in_verify_block {
+        if let Some(command) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+        {
+            if let Some(command) = normalize_optional_text(Some(command)) {
+                metadata.verify.push(command);
+            }
+            return true;
+        }
+        *in_verify_block = false;
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("files:") {
+        metadata.files = parse_files_metadata(rest);
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix("outcome:") {
+        metadata.outcome = normalize_optional_text(Some(rest));
+        return true;
+    }
+    if trimmed == "verify:" {
+        metadata.verify.clear();
+        *in_verify_block = true;
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix("verify:") {
+        metadata.verify = normalize_string_items(Some(&[rest.to_string()]));
+        return true;
+    }
+
+    false
+}
+
 pub fn append_task_step_metadata(markdown: &mut String, indent: &str, metadata: &TaskStepMetadata) {
     if !metadata.files.is_empty() {
         markdown.push_str(indent);
@@ -284,11 +659,9 @@ pub fn metadata_from_input(
     outcome: Option<&str>,
     verify: Option<&[String]>,
 ) -> TaskStepMetadata {
-    TaskStepMetadata {
-        files: normalize_string_items(files),
-        outcome: normalize_optional_text(outcome),
-        verify: normalize_string_items(verify),
-    }
+    let mut metadata = TaskStepMetadata::default();
+    apply_metadata_input(&mut metadata, files, outcome, verify);
+    metadata
 }
 
 /// Markers that may trail a task description as inline `Action -> files: [...]
@@ -632,6 +1005,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parse_files_metadata_keeps_quoted_commas_as_single_item() {
+        let items = parse_files_metadata("'src/a.rs, b.rs', src/c.rs");
+        assert_eq!(items, vec!["'src/a.rs, b.rs'".to_string(), "src/c.rs".to_string()]);
+    }
+
+    #[test]
+    fn apply_metadata_line_drives_verify_block_state_machine() {
+        let mut metadata = TaskStepMetadata::default();
+        let mut in_verify_block = false;
+
+        // Non-metadata lines are rejected without touching state.
+        assert!(!apply_metadata_line(&mut metadata, "just a description", &mut in_verify_block));
+        assert!(!in_verify_block);
+        assert!(metadata.verify.is_empty());
+
+        // files:/outcome: lines are consumed directly (persisted bracket-free).
+        assert!(apply_metadata_line(&mut metadata, "  files: a.rs, b.rs", &mut in_verify_block));
+        assert!(apply_metadata_line(&mut metadata, "  outcome: did the thing", &mut in_verify_block));
+        assert_eq!(metadata.files, vec!["a.rs".to_string(), "b.rs".to_string()]);
+        assert_eq!(metadata.outcome.as_deref(), Some("did the thing"));
+
+        // Bare `verify:` opens a block; mixed bullet markers accumulate.
+        assert!(apply_metadata_line(&mut metadata, "  verify:", &mut in_verify_block));
+        assert!(in_verify_block);
+        assert!(apply_metadata_line(&mut metadata, "    - cargo test", &mut in_verify_block));
+        assert!(apply_metadata_line(&mut metadata, "    * cargo clippy", &mut in_verify_block));
+        assert_eq!(metadata.verify, vec!["cargo test".to_string(), "cargo clippy".to_string()]);
+
+        // A non-bullet line closes the block and is itself rejected.
+        assert!(!apply_metadata_line(&mut metadata, "  other: x", &mut in_verify_block));
+        assert!(!in_verify_block);
+
+        // Inline `verify:` replaces the accumulated block.
+        assert!(apply_metadata_line(&mut metadata, "  verify: make check", &mut in_verify_block));
+        assert_eq!(metadata.verify, vec!["make check".to_string()]);
+    }
+
+    #[test]
     fn parse_marked_status_prefix_rejects_unmarked_text() {
         let parsed = parse_marked_status_prefix("plain text without marker");
         assert!(parsed.is_none());
@@ -665,6 +1076,29 @@ mod tests {
         let mut markdown = "# Title\n".to_string();
         append_notes_section(&mut markdown, Some("   "));
         assert_eq!(markdown, "# Title\n");
+    }
+
+    #[test]
+    fn bulk_sync_validation_preserves_text_and_actual_structured_items() {
+        let valid = vec![
+            TaskItemInput::Text(r#"[x] Document {"status":"completed"}"#.to_string()),
+            TaskItemInput::Text(r#"{"example":"literal JSON"}"#.to_string()),
+            TaskItemInput::Structured(TaskItemInputObject {
+                description: "Original step".to_string(),
+                status: Some("completed".to_string()),
+                ..Default::default()
+            }),
+        ];
+        validate_task_item_inputs(&valid).unwrap();
+        for text in [
+            r#"{"index":1,"status":"completed"}"#,
+            r#"{"description":"Encoded step","status":"completed"}"#,
+        ] {
+            for prefix in ["", "[x] ", "[X] ", "[~] ", "[/] ", "[!] ", "[ ] "] {
+                let item = TaskItemInput::Text(format!("  {prefix}{text}  "));
+                assert!(validate_task_item_inputs(&[item]).is_err(), "prefix {prefix:?}");
+            }
+        }
     }
 
     #[test]
@@ -865,5 +1299,108 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["display"], "  └ □ Add vtcode exec resume to the Commands section");
         assert_eq!(rows[0]["text"], "Add vtcode exec resume to the Commands section");
+    }
+
+    #[test]
+    fn shared_schema_helpers_stay_actionable_and_drift_free() {
+        assert_eq!(TASK_STATUS_VALUES, ["pending", "in_progress", "completed", "blocked"]);
+
+        let status = task_status_schema();
+        assert_eq!(status["type"], "string");
+        assert_eq!(status["enum"], json!(TASK_STATUS_VALUES));
+        assert!(status.get("description").is_none());
+
+        let with_desc = task_status_property_schema("New status.");
+        assert_eq!(with_desc["description"], "New status.");
+        assert_eq!(with_desc["enum"], json!(TASK_STATUS_VALUES));
+
+        // Asymmetric: plain string item vs structured item with metadata.
+        let items_schema = task_items_array_schema("Items desc.");
+        let validator = jsonschema::validator_for(&items_schema).expect("items schema is valid");
+        assert!(validator.validate(&json!(["plain step"])).is_ok());
+        assert!(
+            validator
+                .validate(&json!([{
+                    "description": "Structured step",
+                    "status": "in_progress",
+                    "files": ["src/a.rs"],
+                    "outcome": "Done",
+                    "verify": ["cargo check"],
+                }]))
+                .is_ok()
+        );
+        // Boundary: verify also accepts a bare string; missing description fails.
+        assert!(validator.validate(&json!([{"status": "completed"}])).is_err());
+        assert!(validator.validate(&json!([{"description": "Bad", "status": "done"}])).is_err());
+
+        assert_eq!(task_files_property_schema("F.")["description"], "F.");
+        assert_eq!(task_verify_property_schema("V.")["description"], "V.");
+    }
+
+    #[test]
+    fn shared_status_values_match_runtime_parser() {
+        use std::str::FromStr;
+        for status in TASK_STATUS_VALUES {
+            assert!(TaskTrackingStatus::from_str(status).is_ok(), "schema status {status:?} must parse");
+        }
+        assert!(TaskTrackingStatus::from_str("done").is_err());
+    }
+
+    /// Drift guard: `TaskTrackingStatus` reaches the wire through three
+    /// independent paths — the derived serde `snake_case` form, `as_str()`, and
+    /// the hand-written `FromStr`. Nothing in the type system ties them
+    /// together, so this locks the as_str <-> serde <-> FromStr triangle for
+    /// every variant and pins the schema enum list to the same source. A
+    /// one-sided edit to any path fails here instead of silently producing a
+    /// value the runtime cannot parse back.
+    #[test]
+    fn task_status_as_str_serde_and_from_str_stay_in_lockstep() {
+        use std::str::FromStr;
+        let variants = [
+            TaskTrackingStatus::Pending,
+            TaskTrackingStatus::InProgress,
+            TaskTrackingStatus::Completed,
+            TaskTrackingStatus::Blocked,
+        ];
+        let strings: Vec<&str> = variants.iter().map(TaskTrackingStatus::as_str).collect();
+        assert_eq!(strings, TASK_STATUS_VALUES);
+
+        for variant in variants {
+            let expected = variant.as_str();
+            assert_eq!(
+                serde_json::to_value(variant).expect("serializes"),
+                json!(expected),
+                "serde form drifted for {variant:?}"
+            );
+            assert_eq!(
+                TaskTrackingStatus::from_str(expected).expect("as_str output must parse back"),
+                variant,
+                "FromStr drift for {variant:?}"
+            );
+        }
+    }
+
+    /// Cross-crate drift guard. `vtcode-commons::ui_protocol::TaskItemStatus`
+    /// (the TUI-facing row status) is a distinct type from
+    /// `TaskTrackingStatus` but must carry the *same* canonical strings — its
+    /// doc comment promises they match, and the TUI parses runtime strings
+    /// through it (`raw.parse::<TaskItemStatus>()`). The type system does not
+    /// connect the two enums, so pin them token-for-token here.
+    #[test]
+    fn task_item_status_matches_tracking_status_strings() {
+        use std::str::FromStr;
+        use vtcode_commons::ui_protocol::TaskItemStatus;
+
+        for variant in [
+            TaskTrackingStatus::Pending,
+            TaskTrackingStatus::InProgress,
+            TaskTrackingStatus::Completed,
+            TaskTrackingStatus::Blocked,
+        ] {
+            let canonical = variant.as_str();
+            let display = TaskItemStatus::from_str(canonical)
+                .unwrap_or_else(|_| panic!("TaskItemStatus must parse runtime status {canonical:?}"));
+            assert_eq!(display.as_str(), canonical, "TaskItemStatus/TaskTrackingStatus string drift for {variant:?}");
+        }
     }
 }

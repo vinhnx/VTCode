@@ -24,6 +24,7 @@ mod streaming;
 mod tests;
 mod tool_shaping;
 
+use crate::agent::runloop::unified::stop_requests::wait_for_stop;
 use anyhow::Result;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -182,6 +183,9 @@ async fn execute_llm_request_with_options_impl(
     ctx.renderer
         .set_reasoning_visible(resolve_reasoning_visibility(ctx.vt_cfg, turn_snapshot.capabilities.reasoning));
     let mut use_streaming = turn_snapshot.capabilities.streaming;
+    ctx.handle
+        .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::PreparingContext);
+    let assembly_started_at = Instant::now();
     let initial_request = build_turn_request(
         ctx,
         step_count,
@@ -192,6 +196,8 @@ async fn execute_llm_request_with_options_impl(
         use_streaming,
     )
     .await?;
+    tracing::debug!(target: "vtcode.response_latency", operation_id = ctx.handle.current_progress_operation().map(|op| op.id()),
+        request_assembly_ms = assembly_started_at.elapsed().as_secs_f64() * 1000.0, step = step_count, "request assembled");
     let mut request = initial_request.request;
     let has_tools = initial_request.has_tools;
     let runtime_tools = initial_request.runtime_tools;
@@ -220,6 +226,8 @@ async fn execute_llm_request_with_options_impl(
     while attempt < max_retries {
         attempts_made = attempt + 1;
         if attempt > 0 {
+            ctx.handle
+                .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::Retrying);
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
             // Use category-aware backoff: rate limits get longer base delays,
             // timeouts get moderate delays, network errors use standard exponential.
@@ -241,15 +249,13 @@ async fn execute_llm_request_with_options_impl(
                 max_retries,
                 "LLM request failed; retrying after backoff"
             );
-            let cancel_notifier = ctx.ctrl_c_notify.notified();
+            let cancel_notifier = wait_for_stop(ctx.ctrl_c_state, ctx.ctrl_c_notify);
             tokio::pin!(cancel_notifier);
             tokio::select! {
                 _ = tokio::time::sleep(delay) => {}
                 _ = &mut cancel_notifier => {
-                    if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-                        llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
-                        break;
-                    }
+                    llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
+                    break;
                 }
             }
         }
@@ -276,6 +282,10 @@ async fn execute_llm_request_with_options_impl(
         }
         task::yield_now().await;
         let attempt_started_at = Instant::now();
+        ctx.handle
+            .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForModel);
+        tracing::debug!(target: "vtcode.response_latency", operation_id = ctx.handle.current_progress_operation().map(|op| op.id()),
+            step = step_count, attempt = attempt + 1, "provider dispatched");
 
         #[cfg(debug_assertions)]
         {
@@ -325,7 +335,18 @@ async fn execute_llm_request_with_options_impl(
                         ))
                     }),
             };
-            let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
+            let progress_handle = ctx.handle.clone();
+            let progress_operation = ctx.handle.current_progress_operation();
+            let mut latency =
+                streaming::ResponseLatency::new(progress_operation, attempt_started_at, step_count, attempt + 1);
+            let mut progress = |event: StreamProgressEvent| {
+                let phase = latency.observe(&event);
+                if let Some(operation) = progress_operation {
+                    progress_handle
+                        .update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation, phase });
+                }
+                stream_bridge.on_progress(event);
+            };
             let stream_result = if turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY {
                 let mut runtime_host = CopilotRuntimeHost::new(
                     ctx.tool_registry,
@@ -370,7 +391,7 @@ async fn execute_llm_request_with_options_impl(
                         FirstProgressTimeout::starting_now(Duration::from_secs(first_progress_timeout_secs));
                     let prompt_session = tokio::select! {
                         biased;
-                        _ = ctx.ctrl_c_notify.notified() => {
+                        _ = wait_for_stop(ctx.ctrl_c_state, ctx.ctrl_c_notify) => {
                             return Err(interrupted_provider_error(&turn_snapshot.provider_name));
                         }
                         _ = tokio::time::sleep_until(first_progress_timeout.deadline) => {
@@ -443,16 +464,17 @@ async fn execute_llm_request_with_options_impl(
             let wait_subject = format!("LLM request for model '{active_model}'");
 
             loop {
-                let cancel_notifier = ctx.ctrl_c_notify.notified();
+                let cancel_notifier = wait_for_stop(ctx.ctrl_c_state, ctx.ctrl_c_notify);
                 tokio::pin!(cancel_notifier);
                 let keepalive_sleep = tokio::time::sleep_until(next_keepalive_at);
                 tokio::pin!(keepalive_sleep);
 
                 let outcome = tokio::select! {
-                    res = &mut generate_future => Some(res.map_err(anyhow::Error::from)),
+                    biased;
                     _ = &mut cancel_notifier => {
                         Some(Err(interrupted_provider_error(&turn_snapshot.provider_name)))
                     }
+                    res = &mut generate_future => Some(res.map_err(anyhow::Error::from)),
                     _ = &mut keepalive_sleep => None,
                 };
 
@@ -472,6 +494,16 @@ async fn execute_llm_request_with_options_impl(
             }
         };
         let attempt_elapsed = attempt_started_at.elapsed();
+        if !use_streaming && let Ok((response, _)) = &step_result {
+            let operation = ctx.handle.current_progress_operation();
+            let mut latency = streaming::ResponseLatency::new(operation, attempt_started_at, step_count, attempt + 1);
+            latency.observe(&StreamProgressEvent::ProviderActivity);
+            // Non-streaming text is rendered later by response handling.
+            if response.content.as_deref().is_some_and(|content| !content.trim().is_empty()) {
+                ctx.handle
+                    .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::ReceivingResponse);
+            }
+        }
         match &step_result {
             Ok((response, _)) => {
                 ctx.telemetry
@@ -512,7 +544,7 @@ async fn execute_llm_request_with_options_impl(
             }
             Err(err) => {
                 let msg = err.to_string();
-                let category = classify_llm_error(&msg);
+                let category = classify_llm_error(&err);
                 let is_misconfiguration = vtcode_commons::detect_misconfiguration_in_anyhow(&err).is_some();
                 let is_retryable = category.is_retryable() && !is_misconfiguration;
                 last_error_retryable = Some(is_retryable);
@@ -579,6 +611,8 @@ async fn execute_llm_request_with_options_impl(
                         break;
                     }
 
+                    ctx.tool_registry
+                        .reconcile_source_projection_change(&request.messages, normalized.as_ref());
                     request.messages = Arc::new(normalized.into_owned());
                     attempts_made = attempts_made.saturating_add(1);
                     tracing::warn!(
@@ -654,6 +688,8 @@ async fn execute_llm_request_with_options_impl(
                                 )
                             };
                             let compacted = compact_tool_messages_for_retry(&request.messages);
+                            ctx.tool_registry
+                                .reconcile_source_projection_change(&request.messages, &compacted);
                             request.messages = Arc::new(compacted);
                             // Strip reasoning_effort on retry — DeepSeek's
                             // `thinking` parameter causes ExecutionError on
@@ -739,7 +775,7 @@ async fn execute_llm_request_with_options_impl(
         let cached_prompt_tokens = usage.cached_prompt_tokens.unwrap_or(0);
         let cache_read_tokens = usage.cache_read_tokens_or_fallback();
         let cache_creation_tokens = usage.cache_creation_tokens_or_zero();
-        let cache_hit_ratio = usage.cache_hit_rate().unwrap_or(0.0) / 100.0;
+        let cache_hit_ratio = metrics::prompt_cache_hit_ratio(ctx.provider_client.name(), usage);
         let record = PromptCacheMetricsRecord {
             kind: "prompt_cache_metrics",
             turn: step_count,

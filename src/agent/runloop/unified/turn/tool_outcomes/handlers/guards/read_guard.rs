@@ -12,13 +12,11 @@
 
 use serde_json::{Value, json};
 use vtcode_core::config::constants::tools as tool_names;
-use vtcode_core::tools::tool_intent::{ShellActivity, classify_shell_activity};
 
 use super::super::ValidationResult;
 use super::super::looping::low_signal_family_key;
 use super::common::{extract_read_path, is_read_action, push_guard_failure_messages};
 use crate::agent::runloop::git::normalize_workspace_path;
-use crate::agent::runloop::unified::tool_reads::spool_page_source_path;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{find_duplicate_in_history, signature_key_for};
 use crate::agent::runloop::unified::turn::tool_outcomes::read_extent;
@@ -139,6 +137,36 @@ pub(crate) fn check_read_family_cap(
     ReadFamilyCapDecision::Tripped { target, block_reason, error_content }
 }
 
+/// Serve a cache/history reuse verdict for a read-only call.
+///
+/// `register_signature` distinguishes the exact-args path (signature already
+/// recorded — no-op needed) from the read-target path (record it now so a
+/// later identical call takes the cheaper exact-args lookup).
+///
+/// Content is served intact: issue #680 established that stripping the payload
+/// from a reused read leaves the model with no data and makes it hallucinate or
+/// spin, and the durable `tool_output` event shares this string, so events and
+/// persistence must keep the full result.
+fn reuse_read_only_result(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    effective_args: &Value,
+    mut reused_value: Value,
+    register_signature: bool,
+) {
+    if let Some(obj) = reused_value.as_object_mut() {
+        super::super::apply_reused_read_only_loop_metadata(obj);
+    }
+    let content = maybe_inline_spooled(canonical_tool_name, &reused_value);
+    ctx.push_reused_tool_response(tool_call_id, canonical_tool_name, effective_args, content);
+    if register_signature {
+        let signature = signature_key_for(canonical_tool_name, effective_args);
+        ctx.harness_state.record_successful_readonly_signature(signature);
+    }
+    ctx.harness_state.record_reused_result();
+}
+
 /// Get the family key for a read-file call.
 fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Option<String> {
     use super::super::looping::spool_chunk_read_path;
@@ -152,12 +180,15 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
         tool_names::CODE_SEARCH => vtcode_core::tools::normalised_code_search_loop_identity(args)
             .map(|identity| format!("code_search::{identity}")),
         tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND | "command_session" => {
-            if let Some(exec_read) = parse_simple_exec_read_target(args) {
-                return Some(format!("unified_exec::read::{}{}", exec_read.path, exec_read.slice_suffix));
+            if let Some(exec_read) = vtcode_core::tools::parse_exec_read_target(args) {
+                let slice_suffix = exec_read_slice_suffix(&exec_read);
+                return Some(format!("unified_exec::read::{}{}", exec_read.path, slice_suffix));
             }
-            // Track file-reading shell commands in the family guard to prevent
-            // bypass via unified_exec. Only commands on the is_readonly_unified_exec_command
-            // allowlist (tool_intent.rs) reach this point — cat, head, tail, bat.
+            // Track remaining file-reading shell commands in the family guard to
+            // prevent bypass via unified_exec. Simple `sed -n` ranges and `awk`
+            // `NR`-range measurements are handled above; only commands on the
+            // is_readonly_unified_exec_command allowlist (tool_intent.rs)
+            // reach this fallback — cat, head, tail, bat.
             let parts = vtcode_core::tools::command_args::command_words(args).ok()??;
             let command_name = parts.first()?.as_str();
             if !matches!(command_name, "cat" | "head" | "tail" | "bat") {
@@ -171,58 +202,17 @@ fn repeated_file_read_family_key(canonical_tool_name: &str, args: &Value) -> Opt
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ExecReadTarget {
-    path: String,
-    slice_suffix: String,
+/// Family-key slice encoding shared with the core `ExecReadTarget` identity so
+/// the guard and replay can never disagree on the shape.
+fn exec_read_slice_suffix(exec_read: &vtcode_core::tools::ExecReadTarget) -> String {
+    let limit = exec_read.end_line.saturating_sub(exec_read.start_line).saturating_add(1);
+    format!("::off={}::lim={limit}", exec_read.start_line)
 }
 
-fn parse_simple_exec_read_target(args: &Value) -> Option<ExecReadTarget> {
-    let parts = vtcode_core::tools::command_args::command_words(args).ok()??;
-    if parts.iter().any(|part| matches!(part.as_str(), "&&" | "|" | ";")) {
-        return None;
-    }
-
-    parse_simple_sed_read_target(parts.as_slice())
-}
-
-fn parse_simple_sed_read_target(parts: &[String]) -> Option<ExecReadTarget> {
-    if parts.first().map(String::as_str) != Some("sed") {
-        return None;
-    }
-
-    let mut cursor = 1usize;
-    if parts.get(cursor).map(String::as_str) != Some("-n") {
-        return None;
-    }
-    cursor += 1;
-
-    let script = parts.get(cursor)?.as_str();
-    cursor += 1;
-
-    let path = parts.get(cursor)?.as_str();
-    if cursor + 1 != parts.len() {
-        return None;
-    }
-
-    let (start, end) = parse_simple_sed_print_range(script)?;
-    let limit = end.saturating_sub(start).saturating_add(1);
-    Some(ExecReadTarget {
-        path: path.to_string(),
-        slice_suffix: format!("::off={start}::lim={limit}"),
-    })
-}
-
-fn parse_simple_sed_print_range(script: &str) -> Option<(usize, usize)> {
-    let range = script.strip_suffix('p')?;
-    let (start, end) = match range.split_once(',') {
-        Some((start, end)) => (start, end),
-        None => (range, range),
-    };
-
-    let start = start.parse::<usize>().ok()?;
-    let end = end.parse::<usize>().ok()?;
-    (start <= end).then_some((start, end))
+/// Binary-crate alias over the shared core parser so guard and evidence
+/// consumers keep their stable import path without re-deriving the shape.
+pub(crate) fn parse_simple_exec_read_target(args: &Value) -> Option<vtcode_core::tools::ExecReadTarget> {
+    vtcode_core::tools::parse_exec_read_target(args)
 }
 
 fn repeated_read_path(canonical_tool_name: &str, effective_args: &Value) -> Option<String> {
@@ -302,103 +292,6 @@ fn is_plan_artifact_read(canonical_tool_name: &str, args: &Value) -> Option<Stri
     }
 }
 
-/// Whether a read-only call is an inspection whose value is its visible body.
-/// Once the model-visible preview budget is exhausted, inspections return
-/// metadata stubs without content, so admitting more of them only burns
-/// request cycles. Fail-open: unknown tools are never inspections.
-fn is_preview_gated_inspection(canonical_tool_name: &str, effective_args: &Value) -> bool {
-    if is_read_action(canonical_tool_name, effective_args) {
-        return true;
-    }
-    if matches!(
-        canonical_tool_name,
-        tool_names::CODE_SEARCH | tool_names::UNIFIED_SEARCH | tool_names::GREP_FILE | tool_names::LIST_FILES
-    ) {
-        return true;
-    }
-    if matches!(canonical_tool_name, tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND | "command_session") {
-        return matches!(classify_shell_activity(canonical_tool_name, effective_args), ShellActivity::Inspection);
-    }
-    false
-}
-
-#[cold]
-fn build_preview_exhaustion_error_content(planning_active: bool) -> String {
-    let guidance = if planning_active {
-        "Tool preview budget is exhausted this turn; further inspection returns hidden stubs. \
-         Synthesize the `<proposed_plan>` now from the evidence already gathered. \
-         Verification, task_tracker, session polling, spool paging in small ranges using a spool_path already in this conversation, and plan-draft re-reads stay open; exhausted inspections are blocked."
-    } else {
-        "Tool preview budget is exhausted this turn; further inspection returns hidden stubs. \
-         Work from the evidence already visible: summarize status, edit, verify, or report. \
-         To read a spooled output, page it in small ranges using a spool_path already in this conversation."
-    };
-    super::super::super::execution_result::build_error_content(
-        guidance.to_string(),
-        None,
-        None,
-        "preview_exhaustion_gate",
-    )
-    .to_string()
-}
-
-/// Reject read-only inspections once the model-visible preview budget is
-/// exhausted. Post-exhaustion responses are metadata stubs without body
-/// content, so executing more inspections cannot surface new evidence — it
-/// only grows the request and starves synthesis or implementation.
-///
-/// Channels that stay useful without visible bodies remain open: verification
-/// commands (exit codes survive in stub metadata), the planning interview,
-/// task bookkeeping, session polling (verifier completions arrive through
-/// it), spool paging (kept visible through preview credit), and plan-draft
-/// re-reads (which carry finalize-the-plan guidance). Rejections feed the
-/// existing blocked-call fuse, so persistent flailing still converges on
-/// recovery instead of looping here.
-pub(crate) fn enforce_preview_exhaustion_inspection_gate(
-    ctx: &mut TurnProcessingContext<'_>,
-    tool_call_id: &str,
-    canonical_tool_name: &str,
-    effective_args: &Value,
-    readonly_classification: bool,
-) -> Option<ValidationResult> {
-    if !readonly_classification {
-        return None;
-    }
-    if !ctx.harness_state.model_visible_preview_budget_exhausted() {
-        return None;
-    }
-    if matches!(
-        canonical_tool_name,
-        tool_names::TASK_TRACKER | tool_names::REQUEST_USER_INPUT | tool_names::WRITE_STDIN
-    ) {
-        return None;
-    }
-    if matches!(canonical_tool_name, tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND | "command_session")
-        && matches!(classify_shell_activity(canonical_tool_name, effective_args), ShellActivity::Verification)
-    {
-        return None;
-    }
-    if spool_page_source_path(canonical_tool_name, effective_args).is_some() {
-        return None;
-    }
-    if ctx.tool_registry.is_planning_active() && is_plan_artifact_read(canonical_tool_name, effective_args).is_some() {
-        return None;
-    }
-    if !is_preview_gated_inspection(canonical_tool_name, effective_args) {
-        return None;
-    }
-    let planning_active = ctx.tool_registry.is_planning_active();
-    let block_reason = if planning_active {
-        "Tool preview budget exhausted; inspection blocked. Synthesize the plan from collected evidence."
-    } else {
-        "Tool preview budget exhausted; inspection blocked. Work from visible evidence instead."
-    }
-    .to_string();
-    let error_content = build_preview_exhaustion_error_content(planning_active);
-    push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
-    Some(ValidationResult::PreviewExhausted)
-}
-
 /// Build the error content for a read-after-write guard trip.
 #[cold]
 fn build_read_after_write_error(path: &str) -> String {
@@ -461,7 +354,7 @@ pub(crate) fn enforce_read_after_write_guard(
 /// 1. Family cap: Catches identical slice retries (same path + same offset/limit)
 /// 2. Per-file-path cap: Catches paginated reads of the same file
 ///
-/// Returns `Some(ValidationResult::Blocked)` when either guard trips,
+/// Returns a blocked validation result when either guard trips,
 /// or `None` when both guards pass.
 pub(crate) fn enforce_repeated_read_only_call_guard(
     ctx: &mut TurnProcessingContext<'_>,
@@ -470,22 +363,11 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     effective_args: &Value,
     readonly_classification: bool,
 ) -> Option<ValidationResult> {
-    if !readonly_classification {
+    // Tracker calls are read-only with respect to workspace files, but their
+    // state changes independently of file-read signatures and history caches.
+    // Both list and updates must execute against the current checklist.
+    if !readonly_classification || canonical_tool_name == tool_names::TASK_TRACKER {
         return None;
-    }
-
-    // Blindness brake first: post-exhaustion inspections return hidden stubs,
-    // so executing them cannot surface new evidence. Reject before counting
-    // or serving anything; verification, spool paging, and bookkeeping stay
-    // open inside the gate itself.
-    if let Some(outcome) = enforce_preview_exhaustion_inspection_gate(
-        ctx,
-        tool_call_id,
-        canonical_tool_name,
-        effective_args,
-        readonly_classification,
-    ) {
-        return Some(outcome);
     }
 
     // Planning doubles the read caps, mirroring the generous planning research
@@ -526,9 +408,10 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
                     )),
                 );
             }
-            ctx.push_tool_response(
+            ctx.push_reused_tool_response(
                 tool_call_id,
-                Some(canonical_tool_name),
+                canonical_tool_name,
+                effective_args,
                 maybe_inline_spooled(canonical_tool_name, &reused_value),
             );
             ctx.harness_state.record_successful_readonly_signature(signature);
@@ -537,6 +420,13 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
         }
     }
 
+    // Reserve the single fresh mismatch read before either read cap. Otherwise
+    // the identical-slice guard can block recovery before the path exception.
+    let recovery_allowed = ctx
+        .tool_registry
+        .pending_patch_recovery_read_path(canonical_tool_name, effective_args)
+        .is_some_and(|path| ctx.harness_state.claim_patch_recovery_path(path));
+
     if let Some(family_key) = repeated_file_read_family_key(canonical_tool_name, effective_args) {
         // The streak mutation is stateful and stays here; the cap *decision*
         // is delegated to the pure `check_read_family_cap` helper so it can be
@@ -544,6 +434,7 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
         let streak = ctx.harness_state.record_file_read_family_call(family_key);
         if let ReadFamilyCapDecision::Tripped { target: _, block_reason, error_content } =
             check_read_family_cap(canonical_tool_name, effective_args, streak, family_cap, planning_active)
+            && !recovery_allowed
         {
             ctx.activate_recovery(block_reason.clone());
             push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
@@ -559,9 +450,9 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     // query-aware family cap above, not pagination.
     if let Some(path) = repeated_read_path(canonical_tool_name, effective_args) {
         let path_count = ctx.harness_state.record_file_read_path_call(path.clone());
-        if path_count > path_cap {
+        if path_count > path_cap && !recovery_allowed {
             let block_reason = format!(
-                "Repeated reads of '{path}' hit the per-file-path cap ({path_cap}), so further reads of this path are blocked for the rest of this turn. Reads of other paths, edits, and other useful actions remain available; continue from the evidence already gathered."
+                "Repeated reads of '{path}' hit the per-file-path cap ({path_cap}), so further reads of this path are blocked for the rest of this turn. Prefer wider windows (e.g. sed -n '1,200p' or read_file) over overlapping slices and reuse spooled evidence; reads of other paths, edits, and other useful actions remain available."
             );
             let error_content = super::super::super::execution_result::build_error_content(
                 block_reason.clone(),
@@ -571,8 +462,15 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
             )
             .to_string();
             push_guard_failure_messages(ctx, tool_call_id, canonical_tool_name, error_content, &block_reason);
-            return Some(ValidationResult::Blocked);
+            return Some(ValidationResult::ReadCapBlocked);
         }
+    }
+
+    // Recovery still advances family/path counters and grants only one exception.
+    // The registry consumes the allowance only on execution, bypassing both
+    // replay reuse here and its own caches without discarding loop history.
+    if ctx.tool_registry.has_patch_recovery_read(canonical_tool_name, effective_args) {
+        return None;
     }
 
     // Cap-first: exact duplicates, cross-turn TTL matches, and history
@@ -580,21 +478,13 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     // preserves the identical-slice loop guard: serving a cached hit must not
     // hide a retry loop that should force tool-free recovery.
     if ctx.harness_state.has_successful_readonly_signature(signature.as_str())
-        && let Some(mut reused_value) = ctx.tool_registry.find_recent_successful_output(
+        && let Some(reused_value) = ctx.tool_registry.find_recent_successful_output(
             canonical_tool_name,
             effective_args,
             ctx.harness_state.max_tool_wall_clock,
         )
     {
-        if let Some(obj) = reused_value.as_object_mut() {
-            super::super::apply_reused_read_only_loop_metadata(obj);
-        }
-        ctx.push_tool_response(
-            tool_call_id,
-            Some(canonical_tool_name),
-            maybe_inline_spooled(canonical_tool_name, &reused_value),
-        );
-        ctx.harness_state.record_reused_result();
+        reuse_read_only_result(ctx, tool_call_id, canonical_tool_name, effective_args, reused_value, false);
         return Some(ValidationResult::Handled);
     }
 
@@ -602,22 +492,13 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     // via `read_extent_matches`). Plan artifacts already looked this up before
     // the caps above, so skip the duplicate lookup for them.
     if !plan_lookup_done
-        && let Some(mut reused_value) = ctx.tool_registry.find_recent_successful_by_read_target(
+        && let Some(reused_value) = ctx.tool_registry.find_recent_successful_by_read_target(
             canonical_tool_name,
             effective_args,
             ctx.harness_state.max_tool_wall_clock,
         )
     {
-        if let Some(obj) = reused_value.as_object_mut() {
-            super::super::apply_reused_read_only_loop_metadata(obj);
-        }
-        ctx.push_tool_response(
-            tool_call_id,
-            Some(canonical_tool_name),
-            maybe_inline_spooled(canonical_tool_name, &reused_value),
-        );
-        ctx.harness_state.record_successful_readonly_signature(signature);
-        ctx.harness_state.record_reused_result();
+        reuse_read_only_result(ctx, tool_call_id, canonical_tool_name, effective_args, reused_value, true);
         return Some(ValidationResult::Handled);
     }
 
@@ -632,13 +513,14 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
             if let Some(obj) = parsed.as_object_mut() {
                 super::super::apply_reused_read_only_loop_metadata(obj);
             }
-            ctx.push_tool_response(
+            ctx.push_reused_tool_response(
                 tool_call_id,
-                Some(canonical_tool_name),
+                canonical_tool_name,
+                effective_args,
                 maybe_inline_spooled(canonical_tool_name, &parsed),
             );
         } else {
-            ctx.push_tool_response(tool_call_id, Some(canonical_tool_name), raw_output);
+            ctx.push_reused_tool_response(tool_call_id, canonical_tool_name, effective_args, raw_output);
         }
         ctx.harness_state.record_reused_result();
         return Some(ValidationResult::Handled);
@@ -707,6 +589,210 @@ mod tests {
         let args = serde_json::json!({"command": "sed -n '440,520p' Cargo.toml extra.txt"});
         let key = repeated_file_read_family_key(tool_names::UNIFIED_EXEC, &args);
         assert_eq!(key, None);
+    }
+
+    #[test]
+    fn piped_sed_measurement_shares_family_with_bare_sed_same_range() {
+        // Blocked session 20261008T094713Z: `sed -n '65,71p' README.md | awk ...`
+        // measured the same table as the bare sed. Both must share one family
+        // key so the consecutive family cap converges the loop.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md"});
+        let piped = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{n=length($0); print n}'"});
+        let bare_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &bare);
+        let piped_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &piped);
+        assert_eq!(bare_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(piped_key, bare_key);
+    }
+
+    #[test]
+    fn piped_sed_different_ranges_stay_distinct_families() {
+        // Asymmetric side: diverse pagination must NOT group. Same shape as
+        // above but disjoint ranges → distinct keys, no false cap trip.
+        let first = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let second = serde_json::json!({"cmd": "sed -n '154,180p' README.md | awk '{print n}'"});
+        let first_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first);
+        let second_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &second);
+        assert_eq!(first_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(second_key, Some("unified_exec::read::README.md::off=154::lim=27".to_string()));
+        assert_ne!(first_key, second_key);
+    }
+
+    #[test]
+    fn semicolon_compound_keeps_legacy_untracked_behavior() {
+        // `;` compounds carry multiple reads in one call. They keep the legacy
+        // `None` (under-count rather than over-block); pipe stages above are
+        // the measurement-loop shape this fix covers.
+        let args = serde_json::json!({"cmd": "sed -n '65,71p' README.md; echo ---; sed -n '202,260p' README.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+    }
+
+    #[test]
+    fn awk_nr_range_measurement_groups_same_slice() {
+        // The late-turn loop ran `awk 'NR>=65 && NR<=71 ...' README.md` with
+        // varying bodies. Same NR range → same family regardless of body.
+        let first = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print NR\": \"$0}' README.md"});
+        let second = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {n=length($0); print NR\": len=\"n}' README.md"});
+        let first_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first);
+        let second_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &second);
+        assert_eq!(first_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(second_key, first_key);
+    }
+
+    #[test]
+    fn awk_nr_equality_alternatives_extract_min_max() {
+        // `NR==67 || NR==68 || ... || NR==71` targets lines 67-71.
+        let args = serde_json::json!({"cmd": "awk 'NR==67 || NR==68 || NR==69 || NR==70 || NR==71 {print}' README.md"});
+        let key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args);
+        assert_eq!(key, Some("unified_exec::read::README.md::off=67::lim=5".to_string()));
+    }
+
+    #[test]
+    fn awk_whole_file_scan_stays_untracked() {
+        // Asymmetric side: `length > 120` names a byte threshold, not a line
+        // range (no NR) → untracked, so diverse whole-file queries never trip
+        // the read caps (mirrors the `code_search` per-path exclusion).
+        let whole = serde_json::json!({"cmd": "awk 'length > 120 {print}' README.md"});
+        let ranged = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&whole), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &whole), None);
+        assert_eq!(
+            repeated_file_read_family_key(tool_names::EXEC_COMMAND, &ranged),
+            Some("unified_exec::read::README.md::off=65::lim=7".to_string())
+        );
+    }
+
+    #[test]
+    fn awk_piped_measurement_still_counts_leading_read() {
+        let args = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md | cat"});
+        let key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args);
+        assert_eq!(key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+    }
+
+    #[test]
+    fn only_bare_sed_is_verbatim_for_positioned_evidence() {
+        // Guards count pipes and awk via path/slice, but positioned evidence
+        // needs the file's own lines: only a bare `sed -n` range print is
+        // verbatim. Piped and awk outputs are transformed downstream.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md"});
+        assert!(parse_simple_exec_read_target(&bare).is_some_and(|target| target.verbatim));
+        let piped = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        assert!(parse_simple_exec_read_target(&piped).is_some_and(|target| !target.verbatim));
+        let awk = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert!(parse_simple_exec_read_target(&awk).is_some_and(|target| !target.verbatim));
+    }
+
+    #[test]
+    fn awk_single_nr_reference_stays_untracked() {
+        // One `NR` number cannot delimit a range: `NR>1` header-skips with
+        // different bodies are diverse queries, not a retry loop. Grouping
+        // them would trip the family cap on legitimate research.
+        let first = serde_json::json!({"cmd": "awk 'NR>1 {print $1}' README.md"});
+        let second = serde_json::json!({"cmd": "awk 'NR>1 {print $2}' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&first), None);
+        assert_eq!(parse_simple_exec_read_target(&second), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &first), None);
+    }
+
+    #[test]
+    fn sed_flag_like_path_stays_untracked() {
+        let args = serde_json::json!({"cmd": "sed -n '1p' --help"});
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+    }
+
+    #[test]
+    fn awk_with_options_or_multiple_files_stays_untracked() {
+        // Fail closed: options and multi-file scans are not simple reads.
+        let flagged = serde_json::json!({"cmd": "awk -F: '{print $1}' README.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &flagged), None);
+        let multi = serde_json::json!({"cmd": "awk '{print}' README.md CHANGELOG.md"});
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &multi), None);
+    }
+
+    #[test]
+    fn grep_measurement_probe_is_not_a_read_target() {
+        // `grep -c` is search, not a positioned read: distinct queries are
+        // diverse research (mirrors the code_search per-path exclusion), so it
+        // must stay out of the read family/path caps.
+        let args = serde_json::json!({"cmd": "grep -c '—' README.md"});
+        assert_eq!(parse_simple_exec_read_target(&args), None);
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &args), None);
+    }
+
+    #[test]
+    fn repeated_read_path_counts_piped_sed_and_awk_measurements() {
+        // Per-path total (not just family streak) must see the bypass shapes,
+        // so 7+ README measurements trip the path cap even with mixed bodies.
+        let piped_sed = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let awk = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' README.md"});
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &piped_sed), Some("README.md".to_string()));
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &awk), Some("README.md".to_string()));
+    }
+
+    #[test]
+    fn spelling_variants_share_shell_family_and_path_count() {
+        // `./` and interior `..` spellings are the same file: one family key
+        // and one path bucket. A leading `..` escapes and stays distinct.
+        let bare = serde_json::json!({"cmd": "sed -n '65,71p' README.md | awk '{print n}'"});
+        let dotted = serde_json::json!({"cmd": "sed -n '65,71p' ./README.md | awk '{print n}'"});
+        let escaping = serde_json::json!({"cmd": "awk 'NR>=65 && NR<=71 {print}' ../README.md"});
+        let bare_key = repeated_file_read_family_key(tool_names::EXEC_COMMAND, &bare);
+        assert_eq!(bare_key, Some("unified_exec::read::README.md::off=65::lim=7".to_string()));
+        assert_eq!(repeated_file_read_family_key(tool_names::EXEC_COMMAND, &dotted), bare_key);
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &dotted), Some("README.md".to_string()));
+        assert_eq!(repeated_read_path(tool_names::EXEC_COMMAND, &escaping), Some("../README.md".to_string()));
+    }
+
+    #[test]
+    fn blocked_session_measurement_loop_trips_path_cap() {
+        // Incident-shaped replay: session 20261008T094713Z burned 32 tool calls
+        // on consecutive `README.md:65-71` table-width probes. The per-path cap
+        // (`MAX_SAME_FILE_PATH_READ_CALLS`) must trip on this sequence even
+        // though the bodies vary per call. `;`-compounds, `grep -c` searches,
+        // and whole-file `length` scans stay untracked by design, so the hit
+        // count is below the raw call count — but still above the cap.
+        let probe_shapes = [
+            r#"sed -n '65,71p' README.md | cat -A | head -20"#,
+            r#"awk 'NR>=65 && NR<=71 {print NR": ["$0"]"}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {print NR": "$0}' README.md | awk '{print length($0), $0}'"#,
+            r#"awk 'NR==67 || NR==68 || NR==69 || NR==70 || NR==71 {print}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {print}' README.md; sed -n '65p' README.md | wc -c"#,
+            r#"awk 'NR>=65 && NR<=71 {n=length($0); print NR": len="n}' README.md"#,
+            r#"awk 'NR>=65 && NR<=71 {n=length($0); print NR": c="n}' README.md"#,
+            r#"sed -n '65,71p' README.md | awk '{n=length($0); print n}'"#,
+            r#"grep -c 'x' README.md"#,
+            r#"awk 'length > 120 {print}' README.md"#,
+            r#"awk 'NR==67 {print $0} NR==68 {print $0}' README.md | cat"#,
+            r#"sed -n '65,71p' README.md | awk '{n=length($0); print n}'"#,
+        ];
+        let hits = probe_shapes
+            .iter()
+            .filter(|command| {
+                repeated_read_path(tool_names::EXEC_COMMAND, &serde_json::json!({"cmd": command}))
+                    == Some("README.md".to_string())
+            })
+            .count();
+        assert!(
+            hits > MAX_SAME_FILE_PATH_READ_CALLS,
+            "incident loop must exceed the per-path cap: {hits} hits, cap {MAX_SAME_FILE_PATH_READ_CALLS}"
+        );
+    }
+
+    #[test]
+    fn advertised_per_path_read_cap_matches_enforcement() {
+        // Lockstep guard for a hand-synced mirror: enforcement lives here
+        // (`MAX_SAME_FILE_PATH_READ_CALLS`) while the model-facing
+        // advertisement lives in `vtcode-core` (`harness_limits.rs`
+        // `MAX_SAME_FILE_PATH_READS`, a separate crate so the const cannot be
+        // shared). Render the prompt section and require the advertised line
+        // to carry the live enforcement value: drift on either side fails.
+        let mut prompt = String::from("Base prompt");
+        vtcode_core::prompts::upsert_harness_limits_section(&mut prompt, 32, 600, 2);
+        assert!(
+            prompt.contains(&format!("max_same_file_path_reads: {MAX_SAME_FILE_PATH_READ_CALLS}")),
+            "advertised per-path cap must match enforcement ({MAX_SAME_FILE_PATH_READ_CALLS}): {prompt}"
+        );
     }
 
     #[test]

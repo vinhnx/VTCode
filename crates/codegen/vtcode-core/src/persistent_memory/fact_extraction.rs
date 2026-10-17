@@ -1,13 +1,13 @@
 use super::*;
 
+/// Collapse whitespace runs into single spaces, trimming the ends.
+///
+/// Delegates to the canonical [`vtcode_commons::formatting::collapse_whitespace`];
+/// kept as a named function because persistent-memory callers rely on the
+/// `normalize_whitespace` spelling and the `persistent_memory` re-export.
+#[inline]
 pub fn normalize_whitespace(text: &str) -> String {
-    text.split_whitespace().fold(String::new(), |mut acc, s| {
-        if !acc.is_empty() {
-            acc.push(' ');
-        }
-        acc.push_str(s);
-        acc
-    })
+    vtcode_commons::formatting::collapse_whitespace(text)
 }
 
 pub fn truncate_for_fact(text: &str, max_chars: usize) -> String {
@@ -15,7 +15,7 @@ pub fn truncate_for_fact(text: &str, max_chars: usize) -> String {
     if trimmed.chars().count() <= max_chars {
         return trimmed.to_string();
     }
-    format!("{}...", trimmed.chars().take(max_chars.saturating_sub(3)).collect::<String>())
+    vtcode_commons::formatting::truncate_text(trimmed, max_chars.saturating_sub(3), "...")
 }
 
 pub fn maybe_extract_tool_fact(message: &Message) -> Option<GroundedFactRecord> {

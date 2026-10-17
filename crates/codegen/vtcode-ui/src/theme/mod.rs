@@ -5,6 +5,7 @@
 //! Shared theme registry and runtime state for VT Code UI crates.
 
 mod color_math;
+pub(crate) use color_math::contrast_ratio;
 mod registry;
 mod runtime;
 mod scheme;
@@ -18,7 +19,7 @@ pub use runtime::{
     active_styles, active_theme_id, active_theme_label, banner_color, banner_style, clear_preview_theme, ensure_theme,
     get_minimum_contrast, has_preview_theme, is_bold_bright_mode, is_safe_colors_only, logo_accent_color,
     rebuild_active_styles, resolve_theme, set_active_theme, set_color_accessibility_config, set_preview_theme,
-    validate_theme_contrast,
+    style_contrast_ratio, validate_theme_contrast,
 };
 pub use scheme::{
     is_light_theme, suggest_theme_for_terminal, theme_for_terminal_scheme_change, theme_matches_terminal_scheme,

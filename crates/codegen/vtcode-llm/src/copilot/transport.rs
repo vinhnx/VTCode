@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
@@ -393,34 +393,13 @@ pub(super) async fn read_bounded_line<R: AsyncBufRead + Unpin>(
     line: &mut Vec<u8>,
     max_bytes: usize,
 ) -> std::io::Result<Option<bool>> {
-    line.clear();
-    let mut truncated = false;
-
-    loop {
-        let available = reader.fill_buf().await?;
-        if available.is_empty() {
-            return Ok(if line.is_empty() && !truncated {
-                None
-            } else {
-                Some(truncated)
-            });
-        }
-
-        let newline = available.iter().position(|byte| *byte == b'\n');
-        let consumed = newline.map_or(available.len(), |position| position + 1);
-        if line.len() < max_bytes {
-            let copy_len = (max_bytes - line.len()).min(consumed);
-            line.extend_from_slice(&available[..copy_len]);
-            truncated |= copy_len < consumed;
-        } else {
-            truncated = true;
-        }
-        reader.consume(consumed);
-
-        if newline.is_some() {
-            return Ok(Some(truncated));
-        }
-    }
+    vtcode_commons::line_framing::read_bounded_line(
+        reader,
+        line,
+        max_bytes,
+        vtcode_commons::line_framing::LineEnding::IncludeLf,
+    )
+    .await
 }
 
 pub(super) fn trim_line_ending(mut line: &[u8]) -> &[u8] {
@@ -602,6 +581,19 @@ mod tests {
 
         let pending_len = transport.pending.lock().unwrap().len();
         assert_eq!(pending_len, 0, "timed-out call must not leave a pending entry");
+    }
+
+    #[tokio::test]
+    async fn bounded_line_cap_includes_lf_and_reuses_buffer() -> std::io::Result<()> {
+        let mut reader = BufReader::with_capacity(1, b"abc\nxy\r\nq\n".as_slice());
+        let mut line = vec![b'!'; 8];
+        assert_eq!(read_bounded_line(&mut reader, &mut line, 3).await?, Some(true));
+        assert_eq!(line, b"abc");
+        assert_eq!(read_bounded_line(&mut reader, &mut line, 3).await?, Some(true));
+        assert_eq!(line, b"xy\r");
+        assert_eq!(read_bounded_line(&mut reader, &mut line, 3).await?, Some(false));
+        assert_eq!(line, b"q\n");
+        Ok(())
     }
 
     #[tokio::test]

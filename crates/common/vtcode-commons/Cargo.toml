@@ -59,6 +59,7 @@ schemars = { workspace = true, optional = true }
 tiktoken = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
+nucleo-matcher = "0.3"
 
 [dev-dependencies]
 tempfile = { workspace = true }

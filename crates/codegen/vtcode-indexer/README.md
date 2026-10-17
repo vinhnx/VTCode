@@ -2,16 +2,16 @@
 
 Workspace-friendly code indexer extracted from VT Code.
 
-`vtcode-indexer` offers a lightweight alternative to heavyweight
-search/indexing stacks. It recursively walks a workspace, computes
-per-file hashes, and stores metadata in Markdown-friendly summaries
-so changes remain easy to audit in git.
+`vtcode-indexer` offers a lightweight alternative to heavyweight search/indexing stacks. It recursively walks a
+workspace, computes per-file hashes, and stores metadata in Markdown-friendly summaries so changes remain easy to audit
+in git.
 
 <!-- cargo-rdme start -->
 
 Workspace-friendly file indexer and file utilities for VT Code.
 
 `vtcode-indexer` provides:
+
 - A lightweight workspace file indexer with markdown-backed persistence
 - Fast parallel fuzzy file search (via `file_search` module)
 - Markdown-backed storage utilities (via `markdown_store` module)

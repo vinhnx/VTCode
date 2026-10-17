@@ -15,6 +15,7 @@ pub use vtcode_commons::{
     BackoffStrategy, ConfigGuidance, ErrorCategory, MisconfigurationKind, Retryability, detect_misconfiguration,
     is_misconfiguration,
 };
+use vtcode_macros::DebugNoInline;
 
 /// Result type alias for VT Code operations.
 pub type Result<T> = std::result::Result<T, VtCodeError>;
@@ -23,7 +24,12 @@ pub type Result<T> = std::result::Result<T, VtCodeError>;
 ///
 /// Uses `thiserror::Error` for automatic `std::error::Error` implementation
 /// and provides clear error messages with context.
-#[derive(Debug, Error, Serialize, Deserialize)]
+///
+/// `Debug` is derived via [`DebugNoInline`] rather than `#[derive(Debug)]`: the
+/// envelope wraps an arbitrary `source` chain and is formatted on fan-out failure
+/// paths, so the built-in derive's implied `#[inline]` would inline the whole
+/// chain into every `{:?}` / `?err` site.
+#[derive(DebugNoInline, Error, Serialize, Deserialize)]
 #[error("{category}: {message}")]
 pub struct VtCodeError {
     /// Error category for categorization and handling.
@@ -470,13 +476,7 @@ fn llm_error_message(error: &LLMError) -> String {
 }
 
 fn llm_metadata_context(error: &LLMError) -> Option<String> {
-    let metadata = match error {
-        LLMError::Authentication { metadata, .. }
-        | LLMError::RateLimit { metadata }
-        | LLMError::InvalidRequest { metadata, .. }
-        | LLMError::Network { metadata, .. }
-        | LLMError::Provider { metadata, .. } => metadata.as_deref(),
-    }?;
+    let metadata = error.metadata()?;
 
     let mut context = Vec::new();
     if let Some(code) = metadata.code.as_deref() {
@@ -489,13 +489,7 @@ fn llm_metadata_context(error: &LLMError) -> Option<String> {
 }
 
 fn llm_retry_after(error: &LLMError) -> Option<std::time::Duration> {
-    let metadata = match error {
-        LLMError::Authentication { metadata, .. }
-        | LLMError::RateLimit { metadata }
-        | LLMError::InvalidRequest { metadata, .. }
-        | LLMError::Network { metadata, .. }
-        | LLMError::Provider { metadata, .. } => metadata.as_ref(),
-    }?;
+    let metadata = error.metadata()?;
 
     retry_after_from_llm_metadata(metadata)
 }

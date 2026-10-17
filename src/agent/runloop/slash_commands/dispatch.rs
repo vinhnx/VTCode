@@ -7,7 +7,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::builtins::execute_built_in_command_skill;
 use super::models::SlashCommandOutcome;
-use super::parsing::{parse_analyze_scope, parse_prompt_template_args, parse_review_input, split_command_and_args};
+use super::parsing::{parse_prompt_template_args, parse_review_input, split_command_and_args};
 
 pub(crate) async fn handle_slash_command(
     input: &str,
@@ -23,6 +23,17 @@ pub(crate) async fn handle_slash_command(
     let command_key = command.to_ascii_lowercase();
     let command_key = normalize_command_key(&command_key);
     let args = rest.trim();
+
+    if let Some(section) = config_consolidated_section(command_key) {
+        let section_args = if args.is_empty() {
+            section.to_string()
+        } else {
+            format!("{section} {args}")
+        };
+        if let Some(spec) = find_command_skill_by_slash_name("config") {
+            return execute_command_skill_spec(spec, &section_args, trimmed, renderer, workspace).await;
+        }
+    }
 
     if let Some(spec) = find_command_skill_by_slash_name(command_key) {
         return execute_command_skill_spec(spec, args, trimmed, renderer, workspace).await;
@@ -50,6 +61,17 @@ pub(crate) async fn execute_command_skill_by_name(
     workspace: &Path,
 ) -> Result<SlashCommandOutcome> {
     let command_key = normalize_command_key(slash_name.trim());
+    if let Some(section) = config_consolidated_section(command_key) {
+        let Some(spec) = find_command_skill_by_slash_name("config") else {
+            anyhow::bail!("unknown command skill '{slash_name}'");
+        };
+        let section_args = if input.trim().is_empty() {
+            section.to_string()
+        } else {
+            format!("{section} {}", input.trim())
+        };
+        return execute_command_skill_spec(spec, &section_args, input.trim(), renderer, workspace).await;
+    }
     let Some(spec) = find_command_skill_by_slash_name(command_key) else {
         anyhow::bail!("unknown command skill '{slash_name}'");
     };
@@ -101,21 +123,6 @@ fn dispatch_traditional_command_skill(
             }
             args.trim().to_string()
         }
-        "analyze" => {
-            if matches!(args.trim(), "--help" | "help") {
-                renderer.line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            match parse_analyze_scope(args) {
-                Ok(Some(scope)) => scope,
-                Ok(None) => String::new(),
-                Err(err) => {
-                    renderer.line(MessageStyle::Error, &err)?;
-                    renderer.line(MessageStyle::Info, "Usage: /analyze [full|security|performance]")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-            }
-        }
         _ => args.trim().to_string(),
     };
 
@@ -130,5 +137,24 @@ pub(in crate::agent::runloop::slash_commands) fn normalize_command_key(command_k
         "subprocesses" => "subprocess",
         "context" => "compact",
         other => other,
+    }
+}
+
+/// Hidden backward-compat aliases consolidated under `/config`.
+///
+/// These names no longer appear in the `/` palette or skill registry; typing
+/// them still works by routing through `/config <section>`.
+pub(in crate::agent::runloop::slash_commands) fn config_consolidated_section(
+    command_key: &str,
+) -> Option<&'static str> {
+    match command_key {
+        "permissions" => Some("permissions"),
+        "tasks" => Some("tasks"),
+        "jobs" => Some("jobs"),
+        "log" => Some("log"),
+        "subprocess" | "subprocesses" => Some("subprocess"),
+        "notify" => Some("notify"),
+        "checkup" | "doctor" => Some("checkup"),
+        _ => None,
     }
 }

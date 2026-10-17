@@ -3,6 +3,7 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::{DirtyWorktreeStatus, git_dirty_worktree_entries, workspace_relative_display};
 use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::context::last_user_message_index;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -147,6 +148,22 @@ pub(super) fn remove_transient_system_notes(history: &mut Vec<vtcode_core::llm::
     }
 }
 
+/// User-facing notice when a prompt checkpoint cannot be taken.
+///
+/// Pure policy: maps the checkpoint error text to a short `Info` notice.
+/// The full error stays in the tracing log; the UI stays concise. The busy
+/// branch names the safety reason (checkpoint corruption) and both options
+/// (wait + retry, separate worktree) so parallel-session users can act.
+pub(super) fn checkpoint_unavailable_notice(err_text: &str) -> &'static str {
+    if err_text.contains("Another turn or rewind is using this workspace") {
+        "Prompt kept — workspace busy (safety lock prevents checkpoint corruption). Options: wait then retry, or use a separate worktree."
+    } else if err_text.contains("Interrupted rewind") {
+        "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry."
+    } else {
+        "Prompt kept — checkpoint unavailable. Wait a moment and retry."
+    }
+}
+
 pub(super) fn build_tracked_file_freshness_note(
     workspace: &std::path::Path,
     stale_paths: &[std::path::PathBuf],
@@ -239,13 +256,13 @@ pub(super) fn build_unrelated_dirty_worktree_note(
     )))
 }
 
-/// Append transient system notes for the upcoming turn.
+/// Assemble transient system notes without mutating model history.
+/// The caller publishes them only after its cancellable preparation wait succeeds.
 ///
 /// `unrelated_dirty_note` is pre-fetched by the caller via `spawn_blocking`
 /// (see `orchestration.rs`) because `build_unrelated_dirty_worktree_note`
 /// spawns blocking `git` subprocesses — see the `# Blocking` docs in `git.rs`.
-pub(super) async fn append_transient_turn_notes(
-    history: &mut Vec<vtcode_core::llm::provider::Message>,
+pub(super) async fn prepare_transient_turn_notes(
     workspace: &std::path::Path,
     tool_registry: &ToolRegistry,
     unrelated_dirty_note: Option<String>,
@@ -257,13 +274,11 @@ pub(super) async fn append_transient_turn_notes(
         let stale_paths = tool_registry.edited_file_monitor_ref().stale_tracked_paths();
         build_tracked_file_freshness_note(workspace, &stale_paths)
     } {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     if let Some(note) = unrelated_dirty_note {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     // Cross-turn exec-session resume: when the previous turn ended with a
@@ -271,13 +286,11 @@ pub(super) async fn append_transient_turn_notes(
     // pre-filled wait call so it needs zero reconstruction. This also covers
     // session restore — both paths flow through the same turn loop.
     if let Some(note) = build_exec_session_resume_note(tool_registry).await {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     if let Some(note) = background_completion_note {
-        transient_system_notes.push(note.clone());
-        history.push(vtcode_core::llm::provider::Message::system(note));
+        transient_system_notes.push(note);
     }
 
     transient_system_notes
@@ -333,14 +346,18 @@ pub(super) async fn build_exec_session_resume_note(tool_registry: &ToolRegistry)
         .join("\n");
 
     let first_session_id = sessions[0].id.as_str().to_string();
+    let count = sessions.len();
     Some(format!(
-        "Exec session resume: the following command session(s) from earlier in this session are still running:\n\
+        "Exec session resume: {count} foreground command session(s) are still running:\n\
          {lines}\n\
+         (showing newest {count}, capped at 4)\n\
          Settle them before starting new work: call `write_stdin` with \
          {{\"session_id\": \"{first_session_id}\", \"action\": \"wait\", \
-         \"wait_timeout_seconds\": 600}} — wait/inspect calls are exempt from the per-turn \
+         \"wait_timeout_seconds\": 600}} verbatim (copy the session_id exactly; never guess the id) — \
+         `wait` blocks until exit or deadline while `poll` returns immediately; wait/inspect calls are exempt from the per-turn \
          tool-call budget. A deadline-expired wait returns an in-progress session that can be \
-         waited on again."
+         waited on again with the same session_id. With several sessions, repeat this wait per id newest-first; \
+         use `inspect` only for a bounded snapshot, not to wait."
     ))
 }
 
@@ -538,7 +555,7 @@ pub(super) async fn approved_plan_execution_summary(
 pub(super) fn take_pending_resumed_user_prompt(
     history: &mut Vec<vtcode_core::llm::provider::Message>,
 ) -> Option<String> {
-    let user_index = history.iter().rposition(|message| message.role == MessageRole::User)?;
+    let user_index = last_user_message_index(history)?;
     if history
         .iter()
         .skip(user_index + 1)
@@ -668,6 +685,7 @@ pub(super) async fn prompt_startup_planning_workflow(
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
                 search_value: None,
+                ..Default::default()
             },
             InlineListItem {
                 title: "Start normally".to_string(),
@@ -676,10 +694,12 @@ pub(super) async fn prompt_startup_planning_workflow(
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_STAY_ACTION.to_string())),
                 search_value: None,
+                ..Default::default()
             },
         ],
         selected: Some(InlineListSelection::ConfigAction(STARTUP_PLANNING_WORKFLOW_ENTER_ACTION.to_string())),
         search: None,
+        status: None,
         hotkeys: Vec::new(),
     });
 
@@ -705,9 +725,33 @@ pub(super) async fn prompt_startup_planning_workflow(
 
 #[cfg(test)]
 mod tests {
-    use super::{ExecutionSummaryStatus, RefusedTurnRollback, classify_execution_summary};
+    use super::{
+        ExecutionSummaryStatus, RefusedTurnRollback, checkpoint_unavailable_notice, classify_execution_summary,
+    };
     use crate::agent::runloop::unified::turn::context::TurnLoopResult;
     use serde_json::json;
+
+    #[test]
+    fn checkpoint_unavailable_notice_names_safety_lock_and_options_for_busy_workspace() {
+        let notice =
+            checkpoint_unavailable_notice("Another turn or rewind is using this workspace: operation would block");
+        assert!(notice.starts_with("Prompt kept"), "notice must confirm the prompt is kept: {notice}");
+        assert!(notice.contains("safety lock"), "notice must name the safety reason: {notice}");
+        assert!(notice.contains("wait then retry"), "notice must offer wait+retry: {notice}");
+        assert!(notice.contains("separate worktree"), "notice must offer worktree option: {notice}");
+    }
+
+    #[test]
+    fn checkpoint_unavailable_notice_routes_interrupted_rewind_to_recover() {
+        let notice = checkpoint_unavailable_notice("Interrupted rewind; run again before continuing");
+        assert_eq!(notice, "Prompt kept — rewind interrupted. Run /rewind again to auto-recover, then retry.");
+    }
+
+    #[test]
+    fn checkpoint_unavailable_notice_falls_back_to_concise_retry() {
+        let notice = checkpoint_unavailable_notice("Checkpoint skipped paths; cannot safely start turn");
+        assert_eq!(notice, "Prompt kept — checkpoint unavailable. Wait a moment and retry.");
+    }
 
     #[tokio::test]
     async fn exec_session_resume_note_is_none_without_sessions() {
@@ -811,19 +855,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn append_transient_turn_notes_omits_resume_hint_without_sessions() {
+    async fn cancelled_note_preparation_does_not_publish_transient_history() {
+        use super::{Notify, ToolRegistry};
+        use crate::agent::runloop::unified::state::CtrlCState;
+        use crate::agent::runloop::unified::stop_requests::await_with_stop;
+        use vtcode_core::llm::provider::Message;
+        let temp = tempfile::tempdir().unwrap();
+        let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+        let state = CtrlCState::new();
+        let notify = Notify::new();
+        let mut history = vec![Message::user("preserved request".to_owned())];
+        let preparation = async {
+            let notes = super::prepare_transient_turn_notes(
+                temp.path(),
+                &registry,
+                Some("dirty workspace evidence".to_owned()),
+                Some("completed background job".to_owned()),
+            )
+            .await;
+            assert_eq!(notes, ["dirty workspace evidence", "completed background job"]);
+            // Exercise the harder boundary: preparation finished, but stop is
+            // accepted before its result is admitted to the request history.
+            state.request_local_cancel();
+            notes
+        };
+        if let Some(notes) = await_with_stop(&state, &notify, preparation).await {
+            history.extend(notes.into_iter().map(Message::system));
+        }
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].content.as_text(), "preserved request");
+    }
+
+    #[tokio::test]
+    async fn prepare_transient_turn_notes_omits_resume_hint_without_sessions() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
         assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
-        assert!(history.is_empty(), "no hint must leave history untouched");
+        assert!(transient.is_empty(), "no sessions must produce no notes");
     }
 
     #[tokio::test]
     #[cfg(unix)]
-    async fn append_transient_turn_notes_injects_bounded_resume_hint() {
+    async fn prepare_transient_turn_notes_injects_bounded_resume_hint() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
         let run = registry
@@ -835,8 +909,7 @@ mod tests {
             .expect("run should start");
         let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
         let hint = transient
             .iter()
@@ -844,11 +917,7 @@ mod tests {
             .expect("transient list must carry the resume hint");
         assert!(hint.contains(&session_id));
         assert!(hint.len() < 1_024);
-        assert_eq!(history.len(), 1, "hint must append exactly one system message");
-        let last = history.last().expect("history has hint");
-        assert_eq!(last.role, vtcode_core::llm::provider::MessageRole::System);
-        assert!(last.tool_calls.is_none(), "hint must never auto-execute a wait");
-        assert!(last.content.as_text().contains(&session_id), "history hint must carry the session id");
+        assert_eq!(transient.len(), 1, "exactly one resume note");
 
         // Hint suggests the wait; it must not settle the session on its own.
         assert!(
@@ -860,7 +929,7 @@ mod tests {
 
     #[tokio::test]
     #[cfg(unix)]
-    async fn append_transient_turn_notes_omits_retained_background_sessions() {
+    async fn prepare_transient_turn_notes_omits_retained_background_sessions() {
         let temp = tempfile::tempdir().expect("tempdir");
         let registry = vtcode_core::tools::registry::ToolRegistry::new(temp.path().to_path_buf()).await;
         let run = registry
@@ -872,11 +941,10 @@ mod tests {
             .expect("background run should start");
         let session_id = run["session_id"].as_str().expect("session id present").to_string();
 
-        let mut history: Vec<vtcode_core::llm::provider::Message> = Vec::new();
-        let transient = super::append_transient_turn_notes(&mut history, temp.path(), &registry, None, None).await;
+        let transient = super::prepare_transient_turn_notes(temp.path(), &registry, None, None).await;
 
         assert!(!transient.iter().any(|note| note.starts_with("Exec session resume:")));
-        assert!(history.is_empty(), "retained background work must not force a resume wait");
+        assert!(transient.is_empty(), "retained background work must not force a resume wait");
         registry.close_harness_exec_session(&session_id).await.expect("close session");
     }
 

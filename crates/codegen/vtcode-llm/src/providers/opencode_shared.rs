@@ -3,8 +3,28 @@ use vtcode_config::models::model_catalog_entry;
 
 use crate::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
 
-use super::common::map_finish_reason_common;
+use super::common::{map_finish_reason_common, validate_request_common};
 use super::openai_compat::{OpenAiCompatCore, OpenAiCompatSpec, SystemPromptPlacement};
+
+pub(super) fn validate_normalized_request(
+    request: &LLMRequest,
+    normalized_model: &str,
+    provider_name: &str,
+    provider_key: &str,
+    supported_models: &[&str],
+) -> Result<(), LLMError> {
+    let supported_models = supported_models.iter().map(|model| model.to_string()).collect::<Vec<_>>();
+
+    // Direct validation accepts an empty model; generate/stream supply the
+    // default separately. Clone only when a nonempty model needs normalization.
+    if request.model.trim().is_empty() || normalized_model == request.model {
+        validate_request_common(request, provider_name, provider_key, Some(&supported_models))
+    } else {
+        let mut normalized = request.clone();
+        normalized.model = normalized_model.to_string();
+        validate_request_common(&normalized, provider_name, provider_key, Some(&supported_models))
+    }
+}
 
 /// Wire-dialect spec for the OpenCode Go OpenAI-compatible protocol.
 pub(crate) struct OpenCodeGoInnerSpec;
@@ -206,9 +226,129 @@ impl<S: OpenAiCompatSpec> LLMProvider for OpenCodeCompatibleProvider<S> {
 #[cfg(test)]
 mod tests {
     use super::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec};
-    use crate::provider::{LLMRequest, Message, ToolChoice};
+    use crate::provider::{LLMError, LLMProvider, LLMRequest, Message, ToolChoice};
+    use crate::providers::{OpenCodeGoProvider, OpenCodeZenProvider};
     use std::sync::Arc;
     use vtcode_config::types::ReasoningEffortLevel;
+
+    struct DispatcherCase {
+        provider: Box<dyn LLMProvider>,
+        name: &'static str,
+        prefix: &'static str,
+        model: &'static str,
+    }
+
+    fn dispatchers() -> [DispatcherCase; 2] {
+        let client = reqwest::Client::new();
+        [
+            DispatcherCase {
+                provider: Box::new(OpenCodeGoProvider::new_with_client(
+                    "test-key".to_string(),
+                    "glm-5.3".to_string(),
+                    client.clone(),
+                    "https://example.test/v1".to_string(),
+                    Default::default(),
+                )),
+                name: "OpenCode Go",
+                prefix: "opencode-go/",
+                model: "glm-5.3",
+            },
+            DispatcherCase {
+                provider: Box::new(OpenCodeZenProvider::new_with_client(
+                    "test-key".to_string(),
+                    "gpt-5.6-sol".to_string(),
+                    client,
+                    "https://example.test/v1".to_string(),
+                    Default::default(),
+                )),
+                name: "OpenCode Zen",
+                prefix: "opencode-zen/",
+                model: "gpt-5.6-sol",
+            },
+        ]
+    }
+
+    #[test]
+    fn dispatcher_validation_accepts_supported_prefixed_and_blank_models_without_mutation() {
+        for DispatcherCase { provider, prefix, model, .. } in dispatchers() {
+            for requested_model in [
+                model.to_string(),
+                format!("  {prefix}{model}  "),
+                String::new(),
+                "  ".to_string(),
+            ] {
+                let request = LLMRequest {
+                    messages: vec![Message::user("hello".to_string())].into(),
+                    model: requested_model.clone(),
+                    ..Default::default()
+                };
+                assert!(provider.validate_request(&request).is_ok(), "{}: {requested_model:?}", provider.name());
+                assert_eq!(request.model, requested_model);
+            }
+        }
+
+        let provider = &dispatchers()[1].provider;
+        let request = LLMRequest {
+            messages: vec![Message::user("hello".to_string())].into(),
+            model: "opencode/gpt-5.6-sol".to_string(),
+            ..Default::default()
+        };
+        assert!(provider.validate_request(&request).is_ok());
+    }
+
+    #[test]
+    fn dispatcher_validation_rejects_unknown_models_with_provider_context() {
+        for DispatcherCase { provider, name, prefix, .. } in dispatchers() {
+            let request = LLMRequest {
+                messages: vec![Message::user("hello".to_string())].into(),
+                model: format!("{prefix}unknown-model"),
+                ..Default::default()
+            };
+            let LLMError::InvalidRequest { message, .. } = provider.validate_request(&request).unwrap_err() else {
+                panic!("expected an invalid request");
+            };
+            assert!(message.contains(name), "{message}");
+            assert!(message.contains("Unsupported model: unknown-model"), "{message}");
+            assert!(!message.contains(prefix), "{message}");
+            assert_eq!(request.model, format!("{prefix}unknown-model"));
+        }
+    }
+
+    #[test]
+    fn dispatcher_validation_keeps_provider_model_allowlists_separate() {
+        for DispatcherCase { provider, prefix, model, .. } in dispatchers() {
+            let other_model = if model == "glm-5.3" { "gpt-5.6-sol" } else { "glm-5.3" };
+            let request = LLMRequest {
+                messages: vec![Message::user("hello".to_string())].into(),
+                model: format!("{prefix}{other_model}"),
+                ..Default::default()
+            };
+            let LLMError::InvalidRequest { message, .. } = provider.validate_request(&request).unwrap_err() else {
+                panic!("expected an invalid request");
+            };
+            assert!(message.contains(&format!("Unsupported model: {other_model}")), "{message}");
+        }
+    }
+
+    #[test]
+    fn dispatcher_validation_keeps_message_checks_after_model_normalization() {
+        for DispatcherCase { provider, name, prefix, model } in dispatchers() {
+            let request = LLMRequest {
+                model: format!("{prefix}{model}"),
+                ..Default::default()
+            };
+            let error = provider.validate_request(&request).unwrap_err().to_string();
+            assert!(error.contains(name), "{error}");
+            assert!(error.contains("Messages cannot be empty"), "{error}");
+
+            let mut invalid_message = Message::user("hello".to_string());
+            invalid_message.tool_calls = Some(Vec::new());
+            let request = LLMRequest { messages: vec![invalid_message].into(), ..request };
+            let error = provider.validate_request(&request).unwrap_err().to_string();
+            assert!(error.contains(name), "{error}");
+            assert!(error.contains("cannot make tool calls"), "{error}");
+        }
+    }
 
     fn base_request() -> LLMRequest {
         LLMRequest {

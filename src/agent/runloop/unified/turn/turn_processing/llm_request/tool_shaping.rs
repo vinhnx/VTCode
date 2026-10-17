@@ -109,35 +109,43 @@ fn apply_permission_policy_to_tools(
         true
     };
 
-    let filtered: Vec<_> = tools
-        .iter()
-        .filter(|tool| {
-            let name = tool.function_name();
+    let allows_tool = |tool: &uni::ToolDefinition| {
+        let name = tool.function_name();
 
-            // Enforce full-auto allow-list if present. Workflow-coordination
-            // tools skip this gate only (they were already subject to the
-            // mode/primary-agent filters upstream, so this never injects a
-            // tool — it only keeps an already-visible one).
-            if let Some(allowlist) = full_auto_allowlist
-                && !allowlist.iter().any(|allowed| allowed == name)
-                && !tool_names::is_workflow_coordination_tool(name)
-            {
-                return false;
-            }
+        // Enforce full-auto allow-list if present. Workflow-coordination
+        // tools skip this gate only (they were already subject to the
+        // mode/primary-agent filters upstream, so this never injects a
+        // tool — it only keeps an already-visible one).
+        if let Some(allowlist) = full_auto_allowlist
+            && !allowlist.iter().any(|allowed| allowed == name)
+            && !tool_names::is_workflow_coordination_tool(name)
+        {
+            return false;
+        }
 
-            let requests = build_advertised_permission_requests(workspace, &current_dir, name);
-            if requests.is_empty() {
-                return true;
-            }
-            // Hide the tool only when ALL advertised actions are denied.
-            let all_denied = requests.iter().all(|request| {
-                evaluate_effective_permissions(&cfg.permissions, agent_permissions, workspace, &current_dir, request)
-                    == ResolvedPermissionDecision::Deny
-            });
-            !all_denied
-        })
-        .cloned()
-        .collect();
+        let requests = build_advertised_permission_requests(workspace, &current_dir, name);
+        if requests.is_empty() {
+            return true;
+        }
+        // Hide the tool only when ALL advertised actions are denied.
+        let all_denied = requests.iter().all(|request| {
+            evaluate_effective_permissions(&cfg.permissions, agent_permissions, workspace, &current_dir, request)
+                == ResolvedPermissionDecision::Deny
+        });
+        !all_denied
+    };
+    let filtered: Vec<_> = if let Some(first_rejected) = tools.iter().position(|tool| !allows_tool(tool)) {
+        tools
+            .iter()
+            .take(first_rejected)
+            .chain(tools.iter().skip(first_rejected + 1).filter(|tool| allows_tool(tool)))
+            .cloned()
+            .collect()
+    } else if !tools.is_empty() {
+        return Some(tools);
+    } else {
+        Vec::new()
+    };
 
     // Fail loud instead of handing the model a zero-tool catalog. A non-empty
     // full-auto allowlist whose entries match no emitted tool is pure config
@@ -250,19 +258,22 @@ mod tests {
             "web_fetch".into(),
             "request_user_input".into(),
         ]);
+        let original = catalog(&[
+            "exec_command",
+            "write_stdin",
+            "apply_patch",
+            "code_search",
+            "web_fetch",
+            "request_user_input",
+        ])
+        .expect("catalog");
         let result = apply_permission_policy_to_tools(
-            catalog(&[
-                "exec_command",
-                "write_stdin",
-                "apply_patch",
-                "code_search",
-                "web_fetch",
-                "request_user_input",
-            ]),
+            Some(Arc::clone(&original)),
             &auto_agent(),
             PathBuf::from(WORKSPACE).as_path(),
             Some(&cfg),
         );
+        assert!(Arc::ptr_eq(result.as_ref().expect("unchanged catalog"), &original));
         assert_eq!(
             names(result),
             vec![
@@ -362,5 +373,54 @@ mod tests {
             Some(&cfg),
         );
         assert_eq!(names(result), vec!["task_tracker"]);
+    }
+
+    #[test]
+    fn permission_filter_preserves_order_and_the_original_catalog() {
+        let mut cfg = cfg_with_full_auto(vec!["*".into()]);
+        cfg.permissions.deny = vec!["Edit".into()];
+        let original = catalog(&["web_fetch", "apply_patch", "code_search", "exec_command"]).expect("catalog");
+        let result = apply_permission_policy_to_tools(
+            Some(Arc::clone(&original)),
+            &auto_agent(),
+            PathBuf::from(WORKSPACE).as_path(),
+            Some(&cfg),
+        )
+        .expect("surviving tools");
+
+        assert!(!Arc::ptr_eq(&result, &original));
+        assert_eq!(
+            result.iter().map(ToolDefinition::function_name).collect::<Vec<_>>(),
+            ["web_fetch", "code_search", "exec_command"]
+        );
+        assert_eq!(
+            original.iter().map(ToolDefinition::function_name).collect::<Vec<_>>(),
+            ["web_fetch", "apply_patch", "code_search", "exec_command"]
+        );
+    }
+
+    #[test]
+    fn empty_catalog_preserves_config_and_stale_allowlist_behavior() {
+        let workspace = PathBuf::from(WORKSPACE);
+        let agent = auto_agent();
+        let empty = Arc::new(Vec::new());
+        let no_config = apply_permission_policy_to_tools(Some(Arc::clone(&empty)), &agent, &workspace, None)
+            .expect("no-config passthrough");
+        assert!(Arc::ptr_eq(&no_config, &empty));
+        assert!(
+            apply_permission_policy_to_tools(
+                Some(Arc::clone(&empty)),
+                &agent,
+                &workspace,
+                Some(&VTCodeConfig::default())
+            )
+            .is_none()
+        );
+
+        let cfg = cfg_with_full_auto(vec!["stale_tool".into()]);
+        let stale_fallback = apply_permission_policy_to_tools(Some(Arc::clone(&empty)), &agent, &workspace, Some(&cfg))
+            .expect("stale allowlist fallback");
+        assert!(Arc::ptr_eq(&stale_fallback, &empty));
+        assert!(apply_permission_policy_to_tools(None, &agent, &workspace, Some(&cfg)).is_none());
     }
 }

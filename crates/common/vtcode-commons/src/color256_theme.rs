@@ -126,16 +126,12 @@ pub fn rgb_to_ansi256_for_theme(r: u8, g: u8, b: u8, is_light_theme: bool) -> u8
     adjust_index_for_theme(base_index, is_light_theme)
 }
 
-fn parse_bool(value: &str) -> Option<bool> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
-    }
-}
-
 fn harmonious_override() -> Option<bool> {
-    std::env::var("VTCODE_256_HARMONIOUS").ok().and_then(|value| parse_bool(&value))
+    // Delegate to the canonical tri-state parser instead of forking the
+    // accepted-value set (see `utils::parse_bool_env_value`).
+    std::env::var("VTCODE_256_HARMONIOUS")
+        .ok()
+        .and_then(|value| crate::utils::parse_bool_env_value(&value))
 }
 
 #[cfg(test)]

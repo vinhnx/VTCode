@@ -7,6 +7,7 @@ pub(super) use ratatui::prelude::*;
 pub(super) use ratatui::widgets::Clear;
 pub(super) use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use crate::tui::config::constants::ui;
 use crate::tui::core_tui::app::types::{
     CompactActivityMetadata, DiffOverlayRequest, DiffPreviewMode, DiffPreviewState, InlineCommand, InlineEvent,
     InlineMessageKind, InlineSegment, LocalAgentsTransientRequest, SlashCommandItem, TaskPanelMetadata,
@@ -37,7 +38,7 @@ pub(crate) mod slash;
 /// Slash command palette widget.
 pub mod slash_palette;
 mod task_panel;
-#[path = "transcript_review.rs"]
+#[path = "transcript_review/mod.rs"]
 mod tool_output_viewer;
 mod transient;
 /// Workspace trust state management.
@@ -249,6 +250,7 @@ impl AppSession {
         }
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     fn update_input_triggers(&mut self) {
         if !self.core.input_enabled() {
             return;
@@ -562,9 +564,16 @@ impl AppSession {
         self.core.mark_dirty();
     }
 
-    fn record_tool_output_block(&mut self, id: ToolOutputId, lines: Vec<String>) {
+    pub(crate) fn record_tool_output_block(&mut self, id: ToolOutputId, mut lines: Vec<String>) {
         if lines.is_empty() {
             return;
+        }
+        // Bound retained capture size so long-running floods cannot grow the
+        // TUI heap without limit. Keep the tail — that is what review shows.
+        let max_lines = ui::TUI_TOOL_OUTPUT_CAPTURE_MAX_LINES;
+        if lines.len() > max_lines {
+            let drop = lines.len() - max_lines;
+            lines.drain(..drop);
         }
 
         // A non-PTY capture is recorded after the live PTY stream has rendered
@@ -591,8 +600,36 @@ impl AppSession {
             recorded_at_line: Some(recorded_at_line),
             lines,
         });
+        self.trim_tool_output_blocks();
         self.tool_output_revision = self.tool_output_revision.wrapping_add(1);
         self.core.mark_dirty();
+    }
+
+    /// FIFO-bound capture blocks. Blocks shown in an open tool-output viewer
+    /// are pinned so review does not lose content mid-read; the newest block
+    /// is never dropped. Call again after the viewer closes to re-trim.
+    fn trim_tool_output_blocks(&mut self) {
+        let max_blocks = ui::TUI_TOOL_OUTPUT_BLOCKS_MAX;
+        if self.tool_output_blocks.len() <= max_blocks {
+            return;
+        }
+        let pinned = self
+            .tool_output_viewer_state
+            .as_ref()
+            .map(|viewer| viewer.retained_tool_ids())
+            .unwrap_or_default();
+        while self.tool_output_blocks.len() > max_blocks {
+            let newest = self.tool_output_blocks.len() - 1;
+            let Some(pos) = self
+                .tool_output_blocks
+                .iter()
+                .take(newest)
+                .position(|block| !pinned.contains(&block.id))
+            else {
+                break;
+            };
+            self.tool_output_blocks.remove(pos);
+        }
     }
 
     fn find_live_pty_anchor(&self, header: Option<&String>, search_start: usize) -> Option<usize> {
@@ -693,6 +730,11 @@ impl AppSession {
         self.core.invalidate_scroll_metrics();
     }
 
+    /// Visual-only redraw (cursor, scroll, hover). Does not drop header/sidebar caches.
+    pub(crate) fn mark_visual_dirty(&mut self) {
+        self.core.mark_visual_dirty();
+    }
+
     fn append_compact_activity(&mut self, metadata: CompactActivityMetadata) {
         let segments = tool_output_viewer::compact_activity_segments(self, &metadata);
         self.handle_core_command(crate::tui::core_tui::types::InlineCommand::AppendLine {
@@ -702,6 +744,11 @@ impl AppSession {
         let line_index = self.core.lines.len().saturating_sub(1);
         self.compact_activity_entries
             .push(CompactActivityEntry { line_index, metadata: metadata.clone() });
+        let max_entries = ui::TUI_COMPACT_ACTIVITY_MAX_ENTRIES;
+        if self.compact_activity_entries.len() > max_entries {
+            let drop = self.compact_activity_entries.len() - max_entries;
+            self.compact_activity_entries.drain(..drop);
+        }
         self.update_tool_output_anchors(&metadata, line_index);
     }
 
@@ -783,6 +830,8 @@ impl AppSession {
         }
         self.tool_output_viewer_state = None;
         self.close_transient_surface(TransientSurface::ToolOutputViewer);
+        // Unpin and drop any over-cap blocks that were held for the viewer.
+        self.trim_tool_output_blocks();
         self.core.mark_dirty();
     }
 
@@ -861,6 +910,17 @@ impl AppSession {
                                 "{}/{}",
                                 metadata.completed, metadata.total
                             )));
+                            let percent = if metadata.total == 0 {
+                                None
+                            } else {
+                                let completed = metadata.completed.min(metadata.total) as u64;
+                                let total = metadata.total as u64;
+                                let percent = completed.saturating_mul(100) / total.max(1);
+                                Some(u8::try_from(percent.min(100)).unwrap_or(100))
+                            };
+                            self.core
+                                .program_status
+                                .apply(vtcode_commons::program_status::ProgramStatusUpdate::Progress { percent });
                             self.task_panel_metadata = Some(metadata);
                         }
                         None => {
@@ -869,6 +929,9 @@ impl AppSession {
                             // panel header or terminal title.
                             self.task_panel_metadata = None;
                             self.core.set_task_panel_progress_label(None);
+                            self.core
+                                .program_status
+                                .apply(vtcode_commons::program_status::ProgramStatusUpdate::Progress { percent: None });
                         }
                     }
                 }
@@ -1095,6 +1158,10 @@ impl AppSession {
                 self.refresh_compact_activity_presentations();
             }
             InlineCommand::SetAppearance { appearance } => {
+                let enabling_screen_reader = appearance.screen_reader_mode && !self.core.appearance.screen_reader_mode;
+                if enabling_screen_reader && let Some(viewer) = self.tool_output_viewer_state.as_mut() {
+                    viewer.set_render_mode(tool_output_viewer::TranscriptRenderMode::Raw);
+                }
                 self.handle_core_command(crate::tui::core_tui::types::InlineCommand::SetAppearance { appearance });
                 self.refresh_compact_activity_presentations();
             }
@@ -1125,6 +1192,11 @@ impl AppSession {
             InlineCommand::CloseTransient => self.close_transient(),
             InlineCommand::ShowTransient { request } => self.show_transient(*request),
             InlineCommand::RecordDiffReview(anchor) => self.record_diff_review(anchor),
+            InlineCommand::FocusTranscriptReview { id } => self.open_tool_output_viewer(
+                self.core.transcript_width.max(1),
+                self.core.transcript_rows.max(1),
+                Some(id),
+            ),
             InlineCommand::UpdateFilePaletteSearch { files } => {
                 if let Some(palette) = &mut self.file_palette {
                     palette.set_search_index(files);
@@ -1215,6 +1287,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
             link_ranges: link_ranges.clone(),
         },
         InlineCommand::RecordToolOutput { .. }
+        | InlineCommand::FocusTranscriptReview { .. }
         | InlineCommand::AppendToolOutputLine { .. }
         | InlineCommand::AppendCompactActivity(_)
         | InlineCommand::ReplaceCompactActivity(_)
@@ -1233,7 +1306,12 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::SetInputStatus { left, right } => {
             CoreCommand::SetInputStatus { left: left.clone(), right: right.clone() }
         }
+        InlineCommand::SetConfiguredInputStatus { left, right } => {
+            CoreCommand::SetConfiguredInputStatus { left: left.clone(), right: right.clone() }
+        }
+        InlineCommand::ProgramStatus(update) => CoreCommand::ProgramStatus(*update),
         InlineCommand::SetActivityState(state) => CoreCommand::SetActivityState(*state),
+        InlineCommand::UpdateProgress(update) => CoreCommand::UpdateProgress(*update),
         InlineCommand::SetTerminalTitleItems { items } => CoreCommand::SetTerminalTitleItems { items: items.clone() },
         InlineCommand::SetTerminalTitleThreadLabel { label } => {
             CoreCommand::SetTerminalTitleThreadLabel { label: label.clone() }
@@ -1315,6 +1393,14 @@ impl TuiSessionDriver for AppSession {
         self.core.handle_tick();
     }
 
+    fn needs_animation_tick(&self) -> bool {
+        // Core covers drag, spinner, shimmer, core background, and expiries;
+        // AppSession adds its own drawer-local background loading count, which
+        // feeds `has_status_spinner` but lives outside `core`.
+        self.core.needs_animation_tick()
+            || (self.core.appearance.should_animate_progress_status() && self.background_activity_active())
+    }
+
     fn render(&mut self, frame: &mut Frame<'_>) {
         AppSession::render(self, frame);
     }
@@ -1351,6 +1437,18 @@ impl TuiSessionDriver for AppSession {
         self.core.update_terminal_title();
     }
 
+    fn attach_program_status_terminal(&mut self) {
+        self.core.program_status.attach_terminal();
+    }
+
+    fn flush_program_status(&mut self) {
+        self.core.program_status.flush();
+    }
+
+    fn shutdown_program_status(&mut self) {
+        self.core.program_status.shutdown();
+    }
+
     fn clear_terminal_title(&mut self) {
         self.core.clear_terminal_title();
     }
@@ -1358,7 +1456,7 @@ impl TuiSessionDriver for AppSession {
     fn is_running_activity(&self) -> bool {
         // Turn-scoped only. Background tasks and drawer previews are
         // asynchronous, so they must not lock mode switches, block slash
-        // commands, or convert plain submissions into queued/steered input.
+        // commands, or convert plain submissions into queued input.
         self.core.is_running_activity()
     }
 

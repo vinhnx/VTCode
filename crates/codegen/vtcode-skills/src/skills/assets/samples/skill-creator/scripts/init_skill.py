@@ -85,28 +85,50 @@ Files used in output (not loaded into context). Use for templates, images, boile
 """
 
 EXAMPLE_SCRIPT = '''#!/usr/bin/env python3
+# /// script
+# dependencies = []
+# ///
 """
 Example script for {skill_title}
 
-This is a placeholder script. Replace with actual functionality.
+Agentic design: non-interactive, --help, structured stdout,
+diagnostics on stderr, meaningful exit codes.
 
 Usage:
-    python scripts/example_script.py [arguments]
+    python scripts/example_script.py [--format json] [--output -] [--dry-run] [input]
 """
 
+import argparse
+import json
 import sys
+from pathlib import Path
 
 
-def main():
-    """Main entry point."""
-    print("Hello from {skill_name} skill!")
-    print(f"Arguments: {{sys.argv[1:]}}")
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description="Example script for {skill_title}.")
+    parser.add_argument("input", nargs="?", help="Input file (default: stdin)")
+    parser.add_argument("--format", choices=["json", "text"], default="json")
+    parser.add_argument("--output", default="-", help="Output file or - for stdout")
+    parser.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    return parser.parse_args(argv)
 
-    # TODO: Add actual script logic here
-    # This could be data processing, file conversion, API calls, etc.
+
+def main(argv=None):
+    args = parse_args(argv if argv is not None else sys.argv[1:])
+    result = {{"skill": "{skill_name}", "input": args.input, "dry_run": args.dry_run}}
+    output = json.dumps(result) if args.format == "json" else str(result)
+    if args.dry_run:
+        print(f"would write: {{output}}", file=sys.stderr)
+        return 0
+    if args.output == "-":
+        print(output)
+    else:
+        Path(args.output).write_text(output, encoding="utf-8")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 '''
 
 EXAMPLE_REFERENCE = """# Reference Documentation for {skill_title}
@@ -205,7 +227,9 @@ def parse_resources(raw_resources):
     return resources
 
 
-def create_resource_dirs(skill_dir, skill_name, skill_title, resources, include_examples):
+def create_resource_dirs(
+    skill_dir, skill_name, skill_title, resources, include_examples
+):
     """Create resource directories with optional example files."""
     for resource in resources:
         resource_dir = skill_dir / resource
@@ -263,7 +287,9 @@ def init_skill(skill_name, path, resources, include_examples):
 
     # Create SKILL.md from template
     skill_title = title_case_skill_name(skill_name)
-    skill_content = SKILL_TEMPLATE.format(skill_name=skill_name, skill_title=skill_title)
+    skill_content = SKILL_TEMPLATE.format(
+        skill_name=skill_name, skill_title=skill_title
+    )
 
     skill_md_path = skill_dir / "SKILL.md"
     try:
@@ -276,7 +302,9 @@ def init_skill(skill_name, path, resources, include_examples):
     # Create resource directories if requested
     if resources:
         try:
-            create_resource_dirs(skill_dir, skill_name, skill_title, resources, include_examples)
+            create_resource_dirs(
+                skill_dir, skill_name, skill_title, resources, include_examples
+            )
         except Exception as e:
             print(f"[ERROR] Error creating resource directories: {e}")
             return None

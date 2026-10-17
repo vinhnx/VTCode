@@ -1,14 +1,13 @@
 use std::path::Path;
 
 use anyhow::Result;
-use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::skills::CommandSkillSpec;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::flow::{
-    handle_auth_command, handle_continue_command, handle_fork_command, handle_login_command, handle_logout_command,
-    handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command, handle_plan_command,
+    handle_resume_command, handle_rewind_command,
 };
 use super::management::{handle_local_command, handle_mcp_command, handle_secret_command};
 use super::models::{
@@ -19,6 +18,19 @@ use super::parsing::{self, parse_compact_command, parse_session_log_export_forma
 use super::rendering::{render_help, render_theme_list};
 
 // ---- Built-in command handlers ----
+fn handle_fast_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    let enable = match args.trim() {
+        "" => None,
+        arg if arg.eq_ignore_ascii_case("on") => Some(true),
+        arg if arg.eq_ignore_ascii_case("off") => Some(false),
+        _ => {
+            renderer.line(MessageStyle::Error, "Usage: /fast [on|off]")?;
+            return Ok(SlashCommandOutcome::Handled);
+        }
+    };
+    Ok(SlashCommandOutcome::ToggleFastMode { enable })
+}
+
 // Each command is an independently testable function. The dispatch match in
 // `execute_built_in_command_skill` is the strict interface guard: adding a
 // new command requires a handler and a match-arm registration.
@@ -79,47 +91,58 @@ fn handle_init_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
 
 #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_config_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
+    const USAGE: &str =
+        "Usage: /config [memory|permissions|model|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]";
     let trimmed = args.trim();
     if trimmed.is_empty() {
-        Ok(SlashCommandOutcome::ShowSettings)
-    } else {
-        let mut tokens = trimmed.split_whitespace();
-        let command = tokens.next().unwrap_or_default();
-        let normalized = command.to_ascii_lowercase();
-        match normalized.as_str() {
-            "reset" | "clear" => {
-                if tokens.next().is_some() {
-                    renderer.line(MessageStyle::Error, "Usage: /config reset")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-                Ok(SlashCommandOutcome::ShowSettingsReset)
+        return Ok(SlashCommandOutcome::ShowSettings);
+    }
+    let (command, rest) = match trimmed.split_once(char::is_whitespace) {
+        Some((command, rest)) => (command, rest.trim()),
+        None => (trimmed, ""),
+    };
+    let normalized = command.to_ascii_lowercase();
+    match normalized.as_str() {
+        "reset" | "clear" => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /config reset")?;
+                return Ok(SlashCommandOutcome::Handled);
             }
-            "memory" | "agent.persistent_memory" => {
-                if tokens.next().is_some() {
-                    renderer.line(MessageStyle::Error, "Usage: /config [memory|permissions|model|<path>|reset]")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-                Ok(SlashCommandOutcome::ShowMemoryConfig)
+            Ok(SlashCommandOutcome::ShowSettingsReset)
+        }
+        "memory" | "agent.persistent_memory" => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
             }
-            "permissions" => {
-                if tokens.next().is_some() {
-                    renderer.line(MessageStyle::Error, "Usage: /config [memory|permissions|model|<path>|reset]")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-                Ok(SlashCommandOutcome::ShowPermissions)
+            Ok(SlashCommandOutcome::ShowMemoryConfig)
+        }
+        "permissions" => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
             }
-            "model" | "model.main" => {
-                if tokens.next().is_some() {
-                    renderer.line(MessageStyle::Error, "Usage: /config [memory|permissions|model|<path>|reset]")?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-                Ok(SlashCommandOutcome::ShowSettingsAtPath { path: command.to_string() })
+            Ok(SlashCommandOutcome::ShowPermissions)
+        }
+        "model" | "model.main" => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
             }
-            _ if tokens.next().is_none() => Ok(SlashCommandOutcome::ShowSettingsAtPath { path: command.to_string() }),
-            _ => {
-                renderer.line(MessageStyle::Error, "Usage: /config [memory|permissions|model|<path>|reset]")?;
-                Ok(SlashCommandOutcome::Handled)
+            Ok(SlashCommandOutcome::ShowSettingsAtPath { path: command.to_string() })
+        }
+        "tasks" => handle_tasks_command(rest, renderer),
+        "jobs" => handle_jobs_command(rest, renderer),
+        "log" => handle_log_command(rest, renderer),
+        "subprocess" | "subprocesses" => handle_subprocesses_command(rest, renderer),
+        "notify" => handle_notify_command(rest),
+        "checkup" | "doctor" => handle_checkup_command(rest, renderer, renderer.supports_inline_ui()),
+        _ => {
+            if !rest.is_empty() {
+                renderer.line(MessageStyle::Error, USAGE)?;
+                return Ok(SlashCommandOutcome::Handled);
             }
+            Ok(SlashCommandOutcome::ShowSettingsAtPath { path: command.to_string() })
         }
     }
 }
@@ -211,7 +234,7 @@ fn handle_log_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
 fn handle_notify_command(args: &str) -> Result<SlashCommandOutcome> {
     Ok(SlashCommandOutcome::Notify {
         message: if args.is_empty() {
-            "Manual notification from /notify".to_string()
+            "Manual notification from /config notify".to_string()
         } else {
             args.to_string()
         },
@@ -247,18 +270,6 @@ fn handle_mode_command(args: &str) -> Result<SlashCommandOutcome> {
         Ok(SlashCommandOutcome::StartModePalette)
     } else {
         Ok(SlashCommandOutcome::SelectPrimaryAgent { name: trimmed.to_string() })
-    }
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_effort_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    match parse_effort_args(args) {
-        Ok((level, persist)) => Ok(SlashCommandOutcome::SetEffort { level, persist }),
-        Err(err) => {
-            renderer.line(MessageStyle::Error, &err)?;
-            renderer.line(MessageStyle::Info, "Usage: /effort [--persist] [none|minimal|low|medium|high|xhigh|max]")?;
-            Ok(SlashCommandOutcome::Handled)
-        }
     }
 }
 
@@ -376,11 +387,6 @@ fn handle_permissions_command() -> Result<SlashCommandOutcome> {
 }
 
 #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_memory_command() -> Result<SlashCommandOutcome> {
-    Ok(SlashCommandOutcome::ShowMemory)
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_stop_command() -> Result<SlashCommandOutcome> {
     Ok(SlashCommandOutcome::StopAgent)
 }
@@ -447,14 +453,6 @@ fn handle_jobs_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashC
     Ok(SlashCommandOutcome::ShowJobsPanel)
 }
 
-fn handle_ide_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    if !args.is_empty() {
-        renderer.line(MessageStyle::Error, "Usage: /ide")?;
-        return Ok(SlashCommandOutcome::Handled);
-    }
-    Ok(SlashCommandOutcome::ToggleIdeContext)
-}
-
 #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
 fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
     match args.trim().to_ascii_lowercase().as_str() {
@@ -463,8 +461,12 @@ fn handle_terminal_setup_command(args: &str, renderer: &mut AnsiRenderer) -> Res
             vtcode_core::terminal_setup::terminals::iterm2::run_profile_icon_install(renderer)?;
             Ok(SlashCommandOutcome::Handled)
         }
+        "reset-iterm2-icon" => {
+            vtcode_core::terminal_setup::terminals::iterm2::run_profile_icon_reset(renderer)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
         _ => {
-            renderer.line(MessageStyle::Error, "Usage: /terminal-setup [install-iterm2-icon]")?;
+            renderer.line(MessageStyle::Error, "Usage: /terminal-setup [install-iterm2-icon|reset-iterm2-icon]")?;
             Ok(SlashCommandOutcome::Handled)
         }
     }
@@ -481,16 +483,6 @@ fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
             Ok(SlashCommandOutcome::Handled)
         }
     }
-}
-
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-fn handle_edit_command(args: &str) -> Result<SlashCommandOutcome> {
-    let file = if args.trim().is_empty() {
-        None
-    } else {
-        Some(args.trim().to_string())
-    };
-    Ok(SlashCommandOutcome::LaunchEditor { file })
 }
 
 #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
@@ -573,43 +565,33 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "theme" => handle_theme_command(args, renderer),
         "init" => handle_init_command(args, renderer),
         "config" | "settings" | "setttings" => handle_config_command(args, renderer),
-        "permissions" => Ok(SlashCommandOutcome::ShowPermissions),
-        "memory" => Ok(SlashCommandOutcome::ShowMemory),
         "statusline" => handle_statusline_command(args),
         "title" => handle_title_command(args, renderer),
         "clear" => handle_clear_command(args, renderer),
         "transcript" => handle_transcript_command(args, renderer),
+        "explain" => Ok(SlashCommandOutcome::Explain { args: args.to_owned() }),
         "compact" | "context" => handle_compact_command(args, renderer),
         "copy" => handle_copy_command(args, renderer),
-        "tasks" => handle_tasks_command(args, renderer),
-        "jobs" => handle_jobs_command(args, renderer),
-        "log" => handle_log_command(args, renderer),
         "status" => Ok(SlashCommandOutcome::ShowStatus),
-        "notify" => handle_notify_command(args),
         "stop" => Ok(SlashCommandOutcome::StopAgent),
         "pause" => handle_pause_command(renderer),
-        "checkup" => handle_checkup_command(args, renderer, renderer.supports_inline_ui()),
         "update" => handle_update_command(args),
         "mcp" => handle_mcp_command(args, renderer),
         "webmcp" => handle_webmcp_command(args, renderer),
         "local" => handle_local_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "fast" => handle_fast_command(args, renderer),
         "mode" => handle_mode_command(args),
-        "effort" => handle_effort_command(args, renderer),
-        "ide" => handle_ide_command(args, renderer),
         "files" => handle_files_command(args, renderer),
         "share" => handle_share_command(args, renderer),
         "resume" => handle_resume_command(args, renderer, workspace).await,
-        "continue" => handle_continue_command(args, renderer),
         "fork" => handle_fork_command(args, renderer, workspace).await,
         "history" => handle_history_command(args, renderer),
         "new" => Ok(SlashCommandOutcome::NewSession),
         "rewind" => handle_rewind_command(args, renderer),
         "redo" => Ok(SlashCommandOutcome::Redo),
-        "rewind-recover" => Ok(SlashCommandOutcome::RewindRecover),
         "docs" => Ok(SlashCommandOutcome::OpenDocs),
         "feedback" => handle_feedback_command(args, renderer),
-        "edit" => handle_edit_command(args),
         "exit" => Ok(SlashCommandOutcome::Exit),
         "skills" => handle_skills_command(input, renderer),
         "plugin" => handle_plugin_command(input, renderer),
@@ -747,28 +729,6 @@ pub(in crate::agent::runloop::slash_commands) fn parse_update_args(
     }
 
     Ok((check_only, install, force))
-}
-
-pub(crate) fn parse_effort_args(args: &str) -> std::result::Result<(Option<ReasoningEffortLevel>, bool), String> {
-    let mut persist = false;
-    let mut level = None;
-
-    parsing::for_each_token(args, |token| {
-        match token {
-            "--persist" | "persist" => persist = true,
-            _ => {
-                let Some(parsed) = ReasoningEffortLevel::parse(token) else {
-                    return Err(format!("Unknown effort value '{token}'"));
-                };
-                if level.replace(parsed).is_some() {
-                    return Err("Specify at most one effort level.".to_string());
-                }
-            }
-        }
-        Ok(())
-    })?;
-
-    Ok((level, persist))
 }
 
 #[derive(Debug)]

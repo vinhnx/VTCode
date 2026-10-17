@@ -85,6 +85,9 @@ pub enum AnthropicOptionalU32Override {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct AnthropicRequestOverrides {
+    /// Explicit request speed takes precedence over provider configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<vtcode_config::AnthropicSpeed>,
     #[serde(default)]
     pub(crate) thinking_mode: AnthropicThinkingModeOverride,
     #[serde(default)]
@@ -272,7 +275,8 @@ pub struct ResponsesCompactionOptions {
 pub struct CodingAgentSettings {
     /// Optimize for long context by hoisting the largest user message.
     /// Hoisting reorders earlier turns, so the Anthropic builder skips it on
-    /// preserved-thinking models (Claude Opus 5.5, Claude Fable 5.1).
+    /// preserved-thinking models (Claude Sonnet 5.5, Claude Opus 5.5, Claude
+    /// Fable 5.1).
     pub(crate) long_context_optimization: bool,
 }
 

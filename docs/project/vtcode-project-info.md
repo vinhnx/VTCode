@@ -2,7 +2,8 @@
 
 ## What is VT Code?
 
-VT Code is an open-source coding agent with LLM-native code understanding and robust shell safety. It supports multiple LLM providers with automatic failover and efficient context management.
+VT Code is an open-source coding agent with LLM-native code understanding and robust shell safety. It supports multiple
+LLM providers with automatic failover and efficient context management.
 
 ## Architecture
 

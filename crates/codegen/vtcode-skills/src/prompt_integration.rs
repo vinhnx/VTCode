@@ -13,7 +13,7 @@ pub use vtcode_config::core::skills::PromptFormat;
 /// Rendering mode for skills section
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SkillsRenderMode {
-    /// Full metadata (currently same core fields as lean mode).
+    /// Full metadata: lean fields plus `compatibility` and `allowed-tools` when present.
     Full,
     /// Lean mode: only name + description + file path (Codex-style, 40-60% token savings)
     #[default]
@@ -51,14 +51,28 @@ pub fn generate_skills_prompt_with_mode(skills: &[SkillMetadata], mode: SkillsRe
 }
 
 /// Render skills in full mode.
+///
+/// Lean fields plus optional spec metadata (`compatibility`, `allowed-tools`)
+/// when present on the manifest, so operators can opt into richer routing
+/// signals without changing the default lean catalog.
 fn render_skills_full(skills: &[SkillMetadata]) -> String {
-    render_skills_lean(skills)
+    render_skills_markdown(skills, true)
 }
 
 /// Render skills in lean mode (Codex-style: name + description + path only)
 ///
 /// This keeps only the metadata required by the strict SKILL.md spec.
 fn render_skills_lean(skills: &[SkillMetadata]) -> String {
+    render_skills_markdown(skills, false)
+}
+
+/// Shared markdown catalog renderer.
+///
+/// `include_optional` controls whether Full-mode spec metadata
+/// (`compatibility`, `allowed-tools`) is appended when present.
+/// Sorting, 10-item cap, overflow suffix, and usage rules stay identical
+/// across modes so the two cannot drift.
+fn render_skills_markdown(skills: &[SkillMetadata], include_optional: bool) -> String {
     let mut prompt = String::from("\n\n## Skills\n");
     prompt.push_str(
         "Available skills (name: description + directory + scope). Content on disk; open SKILL.md when triggered.\n\n",
@@ -83,7 +97,15 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Admin => "admin",
         };
 
-        let line = format!("- {}: {} (file: {}, scope: {})", skill.name, skill.description, location, scope);
+        let mut line = format!("- {}: {} (file: {}, scope: {})", skill.name, skill.description, location, scope);
+        if include_optional && let Some(manifest) = &skill.manifest {
+            if let Some(compat) = &manifest.compatibility {
+                line.push_str(&format!(" [compat: {compat}]"));
+            }
+            if let Some(tools) = &manifest.allowed_tools {
+                line.push_str(&format!(" [tools: {tools}]"));
+            }
+        }
 
         let _ = writeln!(prompt, "{line}");
     }
@@ -275,9 +297,33 @@ mod tests {
         let full_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Full);
         let lean_prompt = generate_skills_prompt_with_mode(&skills, SkillsRenderMode::Lean);
 
+        // Without optional metadata, full falls back to lean shape.
         assert_eq!(full_prompt, lean_prompt);
         assert!(lean_prompt.contains("Usage Rules"));
         assert!(full_prompt.contains("Available skills"));
+
+        // With optional spec fields, full surfaces richer routing signals.
+        let rich_manifest = SkillManifest {
+            name: "rich-skill".to_string(),
+            description: "Rich skill".to_string(),
+            compatibility: Some("Requires git".to_string()),
+            allowed_tools: Some("Read Bash".to_string()),
+            ..Default::default()
+        };
+        let rich = SkillMetadata {
+            name: rich_manifest.name.clone(),
+            description: rich_manifest.description.clone(),
+            short_description: None,
+            path: PathBuf::from("/tmp/rich-skill"),
+            scope: SkillScope::User,
+            manifest: Some(rich_manifest.into()),
+        };
+        let full_rich = generate_skills_prompt_with_mode(std::slice::from_ref(&rich), SkillsRenderMode::Full);
+        let lean_rich = generate_skills_prompt_with_mode(std::slice::from_ref(&rich), SkillsRenderMode::Lean);
+        assert!(full_rich.contains("[compat: Requires git]"));
+        assert!(full_rich.contains("[tools: Read Bash]"));
+        assert!(!lean_rich.contains("[compat:"));
+        assert!(!lean_rich.contains("[tools:"));
     }
 
     #[test]

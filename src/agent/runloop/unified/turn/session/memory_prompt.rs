@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Context, Result};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::persistent_memory::{
@@ -8,7 +10,7 @@ use vtcode_core::persistent_memory::{
 };
 use vtcode_core::session::SessionId;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode, WizardStep};
 
 use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::display::{display_user_message, reset_inline_input};
@@ -27,6 +29,14 @@ const MEMORY_CONFIRM_CANCEL: &str = "memory.confirm.cancel";
 const MEMORY_CLEANUP_ACCEPT: &str = "memory.cleanup.accept";
 const MEMORY_CLEANUP_CANCEL: &str = "memory.cleanup.cancel";
 const MEMORY_MATCH_PREVIEW_LIMIT: usize = 5;
+const MEMORY_DISABLED_HINT: &str = "Persistent memory is disabled. Use `/config memory` to enable it.";
+
+fn persistent_memory_enabled(ctx: &InteractionLoopContext<'_>) -> bool {
+    ctx.vt_cfg
+        .as_ref()
+        .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
+        .unwrap_or(true)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MemoryPromptIntent {
@@ -83,17 +93,8 @@ pub(crate) async fn handle_memory_prompt(
         MemoryPromptIntent::Show => handle_show_memory_intent(ctx, state).await,
         MemoryPromptIntent::Remember { request } => {
             let prior_assistant_reply = prior_assistant_reply_for_memory_request(&request, ctx.conversation_history);
-            if !ctx
-                .vt_cfg
-                .as_ref()
-                .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
-                .unwrap_or(true)
-            {
-                respond_to_memory_prompt(
-                    ctx,
-                    input,
-                    "Persistent memory is disabled. Use `/memory` or `/config memory` to enable it.",
-                )?;
+            if !persistent_memory_enabled(ctx) {
+                respond_to_memory_prompt(ctx, input, MEMORY_DISABLED_HINT)?;
                 return Ok(Some(InteractionOutcome::DirectToolHandled));
             }
 
@@ -127,7 +128,7 @@ pub(crate) async fn handle_memory_prompt(
                     respond_to_memory_prompt(
                         ctx,
                         input,
-                        "Memory updates require the inline confirmation UI. Open `/memory` in inline UI to continue.",
+                        "Memory updates require the inline confirmation UI. Open `/config memory` in inline UI to continue.",
                     )?;
                     return Ok(Some(InteractionOutcome::DirectToolHandled));
                 }
@@ -142,12 +143,12 @@ pub(crate) async fn handle_memory_prompt(
                         report.directory.display()
                     ),
                     Ok(false) => format!(
-                        "Saved {} normalized memory note(s) under {}, but verification failed. Open `/memory` to inspect the saved note.",
+                        "Saved {} normalized memory note(s) under {}, but verification failed. Open `/config memory` to inspect the saved note.",
                         report.added_facts,
                         report.directory.display()
                     ),
                     Err(err) => format!(
-                        "Saved {} normalized memory note(s) under {}, but verification failed: {err}. Open `/memory` to inspect the saved note.",
+                        "Saved {} normalized memory note(s) under {}, but verification failed: {err}. Open `/config memory` to inspect the saved note.",
                         report.added_facts,
                         report.directory.display()
                     ),
@@ -166,17 +167,8 @@ pub(crate) async fn handle_memory_prompt(
             Ok(Some(InteractionOutcome::DirectToolHandled))
         }
         MemoryPromptIntent::Forget { request } => {
-            if !ctx
-                .vt_cfg
-                .as_ref()
-                .map(vtcode_core::config::loader::VTCodeConfig::persistent_memory_enabled)
-                .unwrap_or(true)
-            {
-                respond_to_memory_prompt(
-                    ctx,
-                    input,
-                    "Persistent memory is disabled. Use `/memory` or `/config memory` to enable it.",
-                )?;
+            if !persistent_memory_enabled(ctx) {
+                respond_to_memory_prompt(ctx, input, MEMORY_DISABLED_HINT)?;
                 return Ok(Some(InteractionOutcome::DirectToolHandled));
             }
 
@@ -241,7 +233,7 @@ pub(crate) async fn handle_memory_prompt(
                     respond_to_memory_prompt(
                         ctx,
                         input,
-                        "Memory removals require the inline confirmation UI. Open `/memory` in inline UI to continue.",
+                        "Memory removals require the inline confirmation UI. Open `/config memory` in inline UI to continue.",
                     )?;
                     return Ok(Some(InteractionOutcome::DirectToolHandled));
                 }
@@ -274,7 +266,7 @@ async fn handle_show_memory_intent(
     state: &mut InteractionState<'_>,
 ) -> Result<Option<InteractionOutcome>> {
     let control = handle_outcome(
-        SlashCommandOutcome::ShowMemory,
+        SlashCommandOutcome::ShowMemoryConfig,
         SlashCommandContext {
             thread_id: ctx.thread_id,
             active_thread_label: ctx.active_thread_label,
@@ -283,7 +275,6 @@ async fn handle_show_memory_intent(
             handle: ctx.handle,
             session: ctx.session,
             header_context: ctx.header_context,
-            ide_context_bridge: ctx.ide_context_bridge,
             config: ctx.config,
             vt_cfg: ctx.vt_cfg,
             provider_client: ctx.provider_client,
@@ -335,18 +326,6 @@ async fn handle_show_memory_intent(
             super::interaction_loop_runner::handle_select_primary_agent(ctx, state, Some(name)).await?;
             Ok(Some(InteractionOutcome::DirectToolHandled))
         }
-        SlashCommandControl::ResumeLatest { show_all } => {
-            match super::interaction_loop_runner::try_resume_latest_session(
-                ctx.renderer,
-                &ctx.config.workspace,
-                show_all,
-            )
-            .await?
-            {
-                outcome @ Some(_) => Ok(outcome),
-                None => Ok(Some(InteractionOutcome::DirectToolHandled)),
-            }
-        }
     }
 }
 
@@ -375,7 +354,7 @@ async fn maybe_cleanup_before_memory_mutation(
         respond_to_memory_prompt(
             ctx,
             input,
-            "Persistent memory still needs one-time cleanup before VT Code can change it. Use `/memory` to run cleanup when you're ready.",
+            "Persistent memory still needs one-time cleanup before VT Code can change it. Use `/config memory` to run cleanup when you're ready.",
         )?;
         return Ok(false);
     }
@@ -393,7 +372,7 @@ async fn maybe_cleanup_before_memory_mutation(
             respond_to_memory_prompt(
                 ctx,
                 input,
-                "Persistent memory needs one-time cleanup before VT Code can change it. Use `/memory` to run cleanup when you're ready.",
+                "Persistent memory needs one-time cleanup before VT Code can change it. Use `/config memory` to run cleanup when you're ready.",
             )?;
             return Ok(false);
         }
@@ -401,7 +380,7 @@ async fn maybe_cleanup_before_memory_mutation(
             respond_to_memory_prompt(
                 ctx,
                 input,
-                "Persistent memory needs one-time cleanup. Open `/memory` in inline UI to confirm cleanup before changing memory.",
+                "Persistent memory needs one-time cleanup. Open `/config memory` in inline UI to confirm cleanup before changing memory.",
             )?;
             return Ok(false);
         }
@@ -528,7 +507,11 @@ async fn resolve_remember_plan(
             respond_to_memory_prompt(ctx, input, "Cancelled memory save.")?;
             return Ok(None);
         };
-        supplemental = Some(answer);
+        if is_empty_memory_answer(&answer) {
+            respond_to_memory_prompt(ctx, input, "Cancelled memory save.")?;
+            return Ok(None);
+        }
+        supplemental = Some(format_supplemental_for_missing(supplemental.take(), &missing.field, &answer));
     }
 
     let Some(missing) = final_missing else {
@@ -562,8 +545,20 @@ fn exhausted_missing_details_message(missing: &MemoryMissingField) -> String {
     let field = normalize_whitespace(&missing.field);
     let prompt = normalize_whitespace(&missing.prompt);
     format!(
-        "Couldn't save memory yet. The planner still needs `{field}`: {prompt}\nPlease submit the complete fact directly in a new `remember ...` request."
+        "Couldn't save memory yet. The planner still needs `{field}`: {prompt}\nPlease submit the complete fact directly in a new `remember ...` request, e.g. `remember that <your complete fact here>`."
     )
+}
+
+fn is_empty_memory_answer(answer: &str) -> bool {
+    answer.trim().is_empty()
+}
+
+fn format_supplemental_for_missing(previous: Option<String>, field: &str, answer: &str) -> String {
+    let labeled = format!("For missing field '{}': {}", field.trim(), answer.trim());
+    match previous {
+        Some(prev) => format!("{prev}\n{labeled}"),
+        None => labeled,
+    }
 }
 
 async fn load_memory_candidates(ctx: &InteractionLoopContext<'_>) -> Result<Vec<MemoryOpCandidate>> {
@@ -631,22 +626,22 @@ async fn confirm_memory_plan(
         title: "Confirm".to_string(),
         question: format!("Review the normalized memory action below, then confirm.\n\n{body}"),
         items: vec![
-            InlineListItem {
-                title: format!("Confirm {action_label}"),
-                subtitle: Some("Apply the memory change now.".to_string()),
-                badge: Some("Confirm".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_ACCEPT.to_string())),
-                search_value: Some("confirm accept yes".to_string()),
-            },
-            InlineListItem {
-                title: "Cancel".to_string(),
-                subtitle: Some("Dismiss without changing memory.".to_string()),
-                badge: None,
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_CANCEL.to_string())),
-                search_value: Some("cancel no dismiss".to_string()),
-            },
+            ui_list::action(
+                format!("Confirm {action_label}"),
+                "Apply the memory change now.".to_string(),
+                Some("Confirm".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_ACCEPT.to_string())),
+            )
+            .with_search_value("confirm accept yes".to_string()),
+            ui_list::action(
+                "Cancel",
+                "Dismiss without changing memory.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(MEMORY_CONFIRM_CANCEL.to_string())),
+            )
+            .with_search_value("cancel no dismiss".to_string()),
         ],
         completed: false,
         answer: None,
@@ -708,22 +703,22 @@ async fn confirm_memory_cleanup(
             status.cleanup_status.suspicious_facts, status.cleanup_status.suspicious_summary_lines
         ),
         items: vec![
-            InlineListItem {
-                title: "Run cleanup now".to_string(),
-                subtitle: Some("Rewrite durable memory through the LLM-assisted normalization path.".to_string()),
-                badge: Some("Confirm".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_ACCEPT.to_string())),
-                search_value: Some("cleanup memory now".to_string()),
-            },
-            InlineListItem {
-                title: "Cancel".to_string(),
-                subtitle: Some("Leave memory unchanged and stop this mutation.".to_string()),
-                badge: None,
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_CANCEL.to_string())),
-                search_value: Some("cancel cleanup".to_string()),
-            },
+            ui_list::action(
+                "Run cleanup now",
+                "Rewrite durable memory through the LLM-assisted normalization path.".to_string(),
+                Some("Confirm".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_ACCEPT.to_string())),
+            )
+            .with_search_value("cleanup memory now".to_string()),
+            ui_list::action(
+                "Cancel",
+                "Leave memory unchanged and stop this mutation.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::ConfigAction(MEMORY_CLEANUP_CANCEL.to_string())),
+            )
+            .with_search_value("cancel cleanup".to_string()),
         ],
         completed: false,
         answer: None,
@@ -782,18 +777,18 @@ async fn prompt_missing_memory_value(
     let step = WizardStep {
         title: "Missing Detail".to_string(),
         question: prompt.to_string(),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some("Press Tab to type the missing detail, then Enter to submit.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: MEMORY_MISSING_QUESTION_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit memory detail".to_string()),
-        }],
+        items: vec![
+            ui_list::choice(
+                "Submit",
+                Some("Press Tab to type the missing detail, then Enter to submit.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: MEMORY_MISSING_QUESTION_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("submit memory detail".to_string()),
+        ],
         completed: false,
         answer: None,
         allow_freeform: true,
@@ -1045,7 +1040,49 @@ mod tests {
         assert!(message.contains("alias"));
         assert!(message.contains("What alias should VT Code remember?"));
         assert!(message.contains("submit the complete fact directly"));
+        assert!(message.contains("remember that"));
         assert!(!message.contains("still needs more information."));
+    }
+
+    #[test]
+    fn exhausted_message_normalizes_rule_field_and_prompt() {
+        let missing = MemoryMissingField {
+            field: "  rule  ".to_string(),
+            prompt: "  What rule should VT Code remember?  ".to_string(),
+        };
+
+        let message = exhausted_missing_details_message(&missing);
+        assert!(message.contains("`rule`"));
+        assert!(message.contains("What rule should VT Code remember?"));
+        assert!(!message.contains("  rule  "));
+    }
+
+    #[test]
+    fn empty_memory_answers_cancel_instead_of_looping() {
+        assert!(is_empty_memory_answer(""));
+        assert!(is_empty_memory_answer("   "));
+        assert!(is_empty_memory_answer("\n\t "));
+        assert!(!is_empty_memory_answer("Use pnpm"));
+        assert!(!is_empty_memory_answer("  valid rule  "));
+    }
+
+    #[test]
+    fn supplemental_labels_missing_field_for_planner_retry() {
+        let first = format_supplemental_for_missing(None, "rule", "Always run cargo nextest");
+        assert_eq!(first, "For missing field 'rule': Always run cargo nextest");
+
+        let second = format_supplemental_for_missing(Some(first), "alias", "srivera");
+        assert!(second.contains("For missing field 'rule': Always run cargo nextest"));
+        assert!(second.contains("For missing field 'alias': srivera"));
+        assert!(second.find("rule").unwrap() < second.find("alias").unwrap());
+    }
+
+    #[test]
+    fn supplemental_trims_field_and_answer_whitespace_asymmetrically() {
+        let labeled =
+            format_supplemental_for_missing(None, "  repository_fact  ", "  Tests live under vtcode-core/tests  ");
+        assert_eq!(labeled, "For missing field 'repository_fact': Tests live under vtcode-core/tests");
+        assert!(!labeled.contains("  "));
     }
 
     #[test]

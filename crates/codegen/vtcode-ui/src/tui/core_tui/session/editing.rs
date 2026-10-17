@@ -17,6 +17,12 @@ fn is_word_separator(ch: char) -> bool {
     WORD_SEPARATORS.contains(ch)
 }
 
+/// Strip carriage returns and DEL bytes from pasted text so terminal and
+/// clipboard pastes land verbatim without control-code side effects.
+fn sanitize_pasted_text(text: &str) -> String {
+    text.chars().filter(|&ch| ch != '\r' && ch != '\u{7f}').collect()
+}
+
 fn is_separator_piece(piece: &str) -> bool {
     piece.chars().all(is_word_separator)
 }
@@ -152,6 +158,7 @@ impl Session {
     }
 
     /// Insert a character at the current cursor position
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn insert_char(&mut self, ch: char) {
         if ch == '\u{7f}' {
             return;
@@ -167,25 +174,50 @@ impl Session {
     ///
     /// This preserves the full block (including large multi-line pastes) so the
     /// agent receives the exact content instead of dropping line breaks after
-    /// hitting the interactive input's visual limit.
+    /// hitting the interactive input's visual limit. Large pastes — by lines,
+    /// chars, images, or file tokens — are tracked as a collapsible block so
+    /// the composer summarizes previous content instead of showing full text.
+    /// Pasting while already collapsed expands to the full text instead, so
+    /// paste-once summarizes and paste-twice reviews the complete content.
     pub(crate) fn insert_paste_text(&mut self, text: &str) {
-        let sanitized: String = text.chars().filter(|&ch| ch != '\r' && ch != '\u{7f}').collect();
+        let sanitized = sanitize_pasted_text(text);
 
         if sanitized.is_empty() {
             return;
         }
 
+        let was_collapsed = self.input_compact_mode;
         let paste_start = self
             .input_manager
             .selection_range()
             .map_or_else(|| self.input_manager.cursor(), |(start, _)| start);
         let paste_end = paste_start.saturating_add(sanitized.len());
-        let line_count = sanitized.split('\n').count();
+        let should_collapse = super::input::should_track_compact_paste(&sanitized);
         self.input_manager.insert_text(&sanitized);
-        if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+        if should_collapse {
             self.input_manager.set_compact_paste_range(paste_start..paste_end);
         }
         self.refresh_input_edit_state();
+        if was_collapsed && self.input_compact_placeholder().is_some() {
+            self.input_compact_mode = false;
+        }
+    }
+
+    /// Insert pasted text verbatim, bypassing collapse tracking.
+    ///
+    /// Shift+Ctrl+V pastes clipboard text as raw full content: no compact
+    /// block is tracked and the composer stays expanded so nothing is
+    /// summarized away, no matter how large the pasted text is.
+    pub(crate) fn insert_raw_paste_text(&mut self, text: &str) {
+        let sanitized = sanitize_pasted_text(text);
+
+        if sanitized.is_empty() {
+            return;
+        }
+
+        self.input_manager.insert_text(&sanitized);
+        self.refresh_input_edit_state();
+        self.input_compact_mode = false;
     }
 
     pub(crate) fn apply_suggested_prompt(&mut self, text: String) {
@@ -236,10 +268,13 @@ impl Session {
     /// Delete the character before the cursor (backspace)
     pub(crate) fn delete_char(&mut self) {
         // One Backspace right after a collapsed multi-line paste removes the
-        // whole inserted block instead of peeling single characters. When the
+        // whole inserted block instead of peeling single characters. This only
+        // applies while collapsed: in the expanded full-text view Backspace
+        // peels one character like normal multiline editing. When the
         // user has an active selection, the selection must win (it removes
         // exactly what the user highlighted).
-        if let Some(range) = self.input_manager.compact_paste_range()
+        if self.input_compact_mode
+            && let Some(range) = self.input_manager.compact_paste_range()
             && range.end > range.start
             && self.input_manager.selection_range().is_none()
             && self.input_manager.cursor() == range.end
@@ -429,7 +464,9 @@ impl Session {
     /// Dimension key: `line_start..line_end` are byte offsets of the cursor's
     /// logical line; `clear_start..clear_end` expands that range to cover an
     /// overlapping compact paste block (`[Pasted Content N chars]`) so a
-    /// collapsed multi-line paste is removed atomically. Image placeholders
+    /// collapsed multi-line paste is removed atomically. The expansion only
+    /// applies while collapsed; in the expanded full-text view line clears
+    /// behave like normal multiline editing. Image placeholders
     /// (`[Image #N]`) live inside their line, so line deletion already covers
     /// them; single-line clears go through [`InputManager::clear`] which also
     /// drops attachments and compact state.
@@ -453,7 +490,8 @@ impl Session {
         let mut clear_start = line_start.min(content_len);
         let mut clear_end = line_end.min(content_len);
 
-        if let Some(range) = self.input_manager.compact_paste_range()
+        if self.input_compact_mode
+            && let Some(range) = self.input_manager.compact_paste_range()
             && range.start < range.end
         {
             // Clamp stale ranges to current content before expanding.
@@ -494,6 +532,7 @@ impl Session {
     pub(crate) fn navigate_history_previous(&mut self) -> bool {
         if let Some(previous) = self.input_manager.go_to_previous_history() {
             self.input_manager.apply_history_entry(previous);
+            self.input_compact_mode = self.input_compact_placeholder().is_some();
             true
         } else {
             false
@@ -504,6 +543,7 @@ impl Session {
     pub(crate) fn navigate_history_next(&mut self) -> bool {
         if let Some(next) = self.input_manager.go_to_next_history() {
             self.input_manager.apply_history_entry(next);
+            self.input_compact_mode = self.input_compact_placeholder().is_some();
             true
         } else {
             false

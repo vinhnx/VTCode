@@ -95,10 +95,18 @@ impl AgentRunner {
         // becomes the single source of truth for session state/history.
         let (session_sink, session_store_handle) =
             crate::core::agent::events::session_store_sink_with_handle(self.workspace(), &self.session_id).await?;
+        self.tool_registry
+            .set_decision_evidence_validator(session_store_handle.decision_validator());
+        if let Some(controller) = self.tool_registry.subagent_controller() {
+            controller
+                .set_matrix_persistence(session_store_handle.matrix_persistence())
+                .await?;
+        }
         let event_sink = crate::core::agent::events::combine_event_sinks(self.event_sink.clone(), Some(session_sink));
         let mut event_recorder =
             ExecEventRecorder::new(self.session_id.clone(), event_sink, Some(self.thread_handle.clone()));
-        event_recorder.turn_started();
+        let execution_task_id = event_recorder.task_started(&task.description);
+        self.tool_registry.set_harness_task(Some(execution_task_id));
         self.runner_println(format_args!("{agent_prefix} Analyzing request and planning approach..."));
 
         self.runner_println(format_args!(

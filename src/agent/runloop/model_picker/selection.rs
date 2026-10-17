@@ -8,7 +8,7 @@ use vtcode_config::api_keys::CredentialSource;
 use vtcode_config::auth::AuthCredentialsStoreMode;
 use vtcode_config::core::CustomProviderConfig;
 use vtcode_core::config::constants::reasoning;
-use vtcode_core::config::models::{ModelId, Provider};
+use vtcode_core::config::models::{ModelId, Provider, ProviderModelSupport};
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::llm::{DynamicModelMeta, ModelAvailability, ModelResolver, ResolvedModel};
 
@@ -45,6 +45,7 @@ pub(super) enum ServiceTierChoice {
     ProjectDefault,
     Flex,
     Priority,
+    Ultrafast,
 }
 
 #[derive(Clone)]
@@ -62,6 +63,10 @@ pub(crate) struct ModelSelectionResult {
     pub(crate) service_tier_supported: bool,
     pub(crate) service_tier: Option<OpenAIServiceTier>,
     pub(crate) service_tier_changed: bool,
+    /// None keeps the saved provider preference; explicit values update it.
+    pub(crate) anthropic_speed: Option<vtcode_config::AnthropicSpeed>,
+    pub(crate) decisions_probe: Option<bool>,
+    pub(crate) decisions_probe_changed: bool,
     pub(crate) api_key: Option<String>,
     /// Source of a credential discovered by the central resolver. `None`
     /// means the user entered the key during this picker session.
@@ -70,6 +75,15 @@ pub(crate) struct ModelSelectionResult {
     pub(crate) requires_api_key: bool,
     pub(crate) uses_chatgpt_auth: bool,
     pub(crate) mimo_auth_method: Option<MiMoAuthMethod>,
+}
+
+impl ModelSelectionResult {
+    pub(crate) fn validate_speed(&self, config: &VTCodeConfig) -> Result<()> {
+        if self.anthropic_speed.is_some() && !config.anthropic_speed_supported(&self.provider, &self.model) {
+            anyhow::bail!("Claude speed requires a supported native Anthropic route");
+        }
+        Ok(())
+    }
 }
 
 pub(super) fn parse_model_selection(
@@ -494,8 +508,42 @@ pub(super) fn service_tier_label(service_tier: Option<OpenAIServiceTier>) -> &'s
     match service_tier {
         Some(OpenAIServiceTier::Flex) => "Flex",
         Some(OpenAIServiceTier::Priority) => "Priority",
+        Some(OpenAIServiceTier::Ultrafast) => "Ultrafast",
         None => "Project default",
     }
+}
+
+/// Title and subtitle for one picker tier row. `None` is the project default.
+pub(super) fn service_tier_choice_meta(tier: Option<OpenAIServiceTier>) -> (&'static str, &'static str) {
+    match tier {
+        None => ("Project default", "Do not send service_tier; inherit the OpenAI Project setting."),
+        Some(OpenAIServiceTier::Flex) => ("Flex", "Send service_tier=flex for lower-cost, lower-priority processing."),
+        Some(OpenAIServiceTier::Priority) => {
+            ("Priority", "Send service_tier=priority for lower and more consistent latency.")
+        }
+        Some(OpenAIServiceTier::Ultrafast) => (
+            "Ultrafast",
+            "Send service_tier=ultrafast for fastest processing at higher cost (Astra US/global, 6.1-sol US/EU/global).",
+        ),
+    }
+}
+
+/// Tiers offered in the picker for this route, in display order (`None` is
+/// the project default). Provider-incompatible values — notably `ultrafast`
+/// outside native OpenAI — are never offered, so a selection the wire would
+/// drop or reject cannot be picked.
+pub(super) fn available_service_tiers(detail: &SelectionDetail) -> Vec<Option<OpenAIServiceTier>> {
+    if !detail.service_tier_supported {
+        return Vec::new();
+    }
+    let mut tiers = vec![None, Some(OpenAIServiceTier::Flex), Some(OpenAIServiceTier::Priority)];
+    let supports_ultrafast = detail
+        .provider_enum
+        .is_some_and(|provider| provider.supports_service_tier_value(&detail.model_id, OpenAIServiceTier::Ultrafast));
+    if supports_ultrafast {
+        tiers.push(Some(OpenAIServiceTier::Ultrafast));
+    }
+    tiers
 }
 
 pub(super) fn is_cancel_command(input: &str) -> bool {

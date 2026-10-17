@@ -12,6 +12,8 @@ use crate::tui::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult}
 /// Tab accepts ghost suggestions first (caller handles that), then enqueues
 /// the draft: running turns get `QueueSubmit`, idle turns get `Submit`, and
 /// empty drafts get `ProcessLatestQueued` (idle) or nothing (busy).
+/// Plain text queued while busy is batchable so it coalesces like
+/// `Ctrl+Enter`; slash stays one per turn.
 fn enqueue_tab_draft(session: &mut Session) -> Option<InlineEvent> {
     let Some(submitted) = take_submitted_input(session) else {
         session.mark_dirty();
@@ -23,8 +25,13 @@ fn enqueue_tab_draft(session: &mut Session) -> Option<InlineEvent> {
     };
     session.mark_dirty();
     if session.is_running_activity() {
-        session.push_queued_input(submitted.text.clone());
-        Some(InlineEvent::QueueSubmit(submitted))
+        if submitted.text.trim_start().starts_with('/') {
+            session.push_queued_input(submitted.text.clone());
+            Some(InlineEvent::QueueSubmit(submitted))
+        } else {
+            session.push_queued_input(submitted.text.clone());
+            Some(InlineEvent::QueueSubmit(submitted.batchable()))
+        }
     } else {
         Some(InlineEvent::Submit(submitted))
     }
@@ -634,6 +641,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            // Check for multiline input options (Shift/Alt)
+            if !has_control && (has_shift || has_alt) {
+                session.insert_char('\n');
+                session.mark_dirty();
+                return None;
+            }
+
             if !has_control
                 && !has_shift
                 && !has_alt
@@ -666,21 +680,21 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
 
                 // Ctrl+Enter while a turn is running joins the queue so the
-                // message dispatches after the current turn completes; plain
-                // Enter steers instead.
+                // message dispatches after the current turn completes.
+                // Plain text is batchable so consecutive queued messages
+                // coalesce into one turn; slash stays one per turn.
+                // Mirrors the app session's Ctrl+Enter path.
                 return if session.is_running_activity() {
-                    session.push_queued_input(submitted.text.clone());
-                    Some(InlineEvent::QueueSubmit(submitted))
+                    if submitted.text.trim_start().starts_with('/') {
+                        session.push_queued_input(submitted.text.clone());
+                        Some(InlineEvent::QueueSubmit(submitted))
+                    } else {
+                        session.push_queued_input(submitted.text.clone());
+                        Some(InlineEvent::QueueSubmit(submitted.batchable()))
+                    }
                 } else {
                     Some(InlineEvent::Submit(submitted))
                 };
-            }
-
-            // Check for multiline input options (Shift/Alt)
-            if has_shift || has_alt {
-                session.insert_char('\n');
-                session.mark_dirty();
-                return None;
             }
 
             let Some(submitted) = take_submitted_input(session) else {
@@ -690,16 +704,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             session.mark_dirty();
 
-            // If a turn is actively running, steer the message so it is
-            // injected into the conversation right after the current
-            // tool-call batch. Slash commands keep the queue path (the core
-            // surface has no busy slash interception).
+            // While a turn is actively running, enqueue the message so it
+            // dispatches after the current turn completes. This avoids racing
+            // a mid-turn steer against the tool-batch boundary and the
+            // steering-channel lifetime: the MPSC FIFO plus the runloop's
+            // drain-then-flush_sync keeps UI-optimistic and authoritative
+            // queue snapshots in order. Each plain-Enter stays its own
+            // non-batchable turn.
             if session.is_running_activity() {
-                if submitted.text.trim_start().starts_with('/') {
-                    session.push_queued_input(submitted.text.clone());
-                    return Some(InlineEvent::QueueSubmit(submitted));
-                }
-                return Some(InlineEvent::Steer(submitted));
+                session.push_queued_input(submitted.text.clone());
+                return Some(InlineEvent::QueueSubmit(submitted));
             }
             Some(InlineEvent::Submit(submitted))
         }

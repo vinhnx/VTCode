@@ -1,99 +1,112 @@
 # Getting Started with VT Code
 
-Welcome to VT Code! This guide will help you get up and running with this Rust-based terminal coding agent that provides intelligent.
+Welcome to VT Code! This guide will help you get up and running with this Rust-based terminal coding agent that provides
+intelligent.
 
 ## What Makes VT Code Special
 
 VT Code represents a modern approach to AI-powered software development, featuring:
 
--   **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, Meta AI, DeepSeek, OpenRouter, Z.AI, Moonshot, StepFun, MiniMax, and more
--   **Enhanced Terminal Interface** - Modern TUI with mouse support and text selection
--   **Advanced Code Intelligence** - Tree-sitter parsers for 6+ programming languages
--   **Enterprise-Grade Safety** - Comprehensive security controls and path validation
--   **Flexible Configuration** - TOML-based configuration with granular policies
--   **Research-Preview Features** - Cutting-edge agent coordination and context engineering
--   **Workspace-First Operations** - Full read/write/command access within `WORKSPACE_DIR` and built-in project indexing
+- **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, Meta AI, DeepSeek, OpenRouter, Z.AI, Moonshot, StepFun,
+  MiniMax, and more
+- **Enhanced Terminal Interface** - Modern TUI with mouse support and text selection
+- **Advanced Code Intelligence** - Tree-sitter parsers for 6+ programming languages
+- **Enterprise-Grade Safety** - Comprehensive security controls and path validation
+- **Flexible Configuration** - TOML-based configuration with granular policies
+- **Research-Preview Features** - Cutting-edge agent coordination and context engineering
+- **Workspace-First Operations** - Full read/write/command access within `WORKSPACE_DIR` and built-in project indexing
 
 ## Prerequisites
 
 ### System Requirements
 
--   **Rust**: 1.98.1+ (stable recommended)
-    -   Install from [rustup.rs](https://rustup.rs/)
-    -   Includes Cargo package manager
--   **Git**: For version control and cloning the repository
--   **Operating System**: macOS, Linux, or Windows (with WSL2)
+- **Rust**: 1.98.1+ (stable recommended)
+  - Install from [rustup.rs](https://rustup.rs/)
+  - Includes Cargo package manager
+- **Git**: For version control and cloning the repository
+- **Operating System**: macOS, Linux, or Windows (with WSL2)
 
-For contributor workflow setup (tooling, checks, and test loop), use the canonical [Development Setup](../development/DEVELOPMENT_SETUP.md) guide.
+For contributor workflow setup (tooling, checks, and test loop), use the canonical
+[Development Setup](../development/DEVELOPMENT_SETUP.md) guide.
 
 ### API Requirements
 
 Choose one of the supported LLM providers:
 
--   **Gemini** (Primary): `export GEMINI_API_KEY=your_key_here` or `export GOOGLE_API_KEY=your_key_here`
+- **Gemini** (Primary): `export GEMINI_API_KEY=your_key_here` or `export GOOGLE_API_KEY=your_key_here`
+  - Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
+  - Default model: `gemini-3-flash-preview`; also supports Gemini 3.7 Flash, Gemini 3.6 Flash, Gemini 3.5 Flash, and
+    Gemini 3.1 Pro
 
-    -   Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
-    -   Default model: `gemini-3-flash-preview`; also supports Gemini 3.7 Flash, Gemini 3.6 Flash, Gemini 3.5 Flash, and Gemini 3.1 Pro
+- **OpenAI**: `export OPENAI_API_KEY=your_key_here`
+  - Get from [OpenAI Platform](https://platform.openai.com/api-keys)
+  - **ChatGPT subscription (no API key needed):** Run `vtcode login openai` or use `/login openai` in the TUI. VT Code
+    performs an in-process PKCE browser login — the Codex CLI is **not** required. By default, VT Code reuses Codex's
+    public OAuth client identity as an **unofficial compatibility mechanism** (OpenAI has not documented or guaranteed
+    third-party reuse; a public client ID is not authorization to reuse another tool's registration). If you have Codex
+    CLI installed, VT Code can also reuse its `~/.codex/auth.json` via `vtcode login openai --from-codex`. See the
+    [OAuth guide](../guides/oauth-authentication.md) for details.
 
--   **OpenAI**: `export OPENAI_API_KEY=your_key_here`
+- **xAI (Grok)**: `export XAI_API_KEY=your_key_here`
+  - Get from the [xAI Console](https://console.x.ai/)
+  - Default model: `grok-4.6`; see the [xAI provider guide](../providers/PROVIDER_GUIDES.md#xai-grok)
 
-    -   Get from [OpenAI Platform](https://platform.openai.com/api-keys)
-    -   **ChatGPT subscription (no API key needed):** Run `vtcode login openai` or use `/login openai` in the TUI. VT Code performs an in-process PKCE browser login — the Codex CLI is **not** required. By default, VT Code reuses Codex's public OAuth client identity as an **unofficial compatibility mechanism** (OpenAI has not documented or guaranteed third-party reuse; a public client ID is not authorization to reuse another tool's registration). If you have Codex CLI installed, VT Code can also reuse its `~/.codex/auth.json` via `vtcode login openai --from-codex`. See the [OAuth guide](../guides/oauth-authentication.md) for details.
+- **Anthropic**: `export ANTHROPIC_API_KEY=your_key_here`
+  - Get from [Anthropic Console](https://console.anthropic.com/)
+  - Curated models: `claude-sonnet-5-5`, `claude-sonnet-5`, `claude-fable-5`, `claude-fable-5-1`, `claude-opus-5`, and
+    `claude-opus-5-5`; see the [Anthropic provider guide](../providers/PROVIDER_GUIDES.md#anthropic)
 
--   **xAI (Grok)**: `export XAI_API_KEY=your_key_here`
-    -   Get from the [xAI Console](https://console.x.ai/)
-    -   Default model: `grok-4.6`; see the [xAI provider guide](../providers/PROVIDER_GUIDES.md#xai-grok)
+- **Meta AI**: `export MODEL_API_KEY=your_key_here` or `export META_API_KEY=your_key_here`
+  - Get from the [Meta AI developer documentation](https://dev.meta.ai/docs/llms.txt)
+  - Default model: `muse-spark-1.3`; frontier `muse-wonder-1.0` also available; see the [Meta AI provider guide](../providers/meta.md)
 
--   **Anthropic**: `export ANTHROPIC_API_KEY=your_key_here`
-    -   Get from [Anthropic Console](https://console.anthropic.com/)
+- **Z.AI**: `export ZAI_API_KEY=your_key_here`
+  - Get from [Z.AI Platform](https://z.ai/docs)
+  - Models: GLM-5.3, GLM-5.3 Flash (320B/18B, hybrid attention, native vision, 1M context), GLM-5.3 FlashX (high-speed
+    Flash variant, up to 200 tok/s), GLM-5.2
+  - Default model: `glm-5.3`; Flash is `glm-5.3-flash` (recommended `reasoning_effort: max` / `xhigh`); see the
+    [Z.AI provider guide](../providers/zai.md) and [GLM-5.3 Flash guide](https://docs.z.ai/guides/vlm/glm-5.3-flash)
 
--   **Meta AI**: `export MODEL_API_KEY=your_key_here` or `export META_API_KEY=your_key_here`
-    -   Get from the [Meta AI developer documentation](https://dev.meta.ai/docs/llms.txt)
-    -   Default model: `muse-spark-1.2`; see the [Meta AI provider guide](../providers/meta.md)
+- **Moonshot (Kimi)**: `export MOONSHOT_API_KEY=your_key_here`
+  - Get from [Moonshot Platform](https://platform.moonshot.ai/docs)
+  - Models: Kimi K3, K2.7 Code, K2.5
+  - Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/PROVIDER_GUIDES.md#moonshot-kimi)
 
--   **Z.AI**: `export ZAI_API_KEY=your_key_here`
-    -   Get from [Z.AI Platform](https://z.ai/docs)
-    -   Models: GLM-5.3, GLM-5.3 Flash (320B/18B, hybrid attention, native vision, 1M context), GLM-5.3 FlashX (high-speed Flash variant, up to 200 tok/s), GLM-5.2
-    -   Default model: `glm-5.3`; Flash is `glm-5.3-flash` (recommended `reasoning_effort: max` / `xhigh`); see the [Z.AI provider guide](../providers/zai.md) and [GLM-5.3 Flash guide](https://docs.z.ai/guides/vlm/glm-5.3-flash)
+- **StepFun**: `export STEPFUN_API_KEY=your_key_here`
+  - Get from [StepFun Platform](https://platform.stepfun.ai/docs)
+  - Models: Step-3.7-Flash
+  - Default model: `step-3.7-flash`
 
--   **Moonshot (Kimi)**: `export MOONSHOT_API_KEY=your_key_here`
-    -   Get from [Moonshot Platform](https://platform.moonshot.ai/docs)
-    -   Models: Kimi K3, K2.7 Code, K2.5
-    -   Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/PROVIDER_GUIDES.md#moonshot-kimi)
+- **MiniMax**: `export MINIMAX_API_KEY=your_key_here`
+  - Get from [MiniMax Platform](https://platform.minimax.io/docs)
+  - Models: MiniMax-M3, M2.5
+  - Default model: `MiniMax-M3`
 
--   **StepFun**: `export STEPFUN_API_KEY=your_key_here`
-    -   Get from [StepFun Platform](https://platform.stepfun.ai/docs)
-    -   Models: Step-3.7-Flash
-    -   Default model: `step-3.7-flash`
+- **NVIDIA NIM**: `export NVIDIA_API_KEY=your_key_here`
+  - Get from [NVIDIA Build](https://build.nvidia.com/)
+  - Models: Nemotron 3 Ultra/Super/Nano, GLM-5.2, DeepSeek V4 Flash
 
--   **MiniMax**: `export MINIMAX_API_KEY=your_key_here`
-    -   Get from [MiniMax Platform](https://platform.minimax.io/docs)
-    -   Models: MiniMax-M3, M2.5
-    -   Default model: `MiniMax-M3`
+- **Merge Gateway**: `export MERGE_GATEWAY_API_KEY=your_key_here`
+  - Create a key in the [Merge dashboard](https://dashboard.merge.dev/), then configure `provider = "merge-gateway"`.
+  - Default model: `default_routing`; curated routes include `openai/gpt-5.5`, `anthropic/claude-opus-5`, and
+    `google/gemini-3.6-flash`.
+  - Native Requests API and authenticated `/v1/models` catalog discovery are used by default; see the
+    [Merge Gateway provider guide](../providers/merge-gateway.md) for legacy `/v1/openai` compatibility.
 
--   **NVIDIA NIM**: `export NVIDIA_API_KEY=your_key_here`
-    -   Get from [NVIDIA Build](https://build.nvidia.com/)
-    -   Models: Nemotron 3 Ultra/Super/Nano, GLM-5.2, DeepSeek V4 Flash
-
--   **Merge Gateway**: `export MERGE_GATEWAY_API_KEY=your_key_here`
-    -   Create a key in the [Merge dashboard](https://dashboard.merge.dev/), then configure `provider = "merge-gateway"`.
-    -   Default model: `default_routing`; curated routes include `openai/gpt-5.5`, `anthropic/claude-opus-5`, and `google/gemini-3.6-flash`.
-    -   Native Requests API and authenticated `/v1/models` catalog discovery are used by default; see the [Merge Gateway provider guide](../providers/merge-gateway.md) for legacy `/v1/openai` compatibility.
-
--   **Vercel AI Gateway**: `export AI_GATEWAY_API_KEY=your_key_here`
-    -   Create a key in the [Vercel dashboard](https://vercel.com/dashboard) under AI Gateway, then configure `provider = "vercel"`.
-    -   Default model: `anthropic/claude-sonnet-5`; see the [Vercel AI Gateway provider guide](../providers/vercel-ai-gateway.md)
+- **Vercel AI Gateway**: `export AI_GATEWAY_API_KEY=your_key_here`
+  - Create a key in the [Vercel dashboard](https://vercel.com/dashboard) under AI Gateway, then configure
+    `provider = "vercel"`.
+  - Default model: `anthropic/claude-sonnet-5`; see the
+    [Vercel AI Gateway provider guide](../providers/vercel-ai-gateway.md)
 
 For more providers, see the [Provider Guides](../providers/PROVIDER_GUIDES.md).
 
 ### User data and configuration paths
 
-VT Code keeps project-local `.vtcode` state in the workspace and stores
-user-global configuration, data, state, caches, runtime files, and managed
-binaries in platform-appropriate directories. Run `vtcode --version` to see
-the paths selected for this installation. The [user data directories guide](../guides/user-data-directories.md)
-documents XDG overrides, Windows/macOS locations, permissions, and migration
-from the historical `~/.vtcode` tree.
+VT Code keeps project-local `.vtcode` state in the workspace and stores user-global configuration, data, state, caches,
+runtime files, and managed binaries in platform-appropriate directories. Run `vtcode --version` to see the paths
+selected for this installation. The [user data directories guide](../guides/user-data-directories.md) documents XDG
+overrides, Windows/macOS locations, permissions, and migration from the historical `~/.vtcode` tree.
 
 ## Installation
 
@@ -148,21 +161,30 @@ Use VT Code's built-in secret management — keys are stored in your OS keyring,
 vtcode secret add openai
 ```
 
-**ChatGPT subscription users:** No API key needed — run `vtcode login openai` for in-process
-PKCE OAuth (full auto-refresh, no Codex CLI required) or `vtcode login openai --from-codex` to
-reuse Codex CLI's existing login. In the TUI, use `/login openai`.
+**ChatGPT subscription users:** No API key needed — run `vtcode login openai` for in-process PKCE OAuth (full
+auto-refresh, no Codex CLI required) or `vtcode login openai --from-codex` to reuse Codex CLI's existing login. In the
+TUI, use `/login openai`.
 
-The first-run wizard auto-discovers any key already in your shell environment (e.g. `~/.zshrc`) or in your OS keyring, and skips re-prompting. It tells you exactly which source it found — e.g. "Found OPENAI_API_KEY in environment" or "Found stored Gemini key in OS keyring."
+The first-run wizard auto-discovers any key already in your shell environment (e.g. `~/.zshrc`) or in your OS keyring,
+and skips re-prompting. It tells you exactly which source it found — e.g. "Found OPENAI_API_KEY in environment" or
+"Found stored Gemini key in OS keyring."
 
-If you prefer env vars or `.env`, those still work — export them in your shell or add them to a workspace `.env` and the app reads them automatically.
+If you prefer env vars or `.env`, those still work — export them in your shell or add them to a workspace `.env` and the
+app reads them automatically.
 
-If no key is in your environment, the wizard lets you paste one now or skip and set it later via `/model`. The paste flow is built for safe input:
+If no key is in your environment, the wizard lets you paste one now or skip and set it later via `/model`. The paste
+flow is built for safe input:
 
--   **Input is hidden** — terminal echo is disabled while you paste, so the key never appears in your scrollback or terminal recordings (each character shows as `*`). If stdin is not a terminal, the wizard warns you and falls back to visible input.
--   **Masked preview + confirm** — before saving, the wizard shows a masked preview (e.g. `sk-or-v1-…7Q2x`) and the key length, and asks you to confirm. A paste mistake can be discarded and re-entered without restarting the wizard.
--   **Stored in your OS keyring, not a workspace `.env`** — the secret is never duplicated per project. If a key is already stored, the wizard offers to use it or replace it (so you can rotate keys without leaving setup).
+- **Input is hidden** — terminal echo is disabled while you paste, so the key never appears in your scrollback or
+  terminal recordings (each character shows as `*`). If stdin is not a terminal, the wizard warns you and falls back to
+  visible input.
+- **Masked preview + confirm** — before saving, the wizard shows a masked preview (e.g. `sk-or-v1-…7Q2x`) and the key
+  length, and asks you to confirm. A paste mistake can be discarded and re-entered without restarting the wizard.
+- **Stored in your OS keyring, not a workspace `.env`** — the secret is never duplicated per project. If a key is
+  already stored, the wizard offers to use it or replace it (so you can rotate keys without leaving setup).
 
-If you have no provider key at all, the wizard still offers a path forward: local providers like Ollama, LM Studio, and llama.cpp need no key.
+If you have no provider key at all, the wizard still offers a path forward: local providers like Ollama, LM Studio, and
+llama.cpp need no key.
 
 #### Restrict accessible providers (optional)
 
@@ -173,11 +195,13 @@ In corporate or air-gapped environments, use `providers_whitelist` to prevent ac
 providers_whitelist = ["opencode-zen", "opencode-go", "gemini"]
 ```
 
-When set, the `/model` picker, first-run wizard, and config validator all respect the list. Leave it empty (the default) to allow every built-in and custom provider.
+When set, the `/model` picker, first-run wizard, and config validator all respect the list. Leave it empty (the default)
+to allow every built-in and custom provider.
 
 ### 2. Confirm Workspace Context
 
-`WORKSPACE_DIR` tells VT Code which project folder to treat as its primary context. The CLI sets this automatically when you launch inside a directory, but you can override or verify it explicitly:
+`WORKSPACE_DIR` tells VT Code which project folder to treat as its primary context. The CLI sets this automatically when
+you launch inside a directory, but you can override or verify it explicitly:
 
 ```bash
 # Confirm the workspace root
@@ -210,15 +234,18 @@ cd /path/to/your/project
 
 ### Resume Previous Sessions
 
-- Run `vtcode --resume` to open an interactive picker of recent sessions, or `vtcode --resume <SESSION_ID>` to jump directly to a known session.
+- Run `vtcode --resume` to open an interactive picker of recent sessions, or `vtcode --resume <SESSION_ID>` to jump
+  directly to a known session.
 - Use `vtcode --continue` to resume the most recent session automatically without picking from the list.
-- These flags are global; do not append a subcommand (for example, `vtcode chat --resume` is rejected). Resume or continue first, then start a new command if needed.
+- These flags are global; do not append a subcommand (for example, `vtcode chat --resume` is rejected). Resume or
+  continue first, then start a new command if needed.
 
 ## Enhanced Terminal Interface
 
 VT Code now features a completely revamped terminal user interface with numerous enhancements:
 
 ### Visual Improvements
+
 - Modern, clean interface with rounded borders and improved styling
 - Customizable color themes with Catppuccin color palette integration
 - Enhanced message formatting with distinct markers for different message types
@@ -226,18 +253,21 @@ VT Code now features a completely revamped terminal user interface with numerous
 - Real-time command output display with proper ANSI color support
 
 ### Interaction Features
+
 - Full mouse support for scrolling and text selection
 - Interactive text selection with click-and-drag functionality
 - Improved input area with placeholder text ("Implement {feature}...")
 - Slash command auto-suggestions for quick access to built-in commands
 
 ### Terminal Command Support
+
 - Real-time PTY (pseudo-terminal) integration for running shell commands
 - Dedicated terminal output panels with command summaries
 - Streaming output display for long-running processes
 - Proper handling of ANSI escape sequences and colors
 
 ### Navigation & Controls
+
 - Smooth scrolling with mouse wheel and keyboard shortcuts
 - Page navigation with Page Up/Down keys
 - Dedicated status bar with contextual information
@@ -249,18 +279,23 @@ VT Code now features a completely revamped terminal user interface with numerous
 
 During chat you can lead with `/` to trigger built-in actions without leaving the session:
 
--   `/help` — list supported commands
+- `/help` — list supported commands
 
--   `/theme <id>` — switch the active theme
--   `/agent` — manage subagent definitions (create, inspect, edit, delete) and inspect delegated child threads
+- `/theme <id>` — switch the active theme
+- `/agent` — manage subagent definitions (create, inspect, edit, delete) and inspect delegated child threads
 
-Press **Tab** on an empty idle composer to cycle primary agents. The active primary agent appears in the session header badge and controls the session's instructions, model, granular permission policy, and tool access.
+Press **Tab** on an empty idle composer to cycle primary agents. The active primary agent appears in the session header
+badge and controls the session's instructions, model, granular permission policy, and tool access.
 
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 
-For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). Primary agents (`mode: primary` or `mode: all`) control the main session directly; subagents (`mode: subagent` or `mode: all`) are spawned as child threads via `@agent-name`. New `.vtcode/agents/*.md` files should use VT Code tool ids such as `exec_command`, `write_stdin`, `apply_patch`, and advanced `code_search`, not Claude-style names like `Read` or `Bash`.
+For delegated child-agent workflows and primary agents, see the dedicated [Subagents guide](./subagents.md). Primary
+agents (`mode: primary` or `mode: all`) control the main session directly; subagents (`mode: subagent` or `mode: all`)
+are spawned as child threads via `@agent-name`. New `.vtcode/agents/*.md` files should use VT Code tool ids such as
+`exec_command`, `write_stdin`, `apply_patch`, and advanced `code_search`, not Claude-style names like `Read` or `Bash`.
 
-VT Code uses a comprehensive TOML configuration system. The `init` command creates a `vtcode.toml` file with sensible defaults.
+VT Code uses a comprehensive TOML configuration system. The `init` command creates a `vtcode.toml` file with sensible
+defaults.
 
 ### Basic Configuration
 
@@ -305,21 +340,22 @@ command_timeout_seconds = 300
 [hooks.lifecycle]
 # Example: Run security validation before bash commands
 pre_tool_use = [
-  { 
+  {
     matcher = "Bash",
-    hooks = [ 
-      { 
-        command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", 
-        timeout_seconds = 10 
-      } 
-    ] 
+    hooks = [
+      {
+        command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh",
+        timeout_seconds = 10
+      }
+    ]
   }
 ]
 ```
 
 ### Session Onboarding
 
-VT Code opens each chat with a workspace-specific orientation generated by the context engine. Configure it with the `[agent.onboarding]` section:
+VT Code opens each chat with a workspace-specific orientation generated by the context engine. Configure it with the
+`[agent.onboarding]` section:
 
 ```toml
 [agent.onboarding]
@@ -343,7 +379,9 @@ recommended_actions = [
 # chat_placeholder = "Describe the task you want to tackle next."
 ```
 
-When enabled, VT Code prints the onboarding message before the first prompt and appends the same context block to the system prompt for the model. Provide `chat_placeholder` only if you want a custom hint above the initial `>` prompt; leaving it unset keeps the input empty by default.
+When enabled, VT Code prints the onboarding message before the first prompt and appends the same context block to the
+system prompt for the model. Provide `chat_placeholder` only if you want a custom hint above the initial `>` prompt;
+leaving it unset keeps the input empty by default.
 
 ### Terminal parity extras
 
@@ -368,10 +406,10 @@ vtcode chat
 
 The agent will greet you and await your instructions. Try asking:
 
--   "Analyze this codebase"
--   "Add error handling to the user authentication"
--   "Refactor this function to be more readable"
--   "Create a new API endpoint for user registration"
+- "Analyze this codebase"
+- "Add error handling to the user authentication"
+- "Refactor this function to be more readable"
+- "Create a new API endpoint for user registration"
 
 ### Command Line Queries
 
@@ -381,7 +419,8 @@ For quick questions or piping to other tools, use the `ask` command:
 vtcode ask "Write a Python function to calculate Fibonacci numbers" > fib.py
 ```
 
-**Note**: `vtcode ask` sends the raw response code/text to **stdout**, while sending metadata (provider info, reasoning traces) to **stderr**. This makes it perfect for shell scripting and piping.
+**Note**: `vtcode ask` sends the raw response code/text to **stdout**, while sending metadata (provider info, reasoning
+traces) to **stderr**. This makes it perfect for shell scripting and piping.
 
 ### Project Analysis
 
@@ -400,21 +439,21 @@ vtcode summary
 
 ### Orchestrator Agent
 
--   **Role**: Strategic coordinator and task planner
--   **Capabilities**: Task decomposition, agent delegation, progress tracking
--   **Use for**: Complex multi-step tasks requiring coordination
+- **Role**: Strategic coordinator and task planner
+- **Capabilities**: Task decomposition, agent delegation, progress tracking
+- **Use for**: Complex multi-step tasks requiring coordination
 
 ### Explorer Agent
 
--   **Role**: Investigation and verification specialist
--   **Capabilities**: Code analysis, system exploration, testing
--   **Use for**: Understanding codebases, verifying implementations
+- **Role**: Investigation and verification specialist
+- **Capabilities**: Code analysis, system exploration, testing
+- **Use for**: Understanding codebases, verifying implementations
 
 ### Coder Agent
 
--   **Role**: Implementation specialist
--   **Capabilities**: Code writing, refactoring, debugging
--   **Use for**: Making code changes, adding features, fixing bugs
+- **Role**: Implementation specialist
+- **Capabilities**: Code writing, refactoring, debugging
+- **Use for**: Making code changes, adding features, fixing bugs
 
 ## Advanced Features
 
@@ -422,30 +461,30 @@ vtcode summary
 
 VT Code automatically manages conversation context:
 
--   **Intelligent compression** of long conversations
--   **Persistent context store** across sessions
--   **Automatic summarization** of completed tasks
--   **Context-aware responses** based on full history
+- **Intelligent compression** of long conversations
+- **Persistent context store** across sessions
+- **Automatic summarization** of completed tasks
+- **Context-aware responses** based on full history
 
 ### Safety Features
 
 Comprehensive security controls:
 
--   **Path validation** - Prevents access outside workspace
--   **Command policies** - Allow/deny lists for terminal commands
--   **Human-in-the-loop** - Confirmation for dangerous operations
--   **File size limits** - Prevents processing of large files
--   **API key masking** - Secure credential handling
+- **Path validation** - Prevents access outside workspace
+- **Command policies** - Allow/deny lists for terminal commands
+- **Human-in-the-loop** - Confirmation for dangerous operations
+- **File size limits** - Prevents processing of large files
+- **API key masking** - Secure credential handling
 
 ### Tool Integration
 
 Rich tool ecosystem:
 
--   **File Operations**: Read, write, edit files safely
--   **Search & Analysis**: Fast text search and AST-based analysis
--   **Terminal Commands**: Execute shell commands with PTY support
--   **Code Intelligence**: Tree-sitter powered syntax analysis
--   **Batch Operations**: Process multiple files efficiently
+- **File Operations**: Read, write, edit files safely
+- **Search & Analysis**: Fast text search and AST-based analysis
+- **Terminal Commands**: Execute shell commands with PTY support
+- **Code Intelligence**: Tree-sitter powered syntax analysis
+- **Batch Operations**: Process multiple files efficiently
 
 ## Troubleshooting
 
@@ -489,10 +528,10 @@ cargo --version
 
 ### Getting Help
 
--   **Documentation**: Comprehensive guides in `docs/` directory
--   **GitHub Issues**: Report bugs and request features
--   **GitHub Discussions**: Community support and discussions
--   **Configuration Examples**: Check `vtcode.toml.example`
+- **Documentation**: Comprehensive guides in `docs/` directory
+- **GitHub Issues**: Report bugs and request features
+- **GitHub Discussions**: Community support and discussions
+- **Configuration Examples**: Check `vtcode.toml.example`
 
 ## Security & Safety
 
@@ -525,20 +564,22 @@ VT Code is designed with security as a first-class concern:
 Now that you have VT Code running, explore:
 
 1. **[Security Guide](../guides/security.md)** - Understand security features
-1. **[Lifecycle Hooks Guide](../guides/lifecycle-hooks.md)** - Execute shell commands in response to agent events for context enrichment, policy enforcement, and automation
-1. **[Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)** - Advanced configuration options and precedence rules
-1. **[Agent Plugins](agent-plugins.md)** - Install portable plugins that bundle Agent Skills and MCP servers
-1. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
-1. **[Provider Guides](../providers/PROVIDER_GUIDES.md)** - LLM provider integration
+2. **[Lifecycle Hooks Guide](../guides/lifecycle-hooks.md)** - Execute shell commands in response to agent events for
+   context enrichment, policy enforcement, and automation
+3. **[Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)** - Advanced configuration options and precedence
+   rules
+4. **[Agent Plugins](agent-plugins.md)** - Install portable plugins that bundle Agent Skills and MCP servers
+5. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
+6. **[Provider Guides](../providers/PROVIDER_GUIDES.md)** - LLM provider integration
    - [OpenRouter Integration](../providers/openrouter.md)
 
 ## Contributing
 
 Interested in contributing? Check out:
 
--   **[Development Guide](../development/README.md)** - Development setup
--   **[Contributing Guide](../../docs/CONTRIBUTING.md)** - Contribution guidelines
+- **[Development Guide](../development/README.md)** - Development setup
+- **[Contributing Guide](../../docs/CONTRIBUTING.md)** - Contribution guidelines
 
 ---
 
-**Happy coding with VT Code!** 
+**Happy coding with VT Code!**

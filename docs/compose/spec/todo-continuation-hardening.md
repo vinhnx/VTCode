@@ -8,33 +8,50 @@ commits: b998eb6f7..e5d26168f
 
 # TODO Continuation Hardening (Residual)
 
-Residual work after delivered `tracker-continuation`, plus a post-merge review cycle that closed correctness gaps on the same feature.
+Residual work after delivered `tracker-continuation`, plus a post-merge review cycle that closed correctness gaps on the
+same feature.
 
 ## Report
 
-**What was built** — TODO/tracker work continues across turns without user nudges when no true handoff is required, and the harness no longer auto-continues past genuine questions, permission/policy denials, or planning interview waits.
+**What was built** — TODO/tracker work continues across turns without user nudges when no true handoff is required, and
+the harness no longer auto-continues past genuine questions, permission/policy denials, or planning interview waits.
 
-Shipped behavior: expanded recoverable classifiers (tool-budget/loop, planning recovery-fallback); default `cross_turn_turns = 32` with **progress-reset on any completed-count change** (including checklist recreate); `TrackerProbeOutcome` so Complete clears incomplete caches and Unavailable keeps last; in-turn override on status recaps **except tool-free recovery** (stays terminal; outer queue continues next turn); outer Completed auto-queue requires `!final_text_requires_user_input`; safety-handoff vocabulary denies permission/policy **before** budget tokens; plan-mode deny-first for compound handoffs while `PLANNING_COMPLETED_TURN_FALLBACK_REASON` remains recoverable; planning/tracker resume paths mutually exclusive; malformed checklist probes are Unavailable.
+Shipped behavior: expanded recoverable classifiers (tool-budget/loop, planning recovery-fallback); default
+`cross_turn_turns = 32` with **progress-reset on any completed-count change** (including checklist recreate);
+`TrackerProbeOutcome` so Complete clears incomplete caches and Unavailable keeps last; in-turn override on status recaps
+**except tool-free recovery** (stays terminal; outer queue continues next turn); outer Completed auto-queue requires
+`!final_text_requires_user_input`; safety-handoff vocabulary denies permission/policy **before** budget tokens;
+plan-mode deny-first for compound handoffs while `PLANNING_COMPLETED_TURN_FALLBACK_REASON` remains recoverable;
+planning/tracker resume paths mutually exclusive; malformed checklist probes are Unavailable.
 
 **Verification** —
 
 - `cargo nextest run -p vtcode-core -E 'test(tracker_final_text) or test(runtime_guidance)'` — PASS (5)
-- `cargo nextest run -p vtcode -E 'test(outer_queue) or test(plan_mode) or test(tracker_probe) or test(session_stats_progress) or test(tracker_incomplete) or test(recoverable_block) or test(tracker_config) or test(resume_gate) or test(parse_tracker)'` — PASS (29)
+<!-- markdownlint-disable-next-line MD013 -->
+- `cargo nextest run -p vtcode -E 'test(outer_queue) or test(plan_mode) or test(tracker_probe) or test(session_stats_progress) or test(tracker_incomplete) or test(recoverable_block) or test(tracker_config) or test(resume_gate) or test(parse_tracker)'`
+  — PASS (29)
 - Re-review (general-5): findings 1–8 fixed; no new criticals; targeted 5/5 PASS
 - `./scripts/check-dev.sh` — PASS
 - PRE-EXISTING / unrelated: `sparse_approved_plan_is_distilled_into_tracker_items`
 
 **Journey log** —
 
-1. Empirical session `session-vtcode-20260918T030054Z_141498-26410` already auto-continued 20 turns; residual work was classifiers/budget/UX, not “no auto-continue”.
-2. First post-merge review: tool-free recovery override could re-enable tools; outer Completed ignored user questions; budget_like short-circuited safety handoffs; plan-mode gate test was stale vs allow-list-first.
-3. Spec S2B originally asked for in-turn override on tool-free recovery — **reversed** after code evidence that recovery is intentionally terminal (`tool_free_recovery_terminal`).
-4. Safety/policy tokens must be checked **before** budget tokens; the opposite order mis-classifies compound recaps as continue.
-5. Resume auto-queue paths must exclude each other: planning-active blocks tracker resume; plan resume requires `"planning"` in the blocked summary.
+1. Empirical session `session-vtcode-20260918T030054Z_141498-26410` already auto-continued 20 turns; residual work was
+   classifiers/budget/UX, not “no auto-continue”.
+2. First post-merge review: tool-free recovery override could re-enable tools; outer Completed ignored user questions;
+   budget_like short-circuited safety handoffs; plan-mode gate test was stale vs allow-list-first.
+3. Spec S2B originally asked for in-turn override on tool-free recovery — **reversed** after code evidence that recovery
+   is intentionally terminal (`tool_free_recovery_terminal`).
+4. Safety/policy tokens must be checked **before** budget tokens; the opposite order mis-classifies compound recaps as
+   continue.
+5. Resume auto-queue paths must exclude each other: planning-active blocks tracker resume; plan resume requires
+   `"planning"` in the blocked summary.
 
 ## [S1] Problem
 
-TODO/tracker work still looked like “agent stopped, take action”: status recaps, planning “Type continue”, budget episode 8 that only reset on full tracker complete, recoverable classifiers missing production blocked-reasons, and post-merge review found outer Completed could auto-queue past genuine user questions and compound permission handoffs.
+TODO/tracker work still looked like “agent stopped, take action”: status recaps, planning “Type continue”, budget
+episode 8 that only reset on full tracker complete, recoverable classifiers missing production blocked-reasons, and
+post-merge review found outer Completed could auto-queue past genuine user questions and compound permission handoffs.
 
 ## [S2] Design
 
@@ -49,7 +66,8 @@ End turn and wait when tracker work remains **only if**:
 3. Verification block after autonomous recovery is exhausted/escalated, or
 4. Session exit / hard interrupt.
 
-Budget / tool-loop / preview / recovery ends auto-continue. Tool-free recovery ends the **turn** but outer queue schedules the next tracker turn.
+Budget / tool-loop / preview / recovery ends auto-continue. Tool-free recovery ends the **turn** but outer queue
+schedules the next tracker turn.
 
 ### Contracts (review-cycle corrections)
 
@@ -85,4 +103,5 @@ cross_turn_turns = 32   # progress-resets on completed-count change
 - [x] T3: Progress-reset + default 32 (covers: S2C)
 - [x] T4: Planning resume + no Type-continue on successful queue (covers: S2D,S2E)
 - [x] T5: Runtime guidance + docs (covers: S2E)
-- [x] T6: Post-merge review-cycle fixes (outer question filter, handoff order, plan deny-first, resume gates, Unavailable malformed probe) (covers: S2; review)
+- [x] T6: Post-merge review-cycle fixes (outer question filter, handoff order, plan deny-first, resume gates,
+      Unavailable malformed probe) (covers: S2; review)

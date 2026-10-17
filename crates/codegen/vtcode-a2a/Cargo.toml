@@ -20,7 +20,7 @@ a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]
 [dependencies]
 anyhow = { workspace = true }
 async-stream = "0.3"
-axum = { version = "0.8", features = ["json", "macros"], optional = true }
+axum = { workspace = true, features = ["json", "macros"], optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -31,9 +31,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"] }
-tokio-stream = { version = "0.1", optional = true }
-tower = { version = "0.5", optional = true }
-tower-http = { version = "0.7", features = ["cors", "trace"], optional = true }
+tokio-stream = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, features = ["trace"], optional = true }
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }

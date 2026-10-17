@@ -2,11 +2,14 @@
 
 ## Overview
 
-VT Code now supports output styles, allowing you to customize the behavior and response format of the assistant. This feature enables different modes of operation, from concise responses to detailed explanations, and even specialized workflows like learning and architectural design.
+VT Code now supports output styles, allowing you to customize the behavior and response format of the assistant. This
+feature enables different modes of operation, from concise responses to detailed explanations, and even specialized
+workflows like learning and architectural design.
 
 ## How It Works
 
-Output styles modify VT Code's system prompt to change how the assistant behaves. Each style can either enhance the base system prompt or replace it entirely, depending on its configuration.
+Output styles modify VT Code's system prompt to change how the assistant behaves. Each style can either enhance the base
+system prompt or replace it entirely, depending on its configuration.
 
 ## Configuration
 
@@ -27,7 +30,8 @@ active_style = "default"  # Set the active output style
 
 ## Creating Custom Styles
 
-Custom output styles can be created in the `.vtcode/output-styles/` directory as markdown files with YAML frontmatter. Each style file defines:
+Custom output styles can be created in the `.vtcode/output-styles/` directory as markdown files with YAML frontmatter.
+Each style file defines:
 
 - The style name and description
 - Whether to keep the base VT Code instructions
@@ -49,4 +53,5 @@ The output styles feature is implemented through:
 3. Integration with the system prompt generation pipeline
 4. Support for YAML frontmatter in markdown style files
 
-The system applies the selected output style during system prompt generation, ensuring that the assistant's behavior matches the selected style from the start of each interaction.
+The system applies the selected output style during system prompt generation, ensuring that the assistant's behavior
+matches the selected style from the start of each interaction.

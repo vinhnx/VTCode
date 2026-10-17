@@ -1,6 +1,7 @@
 # Architectural Invariants
 
-Mechanical enforcement rules for VT Code. These are not suggestions — they are invariants that must hold at all times. Violations should be caught by CI, not code review.
+Mechanical enforcement rules for VT Code. These are not suggestions — they are invariants that must hold at all times.
+Violations should be caught by CI, not code review.
 
 Each invariant includes a **remediation** instruction so agents can fix violations without asking for help.
 
@@ -12,7 +13,7 @@ For additive principle mapping and staged rollout policy, see [ZEN_ALIGNMENT.md]
 
 VT Code modules form a strict dependency DAG. No reverse imports.
 
-```
+```text
 types / commons
     ↓
   config
@@ -33,8 +34,8 @@ Side crates with no upstream dependents:
 - `vtcode-exec-events` — event definitions, used by core
 - `vtcode-acp` — Zed integration, used by agent
 
-**Violation**: a lower-layer crate imports from a higher-layer crate.
-**Remediation**: move the shared type/function down to the lowest common layer (usually `vtcode-commons` or `vtcode-config`). Never add a reverse dependency.
+**Violation**: a lower-layer crate imports from a higher-layer crate. **Remediation**: move the shared type/function
+down to the lowest common layer (usually `vtcode-commons` or `vtcode-config`). Never add a reverse dependency.
 
 ---
 
@@ -42,8 +43,8 @@ Side crates with no upstream dependents:
 
 Each Rust source file should be ≤500 lines. Files exceeding this limit should be split into focused submodules.
 
-**Violation**: `wc -l` > 500 on a `.rs` file.
-**Remediation**: extract logical sections into submodules within the same directory. Use `mod.rs` to re-export public items. Preserve the public API surface.
+**Violation**: `wc -l` > 500 on a `.rs` file. **Remediation**: extract logical sections into submodules within the same
+directory. Use `mod.rs` to re-export public items. Preserve the public API surface.
 
 ---
 
@@ -62,14 +63,15 @@ Enforced mechanically:
 | Modules   | `snake_case`           | `golden_path`     |
 | Crates    | `kebab-case`           | `vtcode-core`     |
 
-**Violation**: naming does not match the convention for its element type.
-**Remediation**: rename the item. Use your editor's rename refactoring to update all references. If it's a public API, check for downstream usage first.
+**Violation**: naming does not match the convention for its element type. **Remediation**: rename the item. Use your
+editor's rename refactoring to update all references. If it's a public API, check for downstream usage first.
 
 ---
 
 ## 4. Structured Logging
 
-All log statements must use the `tracing` crate with structured fields. No `println!` or `eprintln!` in library code (TUI binary `src/` may use `eprintln!` for fatal startup errors only).
+All log statements must use the `tracing` crate with structured fields. No `println!` or `eprintln!` in library code
+(TUI binary `src/` may use `eprintln!` for fatal startup errors only).
 
 ```rust
 // Correct
@@ -79,8 +81,8 @@ tracing::info!(provider = %name, model = %model_id, "Sending LLM request");
 println!("Sending request to {} with model {}", name, model_id);
 ```
 
-**Violation**: `println!` or `eprintln!` in any crate except `src/` startup code.
-**Remediation**: replace with `tracing::info!`, `tracing::warn!`, `tracing::error!`, or `tracing::debug!` using structured fields.
+**Violation**: `println!` or `eprintln!` in any crate except `src/` startup code. **Remediation**: replace with
+`tracing::info!`, `tracing::warn!`, `tracing::error!`, or `tracing::debug!` using structured fields.
 
 ---
 
@@ -100,14 +102,16 @@ let config = tokio::fs::read_to_string(path).await.unwrap();
 
 Exception: test code (`#[cfg(test)]` modules) may use `.unwrap()` when the test should panic on failure.
 
-**Violation**: `.unwrap()` or `.expect()` outside of `#[cfg(test)]`.
-**Remediation**: replace with `.with_context(|| "descriptive message")?`. The context message should describe what was being attempted, not just what failed.
+**Violation**: `.unwrap()` or `.expect()` outside of `#[cfg(test)]`. **Remediation**: replace with
+`.with_context(|| "descriptive message")?`. The context message should describe what was being attempted, not just what
+failed.
 
 ---
 
 ## 6. No Hardcoded Model IDs
 
-Model identifiers change frequently. All model references must come from `docs/models.json` or `crates/codegen/vtcode-core/src/config/constants.rs`.
+Model identifiers change frequently. All model references must come from `docs/models.json` or
+`crates/codegen/vtcode-core/src/config/constants.rs`.
 
 ```rust
 // Correct
@@ -117,16 +121,20 @@ use vtcode_core::config::constants::DEFAULT_MODEL_ID;
 let model = "gpt-5-mini";
 ```
 
-**Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test code.
-**Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to `crates/codegen/vtcode-core/src/config/constants.rs`.
+**Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test
+code. **Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to
+`crates/codegen/vtcode-core/src/config/constants.rs`.
 
 ---
 
 ## 7. Documentation Location
 
-All `.md` documentation files go in `docs/`. The only exceptions in repository root are approved governance files (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
+All `.md` documentation files go in `docs/`. The only exceptions in repository root are approved governance files
+(`README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
 
-Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. New one-off implementation notes, phase reports, and fix summaries must go to a domain folder (for example `docs/features/`) or archive path (for example `docs/archive/`).
+Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. New one-off implementation notes, phase
+reports, and fix summaries must go to a domain folder (for example `docs/features/`) or archive path (for example
+`docs/archive/`).
 
 **Violation**:
 
@@ -143,7 +151,8 @@ Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. Ne
 
 ## 8. Workspace Boundary Enforcement
 
-All file operations (read, write, list, search) must validate that paths are within the workspace root. No file tool should access paths outside the workspace without explicit user approval.
+All file operations (read, write, list, search) must validate that paths are within the workspace root. No file tool
+should access paths outside the workspace without explicit user approval.
 
 ```rust
 // At the tool boundary, before any file operation:
@@ -154,14 +163,15 @@ if !canonical.starts_with(&workspace_root) {
 }
 ```
 
-**Violation**: file operation without workspace boundary check.
-**Remediation**: add path validation at the tool's entry point (the API boundary), not deep inside helper functions. Use the existing `validate_path` utility if available.
+**Violation**: file operation without workspace boundary check. **Remediation**: add path validation at the tool's entry
+point (the API boundary), not deep inside helper functions. Use the existing `validate_path` utility if available.
 
 ---
 
 ## 9. Parse at Boundaries
 
-Validate and parse inputs where they enter the system — at API boundaries, config loading, and tool argument parsing. Internal functions should receive validated types, not raw strings.
+Validate and parse inputs where they enter the system — at API boundaries, config loading, and tool argument parsing.
+Internal functions should receive validated types, not raw strings.
 
 ```rust
 // At the boundary (tool argument parsing):
@@ -174,16 +184,17 @@ let line_number: usize = args["line"]
 fn process_line(content: &str, line: usize) -> Result<String> { ... }
 ```
 
-**Violation**: raw string parsing or validation deep inside business logic.
-**Remediation**: move validation to the boundary function. Define typed structs for parsed inputs. Internal functions should receive these typed structs.
+**Violation**: raw string parsing or validation deep inside business logic. **Remediation**: move validation to the
+boundary function. Define typed structs for parsed inputs. Internal functions should receive these typed structs.
 
 ---
 
 ## 10. Lint Error Messages
 
-Custom lint rules, Clippy configurations, and CI checks must include remediation instructions in their error messages. An agent reading the error should know how to fix it without searching.
+Custom lint rules, Clippy configurations, and CI checks must include remediation instructions in their error messages.
+An agent reading the error should know how to fix it without searching.
 
-```
+```text
 // Good error message:
 error: File exceeds 500-line limit (623 lines).
   Remediation: split into submodules. Extract logical sections into
@@ -193,17 +204,19 @@ error: File exceeds 500-line limit (623 lines).
 error: File too long.
 ```
 
-**Violation**: CI check or lint rule that produces an error without remediation guidance.
-**Remediation**: update the check's error message to include a "Remediation:" section with specific instructions.
+**Violation**: CI check or lint rule that produces an error without remediation guidance. **Remediation**: update the
+check's error message to include a "Remediation:" section with specific instructions.
 
 ---
 
 ## 11. Agent Legibility
 
-Operational data and status reports must be presented in structured formats (tables, YAML, or consistent headers) to ensure high parseability by agents and clarity for humans.
+Operational data and status reports must be presented in structured formats (tables, YAML, or consistent headers) to
+ensure high parseability by agents and clarity for humans.
 
-**Violation**: multi-file or multi-component status reported in long prose blocks without structure.
-**Remediation**: convert the status report into a markdown table or structured list. Follow the examples in `docs/harness/AGENT_LEGIBILITY_GUIDE.md`.
+**Violation**: multi-file or multi-component status reported in long prose blocks without structure. **Remediation**:
+convert the status report into a markdown table or structured list. Follow the examples in
+`docs/harness/AGENT_LEGIBILITY_GUIDE.md`.
 
 ---
 
@@ -211,8 +224,8 @@ Operational data and status reports must be presented in structured formats (tab
 
 Core documentation entrypoints must not contain broken local markdown links.
 
-**Violation**: a local markdown link target in `AGENTS.md`, `README.md`, `docs/README.md`, `docs/INDEX.md`, or harness docs does not exist.
-**Remediation**:
+**Violation**: a local markdown link target in `AGENTS.md`, `README.md`, `docs/README.md`, `docs/INDEX.md`, or harness
+docs does not exist. **Remediation**:
 
 1. Fix or remove broken references.
 2. Keep links relative to the source markdown file when possible.
@@ -220,116 +233,175 @@ Core documentation entrypoints must not contain broken local markdown links.
 
 ## 13. Pre-flight Environment Checks
 
-Before modifying code in any workspace, the agent must identify the project's build system, test runner, and module structure. Structural errors (missing `__init__.py`, broken `mod.rs` declarations, wrong test runner) cause more failures than incorrect logic.
+Before modifying code in any workspace, the agent must identify the project's build system, test runner, and module
+structure. Structural errors (missing `__init__.py`, broken `mod.rs` declarations, wrong test runner) cause more
+failures than incorrect logic.
 
-**Violation**: Agent modifies code without first checking `Cargo.toml`, `package.json`, `pyproject.toml`, or equivalent project manifests.
-**Remediation**: Before any code changes, run at least one of: `ls *.toml *.json Makefile`, read `AGENTS.md`, or use `list_files` on the project root. Identify the build/test commands and module convention before editing.
+**Violation**: Agent modifies code without first checking `Cargo.toml`, `package.json`, `pyproject.toml`, or equivalent
+project manifests. **Remediation**: Before any code changes, run at least one of: `ls *.toml *.json Makefile`, read
+`AGENTS.md`, or use `list_files` on the project root. Identify the build/test commands and module convention before
+editing.
 
 ---
 
 ## 14. Verification-First Autonomy
 
-Agent output must be verifiable before deployment. Every agent action that produces or modifies code must be followed by at least one verification step (test, type-check, or lint).
+Agent output must be verifiable before deployment. Every agent action that produces or modifies code must be followed by
+at least one verification step (test, type-check, or lint).
 
-**Blind Editing**: Making consecutive code changes without intermediate testing or verification is strictly forbidden. This leads to compounding errors and brittle implementations.
+**Blind Editing**: Making consecutive code changes without intermediate testing or verification is strictly forbidden.
+This leads to compounding errors and brittle implementations.
 
-**Violation**: Agent declares a task complete or moves to a next major phase without executing a verification tool (e.g., `cargo check`, `cargo test`, `npx tsc`).
-**Remediation**: Run the appropriate verification command. Analyze the output. If it fails, fix and re-verify. Never rely on internal reasoning as proof of correctness ("hallucination of verification").
+**Violation**: Agent declares a task complete or moves to a next major phase without executing a verification tool
+(e.g., `cargo check`, `cargo test`, `npx tsc`). **Remediation**: Run the appropriate verification command. Analyze the
+output. If it fails, fix and re-verify. Never rely on internal reasoning as proof of correctness ("hallucination of
+verification").
 
-**Prompt surface**: The shipped system prompt carries this invariant (and §16) as the outcome rule in the runtime guidance shared by every prompt profile, Minimal included, and re-added when a workspace `system.md` replaces the base (`RUNTIME_GUIDANCE_SECTION`: "Report work as done only after verifying it: never claim a check passed unless you ran it, and report failures with their output."). The no-blind-editing cadence is enforced by the harness gate (`BLIND_EDITING_THRESHOLD` in `src/agent/runloop/unified/turn/tool_outcomes/helpers.rs`), not by a per-edit prompt instruction: telling current models to verify every edit makes them over-verify.
+**Prompt surface**: The shipped system prompt carries this invariant (and §16) as the outcome rule in the runtime
+guidance shared by every prompt profile, Minimal included, and re-added when a workspace `system.md` replaces the base
+(`RUNTIME_GUIDANCE_SECTION`: "Report work as done only after verifying it: never claim a check passed unless you ran it,
+and report failures with their output."). The no-blind-editing cadence is enforced by the harness gate
+(`BLIND_EDITING_THRESHOLD` in `src/agent/runloop/unified/turn/tool_outcomes/helpers.rs`), not by a per-edit prompt
+instruction: telling current models to verify every edit makes them over-verify.
 
 ---
 
 ## 15. Error Mode Diagnosis
 
-Before modifying code in response to a shell/command failure, the agent must verify if the failure is environmental or logical.
+Before modifying code in response to a shell/command failure, the agent must verify if the failure is environmental or
+logical.
 
-**Violation**: Agent modifies code to "fix" an error that is actually caused by a missing dependency, port conflict, incorrect file path, or permission issue.
-**Remediation**: Use `ls`, `cat /etc/*release`, `which <cmd>`, or `ps` to diagnose the environment state first. Proactively document environment findings in `<analysis>`. If the environment is broken, fix the environment (if possible) or report it to the user rather than editing code.
+**Violation**: Agent modifies code to "fix" an error that is actually caused by a missing dependency, port conflict,
+incorrect file path, or permission issue. **Remediation**: Use `ls`, `cat /etc/*release`, `which <cmd>`, or `ps` to
+diagnose the environment state first. Proactively document environment findings in `<analysis>`. If the environment is
+broken, fix the environment (if possible) or report it to the user rather than editing code.
 
 ---
 
 ## 16. Regression Verification
 
-Every intentional "fix" for an observed error must be followed by running at least one related existing test to prevent introducing regressions. Research shows agents break existing code in 12-30% of cases when focusing purely on a new feature or fix.
+Every intentional "fix" for an observed error must be followed by running at least one related existing test to prevent
+introducing regressions. Research shows agents break existing code in 12-30% of cases when focusing purely on a new
+feature or fix.
 
-**Hallucination of Verification Warning**: Avoid declaring success purely through internal reasoning. If you claim a regression check passed, you MUST show the tool output that proves it.
+**Hallucination of Verification Warning**: Avoid declaring success purely through internal reasoning. If you claim a
+regression check passed, you MUST show the tool output that proves it.
 
 ---
 
 ## 17. Loop Safety
 
-When vtcode-core is invoked by an external loop (scheduler, CI, or a future loop crate), each invocation must be stateless across runs. No mutable global state, leaked temp files, or stale worktrees may persist between loop iterations.
+When vtcode-core is invoked by an external loop (scheduler, CI, or a future loop crate), each invocation must be
+stateless across runs. No mutable global state, leaked temp files, or stale worktrees may persist between loop
+iterations.
 
 Key guarantees:
 
-- **Loop run state** is persisted explicitly to `.vtcode/state/loop-<id>.json` via `LoopRunState`. In-memory state is discarded at the end of each invocation.
-- **Loop memory** (notes, decisions) is append-only in `.vtcode/state/`. The agent reads previous entries on startup and appends new ones; it never overwrites.
-- **Worktree isolation** prevents parallel loop runs from colliding on the working tree. Each spawned sub-agent with `isolation = "worktree"` gets its own git worktree under `.vtcode/worktrees/`.
-- **Cost guardrails** (`CostBudget` in `loop_state.rs`) prevent unbounded iteration cost. The loop scheduler reads the budget on resume and stops when limits are reached.
+- **Loop run state** is persisted explicitly to `.vtcode/state/loop-<id>.json` via `LoopRunState`. In-memory state is
+  discarded at the end of each invocation.
+- **Loop memory** (notes, decisions) is append-only in `.vtcode/state/`. The agent reads previous entries on startup and
+  appends new ones; it never overwrites.
+- **Worktree isolation** prevents parallel loop runs from colliding on the working tree. Each spawned sub-agent with
+  `isolation = "worktree"` gets its own git worktree under `.vtcode/worktrees/`.
+- **Cost guardrails** (`CostBudget` in `loop_state.rs`) prevent unbounded iteration cost. The loop scheduler reads the
+  budget on resume and stops when limits are reached.
 
-**Violation**: global mutable state that leaks between invocations, or worktree paths left behind after the loop run completes.
-**Remediation**: use `LoopRunState` for persistence, clean up worktrees via `WorktreeManager::remove()`, and ensure all state flows through the explicit `.vtcode/state/` layout.
+**Violation**: global mutable state that leaks between invocations, or worktree paths left behind after the loop run
+completes. **Remediation**: use `LoopRunState` for persistence, clean up worktrees via `WorktreeManager::remove()`, and
+ensure all state flows through the explicit `.vtcode/state/` layout.
 
 ---
 
 ## 18. Evaluate Outcomes, Not Claims
 
-Agent output claiming success is not evidence of success. Every completion claim must be backed by actual verification output: test results, build output, runtime behavior, or environment state.
+Agent output claiming success is not evidence of success. Every completion claim must be backed by actual verification
+output: test results, build output, runtime behavior, or environment state.
 
-**Violation**: Agent declares a task complete or a sprint passes without showing actual tool output that proves correctness (test pass counts, build exit codes, command output).
+**Violation**: Agent declares a task complete or a sprint passes without showing actual tool output that proves
+correctness (test pass counts, build exit codes, command output).
 
-**Remediation**: Write an outcome verification artifact (`current_outcome_verification.md`) that records: (1) what verification commands were run, (2) what their actual output was, (3) whether tests passed or failed with counts, (4) whether the build succeeded. The evaluator must check this artifact, not the agent's claims.
+**Remediation**: Write an outcome verification artifact (`current_outcome_verification.md`) that records: (1) what
+verification commands were run, (2) what their actual output was, (3) whether tests passed or failed with counts, (4)
+whether the build succeeded. The evaluator must check this artifact, not the agent's claims.
 
 ---
 
 ## 19. Sprint Contract Negotiation
 
-Before implementation begins, the generator and evaluator must agree on "what counts as done" through a structured sprint contract. Vague requirements become testable acceptance criteria.
+Before implementation begins, the generator and evaluator must agree on "what counts as done" through a structured
+sprint contract. Vague requirements become testable acceptance criteria.
 
-**Violation**: Agent begins implementation without a sprint contract that specifies scope, acceptance criteria, and out-of-scope items.
+**Violation**: Agent begins implementation without a sprint contract that specifies scope, acceptance criteria, and
+out-of-scope items.
 
-**Remediation**: Write a sprint contract artifact (`current_sprint_contract.md`) before coding. Include: (1) what this sprint will deliver, (2) acceptance criteria that can be verified mechanically, (3) what is explicitly out of scope, (4) scoring dimensions with hard thresholds.
+**Remediation**: Write a sprint contract artifact (`current_sprint_contract.md`) before coding. Include: (1) what this
+sprint will deliver, (2) acceptance criteria that can be verified mechanically, (3) what is explicitly out of scope, (4)
+scoring dimensions with hard thresholds.
 
 ---
 
 ## 20. Reward Hacking Prevention in Eval Environments
 
-The eval and sandbox environment must not contain shortcuts the agent can exploit instead of solving the real task. Hidden tests must not be in the container, future commits must not be in `.git/objects`, and production secrets must not be exposed directly.
+The eval and sandbox environment must not contain shortcuts the agent can exploit instead of solving the real task.
+Hidden tests must not be in the container, future commits must not be in `.git/objects`, and production secrets must not
+be exposed directly.
 
-**Violation**: Eval environment contains hidden tests in the filesystem, future commits in `.git/objects`, or production secrets (API keys, OAuth tokens, SSH keys) exposed directly to the agent.
+**Violation**: Eval environment contains hidden tests in the filesystem, future commits in `.git/objects`, or production
+secrets (API keys, OAuth tokens, SSH keys) exposed directly to the agent.
 
-**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets. The tool internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git clean), rather than agent output text.
+**Remediation**: Store hidden tests outside the container. Use controlled tool capabilities for secrets. The tool
+internally checks permissions, limits parameters, and logs audit trails. Verify environment state (files, tests, git
+clean), rather than agent output text.
 
 ---
 
 ## 21. Spawned Task Ownership
 
-Every `tokio::spawn`/`spawn_blocking` call site must have an owner: the `JoinHandle` is awaited before the spawning scope exits, stored behind a Drop-abort guard or an owned field with a shutdown path, or dropped only with a comment documenting the detachment as safe (bounded work, token/channel termination, observable outcome). Rust tasks have indefinite extent, unaware cancellation, and never-propagated errors — an unowned task is killed silently at process exit and discards panics and `Err` results (see `docs/guides/async-architecture.md`, "Task Extent, Error Propagation, and Cancel-Safety").
+Every `tokio::spawn`/`spawn_blocking` call site must have an owner: the `JoinHandle` is awaited before the spawning
+scope exits, stored behind a Drop-abort guard or an owned field with a shutdown path, or dropped only with a comment
+documenting the detachment as safe (bounded work, token/channel termination, observable outcome). Rust tasks have
+indefinite extent, unaware cancellation, and never-propagated errors — an unowned task is killed silently at process
+exit and discards panics and `Err` results (see `docs/guides/async-architecture.md`, "Task Extent, Error Propagation,
+and Cancel-Safety").
 
-**Violation**: A `tokio::spawn` whose handle is dropped without await, guard, or documented-detached comment; a detached task whose error/panic outcome is silently lost; async work spawned inside `Drop` or between a bounded shutdown await and `std::process::exit`.
+**Violation**: A `tokio::spawn` whose handle is dropped without await, guard, or documented-detached comment; a detached
+task whose error/panic outcome is silently lost; async work spawned inside `Drop` or between a bounded shutdown await
+and `std::process::exit`.
 
-**Remediation**: Await the handle, store it in a guard, or document the detachment with its termination and observability story. Detached tasks that can fail meaningfully must log or send their outcome (observer pattern). Cleanup before `process::exit` must be awaited inline with a timeout, not spawned.
+**Remediation**: Await the handle, store it in a guard, or document the detachment with its termination and
+observability story. Detached tasks that can fail meaningfully must log or send their outcome (observer pattern).
+Cleanup before `process::exit` must be awaited inline with a timeout, not spawned.
 
 ---
 
 ## 22. Cross-Turn Exec-Session Resume Hint
 
-When a turn ends while a foreground `run-*` exec session is still running, the next turn start must surface a bounded resume hint from the live registry so a resumed or compacted session needs zero identity reconstruction. Retained background sessions remain asynchronous and are excluded from this hint.
+When a turn ends while a foreground `run-*` exec session is still running, the next turn start must surface a bounded
+resume hint from the live registry so a resumed or compacted session needs zero identity reconstruction. Retained
+background sessions remain asynchronous and are excluded from this hint.
 
 Key guarantees:
 
-- **Source**: live registry via the foreground-only `in_progress_foreground_exec_sessions` view with backend-checked completion; exited and retained background sessions are filtered, newest first, capped at 4.
-- **Injection site**: `append_transient_turn_notes` at every turn start — this single site covers both the normal next-turn case and session restore/resume (both flow through the turn loop).
-- **Bounded**: per-session command display truncated to 160 bytes, at most 4 sessions; a single-session hint stays under 1 KiB.
-- **Shape**: session id, command display, elapsed time, plus a pre-filled `write_stdin` wait (`{"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}`).
+- **Source**: live registry via the foreground-only `in_progress_foreground_exec_sessions` view with backend-checked
+  completion; exited and retained background sessions are filtered, newest first, capped at 4.
+- **Injection site**: `append_transient_turn_notes` at every turn start — this single site covers both the normal
+  next-turn case and session restore/resume (both flow through the turn loop).
+- **Bounded**: per-session command display truncated to 160 bytes, at most 4 sessions; a single-session hint stays under
+  1 KiB.
+- **Shape**: session id, command display, elapsed time, plus a pre-filled `write_stdin` wait
+  (`{"session_id": "<first-id>", "action": "wait", "wait_timeout_seconds": 600}`).
 - **Never auto-execute**: the hint only suggests the wait call; the runtime never waits on its own.
-- **Budget**: `wait`/`inspect` calls stay exempt from the per-turn tool-call budget, so settling never starves new work. A deadline-expired wait returns an in-progress session that can be waited on again.
-- **Diagnostics**: turn-end `SnapshotTurnDiagnostics.in_progress_exec_sessions` (bounded to 4) records all live ids, including retained background sessions, for ATIF correlation.
+- **Budget**: `wait`/`inspect` calls stay exempt from the per-turn tool-call budget, so settling never starves new work.
+  A deadline-expired wait returns an in-progress session that can be waited on again.
+- **Diagnostics**: turn-end `SnapshotTurnDiagnostics.in_progress_exec_sessions` (bounded to 4) records all live ids,
+  including retained background sessions, for ATIF correlation.
 
-**Violation**: a turn starts with a live exec session but no resume hint; a single-session hint exceeding 1 KiB; more than 4 sessions in one hint; a hint that auto-executes a wait; a resumed session that must guess the `session_id`.
+**Violation**: a turn starts with a live exec session but no resume hint; a single-session hint exceeding 1 KiB; more
+than 4 sessions in one hint; a hint that auto-executes a wait; a resumed session that must guess the `session_id`.
 
-**Remediation**: route the hint through `append_transient_turn_notes` from `in_progress_foreground_exec_sessions`, keep the 4-session / 160-byte / single-session 1 KiB bounds, and settle via `write_stdin` wait before starting new work. See `docs/harness/AGENT_LEGIBILITY_GUIDE.md` for the agent-facing settle shape.
+**Remediation**: route the hint through `append_transient_turn_notes` from `in_progress_foreground_exec_sessions`, keep
+the 4-session / 160-byte / single-session 1 KiB bounds, and settle via `write_stdin` wait before starting new work. See
+`docs/harness/AGENT_LEGIBILITY_GUIDE.md` for the agent-facing settle shape.
 
 ---
 
@@ -360,4 +432,5 @@ Not all invariants are fully enforced yet. Known violations are tracked in `docs
 | #10 Lint Error Messages   | TD-014    | Custom lints with remediation not yet implemented                             |
 | #7 Documentation Location | TD-001    | Top-level docs sprawl now gated by allowlist; consolidation still in-progress |
 
-Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are enforced by code review and agent discipline.
+Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are
+enforced by code review and agent discipline.

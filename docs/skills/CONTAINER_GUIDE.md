@@ -5,6 +5,7 @@ Quick reference for using VT Code's skill container system (Claude API-aligned).
 ## Basic Usage
 
 ### Single Skill
+
 ```rust
 use vtcode_core::skills::{SkillContainer, SkillSpec};
 
@@ -18,6 +19,7 @@ executor.execute_container(container, "analyze this data").await?;
 ```
 
 ### Multiple Skills
+
 ```rust
 let mut container = SkillContainer::new();
 
@@ -33,6 +35,7 @@ executor.execute_container(container, input).await?;
 ## Advanced Usage
 
 ### Version Pinning
+
 ```rust
 use vtcode_core::skills::{SkillVersion, SkillSpec};
 
@@ -47,6 +50,7 @@ container.add_skill(spec)?;
 ```
 
 ### Container Reuse
+
 ```rust
 // Create container once
 let mut container = SkillContainer::new();
@@ -55,12 +59,12 @@ container.add_anthropic("pptx")?;
 container.set_id("session-123");  // Set ID for reuse
 
 // Turn 1: Analyze data
-let result1 = executor.execute_container(&container, 
+let result1 = executor.execute_container(&container,
     "analyze sales data from Q1"
 ).await?;
 
 // Turn 2: Create presentation
-let result2 = executor.execute_container(&container, 
+let result2 = executor.execute_container(&container,
     "create a presentation from the analysis"
 ).await?;
 
@@ -68,6 +72,7 @@ let result2 = executor.execute_container(&container,
 ```
 
 ### Skill Filtering
+
 ```rust
 let container = SkillContainer::single(SkillSpec::custom("test"));
 
@@ -88,7 +93,7 @@ container.skills_by_type(SkillType::Custom); // Filter by type
 let container = SkillContainer::new()
     // Add anthropic skills
     .with_id("session-456")?
-    
+
     // ... error handling for convenience
 ```
 
@@ -140,6 +145,7 @@ let restored: SkillContainer = serde_json::from_str(&json)?;
 ```
 
 JSON Output:
+
 ```json
 {
   "skills": [
@@ -245,6 +251,7 @@ SkillType::Custom                             // User-uploaded
 ## Common Patterns
 
 ### Excel + PowerPoint Analysis
+
 ```rust
 let mut container = SkillContainer::new();
 container.add_anthropic("xlsx")?;   // Read Excel
@@ -255,6 +262,7 @@ executor.execute_container(container, input).await?;
 ```
 
 ### Custom Analysis Pipeline
+
 ```rust
 let mut container = SkillContainer::new();
 container.add_custom("data-cleaner")?;
@@ -266,6 +274,7 @@ executor.execute_container(container, input).await?;
 ```
 
 ### Progressive Enhancement
+
 ```rust
 // Start simple
 let mut container = SkillContainer::single(
@@ -290,19 +299,19 @@ use anyhow::Result;
 
 fn build_container() -> Result<SkillContainer> {
     let mut container = SkillContainer::new();
-    
+
     // May fail if skill ID invalid
     container.add_anthropic("xlsx")?;
     container.add_custom("analysis")?;
-    
+
     // May fail if exceeds 8 skills
     for i in 0..10 {
         container.add_custom(format!("skill{}", i))?;  // Error on 9th
     }
-    
+
     // Validate before execution
     container.validate()?;
-    
+
     Ok(container)
 }
 ```
@@ -316,11 +325,11 @@ fn build_container() -> Result<SkillContainer> {
 
 ## Compatibility
 
--  JSON serialization (serde)
--  Backward compatible with existing skills
--  Works with existing skill loader
--  Compatible with tool registry
--  No breaking changes
+- JSON serialization (serde)
+- Backward compatible with existing skills
+- Works with existing skill loader
+- Compatible with tool registry
+- No breaking changes
 
 ## See Also
 

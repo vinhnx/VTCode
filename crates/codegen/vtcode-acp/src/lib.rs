@@ -6,8 +6,10 @@
 )]
 //! ACP (Agent Communication Protocol) support for VT Code.
 //!
-//! This crate exposes both the ACP client library and the VT Code Zed bridge.
-//! Downstream crates should treat this as the canonical ACP entrypoint.
+//! Canonical surface is the SACP stdio agent in `zed` (`StandardAcpAdapter`,
+//! `ZedAcpAdapter`). The `capabilities`/`client`/`client_v2`/`session`/
+//! `messages`/`jsonrpc` modules are a legacy crate-internal HTTP stack and
+//! must not be extended for new protocol work.
 
 pub mod capabilities;
 pub(crate) mod client;

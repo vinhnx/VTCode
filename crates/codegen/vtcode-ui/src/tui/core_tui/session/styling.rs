@@ -27,6 +27,7 @@ fn normalize_tool_name(tool_name: &str) -> &'static str {
         "list" | "ls" | "dir" | tools::LIST_FILES => "list",
         "read" | "cat" | "file" | tools::READ_FILE => "read",
         "write" | "edit" | "save" | "insert" | tools::EDIT_FILE => "write",
+        "git" | "version_control" => "git",
         "run" | "command" | "bash" | "sh" | "ran" => "run",
         _ => "other",
     }
@@ -39,12 +40,7 @@ pub(crate) fn tool_inline_style_for(tool_name: &str, theme: &InlineTheme) -> Inl
     let mut style = InlineTextStyle::default().bold();
 
     style.color = match normalized_name {
-        "read" => Some(AnsiColor::Cyan.into()),
-        "list" => Some(AnsiColor::Green.into()),
-        "search" => Some(AnsiColor::Cyan.into()),
-        "write" => Some(AnsiColor::Magenta.into()),
-        "run" => Some(AnsiColor::Red.into()),
-        "git" | "version_control" => Some(AnsiColor::Cyan.into()),
+        "read" | "list" | "search" | "git" => theme.primary.or(theme.tool_accent).or(theme.foreground),
         _ => theme.tool_accent.or(theme.primary).or(theme.foreground),
     };
 
@@ -124,6 +120,15 @@ impl SessionStyles {
         ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
     }
 
+    /// Get the warning style (amber token, falling back to the theme foreground).
+    ///
+    /// Reuses the canonical [`Self::text_fallback`] chain for `Warning` so this
+    /// style cannot drift from the semantic warning color.
+    pub(crate) fn warning_style(&self) -> Style {
+        let color = self.text_fallback(InlineMessageKind::Warning);
+        ratatui_style_from_inline(&InlineTextStyle { color, ..InlineTextStyle::default() }, self.theme.foreground)
+    }
+
     pub(crate) fn transcript_link_style(&self) -> Style {
         let style = InlineTextStyle {
             color: self.theme.tool_accent.or(self.theme.primary).or(self.theme.foreground),
@@ -143,6 +148,25 @@ impl SessionStyles {
     /// Get the border style (dimmed)
     pub(crate) fn border_style(&self) -> Style {
         self.dimmed_border_style(true)
+    }
+
+    /// Muted foreground for secondary text (context labels, subtitles, hints).
+    ///
+    /// Deliberately an explicit color — theme `secondary` with a `Gray`
+    /// fallback, mirroring the `muted` slot of `input_styles_from_theme` —
+    /// instead of `Modifier::DIM`: DIM renders as SGR 2, which several
+    /// terminals attenuate to near-invisible, and ratatui's `Cell::set_style`
+    /// only ever *inserts* modifiers, so a DIM painted as an area background
+    /// sticks to every glyph drawn on top of it and mutes otherwise-bright
+    /// text. Same no-DIM rule the diff gutter styles follow.
+    pub(crate) fn muted_text_style(&self) -> Style {
+        let color = self
+            .theme
+            .secondary
+            .or(self.theme.foreground)
+            .map(ratatui_color_from_ansi)
+            .unwrap_or(Color::Gray);
+        self.default_style().fg(color)
     }
 
     /// Get a border style with configurable boldness.
@@ -171,6 +195,18 @@ impl SessionStyles {
         };
 
         style = style.bg(ratatui_color_from_ansi(resolved));
+        style
+    }
+
+    /// Preserve theme foreground contrast while using the composer tint where
+    /// it remains readable. Some light themes sit close to the AA floor.
+    pub(crate) fn sticky_prompt_style(&self) -> Style {
+        let style = self.input_background_style();
+        if let (Some(Color::Rgb(fr, fg, fb)), Some(Color::Rgb(br, bg, bb))) = (style.fg, style.bg)
+            && crate::theme::contrast_ratio(RgbColor(fr, fg, fb), RgbColor(br, bg, bb)) < ui::THEME_MIN_CONTRAST_RATIO
+        {
+            return self.default_style();
+        }
         style
     }
 
@@ -208,5 +244,44 @@ impl SessionStyles {
     /// glanceable while the muted tone avoids clutter.
     pub(crate) fn message_divider_style(&self, _kind: InlineMessageKind) -> Style {
         self.dimmed_border_style(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anstyle::Color as AnsiColorEnum;
+    use ratatui::style::Color;
+
+    use super::*;
+
+    #[test]
+    fn warning_style_prefers_explicit_theme_warning() {
+        let theme = InlineTheme {
+            warning: Some(AnsiColorEnum::Rgb(RgbColor(0xAB, 0xCD, 0xEF))),
+            foreground: Some(AnsiColorEnum::Rgb(RgbColor(0x11, 0x22, 0x33))),
+            ..InlineTheme::default()
+        };
+
+        assert_eq!(
+            SessionStyles::new(theme).warning_style().fg,
+            Some(Color::Rgb(0xAB, 0xCD, 0xEF)),
+            "explicit warning token must win"
+        );
+    }
+
+    #[test]
+    fn warning_style_falls_back_to_amber_not_foreground() {
+        // With no warning token, the canonical `text_fallback(Warning)` chain
+        // supplies amber — not the theme foreground.
+        let theme = InlineTheme {
+            foreground: Some(AnsiColorEnum::Rgb(RgbColor(0x11, 0x22, 0x33))),
+            ..InlineTheme::default()
+        };
+
+        assert_eq!(
+            SessionStyles::new(theme).warning_style().fg,
+            Some(Color::Yellow),
+            "missing warning token must fall back to amber"
+        );
     }
 }

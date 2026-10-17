@@ -37,7 +37,7 @@ image            = { workspace = true }
 line-clipping    = "0.3"
 nucleo-matcher   = "0.3"
 once_cell        = { workspace = true }
-parking_lot      = "0.12"
+arc-swap         = { workspace = true }
 pulldown-cmark   = { version = "0.13", default-features = false, features = ["html"] }
 ratatui          = { workspace = true, features = ["crossterm", "unstable-rendered-line-info", "unstable-widget-ref"] }
 ratatui-cheese   = { workspace = true }
@@ -60,6 +60,14 @@ unicode-width    = { workspace = true }
 vtcode-commons   = { workspace = true }
 vtcode-diff      = { workspace = true, features = ["serde", "ratatui"] }
 vtcode-config    = { workspace = true }
+hotpath          = { workspace = true, optional = true }
+
+[features]
+default = []
+# hotpath profiling for TUI hot paths (render, reflow, input). Zero-cost when off.
+# `hotpath/tokio` enables tokio channel/mutex wrappers used by the tui_hotpath
+# channel demo (article: channel throughput + Max queue as OOM early warning).
+profiling = ["dep:hotpath", "hotpath/hotpath", "hotpath/hotpath-alloc", "hotpath/tokio"]
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard          = { workspace = true }
@@ -68,6 +76,7 @@ arboard          = { workspace = true }
 criterion = { workspace = true }
 insta = "1.39"
 serial_test = { workspace = true }
+tempfile = { workspace = true }
 
 [[bench]]
 name = "markdown_render"
@@ -76,6 +85,10 @@ harness = false
 [[bench]]
 name = "transcript"
 harness = false
+
+[[example]]
+name = "tui_hotpath"
+required-features = ["profiling"]
 
 [lints]
 workspace = true

@@ -356,7 +356,7 @@ mod e2e_tests {
     }
 
     #[tokio::test]
-    async fn test_file_edit_replaces_first_occurrence() {
+    async fn test_file_edit_rejects_ambiguity_and_recovers_with_context() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace_root = canonicalize(temp_dir.path()).expect("Failed to canonicalize workspace");
         let registry = ToolRegistry::new(workspace_root.clone()).await;
@@ -372,7 +372,7 @@ mod e2e_tests {
             .await
             .expect("Initial write should succeed");
 
-        // Edit file - replace the first matching occurrence.
+        // A bare repeated substring cannot identify which occurrence to edit.
         let edit_args = json!({
             "path": "test.txt",
             "old_str": "test",
@@ -381,12 +381,38 @@ mod e2e_tests {
 
         let result = execute_harness_tool(&registry, vtcode_core::config::constants::tools::EDIT_FILE, &edit_args)
             .await
-            .expect("file_edit should succeed");
+            .expect("ambiguous edit should return structured feedback");
+        let failure = &result["error"]["edit_failure"];
+        assert_eq!(failure["failure_kind"], "ambiguous_match");
+        assert_eq!(
+            failure["candidate_locations"],
+            json!([
+                {"start_line":1,"end_line":1},
+                {"start_line":2,"end_line":2},
+                {"start_line":3,"end_line":3},
+            ])
+        );
+        let original = "test\ntest\nmore test content";
+        assert_eq!(fs::read_to_string(&test_file).expect("unchanged file"), original);
+        let read_args = json!({"path":"test.txt"});
+        let unchanged = execute_harness_tool(&registry, vtcode_core::config::constants::tools::READ_FILE, &read_args)
+            .await
+            .expect("read after rejected edit");
+        assert_eq!(unchanged["content"], original);
+
+        let corrected = json!({"path":"test.txt", "old_str":"test\ntest", "new_str":"example\ntest"});
+        let result = execute_harness_tool(&registry, vtcode_core::config::constants::tools::EDIT_FILE, &corrected)
+            .await
+            .expect("context uniquely identifies the first occurrence");
         assert_eq!(result["success"], true);
 
         // Verify that only the first matching occurrence was replaced.
         let content = fs::read_to_string(&test_file).expect("File should exist");
         assert_eq!(content, "example\ntest\nmore test content");
+        let refreshed = execute_harness_tool(&registry, vtcode_core::config::constants::tools::READ_FILE, &read_args)
+            .await
+            .expect("cache should reflect the successful correction");
+        assert_eq!(refreshed["content"], "example\ntest\nmore test content");
     }
 
     #[tokio::test]

@@ -1,7 +1,11 @@
 use crate::error_display;
 use crate::provider::{LLMError, LLMNormalizedStream, LLMResponse, NormalizedStreamEvent};
 use crate::providers::shared::responses_adapter::{ResponsesStreamAdapter, ResponsesStreamEvent};
-use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes};
+/// Usage-block alias chains accepted across Responses-style payloads.
+pub(crate) const RESPONSES_PROMPT_TOKEN_KEYS: &[&str] = &["input_tokens", "prompt_tokens"];
+pub(crate) const RESPONSES_COMPLETION_TOKEN_KEYS: &[&str] = &["output_tokens", "completion_tokens"];
+
+use crate::providers::shared::{Utf8StreamDecoder, extract_data_payload, find_sse_boundary_bytes, usage_u32_from_keys};
 use async_stream::try_stream;
 use futures::StreamExt;
 use hashbrown::{HashMap, HashSet};
@@ -99,7 +103,7 @@ fn response_stream_event_policy_for_type(event_type: &str) -> ResponsesStreamEve
     }
 }
 
-struct ResponsesNormalizedStreamProcessor<P> {
+pub(crate) struct ResponsesNormalizedStreamProcessor<P> {
     options: ResponsesNormalizedStreamOptions,
     parse_final_response: P,
     aggregator: StreamAggregator,
@@ -118,7 +122,7 @@ impl<P> ResponsesNormalizedStreamProcessor<P>
 where
     P: Fn(Value) -> Result<LLMResponse, LLMError>,
 {
-    fn new(options: ResponsesNormalizedStreamOptions, parse_final_response: P) -> Self {
+    pub(crate) fn new(options: ResponsesNormalizedStreamOptions, parse_final_response: P) -> Self {
         Self {
             aggregator: StreamAggregator::new(options.model.clone()),
             options,
@@ -145,7 +149,7 @@ where
         }
     }
 
-    fn is_done(&self) -> bool {
+    pub(crate) fn is_done(&self) -> bool {
         self.done
     }
 
@@ -156,7 +160,7 @@ where
         self.handle_payload_data(&serialized)
     }
 
-    fn handle_payload_data(&mut self, payload: &str) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
+    pub(crate) fn handle_payload_data(&mut self, payload: &str) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
         let event = ResponsesStreamAdapter::parse_sse_data_for_provider(self.options.provider_name, payload)?;
         self.handle_event(event)
     }
@@ -277,7 +281,7 @@ where
         index
     }
 
-    fn finish(self) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
+    pub(crate) fn finish(self) -> Result<Vec<NormalizedStreamEvent>, LLMError> {
         let streamed = self.aggregator.finalize();
         let mut response = if let Some(final_response) = self.final_response {
             match (self.parse_final_response)(final_response.clone()) {
@@ -490,23 +494,9 @@ fn parse_responses_usage(
     let usage_value = final_response.get("usage")?;
     let cached_prompt_tokens = parse_cached_prompt_tokens_from_usage(usage_value, include_cached_prompt_metrics);
     Some(crate::provider::Usage {
-        prompt_tokens: usage_value
-            .get("input_tokens")
-            .or_else(|| usage_value.get("prompt_tokens"))
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(0),
-        completion_tokens: usage_value
-            .get("output_tokens")
-            .or_else(|| usage_value.get("completion_tokens"))
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(0),
-        total_tokens: usage_value
-            .get("total_tokens")
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(0),
+        prompt_tokens: usage_u32_from_keys(usage_value, RESPONSES_PROMPT_TOKEN_KEYS),
+        completion_tokens: usage_u32_from_keys(usage_value, RESPONSES_COMPLETION_TOKEN_KEYS),
+        total_tokens: usage_u32_from_keys(usage_value, &["total_tokens"]),
         cached_prompt_tokens,
         cache_creation_tokens: None,
         cache_read_tokens: None,

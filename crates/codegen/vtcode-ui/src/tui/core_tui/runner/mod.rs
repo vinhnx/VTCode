@@ -37,6 +37,12 @@ pub trait TuiSessionDriver {
         callback: Option<&(dyn Fn(&Self::Event) + Send + Sync + 'static)>,
     );
     fn handle_tick(&mut self);
+    /// Whether the session needs active-rate ticks (animations or transient
+    /// expiries pending). The drive loop uses this to extend active-mode
+    /// ticking independently of recent user input, so truly idle sessions rest
+    /// instead of polling. Input, commands, and crossterm events always render
+    /// immediately regardless of this flag.
+    fn needs_animation_tick(&self) -> bool;
     fn render(&mut self, frame: &mut ratatui::Frame<'_>);
     fn take_redraw(&mut self) -> bool;
     fn use_steady_cursor(&self) -> bool;
@@ -46,6 +52,9 @@ pub trait TuiSessionDriver {
     fn request_exit(&mut self);
     fn mark_dirty(&mut self);
     fn update_terminal_title(&mut self);
+    fn attach_program_status_terminal(&mut self);
+    fn flush_program_status(&mut self);
+    fn shutdown_program_status(&mut self);
     fn clear_terminal_title(&mut self);
     fn is_running_activity(&self) -> bool;
     fn has_status_spinner(&self) -> bool;
@@ -139,10 +148,17 @@ impl EventStreamController {
 
     /// Cancel the current event loop task and await its termination.
     /// Creates a fresh CancellationToken for the next `start()` call.
+    ///
+    /// Bounded: a stuck crossterm reader must not park TUI teardown, and a
+    /// leaked reader would keep stdin claimed after exit. The handle is
+    /// aborted on timeout so shutdown always makes progress.
     async fn stop(&mut self) {
         self.cancellation_token.cancel();
-        if let Some(handle) = self.join_handle.take() {
-            let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
+        if let Some(mut handle) = self.join_handle.take()
+            && tokio::time::timeout(Duration::from_millis(100), &mut handle).await.is_err()
+        {
+            tracing::debug!("event loop did not stop within 100ms; aborting");
+            handle.abort();
         }
         self.cancellation_token = CancellationToken::new();
     }
@@ -161,10 +177,16 @@ impl EventStreamController {
     }
 
     /// Ensure the event loop is stopped for final cleanup on TUI exit.
+    ///
+    /// Bounded like [`Self::stop`]: abort on timeout so a wedged reader can
+    /// never delay the alternate-screen teardown and shell return.
     async fn shutdown(&mut self) {
-        if let Some(handle) = self.join_handle.take() {
+        if let Some(mut handle) = self.join_handle.take() {
             self.cancellation_token.cancel();
-            let _ = tokio::time::timeout(Duration::from_millis(100), handle).await;
+            if tokio::time::timeout(Duration::from_millis(100), &mut handle).await.is_err() {
+                tracing::debug!("event loop did not shut down within 100ms; aborting");
+                handle.abort();
+            }
         }
     }
 }
@@ -234,12 +256,14 @@ where
     // Create a guard to mark TUI as initialized during the session
     // This ensures the panic hook knows to restore terminal state
     let _panic_guard = crate::tui::ui::tui::panic_hook::TuiPanicGuard::new();
+    crate::tui::frame_metrics::initialize_from_env();
 
     let _signal_guard = SignalCleanupGuard::new()?;
 
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     set_log_theme_name(options.log_theme.clone());
     let mut session = make_session(surface.rows());
+    session.attach_program_status_terminal();
     session.set_preview_callback(options.preview_callback.clone());
     session.set_show_logs(options.show_logs);
     session.set_active_pty_sessions(options.active_pty_sessions);
@@ -258,8 +282,13 @@ where
     let mut stderr = io::stderr();
     let mut mode_restore_guard =
         TerminalModeRestoreGuard::new(enable_terminal_modes(&mut stderr, &options.fullscreen)?);
-    mode_restore_guard.state_mut().save_cursor_position(&mut stderr);
     if surface.use_alternate() {
+        // Alternate-screen sessions return to the pre-TUI cursor after
+        // leaving the buffer, so save it up front. Inline sessions must keep
+        // the cursor at the end of their transcript: restoring to the startup
+        // position would yank it to the top of the frame and force the exit
+        // summary onto a viewport-height jump (blank gap).
+        mode_restore_guard.state_mut().save_cursor_position(&mut stderr);
         mode_restore_guard.state_mut().enter_alternate_screen(&mut stderr)?;
         // Record the surface so the canonical restore path can skip the
         // full-screen clear: leaving the alternate buffer already restores
@@ -335,6 +364,8 @@ where
     )
     .await;
 
+    session.shutdown_program_status();
+
     // Gracefully shutdown the event loop (may already be stopped by StopEventStream)
     event_stream.shutdown().await;
 
@@ -366,4 +397,54 @@ where
     vtcode_commons::trace_flush::flush_trace_log();
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// Sets a flag when dropped, so a test can observe that an aborted task
+    /// future was actually dropped (not merely detached).
+    struct DropFlag(std::sync::Arc<AtomicBool>);
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    /// A wedged event-loop task must be aborted, not silently detached: the
+    /// prior implementation dropped the join handle on timeout, which left the
+    /// crossterm reader holding stdin past TUI teardown.
+    #[tokio::test]
+    async fn event_stream_shutdown_aborts_a_wedged_reader() {
+        let (_listener, channels) = EventListener::new();
+        let dropped = std::sync::Arc::new(AtomicBool::new(false));
+        let flag = dropped.clone();
+        let handle = tokio::spawn(async move {
+            let _guard = DropFlag(flag);
+            std::future::pending::<()>().await;
+        });
+
+        let mut controller = EventStreamController::new(
+            CancellationToken::new(),
+            handle,
+            channels.tx.clone(),
+            channels.rx_paused.clone(),
+            channels.last_input_elapsed_ms.clone(),
+            channels.session_start,
+        );
+
+        let started = std::time::Instant::now();
+        controller.shutdown().await;
+        assert!(started.elapsed() < Duration::from_secs(1), "shutdown must not block on a wedged reader");
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !dropped.load(Ordering::SeqCst) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("shutdown must abort the wedged event-loop task");
+    }
 }

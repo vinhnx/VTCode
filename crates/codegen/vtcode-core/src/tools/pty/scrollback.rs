@@ -190,110 +190,54 @@ impl PtyScrollback {
     }
 
     pub(super) fn push_utf8(&mut self, buffer: &mut Vec<u8>, eof: bool) {
-        const MAX_UTF8_BUFFER_SIZE: usize = 16 * 1024; // 16KB limit for incomplete UTF-8
-        const MAX_UNICODE_ERRORS: usize = 100; // Prevent excessive error logging
-
-        // Start unicode validation context
+        const MAX_UNICODE_ERRORS: usize = 100;
         let validation_context = UnicodeValidationContext::new(buffer.len());
-
-        // Prepend any remainder from previous calls
         if !self.utf8_buffer_remainder.is_empty() {
             let mut combined = std::mem::take(&mut self.utf8_buffer_remainder);
             combined.append(buffer);
             *buffer = combined;
         }
 
-        // Prevent buffer overflow from accumulated incomplete sequences
-        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
-            // If buffer is too large, treat remaining content as invalid
-            if !buffer.is_empty() {
-                self.push_text("\u{FFFD}");
-                self.unicode_errors += 1;
-                if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                    tracing::warn!("UTF-8 buffer overflow: {} bytes, treating as invalid", buffer.len());
-                }
-                buffer.clear();
-            }
-            return;
-        }
-
-        loop {
-            match std::str::from_utf8(buffer) {
+        // An input chunk can contain arbitrarily many complete characters.
+        // Only the incomplete suffix needs retention (at most three bytes).
+        // Advance a slice instead of repeatedly draining and moving the input.
+        let mut remaining = buffer.as_slice();
+        while !remaining.is_empty() {
+            match std::str::from_utf8(remaining) {
                 Ok(valid) => {
-                    if !valid.is_empty() {
-                        self.push_text(valid);
-                    }
-                    buffer.clear();
+                    self.push_text(valid);
                     break;
                 }
                 Err(error) => {
                     let valid_up_to = error.valid_up_to();
-                    if valid_up_to > 0 {
-                        // Process valid portion
-                        if let Ok(valid) = std::str::from_utf8(&buffer[..valid_up_to])
-                            && !valid.is_empty()
-                        {
-                            self.push_text(valid);
-                        }
-                        buffer.drain(..valid_up_to);
-
-                        // Check buffer size again after draining
-                        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
-                            self.push_text("\u{FFFD}");
-                            self.unicode_errors += 1;
-                            if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                                tracing::warn!("UTF-8 buffer overflow after processing: {} bytes", buffer.len());
-                            }
-                            buffer.clear();
-                            break;
-                        }
-                        continue;
+                    if let Ok(valid) = std::str::from_utf8(&remaining[..valid_up_to])
+                        && !valid.is_empty()
+                    {
+                        self.push_text(valid);
                     }
-
+                    remaining = &remaining[valid_up_to..];
                     if let Some(error_len) = error.error_len() {
-                        // Invalid UTF-8 sequence - replace with replacement character
                         self.push_text("\u{FFFD}");
                         self.unicode_errors += 1;
                         if self.unicode_errors <= MAX_UNICODE_ERRORS {
                             tracing::debug!("Invalid UTF-8 sequence detected, replacing with U+FFFD");
                         }
-                        buffer.drain(..error_len);
-
-                        // Check buffer size after draining
-                        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
+                        remaining = &remaining[error_len..];
+                    } else {
+                        if eof {
                             self.push_text("\u{FFFD}");
                             self.unicode_errors += 1;
-                            if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                                tracing::warn!("UTF-8 buffer overflow after error: {} bytes", buffer.len());
-                            }
-                            buffer.clear();
-                            break;
+                        } else {
+                            self.utf8_buffer_remainder.extend_from_slice(remaining);
+                            debug_assert!(self.utf8_buffer_remainder.len() <= 3);
                         }
-                        continue;
+                        break;
                     }
-
-                    // Incomplete UTF-8 sequence at end
-                    if eof && !buffer.is_empty() {
-                        // At EOF, treat incomplete sequences as invalid
-                        self.push_text("\u{FFFD}");
-                        self.unicode_errors += 1;
-                        if self.unicode_errors <= MAX_UNICODE_ERRORS {
-                            tracing::debug!("Incomplete UTF-8 sequence at EOF, replacing with U+FFFD");
-                        }
-                        buffer.clear();
-                    } else if !buffer.is_empty() && !eof {
-                        // Save incomplete sequence for next call
-                        self.utf8_buffer_remainder = std::mem::take(buffer);
-                    }
-
-                    break;
                 }
             }
         }
-
-        // Complete unicode validation context
-        let processed_bytes = if buffer.is_empty() { 0 } else { buffer.len() };
-        validation_context.complete(processed_bytes);
+        buffer.clear();
+        validation_context.complete(self.utf8_buffer_remainder.len());
     }
 
     #[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
@@ -578,14 +522,32 @@ mod unicode_tests {
     }
 
     #[test]
-    fn test_push_utf8_buffer_overflow() {
+    fn large_invalid_utf8_chunk_retains_only_incomplete_suffix() {
         let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
         let mut buffer = vec![0xF0; 20 * 1024]; // 20KB of invalid data
         scrollback.push_utf8(&mut buffer, false);
 
-        assert_eq!(scrollback.snapshot(), "\u{FFFD}");
-        assert_eq!(scrollback.unicode_errors, 1);
-        assert_eq!(buffer.len(), 0);
+        assert_eq!(scrollback.snapshot(), "\u{FFFD}".repeat(20 * 1024 - 1));
+        assert_eq!(scrollback.unicode_errors, 20 * 1024 - 1);
+        assert_eq!(scrollback.utf8_buffer_remainder, vec![0xF0]);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn large_valid_utf8_chunks_preserve_content_across_split_boundaries() {
+        let text = format!("HEAD{}TAIL", "界éx".repeat(5000));
+        for split in [16 * 1024 - 1, 16 * 1024, 16 * 1024 + 1, text.len()] {
+            let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+            let mut first = text.as_bytes()[..split].to_vec();
+            scrollback.push_utf8(&mut first, false);
+            assert!(first.is_empty());
+            assert!(scrollback.utf8_buffer_remainder.len() <= 3);
+            let mut second = text.as_bytes()[split..].to_vec();
+            scrollback.push_utf8(&mut second, true);
+            assert_eq!(scrollback.snapshot(), text, "split={split}");
+            assert_eq!(scrollback.unicode_errors, 0);
+            assert!(scrollback.utf8_buffer_remainder.is_empty());
+        }
     }
 
     #[test]

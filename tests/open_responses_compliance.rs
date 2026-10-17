@@ -71,6 +71,7 @@ fn test_streaming_event_sequence_compliance() {
 
     // 2. Item Started
     let item = ThreadItem {
+        context: None,
         id: "msg_1".to_string(),
         details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello".to_string() }),
     };
@@ -78,6 +79,7 @@ fn test_streaming_event_sequence_compliance() {
 
     // 3. Text Delta
     let updated_item = ThreadItem {
+        context: None,
         id: "msg_1".to_string(),
         details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello world".to_string() }),
     };
@@ -85,6 +87,7 @@ fn test_streaming_event_sequence_compliance() {
 
     // 4. Item Completed
     let final_item = ThreadItem {
+        context: None,
         id: "msg_1".to_string(),
         details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello world!".to_string() }),
     };
@@ -93,6 +96,7 @@ fn test_streaming_event_sequence_compliance() {
     // 5. Response Completed
     builder.process_event(
         &ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -174,8 +178,12 @@ fn test_reasoning_item_compliance() {
     let mut emitter = VecStreamEmitter::new();
 
     let item = ThreadItem {
+        context: None,
         id: "r1".to_string(),
-        details: ThreadItemDetails::Reasoning(ExecReasoningItem { text: "Thinking...".to_string(), stage: None }),
+        details: ThreadItemDetails::Reasoning(Box::new(ExecReasoningItem {
+            text: "Thinking...".to_string(),
+            stage: None,
+        })),
     };
 
     builder.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent { item: item.clone() }), &mut emitter);
@@ -196,6 +204,7 @@ fn test_tool_call_compliance() {
     let mut emitter = VecStreamEmitter::new();
 
     let item = ThreadItem {
+        context: None,
         id: "fc1".to_string(),
         details: ThreadItemDetails::McpToolCall(Box::new(McpToolCallItem {
             tool_name: "read_file".to_string(),

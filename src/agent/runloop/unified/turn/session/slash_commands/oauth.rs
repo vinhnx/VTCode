@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use crate::agent::runloop::unified::session_setup::configured_anthropic_config;
 use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
 use anyhow::Result;
@@ -14,7 +16,7 @@ use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::ansi_codes::notify_attention;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSelection, WizardModalMode, WizardStep};
+use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode, WizardStep};
 
 use super::{SlashCommandContext, SlashCommandControl, ui};
 use crate::agent::runloop::slash_commands::OAuthProviderAction;
@@ -482,18 +484,18 @@ async fn prompt_openai_manual_callback_input(
         question: format!(
             "Waiting for browser callback. If it doesn't open automatically, copy this URL:\n\n{auth_url}\n\nOr paste the redirected URL / query string below."
         ),
-        items: vec![InlineListItem {
-            title: "Submit".to_string(),
-            subtitle: Some("Press Tab to type text, then Enter to submit.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: OPENAI_MANUAL_PROMPT_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("submit callback redirect url query string".to_string()),
-        }],
+        items: vec![
+            ui_list::choice(
+                "Submit",
+                Some("Press Tab to type text, then Enter to submit.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: OPENAI_MANUAL_PROMPT_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("submit callback redirect url query string".to_string()),
+        ],
         completed: false,
         answer: None,
         allow_freeform: true,
@@ -547,38 +549,38 @@ async fn show_oauth_provider_modal(ctx: &mut SlashCommandContext<'_>, action: OA
     let copilot_status = probe_auth_status(&copilot_auth_cfg, Some(&ctx.config.workspace)).await;
 
     let mut items = vec![
-        InlineListItem {
-            title: "GitHub Copilot".to_string(),
-            subtitle: Some(copilot_modal_subtitle(action, &copilot_status)),
-            badge: Some(copilot_modal_badge(action, &copilot_status)),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"))),
-            search_value: Some("github copilot cli auth".to_string()),
-        },
-        InlineListItem {
-            title: "OpenAI ChatGPT".to_string(),
-            subtitle: Some(openai_modal_subtitle(action, &openai_status, &openai_overview)),
-            badge: Some(openai_modal_badge(action, &openai_status, &openai_overview)),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENAI_PROVIDER}"))),
-            search_value: Some("openai chatgpt oauth subscription".to_string()),
-        },
-        InlineListItem {
-            title: "OpenRouter".to_string(),
-            subtitle: Some(openrouter_modal_subtitle(action, &openrouter_status)),
-            badge: Some(openrouter_modal_badge(action, &openrouter_status)),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENROUTER_PROVIDER}"))),
-            search_value: Some("openrouter oauth".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close this dialog".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(OAUTH_PROVIDER_BACK.to_string())),
-            search_value: Some("back close cancel".to_string()),
-        },
+        ui_list::action(
+            "GitHub Copilot",
+            copilot_modal_subtitle(action, &copilot_status),
+            Some(copilot_modal_badge(action, &copilot_status)),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{COPILOT_PROVIDER}"))),
+        )
+        .with_search_value("github copilot cli auth".to_string()),
+        ui_list::action(
+            "OpenAI ChatGPT",
+            openai_modal_subtitle(action, &openai_status, &openai_overview),
+            Some(openai_modal_badge(action, &openai_status, &openai_overview)),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENAI_PROVIDER}"))),
+        )
+        .with_search_value("openai chatgpt oauth subscription".to_string()),
+        ui_list::action(
+            "OpenRouter",
+            openrouter_modal_subtitle(action, &openrouter_status),
+            Some(openrouter_modal_badge(action, &openrouter_status)),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{OAUTH_PROVIDER_PREFIX}{OPENROUTER_PROVIDER}"))),
+        )
+        .with_search_value("openrouter oauth".to_string()),
+        ui_list::action(
+            "Back",
+            "Close this dialog".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(OAUTH_PROVIDER_BACK.to_string())),
+        )
+        .with_search_value("back close cancel".to_string()),
     ];
 
     if matches!(action, OAuthProviderAction::Refresh) {
@@ -635,7 +637,6 @@ mod tests {
 
     use crate::agent::runloop::model_picker::ModelPickerState;
     use crate::agent::runloop::unified::palettes::ActivePalette;
-    use crate::agent::runloop::unified::session_setup::IdeContextBridge;
     use crate::agent::runloop::unified::state::CtrlCSignal;
     use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
     use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
@@ -649,7 +650,6 @@ mod tests {
         assert!(matches!(turn.ctrl_c_state.register_signal(), CtrlCSignal::Cancel));
 
         let header_context = Box::leak(Box::new(InlineHeaderContext::default()));
-        let ide_context_bridge = Box::leak(Box::new(None::<IdeContextBridge>));
         let model_picker_state = Box::leak(Box::new(None::<ModelPickerState>));
         let palette_state = Box::leak(Box::new(None::<ActivePalette>));
         let conversation_history = Box::leak(Box::new(Vec::<uni::Message>::new()));
@@ -680,7 +680,6 @@ mod tests {
             handle: turn.handle,
             session: turn.session,
             header_context,
-            ide_context_bridge,
             config: turn.config,
             vt_cfg,
             provider_client: turn.provider_client,
@@ -1065,6 +1064,7 @@ async fn sync_openai_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Res
             timeouts: None,
             openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
             anthropic: configured_anthropic_config(ctx.vt_cfg.as_ref()),
+            openrouter: None,
             model_behavior: ctx.config.model_behavior.clone(),
             workspace_root: Some(ctx.config.workspace.clone()),
         },
@@ -1111,6 +1111,7 @@ async fn sync_copilot_runtime_if_active(ctx: &mut SlashCommandContext<'_>) -> Re
             timeouts: None,
             openai: ctx.vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
             anthropic: configured_anthropic_config(ctx.vt_cfg.as_ref()),
+            openrouter: None,
             model_behavior: ctx.config.model_behavior.clone(),
             workspace_root: Some(ctx.config.workspace.clone()),
         },

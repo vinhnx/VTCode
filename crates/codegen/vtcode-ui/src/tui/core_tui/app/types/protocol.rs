@@ -1,3 +1,6 @@
+use crate::tui::core_tui::types::{
+    define_inline_message_commands, impl_inline_control_methods, impl_inline_message_methods,
+};
 use std::collections::VecDeque;
 use std::sync::{
     Arc, Mutex,
@@ -21,9 +24,8 @@ use super::overlay::{
 use crate::tui::core_tui::session::config::AppearanceConfig;
 pub use crate::tui::core_tui::types::SubmittedInput;
 use crate::tui::core_tui::types::{
-    ActivityState, ExecSessionAction, InlineHeaderContext, InlineLinkRange, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry,
-    SecurePromptConfig,
+    ActivityState, ExecSessionAction, InlineHeaderContext, InlineListItem, InlineListSearchConfig, InlineListSelection,
+    InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LocalAgentEntry, SecurePromptConfig,
 };
 use crate::tui::options::FullscreenInteractionSettings;
 
@@ -66,162 +68,155 @@ pub struct ArchivedPromptEntry {
     pub session_label: String,
 }
 
-pub enum InlineCommand {
-    AppendLine {
-        kind: InlineMessageKind,
-        segments: Vec<InlineSegment>,
-    },
-    AppendPastedMessage {
-        kind: InlineMessageKind,
-        text: String,
-        line_count: usize,
-    },
-    Inline {
-        kind: InlineMessageKind,
-        segment: InlineSegment,
-    },
-    ReplaceLast {
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-        link_ranges: Option<Vec<Vec<InlineLinkRange>>>,
-    },
-    /// Retain one complete tool-call capture for the session-local viewer.
-    RecordToolOutput {
-        id: ToolOutputId,
-        lines: Vec<String>,
-    },
-    /// Append a summary line and associate it with a previously recorded
-    /// capture. This is a UI-only identity edge, not a transcript event.
-    AppendToolOutputLine {
-        id: ToolOutputId,
-        kind: InlineMessageKind,
-        segments: Vec<InlineSegment>,
-    },
-    /// Append a compact successful-command activity row.
-    ///
-    /// UI-only identity edge derived from the canonical `ThreadEvent` tool
-    /// outcome, not a new source of truth: grouping must stay consistent with
-    /// `vtcode_commons::ui_protocol::tool_summary` boundaries.
-    AppendCompactActivity(CompactActivityMetadata),
-    /// Store a completed-edit review payload for explicit expand activation.
-    RecordDiffReview(vtcode_commons::ui_protocol::DiffReviewAnchor),
-    /// Replace the current compact successful-command activity row with an
-    /// updated contiguous group.
-    ///
-    /// UI-only identity edge; see [`InlineCommand::AppendCompactActivity`].
-    /// Only contiguous successful command activity may group; transient PTY
-    /// rows stay separate.
-    ReplaceCompactActivity(CompactActivityMetadata),
-    /// Replace the live PTY preview block with a compact activity row after
-    /// the command has completed. Complete output is retained separately.
-    ///
-    /// UI-only identity edge; see [`InlineCommand::AppendCompactActivity`].
-    CollapsePtyBlock(CompactActivityMetadata),
-    SetPrompt {
-        prefix: String,
-        style: InlineTextStyle,
-    },
-    SetPlaceholder {
-        hint: Option<String>,
-        style: Option<InlineTextStyle>,
-    },
-    SetMessageLabels {
-        agent: Option<String>,
-        user: Option<String>,
-    },
-    SetHeaderContext {
-        context: Box<InlineHeaderContext>,
-    },
-    SetInputStatus {
-        left: Option<String>,
-        right: Option<String>,
-    },
-    SetActivityState(ActivityState),
-    SetTerminalTitleItems {
-        items: Option<Vec<String>>,
-    },
-    SetTerminalTitleThreadLabel {
-        label: Option<String>,
-    },
-    SetTerminalTitleGitBranch {
-        branch: Option<String>,
-    },
-    SetTheme {
-        theme: InlineTheme,
-    },
-    SetColorSchemeAuto {
-        enabled: bool,
-    },
-    SetAppearance {
-        appearance: AppearanceConfig,
-    },
-    SetFullscreenInteraction {
-        interaction: FullscreenInteractionSettings,
-    },
-    /// Replace the live action bindings after a valid configuration reload.
-    SetKeyBindings {
-        bindings: HashMap<String, Vec<String>>,
-    },
-    SetVimModeEnabled(bool),
-    SetQueuedInputs {
-        entries: Vec<String>,
-    },
-    SetSubprocessEntries {
-        entries: Vec<String>,
-    },
-    SetSubagentPreview {
-        text: Option<String>,
-    },
-    SetLocalAgents {
-        entries: Vec<LocalAgentEntry>,
-    },
-    /// Inject archived prompts from previous sessions into the history picker.
-    SetArchivedHistory {
-        entries: Vec<ArchivedPromptEntry>,
-    },
-    SetPrimaryAgent {
-        name: Option<String>,
-        color: Option<String>,
-    },
-    SetCursorVisible(bool),
-    SetInputEnabled(bool),
-    SetImageInputEnabled(bool),
-    SetInput(String),
-    RestoreInputDraft(SubmittedInput),
-    ApplySuggestedPrompt(String),
-    SetInlinePromptSuggestion {
-        suggestion: String,
-        llm_generated: bool,
-    },
-    ClearInlinePromptSuggestion,
-    ClearInput,
-    ForceRedraw,
-    ShowTransient {
-        request: Box<TransientRequest>,
-    },
-    /// Deliver the full recursive workspace file list (discovered in the
-    /// background) so the file palette's Search mode can match against it.
-    UpdateFilePaletteSearch {
-        files: Vec<String>,
-    },
-    /// Replace the slash-command palette after background prompt-template
-    /// discovery. Lets first paint spawn with built-ins only; templates merge
-    /// in without blocking `spawn_session_with_options`.
-    SetSlashCommands {
-        commands: Vec<SlashCommandItem>,
-    },
-    CloseTransient,
-    ClearScreen,
-    SuspendEventLoop,
-    ResumeEventLoop,
-    ClearInputQueue,
-    StopEventStream,
-    StartEventStream,
-    SetSkipConfirmations(bool),
-    Shutdown,
-    /// Update reasoning stage in header context
-    SetReasoningStage(Option<String>),
+define_inline_message_commands! {
+    pub enum InlineCommand {
+        /// Retain one complete tool-call capture for the session-local viewer.
+        RecordToolOutput {
+            id: ToolOutputId,
+            lines: Vec<String>,
+        },
+        /// Append a summary line and associate it with a previously recorded
+        /// capture. This is a UI-only identity edge, not a transcript event.
+        AppendToolOutputLine {
+            id: ToolOutputId,
+            kind: InlineMessageKind,
+            segments: Vec<InlineSegment>,
+        },
+        /// Append a compact successful-command activity row.
+        ///
+        /// UI-only identity edge derived from the canonical `ThreadEvent` tool
+        /// outcome, not a new source of truth: grouping must stay consistent with
+        /// `vtcode_commons::ui_protocol::tool_summary` boundaries.
+        AppendCompactActivity(CompactActivityMetadata),
+        /// Store a completed-edit review payload for explicit expand activation.
+        RecordDiffReview(vtcode_commons::ui_protocol::DiffReviewAnchor),
+        /// Focus an existing capture in Transcript Review without submitting input.
+        FocusTranscriptReview {
+            id: ToolOutputId,
+        },
+        /// Replace the current compact successful-command activity row with an
+        /// updated contiguous group.
+        ///
+        /// UI-only identity edge; see [`InlineCommand::AppendCompactActivity`].
+        /// Only contiguous successful command activity may group; transient PTY
+        /// rows stay separate.
+        ReplaceCompactActivity(CompactActivityMetadata),
+        /// Replace the live PTY preview block with a compact activity row after
+        /// the command has completed. Complete output is retained separately.
+        ///
+        /// UI-only identity edge; see [`InlineCommand::AppendCompactActivity`].
+        CollapsePtyBlock(CompactActivityMetadata),
+        SetPrompt {
+            prefix: String,
+            style: InlineTextStyle,
+        },
+        SetPlaceholder {
+            hint: Option<String>,
+            style: Option<InlineTextStyle>,
+        },
+        SetMessageLabels {
+            agent: Option<String>,
+            user: Option<String>,
+        },
+        SetHeaderContext {
+            context: Box<InlineHeaderContext>,
+        },
+        SetInputStatus {
+            left: Option<String>,
+            right: Option<String>,
+        },
+        SetConfiguredInputStatus {
+            left: Option<String>,
+            right: Option<String>,
+        },
+        ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate),
+        SetActivityState(ActivityState),
+        UpdateProgress(vtcode_commons::ui_protocol::ProgressUpdate),
+        SetTerminalTitleItems {
+            items: Option<Vec<String>>,
+        },
+        SetTerminalTitleThreadLabel {
+            label: Option<String>,
+        },
+        SetTerminalTitleGitBranch {
+            branch: Option<String>,
+        },
+        SetTheme {
+            theme: InlineTheme,
+        },
+        SetColorSchemeAuto {
+            enabled: bool,
+        },
+        SetAppearance {
+            appearance: AppearanceConfig,
+        },
+        SetFullscreenInteraction {
+            interaction: FullscreenInteractionSettings,
+        },
+        /// Replace the live action bindings after a valid configuration reload.
+        SetKeyBindings {
+            bindings: HashMap<String, Vec<String>>,
+        },
+        SetVimModeEnabled(bool),
+        SetQueuedInputs {
+            entries: Vec<String>,
+        },
+        SetSubprocessEntries {
+            entries: Vec<String>,
+        },
+        SetSubagentPreview {
+            text: Option<String>,
+        },
+        SetLocalAgents {
+            entries: Vec<LocalAgentEntry>,
+        },
+        /// Inject archived prompts from previous sessions into the history picker.
+        SetArchivedHistory {
+            entries: Vec<ArchivedPromptEntry>,
+        },
+        SetPrimaryAgent {
+            name: Option<String>,
+            color: Option<String>,
+        },
+        SetCursorVisible(bool),
+        SetInputEnabled(bool),
+        SetImageInputEnabled(bool),
+        SetInput(String),
+        RestoreInputDraft(SubmittedInput),
+        ApplySuggestedPrompt(String),
+        SetInlinePromptSuggestion {
+            suggestion: String,
+            llm_generated: bool,
+        },
+        ClearInlinePromptSuggestion,
+        ClearInput,
+        ForceRedraw,
+        ShowTransient {
+            request: Box<TransientRequest>,
+        },
+        /// Deliver the full recursive workspace file list (discovered in the
+        /// background) so the file palette's Search mode can match against it.
+        UpdateFilePaletteSearch {
+            files: Vec<String>,
+        },
+        /// Replace the slash-command palette after background prompt-template
+        /// discovery. Lets first paint spawn with built-ins only; templates merge
+        /// in without blocking `spawn_session_with_options`.
+        SetSlashCommands {
+            commands: Vec<SlashCommandItem>,
+        },
+        CloseTransient,
+        ClearScreen,
+        SuspendEventLoop,
+        ResumeEventLoop,
+        ClearInputQueue,
+        StopEventStream,
+        StartEventStream,
+        SetSkipConfirmations(bool),
+        Shutdown,
+        /// Update reasoning stage in header context
+        SetReasoningStage(Option<String>),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -230,6 +225,8 @@ pub enum InlineEvent {
     /// Submit text from the WebMCP bridge without interpreting slash commands.
     WebmcpSubmit(SubmittedInput),
     QueueSubmit(SubmittedInput),
+    /// Mid-turn steer from external embedders (mirrors the core protocol's
+    /// reserved steering path).
     Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
@@ -318,6 +315,12 @@ struct InlineLayoutState {
 }
 
 #[derive(Clone)]
+struct HandleProgress {
+    operation: vtcode_commons::ui_protocol::ProgressOperation,
+    phase: vtcode_commons::ui_protocol::ProgressPhase,
+}
+
+#[derive(Clone)]
 pub struct InlineHandle {
     pub(crate) sender: UnboundedSender<InlineCommand>,
     message_layout: Arc<InlineLayoutState>,
@@ -329,6 +332,7 @@ pub struct InlineHandle {
     /// the next visible surface before releasing input ownership.
     ui_owned_transient_activity: bool,
     next_tool_output_id: Arc<AtomicU64>,
+    progress_operation: Arc<Mutex<Option<HandleProgress>>>,
 }
 
 impl InlineHandle {
@@ -359,6 +363,7 @@ impl InlineHandle {
             transient_activity,
             ui_owned_transient_activity,
             next_tool_output_id: Arc::new(AtomicU64::new(0)),
+            progress_operation: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -398,36 +403,76 @@ impl InlineHandle {
         let _ = self.sender.send(command);
     }
 
-    pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        self.send_command(InlineCommand::AppendLine { kind, segments });
+    impl_inline_message_methods!(InlineCommand);
+    impl_inline_control_methods!(InlineCommand);
+
+    /// Own a transient row through completion, errors and cancellation.
+    pub fn begin_progress(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) -> ProgressGuard {
+        let operation = vtcode_commons::ui_protocol::ProgressOperation::start();
+        if let Ok(mut current) = self.progress_operation.lock() {
+            *current = Some(HandleProgress { operation, phase });
+        }
+        self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Begin { operation, phase });
+        ProgressGuard {
+            handle: self.clone(),
+            operation,
+            clear_on_drop: true,
+        }
     }
 
-    pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
-        self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
+    /// Resume ownership after the interaction loop transfers a submitted turn.
+    pub fn resume_progress(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) -> ProgressGuard {
+        if let Some(operation) = self.current_progress_operation() {
+            self.set_progress_phase(phase);
+            ProgressGuard {
+                handle: self.clone(),
+                operation,
+                clear_on_drop: true,
+            }
+        } else {
+            self.begin_progress(phase)
+        }
     }
 
-    pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
-        self.send_command(InlineCommand::Inline { kind, segment });
+    pub fn current_progress_operation(&self) -> Option<vtcode_commons::ui_protocol::ProgressOperation> {
+        self.progress_operation
+            .lock()
+            .ok()
+            .and_then(|current| current.as_ref().map(|current| current.operation))
     }
 
-    pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
-        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
+    pub fn set_progress_phase(&self, phase: vtcode_commons::ui_protocol::ProgressPhase) {
+        let _ = self.replace_progress_phase(phase);
     }
 
-    pub fn replace_last_with_links(
+    /// Update the current owner in place and retain its previous phase for scoped work.
+    pub fn replace_progress_phase(
         &self,
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-        link_ranges: Vec<Vec<InlineLinkRange>>,
-    ) {
-        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: Some(link_ranges) });
+        phase: vtcode_commons::ui_protocol::ProgressPhase,
+    ) -> Option<vtcode_commons::ui_protocol::ProgressUpdate> {
+        let mut current = self.progress_operation.lock().ok()?;
+        let current = current.as_mut()?;
+        let previous =
+            vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation: current.operation, phase: current.phase };
+        current.phase = phase;
+        self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase {
+            operation: current.operation,
+            phase,
+        });
+        Some(previous)
     }
 
     pub fn record_tool_output(&self, lines: Vec<String>) -> ToolOutputId {
         let id = self.next_tool_output_id.fetch_add(1, Ordering::Relaxed);
         self.send_command(InlineCommand::RecordToolOutput { id, lines });
         id
+    }
+
+    /// Display retained canonical evidence using the existing review geometry.
+    pub fn review_evidence(&self, lines: Vec<String>) -> bool {
+        let id = self.next_tool_output_id.fetch_add(1, Ordering::Relaxed);
+        self.sender.send(InlineCommand::RecordToolOutput { id, lines }).is_ok()
+            && self.sender.send(InlineCommand::FocusTranscriptReview { id }).is_ok()
     }
 
     pub fn append_tool_output_line(&self, id: ToolOutputId, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
@@ -447,34 +492,6 @@ impl InlineHandle {
 
     pub fn collapse_pty_block(&self, activity: CompactActivityMetadata) {
         self.send_command(InlineCommand::CollapsePtyBlock(activity));
-    }
-
-    pub fn suspend_event_loop(&self) {
-        self.send_command(InlineCommand::SuspendEventLoop);
-    }
-
-    pub fn resume_event_loop(&self) {
-        self.send_command(InlineCommand::ResumeEventLoop);
-    }
-
-    pub fn clear_input_queue(&self) {
-        self.send_command(InlineCommand::ClearInputQueue);
-    }
-
-    pub fn stop_event_stream(&self) {
-        self.send_command(InlineCommand::StopEventStream);
-    }
-
-    pub fn start_event_stream(&self) {
-        self.send_command(InlineCommand::StartEventStream);
-    }
-
-    pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
-        self.send_command(InlineCommand::SetPrompt { prefix, style });
-    }
-
-    pub fn set_placeholder(&self, hint: Option<String>) {
-        self.set_placeholder_with_style(hint, None);
     }
 
     fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
@@ -498,64 +515,8 @@ impl InlineHandle {
         self.message_layout.agent_label_frame_width.load(Ordering::Relaxed)
     }
 
-    pub fn set_header_context(&self, context: InlineHeaderContext) {
-        self.send_command(InlineCommand::SetHeaderContext { context: Box::new(context) });
-    }
-
-    pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
-        self.send_command(InlineCommand::SetInputStatus { left, right });
-    }
-
-    pub fn set_activity_state(&self, state: ActivityState) {
-        self.send_command(InlineCommand::SetActivityState(state));
-    }
-
-    pub fn set_terminal_title_items(&self, items: Option<Vec<String>>) {
-        self.send_command(InlineCommand::SetTerminalTitleItems { items });
-    }
-
-    pub fn set_terminal_title_thread_label(&self, label: Option<String>) {
-        self.send_command(InlineCommand::SetTerminalTitleThreadLabel { label });
-    }
-
-    pub fn set_terminal_title_git_branch(&self, branch: Option<String>) {
-        self.send_command(InlineCommand::SetTerminalTitleGitBranch { branch });
-    }
-
-    pub fn set_theme(&self, theme: InlineTheme) {
-        self.send_command(InlineCommand::SetTheme { theme });
-    }
-
-    pub fn set_color_scheme_auto(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetColorSchemeAuto { enabled });
-    }
-
-    pub fn set_appearance(&self, appearance: AppearanceConfig) {
-        self.send_command(InlineCommand::SetAppearance { appearance });
-    }
-
-    pub fn set_fullscreen_interaction(&self, interaction: FullscreenInteractionSettings) {
-        self.send_command(InlineCommand::SetFullscreenInteraction { interaction });
-    }
-
     pub fn set_key_bindings(&self, bindings: HashMap<String, Vec<String>>) {
         self.send_command(InlineCommand::SetKeyBindings { bindings });
-    }
-
-    pub fn set_vim_mode_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetVimModeEnabled(enabled));
-    }
-
-    pub fn set_queued_inputs(&self, entries: Vec<String>) {
-        self.send_command(InlineCommand::SetQueuedInputs { entries });
-    }
-
-    pub fn set_subprocess_entries(&self, entries: Vec<String>) {
-        self.send_command(InlineCommand::SetSubprocessEntries { entries });
-    }
-
-    pub fn set_subagent_preview(&self, text: Option<String>) {
-        self.send_command(InlineCommand::SetSubagentPreview { text });
     }
 
     pub fn set_local_agents(&self, entries: Vec<LocalAgentEntry>) {
@@ -564,54 +525,6 @@ impl InlineHandle {
 
     pub fn set_archived_history(&self, entries: Vec<ArchivedPromptEntry>) {
         self.send_command(InlineCommand::SetArchivedHistory { entries });
-    }
-
-    pub fn set_primary_agent(&self, name: Option<String>, color: Option<String>) {
-        self.send_command(InlineCommand::SetPrimaryAgent { name, color });
-    }
-
-    pub fn set_cursor_visible(&self, visible: bool) {
-        self.send_command(InlineCommand::SetCursorVisible(visible));
-    }
-
-    pub fn set_input_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetInputEnabled(enabled));
-    }
-
-    pub fn set_image_input_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetImageInputEnabled(enabled));
-    }
-
-    pub fn set_input(&self, content: String) {
-        self.send_command(InlineCommand::SetInput(content));
-    }
-
-    pub fn restore_input_draft(&self, input: SubmittedInput) {
-        self.send_command(InlineCommand::RestoreInputDraft(input));
-    }
-
-    pub fn apply_suggested_prompt(&self, content: String) {
-        self.send_command(InlineCommand::ApplySuggestedPrompt(content));
-    }
-
-    pub fn set_inline_prompt_suggestion(&self, suggestion: String, llm_generated: bool) {
-        self.send_command(InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated });
-    }
-
-    pub fn clear_inline_prompt_suggestion(&self) {
-        self.send_command(InlineCommand::ClearInlinePromptSuggestion);
-    }
-
-    pub fn clear_input(&self) {
-        self.send_command(InlineCommand::ClearInput);
-    }
-
-    pub fn force_redraw(&self) {
-        self.send_command(InlineCommand::ForceRedraw);
-    }
-
-    pub fn shutdown(&self) {
-        self.send_command(InlineCommand::Shutdown);
     }
 
     pub fn show_transient(&self, request: TransientRequest) {
@@ -659,6 +572,20 @@ impl InlineHandle {
         search: Option<InlineListSearchConfig>,
         footer_hint: Option<String>,
     ) {
+        self.show_list_modal_with_status(title, lines, items, selected, search, footer_hint, None);
+    }
+
+    /// Show a list modal with an optional status strip (last action feedback).
+    pub fn show_list_modal_with_status(
+        &self,
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
+        footer_hint: Option<String>,
+        status: Option<crate::tui::core_tui::types::InlineStatus>,
+    ) {
         self.show_transient(TransientRequest::List(ListOverlayRequest {
             title,
             lines,
@@ -667,6 +594,7 @@ impl InlineHandle {
             search,
             footer_hint,
             hotkeys: Vec::new(),
+            status,
         }));
     }
 
@@ -771,18 +699,6 @@ impl InlineHandle {
     pub fn close_modal(&self) {
         self.close_transient();
     }
-
-    pub fn clear_screen(&self) {
-        self.send_command(InlineCommand::ClearScreen);
-    }
-
-    pub fn set_skip_confirmations(&self, skip: bool) {
-        self.send_command(InlineCommand::SetSkipConfirmations(skip));
-    }
-
-    pub fn set_reasoning_stage(&self, stage: Option<String>) {
-        self.send_command(InlineCommand::SetReasoningStage(stage));
-    }
 }
 
 /// Return the deferred-input state for requests that own or release input.
@@ -801,6 +717,38 @@ fn transient_input_state(request: &TransientRequest) -> Option<bool> {
         // The task panel is a passive surface; it keeps the input enabled and
         // therefore must not hold bridge events while it is visible.
         TransientRequest::TaskPanel(_) => None,
+    }
+}
+
+/// Scoped owner; transferring a turn preserves its monotonic start time.
+pub struct ProgressGuard {
+    handle: InlineHandle,
+    operation: vtcode_commons::ui_protocol::ProgressOperation,
+    clear_on_drop: bool,
+}
+
+impl ProgressGuard {
+    pub fn operation(&self) -> vtcode_commons::ui_protocol::ProgressOperation {
+        self.operation
+    }
+
+    pub fn transfer(mut self) {
+        self.clear_on_drop = false;
+    }
+}
+
+impl Drop for ProgressGuard {
+    fn drop(&mut self) {
+        if !self.clear_on_drop {
+            return;
+        }
+        self.handle
+            .update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Finish { operation: self.operation });
+        if let Ok(mut current) = self.handle.progress_operation.lock()
+            && current.as_ref().is_some_and(|current| current.operation == self.operation)
+        {
+            *current = None;
+        }
     }
 }
 
@@ -903,6 +851,64 @@ impl crate::tui::core_tui::runner::TuiCommand for InlineCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_scope_transfers_identity_and_only_clears_its_operation() {
+        use vtcode_commons::ui_protocol::ProgressPhase;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let first = handle.begin_progress(ProgressPhase::PreparingContext);
+        let operation = first.operation();
+        first.transfer();
+        let resumed = handle.resume_progress(ProgressPhase::SavingCheckpoint);
+        assert_eq!(resumed.operation(), operation);
+        let replacement = handle.begin_progress(ProgressPhase::Initializing);
+        drop(resumed);
+        assert_eq!(handle.current_progress_operation(), Some(replacement.operation()));
+        drop(replacement);
+        assert_eq!(handle.current_progress_operation(), None);
+        let updates: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        assert_eq!(updates.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn cancellation_drops_progress_scope_and_emits_matching_finish() {
+        use vtcode_commons::ui_protocol::{ProgressPhase, ProgressUpdate};
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(tx);
+        let worker_handle = handle.clone();
+        let worker = tokio::spawn(async move {
+            let _guard = worker_handle.begin_progress(ProgressPhase::WaitingForModel);
+            std::future::pending::<()>().await;
+        });
+        let operation = match rx.recv().await.unwrap() {
+            InlineCommand::UpdateProgress(ProgressUpdate::Begin { operation, .. }) => operation,
+            _ => panic!("expected progress begin"),
+        };
+        worker.abort();
+        assert!(worker.await.unwrap_err().is_cancelled());
+        assert!(
+            matches!(rx.recv().await, Some(InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation: finished })) if finished == operation)
+        );
+        assert!(handle.current_progress_operation().is_none());
+    }
+
+    #[test]
+    fn evidence_navigation_records_capture_before_focus_and_reports_closed_ui() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        assert!(handle.review_evidence(vec!["recorded event".into()]));
+        let InlineCommand::RecordToolOutput { id, lines } = receiver.try_recv().unwrap() else {
+            panic!("capture must precede focus")
+        };
+        assert_eq!(lines, ["recorded event"]);
+        assert!(
+            matches!(receiver.try_recv().unwrap(), InlineCommand::FocusTranscriptReview { id: focused } if focused == id)
+        );
+        assert!(receiver.try_recv().is_err(), "navigation must not submit input");
+        drop(receiver);
+        assert!(!handle.review_evidence(vec!["expired receiver".into()]));
+    }
 
     fn test_session() -> (InlineHandle, InlineSession, UnboundedSender<InlineEvent>) {
         let (command_sender, _command_receiver) = tokio::sync::mpsc::unbounded_channel();

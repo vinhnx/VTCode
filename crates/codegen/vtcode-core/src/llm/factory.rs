@@ -179,16 +179,12 @@ pub fn get_models_manager() -> &'static ModelsManager {
     &MODELS_MANAGER
 }
 
-/// Infer provider from model slug using ModelsManager presets.
+/// Infer provider from model slug.
 ///
-/// This provides a more accurate provider resolution than heuristic-based
-/// `provider_from_model` by checking against known model presets first.
-pub fn infer_provider_from_model(model: &str) -> Option<Provider> {
-    ModelResolver::resolve_provider(None, model, &[]).or_else(|| {
-        let family = vtcode_commons::model_family::find_family_for_model(model);
-        (family.family != "unknown").then_some(family.provider)
-    })
-}
+/// Canonical implementation lives in `vtcode-llm::factory_types` (it needs no
+/// vtcode-core state); this re-export keeps the historical
+/// `crate::llm::factory::infer_provider_from_model` path stable.
+pub use vtcode_llm::factory_types::infer_provider_from_model;
 
 /// Create provider from model name and API key
 pub fn create_provider_for_model(
@@ -225,6 +221,7 @@ pub fn create_provider_for_model(
             timeouts: None,
             openai: None,
             anthropic: None,
+            openrouter: None,
             model_behavior,
             workspace_root: None,
         },
@@ -397,6 +394,7 @@ mod tests {
                     timeouts: None,
                     openai: None,
                     anthropic: None,
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },
@@ -423,6 +421,7 @@ mod tests {
                     timeouts: None,
                     openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
                     anthropic: Some(AnthropicConfig::default()),
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },
@@ -452,6 +451,7 @@ mod tests {
                         count_tokens_enabled: true,
                         ..AnthropicConfig::default()
                     }),
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },
@@ -490,6 +490,7 @@ mod tests {
                     timeouts: None,
                     openai: None,
                     anthropic: None,
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },
@@ -509,6 +510,7 @@ mod tests {
                     timeouts: None,
                     openai: None,
                     anthropic: None,
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },
@@ -564,6 +566,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -620,6 +623,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -716,6 +720,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: Some(AnthropicConfig::default()),
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -745,6 +750,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: Some(AnthropicConfig::default()),
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -776,6 +782,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: Some(AnthropicConfig::default()),
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -887,6 +894,7 @@ mod tests {
                 timeouts: None,
                 openai: Some(OpenAIConfig::default()),
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -1010,6 +1018,7 @@ mod tests {
                 timeouts: None,
                 openai: None,
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -1052,6 +1061,7 @@ mod tests {
                 timeouts: None,
                 openai: None,
                 anthropic: None,
+                openrouter: None,
                 model_behavior: None,
                 workspace_root: None,
             },
@@ -1083,6 +1093,7 @@ mod tests {
                     timeouts: None,
                     openai: None,
                     anthropic: None,
+                    openrouter: None,
                     model_behavior: None,
                     workspace_root: None,
                 },

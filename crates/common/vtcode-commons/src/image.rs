@@ -25,7 +25,34 @@ pub struct ImageData {
     pub size: u64,
 }
 
-/// Detects MIME type from Content-Type header
+/// Image MIME types accepted by LLM vision APIs.
+///
+/// OpenAI, Anthropic, Gemini, and DeepSeek all accept exactly this set for
+/// base64 image inputs. Formats outside it (BMP, TIFF, SVG, ...) are rejected
+/// by providers with `400 invalid_value`, so they must never be serialized as
+/// `input_image` parts. SVG is XML text and is better read as text.
+pub const SUPPORTED_IMAGE_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/// File extensions that map to [`SUPPORTED_IMAGE_MIME_TYPES`].
+pub const SUPPORTED_IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
+
+/// Binary raster extensions no LLM vision API accepts.
+///
+/// These must be rejected explicitly instead of falling through to a text
+/// read (which would produce mojibake). SVG is intentionally absent: it is
+/// text and reads fine through the normal text path.
+pub const UNSUPPORTED_BINARY_IMAGE_EXTENSIONS: &[&str] = &["bmp", "tif", "tiff"];
+
+/// Returns whether a MIME type can be sent to LLM vision APIs.
+pub fn is_supported_image_mime_type(mime_type: &str) -> bool {
+    SUPPORTED_IMAGE_MIME_TYPES.contains(&mime_type)
+}
+
+/// Detects MIME type from Content-Type header.
+///
+/// This stays truthful about BMP/TIFF/SVG content: callers must gate the
+/// result through [`is_supported_image_mime_type`] before serializing an
+/// image part, otherwise providers reject the request.
 pub fn detect_mime_type_from_content_type(content_type: &str) -> Option<String> {
     let content_type = content_type.to_lowercase();
     if content_type.starts_with("image/png") {
@@ -80,7 +107,11 @@ pub fn detect_mime_type_from_data(data: &[u8]) -> String {
     }
 }
 
-/// Detects the MIME type based on file extension
+/// Detects the MIME type based on file extension.
+///
+/// Only extensions in [`SUPPORTED_IMAGE_EXTENSIONS`] are accepted; anything
+/// else (including BMP/TIFF/SVG) is an error so callers fall back to text or
+/// surface a clear rejection instead of sending a payload providers refuse.
 fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
     let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_lowercase();
 
@@ -89,21 +120,20 @@ fn detect_mime_type_from_extension(path: &Path) -> Result<String> {
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
         "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "tiff" | "tif" => "image/tiff",
-        "svg" => "image/svg+xml",
         _ => return Err(anyhow::anyhow!("Unsupported image format: {extension}")),
     };
 
     Ok(mime_type.to_string())
 }
 
-/// Validates that the image file path has a supported extension
+/// Validates that the image file path has a provider-supported extension.
+///
+/// BMP/TIFF/SVG are intentionally excluded: no LLM vision API accepts them,
+/// and sending them produces `400 invalid_value` errors.
 pub fn has_supported_image_extension(path: &Path) -> bool {
     let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("").to_lowercase();
 
-    const VALID_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg"];
-    VALID_EXTENSIONS.contains(&extension.as_str())
+    SUPPORTED_IMAGE_EXTENSIONS.contains(&extension.as_str())
 }
 
 /// Encodes binary data to base64
@@ -244,5 +274,56 @@ mod tests {
     #[test]
     fn detect_mime_type_from_data_recognizes_png_magic() {
         assert_eq!(detect_mime_type_from_data(PNG_MAGIC), "image/png");
+    }
+
+    #[test]
+    fn only_provider_supported_extensions_count_as_images() {
+        for supported in [
+            "pixel.png",
+            "photo.jpg",
+            "photo.jpeg",
+            "anim.gif",
+            "modern.webp",
+            "UPPER.PNG",
+        ] {
+            assert!(has_supported_image_extension(Path::new(supported)), "{supported} should be a supported image");
+        }
+        // BMP/TIFF/SVG are refused by every LLM vision API (400 invalid_value),
+        // so they must never become image parts.
+        for unsupported in ["vector.svg", "bitmap.bmp", "scan.tif", "scan.tiff", "notes.txt"] {
+            assert!(
+                !has_supported_image_extension(Path::new(unsupported)),
+                "{unsupported} must not be treated as a vision image"
+            );
+        }
+    }
+
+    #[test]
+    fn only_provider_supported_mimes_pass_the_allowlist() {
+        for mime in ["image/jpeg", "image/png", "image/gif", "image/webp"] {
+            assert!(is_supported_image_mime_type(mime), "{mime} should be supported");
+        }
+        for mime in ["image/svg+xml", "image/bmp", "image/tiff", "image/heic", "text/plain"] {
+            assert!(!is_supported_image_mime_type(mime), "{mime} must be rejected");
+        }
+    }
+
+    #[test]
+    fn extension_mime_detection_rejects_formats_providers_refuse() {
+        assert_eq!(detect_mime_type_from_extension(Path::new("a.png")).expect("png"), "image/png");
+        for rejected in ["a.svg", "a.bmp", "a.tif", "a.tiff"] {
+            assert!(detect_mime_type_from_extension(Path::new(rejected)).is_err(), "{rejected} must be rejected");
+        }
+    }
+
+    #[tokio::test]
+    async fn read_image_file_any_path_rejects_svg_and_bmp() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        for name in ["logo.svg", "bitmap.bmp"] {
+            let path = dir.path().join(name);
+            std::fs::write(&path, b"<svg></svg>").expect("write fixture");
+            let err = read_image_file_any_path(&path).await.expect_err("must be rejected");
+            assert!(err.to_string().contains("Unsupported image extension"), "unexpected error: {err}");
+        }
     }
 }

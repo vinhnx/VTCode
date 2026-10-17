@@ -18,6 +18,7 @@ impl Session {
         self.mark_dirty();
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         events::process_key(self, key)
     }
@@ -43,7 +44,8 @@ impl Session {
         }
 
         // Clear streaming state on turn completion (status cleared)
-        if let InlineCommand::SetInputStatus { left, right } = &command
+        if let InlineCommand::SetInputStatus { left, right } | InlineCommand::SetConfiguredInputStatus { left, right } =
+            &command
             && self.is_streaming_final_answer
             && left.is_none()
             && right.is_none()
@@ -78,10 +80,12 @@ impl Session {
                 self.prompt_prefix = prefix;
                 self.prompt_style = style;
                 self.ensure_prompt_style_color();
+                self.input_render_cache = None;
             }
             InlineCommand::SetPlaceholder { hint, style } => {
                 self.placeholder = hint;
                 self.placeholder_style = style;
+                self.input_render_cache = None;
             }
             InlineCommand::SetMessageLabels { agent, user } => {
                 self.labels.agent = agent.filter(|label| !label.is_empty());
@@ -98,16 +102,35 @@ impl Session {
                 self.invalidate_header_cache();
             }
             InlineCommand::SetInputStatus { left, right } => {
-                self.input_status_left = left;
-                self.input_status_right = right;
-                if self.thinking_spinner.is_active {
-                    self.thinking_spinner.stop();
+                self.apply_input_status(left, right);
+            }
+            InlineCommand::SetConfiguredInputStatus { left, right } => {
+                self.footer_context_configured = true;
+                self.footer_context_right = right.clone();
+                self.footer_context_status = left
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned);
+                self.apply_input_status(left, right);
+            }
+            InlineCommand::ProgramStatus(update) => {
+                self.program_status.apply(update);
+                if matches!(update, vtcode_commons::program_status::ProgramStatusUpdate::Configure { enabled: true }) {
+                    self.program_status.children(&self.local_agents);
                 }
-                // The blocked/recovery badge is part of the cached header and
-                // can be derived from either status field.
-                self.invalidate_header_cache();
+                command_needs_redraw = false;
+            }
+            InlineCommand::UpdateProgress(update) => {
+                self.program_status.progress(update);
+                if self.progress.apply(update) {
+                    self.request_transcript_clear();
+                } else {
+                    command_needs_redraw = false;
+                }
             }
             InlineCommand::SetActivityState(state) => {
+                self.program_status.activity(state);
                 self.activity_state = state;
                 self.input_status_left = state.status().map(ToOwned::to_owned);
                 let enabled = !state.is_busy();
@@ -273,6 +296,16 @@ impl Session {
         if command_needs_redraw {
             self.mark_visual_dirty();
         }
+    }
+
+    fn apply_input_status(&mut self, left: Option<String>, right: Option<String>) {
+        self.input_status_left = left;
+        self.input_status_right = right;
+        if self.thinking_spinner.is_active {
+            self.thinking_spinner.stop();
+        }
+        // The blocked/recovery badge can be derived from either status field.
+        self.invalidate_header_cache();
     }
 
     /// Apply an unsolicited terminal color-scheme report (Contour VT extension,

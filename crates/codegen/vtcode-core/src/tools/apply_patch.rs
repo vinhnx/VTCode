@@ -19,6 +19,7 @@ pub use vtcode_utility_tool_specs::{
 /// Input structure for the apply_patch tool
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ApplyPatchInput {
+    #[serde(alias = "patch")]
     pub input: String,
 }
 
@@ -28,6 +29,8 @@ pub struct DecodedApplyPatchInput {
     pub source_bytes: usize,
     pub was_base64: bool,
 }
+
+pub const APPLY_PATCH_ARGUMENT_CORRECTION: &str = r#"Missing or invalid apply_patch input. Call the apply_patch tool directly with JSON such as {"input":"*** Begin Patch\n*** Update File: src/example.rs\n@@\n-old\n+new\n*** End Patch\n"}. Copy exact current context, correct the payload, and retry once; do not run apply_patch in a shell."#;
 
 pub fn patch_source_from_args(args: &Value) -> Option<&str> {
     let input = args.get("input").and_then(|value| value.as_str());
@@ -55,15 +58,18 @@ pub fn patch_source_from_args(args: &Value) -> Option<&str> {
 
 pub fn decode_apply_patch_input(args: &Value) -> anyhow::Result<Option<DecodedApplyPatchInput>> {
     let Some(source) = patch_source_from_args(args) else {
-        return Ok(None);
+        return Err(anyhow::anyhow!(APPLY_PATCH_ARGUMENT_CORRECTION));
     };
 
     let was_base64 = source.starts_with("base64:");
     let cap = effective_max_payload_bytes();
     let text = if was_base64 {
-        let decoded = BASE64.decode(&source[7..]).with_context(|| "Failed to decode base64 patch")?;
+        let decoded = BASE64
+            .decode(&source[7..])
+            .with_context(|| format!("Failed to decode base64 patch. {APPLY_PATCH_ARGUMENT_CORRECTION}"))?;
         enforce_decoded_size_limit(decoded.len(), source.len(), was_base64, cap)?;
-        String::from_utf8(decoded).with_context(|| "Decoded patch is not valid UTF-8")?
+        String::from_utf8(decoded)
+            .with_context(|| format!("Decoded patch is not valid UTF-8. {APPLY_PATCH_ARGUMENT_CORRECTION}"))?
     } else {
         enforce_decoded_size_limit(source.len(), source.len(), was_base64, cap)?;
         source.to_string()

@@ -17,6 +17,7 @@ fn default_public_tool_names() -> Vec<String> {
         tools::WRITE_STDIN.to_string(),
         tools::APPLY_PATCH.to_string(),
         tools::SEARCH_TOOLS.to_string(),
+        tools::RECORD_DECISION.to_string(),
     ]
 }
 

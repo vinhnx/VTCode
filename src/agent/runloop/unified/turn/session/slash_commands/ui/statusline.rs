@@ -237,6 +237,7 @@ async fn select_statusline_target(ctx: &mut SlashCommandContext<'_>) -> Result<O
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction("statusline:user".to_string())),
                 search_value: Some("statusline user home personal".to_string()),
+                ..Default::default()
             },
             InlineListItem {
                 title: "Workspace config".to_string(),
@@ -245,6 +246,7 @@ async fn select_statusline_target(ctx: &mut SlashCommandContext<'_>) -> Result<O
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction("statusline:workspace".to_string())),
                 search_value: Some("statusline workspace repo local".to_string()),
+                ..Default::default()
             },
         ],
         Some(InlineListSelection::ConfigAction("statusline:user".to_string())),

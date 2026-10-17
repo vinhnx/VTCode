@@ -8,6 +8,7 @@ use crate::tui::core_tui::session::{list_panel, message_renderer};
 use ratatui::{buffer::Buffer, style::Modifier};
 
 impl Session {
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub fn render(&mut self, frame: &mut Frame<'_>) {
         let Some(viewport) = self.core.begin_frame(frame) else {
             return;
@@ -51,7 +52,8 @@ impl Session {
         self.core.render_base_frame(frame, &layout, transcript_area);
         {
             let buffer = &*frame.buffer_mut();
-            self.rebuild_compact_activity_hit_regions(buffer, transcript_area);
+            let body = self.core.transcript_area().unwrap_or(transcript_area);
+            self.rebuild_compact_activity_hit_regions(buffer, body);
         }
         self.core.render_input(frame, input_area);
         if let Some(panel_area) = bottom_panel_area {
@@ -71,6 +73,9 @@ impl Session {
                 BottomPanelKind::TaskPanel => {
                     render_task_panel(self, frame, panel_area);
                 }
+                BottomPanelKind::LocalAgents => {
+                    render::render_local_agents(self, frame, panel_area);
+                }
                 BottomPanelKind::None => {
                     frame.render_widget(Clear, panel_area);
                 }
@@ -81,9 +86,6 @@ impl Session {
             core_render::render_modal(self, frame, modal_area);
         }
 
-        if self.local_agents_visible() {
-            render::render_local_agents(self, frame, layout.viewport);
-        }
         if self.diff_preview_state().is_some() {
             diff_preview::render_diff_preview(self, frame, layout.viewport);
         }
@@ -94,7 +96,12 @@ impl Session {
             tool_output_viewer::render_tool_output_viewer(self, frame, layout.viewport, &mut state);
             self.tool_output_viewer_state = Some(state);
         }
+        if self.diff_preview_state().is_some() || self.tool_output_viewer_state().is_some() {
+            self.core.clear_sticky_prompt_target();
+            self.core.occlude_progress_feedback(layout.viewport);
+        }
         self.core.finalize_mouse_selection(frame, layout.viewport);
+        self.core.observe_progress_feedback();
     }
 
     #[expect(
@@ -117,6 +124,7 @@ impl Session {
 }
 
 impl Session {
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     fn rebuild_compact_activity_hit_regions(&mut self, buffer: &Buffer, area: Rect) {
         self.compact_activity_hit_regions.clear();
         if tool_output_viewer::compact_activity_hint_text(self).is_none() {
@@ -233,7 +241,13 @@ fn find_expand_action_text_region(buffer: &Buffer, area: Rect, row: u16) -> Vec<
     for start_column in area.x..=area.right().saturating_sub(phrase_width) {
         let matched = phrase_chars.iter().enumerate().all(|(offset, expected)| {
             let column = start_column + offset as u16;
-            column < area.right() && buffer[(column, row)].symbol() == expected.to_string()
+            if column >= area.right() {
+                return false;
+            }
+            // Compare against a stack-encoded UTF-8 buffer — no per-cell String.
+            let mut utf8 = [0u8; 4];
+            let expected_str = expected.encode_utf8(&mut utf8);
+            buffer[(column, row)].symbol() == expected_str
         });
         if matched {
             return vec![Rect::new(start_column, row, phrase_width, 1)];

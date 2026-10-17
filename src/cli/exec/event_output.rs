@@ -318,6 +318,13 @@ pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
                             style("[BACKGROUND]").green().bold()
                         }
                     }
+                    vtcode_core::exec::events::HarnessEventKind::DelegatedAgentStatus => {
+                        if item.status.as_deref() == Some("failed") {
+                            style("[DELEGATION FAILED]").red().bold()
+                        } else {
+                            style("[DELEGATION]").cyan().bold()
+                        }
+                    }
                 };
                 let detail = match (item.message.as_deref(), item.path.as_deref()) {
                     (Some(message), Some(path)) => format!("{message}: {path}"),

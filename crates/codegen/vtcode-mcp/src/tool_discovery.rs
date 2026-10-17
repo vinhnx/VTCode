@@ -130,17 +130,48 @@ impl ToolDiscovery {
 
         debug!(keyword = keyword, count = tools.len(), "Searching tools for keyword");
 
-        // Pre-allocate with estimated capacity
-        let mut results = Vec::with_capacity(tools.len() / 4);
-
-        for tool in tools {
-            let relevance_score = self.calculate_relevance(&tool, keyword);
+        // Score by reference first. Only the truncated survivors below pay for
+        // owned clones of names/descriptions/schemas; cloning every match
+        // up front would discard most of that work at the 5-result cap.
+        let mut scored: Vec<(&McpToolInfo, f32)> = Vec::with_capacity(tools.len() / 4);
+        for tool in &tools {
+            let relevance_score = self.calculate_relevance(tool, keyword);
 
             // Filter out tools with no relevance
-            if relevance_score <= 0.0 {
-                continue;
+            if relevance_score > 0.0 {
+                scored.push((tool, relevance_score));
             }
+        }
 
+        // Sort by relevance score (highest first). Stable sort preserves the
+        // original discovery order among tied scores, matching the previous
+        // clone-then-sort behavior exactly.
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+        // Apply AGENTS.md compliance: limit to 5 results with overflow indication
+        let total_results = scored.len();
+        if total_results > 5 {
+            info!(
+                keyword = keyword,
+                matched = total_results,
+                displayed = 5,
+                overflow = total_results - 5,
+                detail_level = detail_level.as_str(),
+                "Tool search completed with overflow"
+            );
+            scored.truncate(5);
+        } else {
+            info!(
+                keyword = keyword,
+                matched = total_results,
+                detail_level = detail_level.as_str(),
+                "Tool search completed"
+            );
+        }
+
+        // Materialize owned results for the survivors only.
+        let mut results = Vec::with_capacity(scored.len());
+        for (tool, relevance_score) in scored {
             // Only clone schemas when needed (Full detail level)
             let (input_schema, output_schema) = match detail_level {
                 DetailLevel::Full => (Some(tool.input_schema.clone()), tool.output_schema.clone()),
@@ -155,30 +186,6 @@ impl ToolDiscovery {
                 input_schema,
                 output_schema,
             });
-        }
-
-        // Sort by relevance score (highest first)
-        results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(Ordering::Equal));
-
-        // Apply AGENTS.md compliance: limit to 5 results with overflow indication
-        let total_results = results.len();
-        if total_results > 5 {
-            info!(
-                keyword = keyword,
-                matched = total_results,
-                displayed = 5,
-                overflow = total_results - 5,
-                detail_level = detail_level.as_str(),
-                "Tool search completed with overflow"
-            );
-            results.truncate(5);
-        } else {
-            info!(
-                keyword = keyword,
-                matched = total_results,
-                detail_level = detail_level.as_str(),
-                "Tool search completed"
-            );
         }
 
         Ok(results)
@@ -368,6 +375,51 @@ mod tests {
     #[derive(Default)]
     struct MockMcpClient {
         tools: Vec<McpToolInfo>,
+    }
+
+    #[tokio::test]
+    async fn search_tools_keeps_highest_scores_despite_late_position_and_ties() {
+        // Arrange: 8 tools scored through deterministic tiers only
+        // (exact name = 1.0, name-contains = 0.8, description-contains = 0.6).
+        // The best matches sit last, so keeping the first 5 would fail; the
+        // 0.8 three-way tie checks stable discovery order; the lone 0.6 must
+        // be truncated away. Fillers (`calendar`, `docs`) share at most one
+        // bigram with "mail" (Dice <= 0.2), staying below every tier above.
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient {
+            tools: vec![
+                mock_tool("prov", "calendar", "Show the calendar."),
+                mock_tool("prov", "docs", "Search the docs."),
+                mock_tool("prov", "forward_mail", "Forward a message."),
+                mock_tool("prov", "send_mail", "Send a message."),
+                mock_tool("prov", "mail", "Mail things."),
+                mock_tool("prov", "read_mail", "Read a message."),
+                mock_tool("prov", "delete_mail", "Delete a message."),
+                mock_tool("prov", "archive", "Archive old mail threads."),
+            ],
+        }));
+
+        // Act.
+        let results = discovery.search_tools("mail", DetailLevel::Full).await.expect("search tools");
+
+        // Assert: truncation survivors in score order, ties in discovery order.
+        let names = results.iter().map(|result| result.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(names, vec!["mail", "forward_mail", "send_mail", "read_mail", "delete_mail"]);
+        let scores = results.iter().map(|result| result.relevance_score).collect::<Vec<_>>();
+        assert_eq!(scores, vec![1.0, 0.8, 0.8, 0.8, 0.8]);
+        assert!(results.iter().all(|result| result.input_schema.is_some()));
+
+        // Compact levels keep the same survivors without cloning schemas.
+        let compact = discovery
+            .search_tools("mail", DetailLevel::NameAndDescription)
+            .await
+            .expect("compact search");
+        let compact_names = compact.iter().map(|result| result.name.as_str()).collect::<Vec<_>>();
+        assert_eq!(compact_names, names);
+        assert!(
+            compact
+                .iter()
+                .all(|result| result.input_schema.is_none() && result.output_schema.is_none())
+        );
     }
 
     #[async_trait::async_trait]

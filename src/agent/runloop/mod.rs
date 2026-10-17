@@ -12,6 +12,7 @@ mod telemetry;
 mod text_tools;
 pub(crate) mod tool_output;
 mod ui;
+pub(crate) mod ui_list;
 pub(crate) mod unified;
 mod welcome;
 #[cfg(test)]

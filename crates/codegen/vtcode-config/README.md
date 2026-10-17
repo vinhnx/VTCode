@@ -10,7 +10,7 @@ default) to scaffold configuration directories with project-specific defaults.
 ## Modules
 
 | Module | Purpose |
-|---|---|
+| --- | --- |
 | `loader` | Config parsing, merging, watching, and layer stack |
 | `core` | Primary config structs (`AgentConfig`, `ModelConfig`, `SandboxConfig`, …) |
 | `defaults` | `ConfigDefaultsProvider` and helpers for search paths |
@@ -23,7 +23,7 @@ default) to scaffold configuration directories with project-specific defaults.
 | `debug` | Debug and trace configuration |
 | `hooks` | Lifecycle hook configuration |
 | `ide_context` | IDE context provider configuration |
-| `mcp` | MCP` | MCP server and client configuration |
+| `mcp` | MCP server and client configuration |
 | `models` | Model identifiers and metadata |
 | `optimization` | Performance tuning knobs (caching, pooling, profiling) |
 | `subagents` | Sub-agent discovery and specs |
@@ -31,13 +31,22 @@ default) to scaffold configuration directories with project-specific defaults.
 ## Public entrypoints
 
 | Export | Description |
-|---|---|
+| --- | --- |
 | `VTCodeConfig` | Deserialized configuration root |
 | `ConfigManager` | Load, merge, and watch configuration files |
 | `ConfigDefaultsProvider` | Trait for customizing default paths and values |
 | `install_config_defaults_provider` | Register a custom defaults provider globally |
 | `ConfigLayerStack` | Ordered stack of config layers with merge semantics |
 | `ConfigWatcher` / `SimpleConfigWatcher` | File-system watchers for live reload |
+
+The configuration root's serde definitions, defaults, and validation stay in
+`src/loader/config.rs`. The existing `src/loader/bootstrap.rs` owns scaffold paths,
+file writes, and the `VTCodeConfig::bootstrap_project`,
+`bootstrap_project_with_options`, and `create_sample_config` methods behind the
+`bootstrap` feature. Their sample TOML is embedded from `data/default_config.toml`
+at compile time and ships with the crate; no runtime template file is required.
+Keep the template's output bytes stable during structural moves, and verify public
+entrypoints, force/preserve behavior, canonical home paths, and underlying I/O errors.
 
 ## Usage
 
@@ -54,7 +63,7 @@ fn main() -> anyhow::Result<()> {
 ## Features
 
 | Feature | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `bootstrap` | ✓ | Scaffold config directories on first load |
 | `schema` | — | JSON Schema generation via `schemars` |
 
@@ -71,6 +80,7 @@ Disable default features when you only need parsing/validation to omit the
 filesystem bootstrap helpers and reduce dependencies.
 
 ### Examples
+
 ```rust
 use vtcode_config::ConfigManager;
 

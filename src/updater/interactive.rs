@@ -121,6 +121,7 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(UPDATE_AND_RESTART_ACTION.to_string())),
                 search_value: None,
+                ..Default::default()
             },
             InlineListItem {
                 title: "Stay on current version".to_string(),
@@ -129,10 +130,12 @@ fn build_update_prompt_request(notice: &StartupUpdateNotice) -> TransientRequest
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(STAY_CURRENT_ACTION.to_string())),
                 search_value: None,
+                ..Default::default()
             },
         ],
         selected: Some(InlineListSelection::ConfigAction(UPDATE_AND_RESTART_ACTION.to_string())),
         search: None,
+        status: None,
         hotkeys: Vec::new(),
     })
 }

@@ -8,15 +8,15 @@ use vtcode_config::constants::{defaults::DEFAULT_PRIMARY_AGENT_NAME, tools};
 use vtcode_config::core::permissions::AgentPermissionsConfig;
 use vtcode_config::core::tools::ToolPolicy;
 use vtcode_config::{
-    DiscoveredSubagents, HookGroupConfig, HooksConfig, McpProviderConfig, SubagentMcpServer, SubagentMemoryScope,
-    SubagentSource, SubagentSpec, builtin_primary_build_agent,
+    DiscoveredSubagents, HookGroupConfig, HooksConfig, SubagentMcpServer, SubagentMemoryScope, SubagentSource,
+    SubagentSpec, builtin_primary_build_agent,
 };
 
 use crate::config::{ReasoningEffortLevel, VTCodeConfig};
 use crate::llm::provider::ToolDefinition;
 use crate::permissions::{PermissionRequest, ResolvedPermissionDecision, evaluate_effective_permissions};
 use crate::prompts::PromptContext;
-use crate::subagents::ResolvedAgentRuntimeView;
+use crate::subagents::{ResolvedAgentRuntimeView, inline_mcp_provider};
 use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,7 +237,9 @@ pub fn resolve_primary_agent(
 /// `tool_intent.rs`), and is deferred — see
 /// `apply_primary_agent_tool_policy`'s doc comment for the specific gap.
 fn is_subagent_cleanup_tool(tool_name: &str) -> bool {
-    tools::LIFECYCLE_CLEANUP_TOOLS.contains(&tool_name)
+    tools::LIFECYCLE_CLEANUP_TOOLS
+        .iter()
+        .any(|cleanup| cleanup.eq_ignore_ascii_case(tool_name))
 }
 
 /// Returns the configured agent name that should be surfaced to the operator
@@ -263,11 +265,11 @@ fn fallback_notice(requested_default: &str) -> Option<&str> {
 
 #[must_use]
 pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) -> bool {
-    let tool_name = normalise_tool_name(tool_name);
+    let tool_name = tool_name.trim();
 
     // Cleanup tools stay available so restricted agents can still join or
     // close already-running child work.
-    if is_subagent_cleanup_tool(&tool_name) {
+    if is_subagent_cleanup_tool(tool_name) {
         return true;
     }
 
@@ -276,14 +278,14 @@ pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) ->
     // progress. Planning/interview tools stay author-curated: unlike the
     // tracker they change the session mode, so an explicit omission must
     // keep working.
-    if tool_name == tools::TASK_TRACKER {
+    if tool_name.eq_ignore_ascii_case(tools::TASK_TRACKER) {
         return true;
     }
 
     let allow_list_allows = agent
         .tools
         .as_ref()
-        .is_none_or(|tools| tools.iter().any(|allowed| normalise_tool_name(allowed) == tool_name));
+        .is_none_or(|tools| tools.iter().any(|allowed| allowed.trim().eq_ignore_ascii_case(tool_name)));
     if !allow_list_allows {
         return false;
     }
@@ -291,14 +293,14 @@ pub fn primary_agent_allows_tool(agent: &ActivePrimaryAgent, tool_name: &str) ->
     !agent
         .disallowed_tools
         .iter()
-        .any(|denied| normalise_tool_name(denied) == tool_name)
+        .any(|denied| denied.trim().eq_ignore_ascii_case(tool_name))
 }
 
 /// Filters the emitted tool list down to those `primary_agent_allows_tool`
 /// permits for `agent`.
 ///
 /// KNOWN LIMITATION: filtering is by each tool's canonical
-/// `function_name()`, and `normalise_tool_name` only lowercases/trims — it
+/// `function_name()`, and matching only trims and ignores ASCII case — it
 /// does not alias-resolve. For multi-action tools that fold several legacy
 /// actions into one emitted name (e.g. `agent` folding
 /// spawn/wait/close/send_input/resume, or `mcp` folding connect/disconnect),
@@ -317,9 +319,21 @@ pub fn apply_primary_agent_tool_policy(
     agent: &ActivePrimaryAgent,
 ) -> Option<Arc<Vec<ToolDefinition>>> {
     let tools = tools?;
+    let Some(first_rejected) = tools
+        .iter()
+        .position(|tool| !primary_agent_allows_tool(agent, tool.function_name()))
+    else {
+        return (!tools.is_empty()).then_some(tools);
+    };
     let filtered = tools
         .iter()
-        .filter(|tool| primary_agent_allows_tool(agent, tool.function_name()))
+        .take(first_rejected)
+        .chain(
+            tools
+                .iter()
+                .skip(first_rejected + 1)
+                .filter(|tool| primary_agent_allows_tool(agent, tool.function_name())),
+        )
         .cloned()
         .collect::<Vec<_>>();
 
@@ -381,10 +395,6 @@ pub fn evaluate_active_primary_agent_permissions(
     )
 }
 
-fn normalise_tool_name(tool_name: &str) -> String {
-    tool_name.trim().to_ascii_lowercase()
-}
-
 fn merge_primary_mcp_servers(config: &mut VTCodeConfig, servers: &[SubagentMcpServer]) {
     for server in servers {
         match server {
@@ -424,22 +434,6 @@ fn merge_active_primary_hooks(config: &mut HooksConfig, hooks: Option<&HooksConf
 
 fn append_hook_groups(target: &mut Vec<HookGroupConfig>, source: &[HookGroupConfig]) {
     target.extend(source.iter().cloned());
-}
-
-fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
-    let object = value.as_object()?;
-    let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
-    payload.insert("name".to_string(), serde_json::Value::String(name.to_string()));
-    for (key, value) in object {
-        if key == "type" {
-            continue;
-        }
-        payload.insert(key.clone(), value.clone());
-    }
-    if payload.contains_key("command") && !payload.contains_key("args") {
-        payload.insert("args".to_string(), serde_json::Value::Array(Vec::new()));
-    }
-    serde_json::from_value(serde_json::Value::Object(payload)).ok()
 }
 
 #[cfg(test)]
@@ -729,6 +723,7 @@ mod tests {
             assert!(primary_agent_allows_tool(&active, tools::CODE_SEARCH), "{name} should expose code_search");
             assert!(primary_agent_allows_tool(&active, tools::EXEC_COMMAND), "{name} should expose exec_command");
             assert!(primary_agent_allows_tool(&active, tools::REQUEST_USER_INPUT));
+            assert!(primary_agent_allows_tool(&active, tools::RECORD_DECISION));
 
             assert!(!primary_agent_allows_tool(&active, tools::APPLY_PATCH), "{name} must not expose apply_patch");
             assert!(!primary_agent_allows_tool(&active, tools::RUN_PTY_CMD), "{name} must not expose run_pty_cmd");
@@ -739,13 +734,152 @@ mod tests {
     #[test]
     fn tool_policy_intersects_allow_list_then_applies_deny_list() {
         let mut spec = test_spec("worker");
-        spec.tools = Some(vec![tools::CODE_SEARCH.to_string(), tools::EXEC_COMMAND.to_string()]);
-        spec.disallowed_tools = vec![tools::CODE_SEARCH.to_ascii_uppercase()];
+        spec.tools = Some(vec![" \tCoDe_SeArCh\n".to_string(), "\u{2003}ExEc_CoMmAnD\u{a0}".to_string()]);
+        spec.disallowed_tools = vec!["\u{a0}CODE_search\u{2003}".to_string()];
         let active = ActivePrimaryAgent::from_spec(&spec);
 
-        assert!(primary_agent_allows_tool(&active, tools::EXEC_COMMAND));
-        assert!(!primary_agent_allows_tool(&active, tools::CODE_SEARCH));
+        assert!(primary_agent_allows_tool(&active, "\u{a0}EXEC_command\u{2003}"));
+        assert!(!primary_agent_allows_tool(&active, " \tcode_SEARCH\n"));
         assert!(!primary_agent_allows_tool(&active, tools::APPLY_PATCH));
+        assert!(!primary_agent_allows_tool(&active, "exec_command_extra"));
+        assert!(!primary_agent_allows_tool(&active, tools::RUN_PTY_CMD));
+    }
+
+    #[test]
+    fn absent_tool_allow_list_allows_names_except_deny_matches() {
+        let mut spec = test_spec("worker");
+        spec.tools = None;
+        spec.disallowed_tools = vec![" \tCoDe_SeArCh\n".to_string()];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        assert!(primary_agent_allows_tool(&active, " ExEc_CoMmAnD "));
+        assert!(primary_agent_allows_tool(&active, "custom_tool"));
+        assert!(!primary_agent_allows_tool(&active, " CODE_search "));
+    }
+
+    #[test]
+    fn tool_policy_preserves_empty_name_matching() {
+        let mut spec = test_spec("worker");
+        spec.tools = None;
+        spec.disallowed_tools.clear();
+        let mut active = ActivePrimaryAgent::from_spec(&spec);
+
+        assert!(primary_agent_allows_tool(&active, ""));
+        assert!(primary_agent_allows_tool(&active, "\u{2003}\t\u{a0}"));
+        active.tools = Some(Vec::new());
+        assert!(!primary_agent_allows_tool(&active, ""));
+        assert!(!primary_agent_allows_tool(&active, "\u{2003}\t\u{a0}"));
+        active.tools = Some(vec!["\u{a0} \t".to_string()]);
+        assert!(primary_agent_allows_tool(&active, ""));
+        assert!(primary_agent_allows_tool(&active, "\u{2003}"));
+        assert!(!primary_agent_allows_tool(&active, "custom_tool"));
+        active.disallowed_tools = vec![String::new()];
+        assert!(!primary_agent_allows_tool(&active, ""));
+        assert!(!primary_agent_allows_tool(&active, "\u{2003}"));
+    }
+
+    #[test]
+    fn tool_policy_keeps_non_ascii_case_and_non_whitespace_distinct() {
+        let mut spec = test_spec("worker");
+        spec.tools = Some(vec!["\u{2003}CAFÉ\u{a0}".to_string()]);
+        spec.disallowed_tools = vec![" café ".to_string()];
+        let mut active = ActivePrimaryAgent::from_spec(&spec);
+
+        assert!(primary_agent_allows_tool(&active, " caFÉ "));
+        assert!(!primary_agent_allows_tool(&active, "café"));
+        assert!(!primary_agent_allows_tool(&active, "CAFE"));
+        assert!(!primary_agent_allows_tool(&active, "\u{200b}CAFÉ\u{200b}"));
+
+        active.tools = None;
+        assert!(primary_agent_allows_tool(&active, "CAFÉ"));
+        assert!(!primary_agent_allows_tool(&active, "CaFé"));
+    }
+
+    #[test]
+    fn mixed_case_cleanup_and_tracker_names_bypass_empty_allow_list_and_explicit_denials() {
+        let mut spec = test_spec("restricted");
+        spec.tools = Some(Vec::new());
+        spec.disallowed_tools = vec![
+            " Wait_AGENT ".to_string(),
+            "\u{2003}Close_Agent\u{a0}".to_string(),
+            "\tTask_TRACKER\n".to_string(),
+        ];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+
+        assert!(primary_agent_allows_tool(&active, "\u{a0}WAIT_agent\u{2003}"));
+        assert!(primary_agent_allows_tool(&active, " Close_AGENT "));
+        assert!(primary_agent_allows_tool(&active, " TaSk_TrAcKeR "));
+        assert!(!primary_agent_allows_tool(&active, " Agent "));
+        assert!(!primary_agent_allows_tool(&active, " Spawn_AGENT "));
+        assert!(!primary_agent_allows_tool(&active, "task_tracker_extra"));
+        assert!(!primary_agent_allows_tool(&active, "wait_agent_extra"));
+    }
+
+    #[test]
+    fn filtered_tool_catalog_preserves_surviving_names_and_order() {
+        let mut spec = test_spec("worker");
+        spec.tools = Some(vec![
+            " APPLY_patch ".to_string(),
+            " EXEC_command ".to_string(),
+            " CODE_search ".to_string(),
+        ]);
+        spec.disallowed_tools = vec![" code_SEARCH ".to_string()];
+        let active = ActivePrimaryAgent::from_spec(&spec);
+        let catalog = Arc::new(
+            [
+                "Exec_Command",
+                "code_search",
+                "WaIt_AgEnT",
+                "apply_patch",
+                "TASK_TRACKER",
+                "run_pty_cmd",
+                "agent",
+            ]
+            .into_iter()
+            .map(|name| ToolDefinition::function(name.to_string(), String::new(), json!({"type": "object"})))
+            .collect(),
+        );
+
+        let filtered = apply_primary_agent_tool_policy(Some(Arc::clone(&catalog)), &active).expect("surviving tools");
+
+        assert!(!Arc::ptr_eq(&filtered, &catalog));
+        assert_eq!(
+            filtered.iter().map(ToolDefinition::function_name).collect::<Vec<_>>(),
+            ["Exec_Command", "WaIt_AgEnT", "apply_patch", "TASK_TRACKER"]
+        );
+        assert_eq!(catalog.len(), 7);
+        assert_eq!(catalog[1].function_name(), "code_search");
+    }
+
+    #[test]
+    fn unchanged_tool_catalog_reuses_shared_definitions() {
+        let mut spec = test_spec("worker");
+        spec.tools = None;
+        spec.disallowed_tools.clear();
+        let active = ActivePrimaryAgent::from_spec(&spec);
+        let catalog = Arc::new(vec![ToolDefinition::function(
+            "exec_command".to_string(),
+            "Run a command".to_string(),
+            json!({"type": "object", "properties": {"cmd": {"type": "string"}}}),
+        )]);
+
+        let filtered = apply_primary_agent_tool_policy(Some(Arc::clone(&catalog)), &active).expect("unchanged catalog");
+
+        assert!(Arc::ptr_eq(&filtered, &catalog));
+        assert_eq!(filtered[0].function_name(), "exec_command");
+    }
+
+    #[test]
+    fn tool_policy_returns_none_for_absent_empty_or_fully_denied_catalogs() {
+        let active = ActivePrimaryAgent::from_spec(&test_spec("worker"));
+        assert!(apply_primary_agent_tool_policy(None, &active).is_none());
+        assert!(apply_primary_agent_tool_policy(Some(Arc::new(Vec::new())), &active).is_none());
+        let denied = Arc::new(vec![ToolDefinition::function(
+            "apply_patch".to_string(),
+            String::new(),
+            json!({"type": "object"}),
+        )]);
+        assert!(apply_primary_agent_tool_policy(Some(denied), &active).is_none());
     }
 
     #[test]
@@ -875,6 +1009,10 @@ mod tests {
         assert_eq!(runtime.mcp.providers.len(), 2);
         assert_eq!(runtime.mcp.providers[0].name, "global");
         assert_eq!(runtime.mcp.providers[1].name, "local");
+        let providers = serde_json::to_value(&runtime.mcp.providers).expect("serialize providers");
+        assert_eq!(providers[0]["command"], "global-mcp");
+        assert_eq!(providers[1]["command"], "local-mcp");
+        assert_eq!(providers[1]["args"], json!([]));
     }
 
     #[test]

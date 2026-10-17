@@ -1,8 +1,12 @@
 # Zed Extension File Search Integration
 
+> Historical note: the Zed extension (`extensions/zed-extension/`) has been removed as part of the CLI-only focus.
+> This document is kept as a record of the Phase 3a design.
+
 ## Overview
 
-Phase 3a integrates the optimized file search system into the VT Code Zed extension, exposing file enumeration and discovery capabilities directly through Zed's command palette and IDE interface.
+Phase 3a integrates the optimized file search system into the VT Code Zed extension, exposing file enumeration and
+discovery capabilities directly through Zed's command palette and IDE interface.
 
 ## New Commands
 
@@ -37,7 +41,7 @@ if response.success {
 
 **Command Line Usage** (via Zed):
 
-```
+```text
 vtcode find-files --pattern component --limit 50
 ```
 
@@ -67,7 +71,7 @@ if response.success {
 
 **Command Line Usage**:
 
-```
+```text
 vtcode list-files --exclude "target/**,node_modules/**"
 ```
 
@@ -97,7 +101,7 @@ if response.success {
 
 **Command Line Usage**:
 
-```
+```text
 vtcode find-files --pattern test --exclude "**/__pycache__/**"
 ```
 
@@ -146,21 +150,21 @@ pub fn search_files_command(&self, pattern: &str, exclude: &str) -> CommandRespo
 ### Modified Files
 
 1. **src/command_builder.rs**
-    - Added `find_files()` shortcut
-    - Added `list_files()` shortcut
-    - Added `search_files()` shortcut
-    - Added 3 unit tests for new shortcuts
+   - Added `find_files()` shortcut
+   - Added `list_files()` shortcut
+   - Added `search_files()` shortcut
+   - Added 3 unit tests for new shortcuts
 
 2. **src/commands.rs**
-    - Added `find_files()` function
-    - Added `list_files()` function
-    - Added `search_files()` function
-    - Added 5 unit tests for new functions
+   - Added `find_files()` function
+   - Added `list_files()` function
+   - Added `search_files()` function
+   - Added 5 unit tests for new functions
 
 3. **src/lib.rs**
-    - Exported new file search commands
-    - Added convenience methods to VTCodeExtension
-    - Added documentation for new methods
+   - Exported new file search commands
+   - Added convenience methods to VTCodeExtension
+   - Added documentation for new methods
 
 ## API Reference
 
@@ -228,7 +232,7 @@ let response = extension.search_files_command("component", "**/__tests__/**");
 
 ### Benchmarks
 
-```
+```text
 10,000 files enumeration:
   Before: ~2500ms
   After:  ~350ms
@@ -262,7 +266,7 @@ All new functions have comprehensive test coverage:
 
 **Test Results**:
 
-```
+```text
 Running 7 tests
 v 7 passed
 ```
@@ -403,8 +407,8 @@ let files = parse_response(response);
 
 **Phase 3b**: [wait] In Progress
 
--  This documentation file
--  Command palette integration
--  Zed keybinding examples
+- This documentation file
+- Command palette integration
+- Zed keybinding examples
 
 **Next**: VS Code extension integration (Phase 3c)

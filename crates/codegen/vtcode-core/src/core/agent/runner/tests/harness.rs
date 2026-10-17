@@ -6,6 +6,128 @@
 use super::*;
 
 #[tokio::test]
+async fn headless_loop_stop_preserves_failure_and_workspace_context() {
+    let temp = TempDir::new().unwrap();
+    let mut cfg = VTCodeConfig::default();
+    cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+    cfg.automation.full_auto.max_turns = 8;
+    let mut runner = Box::pin(make_runner(&temp, cfg, "loop-stop")).await;
+    assert!(
+        runner
+            .system_prompt
+            .contains(&format!("Working directory: {}", workspace_root(&temp).display()))
+    );
+    runner.enable_full_auto(&[tools::TASK_TRACKER.into()]).await;
+    runner.loop_detector.lock().set_tool_limit(tools::TASK_TRACKER, 1);
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(tools::TASK_TRACKER, json!({"action":"list"})),
+        tool_call_response(tools::TASK_TRACKER, json!({"action":"list"})),
+        tool_call_response(tools::TASK_TRACKER, json!({"action":"list"})),
+        text_response("The task is complete."),
+    ]));
+    let result = Box::pin(runner.execute_task(&task("Inspect tracker", "loop-stop"), &[]))
+        .await
+        .unwrap();
+    assert_eq!(result.outcome, TaskOutcome::LoopDetected);
+}
+
+#[tokio::test]
+async fn coordinator_headless_completion_waits_for_owned_verification_and_rejects_failure() {
+    use crate::core::agent::events::SessionStoreSink;
+    use crate::exec::events::matrix::*;
+    use vtcode_memory::matrix::MatrixState;
+    for (check, succeeds) in [("sleep 0.05; printf checked > proof.txt", true), ("false", false)] {
+        let temp = TempDir::new().unwrap();
+        let workspace = workspace_root(&temp);
+        assert!(
+            std::process::Command::new("git")
+                .arg("init")
+                .current_dir(&workspace)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+        fs::write(workspace.join("source.rs"), "source").unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .args(["add", "source.rs"])
+                .current_dir(&workspace)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let mut cfg = VTCodeConfig {
+            default_primary_agent: "coordinator".into(),
+            ..Default::default()
+        };
+        cfg.agent.harness.inspection.mode = vtcode_config::core::agent::InspectionMode::Off;
+        cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+        cfg.automation.full_auto.enabled = true;
+        cfg.automation.full_auto.max_turns = 4;
+        cfg.commands.allow_list.push("false".into());
+        let session_id = "matrix-headless";
+        let mut runner = Box::pin(make_runner(&temp, cfg, session_id)).await;
+        runner.set_active_primary_agent(ActivePrimaryAgent::from_spec(
+            &vtcode_config::builtin_primary_coordinator_agent(),
+        ));
+        runner.enable_full_auto(&["matrix".into()]).await;
+        let mut state = MatrixState::create(
+            MatrixSpec {
+                id: "check".into(),
+                resources: Default::default(),
+                tasks: vec![MatrixTaskSpec {
+                    id: "one".into(),
+                    instructions: "Inspect source".into(),
+                    dependencies: vec![],
+                    workspace: ".".into(),
+                    access: WorkspaceAccess::Read,
+                    checks: vec![check.into()],
+                    resources: Default::default(),
+                    timeout_secs: 5,
+                    replay_safe: false,
+                    inputs: vec![],
+                }],
+            },
+            &workspace,
+        )
+        .unwrap();
+        state.start().unwrap();
+        let execution = state.reserve_ready(3).unwrap().remove(0);
+        state
+            .report(&execution.attempt_id, &execution.worker_id, MatrixOutcome::Success, vec![], true)
+            .unwrap();
+        let sink = SessionStoreSink::open(&workspace, session_id).await.unwrap();
+        (sink.matrix_persistence().persist)(state.snapshot().clone()).await.unwrap();
+        sink.close().await.unwrap();
+        runner.provider_client = Box::new(QueuedProvider::new(vec![
+            tool_call_response("matrix", json!({"action":"resume","matrix_id":"check"})),
+            text_response("The task is complete."),
+            text_response("The matrix results are ready."),
+        ]));
+        let result = Box::pin(runner.execute_task(&task("Matrix checks", "matrix-task"), &[]))
+            .await
+            .unwrap();
+        assert_eq!(result.outcome.is_success(), succeeds, "{:?}", result.outcome);
+        assert_eq!(result.turns_executed, 2);
+        let sink = SessionStoreSink::open(&workspace, session_id).await.unwrap();
+        let snapshots = (sink.matrix_persistence().load)().await.unwrap();
+        assert_eq!(
+            snapshots[0].lifecycle,
+            if succeeds {
+                MatrixLifecycle::Succeeded
+            } else {
+                MatrixLifecycle::Blocked
+            }
+        );
+        if succeeds {
+            assert_eq!(fs::read_to_string(workspace.join("proof.txt")).unwrap(), "checked");
+        }
+        sink.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn exec_full_auto_continues_until_tracker_is_completed() {
     let temp = TempDir::new().expect("tempdir");
     let workspace = workspace_root(&temp);
@@ -13,10 +135,14 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    vt_cfg.automation.full_auto.max_turns = 3;
+    vt_cfg.automation.full_auto.max_turns = 4;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-continuation-success")).await;
     runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({"action":"create", "title":"Current task", "items":["Finish tracker step"]}),
+        ),
         text_response("The task is complete."),
         tool_call_response(
             tools::TASK_TRACKER,
@@ -39,6 +165,39 @@ async fn exec_full_auto_continues_until_tracker_is_completed() {
 
     let tracker = fs::read_to_string(workspace.join(".vtcode/tasks/current_task.md")).expect("tracker file");
     assert!(tracker.contains("- [x] Finish tracker step"));
+}
+
+#[tokio::test]
+async fn informational_exec_does_not_continue_or_edit_an_unadopted_workspace_tracker() {
+    for full_auto in [false, true] {
+        for answer in [
+            "VT Code is a coding assistant. The task is complete.",
+            "The task is complete.",
+        ] {
+            let temp = TempDir::new().expect("tempdir");
+            let workspace = workspace_root(&temp);
+            seed_tracker(&workspace, json!(["Unrelated README edits"])).await;
+            let tracker_path = workspace.join(".vtcode/tasks/current_task.md");
+            let before = fs::read_to_string(&tracker_path).expect("old tracker");
+            let mut cfg = VTCodeConfig::default();
+            cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+            let mut runner = Box::pin(make_runner(&temp, cfg, "thread-informational-tracker")).await;
+            if full_auto {
+                runner.enable_full_auto(&[tools::TASK_TRACKER.to_string()]).await;
+            }
+            runner.provider_client = Box::new(QueuedProvider::new(vec![
+                text_response(answer),
+                tool_call_response(tools::TASK_TRACKER, json!({"action":"update", "index":1,"status":"completed"})),
+                text_response("All work is complete."),
+            ]));
+            let result = Box::pin(runner.execute_task(&task("what is vtcode", "informational-task"), &[]))
+                .await
+                .expect("task result");
+            assert_eq!(result.turns_executed, 1, "full_auto={full_auto}, answer={answer}");
+            assert!(!harness_events(&result).contains(&HarnessEventKind::ContinuationStarted));
+            assert_eq!(fs::read_to_string(&tracker_path).expect("preserved tracker"), before);
+        }
+    }
 }
 
 #[tokio::test]
@@ -111,7 +270,17 @@ async fn exec_full_auto_runs_verification_before_accepting_completion() {
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-success")).await;
     runner.enable_full_auto(&[]).await;
-    runner.provider_client = Box::new(QueuedProvider::new(vec![text_response("The task is complete.")]));
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action":"create", "title":"Current verification", "items":[{
+                    "description":"Verify harness", "status":"completed", "verify":"pwd"
+                }]
+            }),
+        ),
+        text_response("The task is complete."),
+    ]));
 
     let result = Box::pin(runner.execute_task(&task("Verification success", "exec-task"), &[]))
         .await
@@ -141,10 +310,18 @@ async fn exec_full_auto_retries_after_verification_failure() {
 
     let mut vt_cfg = VTCodeConfig::default();
     vt_cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
-    vt_cfg.automation.full_auto.max_turns = 2;
+    vt_cfg.automation.full_auto.max_turns = 3;
     let mut runner = Box::pin(make_runner(&temp, vt_cfg, "thread-verification-failure")).await;
     runner.enable_full_auto(&[]).await;
     runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::TASK_TRACKER,
+            json!({
+                "action":"create", "title":"Current verification", "items":[{
+                    "description":"Verify harness", "status":"completed", "verify":"cat missing-verification-target"
+                }]
+            }),
+        ),
         text_response("The task is complete."),
         text_response("Task is now complete."),
     ]));
@@ -864,4 +1041,71 @@ async fn refusal_explanation_falls_back_to_trimmed_content() {
                 .to_string()
         )
     );
+}
+
+#[tokio::test]
+async fn headless_changed_code_cannot_skip_verification_with_continuation_off_or_neutral_text() {
+    for verifier in [None, Some("rustc --version")] {
+        let temp = TempDir::new().unwrap();
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+        cfg.agent.harness.continuation_policy = vtcode_config::core::agent::ContinuationPolicy::Off;
+        cfg.agent.harness.verification.default_verifier_override = verifier.map(str::to_owned);
+        cfg.automation.full_auto.max_turns = 3;
+        let mut runner = Box::pin(make_runner(&temp, cfg, "short-edit")).await;
+        runner.enable_full_auto(&[tools::APPLY_PATCH.into()]).await;
+        runner.tool_registry.allow_all_tools().await.unwrap();
+        let provider = RecordingQueuedProvider::new(vec![
+            tool_call_response(
+                tools::APPLY_PATCH,
+                json!({"input":"*** Begin Patch\n*** Add File: main.rs\n+fn main() {}\n*** End Patch"}),
+            ),
+            text_response("Applied the requested change."),
+        ]);
+        runner.provider_client = Box::new(provider.clone());
+        let result = Box::pin(runner.execute_task(&task("One code edit", "exec-task"), &[]))
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{error}; requests: {:?}",
+                    provider
+                        .recorded_requests()
+                        .iter()
+                        .map(|request| &request.messages)
+                        .collect::<Vec<_>>()
+                )
+            });
+        assert!(workspace_root(&temp).join("main.rs").exists(), "{:?}", result.outcome);
+        assert_eq!(result.outcome.is_success(), verifier.is_some(), "{:?}", result.outcome);
+        if verifier.is_none() {
+            assert!(result.outcome.description().contains("Unverified"));
+        }
+    }
+}
+
+#[tokio::test]
+async fn headless_completion_reuses_a_fresh_model_run_check() {
+    let temp = TempDir::new().unwrap();
+    let mut cfg = VTCodeConfig::default();
+    cfg.agent.harness.orchestration_mode = vtcode_config::core::agent::HarnessOrchestrationMode::Single;
+    cfg.agent.harness.continuation_policy = vtcode_config::core::agent::ContinuationPolicy::Off;
+    let mut runner = Box::pin(make_runner(&temp, cfg, "reuse-verifier")).await;
+    runner
+        .enable_full_auto(&[tools::APPLY_PATCH.into(), tools::EXEC_COMMAND.into()])
+        .await;
+    runner.tool_registry.allow_all_tools().await.unwrap();
+    runner.provider_client = Box::new(QueuedProvider::new(vec![
+        tool_call_response(
+            tools::APPLY_PATCH,
+            json!({"input":"*** Begin Patch\n*** Add File: main.rs\n+fn main() {}\n*** End Patch"}),
+        ),
+        tool_call_response(tools::EXEC_COMMAND, json!({"cmd":"rustc --version"})),
+        text_response("The task is complete."),
+    ]));
+    let result = Box::pin(runner.execute_task(&task("Reuse verifier", "exec-task"), &[]))
+        .await
+        .unwrap();
+    assert_eq!(result.outcome, TaskOutcome::Success);
+    assert!(!harness_events(&result).contains(&HarnessEventKind::VerificationStarted));
+    assert!(workspace_root(&temp).join("main.rs").exists());
 }

@@ -15,10 +15,10 @@ pub const MINIMAL_DESCRIPTION_MAX_CHARS: usize = 64;
 
 /// Progressive mode (the default) keeps whole leading sentences of a tool
 /// description up to this many characters. Builtin descriptions are limited
-/// to 1500 characters by the description contract test and currently fit
-/// well under this cap, so they reach the model intact; only unusually long
+/// to 1500 characters by the description contract test, matching this cap,
+/// so they reach the model intact; only unusually long
 /// tails are dropped, at a sentence boundary.
-pub const PROGRESSIVE_DESCRIPTION_MAX_CHARS: usize = 1024;
+pub const PROGRESSIVE_DESCRIPTION_MAX_CHARS: usize = 1500;
 
 /// Progressive mode keeps parameter descriptions, trimming each one to whole
 /// leading sentences within this many characters.
@@ -318,6 +318,22 @@ mod tests {
         assert!(trimmed.starts_with(description), "{trimmed}");
         assert!(trimmed.ends_with('.'), "trim must stop at a sentence boundary: {trimmed}");
         assert!(trimmed.chars().count() <= PROGRESSIVE_DESCRIPTION_MAX_CHARS);
+    }
+
+    #[test]
+    fn progressive_description_preserves_builtin_contract_limit_and_mcp_cap() {
+        let description = format!("{}.", "A".repeat(1499));
+        assert_eq!(compact_tool_description(&description, ToolDocumentationMode::Progressive, None), description);
+
+        let over_limit = format!("{description} Extra sentence.");
+        assert_eq!(compact_tool_description(&over_limit, ToolDocumentationMode::Progressive, None), description);
+        let mcp = compact_tool_description(
+            &description,
+            ToolDocumentationMode::Progressive,
+            Some(MCP_TOOL_DESCRIPTION_MAX_LEN),
+        );
+        assert_eq!(mcp.chars().count(), MCP_TOOL_DESCRIPTION_MAX_LEN);
+        assert!(mcp.ends_with('…'));
     }
 
     #[test]

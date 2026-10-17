@@ -99,11 +99,6 @@ impl AutonomousExecutor {
     }
 
     #[inline]
-    fn is_command_session_tool(tool_name: &str) -> bool {
-        tool_intent::canonical_command_session_tool_name(tool_name).is_some()
-    }
-
-    #[inline]
     fn is_command_session_run(tool_name: &str, args: &Value) -> bool {
         tool_intent::is_command_run_tool_call(tool_name, args)
             || (tool_name == tools::UNIFIED_EXEC && command_session_action(args).is_none())
@@ -255,7 +250,7 @@ impl AutonomousExecutor {
                 .ok()
                 .flatten()
                 .is_some_and(|cmd| self.is_destructive_command(&cmd)),
-            _ if Self::is_command_session_tool(tool_name)
+            _ if tool_intent::is_command_session_tool(tool_name)
                 && command_session_action_in(args, &["write", "continue"]) =>
             {
                 interactive_input_text(args).is_some_and(|input| self.is_destructive_command(input))
@@ -307,7 +302,7 @@ impl AutonomousExecutor {
                         .context("Missing or invalid 'command' argument")?,
                 )?;
             }
-            _ if Self::is_command_session_tool(tool_name)
+            _ if tool_intent::is_command_session_tool(tool_name)
                 && command_session_action_in(args, &["write", "continue"]) =>
             {
                 if let Some(input) = interactive_input_text(args) {

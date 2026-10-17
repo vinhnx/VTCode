@@ -3,25 +3,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+use vtcode_commons::validation::is_valid_origin;
 
 const PAIRING_CODE_HEX_DIGITS: usize = 12;
 const MAX_FAILED_PAIRING_ATTEMPTS: u8 = 5;
-
-pub(crate) fn is_valid_origin(origin: &str) -> bool {
-    let Ok(parsed) = url::Url::parse(origin) else {
-        return false;
-    };
-    origin == origin.trim()
-        && !origin.chars().any(char::is_whitespace)
-        && !origin.contains('*')
-        && matches!(parsed.scheme(), "http" | "https")
-        && parsed.host_str().is_some_and(|host| !host.is_empty())
-        && parsed.username().is_empty()
-        && parsed.password().is_none()
-        && (parsed.path().is_empty() || (parsed.path() == "/" && !origin.ends_with('/')))
-        && parsed.query().is_none()
-        && parsed.fragment().is_none()
-}
 
 #[derive(Debug)]
 struct PendingPairing {

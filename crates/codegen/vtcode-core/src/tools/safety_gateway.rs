@@ -28,8 +28,8 @@ use crate::tools::invocation::ToolInvocationId;
 use crate::tools::rate_limit_config::{tool_calls_per_minute_from_env, tool_calls_per_second_from_env};
 use crate::tools::registry::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 use crate::tools::tool_intent::{
-    action_qualified_policy_name, classify_tool_intent, command_session_action_in, command_session_action_is,
-    file_operation_action_is,
+    ToolIntent, action_qualified_policy_name, classify_tool_intent, command_session_action_in,
+    command_session_action_is, file_operation_action_is,
 };
 use vtcode_config::constants::tool_limits::{
     DEFAULT_MAX_TOOL_CALLS_PER_TURN, DEFAULT_SAFETY_MAX_TOOL_CALLS_PER_SESSION, MAX_CONTROL_PLANE_TOOL_CALLS_PER_TURN,
@@ -329,32 +329,32 @@ fn file_access_targets(tool_name: &str, args: &Value) -> Vec<FileAccessTarget> {
         tools::APPLY_PATCH => {
             targets.extend(patch_file_access_targets(args));
         }
-        tools::UNIFIED_FILE if file_operation_action_is(args, "write") => {
-            if let Some(path) = primary_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Write);
-            }
-        }
-        tools::UNIFIED_FILE if file_operation_action_is(args, "edit") => {
-            if let Some(path) = primary_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Modify);
-            }
-        }
-        tools::UNIFIED_FILE if file_operation_action_is(args, "delete") => {
-            if let Some(path) = primary_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Delete);
-            }
-        }
-        tools::UNIFIED_FILE if file_operation_action_is(args, "move") => {
-            if let Some(path) = primary_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Modify);
-            }
-            if let Some(path) = destination_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Write);
-            }
-        }
-        tools::UNIFIED_FILE if file_operation_action_is(args, "copy") => {
-            if let Some(path) = destination_path_arg(args) {
-                push_file_access_target(&mut targets, path, AccessType::Write);
+        tools::UNIFIED_FILE => {
+            // Single home of the unified-file mapping; mirrors the legacy
+            // file-helper arms above. Keep them in sync.
+            if file_operation_action_is(args, "write") {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
+            } else if file_operation_action_is(args, "edit") {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Modify);
+                }
+            } else if file_operation_action_is(args, "delete") {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Delete);
+                }
+            } else if file_operation_action_is(args, "move") {
+                if let Some(path) = primary_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Modify);
+                }
+                if let Some(path) = destination_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
+            } else if file_operation_action_is(args, "copy") {
+                if let Some(path) = destination_path_arg(args) {
+                    push_file_access_target(&mut targets, path, AccessType::Write);
+                }
             }
         }
         _ => {}
@@ -367,13 +367,8 @@ fn proposed_changes_preview(args: &Value) -> String {
     const PREVIEW_LIMIT: usize = 500;
 
     let preview_text = |label: &str, text: &str| {
-        let preview_len = text.len().min(PREVIEW_LIMIT);
-        format!(
-            "{label} ({} bytes):\n{}{}",
-            text.len(),
-            &text[..preview_len],
-            if text.len() > preview_len { "..." } else { "" }
-        )
+        let prefix = vtcode_commons::formatting::truncate_utf8_prefix(text, PREVIEW_LIMIT);
+        format!("{label} ({} bytes):\n{}{}", text.len(), prefix, if prefix.len() < text.len() { "..." } else { "" })
     };
 
     if let Some(content) = args.get("content").and_then(|value| value.as_str()) {
@@ -382,7 +377,13 @@ fn proposed_changes_preview(args: &Value) -> String {
 
     if let Some(old_str) = args.get("old_str").and_then(|value| value.as_str()) {
         let new_str = args.get("new_str").and_then(|value| value.as_str()).unwrap_or("");
-        return format!("Replace:\n  '{old_str}'\nWith:\n  '{new_str}'");
+        // Bound like the content/patch branches: an unbounded replacement
+        // would bloat the approval prompt and audit log.
+        return format!(
+            "Replace:\n  '{}'\nWith:\n  '{}'",
+            vtcode_commons::formatting::truncate_byte_budget(old_str, PREVIEW_LIMIT, "..."),
+            vtcode_commons::formatting::truncate_byte_budget(new_str, PREVIEW_LIMIT, "...")
+        );
     }
 
     if let Ok(Some(patch_input)) = decode_apply_patch_input(args) {
@@ -510,24 +511,6 @@ impl SafetyGateway {
         preapproved.contains(tool_name)
     }
 
-    /// Check if a tool is destructive
-    pub fn is_destructive(&self, tool_name: &str) -> bool {
-        classify_tool_intent(tool_name, &Value::Object(Default::default())).destructive
-    }
-
-    /// Check if a tool is mutating
-    pub fn is_mutating(&self, tool_name: &str) -> bool {
-        classify_tool_intent(tool_name, &Value::Object(Default::default())).mutating
-    }
-
-    fn is_destructive_call(&self, tool_name: &str, args: &Value) -> bool {
-        classify_tool_intent(tool_name, args).destructive
-    }
-
-    fn is_mutating_call(&self, tool_name: &str, args: &Value) -> bool {
-        classify_tool_intent(tool_name, args).mutating
-    }
-
     /// Main entry point: check safety for a tool invocation.
     ///
     /// Returns a [`SafetyDecision`] indicating whether execution can proceed.
@@ -630,6 +613,12 @@ impl SafetyGateway {
         args: &Value,
         inv_id: &str,
     ) -> SafetyDecision {
+        // Extract the command text once: the policy check, the risk context,
+        // and the approval justification all read the same value, and each
+        // extraction re-parses the command payload (shell_words split plus
+        // action re-derivation).
+        let command = command_text_for_tool(tool_name, args);
+
         if let Some(decision) = self.check_dotfile_protection(tool_name, args, &ctx.session_id).await {
             tracing::info!(
                 invocation_id = %inv_id,
@@ -640,8 +629,8 @@ impl SafetyGateway {
         }
 
         if let Some(ref policy) = self.command_policy
-            && let Some(command) = command_text_for_tool(tool_name, args)
-            && !policy.allows_text(&command)
+            && let Some(command) = command.as_deref()
+            && !policy.allows_text(command)
         {
             let reason = format!("Command '{command}' blocked by policy");
             tracing::info!(
@@ -671,11 +660,16 @@ impl SafetyGateway {
             return SafetyDecision::Allow;
         }
 
-        let risk_ctx = self.build_risk_context(tool_name, args);
+        // Classify once for the risk context, the justification, and the
+        // destructive gate below: all three read the same tool name and args,
+        // and each re-classification re-parses command payloads.
+        let intent = classify_tool_intent(tool_name, args);
+        let command = command.as_deref();
+        let risk_ctx = self.build_risk_context(tool_name, args, &intent, command);
         let risk_level = ToolRiskScorer::calculate_risk(&risk_ctx);
 
         if ToolRiskScorer::requires_justification(risk_level, self.config.read().approval_risk_threshold) {
-            let justification = self.build_approval_justification(tool_name, &risk_level, args);
+            let justification = self.build_approval_justification(tool_name, &risk_level, args, &intent, command);
             tracing::info!(
                 invocation_id = %inv_id,
                 tool = %tool_name,
@@ -685,7 +679,7 @@ impl SafetyGateway {
             return SafetyDecision::NeedsApproval(justification);
         }
 
-        if self.is_destructive_call(tool_name, args) {
+        if intent.destructive {
             let justification = format!("Tool '{tool_name}' is destructive and may modify files or execute commands.");
             tracing::info!(
                 invocation_id = %inv_id,
@@ -892,7 +886,17 @@ impl SafetyGateway {
     }
 
     /// Build risk context from tool name and arguments
-    fn build_risk_context(&self, tool_name: &str, args: &Value) -> ToolRiskContext {
+    ///
+    /// `command` is the command extracted once by the caller
+    /// ([`Self::evaluate_non_rate_decision`]); re-deriving it here would
+    /// re-parse the command payload for every risk evaluation.
+    fn build_risk_context(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        intent: &ToolIntent,
+        command: Option<&str>,
+    ) -> ToolRiskContext {
         let source = if tool_name.starts_with("mcp_") {
             ToolSource::Mcp
         } else if tool_name.starts_with("acp_") {
@@ -906,10 +910,10 @@ impl SafetyGateway {
         let mut ctx = ToolRiskContext::new(risk_tool_name.to_string(), source, self.config.read().workspace_trust);
 
         // Set flags based on tool type
-        if self.is_mutating_call(tool_name, args) {
+        if intent.mutating {
             ctx = ctx.as_write();
         }
-        if self.is_destructive_call(tool_name, args) {
+        if intent.destructive {
             ctx = ctx.as_destructive();
         }
 
@@ -918,7 +922,7 @@ impl SafetyGateway {
         }
 
         // Extract command args for shell tools
-        if let Some(command) = command_text_for_tool(tool_name, args) {
+        if let Some(command) = command {
             ctx = ctx.with_args(command.split_whitespace().map(String::from).collect());
         }
 
@@ -926,17 +930,28 @@ impl SafetyGateway {
     }
 
     /// Build justification message for approval prompt
-    fn build_approval_justification(&self, tool_name: &str, risk_level: &RiskLevel, args: &Value) -> String {
+    ///
+    /// `command` is the command extracted once by the caller
+    /// ([`Self::evaluate_non_rate_decision`]); re-deriving it here would
+    /// re-parse the command payload on every approval prompt.
+    fn build_approval_justification(
+        &self,
+        tool_name: &str,
+        risk_level: &RiskLevel,
+        args: &Value,
+        intent: &ToolIntent,
+        command: Option<&str>,
+    ) -> String {
         let mut parts = Vec::new();
 
         parts.push(format!("Tool: {tool_name}"));
         parts.push(format!("Risk level: {risk_level}"));
 
-        if self.is_destructive_call(tool_name, args) {
+        if intent.destructive {
             parts.push("This tool may modify or delete files.".to_string());
         }
 
-        if let Some(command) = command_text_for_tool(tool_name, args) {
+        if let Some(command) = command {
             parts.push(format!("Command: {command}"));
         }
 
@@ -1029,6 +1044,64 @@ mod tests {
             .await;
 
         assert!(decision.needs_approval());
+    }
+
+    /// The command text is extracted once per check and threaded to the
+    /// policy, risk, and justification consumers. This pins the observable
+    /// behavior (identical policy verdict, risk sentence, and justification
+    /// command line as re-derivation would produce) after the extraction
+    /// stopped being repeated at each site.
+    #[tokio::test]
+    async fn command_extraction_feeds_policy_risk_and_justification_identically() {
+        let policy = CommandPolicyEvaluator::from_config(&CommandsConfig {
+            allow_list: vec!["cargo".into()],
+            ..Default::default()
+        });
+        let gateway = SafetyGateway::new().with_command_policy(policy);
+
+        // Allowed by policy: command is still classified for risk (mutating
+        // verifier) and surfaces verbatim in any justification.
+        let allowed = gateway
+            .check_safety(&make_ctx(), tools::EXEC_COMMAND, &serde_json::json!({"command": "cargo test"}))
+            .await;
+        assert!(allowed.is_allowed());
+
+        // Denied by policy: the denial reports the same single command.
+        let denied = gateway
+            .check_safety(&make_ctx(), tools::EXEC_COMMAND, &serde_json::json!({"command": "rm -rf /"}))
+            .await;
+        let SafetyDecision::Deny(reason) = denied else {
+            panic!("policy denial expected");
+        };
+        assert!(reason.contains("rm -rf /"), "denial must carry the extracted command: {reason}");
+        assert!(reason.starts_with("Command 'rm -rf /' blocked by policy"), "unexpected denial shape: {reason}");
+
+        // Justification path: the risk classifier and the justification see
+        // the same extracted command (marked unsafe by the gateway config).
+        gateway.config.write().approval_risk_threshold.clone_from(&RiskLevel::Low);
+        let justified = gateway
+            .check_safety(&make_ctx(), tools::EXEC_COMMAND, &serde_json::json!({"command": "cargo publish"}))
+            .await;
+        if let SafetyDecision::NeedsApproval(justification) = justified {
+            assert!(
+                justification.contains("Command: cargo publish"),
+                "justification must carry the extracted command: {justification}"
+            );
+        }
+        gateway.config.write().approval_risk_threshold = RiskLevel::High;
+    }
+
+    #[test]
+    fn build_risk_context_uses_caller_supplied_command() {
+        let gateway = SafetyGateway::new();
+        let args = serde_json::json!({"command": "rg --files"});
+        let intent = classify_tool_intent(tools::EXEC_COMMAND, &args);
+
+        let with_command = gateway.build_risk_context(tools::EXEC_COMMAND, &args, &intent, Some("rg --files"));
+        assert_eq!(with_command.command_args, vec!["rg".to_string(), "--files".to_string()]);
+
+        let without_command = gateway.build_risk_context(tools::EXEC_COMMAND, &args, &intent, None);
+        assert!(without_command.command_args.is_empty());
     }
 
     #[tokio::test]
@@ -1222,6 +1295,55 @@ mod tests {
         assert_eq!(targets[0].access_type, AccessType::Modify);
         assert_eq!(targets[1].path, PathBuf::from(".gitignore"));
         assert_eq!(targets[1].access_type, AccessType::Modify);
+    }
+
+    #[test]
+    fn unified_file_targets_mirror_legacy_file_helpers() {
+        let write = file_access_targets(tools::UNIFIED_FILE, &serde_json::json!({"action": "write", "path": "a.txt"}));
+        assert_eq!(write.len(), 1);
+        assert_eq!(write[0].path, PathBuf::from("a.txt"));
+        assert_eq!(write[0].access_type, AccessType::Write);
+
+        let moved = file_access_targets(
+            tools::UNIFIED_FILE,
+            &serde_json::json!({"action": "move", "path": "a.txt", "destination": "b.txt"}),
+        );
+        assert_eq!(moved.len(), 2);
+        assert_eq!(moved[0].access_type, AccessType::Modify);
+        assert_eq!(moved[1].access_type, AccessType::Write);
+
+        let unknown = file_access_targets(tools::UNIFIED_FILE, &serde_json::json!({"action": "read", "path": "a.txt"}));
+        assert!(unknown.is_empty());
+    }
+
+    #[test]
+    fn proposed_changes_preview_bounds_old_and_new_str() {
+        // Short replacements render exactly as before (no truncation
+        // marker); long ones stay bounded with a marker; a multi-byte
+        // char on the 500-byte boundary must not panic.
+        let short = proposed_changes_preview(&serde_json::json!({"old_str": "a", "new_str": "b"}));
+        assert_eq!(short, "Replace:\n  'a'\nWith:\n  'b'");
+
+        let long_old = "a".repeat(600);
+        let bounded = proposed_changes_preview(&serde_json::json!({"old_str": long_old, "new_str": ""}));
+        assert!(bounded.contains("..."));
+        assert!(bounded.len() < 600, "preview must stay bounded: {}", bounded.len());
+
+        let boundary_old = format!("{}{}", "a".repeat(499), "日".repeat(10));
+        let boundary = proposed_changes_preview(&serde_json::json!({"old_str": boundary_old, "new_str": "b"}));
+        assert!(boundary.contains("..."));
+        assert!(boundary.ends_with("With:\n  'b'"));
+    }
+
+    #[test]
+    fn proposed_changes_preview_never_splits_utf8_boundary() {
+        // 500-byte cut lands mid-`日` (3 bytes): the old `&text[..500]`
+        // panicked; the canonical prefix rounds down to the boundary.
+        let content = format!("{}{}", "a".repeat(499), "日".repeat(10));
+        let preview = proposed_changes_preview(&serde_json::json!({"content": content}));
+        assert!(preview.contains("Content ("));
+        assert!(preview.ends_with("..."));
+        assert!(preview.len() < content.len() + 64);
     }
 
     #[tokio::test]

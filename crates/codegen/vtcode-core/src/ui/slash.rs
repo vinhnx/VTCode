@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(names, vec!["checkup", "clear", "compact", "config", "continue", "copy"]);
+        assert_eq!(names, vec!["clear", "compact", "config", "copy"]);
     }
 
     #[test]
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn fuzzy_matches_include_description_keywords() {
         let names = names_for("check");
-        assert!(names.contains(&"checkup"));
+        assert!(names.contains(&"config"));
     }
 
     #[test]
@@ -197,22 +197,20 @@ mod tests {
     fn checkpoint_commands_are_visible_and_suggested() {
         let visible = visible_commands_for_terminal(TerminalType::Unknown);
         let suggestions = suggestions_for_terminal("re", TerminalType::Unknown);
-        for name in ["rewind", "redo", "rewind-recover"] {
+        for name in ["rewind", "redo"] {
             assert!(visible.iter().any(|command| command.name == name), "{name} must be visible");
             assert!(suggestions.iter().any(|command| command.name == name), "{name} must be suggested");
             assert_eq!(find_command(name).expect("checkpoint command").name, name);
         }
+        assert!(find_command("rewind-recover").is_none(), "rewind-recover must be removed; /rewind auto-recovers");
         assert_eq!(names_for("redo"), vec!["redo"]);
-        assert_eq!(names_for("rewind-re"), vec!["rewind-recover"]);
     }
 
     #[test]
-    fn suggestions_include_new_interactive_mode_commands() {
-        let names = names_for("task");
-        assert_eq!(names, vec!["tasks"]);
-
-        let names = names_for("job");
-        assert_eq!(names, vec!["jobs"]);
+    fn consolidated_panel_commands_route_via_config() {
+        assert!(names_for("task").is_empty() || !names_for("task").contains(&"tasks"));
+        assert!(names_for("job").is_empty() || !names_for("job").contains(&"jobs"));
+        assert!(find_command("config").is_some());
     }
 
     #[test]
@@ -258,8 +256,19 @@ mod tests {
     }
 
     #[test]
-    fn permissions_command_is_registered() {
-        let command = find_command("permissions").expect("permissions command");
-        assert_eq!(command.name, "permissions");
+    fn config_consolidated_commands_are_not_registered() {
+        for removed in [
+            "checkup",
+            "permissions",
+            "ide",
+            "tasks",
+            "jobs",
+            "log",
+            "subprocess",
+            "notify",
+        ] {
+            assert!(find_command(removed).is_none(), "/{removed} must route via /config");
+        }
+        assert!(find_command("config").is_some());
     }
 }

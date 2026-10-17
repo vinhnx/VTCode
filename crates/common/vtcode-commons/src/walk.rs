@@ -12,7 +12,7 @@
 use ignore::{DirEntry, WalkBuilder};
 use std::path::Path;
 
-use crate::exclusions::DEFAULT_EXCLUDED_DIRS;
+use crate::exclusions::{DEFAULT_EXCLUDED_DIRS, VTCODE_IGNORE_FILE};
 
 /// Build a multi-threaded [`WalkBuilder`] with sensible defaults.
 ///
@@ -54,6 +54,12 @@ pub fn apply_defaults(builder: &mut WalkBuilder) {
     builder.ignore(true);
     builder.parents(true);
 
+    // `.vtcodegitignore` mirrors `.gitignore` but is scoped to VT Code's own
+    // file operations. It has higher precedence than the standard ignore files
+    // (including its `!` re-include rules), so a user can whitelist a path that
+    // `.gitignore` prunes.
+    builder.add_custom_ignore_filename(VTCODE_IGNORE_FILE);
+
     // Do not follow symlinks by default.
     builder.follow_links(false);
 
@@ -80,4 +86,67 @@ pub fn is_excluded_dir(entry: &DirEntry) -> bool {
         .file_name()
         .to_str()
         .is_some_and(|name| DEFAULT_EXCLUDED_DIRS.contains(&name))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    fn collected_paths(root: &Path) -> Vec<String> {
+        let walker = build_default_walker(root).build();
+        let mut paths = walker
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path() != root)
+            .map(|entry| {
+                entry
+                    .path()
+                    .strip_prefix(root)
+                    .unwrap_or_else(|_| entry.path())
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
+    }
+
+    #[test]
+    fn default_walker_respects_vtcodegitignore() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        fs::write(root.join(".vtcodegitignore"), "ignored_dir/\nignored_file.txt\n").expect("write ignore file");
+        fs::create_dir(root.join("ignored_dir")).expect("mkdir ignored_dir");
+        fs::write(root.join("ignored_dir/secret.rs"), "x").expect("write secret");
+        fs::write(root.join("ignored_file.txt"), "x").expect("write ignored file");
+        fs::write(root.join("kept.rs"), "x").expect("write kept file");
+
+        let paths = collected_paths(root);
+
+        assert!(paths.contains(&"kept.rs".to_owned()), "kept file should remain: {paths:?}");
+        assert!(!paths.iter().any(|p| p.contains("ignored_file.txt")), "ignored file leaked: {paths:?}");
+        assert!(!paths.iter().any(|p| p.contains("ignored_dir")), "ignored dir leaked: {paths:?}");
+    }
+
+    #[test]
+    fn default_walker_vtcodegitignore_negation_reincludes() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        // Exclude every log, then re-include one. The custom-ignore file's
+        // negation must win over its own earlier pattern (mirrors the repo's
+        // `!README.md` style allow-list).
+        fs::write(root.join(".vtcodegitignore"), "*.log\n!important.log\n").expect("write ignore file");
+        fs::write(root.join("important.log"), "x").expect("write important log");
+        fs::write(root.join("noise.log"), "x").expect("write noise log");
+        fs::write(root.join("kept.rs"), "x").expect("write kept file");
+
+        let paths = collected_paths(root);
+
+        assert!(paths.contains(&"important.log".to_owned()), "negated file should be re-included: {paths:?}");
+        assert!(!paths.iter().any(|p| p.ends_with("noise.log")), "non-negated file leaked: {paths:?}");
+        assert!(paths.contains(&"kept.rs".to_owned()), "unrelated file should remain: {paths:?}");
+    }
 }

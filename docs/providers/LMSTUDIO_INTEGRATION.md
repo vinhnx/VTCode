@@ -2,7 +2,9 @@
 
 ## Overview
 
-VT Code now includes native support for [LM Studio](https://lmstudio.ai), an open-source desktop application for running large language models locally. This integration is based on the architecture proven in [OpenAI's Codex](https://github.com/openai/codex/tree/main/codex-rs/lmstudio).
+VT Code now includes native support for [LM Studio](https://lmstudio.ai), an open-source desktop application for running
+large language models locally. This integration is based on the architecture proven in
+[OpenAI's Codex](https://github.com/openai/codex/tree/main/codex-rs/lmstudio).
 
 **Key capabilities:**
 
@@ -20,6 +22,7 @@ Visit [https://lmstudio.ai](https://lmstudio.ai) and download the appropriate ve
 ### 2. Start the Local Server
 
 In LM Studio:
+
 1. Select a model (e.g., "gpt-oss-20b")
 2. Click "Start Server"
 3. Note the default URL: `http://localhost:1234`
@@ -52,10 +55,10 @@ use vtcode_lmstudio::ensure_oss_ready;
 async fn main() -> anyhow::Result<()> {
     let manager = ConfigManager::load_from_workspace(".")?;
     let config = manager.config();
-    
+
     // Automatically ensure LM Studio is ready
     ensure_oss_ready(config).await?;
-    
+
     // Model is now preloaded and ready for inference
     Ok(())
 }
@@ -65,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
 ### Module Structure
 
-```
+```text
 crates/codegen/vtcode-llm/src/providers/
 ├── lmstudio.rs        # LM Studio provider implementation
 ├── lmstudio/
@@ -75,7 +78,7 @@ crates/codegen/vtcode-llm/src/providers/
 
 ### Component Interactions
 
-```
+```text
 ┌─────────────────────────────────┐
 │     ensure_oss_ready()          │  High-level orchestration
 │  (Public API entry point)       │
@@ -111,7 +114,8 @@ High-level convenience function that:
 4. Downloads the model if missing (using `lms get`)
 5. Loads the model into VRAM asynchronously
 
-**Non-fatal behavior**: Transient failures (e.g., server unreachable, model list fetch fails) are logged as warnings but don't cause the function to fail, allowing higher layers to handle errors.
+**Non-fatal behavior**: Transient failures (e.g., server unreachable, model list fetch fails) are logged as warnings but
+don't cause the function to fail, allowing higher layers to handle errors.
 
 **Example:**
 
@@ -164,10 +168,10 @@ Used when provider is `lmstudio` and `default_model` isn't explicitly set in con
 
 ### Environment Variables
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `LMSTUDIO_URL` | LM Studio server endpoint | `http://localhost:1234` |
-| `VTCODE_PROVIDER` | Active LLM provider | (varies by config) |
+| Variable          | Purpose                   | Default                 |
+| ----------------- | ------------------------- | ----------------------- |
+| `LMSTUDIO_URL`    | LM Studio server endpoint | `http://localhost:1234` |
+| `VTCODE_PROVIDER` | Active LLM provider       | (varies by config)      |
 
 ### TOML Configuration
 
@@ -247,6 +251,7 @@ tokio::spawn({
 ```
 
 **Benefits:**
+
 - Doesn't block the initialization flow
 - Reduces latency on first inference
 - Failures are logged but non-fatal
@@ -264,8 +269,9 @@ tokio::spawn({
 **Cause**: LM Studio server isn't running on the configured URL.
 
 **Solution**:
+
 1. Start LM Studio desktop application
-2. Click "Start Server" 
+2. Click "Start Server"
 3. Verify URL matches `LMSTUDIO_URL` env var (default: `http://localhost:1234`)
 
 ### "LM Studio not found"
@@ -273,7 +279,8 @@ tokio::spawn({
 **Cause**: `lms` CLI tool not in PATH.
 
 **Solution**:
-1. Install LM Studio from https://lmstudio.ai
+
+1. Install LM Studio from <https://lmstudio.ai>
 2. Add `~/.lmstudio/bin` to PATH, or
 3. Reinstall and ensure "Add to PATH" is checked
 
@@ -282,6 +289,7 @@ tokio::spawn({
 **Cause**: Large model or slow network.
 
 **Solution**:
+
 1. Check internet connection
 2. Download model manually in LM Studio UI
 3. Or use `lms get <model-name>` in terminal separately
@@ -314,9 +322,9 @@ Using `std::io::Result<T>` instead of `anyhow::Result<T>`:
 
 ## References
 
-- **LM Studio**: https://lmstudio.ai
-- **LMS CLI**: https://lmstudio.ai/docs/app/cli
-- **OpenAI Codex**: https://github.com/openai/codex/tree/main/codex-rs/lmstudio
+- **LM Studio**: <https://lmstudio.ai>
+- **LMS CLI**: <https://lmstudio.ai/docs/app/cli>
+- **OpenAI Codex**: <https://github.com/openai/codex/tree/main/codex-rs/lmstudio>
 - **OpenAI PR #2312**: "LM Studio OSS Support" (implementation reference)
 
 ## Future Enhancements

@@ -49,6 +49,9 @@ pub mod reasoning;
 pub mod shared;
 pub use shared::TagStreamSanitizer;
 
+#[cfg(test)]
+mod test_support;
+
 // Re-export commonly used constants from vtcode-commons::tool_types
 pub use vtcode_commons::tool_types::{
     DEFAULT_VEC_CAPACITY, ERROR_DETECTION_PATTERNS, MAX_SEARCH_RESULTS, OVERFLOW_INDICATOR_PREFIX,

@@ -21,7 +21,10 @@ pub mod mcp;
 
 pub use discovery::{DiscoveredSkill, LoadedPlugin};
 pub use errors::PluginError;
-pub use expansion::{expand_placeholders, validate_plugin_relative};
+pub use expansion::{
+    default_plugin_data_dir, expand_placeholders, is_reserved_env_key, resolve_cwd, validate_command_token,
+    validate_cwd_form, validate_plugin_relative,
+};
 pub use loader::{FileSystemPluginInstaller, FileSystemPluginLoader, PluginInstaller, PluginLoader, plugin_roots_for};
 pub use manifest::{PluginAuthor, PluginManifest};
 pub use mcp::{HttpServerConfig, McpConfig, ServerConfig, SseServerConfig, StdioServerConfig};

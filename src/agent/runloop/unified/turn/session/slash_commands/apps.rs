@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use std::path::Path;
 
 use anyhow::Result;
@@ -44,6 +46,13 @@ const WORKFLOW_FILE_OPENER: &str = "file_opener";
 
 pub(crate) async fn handle_new_session(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "Starting new session...")?;
+    // Instant feedback before the teardown + re-bootstrap gap: the fresh
+    // prompt can take seconds to rebuild (registry + hydrate + MCP), so
+    // paint the transition state now. Otherwise `/new` looks untriggered
+    // while the old transcript sits frozen through teardown.
+    ctx.handle
+        .set_activity_state(vtcode_commons::ui_protocol::ActivityState::PreparingFreshExecutionThread);
+    ctx.handle.force_redraw();
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::NewSession))
 }
 
@@ -120,26 +129,25 @@ pub(crate) async fn handle_open_donate_links(ctx: SlashCommandContext<'_>) -> Re
         ],
         footer_hint: Some("Esc cancels".to_string()),
         items: vec![
-            InlineListItem {
-                title: "Sponsor VT Code developement".to_string(),
-                subtitle: Some(DONATE_URL.to_string()),
-                badge: Some("Support".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
-                search_value: None,
-            },
-            InlineListItem {
-                title: "Sponsor VT Code developement on GitHub".to_string(),
-                subtitle: Some(PROJECT_URL.to_string()),
-                badge: Some("GitHub".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(PROJECT_URL.to_string())),
-                search_value: None,
-            },
+            ui_list::action(
+                "Sponsor VT Code developement",
+                DONATE_URL.to_string(),
+                Some("Support".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
+            ),
+            ui_list::action(
+                "Sponsor VT Code developement on GitHub",
+                PROJECT_URL.to_string(),
+                Some("GitHub".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(PROJECT_URL.to_string())),
+            ),
         ],
         selected: Some(InlineListSelection::ConfigAction(DONATE_URL.to_string())),
         search: None,
         hotkeys: Vec::new(),
+        status: None,
     });
 
     let outcome =
@@ -207,7 +215,7 @@ pub(crate) async fn launch_editor_from_context(
             Some(target) => Some(target),
             None => {
                 ctx.renderer
-                    .line(MessageStyle::Error, &format!("Invalid file target for `/edit`: {value}"))?;
+                    .line(MessageStyle::Error, &format!("Invalid file target for editor: {value}"))?;
                 ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
                 return Ok(SlashCommandControl::Continue);
             }
@@ -499,7 +507,7 @@ fn build_editor_config_steps(editor_config: &EditorToolConfig, current_preset: E
                 request_choice_item(
                     EDITOR_ENABLED_ID,
                     "Enabled",
-                    "Allow `/edit` and single-click file links to open in the configured editor.",
+                    "Allow external editor and single-click file links to open in the configured editor.",
                     WORKFLOW_ENABLED,
                 ),
                 request_choice_item(
@@ -659,18 +667,20 @@ fn build_custom_editor_command_step(placeholder: String) -> WizardStep {
     WizardStep {
         title: "Custom command".to_string(),
         question: "Enter the raw editor command. Include any flags you want VT Code to keep using.".to_string(),
-        items: vec![InlineListItem {
-            title: "Save command".to_string(),
-            subtitle: Some("Press Tab to type the command, then Enter to save.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: EDITOR_CUSTOM_COMMAND_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("editor command custom raw command".to_string()),
-        }],
+        items: vec![
+            ui_list::action(
+                "Save command",
+                "Press Tab to type the command, then Enter to save.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: EDITOR_CUSTOM_COMMAND_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("editor command custom raw command".to_string()),
+        ],
         completed: false,
         answer: None,
         allow_freeform: true,
@@ -716,18 +726,18 @@ fn request_answer_value(selections: &[InlineListSelection], question_id: &str) -
 }
 
 fn request_choice_item(question_id: &str, title: &str, subtitle: &str, value: &str) -> InlineListItem {
-    InlineListItem {
-        title: title.to_string(),
-        subtitle: Some(subtitle.to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::RequestUserInputAnswer {
+    ui_list::action(
+        title.to_string(),
+        subtitle.to_string(),
+        None,
+        Tone::Neutral,
+        Some(InlineListSelection::RequestUserInputAnswer {
             question_id: question_id.to_string(),
             selected: vec![value.to_string()],
             other: None,
         }),
-        search_value: Some(format!("{title} {subtitle} {value}")),
-    }
+    )
+    .with_search_value(format!("{title} {subtitle} {value}"))
 }
 
 fn persist_editor_workflow_choices(workspace: &Path, choices: EditorWorkflowChoices) -> Result<()> {

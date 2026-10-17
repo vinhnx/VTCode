@@ -1,7 +1,7 @@
 # Output Patterns Reference
 
-This reference provides patterns for structuring skill outputs. Use these patterns
-to make your skills produce consistent, useful results.
+This reference provides patterns for structuring skill outputs. Use these patterns to make your skills produce
+consistent, useful results.
 
 ## Core Principles
 
@@ -14,7 +14,7 @@ to make your skills produce consistent, useful results.
 
 Best for: Operations with clear success/failure states.
 
-```
+```text
 [STATUS] Operation completed successfully
 
 Summary:
@@ -33,13 +33,13 @@ Details:
 
 **Minimal (for scripts):**
 
-```
+```text
 OK: 42 files processed
 ```
 
 **Verbose (for debugging):**
 
-```
+```text
 [2024-01-15 10:30:45] Starting operation...
 [2024-01-15 10:30:45] Processing file 1/42: example.txt
 [2024-01-15 10:30:46] Processing file 2/42: data.json
@@ -98,7 +98,7 @@ class APIClient:
 2. Configure authentication in `.env`
 3. Run tests with `pytest tests/test_api_client.py`
 
-````
+````text
 
 ## Pattern: Analysis Results
 
@@ -206,7 +206,7 @@ example command
 
 You should see:
 
-```
+```text
 expected output
 ```
 
@@ -222,10 +222,9 @@ expected output
 
 ### Troubleshooting
 
--   **Issue**: [Common problem]
-    **Solution**: [Fix]
+- **Issue**: [Common problem] **Solution**: [Fix]
 
-````
+````text
 
 ## Pattern: Error Report
 
@@ -317,7 +316,7 @@ Best for: Modifications to existing content.
 
 [Optional full comparison for major changes]
 
-````
+````text
 
 ## Combining Patterns
 

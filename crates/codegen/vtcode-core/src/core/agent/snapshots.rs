@@ -329,6 +329,7 @@ impl SnapshotConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct SnapshotManager {
     enabled: bool,
     workspace: PathBuf,
@@ -819,12 +820,17 @@ impl SnapshotManager {
         if !self.enabled {
             return Ok(());
         }
-        let protected = self.protected_turns();
-        let entries: Vec<(usize, PathBuf)> = self
-            .read_snapshot_files()?
-            .into_iter()
-            .filter(|(turn, _)| !protected.contains(turn))
-            .collect();
+        let manager = self.clone();
+        let entries = tokio::task::spawn_blocking(move || -> Result<Vec<(usize, PathBuf)>> {
+            let protected = manager.protected_turns();
+            Ok(manager
+                .read_snapshot_files()?
+                .into_iter()
+                .filter(|(turn, _)| !protected.contains(turn))
+                .collect())
+        })
+        .await
+        .context("checkpoint retention worker failed")??;
         if self.max_snapshots != 0 && entries.len() > self.max_snapshots {
             let excess = entries.len() - self.max_snapshots;
             for (_, path) in entries.into_iter().take(excess) {
@@ -837,7 +843,7 @@ impl SnapshotManager {
                 }
             }
         }
-        self.cleanup_retired_snapshots().await;
+        self.cleanup_retired_snapshots(false).await;
         Ok(())
     }
 
@@ -889,7 +895,9 @@ impl SnapshotManager {
             }
         }
 
-        self.prune_snapshot_budget().await
+        self.prune_snapshot_budget().await?;
+        self.cleanup_retired_snapshots(true).await;
+        Ok(())
     }
 
     async fn retire_snapshot(&self, path: &Path) -> Result<()> {
@@ -898,14 +906,14 @@ impl SnapshotManager {
         Ok(())
     }
 
-    async fn cleanup_retired_snapshots(&self) {
+    async fn cleanup_retired_snapshots(&self, full_maintenance: bool) {
         let storage = self.storage_dir.clone();
         let workspace = self.canonical_workspace.clone();
         let result = tokio::task::spawn_blocking(move || -> Result<()> {
             // A replaced record can still be live if publication failed. Read
             // every live record before deleting anything; corrupt metadata defers
             // cleanup rather than guessing which content can be discarded.
-            let mut live = BTreeSet::new();
+            let mut live_paths = Vec::new();
             let mut retired = Vec::new();
             for entry in fs::read_dir(&storage)? {
                 let path = entry?.path();
@@ -916,18 +924,27 @@ impl SnapshotManager {
                     continue;
                 }
                 if name.ends_with(".json") {
-                    let stored: StoredSnapshot = serde_json::from_slice(&fs::read(&path)?)?;
-                    for file in &stored.files {
-                        if file.encoding == Some(FileEncoding::Filesnap) {
-                            live.insert(file.data.clone().context("Missing checkpoint reference")?);
-                        }
-                    }
+                    live_paths.push(path);
                 } else if path
                     .extension()
                     .and_then(|value| value.to_str())
                     .is_some_and(|value| value.starts_with("retired-"))
                 {
                     retired.push(path);
+                }
+            }
+            // The per-prompt path does not need live JSON or a content store
+            // when no records were retired. Explicit maintenance still runs GC.
+            if retired.is_empty() && !full_maintenance {
+                return Ok(());
+            }
+            let mut live = BTreeSet::new();
+            for path in live_paths {
+                let stored: StoredSnapshot = serde_json::from_slice(&fs::read(path)?)?;
+                for file in stored.files {
+                    if file.encoding == Some(FileEncoding::Filesnap) {
+                        live.insert(file.data.context("Missing checkpoint reference")?);
+                    }
                 }
             }
             let store = filesnap::WorkspaceStore::open(&storage, &workspace)?;
@@ -1099,6 +1116,73 @@ mod tests {
         let workspace = dir.path().to_path_buf();
         let manager = SnapshotManager::new(SnapshotConfig::new(workspace.clone())).expect("manager");
         (dir, manager)
+    }
+
+    #[tokio::test]
+    async fn no_retirement_prune_does_not_parse_live_records_or_open_store() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let path = manager.snapshot_path(1);
+        fs::write(&path, b"deliberately corrupt live metadata")?;
+        manager.prune_snapshot_budget().await?;
+        assert_eq!(fs::read(&path)?, b"deliberately corrupt live metadata");
+        let entries: Vec<_> = fs::read_dir(&manager.storage_dir)?.collect::<std::io::Result<Vec<_>>>()?;
+        assert_eq!(entries.len(), 1, "hot cleanup must not create an engine store");
+        assert_eq!(entries[0].path(), path);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn retired_cleanup_preserves_shared_references_and_defers_on_corrupt_live_metadata() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        let file = manager.workspace.join("shared.txt");
+        fs::write(&file, b"original")?;
+        manager
+            .create_snapshot(1, "first", &[], &BTreeSet::from([file.clone()]), None, None, None)
+            .await?;
+        let stored = manager.load_snapshot(1).await?.expect("snapshot");
+        let engine = stored.files[0].data.clone().expect("engine reference");
+        fs::write(manager.snapshot_path(2), serde_json::to_vec(&stored)?)?;
+        let retired = manager.snapshot_path(1).with_extension("retired-test");
+        fs::rename(manager.snapshot_path(1), &retired)?;
+        let corrupt = manager.snapshot_path(3);
+        fs::write(&corrupt, b"{")?;
+        manager.cleanup_retired_snapshots(false).await;
+        assert!(retired.exists(), "corrupt live records must defer reclamation");
+        let store = filesnap::WorkspaceStore::open(&manager.storage_dir, &manager.workspace)?;
+        assert!(store.target_for_turn(&engine)?.is_some());
+        fs::remove_file(corrupt)?;
+        manager.cleanup_retired_snapshots(false).await;
+        assert!(!retired.exists());
+        assert!(store.target_for_turn(&engine)?.is_some(), "a live shared reference pins the engine session");
+        fs::write(&file, b"external edit")?;
+        manager.restore_snapshot(2, RevertScope::Code).await?;
+        assert_eq!(fs::read(file)?, b"original");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn full_maintenance_collects_orphans_without_retired_records() -> Result<()> {
+        let (_dir, manager) = setup_manager();
+        // Use the versioned engine store, rather than a standalone BlobStore
+        // that the workspace collector cannot discover.
+        let blob_dir = manager
+            .storage_dir
+            .join("filesnap")
+            .join(format!("v{}", filesnap::FORMAT_VERSION))
+            .join("blobs");
+        let blobs = filesnap::BlobStore::open(&blob_dir)?;
+        let hash = blobs.store_bytes(b"orphaned content")?;
+        let blob = blob_dir.join(&hash[..2]).join(&hash[2..]);
+        fs::File::options()
+            .write(true)
+            .open(&blob)?
+            .set_times(fs::FileTimes::new().set_modified(SystemTime::now() - Duration::from_secs(3600)))?;
+        manager.prune_snapshot_budget().await?;
+        assert!(blob.exists(), "hot pruning skips unrelated orphan maintenance");
+        manager.cleanup_old_snapshots().await?;
+        assert!(!blob.exists(), "explicit maintenance must still collect old orphans");
+        assert!(blobs.hashes()?.is_empty());
+        Ok(())
     }
 
     #[tokio::test]

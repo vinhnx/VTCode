@@ -30,8 +30,10 @@
 
 pub mod error;
 pub mod event_log;
+pub mod explanation;
 /// Manifest and turn-index persistence helpers.
 pub mod manifest;
+pub mod matrix;
 pub mod migration;
 /// Digest-verified audit packs for sessions.
 pub mod pack;
@@ -57,9 +59,9 @@ pub use query::{
     session_memory_facts, write_session_memory_view,
 };
 pub use retention::{
-    RETENTION_PIN_FILE, RetentionPolicy, apply_retention, apply_retention_preserving, gc_legacy,
-    mark_abandoned_active_sessions, pin_session_retention, retention_pinned_session_ids, session_retention_pinned,
-    unpin_session_retention,
+    RETENTION_PIN_FILE, RetentionPolicy, apply_retention, apply_retention_preserving, evict_zero_turn_completed_store,
+    gc_legacy, mark_abandoned_active_sessions, pin_session_retention, retention_pinned_session_ids,
+    session_retention_pinned, unpin_session_retention,
 };
 
 use std::path::{Path, PathBuf};

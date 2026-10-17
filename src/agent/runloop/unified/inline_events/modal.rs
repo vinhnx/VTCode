@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -9,8 +11,8 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::{
-    InlineHandle, InlineHeaderContext, InlineListItem, InlineListSelection, SubmittedInput, TransientRequest,
-    WizardModalMode, WizardOverlayRequest, WizardStep,
+    InlineHandle, InlineHeaderContext, InlineListSelection, SubmittedInput, TransientRequest, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerStart, ModelPickerState};
@@ -421,18 +423,20 @@ impl<'a> InlineModalProcessor<'a> {
                 steps: vec![WizardStep {
                     title: "Value".to_string(),
                     question: format!("Enter a new value for `{path}`."),
-                    items: vec![InlineListItem {
-                        title: "Edit value".to_string(),
-                        subtitle: Some("Type the value below, then press Enter to save it.".to_string()),
-                        badge: None,
-                        indent: 0,
-                        selection: Some(InlineListSelection::RequestUserInputAnswer {
-                            question_id: "settings_value".to_string(),
-                            selected: Vec::new(),
-                            other: Some(String::new()),
-                        }),
-                        search_value: Some("edit value custom response".to_string()),
-                    }],
+                    items: vec![
+                        ui_list::action(
+                            "Edit value",
+                            "Type the value below, then press Enter to save it.".to_string(),
+                            None,
+                            Tone::Neutral,
+                            Some(InlineListSelection::RequestUserInputAnswer {
+                                question_id: "settings_value".to_string(),
+                                selected: Vec::new(),
+                                other: Some(String::new()),
+                            }),
+                        )
+                        .with_search_value("edit value custom response".to_string()),
+                    ],
                     completed: false,
                     answer: None,
                     allow_freeform: true,

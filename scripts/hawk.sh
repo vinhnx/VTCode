@@ -7,7 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HAWK_TOOLCHAIN="1.97.1"
+HAWK_TOOLCHAIN="1.98.1"
 
 # Default arguments
 CONFIG="${HAWK_CONFIG:-$PROJECT_ROOT/hawk.toml}"

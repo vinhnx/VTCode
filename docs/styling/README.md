@@ -1,11 +1,14 @@
 # Vtcode Styling System Documentation
 
-This directory contains research and implementation guides for improving vtcode's terminal styling system using `anstyle-git` and `anstyle-ls` crates.
+This directory contains research and implementation guides for improving vtcode's terminal styling system using
+`anstyle-git` and `anstyle-ls` crates.
 
 ## Files
 
 ### 1. anstyle-crates-research.md
+
 Comprehensive research on `anstyle-git` and `anstyle-ls` crates:
+
 - What each crate does
 - How they parse color configurations
 - Current vtcode styling architecture
@@ -16,7 +19,9 @@ Comprehensive research on `anstyle-git` and `anstyle-ls` crates:
 **Start here** for understanding the strategic approach.
 
 ### 2. implementation-phase1.md
+
 Step-by-step implementation guide for Phase 1 (Foundation):
+
 - Update Cargo.toml dependencies
 - Expand InlineTextStyle struct
 - Create theme_parser module
@@ -31,6 +36,7 @@ Step-by-step implementation guide for Phase 1 (Foundation):
 ### What We're Doing
 
 Improving vtcode's styling system to:
+
 1. Support **full ANSI text effects** (bold, dim, italic, underline, strikethrough, reverse)
 2. **Parse standard configs**: Git `.git/config` colors and `LS_COLORS` environment variable
 3. **Support background colors** in text styling
@@ -38,12 +44,12 @@ Improving vtcode's styling system to:
 
 ### Key Benefits
 
-| Aspect | Current | After |
-|--------|---------|-------|
-| Text Effects | bold, italic | bold, dim, italic, underline, strikethrough, reverse |
-| Config Sources | Hard-coded themes | Git config, LS_COLORS, custom files |
-| Background Colors | Unsupported | Full support |
-| Code Quality | Custom parsing | Leverage `anstyle-git`, `anstyle-ls` |
+| Aspect            | Current           | After                                                |
+| ----------------- | ----------------- | ---------------------------------------------------- |
+| Text Effects      | bold, italic      | bold, dim, italic, underline, strikethrough, reverse |
+| Config Sources    | Hard-coded themes | Git config, LS_COLORS, custom files                  |
+| Background Colors | Unsupported       | Full support                                         |
+| Code Quality      | Custom parsing    | Leverage `anstyle-git`, `anstyle-ls`                 |
 
 ### Timeline
 
@@ -53,7 +59,7 @@ Improving vtcode's styling system to:
 
 ## Architecture Overview
 
-```
+```text
 User Config / Environment
     ↓
 anstyle-git / anstyle-ls Parsers
@@ -70,12 +76,14 @@ TUI Rendering (Terminal Output)
 ## Dependencies
 
 **Already in Cargo.toml:**
+
 - `anstyle` (1.0)
 - `anstyle-parse` (0.2)
 - `anstyle-crossterm` (4.0)
 - `anstyle-query` (1.0)
 
 **To be added (Phase 1):**
+
 - `anstyle-git` (1.1)
 - `anstyle-ls` (1.0)
 
@@ -114,6 +122,7 @@ TUI Rendering (Terminal Output)
 ## Questions?
 
 For implementation questions, refer to:
+
 - Phase 1 checklist in `implementation-phase1.md`
 - Test examples in same file
 - Existing code patterns in `crates/codegen/vtcode-core/src/ui/`

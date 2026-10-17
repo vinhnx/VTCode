@@ -1,10 +1,18 @@
 use super::*;
 use crate::config::constants::tools as tool_names;
+use crate::config::{HistoryPersistence, VTCodeConfig};
 use crate::core::agent::snapshots::SnapshotTurnDiagnostics;
-use crate::llm::provider::{ContentPart, MessageClearAt, ToolCall};
+use crate::llm::provider::{
+    AssistantPhase, ContentPart, Message, MessageClearAt, MessageContent, MessageRole, ToolCall,
+};
+use crate::utils::error_log_collector::ErrorLogEntry;
 use anyhow::anyhow;
-use chrono::{TimeZone, Timelike};
+use anyhow::{Context, Result};
+use chrono::{TimeZone, Timelike, Utc};
+use std::fs;
 use std::mem::size_of;
+use std::path::{Path, PathBuf};
+use std::process;
 use std::sync::LazyLock;
 use std::time::Duration;
 

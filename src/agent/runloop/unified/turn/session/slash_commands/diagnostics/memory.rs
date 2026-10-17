@@ -33,9 +33,7 @@ use self::config_persistence::{
     set_workspace_small_model_for_memory, set_workspace_small_model_model,
 };
 use self::navigation::handle_memory_navigation_action;
-use self::presentation::{
-    format_path_list, memory_lightweight_route_info, render_common_memory_status, show_memory_actions_modal,
-};
+use self::presentation::{memory_lightweight_route_info, render_common_memory_status, show_memory_actions_modal};
 use self::prompts::{prompt_optional_text, prompt_required_text};
 use super::super::ui::wait_for_list_modal_selection;
 use super::{SlashCommandContext, SlashCommandControl};
@@ -82,49 +80,6 @@ pub(super) async fn run_memory_modal(
             return Ok(control);
         }
     }
-}
-
-pub(super) async fn render_memory_status_lines(
-    ctx: &mut SlashCommandContext<'_>,
-    include_config_hint: bool,
-) -> Result<()> {
-    let agent_config = ctx.vt_cfg.as_ref().map(|cfg| cfg.agent.clone()).unwrap_or_default();
-    let active_dir = ctx
-        .context_manager
-        .active_instruction_directory_snapshot()
-        .unwrap_or_else(|| ctx.config.workspace.clone());
-    let match_paths = ctx.context_manager.instruction_context_paths_snapshot();
-    let appendix = load_instruction_appendix(&agent_config, &active_dir, &match_paths).await;
-    let cfg = agent_config.persistent_memory.clone();
-    let ws = ctx.config.workspace.clone();
-    let memory_status = tokio::task::spawn_blocking(move || persistent_memory_status(&cfg, &ws))
-        .await
-        .context("Persistent memory status task panicked")??;
-    let (agents, matched_rules) = instruction_memory_map(appendix.as_ref());
-    let lightweight_route = memory_lightweight_route_info(ctx.config, ctx.vt_cfg.as_ref());
-
-    ctx.renderer.line(MessageStyle::Info, "Instruction Memory")?;
-    ctx.renderer
-        .line(MessageStyle::Info, &format!("Loaded AGENTS.md sources: {}", format_path_list(&agents)))?;
-    ctx.renderer
-        .line(MessageStyle::Info, &format!("Matched rules: {}", format_path_list(&matched_rules)))?;
-    render_common_memory_status(ctx, &memory_status)?;
-    ctx.renderer.line(
-        MessageStyle::Info,
-        &format!(
-            "Memory triage model: {} ({})",
-            lightweight_route.configured_label, lightweight_route.effective_label
-        ),
-    )?;
-    if let Some(warning) = lightweight_route.warning {
-        ctx.renderer.line(MessageStyle::Warning, &format!("Route warning: {warning}"))?;
-    }
-    if include_config_hint {
-        ctx.renderer
-            .line(MessageStyle::Info, "Focused controls: `/config memory` or `/config agent.persistent_memory`.")?;
-    }
-
-    Ok(())
 }
 
 pub(super) async fn render_memory_config_lines(ctx: &mut SlashCommandContext<'_>) -> Result<()> {

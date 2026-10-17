@@ -21,9 +21,10 @@ impl InlineListRow {
         for line in &mut self.lines {
             for span in &mut line.spans {
                 // `Style::patch` only adds modifiers, so a pre-existing `DIM`
-                // (used by badge/selectable/detail styles) would survive and
-                // mute the highlight's accent color. Strip it so the selected
-                // row pops with the full accent.
+                // — from an area background, a border, or any span that still
+                // carries one — would survive and mute the highlight's accent
+                // color. Strip it so the selected row pops with the full
+                // accent.
                 span.style = span.style.patch(style).remove_modifier(Modifier::DIM);
             }
         }

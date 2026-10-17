@@ -24,7 +24,6 @@ use crate::agent::runloop::unified::inline_events::QueuedInput;
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
-use crate::agent::runloop::unified::session_setup::IdeContextBridge;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::unified::webmcp::ActiveWebmcpBridge;
@@ -40,7 +39,6 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub session: &'a mut vtcode_ui::tui::app::InlineSession,
     pub handle: &'a InlineHandle,
     pub header_context: &'a mut vtcode_ui::tui::app::InlineHeaderContext,
-    pub ide_context_bridge: &'a mut Option<IdeContextBridge>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub input_activity_counter: &'a Arc<AtomicU64>,

@@ -41,45 +41,11 @@ pub(crate) async fn execute_tool_with_timeout(
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
-    execute_tool_with_timeout_ref_inner(registry, name, &args, &tokens, progress_reporter, max_tool_retries).await
-}
-
-#[cfg(test)]
-#[allow(dead_code, reason = "Intentional compatibility, platform, or test-only suppression.")]
-pub(crate) async fn execute_tool_with_timeout_ref(
-    registry: &ToolRegistry,
-    name: &str,
-    args: &Value,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<tokio::sync::Notify>,
-    progress_reporter: Option<&ProgressReporter>,
-    max_tool_retries: usize,
-) -> ToolExecutionStatus {
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
-    execute_tool_with_timeout_ref_inner(registry, name, args, &tokens, progress_reporter, max_tool_retries).await
-}
-
-#[cfg(test)]
-async fn execute_tool_with_timeout_ref_inner(
-    registry: &ToolRegistry,
-    name: &str,
-    args: &Value,
-    tokens: &CancellationTokens,
-    progress_reporter: Option<&ProgressReporter>,
-    max_tool_retries: usize,
-) -> ToolExecutionStatus {
     execute_tool_with_timeout_ref_mode(
         registry,
         name,
-        args,
-        tokens,
+        &args,
+        &CancellationTokens::new(ctrl_c_state, ctrl_c_notify),
         progress_reporter,
         max_tool_retries,
         false,
@@ -101,15 +67,11 @@ pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
     exec_settlement_mode: ExecSettlementMode,
     safety_prevalidated: bool,
 ) -> ToolExecutionStatus {
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
     execute_tool_with_timeout_ref_mode(
         registry,
         name,
         args,
-        &tokens,
+        &CancellationTokens::new(ctrl_c_state, ctrl_c_notify),
         progress_reporter,
         max_tool_retries,
         true,

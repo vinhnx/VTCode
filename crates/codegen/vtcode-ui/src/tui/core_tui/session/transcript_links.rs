@@ -1,13 +1,14 @@
+use crate::tui::utils::transcript::{
+    NON_WHITESPACE_TOKEN_PATTERN, QUOTED_PATH_PATTERN, has_explicit_path_syntax, trim_transcript_token_bounds,
+};
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use regex::Regex;
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::{EditorTarget, parse_editor_target};
 
@@ -18,15 +19,7 @@ use super::{
     wrapping,
 };
 use crate::tui::ui::tui::types::InlineLinkTarget;
-static NON_WHITESPACE_TOKEN_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\S+").expect("valid transcript token regex"));
 const LINK_OPEN_THROTTLE_INTERVAL: Duration = Duration::from_millis(500);
-static QUOTED_PATH_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r#"`(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^`]+`|"(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^"]+"|'(?:file://|~/|/|\./|\.\./|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^']+'"#,
-    )
-    .expect("valid quoted transcript path regex")
-});
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TranscriptFileLinkTarget {
@@ -72,6 +65,50 @@ impl Session {
         self.hovered_transcript_file_link = None;
     }
 
+    fn transcript_link_styles(&self) -> TranscriptLinkStyles {
+        let link = self.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
+        TranscriptLinkStyles { link, hovered: link.add_modifier(Modifier::BOLD) }
+    }
+
+    fn reset_transcript_link_targets(&mut self) {
+        self.transcript_file_link_targets.clear();
+        self.hovered_transcript_file_link = None;
+    }
+
+    fn store_transcript_link_targets(&mut self, targets: Vec<TranscriptFileLinkTarget>) {
+        self.transcript_file_link_targets = targets;
+        self.hovered_transcript_file_link = self.mouse_hovered_transcript_file_link_index();
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Single shared row helper keeps borrowed/visible paths in sync."
+    )]
+    fn decorate_one_transcript_row(
+        line: Line<'static>,
+        explicit_links: &[RenderedTranscriptLink],
+        row_idx: usize,
+        area: Rect,
+        workspace_root: Option<&Path>,
+        last_mouse_position: Option<(u16, u16)>,
+        detect_raw_links: bool,
+        styles: TranscriptLinkStyles,
+        targets: &mut Vec<TranscriptFileLinkTarget>,
+    ) -> Line<'static> {
+        decorate_transcript_line(
+            line,
+            explicit_links,
+            row_idx,
+            area,
+            workspace_root,
+            last_mouse_position,
+            detect_raw_links,
+            styles,
+            targets,
+        )
+    }
+
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn decorate_borrowed_cached_transcript_links(
         &mut self,
         lines: &[TranscriptLine],
@@ -84,6 +121,7 @@ impl Session {
         self.decorate_borrowed_transcript_links_impl(lines, area, true)
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     fn decorate_borrowed_transcript_links_impl(
         &mut self,
         lines: &[TranscriptLine],
@@ -91,36 +129,31 @@ impl Session {
         detect_raw_links: bool,
     ) -> Vec<Line<'static>> {
         if !detect_raw_links && lines.iter().all(|line| line.explicit_links.is_empty()) {
-            self.transcript_file_link_targets.clear();
-            self.hovered_transcript_file_link = None;
+            self.reset_transcript_link_targets();
             return lines.iter().map(|line| line.line.clone()).collect();
         }
 
+        let styles = self.transcript_link_styles();
         let workspace_root = self.workspace_root.as_deref();
-        let link_style = self.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
-        let styles = TranscriptLinkStyles {
-            link: link_style,
-            hovered: link_style.add_modifier(Modifier::BOLD),
-        };
+        let last_mouse_position = self.last_mouse_position;
         let mut targets = Vec::new();
         let mut decorated = Vec::with_capacity(lines.len());
 
         for (row_idx, transcript_line) in lines.iter().enumerate() {
-            decorated.push(decorate_transcript_line(
+            decorated.push(Self::decorate_one_transcript_row(
                 transcript_line.line.clone(),
                 &transcript_line.explicit_links,
                 row_idx,
                 area,
                 workspace_root,
-                self.last_mouse_position,
+                last_mouse_position,
                 detect_raw_links,
                 styles,
                 &mut targets,
             ));
         }
 
-        self.transcript_file_link_targets = targets;
-        self.hovered_transcript_file_link = self.mouse_hovered_transcript_file_link_index();
+        self.store_transcript_link_targets(targets);
 
         decorated
     }
@@ -133,6 +166,7 @@ impl Session {
         self.decorate_visible_transcript_links_impl(lines, area, true)
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn decorate_visible_cached_transcript_links(
         &mut self,
         lines: Vec<TranscriptLine>,
@@ -148,37 +182,32 @@ impl Session {
         detect_raw_links: bool,
     ) -> Vec<Line<'static>> {
         if !detect_raw_links && lines.iter().all(|line| line.explicit_links.is_empty()) {
-            self.transcript_file_link_targets.clear();
-            self.hovered_transcript_file_link = None;
+            self.reset_transcript_link_targets();
             return lines.into_iter().map(|line| line.line).collect();
         }
 
+        let styles = self.transcript_link_styles();
         let workspace_root = self.workspace_root.as_deref();
-        let link_style = self.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
-        let styles = TranscriptLinkStyles {
-            link: link_style,
-            hovered: link_style.add_modifier(Modifier::BOLD),
-        };
+        let last_mouse_position = self.last_mouse_position;
         let mut targets = Vec::new();
         let mut decorated = Vec::with_capacity(lines.len());
 
         for (row_idx, transcript_line) in lines.into_iter().enumerate() {
             let TranscriptLine { line, explicit_links } = transcript_line;
-            decorated.push(decorate_transcript_line(
+            decorated.push(Self::decorate_one_transcript_row(
                 line,
                 &explicit_links,
                 row_idx,
                 area,
                 workspace_root,
-                self.last_mouse_position,
+                last_mouse_position,
                 detect_raw_links,
                 styles,
                 &mut targets,
             ));
         }
 
-        self.transcript_file_link_targets = targets;
-        self.hovered_transcript_file_link = self.mouse_hovered_transcript_file_link_index();
+        self.store_transcript_link_targets(targets);
 
         decorated
     }
@@ -504,13 +533,29 @@ fn may_contain_link_candidate(line: &Line<'_>, explicit_links: &[RenderedTranscr
             .any(|span| may_contain_link_candidate_text(span.content.as_ref()))
 }
 
-fn may_contain_link_candidate_text(text: &str) -> bool {
-    text.contains("://")
-        || text.contains('/')
-        || text.contains('\\')
-        || text.contains("~/")
-        || text.contains("./")
-        || text.contains("../")
+pub(super) fn may_contain_link_candidate_text(text: &str) -> bool {
+    if text.contains("://") || text.contains('/') || text.contains('\\') {
+        return true;
+    }
+    // Hotpath: filename tokens require '.' — skip the whitespace split for
+    // plain prose without dot/slash/backslash (tui_hotpath Agent rows).
+    // "://" contains '/', so the slash check above already covers it.
+    if !text.contains('.') {
+        return false;
+    }
+    // Bare workspace filenames (`Cargo.toml`) resolve without a path separator.
+    // Only treat `name.ext` tokens as candidates — not sentence periods (`end.`).
+    text.split_whitespace().any(looks_like_filename_token)
+}
+
+fn looks_like_filename_token(token: &str) -> bool {
+    // Sentence punctuation trails filenames: `Cargo.toml.` `test.rs,`
+    let token = token.trim_end_matches(|c: char| !c.is_ascii_alphanumeric() && c != '.');
+    let token = token.trim_end_matches('.');
+    let Some((stem, ext)) = token.rsplit_once('.') else {
+        return false;
+    };
+    !stem.is_empty() && !ext.is_empty() && ext.len() <= 10 && ext.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 /// A wrapped display row anchored in the original unwrapped text.
@@ -810,6 +855,11 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
     original_text: &str,
     workspace_root: Option<&Path>,
 ) -> Vec<Vec<RenderedTranscriptLink>> {
+    // Fast reject: plain prose never needs link projection. Skipping this was
+    // a per-row String + regex cost on every reflow (hotpath).
+    if !may_contain_link_candidate_text(original_text) {
+        return vec![Vec::new(); wrapped_lines.len()];
+    }
     let matches = detect_transcript_link_matches(original_text, workspace_root);
     let mut projected = Vec::with_capacity(wrapped_lines.len());
     // Rows are anchored by searching for their body text (see
@@ -842,6 +892,7 @@ pub(crate) fn project_detected_links_onto_wrapped_lines(
     projected
 }
 
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(crate) fn detect_rendered_transcript_links(
     line: &Line<'_>,
     workspace_root: Option<&Path>,
@@ -931,55 +982,11 @@ fn build_transcript_link_match(
     Some(DetectedLinkMatch { start, end, target })
 }
 
-fn trim_transcript_token_bounds(token: &str) -> (usize, usize) {
-    let mut start = 0usize;
-    let mut end = token.len();
-
-    while start < end {
-        let Some(ch) = token[start..end].chars().next() else {
-            break;
-        };
-        if matches!(ch, '(' | '[' | '{' | '<' | '"' | '\'' | '`') {
-            start += ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    while start < end {
-        let Some(ch) = token[start..end].chars().next_back() else {
-            break;
-        };
-        if matches!(ch, ')' | ']' | '}' | '>' | '"' | '\'' | '`' | ',' | ';' | '.' | '!' | '?') {
-            // Preserve trailing ')' when it looks like a location suffix e.g. file.rs(10,5)
-            if ch == ')' && location_paren_suffix_start(&token[start..end]).is_some() {
-                break;
-            }
-            end -= ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    (start, end)
-}
-
-/// Return the byte offset of a trailing parenthesized location suffix like `(10)` or `(10,5)`.
-fn location_paren_suffix_start(token: &str) -> Option<usize> {
-    let paren_start = token.rfind('(')?;
-    let inner = token[paren_start + 1..].strip_suffix(')')?;
-    // Accept `(digits)` or `(digits,digits)` — reject empty or malformed like `(,)` `(10,,5)`
-    let valid = !inner.is_empty()
-        && !inner.starts_with(',')
-        && !inner.ends_with(',')
-        && !inner.contains(",,")
-        && inner.chars().all(|c| c.is_ascii_digit() || c == ',');
-    valid.then_some(paren_start)
-}
-
 fn resolve_transcript_file_target(token: &str, workspace_root: Option<&Path>) -> Option<EditorTarget> {
     let token = token.trim();
-    if token.is_empty() {
+    // Location parsing cannot make an ordinary word into a path candidate.
+    // Percent escapes can introduce path syntax, so they must still be decoded.
+    if !token.bytes().any(|byte| matches!(byte, b'.' | b'/' | b'\\' | b'%')) {
         return None;
     }
 
@@ -1009,29 +1016,18 @@ fn resolve_transcript_url(token: &str) -> Option<String> {
 }
 
 fn looks_like_transcript_path(token: &str) -> bool {
-    // Explicit path prefixes
-    token.starts_with("./")
-        || token.starts_with("../")
-        || token.starts_with('/')
-        || token.starts_with("~/")
-        || token.starts_with("file://")
-        // Windows drive letter (e.g. C:\ or C:/)
-        || (token.len() >= 3
-            && token.as_bytes()[0].is_ascii_alphabetic()
-            && token.as_bytes()[1] == b':'
-            && matches!(token.as_bytes()[2], b'\\' | b'/'))
-        // Contains path separator
-        || token.contains('/')
-        || token.contains('\\')
-        // Has a file-like extension: non-empty stem + dot + 1-12 alphanumeric ext.
-        // Called after suffix stripping so `a.rs` (not `a.rs:10`) is the input.
-        // `path.is_file()` is the final filter, so favor recall here.
-        || token.rsplit_once('.').is_some_and(|(stem, ext)| {
-            !stem.is_empty()
-                && !ext.is_empty()
-                && ext.len() <= 12
-                && ext.chars().all(|c| c.is_ascii_alphanumeric())
-        })
+    // Explicit prefixes, drive letters, and separators are shared with the
+    // markdown detector; the extension fallback below favors recall because
+    // `path.is_file()` is the final filter.
+    if has_explicit_path_syntax(token) {
+        return true;
+    }
+    // Has a file-like extension: non-empty stem + dot + 1-12 alphanumeric ext.
+    // Called after suffix stripping so `a.rs` (not `a.rs:10`) is the input.
+    // `path.is_file()` is the final filter, so favor recall here.
+    token.rsplit_once('.').is_some_and(|(stem, ext)| {
+        !stem.is_empty() && !ext.is_empty() && ext.len() <= 12 && ext.chars().all(|c| c.is_ascii_alphanumeric())
+    })
 }
 
 #[cfg(test)]
@@ -1042,6 +1038,79 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::tui::core_tui::types::InlineTheme;
+
+    #[test]
+    fn path_candidate_shortcut_preserves_decoded_paths_and_locations() {
+        struct Case {
+            raw: &'static str,
+            path: &'static str,
+            location: Option<&'static str>,
+        }
+        let root = tempfile::tempdir().expect("link workspace");
+        fs::create_dir(root.path().join("src")).unwrap();
+        for path in ["src/main.rs", "Cargo.toml", "東京.rs", "Cargo"] {
+            fs::write(root.path().join(path), "fixture").unwrap();
+        }
+        let cases = [
+            Case {
+                raw: "src%2Fmain%2Ers:12:3",
+                path: "src/main.rs",
+                location: Some(":12:3"),
+            },
+            Case {
+                raw: "Cargo%2Etoml(5,2)",
+                path: "Cargo.toml",
+                location: Some(":5:2"),
+            },
+            Case {
+                raw: "./Cargo.toml:7",
+                path: "Cargo.toml",
+                location: Some(":7"),
+            },
+            Case {
+                raw: "東京.rs:4",
+                path: "東京.rs",
+                location: Some(":4"),
+            },
+            Case {
+                raw: "src/main.rs",
+                path: "src/main.rs",
+                location: None,
+            },
+        ];
+        for case in cases {
+            let target = resolve_transcript_file_target(case.raw, Some(root.path())).expect("file link");
+            assert_eq!(target.path(), root.path().join(case.path), "{}", case.raw);
+            assert_eq!(target.location_suffix(), case.location, "{}", case.raw);
+        }
+        for word in ["ordinary", "3999:", "inspect", "or", "Cargo", "Cargo(5,2)"] {
+            assert!(resolve_transcript_file_target(word, Some(root.path())).is_none(), "{word}");
+        }
+    }
+
+    #[test]
+    fn path_candidate_shortcut_keeps_filesystem_checks_live() {
+        let root = tempfile::tempdir().expect("link workspace");
+        let path = root.path().join("appearing.rs");
+        assert!(resolve_transcript_file_target("appearing.rs:9", Some(root.path())).is_none());
+        fs::write(&path, "created after detection").unwrap();
+        let target = resolve_transcript_file_target("appearing.rs:9", Some(root.path())).expect("new file");
+        assert_eq!(target.path(), path);
+        assert_eq!(target.location_suffix(), Some(":9"));
+        fs::remove_file(&path).unwrap();
+        assert!(resolve_transcript_file_target("appearing.rs:9", Some(root.path())).is_none());
+        fs::create_dir(&path).unwrap();
+        assert!(resolve_transcript_file_target("appearing.rs:9", Some(root.path())).is_none());
+    }
+
+    #[test]
+    fn filename_candidates_ignore_sentence_punctuation() {
+        assert!(may_contain_link_candidate_text("see Cargo.toml."));
+        assert!(may_contain_link_candidate_text("open test.rs, then continue"));
+        assert!(!may_contain_link_candidate_text("the end."));
+        assert!(!may_contain_link_candidate_text("plain prose without names"));
+        assert!(may_contain_link_candidate_text("src/main.rs"));
+    }
 
     /// Walk up from `CARGO_MANIFEST_DIR` to the directory whose `Cargo.toml`
     /// contains `[workspace]`. Hardcoding `parent()` breaks when crates are
@@ -1078,6 +1147,72 @@ mod tests {
 
         assert_eq!(decorated, vec![Line::from("plain text only")]);
         assert!(session.transcript_file_link_targets.is_empty());
+    }
+
+    #[test]
+    fn borrowed_and_visible_decoration_agree_on_mixed_links() {
+        use crate::tui::ui::tui::types::InlineLinkTarget;
+
+        // Asymmetric rows: explicit link first, raw URL last, plain middle —
+        // row index feeds target areas, so order matters for the oracle.
+        let root = tempfile::tempdir().expect("link workspace");
+        fs::create_dir(root.path().join("src")).unwrap();
+        fs::write(root.path().join("src/app.rs"), "fixture").unwrap();
+        fs::write(root.path().join("Cargo.toml"), "fixture").unwrap();
+        let area = Rect::new(0, 0, 60, 5);
+        let explicit_text = "see explicit docs";
+        let explicit_target = "https://example.com/explicit";
+        let explicit_start = explicit_text.find("explicit").expect("explicit offset");
+        let lines = vec![
+            TranscriptLine {
+                line: Line::from(explicit_text),
+                explicit_links: vec![RenderedTranscriptLink {
+                    start: explicit_start,
+                    end: explicit_start + "explicit".len(),
+                    start_col: explicit_start,
+                    width: "explicit".len(),
+                    target: InlineLinkTarget::Url(explicit_target.to_string()),
+                }],
+            },
+            TranscriptLine {
+                line: Line::from("plain text only"),
+                explicit_links: Vec::new(),
+            },
+            TranscriptLine {
+                line: Line::from("open src/app.rs and https://example.com/raw"),
+                explicit_links: Vec::new(),
+            },
+        ];
+
+        let mut borrowed_session = Session::new(InlineTheme::default(), None, 60);
+        borrowed_session.set_workspace_root(Some(root.path().to_path_buf()));
+        let borrowed = borrowed_session.decorate_borrowed_transcript_links(&lines, area);
+        let borrowed_targets = borrowed_session.transcript_file_link_targets.clone();
+
+        let mut owned_session = Session::new(InlineTheme::default(), None, 60);
+        owned_session.set_workspace_root(Some(root.path().to_path_buf()));
+        let owned = owned_session.decorate_visible_transcript_links(lines.clone(), area);
+        let owned_targets = owned_session.transcript_file_link_targets.clone();
+
+        assert_eq!(borrowed, owned);
+        assert_eq!(borrowed_targets, owned_targets);
+        // Independently derived: explicit URL + raw file + raw URL = 3 targets
+        // across rows 0 and 2; plain row 1 contributes none.
+        assert_eq!(borrowed_targets.len(), 3);
+        assert_eq!(borrowed_targets[0].area.y, area.y);
+        assert_eq!(borrowed_targets[1].area.y, area.y + 2);
+        assert_eq!(borrowed_targets[2].area.y, area.y + 2);
+
+        // Cached (no raw detection) fast path: explicit survives, raw links vanish.
+        let mut cached_borrowed = Session::new(InlineTheme::default(), None, 60);
+        cached_borrowed.set_workspace_root(Some(root.path().to_path_buf()));
+        let cached_borrowed_lines = cached_borrowed.decorate_borrowed_cached_transcript_links(&lines, area);
+        let mut cached_owned = Session::new(InlineTheme::default(), None, 60);
+        cached_owned.set_workspace_root(Some(root.path().to_path_buf()));
+        let cached_owned_lines = cached_owned.decorate_visible_cached_transcript_links(lines, area);
+        assert_eq!(cached_borrowed_lines, cached_owned_lines);
+        assert_eq!(cached_borrowed.transcript_file_link_targets, cached_owned.transcript_file_link_targets);
+        assert_eq!(cached_borrowed.transcript_file_link_targets.len(), 1);
     }
 
     #[test]

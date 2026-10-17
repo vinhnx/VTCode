@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
+use crate::tui::config::constants::ui;
 
 #[test]
 fn test_extract_file_reference_at_symbol() {
@@ -433,14 +434,18 @@ fn test_current_at_token_ignores_mid_word_at() {
 /// In-memory directory tree used to exercise lazy (on-demand) loading without
 /// touching the real filesystem.
 fn fake_dir_lister() -> DirLister {
+    let entry = |path: &str, is_dir: bool| DirEntryInfo {
+        path: PathBuf::from(path),
+        is_dir,
+        kind: if is_dir { FileKind::Directory } else { FileKind::Other },
+        symlink_target: None,
+        symlink_broken: false,
+    };
     DirLister::new(move |dir: &Path| match dir.display().to_string().as_str() {
-        "/workspace" => vec![
-            (PathBuf::from("/workspace/src"), true),
-            (PathBuf::from("/workspace/README.md"), false),
-        ],
+        "/workspace" => vec![entry("/workspace/src", true), entry("/workspace/README.md", false)],
         "/workspace/src" => vec![
-            (PathBuf::from("/workspace/src/main.rs"), false),
-            (PathBuf::from("/workspace/src/lib.rs"), false),
+            entry("/workspace/src/main.rs", false),
+            entry("/workspace/src/lib.rs", false),
         ],
         _ => Vec::new(),
     })
@@ -497,4 +502,104 @@ fn test_search_mode_deferred_until_index_arrives() {
     let entries = palette.list_entries();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].relative_path, "src/main.rs");
+}
+
+#[test]
+fn test_has_more_items_tracks_visible_budget() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+
+    // Exactly the visible budget: nothing hidden.
+    let at_budget: Vec<String> = (0..ui::INLINE_LIST_MAX_ROWS)
+        .map(|i| format!("/workspace/file{i}.rs"))
+        .collect();
+    palette.load_files(at_budget);
+    assert!(!palette.has_more_items());
+
+    // One past the budget: hidden rows remain.
+    let over_budget: Vec<String> = (0..ui::INLINE_LIST_MAX_ROWS + 1)
+        .map(|i| format!("/workspace/file{i}.rs"))
+        .collect();
+    palette.load_files(over_budget);
+    assert!(palette.has_more_items());
+}
+
+#[test]
+fn test_search_index_loaded_reflects_corpus() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    palette.configure(PathBuf::from("/workspace"), fake_dir_lister());
+    assert!(!palette.search_index_loaded());
+
+    palette.set_search_index(vec!["/workspace/src/main.rs".to_owned()]);
+    assert!(palette.search_index_loaded());
+}
+
+#[test]
+fn test_empty_search_index_still_marks_loaded() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    palette.configure(PathBuf::from("/workspace"), fake_dir_lister());
+    assert!(!palette.search_index_loaded());
+
+    // An empty workspace (or one fully pruned by `.vtcodegitignore`) still
+    // completes discovery; search must not report "still indexing" forever.
+    palette.set_search_index(Vec::new());
+    assert!(palette.search_index_loaded());
+    assert!(palette.all_files.is_empty());
+}
+
+#[test]
+fn test_page_down_and_up_move_by_page_jump() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    let files: Vec<String> = (0..30).map(|i| format!("/workspace/file{i:02}.rs")).collect();
+    palette.load_files(files);
+
+    assert_eq!(palette.selected_index(), Some(0));
+    palette.page_down();
+    assert_eq!(palette.selected_index(), Some(10));
+    palette.page_down();
+    assert_eq!(palette.selected_index(), Some(20));
+    palette.page_up();
+    assert_eq!(palette.selected_index(), Some(10));
+}
+
+#[test]
+fn test_symlink_metadata_propagates_from_dir_lister() {
+    let lister = DirLister::new(|_dir: &Path| {
+        vec![DirEntryInfo {
+            path: PathBuf::from("/workspace/link"),
+            is_dir: false,
+            kind: FileKind::Other,
+            symlink_target: Some(PathBuf::from("/workspace/missing")),
+            symlink_broken: true,
+        }]
+    });
+
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    palette.configure(PathBuf::from("/workspace"), lister);
+
+    let entry = palette.list_entries().first().expect("one entry");
+    assert!(entry.symlink_broken);
+    assert_eq!(entry.symlink_target.as_deref(), Some(Path::new("/workspace/missing")));
+}
+
+#[test]
+fn test_entry_kind_classified_for_files() {
+    let mut palette = FilePalette::new(PathBuf::from("/workspace"));
+    palette.load_files(vec![
+        "/workspace/src/main.rs".to_owned(),
+        "/workspace/assets/logo.png".to_owned(),
+        "/workspace/data/archive.tar".to_owned(),
+    ]);
+
+    let kind_of = |name: &str| {
+        palette
+            .all_files
+            .iter()
+            .find(|e| e.relative_path == name)
+            .map(|e| e.kind)
+            .expect("entry present")
+    };
+
+    assert_eq!(kind_of("src/main.rs"), FileKind::Code);
+    assert_eq!(kind_of("assets/logo.png"), FileKind::Image);
+    assert_eq!(kind_of("data/archive.tar"), FileKind::Other);
 }

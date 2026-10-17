@@ -7,7 +7,7 @@ Comprehensive guide to the OpenAI Codex Ollama integration in VT Code.
 | Document                                                 | Purpose                        | Audience   |
 | -------------------------------------------------------- | ------------------------------ | ---------- |
 | [ollama-quick-reference.md](./ollama-quick-reference.md) | API reference and lookup       | Developers |
-| [providers/ollama.md](./ollama.md)             | User-facing Ollama setup guide | End Users  |
+| [providers/ollama.md](./ollama.md)                       | User-facing Ollama setup guide | End Users  |
 
 ## Modules Overview
 
@@ -86,7 +86,7 @@ pub fn base_url_to_host_root(base_url: &str) -> String
 
 ## Data Flow
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Your Application                          │
 └────────────────────┬────────────────────────────────────────┘
@@ -211,14 +211,14 @@ impl OllamaPullProgressReporter for MyReporter {
 
 ### Connection Error
 
-```
+```text
 No running Ollama server detected. Start it with: `ollama serve` (after installing)
 Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file
 ```
 
 ### Model Not Found
 
-```
+```text
 No remote models found. Ensure Ollama server is running or set OLLAMA_BASE_URL
 ```
 
@@ -238,7 +238,7 @@ cargo test --lib ollama -- --nocapture
 
 ## File Locations
 
-```
+```text
 vtcode/
 ├── crates/codegen/vtcode-core/src/llm/providers/
 │   ├── ollama.rs                  (main provider)
@@ -295,13 +295,13 @@ Handles both:
 
 ## References
 
-- **Codex Source**: https://github.com/openai/codex/tree/main/codex-rs/ollama
-- **Ollama Docs**: https://ollama.com/docs
-- **Ollama API**: https://github.com/ollama/ollama/blob/main/docs/api.md
+- **Codex Source**: <https://github.com/openai/codex/tree/main/codex-rs/ollama>
+- **Ollama Docs**: <https://ollama.com/docs>
+- **Ollama API**: <https://github.com/ollama/ollama/blob/main/docs/api.md>
 
 ## Document Relations
 
-```
+```text
 OLLAMA_INDEX.md (this file)
 │   └── (overview of completed work)
 │
@@ -322,6 +322,4 @@ Refer to the appropriate document:
 
 ---
 
-**Last Updated**: December 31, 2025
-**Status**: Production-ready
-**Quality**: Comprehensive documentation + tests
+**Last Updated**: December 31, 2025 **Status**: Production-ready **Quality**: Comprehensive documentation + tests

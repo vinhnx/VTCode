@@ -7,6 +7,7 @@ use std::fs;
 use super::encryption;
 use super::keyring;
 use super::mode::AuthCredentialsStoreMode;
+use super::mode::ResolvedStoreMode;
 use crate::storage_paths::{auth_storage_dir, read_private_file, write_private_file};
 
 /// Generic credential storage interface.
@@ -27,7 +28,7 @@ impl CredentialStorage {
     /// Store a credential using the specified mode.
     pub(crate) fn store_with_mode(&self, value: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
         match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => match self.store_keyring(value) {
+            ResolvedStoreMode::Keyring => match self.store_keyring(value) {
                 Ok(()) => {
                     if let Err(err) = self.store_file(value) {
                         tracing::warn!(
@@ -49,8 +50,7 @@ impl CredentialStorage {
                     self.store_file(value).context("failed to store credential in encrypted file")
                 }
             },
-            AuthCredentialsStoreMode::File => self.store_file(value),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+            ResolvedStoreMode::File => self.store_file(value),
         }
     }
 
@@ -59,12 +59,12 @@ impl CredentialStorage {
     /// Provider-specific storage adapters use this boundary when their public
     /// API promises that an operation affects only the configured backend.
     /// Unlike [`Self::store_with_mode`], this method never falls back or writes
-    /// a backup to another backend.
-    pub(crate) fn store_exact_with_mode(&self, value: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
-        match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => self.store_keyring(value),
-            AuthCredentialsStoreMode::File => self.store_file(value),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+    /// a backup to another backend. It takes an already-resolved backend so no
+    /// `Auto` case can reach it.
+    pub(crate) fn store_exact_with_mode(&self, value: &str, mode: ResolvedStoreMode) -> Result<()> {
+        match mode {
+            ResolvedStoreMode::Keyring => self.store_keyring(value),
+            ResolvedStoreMode::File => self.store_file(value),
         }
     }
 
@@ -78,7 +78,7 @@ impl CredentialStorage {
     pub(crate) fn store_json_exact_with_mode<T: serde::Serialize>(
         &self,
         value: &T,
-        mode: AuthCredentialsStoreMode,
+        mode: ResolvedStoreMode,
     ) -> Result<()> {
         let serialized = serde_json::to_string(value).context("failed to serialize credential")?;
         self.store_exact_with_mode(&serialized, mode)
@@ -92,7 +92,7 @@ impl CredentialStorage {
     /// Load a credential using the specified mode.
     pub(crate) fn load_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<Option<String>> {
         match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => match self.load_keyring() {
+            ResolvedStoreMode::Keyring => match self.load_keyring() {
                 Ok(Some(value)) => Ok(Some(value)),
                 Ok(None) => self.load_file(),
                 Err(err) => {
@@ -105,8 +105,7 @@ impl CredentialStorage {
                     self.load_file()
                 }
             },
-            AuthCredentialsStoreMode::File => self.load_file(),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+            ResolvedStoreMode::File => self.load_file(),
         }
     }
 
@@ -114,11 +113,10 @@ impl CredentialStorage {
     ///
     /// This deliberately does not fall back to another backend. Callers that
     /// want a preferred-backend lookup must compose that policy explicitly.
-    pub(crate) fn load_exact_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<Option<String>> {
-        match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => self.load_keyring(),
-            AuthCredentialsStoreMode::File => self.load_file(),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+    pub(crate) fn load_exact_with_mode(&self, mode: ResolvedStoreMode) -> Result<Option<String>> {
+        match mode {
+            ResolvedStoreMode::Keyring => self.load_keyring(),
+            ResolvedStoreMode::File => self.load_file(),
         }
     }
 
@@ -138,7 +136,7 @@ impl CredentialStorage {
     /// Load and deserialize a value from exactly the selected backend.
     pub(crate) fn load_json_exact_with_mode<T: serde::de::DeserializeOwned>(
         &self,
-        mode: AuthCredentialsStoreMode,
+        mode: ResolvedStoreMode,
     ) -> Result<Option<T>> {
         let Some(serialized) = self.load_exact_with_mode(mode)? else {
             return Ok(None);
@@ -156,7 +154,7 @@ impl CredentialStorage {
     /// Clear (delete) a credential using the specified mode.
     pub(crate) fn clear_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
         match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => {
+            ResolvedStoreMode::Keyring => {
                 let mut errors = Vec::new();
 
                 if let Err(err) = self.clear_keyring() {
@@ -172,8 +170,7 @@ impl CredentialStorage {
                     Err(anyhow!("Failed to clear credential from secure storage: {}", errors.join("; ")))
                 }
             }
-            AuthCredentialsStoreMode::File => self.clear_file(),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+            ResolvedStoreMode::File => self.clear_file(),
         }
     }
 
@@ -183,11 +180,10 @@ impl CredentialStorage {
     /// It is intentionally separate from [`Self::clear_with_mode`], whose
     /// keyring branch also removes the encrypted backup written by the generic
     /// storage policy.
-    pub(crate) fn clear_exact_with_mode(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
-        match mode.effective_mode() {
-            AuthCredentialsStoreMode::Keyring => self.clear_keyring(),
-            AuthCredentialsStoreMode::File => self.clear_file(),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+    pub(crate) fn clear_exact_with_mode(&self, mode: ResolvedStoreMode) -> Result<()> {
+        match mode {
+            ResolvedStoreMode::Keyring => self.clear_keyring(),
+            ResolvedStoreMode::File => self.clear_file(),
         }
     }
 

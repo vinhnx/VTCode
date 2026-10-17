@@ -1,3 +1,4 @@
+use crate::agent::runloop::ui_list;
 use crate::agent::runloop::unified::reasoning::model_supports_reasoning;
 use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 use anyhow::{Context, Result};
@@ -5,7 +6,7 @@ use chrono::{DateTime, Local, Utc};
 use vtcode_core::core::agent::snapshots::{CheckpointRestore, RevertScope, SnapshotManager, SnapshotMetadata};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_ui::tui::app::{InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, RewindAction};
+use vtcode_ui::tui::app::{InlineHandle, InlineListSearchConfig, InlineListSelection, RewindAction};
 
 use super::ui;
 
@@ -63,6 +64,7 @@ fn restore_prompt_input_and_report(
 }
 
 pub(crate) async fn handle_open_rewind_picker(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    maybe_auto_recover_pending_rewind(&mut ctx).await?;
     if !ctx.renderer.supports_inline_ui() {
         ctx.renderer.line(
             MessageStyle::Info,
@@ -168,19 +170,17 @@ fn show_rewind_checkpoint_modal(handle: &InlineHandle, snapshots: &[SnapshotMeta
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| snapshot.created_at.to_string());
             let event_text = rewind_checkpoint_title(snapshot);
-            InlineListItem {
-                title: timestamp,
-                subtitle: Some(event_text),
-                badge: Some(format!("turn {}", snapshot.turn_number)),
-                indent: 0,
-                selection: Some(InlineListSelection::RewindCheckpoint(snapshot.turn_number)),
-                search_value: Some(format!(
-                    "{} {} {}",
-                    snapshot.turn_number,
-                    snapshot.prompt_text.clone().unwrap_or_default(),
-                    snapshot.description
-                )),
-            }
+            ui_list::choice(
+                timestamp,
+                Some(event_text),
+                Some(InlineListSelection::RewindCheckpoint(snapshot.turn_number)),
+            )
+            .with_search_value(format!(
+                "{} {} {}",
+                snapshot.turn_number,
+                snapshot.prompt_text.clone().unwrap_or_default(),
+                snapshot.description
+            ))
         })
         .collect();
     handle.show_list_modal(
@@ -203,38 +203,30 @@ fn show_rewind_checkpoint_modal(handle: &InlineHandle, snapshots: &[SnapshotMeta
 
 fn show_rewind_action_modal(handle: &InlineHandle, snapshot: &SnapshotMetadata) {
     let items = vec![
-        InlineListItem {
-            title: "Rewind & Run".to_string(),
-            subtitle: Some("Restore code and conversation, then re-run from this checkpoint.".to_string()),
-            badge: Some("Both".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RewindAction(RewindAction::RestoreBoth)),
-            search_value: Some("rewind run restore both code conversation".to_string()),
-        },
-        InlineListItem {
-            title: "Rewind".to_string(),
-            subtitle: Some("Restore conversation only, keeping current files on disk.".to_string()),
-            badge: Some("Chat".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RewindAction(RewindAction::RestoreConversation)),
-            search_value: Some("rewind restore conversation chat".to_string()),
-        },
-        InlineListItem {
-            title: "Restore code".to_string(),
-            subtitle: Some("Revert tracked file edits but keep the current conversation.".to_string()),
-            badge: Some("Code".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RewindAction(RewindAction::RestoreCode)),
-            search_value: Some("restore code files".to_string()),
-        },
-        InlineListItem {
-            title: "Cancel".to_string(),
-            subtitle: Some("Close the rewind picker without changing anything.".to_string()),
-            badge: Some("Cancel".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RewindAction(RewindAction::NeverMind)),
-            search_value: Some("cancel never mind".to_string()),
-        },
+        ui_list::choice(
+            "Rewind & Run",
+            Some("Restore code and conversation, then re-run from this checkpoint.".to_string()),
+            Some(InlineListSelection::RewindAction(RewindAction::RestoreBoth)),
+        )
+        .with_search_value("rewind run restore both code conversation".to_string()),
+        ui_list::choice(
+            "Rewind",
+            Some("Restore conversation only, keeping current files on disk.".to_string()),
+            Some(InlineListSelection::RewindAction(RewindAction::RestoreConversation)),
+        )
+        .with_search_value("rewind restore conversation chat".to_string()),
+        ui_list::choice(
+            "Restore code",
+            Some("Revert tracked file edits but keep the current conversation.".to_string()),
+            Some(InlineListSelection::RewindAction(RewindAction::RestoreCode)),
+        )
+        .with_search_value("restore code files".to_string()),
+        ui_list::choice(
+            "Cancel",
+            Some("Close the rewind picker without changing anything.".to_string()),
+            Some(InlineListSelection::RewindAction(RewindAction::NeverMind)),
+        )
+        .with_search_value("cancel never mind".to_string()),
     ];
     handle.show_list_modal(
         format!("Rewind turn {}", snapshot.turn_number),
@@ -250,9 +242,10 @@ fn show_rewind_action_modal(handle: &InlineHandle, snapshot: &SnapshotMetadata) 
 }
 
 pub(crate) async fn handle_rewind_latest(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     scope: RevertScope,
 ) -> Result<SlashCommandControl> {
+    maybe_auto_recover_pending_rewind(&mut ctx).await?;
     let Some(manager) = ctx.checkpoint_manager else {
         ctx.renderer
             .line(MessageStyle::Info, "In-chat rewind requires access to the checkpoint manager.")?;
@@ -281,10 +274,11 @@ pub(crate) async fn handle_rewind_latest(
 }
 
 pub(crate) async fn handle_rewind_to_turn(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     turn: usize,
     scope: RevertScope,
 ) -> Result<SlashCommandControl> {
+    maybe_auto_recover_pending_rewind(&mut ctx).await?;
     if let Some(manager) = ctx.checkpoint_manager {
         let supports_reasoning = model_supports_reasoning(&**ctx.provider_client, &ctx.config.model);
         let result = restore_rewind_from_checkpoint(
@@ -332,17 +326,24 @@ pub(crate) async fn handle_redo(ctx: SlashCommandContext<'_>) -> Result<SlashCom
     Ok(SlashCommandControl::Continue)
 }
 
-pub(crate) async fn handle_rewind_recover(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    let manager = ctx.checkpoint_manager.context("No checkpoint manager available")?;
-    let restored = manager
-        .recover_pending_rewind(&ctx.tool_registry.harness_context_snapshot().session_id)
-        .await
-        .context("No interrupted rewind to recover; /rewind-recover only resumes an interrupted restore")?;
+/// Auto-recover an interrupted rewind before running the requested rewind.
+///
+/// Returns `Ok(true)` when a pending restore was resumed so callers can note
+/// it in the transcript. Absence of a pending restore is not an error.
+async fn maybe_auto_recover_pending_rewind(ctx: &mut SlashCommandContext<'_>) -> Result<bool> {
+    let Some(manager) = ctx.checkpoint_manager else {
+        return Ok(false);
+    };
+    let session_id = ctx.tool_registry.harness_context_snapshot().session_id;
+    let restored = match manager.recover_pending_rewind(&session_id).await {
+        Ok(restored) => restored,
+        Err(_) => return Ok(false),
+    };
     let supports_reasoning = model_supports_reasoning(&**ctx.provider_client, &ctx.config.model);
     render_redo_restore_success(ctx.renderer, ctx.handle, ctx.conversation_history, restored, supports_reasoning)?;
     ctx.renderer
-        .line(MessageStyle::Info, "Recovery complete; interrupted rewind has been resumed.")?;
-    Ok(SlashCommandControl::Continue)
+        .line(MessageStyle::Info, "Auto-recovered an interrupted rewind before continuing.")?;
+    Ok(true)
 }
 
 async fn restore_rewind_from_checkpoint(

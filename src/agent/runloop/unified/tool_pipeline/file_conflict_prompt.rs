@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,10 +18,9 @@ use vtcode_ui::tui::app::{
 };
 
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
-use super::CancellationTokens;
 use super::execution_runtime::execute_with_cache_and_streaming;
 use super::file_conflict_runtime::{PendingFileConflictStatus, RuntimeToolExecution};
 use super::status::ToolExecutionStatus;
@@ -42,6 +43,11 @@ enum ConflictResolution {
     Proceed,
 }
 
+/// Maximum number of file conflict resolution attempts before aborting.
+/// This prevents an infinite loop when the file keeps changing on disk
+/// between re-executions (e.g., from a file watcher or formatter).
+const MAX_CONFLICT_RESOLUTION_ATTEMPTS: u32 = 10;
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Intentional compatibility, platform, or test-only suppression."
@@ -55,62 +61,9 @@ pub(super) async fn resolve_file_conflict_status<S>(
     tool_item_id: &str,
     tool_call_id: &str,
     args_val: &Value,
-    execution: RuntimeToolExecution,
+    mut execution: RuntimeToolExecution,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    harness_emitter: Option<HarnessEventEmitter>,
-    vt_cfg: Option<&VTCodeConfig>,
-    max_tool_retries: usize,
-    safety_prevalidated: bool,
-    show_live_pty_preview: bool,
-) -> Result<ToolExecutionStatus>
-where
-    S: UiSession + ?Sized,
-{
-    let tokens = CancellationTokens {
-        state: ctrl_c_state.clone(),
-        notify: ctrl_c_notify.clone(),
-    };
-    resolve_file_conflict_status_inner(
-        registry,
-        tool_result_cache,
-        session,
-        handle,
-        name,
-        tool_item_id,
-        tool_call_id,
-        args_val,
-        execution,
-        &tokens,
-        harness_emitter,
-        vt_cfg,
-        max_tool_retries,
-        safety_prevalidated,
-        show_live_pty_preview,
-    )
-    .await
-}
-
-/// Maximum number of file conflict resolution attempts before aborting.
-/// This prevents an infinite loop when the file keeps changing on disk
-/// between re-executions (e.g., from a file watcher or formatter).
-const MAX_CONFLICT_RESOLUTION_ATTEMPTS: u32 = 10;
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Intentional compatibility, platform, or test-only suppression."
-)] // internal pipeline function, all params needed
-async fn resolve_file_conflict_status_inner<S>(
-    registry: &mut ToolRegistry,
-    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
-    session: &mut S,
-    handle: &InlineHandle,
-    name: &str,
-    tool_item_id: &str,
-    tool_call_id: &str,
-    args_val: &Value,
-    mut execution: RuntimeToolExecution,
-    tokens: &CancellationTokens,
     harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
@@ -130,8 +83,8 @@ where
         match prompt_for_conflict_resolution(
             session,
             handle,
-            &tokens.state,
-            &tokens.notify,
+            ctrl_c_state,
+            ctrl_c_notify,
             &conflict,
             vt_cfg.map(|cfg| cfg.security.hitl_notification_bell).unwrap_or(true),
         )
@@ -172,8 +125,8 @@ where
                     tool_item_id,
                     tool_call_id,
                     &override_args,
-                    &tokens.state,
-                    &tokens.notify,
+                    ctrl_c_state,
+                    ctrl_c_notify,
                     handle,
                     harness_emitter.clone(),
                     vt_cfg,
@@ -256,7 +209,7 @@ where
             "Reload uses the external disk version. Diff preview is unavailable for this file content.".to_string()
         },
     ];
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {
@@ -267,6 +220,7 @@ where
             selected: Some(InlineListSelection::FileConflictReload),
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         }),
         ctrl_c_state,
         ctrl_c_notify,
@@ -293,7 +247,7 @@ where
             Ok(OverlayWaitOutcome::Submitted(ConflictResolution::Abort))
         }
         OverlayWaitOutcome::Submitted(InlineListSelection::FileConflictViewDiff) if can_show_diff => {
-            show_overlay_and_wait(
+            show_permission_and_wait(
                 handle,
                 session,
                 TransientRequest::Diff(DiffOverlayRequest {
@@ -327,32 +281,38 @@ where
 
 fn conflict_resolution_items(can_show_diff: bool) -> Vec<InlineListItem> {
     let mut items = Vec::with_capacity(if can_show_diff { 3 } else { 2 });
-    items.push(InlineListItem {
-        title: "Reload from disk".to_string(),
-        subtitle: Some("Discard pending agent changes and continue from the external version.".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::FileConflictReload),
-        search_value: Some("reload disk external version".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Reload from disk",
+            "Discard pending agent changes and continue from the external version.".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::FileConflictReload),
+        )
+        .with_search_value("reload disk external version".to_string()),
+    );
     if can_show_diff {
-        items.push(InlineListItem {
-            title: "View unified diff".to_string(),
-            subtitle: Some("Review external changes against the agent's intended write.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::FileConflictViewDiff),
-            search_value: Some("diff compare review changes".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "View unified diff",
+                "Review external changes against the agent's intended write.".to_string(),
+                None,
+                Tone::Neutral,
+                Some(InlineListSelection::FileConflictViewDiff),
+            )
+            .with_search_value("diff compare review changes".to_string()),
+        );
     }
-    items.push(InlineListItem {
-        title: "Abort".to_string(),
-        subtitle: Some("Cancel this write and leave disk unchanged.".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::FileConflictAbort),
-        search_value: Some("abort cancel stop".to_string()),
-    });
+    items.push(
+        ui_list::action(
+            "Abort",
+            "Cancel this write and leave disk unchanged.".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::FileConflictAbort),
+        )
+        .with_search_value("abort cancel stop".to_string()),
+    );
     items
 }
 

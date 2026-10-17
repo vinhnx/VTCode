@@ -6,7 +6,7 @@ use crate::agent::runloop::unified::planning_workflow::detect_enter_planning_int
 use crate::agent::runloop::unified::run_loop_context::{
     BudgetExhaustedMetrics, HarnessTurnState, budget_kind, emit_budget_exhausted_metric, full_auto_loop_grants_enabled,
 };
-use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::context::{TurnLoopResult, last_user_message};
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS;
@@ -30,7 +30,11 @@ pub(super) struct PrecomputedTurnConfig {
 }
 
 const UNLIMITED_TOOL_LOOPS: usize = usize::MAX;
-const TOOL_LOOP_LIMIT_RECOVERY_REASON: &str = "Tool loop budget exhausted before a final response. Tools are disabled for one bounded synthesis pass; answer from the completed tool outputs and state any incomplete work explicitly.";
+fn tool_loop_limit_recovery_reason(limit: usize) -> String {
+    format!(
+        "Tool loop budget exhausted before a final response ({limit}/{limit}). Tools are disabled for one bounded synthesis pass; answer from the completed tool outputs and state any incomplete work explicitly."
+    )
+}
 
 /// Initialize the loop allowance for a turn that is executing an approved
 /// plan. The allowance is applied at turn initialization only; later
@@ -101,6 +105,18 @@ pub(super) fn resolve_safety_tool_call_limits(
     (turn_limit, session_limit)
 }
 
+/// Shared `0`-means-unlimited floor helper: `0` stays `0`, otherwise raise to
+/// `floor`. Keeps the planning and approved-plan budget wrappers from each
+/// carrying their own zero-branch.
+#[inline]
+fn max_tool_calls_with_floor(configured_limit: usize, floor: usize) -> usize {
+    if configured_limit == 0 {
+        0
+    } else {
+        configured_limit.max(floor)
+    }
+}
+
 /// Minimum per-turn tool-call budget while the planning workflow is active.
 /// Plan-mode research legitimately needs far more read-only calls than a
 /// build-mode turn; a lower configured `max_tool_calls_per_turn` must not
@@ -111,10 +127,8 @@ pub(in crate::agent::runloop::unified::turn) fn effective_max_tool_calls_for_tur
     configured_limit: usize,
     planning_active: bool,
 ) -> usize {
-    if configured_limit == 0 {
-        0
-    } else if planning_active {
-        configured_limit.max(PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN)
+    if planning_active {
+        max_tool_calls_with_floor(configured_limit, PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN)
     } else {
         configured_limit
     }
@@ -125,11 +139,49 @@ pub(in crate::agent::runloop::unified::turn) fn effective_max_tool_calls_for_tur
 /// from ordinary build turns so unrelated requests retain their configured
 /// safety budget.
 pub(super) fn effective_max_tool_calls_for_approved_plan_execution(configured_limit: usize) -> usize {
-    if configured_limit == 0 {
-        0
-    } else {
-        configured_limit.max(APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN)
+    max_tool_calls_with_floor(configured_limit, APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN)
+}
+
+/// Remaining tool-call / tool-loop floor after a mid-turn Build↔Plan switch.
+///
+/// Mode floors (`max(limit, 120)`) only help when the turn is still empty. If
+/// Build already consumed most of the cap and the workflow auto-switches to
+/// Plan (or back to implementation), the new mode must get a full floor of
+/// *remaining* headroom from now — not a cap that is already nearly spent.
+pub(super) fn apply_mode_switch_remaining_tool_call_floor(
+    max_tool_calls: &mut usize,
+    used_tool_calls: usize,
+    planning_active: bool,
+) {
+    if *max_tool_calls == 0 {
+        return;
     }
+    let floor = if planning_active {
+        PLANNING_WORKFLOW_MIN_TOOL_CALLS_PER_TURN
+    } else {
+        APPROVED_PLAN_MIN_TOOL_CALLS_PER_TURN
+    };
+    *max_tool_calls = (*max_tool_calls).max(used_tool_calls.saturating_add(floor));
+}
+
+/// Same remaining-headroom rule for tool-loop iterations (`step_count` is
+/// loops already taken this turn).
+pub(super) fn apply_mode_switch_remaining_tool_loop_floor(
+    current_max_tool_loops: &mut usize,
+    step_count: usize,
+    planning_active: bool,
+) {
+    if *current_max_tool_loops == UNLIMITED_TOOL_LOOPS {
+        return;
+    }
+    let floor = if planning_active {
+        PLANNING_WORKFLOW_MIN_TOOL_LOOPS
+    } else {
+        // Implementation after a plan still needs a full research-sized
+        // runway for edits + verification in the same turn.
+        PLANNING_WORKFLOW_MIN_TOOL_LOOPS.max(DEFAULT_MAX_TOOL_LOOPS)
+    };
+    *current_max_tool_loops = (*current_max_tool_loops).max(step_count.saturating_add(floor));
 }
 
 /// Detects a stale recovery status response that incorrectly carries the
@@ -309,24 +361,27 @@ fn apply_tool_loop_grant(
     let status_message = match grant_source {
         ToolLoopGrantSource::FullAuto => {
             format!(
-                "Full-auto auto-granted +{} tool loops (limit {}, cap {})",
+                "Full-auto auto-granted +{} tool loops (limit {}, cap {}); per-turn tool-call budget unchanged",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::SessionPreauthorized => {
             format!(
-                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases",
+                "Auto-granted +{} tool loops (limit {}, cap {}); earlier grant this session preauthorized further increases; per-turn tool-call budget unchanged",
                 increment, *current_max_tool_loops, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual if requested_increment != increment => {
             format!(
-                "Tool loop limit increased to {} (+{}, requested +{}, cap {})",
+                "Tool loop limit increased to {} (+{}, requested +{}, cap {}); per-turn tool-call budget unchanged",
                 *current_max_tool_loops, increment, requested_increment, hard_cap,
             )
         }
         ToolLoopGrantSource::Manual => {
-            format!("Tool loop limit increased to {} (+{}, cap {})", *current_max_tool_loops, increment, hard_cap,)
+            format!(
+                "Tool loop limit increased to {} (+{}, cap {}); per-turn tool-call budget unchanged",
+                *current_max_tool_loops, increment, hard_cap,
+            )
         }
     };
     display_status(ctx.renderer, &status_message)?;
@@ -379,7 +434,7 @@ fn arm_tool_loop_synthesis_recovery(harness_state: &mut HarnessTurnState, curren
     // `activate_recovery` only arms from the `Inactive` phase and reports
     // whether it did, so a pending/in-flight pass never widens the loop
     // allowance here.
-    if !harness_state.activate_recovery(TOOL_LOOP_LIMIT_RECOVERY_REASON) {
+    if !harness_state.activate_recovery(tool_loop_limit_recovery_reason(*current_max_tool_loops)) {
         return false;
     }
 
@@ -539,7 +594,7 @@ fn apply_pending_follow_ups_mid_turn(
 /// True for machine-generated continuation prompts that must not echo to the
 /// TUI. Matches the stable openings of every harness-queued follow-up so a
 /// reworded tail cannot reintroduce transcript noise.
-fn is_internal_harness_follow_up(input: &str) -> bool {
+pub(crate) fn is_internal_harness_follow_up(input: &str) -> bool {
     use crate::agent::runloop::unified::turn::session_loop::{
         BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
     };
@@ -548,11 +603,78 @@ fn is_internal_harness_follow_up(input: &str) -> bool {
         TRACKER_CONTINUE_FOLLOW_UP_PREFIX,
     };
 
-    input.starts_with(TRACKER_CONTINUE_FOLLOW_UP_PREFIX)
+    input.starts_with(crate::agent::runloop::unified::state::PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX)
+        || input.starts_with(TRACKER_CONTINUE_FOLLOW_UP_PREFIX)
         || input.starts_with(PLAN_MODE_AUTO_CONTINUE_MARKER)
         || input.starts_with(RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX)
         || input.starts_with(BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX)
         || input.starts_with(VERIFICATION_AUTO_RECOVERY_PREFIX)
+}
+
+const FRESH_TURN_TOOL_GUIDANCE: &str = "Fresh turn: the previous turn's preview budget and tool-free recovery restrictions have expired. Tools are available subject to this turn's catalog, planning mode, safety, verification, and permission checks. Older recovery messages do not disable tools in this turn. If earlier file contents were cleared, recover the needed context with a targeted read or small spool range before editing; do not repeat broad inspections.";
+
+pub(crate) fn is_turn_scoped_tool_restriction(text: &str) -> bool {
+    // Inspect the runtime-owned instruction, not bounded evidence that a
+    // planning synthesis directive may append beneath it.
+    let instruction = text.lines().next().unwrap_or_default().trim().to_ascii_lowercase();
+    if instruction.starts_with("tool preview budget exhausted;")
+        || instruction.starts_with("planning recovery: the proposed plan was rejected.")
+    {
+        return true;
+    }
+    let recovery_family = [
+        "recovery:",
+        "planning recovery:",
+        "planning recovery synthesis:",
+        "planning navigation produced",
+        "planning tool preview budget exhausted",
+        "planning research completed",
+        "navigation loop detected",
+        "repeated low-signal navigation calls",
+        "diverse low-signal navigation reached",
+        "turn balancer detected repeated low-signal tool churn",
+        "tool loop budget exhausted",
+        "tool-call budget exhausted for this turn",
+        "tool wall-clock budget exhausted for this turn",
+        "tool follow-up failed.",
+        "model returned no answer after tool activity.",
+        "model follow-up failed after tool activity.",
+    ]
+    .iter()
+    .any(|prefix| instruction.starts_with(prefix));
+    recovery_family
+        && (instruction.contains("tools are disabled")
+            || instruction.contains("tools disabled")
+            || instruction.contains("do not emit tool calls"))
+}
+
+/// Supersede expired recovery guidance without rewriting replayed history.
+/// Only call at a fresh turn boundary, never during an active recovery pass.
+pub(super) fn restore_fresh_turn_tool_guidance(history: &mut Vec<uni::Message>, recovery_active: bool) {
+    if recovery_active {
+        return;
+    }
+    // A newer restoration supersedes every older restriction. Search only
+    // back to that boundary so later turns neither duplicate the instruction
+    // nor scan all of the session's old recovery history.
+    let has_expired_restriction = history
+        .iter()
+        .rev()
+        .filter(|message| message.role == uni::MessageRole::System)
+        .find_map(|message| {
+            let text = message.content.as_text();
+            if text == FRESH_TURN_TOOL_GUIDANCE {
+                Some(false)
+            } else if is_turn_scoped_tool_restriction(&text) {
+                Some(true)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(false);
+    if has_expired_restriction {
+        history.push(uni::Message::system(FRESH_TURN_TOOL_GUIDANCE.to_owned()));
+    }
 }
 
 /// Append a steered user message tagged with its intent id so restart
@@ -652,7 +774,7 @@ pub(super) async fn maybe_handle_planning_enter_trigger(
         return Ok(false);
     }
 
-    let Some(last_user_msg) = working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User) else {
+    let Some(last_user_msg) = last_user_message(working_history) else {
         return Ok(false);
     };
 
@@ -725,6 +847,8 @@ pub(super) async fn maybe_handle_tool_loop_limit(
     let planning_active = ctx.is_planning_active();
     if planning_active {
         ctx.plan_session.mark_budget_exhausted();
+        ctx.harness_state
+            .activate_recovery(tool_loop_limit_recovery_reason(*current_max_tool_loops));
         ctx.harness_state.switch_to_tool_free_recovery();
         *current_max_tool_loops = UNLIMITED_TOOL_LOOPS;
         display_status(
@@ -831,515 +955,4 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        TOOL_LOOP_LIMIT_RECOVERY_REASON, ToolLoopGrantSource, UNLIMITED_TOOL_LOOPS, arm_tool_loop_synthesis_recovery,
-        auto_tool_loop_grant_increment, clamp_tool_loop_increment,
-        effective_max_tool_calls_for_approved_plan_execution, effective_max_tool_calls_for_turn, extract_turn_config,
-        handle_steering_messages, initial_tool_loop_limit, is_internal_harness_follow_up,
-        is_stale_approved_plan_pause_response, resolve_safety_tool_call_limits, resolve_tool_loop_limit,
-        tool_loop_grant_source, tool_loop_hard_cap,
-    };
-    use crate::agent::runloop::unified::planning_workflow::{
-        PlanningIntent, detect_enter_planning_intent, detect_planning_intent,
-    };
-    use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
-    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-    use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
-    use std::time::Duration;
-    use vtcode_core::config::loader::VTCodeConfig;
-    use vtcode_core::core::agent::steering::SteeringMessage;
-    use vtcode_core::llm::provider::MessageRole;
-
-    #[test]
-    fn detects_implement_the_plan_trigger() {
-        assert_eq!(detect_planning_intent("Implement the plan.", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(
-            detect_planning_intent("Please execute this plan and start coding.", false),
-            PlanningIntent::ExitAndImplement
-        );
-    }
-
-    #[test]
-    fn detects_existing_exit_intents() {
-        assert_eq!(
-            detect_planning_intent("Exit planning workflow and implement.", false),
-            PlanningIntent::ExitAndImplement
-        );
-        assert_eq!(
-            detect_planning_intent("Exit planning workflow and proceed.", false),
-            PlanningIntent::ExitAndImplement
-        );
-    }
-
-    #[test]
-    fn does_not_exit_when_user_wants_to_keep_planning() {
-        assert_eq!(
-            detect_planning_intent("Don't implement yet, stay in planning workflow and refine the plan.", false),
-            PlanningIntent::StayInPlanning
-        );
-        assert_eq!(detect_planning_intent("Continue planning for now.", false), PlanningIntent::StayInPlanning);
-    }
-
-    #[test]
-    fn detects_bare_implement_trigger() {
-        assert_eq!(detect_planning_intent("implement", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("/implement", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("implement.", false), PlanningIntent::ExitAndImplement);
-    }
-
-    #[test]
-    fn detects_short_implement_variants() {
-        assert_eq!(detect_planning_intent("Implement now", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("Start implementing", false), PlanningIntent::ExitAndImplement);
-    }
-
-    #[test]
-    fn detects_direct_confirmation_aliases_as_execute_intent() {
-        assert_eq!(detect_planning_intent("yes", false), PlanningIntent::ExitAndImplement);
-        // "continue" is NOT a direct exit trigger — it is ambiguous.
-        // It only works as a short confirmation when the assistant
-        // recently prompted for implementation.
-        assert_eq!(detect_planning_intent("continue", false), PlanningIntent::None);
-        assert_eq!(detect_planning_intent("go", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("start", false), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("yes!", false), PlanningIntent::ExitAndImplement);
-    }
-
-    #[test]
-    fn stay_mode_has_priority_over_implement_keyword() {
-        assert_eq!(
-            detect_planning_intent("Do not implement yet; keep planning.", false),
-            PlanningIntent::StayInPlanning
-        );
-        assert_eq!(
-            detect_planning_intent("Stay in planning workflow and don't implement.", false),
-            PlanningIntent::StayInPlanning
-        );
-    }
-
-    #[test]
-    fn does_not_false_trigger_on_non_intent_implementation_text() {
-        assert_eq!(detect_planning_intent("The implementation details are unclear.", false), PlanningIntent::None);
-    }
-
-    #[test]
-    fn detects_explicit_planning_requests() {
-        assert!(detect_enter_planning_intent("make a plan for this"));
-        assert!(detect_enter_planning_intent("before implementing, create a plan"));
-        assert!(detect_enter_planning_intent("outline the implementation plan"));
-    }
-
-    #[test]
-    fn does_not_start_planning_for_generic_research_requests() {
-        assert!(!detect_enter_planning_intent("explore and tell me about the core agent loop"));
-        assert!(!detect_enter_planning_intent("review the runloop and summarize the behavior"));
-    }
-
-    #[test]
-    fn confirmation_words_trigger_with_implementation_prompt_context() {
-        assert_eq!(detect_planning_intent("yes", true), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("continue", true), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("go", true), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("start", true), PlanningIntent::ExitAndImplement);
-        assert_eq!(detect_planning_intent("begin", true), PlanningIntent::ExitAndImplement);
-    }
-
-    #[test]
-    fn confirmation_words_do_not_trigger_without_implementation_prompt_context() {
-        assert_eq!(
-            detect_planning_intent("yes", false),
-            PlanningIntent::ExitAndImplement // "yes" is a direct command
-        );
-        assert_eq!(detect_planning_intent("continue", false), PlanningIntent::None);
-    }
-
-    #[test]
-    fn confirmation_words_do_not_trigger_when_stay_in_planning_workflow_is_prompted() {
-        // When the assistant asks about staying in planning, "yes" should
-        // not trigger exit - but "yes" is still a direct command, so it
-        // will trigger ExitAndImplement. This is expected behavior.
-        assert_eq!(detect_planning_intent("yes", false), PlanningIntent::ExitAndImplement);
-    }
-
-    #[test]
-    fn tool_loop_hard_cap_scales_and_bounds() {
-        assert_eq!(tool_loop_hard_cap(20, false), 60);
-        assert_eq!(tool_loop_hard_cap(40, false), 120);
-        assert_eq!(tool_loop_hard_cap(120, false), 120);
-        assert_eq!(tool_loop_hard_cap(200, false), 200);
-        assert_eq!(tool_loop_hard_cap(40, true), 240);
-        assert_eq!(tool_loop_hard_cap(120, true), 240);
-    }
-
-    #[test]
-    fn clamp_tool_loop_increment_respects_cap_and_per_prompt_limit() {
-        assert_eq!(clamp_tool_loop_increment(200, 20, 60, false), 40);
-        assert_eq!(clamp_tool_loop_increment(50, 20, 80, false), 50);
-        assert_eq!(clamp_tool_loop_increment(10, 75, 80, false), 5);
-        assert_eq!(clamp_tool_loop_increment(10, 80, 80, false), 0);
-        assert_eq!(clamp_tool_loop_increment(120, 80, 240, true), 80);
-    }
-
-    #[test]
-    fn auto_grant_uses_max_prompt_step_clamped_to_remaining_headroom() {
-        // Ordinary turns grant the +50 manual maximum: 20 -> 60 needs one
-        // grant, 40 -> 120 needs two (40 + 50, then 90 + 30).
-        assert_eq!(auto_tool_loop_grant_increment(20, 60, false), 40);
-        assert_eq!(auto_tool_loop_grant_increment(40, 120, false), 50);
-        assert_eq!(auto_tool_loop_grant_increment(90, 120, false), 30);
-        // Planning turns grant the +80 manual maximum instead.
-        assert_eq!(auto_tool_loop_grant_increment(60, 240, true), 80);
-        assert_eq!(auto_tool_loop_grant_increment(200, 240, true), 40);
-        // No headroom left means no grant: the caller breaks the loop.
-        assert_eq!(auto_tool_loop_grant_increment(60, 60, false), 0);
-        assert_eq!(auto_tool_loop_grant_increment(120, 120, false), 0);
-        assert_eq!(auto_tool_loop_grant_increment(240, 240, true), 0);
-    }
-
-    #[test]
-    fn tool_loop_grant_source_prefers_full_auto_then_session_latch() {
-        assert_eq!(
-            tool_loop_grant_source(true, false),
-            ToolLoopGrantSource::FullAuto,
-            "full-auto wins even before any interactive grant"
-        );
-        assert_eq!(
-            tool_loop_grant_source(true, true),
-            ToolLoopGrantSource::FullAuto,
-            "full-auto wording stays full-auto after an interactive grant"
-        );
-        assert_eq!(
-            tool_loop_grant_source(false, true),
-            ToolLoopGrantSource::SessionPreauthorized,
-            "after the first successful grant later hits auto-grant without a prompt"
-        );
-        assert_eq!(
-            tool_loop_grant_source(false, false),
-            ToolLoopGrantSource::Manual,
-            "first interactive hit (and any denial retry) still prompts"
-        );
-
-        // Only Manual opens the HITL modal; the other two auto-grant max +N
-        // via `auto_tool_loop_grant_increment` (already covered above).
-        assert!(!tool_loop_grant_source(false, false).is_automatic());
-        assert!(tool_loop_grant_source(false, true).is_automatic());
-        assert!(tool_loop_grant_source(true, false).is_automatic());
-        assert!(tool_loop_grant_source(true, true).is_automatic());
-    }
-
-    #[test]
-    fn extract_turn_config_applies_planning_workflow_loop_floor() {
-        for (configured_limit, expected_limit) in [(20, 60), (40, 60), (60, 60), (80, 80)] {
-            let mut cfg = VTCodeConfig::default();
-            cfg.tools.max_tool_loops = configured_limit;
-            let turn_cfg = extract_turn_config(Some(&cfg), true, true);
-            assert_eq!(turn_cfg.max_tool_loops, expected_limit);
-        }
-    }
-
-    #[test]
-    fn extract_turn_config_keeps_non_planning_workflow_loop_limit() {
-        for configured_limit in [20, 40, 60, 80] {
-            let mut cfg = VTCodeConfig::default();
-            cfg.tools.max_tool_loops = configured_limit;
-            let turn_cfg = extract_turn_config(Some(&cfg), false, true);
-            assert_eq!(turn_cfg.max_tool_loops, configured_limit);
-        }
-    }
-
-    #[test]
-    fn resolve_tool_loop_limit_allows_unlimited_mode() {
-        assert_eq!(resolve_tool_loop_limit(0, false), UNLIMITED_TOOL_LOOPS);
-        assert_eq!(resolve_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
-    }
-
-    #[test]
-    fn resolve_safety_tool_call_limits_maps_zero_turn_budget_to_unbounded_limits() {
-        assert_eq!(resolve_safety_tool_call_limits(0, 50, false), (usize::MAX, usize::MAX));
-    }
-
-    #[test]
-    fn resolve_safety_tool_call_limits_scales_session_limit_from_turn_budget() {
-        assert_eq!(resolve_safety_tool_call_limits(12, 40, false), (12, 480));
-    }
-
-    #[test]
-    fn resolve_safety_tool_call_limits_keeps_planning_workflow_session_unbounded() {
-        assert_eq!(resolve_safety_tool_call_limits(48, 40, true), (48, usize::MAX));
-    }
-
-    #[test]
-    fn planning_workflow_applies_tool_call_floor() {
-        assert_eq!(effective_max_tool_calls_for_turn(32, true), 120);
-        assert_eq!(effective_max_tool_calls_for_turn(64, true), 120);
-        assert_eq!(effective_max_tool_calls_for_turn(120, true), 120);
-        assert_eq!(effective_max_tool_calls_for_turn(200, true), 200);
-    }
-
-    #[test]
-    fn zero_tool_call_limit_stays_unlimited_in_all_modes() {
-        assert_eq!(effective_max_tool_calls_for_turn(0, true), 0);
-        assert_eq!(effective_max_tool_calls_for_turn(0, false), 0);
-    }
-
-    #[test]
-    fn edit_mode_keeps_configured_tool_call_limit() {
-        assert_eq!(effective_max_tool_calls_for_turn(32, false), 32);
-    }
-
-    #[test]
-    fn approved_plan_execution_gets_a_fresh_implementation_budget() {
-        assert_eq!(effective_max_tool_calls_for_approved_plan_execution(32), 120);
-        assert_eq!(effective_max_tool_calls_for_approved_plan_execution(160), 160);
-        assert_eq!(effective_max_tool_calls_for_approved_plan_execution(0), 0);
-    }
-
-    #[test]
-    fn approved_plan_execution_gets_one_bounded_loop_allowance() {
-        assert_eq!(initial_tool_loop_limit(40, true), 90);
-        assert_eq!(initial_tool_loop_limit(100, true), 120);
-        assert_eq!(initial_tool_loop_limit(0, true), UNLIMITED_TOOL_LOOPS);
-        assert_eq!(initial_tool_loop_limit(40, false), 40);
-        // The helper is an initialization transform; applying the allowance
-        // to the already-initialized value is not part of the turn loop.
-        assert_eq!(initial_tool_loop_limit(initial_tool_loop_limit(40, true), false), 90);
-    }
-
-    #[test]
-    fn exhausted_loop_limit_arms_one_tool_free_synthesis_pass() {
-        let mut state = HarnessTurnState::new(TurnRunId("run-1".to_string()), TurnId("turn-1".to_string()), 40, 0, 1);
-        let mut loop_limit = 40;
-
-        assert!(arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-        assert_eq!(loop_limit, UNLIMITED_TOOL_LOOPS);
-        assert!(state.is_recovery_active());
-        assert!(state.recovery_is_tool_free());
-        assert_eq!(state.recovery_reason(), Some(TOOL_LOOP_LIMIT_RECOVERY_REASON));
-
-        // The recovery request is the only pass added by this transition.
-        assert!(!arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-        assert!(state.consume_recovery_pass());
-        assert!(state.finish_recovery_pass());
-        assert!(!arm_tool_loop_synthesis_recovery(&mut state, &mut loop_limit));
-    }
-
-    #[test]
-    fn stale_approved_plan_pause_response_requires_both_pause_and_unavailable_markers() {
-        assert!(is_stale_approved_plan_pause_response(
-            "Implementation is paused because tool use is disabled. Wait for the next turn."
-        ));
-        assert!(!is_stale_approved_plan_pause_response(
-            "The implementation is blocked by a missing Docker daemon; no source edits are safe yet."
-        ));
-        assert!(!is_stale_approved_plan_pause_response(
-            "Implementation is paused while I wait for the user to clarify the API contract."
-        ));
-    }
-
-    #[test]
-    fn internal_harness_follow_ups_stay_quiet_while_user_steering_echoes() {
-        use crate::agent::runloop::unified::turn::session_loop::{
-            BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX, VERIFICATION_AUTO_RECOVERY_PREFIX,
-        };
-        use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-            PLAN_MODE_AUTO_CONTINUE_MARKER, RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX,
-            TRACKER_CONTINUE_FOLLOW_UP_PREFIX,
-        };
-
-        assert!(is_internal_harness_follow_up(
-            format!("{TRACKER_CONTINUE_FOLLOW_UP_PREFIX} #1 do X. This follow-up is the harness resuming the work.")
-                .as_str()
-        ));
-        assert!(is_internal_harness_follow_up(
-            format!("{PLAN_MODE_AUTO_CONTINUE_MARKER} no validated persisted plan is ready for approval yet.").as_str()
-        ));
-        assert!(is_internal_harness_follow_up(
-            format!("{RECOVERABLE_BLOCKED_CONTINUE_FOLLOW_UP_PREFIX} Turn ended with a recovery fallback.").as_str()
-        ));
-        assert!(is_internal_harness_follow_up(
-            format!("{BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREFIX} and continue.").as_str()
-        ));
-        assert!(is_internal_harness_follow_up(
-            format!("{VERIFICATION_AUTO_RECOVERY_PREFIX} Verification is still pending.").as_str()
-        ));
-        assert!(!is_internal_harness_follow_up("leftover"));
-        assert!(!is_internal_harness_follow_up("please keep going with the build"));
-    }
-
-    #[test]
-    fn extract_turn_config_honors_request_user_input_setting_in_planning_workflow() {
-        let mut cfg = VTCodeConfig::default();
-        cfg.chat.ask_questions.enabled = false;
-
-        let turn_cfg = extract_turn_config(Some(&cfg), true, true);
-        assert!(!turn_cfg.request_user_input_enabled);
-    }
-
-    #[tokio::test]
-    async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender
-            .send(SteeringMessage::FollowUpInput("first".to_string()))
-            .expect("first follow-up");
-        sender.send(SteeringMessage::Resume).expect("stray resume");
-        sender
-            .send(SteeringMessage::FollowUpInput("second".to_string()))
-            .expect("second follow-up");
-        backing.set_steering_receiver(receiver);
-
-        let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-        let handled = {
-            let mut ctx = backing.turn_loop_context();
-            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
-                .await
-                .expect("handle steering")
-        };
-
-        assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed { .. }));
-        let steered: Vec<String> = working_history
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .map(|message| message.content.as_text().to_string())
-            .collect();
-        assert_eq!(steered, vec!["first".to_string(), "second".to_string()]);
-        // Every steered message is tagged with its intent id so restart
-        // recovery can dedupe it.
-        assert!(working_history.iter().any(|message| {
-            message.role == MessageRole::User
-                && message
-                    .metadata
-                    .as_ref()
-                    .and_then(|metadata| metadata.intent_id())
-                    .is_some_and(|intent_id| !intent_id.is_empty())
-        }));
-        // Applied intents move to the in-flight queue and stay in the pending
-        // snapshot until the post-turn checkpoint acknowledges them.
-        let snapshot: Vec<String> = backing
-            .pending_follow_up_intents_snapshot()
-            .iter()
-            .map(|intent| intent.text().to_string())
-            .collect();
-        assert_eq!(snapshot, vec!["first".to_string(), "second".to_string()]);
-        assert_eq!(backing.deferred_follow_up_inputs(), Vec::<String>::new());
-    }
-
-    #[tokio::test]
-    async fn leftover_steering_intent_applies_without_channel_messages() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        backing.set_steering_receiver(receiver);
-        backing.queue_follow_up_input_for_test("leftover");
-
-        let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-        let handled = {
-            let mut ctx = backing.turn_loop_context();
-            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
-                .await
-                .expect("handle steering")
-        };
-
-        assert!(!handled);
-        let steered: Vec<String> = working_history
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .map(|message| message.content.as_text().to_string())
-            .collect();
-        assert_eq!(steered, vec!["leftover".to_string()]);
-        assert_eq!(backing.deferred_follow_up_inputs(), Vec::<String>::new());
-    }
-
-    #[tokio::test]
-    async fn paused_steering_accepts_follow_up_before_resume() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender.send(SteeringMessage::Pause).expect("pause");
-        sender
-            .send(SteeringMessage::FollowUpInput("refine search".to_string()))
-            .expect("follow-up");
-        let resume_sender = sender.clone();
-        let resume_task = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            resume_sender.send(SteeringMessage::Resume).expect("resume");
-        });
-        backing.set_steering_receiver(receiver);
-
-        let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-        let handled = {
-            let mut ctx = backing.turn_loop_context();
-            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
-                .await
-                .expect("handle paused steering")
-        };
-        resume_task.await.expect("resume task");
-
-        assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed { .. }));
-        let steered: Vec<String> = working_history
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .map(|message| message.content.as_text().to_string())
-            .collect();
-        assert_eq!(steered, vec!["refine search".to_string()]);
-    }
-
-    #[tokio::test]
-    async fn paused_steering_keeps_follow_up_after_resume_in_same_batch() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender.send(SteeringMessage::Pause).expect("pause");
-        sender.send(SteeringMessage::Resume).expect("resume");
-        sender
-            .send(SteeringMessage::FollowUpInput("use the queued note".to_string()))
-            .expect("follow-up");
-        backing.set_steering_receiver(receiver);
-
-        let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-        let handled = {
-            let mut ctx = backing.turn_loop_context();
-            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
-                .await
-                .expect("handle paused steering batch")
-        };
-
-        assert!(!handled);
-        assert!(matches!(result, TurnLoopResult::Completed { .. }));
-        let steered: Vec<String> = working_history
-            .iter()
-            .filter(|message| message.role == MessageRole::User)
-            .map(|message| message.content.as_text().to_string())
-            .collect();
-        assert_eq!(steered, vec!["use the queued note".to_string()]);
-    }
-
-    #[tokio::test]
-    async fn steering_stop_beats_queued_follow_up() {
-        let mut backing = TestTurnProcessingBacking::new(4).await;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        sender
-            .send(SteeringMessage::FollowUpInput("ignore me".to_string()))
-            .expect("follow-up");
-        sender.send(SteeringMessage::SteerStop).expect("stop");
-        backing.set_steering_receiver(receiver);
-
-        let mut working_history = Vec::new();
-        let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-        let handled = {
-            let mut ctx = backing.turn_loop_context();
-            handle_steering_messages(&mut ctx, &mut working_history, &mut result)
-                .await
-                .expect("handle stop steering")
-        };
-
-        assert!(handled);
-        assert!(matches!(result, TurnLoopResult::Cancelled));
-        assert!(working_history.is_empty());
-        assert!(backing.deferred_follow_up_inputs().is_empty());
-    }
-}
+mod tests;

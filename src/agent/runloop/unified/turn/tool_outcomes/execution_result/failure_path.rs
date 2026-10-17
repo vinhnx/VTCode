@@ -67,18 +67,10 @@ pub(super) async fn finalize_failed_tool_response(
     error: &ToolExecutionError,
     failure_kind: &'static str,
     diagnosis: &ToolFailureDiagnosis,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) {
-    push_tool_error_response(
-        t_ctx,
-        tool_call_id,
-        tool_name,
-        args_val,
-        error.message.as_str(),
-        failure_kind,
-        Some(error),
-        diagnosis,
-    )
-    .await;
+    push_tool_error_response(t_ctx, tool_call_id, tool_name, args_val, failure_kind, error, diagnosis, batch_spinner)
+        .await;
 
     super::record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 }
@@ -88,11 +80,12 @@ async fn push_tool_error_response(
     tool_call_id: String,
     tool_name: &str,
     args_val: &serde_json::Value,
-    error_msg: &str,
     failure_kind: &'static str,
-    structured_error: Option<&ToolExecutionError>,
+    error: &ToolExecutionError,
     diagnosis: &ToolFailureDiagnosis,
+    batch_spinner: Option<&crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner>,
 ) {
+    let error_msg = error.message.as_str();
     let (fallback_tool, fallback_tool_args) = if let Some((tool, args)) =
         super::super::error_handling::fallback_from_error(tool_name, error_msg, Some(args_val))
     {
@@ -102,17 +95,21 @@ async fn push_tool_error_response(
         (fallback, None)
     };
 
-    let error_content = match structured_error {
-        Some(error) => super::super::error_handling::build_structured_error_content(
-            error,
-            fallback_tool,
-            fallback_tool_args,
-            failure_kind,
-        ),
-        None => super::build_error_content(error_msg.to_string(), fallback_tool, fallback_tool_args, failure_kind),
-    };
-    if let Err(error) =
-        push_tool_response_with_diagnosis(t_ctx, tool_call_id, tool_name, error_content.to_string(), diagnosis).await
+    let error_content = super::super::error_handling::build_structured_error_content(
+        error,
+        fallback_tool,
+        fallback_tool_args,
+        failure_kind,
+    );
+    if let Err(error) = push_tool_response_with_diagnosis(
+        t_ctx,
+        tool_call_id,
+        tool_name,
+        error_content.to_string(),
+        diagnosis,
+        batch_spinner,
+    )
+    .await
     {
         tracing::warn!(tool = %tool_name, error = %error, "failed to push diagnosed tool response");
     }

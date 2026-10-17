@@ -316,6 +316,61 @@ mod tests {
     }
 
     #[test]
+    fn mistral_presets_include_large_4_without_changing_default() {
+        let presets = presets::mistral_presets();
+        let large_4 = presets
+            .iter()
+            .find(|preset| preset.model == "mistral-large-4")
+            .expect("mistral large 4 preset");
+        assert_eq!(large_4.provider, Provider::Mistral);
+        assert!(!large_4.is_default);
+        assert!(large_4.show_in_picker);
+        assert_eq!(large_4.context_window, Some(1_000_000));
+
+        let default = presets.iter().find(|preset| preset.is_default).expect("mistral default preset");
+        assert_eq!(default.model, "mistral-large-2512");
+    }
+
+    #[test]
+    fn ollama_cloud_presets_include_requested_models() {
+        use crate::config::constants::models;
+
+        let presets = presets_for_provider(Provider::OllamaCloud);
+        for model in [
+            models::ollama::MISTRAL_LARGE_4_CLOUD,
+            models::ollama::MUSE_SPARK_OPEN_CLOUD,
+            models::ollama::GLM_5_3_FLASH_CLOUD,
+            models::ollama::DEEPSEEK_V4_1_FLASH_CLOUD,
+        ] {
+            let preset = presets
+                .iter()
+                .find(|preset| preset.model == model)
+                .expect("Ollama Cloud preset");
+            assert_eq!(preset.provider, Provider::OllamaCloud);
+            assert!(preset.show_in_picker);
+            assert_eq!(preset.context_window, Some(1_000_000));
+        }
+
+        let glm_flash = presets
+            .iter()
+            .find(|preset| preset.model == models::ollama::GLM_5_3_FLASH_CLOUD)
+            .expect("GLM-5.3 Flash preset");
+        let supported_efforts: Vec<_> = glm_flash
+            .supported_reasoning_efforts
+            .iter()
+            .map(|preset| preset.effort)
+            .collect();
+        assert_eq!(
+            supported_efforts,
+            vec![
+                ReasoningEffortLevel::Low,
+                ReasoningEffortLevel::High,
+                ReasoningEffortLevel::Max
+            ]
+        );
+    }
+
+    #[test]
     fn moonshot_presets_exist_and_default_to_kimi_k3() {
         let presets = presets::moonshot_presets();
         assert_eq!(presets.len(), 1);
@@ -367,7 +422,7 @@ mod tests {
     #[test]
     fn merge_gateway_presets_expose_curated_routes_and_default() {
         let presets = presets::merge_gateway_presets();
-        assert_eq!(presets.len(), 22);
+        assert_eq!(presets.len(), 28);
         let default = presets
             .iter()
             .find(|preset| preset.is_default)
@@ -398,11 +453,13 @@ mod tests {
     #[test]
     fn meta_presets_keep_standard_default_and_contributor_opt_in() {
         let presets = presets::meta_presets();
-        assert_eq!(presets.len(), 3);
+        assert_eq!(presets.len(), 5);
 
         let default = presets.iter().find(|preset| preset.is_default).expect("Meta default preset");
         assert_eq!(default.model, "muse-spark-1.3");
         assert!(presets.iter().any(|preset| preset.model == "muse-spark-1.3-contributor"));
+        assert!(presets.iter().any(|preset| preset.model == "muse-wonder-1.0"));
+        assert!(presets.iter().any(|preset| preset.model == "muse-wonder-full-1.0"));
         assert!(
             presets
                 .iter()

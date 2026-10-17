@@ -41,6 +41,12 @@ pub(crate) struct ClaudeThinkingProfile {
     /// Whether the model accepts server-side refusal fallbacks (the
     /// `fallbacks` request parameter). Sonnet 5 is not listed as supported.
     pub supports_server_side_fallback: bool,
+    /// Whether `thinking: {"type": "disabled"}` is rejected with a 400. Such
+    /// models take `{"type": "between_tools"}` as their lowest setting, which
+    /// keeps up-front thinking off while still returning the progress notes
+    /// written between tool calls. Adaptive-only models reject every
+    /// "thinking off" request, so they leave this `false`.
+    pub rejects_disabled_thinking: bool,
 }
 
 /// Default `max_tokens` for Claude 5.x models: a starting point for agentic
@@ -91,6 +97,32 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
             default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
             rejects_forced_tool_choice: true,
             supports_server_side_fallback: true,
+            rejects_disabled_thinking: false,
+        });
+    }
+
+    // `claude-sonnet-5-5` contains `claude-sonnet-5`, so the 5.5 profile must
+    // be checked before the 5 profile. Sonnet 5.5 runs adaptive thinking by
+    // default but rejects `disabled`: its lowest setting is `between_tools`,
+    // which also fails at `xhigh`/`max` effort. Forced tool use and sampling
+    // parameters are rejected outright.
+    if matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: false,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: false,
+            default_display: ThinkingDisplay::Omitted,
+            default_effort: reasoning::HIGH,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+            default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
+            rejects_forced_tool_choice: true,
+            supports_server_side_fallback: true,
+            rejects_disabled_thinking: true,
         });
     }
 
@@ -110,6 +142,31 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
             default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
             rejects_forced_tool_choice: false,
             supports_server_side_fallback: false,
+            rejects_disabled_thinking: false,
+        });
+    }
+
+    // Claude Haiku 5.5 runs adaptive thinking by default with a `medium`
+    // default effort. Unlike Sonnet 5.5/Opus 5.5/Fable 5.1 it accepts forced
+    // `tool_choice` (the response starts with the tool call and has no
+    // thinking block) and it has no server-side refusal fallback.
+    if matches_model(requested, models::anthropic::CLAUDE_HAIKU_5_5) {
+        return Some(ClaudeThinkingProfile {
+            mode: ClaudeThinkingMode::Adaptive,
+            supports_manual_budget: false,
+            adaptive_only: false,
+            default_thinking_enabled: true,
+            manual_interleaved_beta: false,
+            supports_effort: true,
+            supports_task_budget: false,
+            default_display: ThinkingDisplay::Omitted,
+            default_effort: reasoning::MEDIUM,
+            supports_xhigh_effort: true,
+            supports_max_effort: true,
+            default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
+            rejects_forced_tool_choice: false,
+            supports_server_side_fallback: false,
+            rejects_disabled_thinking: false,
         });
     }
 
@@ -129,6 +186,7 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
             default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
             rejects_forced_tool_choice: false,
             supports_server_side_fallback: true,
+            rejects_disabled_thinking: false,
         });
     }
 
@@ -151,6 +209,7 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
             default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
             rejects_forced_tool_choice: true,
             supports_server_side_fallback: true,
+            rejects_disabled_thinking: false,
         });
     }
 
@@ -170,6 +229,7 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
             default_max_tokens: CLAUDE_5_DEFAULT_MAX_TOKENS,
             rejects_forced_tool_choice: false,
             supports_server_side_fallback: true,
+            rejects_disabled_thinking: false,
         });
     }
 
@@ -177,10 +237,15 @@ pub(crate) fn claude_thinking_profile(model: &str, default_model: &str) -> Optio
 }
 
 /// Claude 5.x family ids. `matches_model` uses `contains`, so the Fable 5 id
-/// also matches `claude-fable-5-1` and the Opus 5 id matches `claude-opus-5-5`.
+/// also matches `claude-fable-5-1`, the Opus 5 id matches `claude-opus-5-5`,
+/// and the Sonnet 5 id matches `claude-sonnet-5-5`. The 5.5 ids (including
+/// Haiku 5.5) are listed explicitly so the family stays readable as it grows.
 const CLAUDE_5_FAMILY: &[&str] = &[
+    models::anthropic::CLAUDE_SONNET_5_5,
     models::anthropic::CLAUDE_SONNET_5,
+    models::anthropic::CLAUDE_HAIKU_5_5,
     models::anthropic::CLAUDE_FABLE_5,
+    models::anthropic::CLAUDE_OPUS_5_5,
     models::anthropic::CLAUDE_OPUS_5,
 ];
 
@@ -278,12 +343,14 @@ pub(crate) fn supports_mid_conversation_system_messages(model: &str, default_mod
 
 /// Whether the model accepts Anthropic's turn-scoped `clear_at` system-message
 /// field. The current beta is available to the model families that accept
-/// mid-conversation system messages, but not Sonnet 5.
+/// mid-conversation system messages, but not Sonnet 5 (Sonnet 5.5 adds it
+/// alongside per-message effort and mid-conversation tool changes).
 pub(crate) fn supports_turn_scoped_system_messages(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
     matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
         || matches_model(requested, CLAUDE_OPUS_4_8)
         || matches_model(requested, models::anthropic::CLAUDE_OPUS_5)
+        || matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
 }
 
 pub(crate) fn adaptive_thinking_always_on(model: &str, default_model: &str) -> bool {
@@ -319,7 +386,9 @@ pub(crate) fn supports_server_side_fallback(model: &str, default_model: &str) ->
 /// profiled Claude 5.x model (Opus 5.5 omits `disabled` because it rejects it).
 pub(crate) fn thinking_is_on(thinking: Option<&ThinkingConfig>, model: &str, default_model: &str) -> bool {
     match thinking {
-        Some(ThinkingConfig::Disabled) => false,
+        // `between_tools` turns up-front thinking off; only the progress notes
+        // written between tool calls still come back as thinking blocks.
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::BetweenTools) => false,
         // Unknown configs are treated as thinking so callers stay conservative.
         Some(_) => true,
         None => claude_thinking_profile(model, default_model).is_some_and(|profile| profile.default_thinking_enabled),
@@ -334,28 +403,34 @@ pub(crate) fn thinking_is_on(thinking: Option<&ThinkingConfig>, model: &str, def
 /// history append-only for these models.
 pub(crate) fn preserves_thinking_across_turns(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
-    matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
+    matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
+        || matches_model(requested, models::anthropic::CLAUDE_HAIKU_5_5)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
         || matches_model(requested, models::anthropic::CLAUDE_FABLE_5_1)
 }
 
 /// Whether the model accepts `thinking.display: "updates"` (beta
 /// `thinking-display-updates-2026-08-18`): its between-tool progress notes
 /// come back as their own `thinking` blocks. Other models reject the value.
-/// `claude-fable-5-1` contains the Fable 5 id, so both Fable releases match.
+/// `claude-fable-5-1` contains the Fable 5 id, and `claude-sonnet-5-5` and
+/// `claude-opus-5-5` contain their 5-generation ids, so all four releases match.
 pub(crate) fn supports_thinking_display_updates(model: &str, default_model: &str) -> bool {
     let requested = resolve_model_name(model, default_model);
-    matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
+    matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5)
         || matches_model(requested, models::anthropic::CLAUDE_FABLE_5)
 }
 
 /// Display used when neither the request nor `[provider.anthropic]` sets one.
-/// On Claude Opus 5.5 the text written between tool calls arrives only as
-/// progress-update thinking blocks, which the API default (`omitted`) empties;
-/// requesting `updates` keeps that narration visible in the reasoning view
-/// while the reasoning itself stays hidden.
+/// On Claude Opus 5.5 and Claude Sonnet 5.5 the text written between tool calls
+/// arrives only as progress-update thinking blocks, which the API default
+/// (`omitted`) empties; requesting `updates` keeps that narration visible in
+/// the reasoning view while the reasoning itself stays hidden.
 pub(crate) fn default_thinking_display(model: &str, default_model: &str) -> Option<ThinkingDisplay> {
     let requested = resolve_model_name(model, default_model);
-    matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5).then_some(ThinkingDisplay::Updates)
+    (matches_model(requested, models::anthropic::CLAUDE_SONNET_5_5)
+        || matches_model(requested, models::anthropic::CLAUDE_OPUS_5_5))
+    .then_some(ThinkingDisplay::Updates)
 }
 
 pub(crate) fn default_effort_for_model(model: &str, default_model: &str) -> Option<&'static str> {
@@ -519,6 +594,34 @@ mod tests {
     }
 
     #[test]
+    fn sonnet_5_5_keeps_default_thinking_but_rejects_disabled() {
+        // `claude-sonnet-5-5` contains `claude-sonnet-5`; the 5.5 profile must
+        // win for the 5.5 id: `disabled` is a 400 there, `between_tools` is not.
+        let profile = claude_thinking_profile(models::anthropic::CLAUDE_SONNET_5_5, "").expect("sonnet 5.5 profile");
+        assert!(!profile.adaptive_only);
+        assert!(profile.default_thinking_enabled);
+        assert!(!profile.supports_manual_budget);
+        assert!(profile.rejects_disabled_thinking);
+        assert_eq!(profile.default_effort, reasoning::HIGH);
+        assert!(!profile.supports_task_budget);
+        assert!(profile.rejects_forced_tool_choice);
+        assert!(profile.supports_server_side_fallback);
+        assert!(!adaptive_thinking_always_on(models::anthropic::CLAUDE_SONNET_5_5, ""));
+        assert!(thinking_is_on(None, models::anthropic::CLAUDE_SONNET_5_5, ""));
+        assert!(!thinking_is_on(Some(&ThinkingConfig::Disabled), models::anthropic::CLAUDE_SONNET_5_5, ""));
+        assert!(!thinking_is_on(Some(&ThinkingConfig::BetweenTools), models::anthropic::CLAUDE_SONNET_5_5, ""));
+    }
+
+    #[test]
+    fn sonnet_5_profile_is_unchanged_by_sonnet_5_5() {
+        let profile = claude_thinking_profile(models::anthropic::CLAUDE_SONNET_5, "").expect("sonnet 5 profile");
+        assert!(!profile.adaptive_only);
+        assert_eq!(profile.default_effort, reasoning::HIGH);
+        assert!(!profile.rejects_disabled_thinking);
+        assert!(!profile.rejects_forced_tool_choice);
+    }
+
+    #[test]
     fn opus_5_profile_is_unchanged_by_opus_5_5() {
         // `claude-opus-5-5` contains `claude-opus-5`; the 5 profile must still
         // resolve for the exact 5 id with its high default and opt-out support.
@@ -532,7 +635,9 @@ mod tests {
     fn claude_5_models_default_to_64k_max_tokens_regardless_of_thinking() {
         for model in [
             models::anthropic::CLAUDE_FABLE_5_1,
+            models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_SONNET_5,
+            models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_OPUS_5_5,
             models::anthropic::CLAUDE_OPUS_5,
@@ -545,17 +650,39 @@ mod tests {
     }
 
     #[test]
-    fn only_opus_5_5_and_fable_5_1_reject_forced_tool_choice() {
-        assert!(rejects_forced_tool_choice(models::anthropic::CLAUDE_OPUS_5_5, ""));
-        assert!(rejects_forced_tool_choice(models::anthropic::CLAUDE_FABLE_5_1, ""));
+    fn forced_tool_choice_is_rejected_by_sonnet_5_5_opus_5_5_and_fable_5_1() {
+        for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
+            models::anthropic::CLAUDE_OPUS_5_5,
+            models::anthropic::CLAUDE_FABLE_5_1,
+        ] {
+            assert!(rejects_forced_tool_choice(model, ""), "{model}");
+        }
         for model in [
             models::anthropic::CLAUDE_SONNET_5,
+            models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_OPUS_5,
             "claude-unlisted-model",
         ] {
             assert!(!rejects_forced_tool_choice(model, ""), "{model}");
         }
+    }
+
+    #[test]
+    fn haiku_5_5_runs_adaptive_thinking_with_medium_default_and_no_fallback() {
+        let profile = claude_thinking_profile(models::anthropic::CLAUDE_HAIKU_5_5, "").expect("haiku 5.5 profile");
+        assert_eq!(profile.mode, ClaudeThinkingMode::Adaptive);
+        assert!(!profile.adaptive_only);
+        assert!(profile.default_thinking_enabled);
+        assert!(!profile.supports_manual_budget);
+        assert!(profile.supports_effort);
+        assert_eq!(profile.default_effort, reasoning::MEDIUM);
+        assert_eq!(default_effort_for_model(models::anthropic::CLAUDE_HAIKU_5_5, ""), Some(reasoning::MEDIUM));
+        assert!(!profile.rejects_forced_tool_choice);
+        assert!(!profile.supports_server_side_fallback);
+        assert!(!profile.rejects_disabled_thinking);
+        assert!(!adaptive_thinking_always_on(models::anthropic::CLAUDE_HAIKU_5_5, ""));
     }
 
     #[test]
@@ -579,35 +706,52 @@ mod tests {
 
     #[test]
     fn preserved_thinking_is_limited_to_prefix_bound_models() {
-        assert!(preserves_thinking_across_turns(models::anthropic::CLAUDE_OPUS_5_5, ""));
-        assert!(preserves_thinking_across_turns(models::anthropic::CLAUDE_FABLE_5_1, ""));
-        assert!(preserves_thinking_across_turns("", models::anthropic::CLAUDE_OPUS_5_5));
-        assert!(!preserves_thinking_across_turns(models::anthropic::CLAUDE_OPUS_5, ""));
-        assert!(!preserves_thinking_across_turns(models::anthropic::CLAUDE_FABLE_5, ""));
-        assert!(!preserves_thinking_across_turns(models::anthropic::CLAUDE_SONNET_5, ""));
+        for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
+            models::anthropic::CLAUDE_HAIKU_5_5,
+            models::anthropic::CLAUDE_OPUS_5_5,
+            models::anthropic::CLAUDE_FABLE_5_1,
+        ] {
+            assert!(preserves_thinking_across_turns(model, ""), "{model}");
+        }
+        assert!(preserves_thinking_across_turns("", models::anthropic::CLAUDE_SONNET_5_5));
+        for model in [
+            models::anthropic::CLAUDE_SONNET_5,
+            models::anthropic::CLAUDE_OPUS_5,
+            models::anthropic::CLAUDE_FABLE_5,
+        ] {
+            assert!(!preserves_thinking_across_turns(model, ""), "{model}");
+        }
     }
 
     #[test]
     fn thinking_display_updates_support_and_default() {
         for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_OPUS_5_5,
             models::anthropic::CLAUDE_FABLE_5_1,
             models::anthropic::CLAUDE_FABLE_5,
         ] {
             assert!(supports_thinking_display_updates(model, ""), "{model}");
         }
-        assert!(!supports_thinking_display_updates(models::anthropic::CLAUDE_OPUS_5, ""));
-        assert!(!supports_thinking_display_updates(models::anthropic::CLAUDE_SONNET_5, ""));
+        for model in [models::anthropic::CLAUDE_OPUS_5, models::anthropic::CLAUDE_SONNET_5] {
+            assert!(!supports_thinking_display_updates(model, ""), "{model}");
+        }
 
-        assert_eq!(default_thinking_display(models::anthropic::CLAUDE_OPUS_5_5, ""), Some(ThinkingDisplay::Updates));
-        assert_eq!(default_thinking_display(models::anthropic::CLAUDE_OPUS_5, ""), None);
-        assert_eq!(default_thinking_display(models::anthropic::CLAUDE_SONNET_5, ""), None);
+        for model in [models::anthropic::CLAUDE_SONNET_5_5, models::anthropic::CLAUDE_OPUS_5_5] {
+            assert_eq!(default_thinking_display(model, ""), Some(ThinkingDisplay::Updates), "{model}");
+        }
+        for model in [models::anthropic::CLAUDE_OPUS_5, models::anthropic::CLAUDE_SONNET_5] {
+            assert_eq!(default_thinking_display(model, ""), None, "{model}");
+        }
     }
 
     #[test]
     fn claude_5_family_capabilities_cover_every_profiled_model() {
         for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_SONNET_5,
+            models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_FABLE_5_1,
             models::anthropic::CLAUDE_OPUS_5,
@@ -634,7 +778,9 @@ mod tests {
     #[test]
     fn assistant_prefill_is_rejected_by_claude_4_6_and_later() {
         for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
             models::anthropic::CLAUDE_SONNET_5,
+            models::anthropic::CLAUDE_HAIKU_5_5,
             models::anthropic::CLAUDE_FABLE_5,
             models::anthropic::CLAUDE_FABLE_5_1,
             models::anthropic::CLAUDE_OPUS_5,

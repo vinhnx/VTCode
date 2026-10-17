@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use vtcode_commons::ErrorCategory;
 #[cfg(test)]
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::core::agent::hypothesis::{MismatchKind, revision_guidance};
 use vtcode_core::tools::registry::ToolExecutionError;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
@@ -56,6 +57,8 @@ pub(crate) use self::presentation::{render_and_emit, render_diagnosis};
 
 const DIAGNOSIS_MAX_EVIDENCE_BYTES: usize = vtcode_commons::sanitizer::PROVIDER_DIAGNOSTIC_MAX_BYTES;
 const DIAGNOSIS_MAX_FIELD_BYTES: usize = 320;
+// Preserve the complete bounded corrective action plus the trusted suffix.
+const DIAGNOSIS_MAX_ACTION_BYTES: usize = 480;
 const DIAGNOSIS_MAX_MODEL_RESPONSE_BYTES: usize = 3 * 4 * DIAGNOSIS_MAX_FIELD_BYTES + 512;
 const DIAGNOSIS_MAX_OUTPUT_TOKENS: u32 = 160;
 const DIAGNOSIS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
@@ -79,6 +82,7 @@ pub(crate) struct ToolFailureDiagnosis {
     pub observed: String,
     pub likely_cause: String,
     pub next_action: String,
+    no_matches: bool,
 }
 
 impl ToolFailureDiagnosis {
@@ -86,12 +90,25 @@ impl ToolFailureDiagnosis {
         Self {
             observed: evidence::bounded_field(observed.as_ref()),
             likely_cause: evidence::bounded_field(likely_cause.as_ref()),
-            next_action: evidence::bounded_field(next_action.as_ref()),
+            next_action: evidence::bounded_field_with_limit(next_action.as_ref(), DIAGNOSIS_MAX_ACTION_BYTES),
+            no_matches: false,
         }
     }
 
     pub(crate) fn is_complete(&self) -> bool {
         !self.observed.is_empty() && !self.likely_cause.is_empty() && !self.next_action.is_empty()
+    }
+
+    fn with_revision_guidance(mut self, kind: Option<MismatchKind>) -> Self {
+        let guidance = revision_guidance(kind);
+        if !self.next_action.ends_with(guidance) {
+            // Reserve the suffix before bounding the action. Otherwise a long
+            // model-selected action can silently lose the revision contract.
+            let base = evidence::bounded_field_with_limit(&self.next_action, DIAGNOSIS_MAX_FIELD_BYTES);
+            self.next_action = vtcode_core::core::agent::hypothesis::append_revision_guidance(&base, kind);
+            debug_assert!(self.next_action.len() <= DIAGNOSIS_MAX_ACTION_BYTES);
+        }
+        self
     }
 
     fn is_safe_model_output(&self) -> bool {
@@ -172,9 +189,13 @@ pub(super) async fn diagnose_error(
     failure_kind: &str,
 ) -> ToolFailureDiagnosis {
     let fallback = deterministic_error_diagnosis(error, failure_kind);
+    if classification::is_deterministic_only_error(error) {
+        return fallback;
+    }
     let evidence = evidence::build_error_evidence(tool_name, args, error, failure_kind);
-    let deterministic_only = classification::is_deterministic_only_error(error);
-    model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback, deterministic_only).await
+    model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback)
+        .await
+        .with_revision_guidance(classification::error_mismatch(error))
 }
 
 /// Diagnose a command/tool result whose execution completed with a non-zero
@@ -186,13 +207,185 @@ pub(super) async fn diagnose_output(
     output: &Value,
 ) -> ToolFailureDiagnosis {
     let fallback = deterministic_output_diagnosis(tool_name, args, output);
+    if crate::agent::runloop::unified::turn::tool_outcomes::is_grep_style_no_match(tool_name, args, output) {
+        return fallback;
+    }
     let evidence = evidence::build_output_evidence(tool_name, args, output);
-    model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback, false).await
+    model::diagnose_with_optional_model(ctx, tool_name, &evidence, fallback)
+        .await
+        .with_revision_guidance(classification::output_mismatch(tool_name, args, output))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn revision_suffix_preserves_bounded_corrective_action_and_is_idempotent() {
+        let action = format!("{} Verify exact target before writing.", "x".repeat(270));
+        let diagnosis = ToolFailureDiagnosis::new("exit 1", "unknown", &action)
+            .with_revision_guidance(Some(MismatchKind::NonZeroExit));
+        assert!(diagnosis.next_action.starts_with(&action));
+        assert!(
+            diagnosis
+                .next_action
+                .ends_with(revision_guidance(Some(MismatchKind::NonZeroExit)))
+        );
+        assert!(diagnosis.next_action.len() > DIAGNOSIS_MAX_FIELD_BYTES);
+        assert!(diagnosis.next_action.len() <= DIAGNOSIS_MAX_ACTION_BYTES);
+        assert_eq!(diagnosis.clone().with_revision_guidance(Some(MismatchKind::NonZeroExit)), diagnosis);
+    }
+
+    #[tokio::test]
+    async fn memoized_model_selection_receives_current_mismatch_guidance_without_model_calls() {
+        use crate::agent::runloop::unified::run_loop_context::{DiagnosisMemoEntry, DiagnosisMemoKey};
+        use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+        use vtcode_core::types::CompactStr;
+
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut ctx = backing.turn_processing_context();
+        let args = json!({"cmd":"cargo check --locked"});
+        let output = json!({"exit_code":1,"stderr":"type mismatch at src/lib.rs:2"});
+        let action = format!("{} Repair src/lib.rs:2.", "x".repeat(280));
+        ctx.harness_state.failure_diagnosis_memo_put(
+            DiagnosisMemoKey {
+                tool: CompactStr::from(tool_names::EXEC_COMMAND),
+                evidence: bounded_output_evidence(tool_names::EXEC_COMMAND, &args, &output),
+            },
+            DiagnosisMemoEntry {
+                observed: CompactStr::from("exit 1"),
+                likely_cause: CompactStr::from("type mismatch"),
+                next_action: CompactStr::from(action.as_str()),
+            },
+        );
+        for _ in 0..2 {
+            let selected = diagnose_output(&mut ctx, tool_names::EXEC_COMMAND, &args, &output).await;
+            assert!(selected.next_action.starts_with(&action));
+            assert!(
+                selected
+                    .next_action
+                    .ends_with("Inspect the verifier output, revise the fix hypothesis, then re-verify standalone.")
+            );
+            assert!(selected.next_action.len() <= DIAGNOSIS_MAX_ACTION_BYTES);
+        }
+        for _ in 0..3 {
+            assert!(ctx.harness_state.can_spend_failure_diagnosis_model_call());
+            ctx.harness_state.record_failure_diagnosis_model_call();
+        }
+        assert!(!ctx.harness_state.can_spend_failure_diagnosis_model_call());
+    }
+
+    #[test]
+    fn cancellation_and_policy_keep_safe_actions_without_retry_suffix() {
+        use vtcode_core::tools::registry::ToolErrorType;
+        for category in [ErrorCategory::PolicyViolation, ErrorCategory::Cancelled] {
+            let mut error =
+                ToolExecutionError::new(tool_names::EXEC_COMMAND, ToolErrorType::ExecutionError, "operation stopped");
+            error.category = category;
+            let diagnosis = deterministic_error_diagnosis(&error, "execution");
+            assert!(!diagnosis.next_action.contains("before retrying"));
+            assert!(classification::is_deterministic_only_error(&error));
+        }
+    }
+
+    #[test]
+    fn diagnosis_error_chain_keeps_cause_and_redacts_credentials() {
+        let error = anyhow::anyhow!(
+            "unsupported parameter response_format; Authorization: Bearer sk-sensitive1234567890123456"
+        )
+        .context("tool failure diagnosis request failed");
+        let text = evidence::safe_error_text(&error);
+        assert!(text.contains("tool failure diagnosis request failed"));
+        assert!(text.contains("unsupported parameter response_format"));
+        assert!(!text.contains("sk-sensitive1234567890123456"));
+        let large =
+            anyhow::anyhow!("{}", "transport failure ".repeat(100)).context("tool failure diagnosis request failed");
+        assert!(evidence::safe_error_text(&large).len() <= DIAGNOSIS_MAX_FIELD_BYTES);
+    }
+
+    #[tokio::test]
+    async fn missing_exec_session_diagnosis_preserves_model_budget() {
+        use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+
+        let temp = tempfile::tempdir().expect("workspace");
+        let registry = vtcode_core::tools::ToolRegistry::new(temp.path().to_path_buf()).await;
+        let args = json!({"session_id": "run-missing", "action": "wait"});
+        let source = registry
+            .execute_harness_command_session(args.clone())
+            .await
+            .expect_err("unknown session");
+        let error = ToolExecutionError::from_anyhow(tool_names::WRITE_STDIN, &source, 0, false, false, None);
+        assert!(error.is_exec_session_not_found());
+
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut ctx = backing.turn_processing_context();
+        let diagnosis = diagnose_error(&mut ctx, tool_names::WRITE_STDIN, &args, &error, "execution").await;
+        assert!(diagnosis.likely_cause.contains("does not establish the command's outcome"));
+        assert!(diagnosis.next_action.contains("reuse its output"));
+        assert!(diagnosis.next_action.contains("only if fresh execution is still needed"));
+        for _ in 0..3 {
+            assert!(ctx.harness_state.can_spend_failure_diagnosis_model_call());
+            ctx.harness_state.record_failure_diagnosis_model_call();
+        }
+        assert!(!ctx.harness_state.can_spend_failure_diagnosis_model_call());
+
+        let unrelated = ToolExecutionError::new(
+            "read_file",
+            vtcode_core::tools::registry::ToolErrorType::ResourceNotFound,
+            "file not found",
+        );
+        assert!(!classification::is_deterministic_only_error(&unrelated));
+    }
+
+    #[tokio::test]
+    async fn grep_no_match_diagnosis_preserves_model_budget() {
+        use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
+
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let mut ctx = backing.turn_processing_context();
+        for command in [
+            "rg missing src",
+            "grep -q missing README.md",
+            "LANG=C /usr/bin/grep missing src",
+        ] {
+            let diagnosis = diagnose_output(
+                &mut ctx,
+                tool_names::EXEC_COMMAND,
+                &json!({"cmd": command}),
+                &json!({"stdout": "", "exit_code": 1}),
+            )
+            .await;
+            assert!(diagnosis.likely_cause.contains("no matching results"));
+            assert!(diagnosis.next_action.contains("new scope or question"));
+        }
+        // All three optional model calls remain available for actual failures.
+        for _ in 0..3 {
+            assert!(ctx.harness_state.can_spend_failure_diagnosis_model_call());
+            ctx.harness_state.record_failure_diagnosis_model_call();
+        }
+        assert!(!ctx.harness_state.can_spend_failure_diagnosis_model_call());
+    }
+
+    #[test]
+    fn grep_no_match_diagnosis_rejects_ambiguous_or_hidden_failures() {
+        for command in ["rg missing src; false", "echo '/rg missing'; false", "! rg missing src"] {
+            let diagnosis = deterministic_output_diagnosis(
+                tool_names::EXEC_COMMAND,
+                &json!({"cmd": command}),
+                &json!({"exit_code": 1}),
+            );
+            assert!(!diagnosis.likely_cause.contains("no matching results"), "{command}");
+        }
+        for hidden in [
+            json!({"exit_code": 1, "truncated": true}),
+            json!({"exit_code": 1, "spool_path": "output.txt"}),
+            json!({"exit_code": 1, "total_output_bytes": 10}),
+        ] {
+            let diagnosis =
+                deterministic_output_diagnosis(tool_names::EXEC_COMMAND, &json!({"cmd": "rg missing src"}), &hidden);
+            assert!(!diagnosis.likely_cause.contains("no matching results"));
+        }
+    }
 
     #[test]
     fn parses_exact_model_diagnosis_contract() {
@@ -493,7 +686,10 @@ mod tests {
 
         let diagnosis = deterministic_error_diagnosis(&error, "execution");
 
-        assert_eq!(diagnosis.next_action, "Inspect the bounded error evidence and retry with corrected arguments.");
+        assert_eq!(
+            diagnosis.next_action,
+            "Inspect the bounded error evidence and retry with corrected arguments. Revise the hypothesis from the bounded evidence before retrying."
+        );
         assert!(!diagnosis.next_action.contains("reveal"));
     }
 
@@ -506,6 +702,9 @@ mod tests {
         );
 
         assert!(is_preflight_failure(&error));
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+        assert!(diagnosis.next_action.contains("security"));
+        assert!(!diagnosis.next_action.contains("declared schema"));
     }
 
     #[test]
@@ -520,5 +719,26 @@ mod tests {
         let diagnosis = deterministic_error_diagnosis(&error, "execution");
         assert!(diagnosis.next_action.contains("do not bypass safeguards"));
         assert!(diagnosis.likely_cause.contains("active policy"));
+    }
+
+    #[test]
+    fn code_search_unavailable_does_not_suggest_identical_retry() {
+        let unavailable = ToolExecutionError::new(
+            "code_search",
+            vtcode_core::tools::registry::ToolErrorType::ExecutionError,
+            "all requested code_search result categories are unavailable (requested: text). Do not retry the identical query/path; drop file_types, broaden path, or use exec_command rg for literal text",
+        );
+        let diagnosis = deterministic_error_diagnosis(&unavailable, "execution");
+        assert!(diagnosis.next_action.contains("Do not retry the identical"));
+        assert!(diagnosis.next_action.contains("file_types"));
+
+        let generic = ToolExecutionError::new(
+            "code_search",
+            vtcode_core::tools::registry::ToolErrorType::ExecutionError,
+            "ripgrep literal search failed",
+        );
+        let generic_diagnosis = deterministic_error_diagnosis(&generic, "execution");
+        assert!(generic_diagnosis.next_action.contains("retry with corrected arguments"));
+        assert!(!generic_diagnosis.next_action.contains("Do not retry the identical"));
     }
 }

@@ -2,7 +2,9 @@ use super::FileOpsTool;
 use super::is_image_path;
 use crate::tools::error_helpers::with_file_context;
 use crate::tools::types::Input;
-use crate::utils::image_processing::read_image_file_any_path;
+use crate::utils::image_processing::{
+    UNSUPPORTED_BINARY_IMAGE_EXTENSIONS, has_supported_image_extension, read_image_file_any_path,
+};
 use anyhow::{Result, anyhow};
 use base64::Engine;
 use serde_json::{Value, json};
@@ -17,7 +19,11 @@ impl FileOpsTool {
             return Err(anyhow!("Path is not a file: {}", file_path.display()));
         }
 
-        if is_image_path(file_path) {
+        // Only provider-supported raster formats become base64 image parts.
+        // SVG is XML text and flows through the text path below so the model
+        // can read it; binary formats no vision API accepts are rejected
+        // explicitly instead of producing mojibake or a provider 400.
+        if has_supported_image_extension(file_path) {
             let image_data = read_image_file_any_path::<&Path>(file_path).await?;
             let metadata = json!({
                 "size_bytes": image_data.size,
@@ -26,6 +32,17 @@ impl FileOpsTool {
                 "mime_type": image_data.mime_type,
             });
             return Ok((image_data.base64_data.clone(), metadata, false));
+        }
+        if is_image_path(file_path)
+            && file_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| UNSUPPORTED_BINARY_IMAGE_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+        {
+            return Err(anyhow!(
+                "Unsupported image format for LLM vision: {} (use PNG, JPEG, GIF, or WebP)",
+                file_path.display()
+            ));
         }
 
         if let Some(encoding) = input.encoding.as_deref()

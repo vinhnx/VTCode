@@ -207,7 +207,6 @@ pub fn render_instruction_appendix(
                 bundle.truncated,
                 project_root,
                 home_dir,
-                6,
                 PROJECT_DOC_TRUNCATION_NOTE,
             )
             .trim_end(),
@@ -434,7 +433,8 @@ mod tests {
             .expect("instruction appendix");
 
         assert!(appendix.contains("## PROJECT DOCUMENTATION"));
-        assert!(appendix.contains("### Instruction map"));
+        // Single source: no map / Key points echo, just the body.
+        assert!(!appendix.contains("### Instruction map"));
         assert!(appendix.contains("- Root summary"));
         assert!(!appendix.contains("This detail should stay out"));
         assert!(appendix.contains("Some instruction files exceeded the configured prompt budget"));
@@ -507,7 +507,8 @@ mod tests {
         assert!(instructions.contains("### Instruction map"));
         assert!(instructions.contains("AGENTS.md (workspace AGENTS)"));
         assert!(instructions.contains("nested/sub/AGENTS.md (workspace AGENTS)"));
-        assert!(instructions.contains("### Key points"));
+        // Full bodies are inlined; a Key points echo would just reprint them.
+        assert!(!instructions.contains("### Key points"));
         assert!(instructions.contains("Root summary"));
         assert!(instructions.contains("Nested summary"));
         assert!(instructions.contains("Follow the repository-level guidance first."));
@@ -603,8 +604,8 @@ mod tests {
             .expect("instruction appendix");
         let approx_tokens = appendix.len() / 4;
 
-        assert!(appendix.contains("### Instruction map"));
-        assert!(appendix.contains("### Key points"));
+        assert!(!appendix.contains("### Instruction map"));
+        assert!(!appendix.contains("### Key points"));
         assert!(appendix.contains("avoid adding to vtcode-core"));
         assert!(appendix.contains("start with docs/ARCHITECTURE.md"));
         assert!(approx_tokens < 250, "got ~{approx_tokens} tokens");

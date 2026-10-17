@@ -30,6 +30,30 @@ pub(crate) fn mistral_presets() -> Vec<ModelPreset> {
             context_window: Some(256_000),
         },
         ModelPreset {
+            id: "mistral-large-4".to_string(),
+            model: "mistral-large-4".to_string(),
+            display_name: "Mistral Large 4".to_string(),
+            description: "Open-weight MoE flagship (49B active, 1.05T total) with 1M context (Public Preview)"
+                .to_string(),
+            provider: Provider::Mistral,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_000_000),
+        },
+        ModelPreset {
             id: "mistral-medium-3-5".to_string(),
             model: "mistral-medium-3-5".to_string(),
             display_name: "Mistral Medium 3.5".to_string(),

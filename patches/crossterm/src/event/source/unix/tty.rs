@@ -7,14 +7,14 @@ use rustix::fd::{AsFd, AsRawFd};
 
 use signal_hook::low_level::pipe;
 
-use crate::event::timeout::PollTimeout;
 use crate::event::Event;
-use filedescriptor::{poll, pollfd, POLLIN};
+use crate::event::timeout::PollTimeout;
+use filedescriptor::{POLLIN, poll, pollfd};
 
 #[cfg(feature = "event-stream")]
 use crate::event::sys::Waker;
-use crate::event::{source::EventSource, sys::unix::parse::parse_event, InternalEvent};
-use crate::terminal::sys::file_descriptor::{tty_fd, FileDesc};
+use crate::event::{InternalEvent, source::EventSource, sys::unix::parse::parse_event};
+use crate::terminal::sys::file_descriptor::{FileDesc, tty_fd};
 
 /// Holds a prototypical Waker and a receiver we can wait on when doing select().
 #[cfg(feature = "event-stream")]
@@ -27,10 +27,7 @@ struct WakePipe {
 impl WakePipe {
     fn new() -> io::Result<Self> {
         let (receiver, sender) = nonblocking_unix_pair()?;
-        Ok(WakePipe {
-            receiver,
-            waker: Waker::new(sender),
-        })
+        Ok(WakePipe { receiver, waker: Waker::new(sender) })
     }
 }
 
@@ -103,18 +100,11 @@ impl EventSource for UnixInternalEventSource {
         let timeout = PollTimeout::new(timeout);
 
         fn make_pollfd<F: AsRawFd>(fd: &F) -> pollfd {
-            pollfd {
-                fd: fd.as_raw_fd(),
-                events: POLLIN,
-                revents: 0,
-            }
+            pollfd { fd: fd.as_raw_fd(), events: POLLIN, revents: 0 }
         }
 
         #[cfg(not(feature = "event-stream"))]
-        let mut fds = [
-            make_pollfd(&self.tty),
-            make_pollfd(&self.winch_signal_receiver),
-        ];
+        let mut fds = [make_pollfd(&self.tty), make_pollfd(&self.winch_signal_receiver)];
 
         #[cfg(feature = "event-stream")]
         let mut fds = [
@@ -140,7 +130,7 @@ impl EventSource for UnixInternalEventSource {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
                         format!("got unexpected error while polling: {:?}", e),
-                    ))
+                    ));
                 }
                 Ok(_) => (),
             };
@@ -148,10 +138,8 @@ impl EventSource for UnixInternalEventSource {
                 loop {
                     let read_count = read_complete(&self.tty, &mut self.tty_buffer)?;
                     if read_count > 0 {
-                        self.parser.advance(
-                            &self.tty_buffer[..read_count],
-                            read_count == TTY_BUFFER_SIZE,
-                        );
+                        self.parser
+                            .advance(&self.tty_buffer[..read_count], read_count == TTY_BUFFER_SIZE);
                     }
 
                     if let Some(event) = self.parser.next() {
@@ -178,9 +166,7 @@ impl EventSource for UnixInternalEventSource {
                 // it's a really long time from the mio, async-std/tokio executor, ...
                 // point of view.
                 let new_size = crate::terminal::size()?;
-                return Ok(Some(InternalEvent::Event(Event::Resize(
-                    new_size.0, new_size.1,
-                ))));
+                return Ok(Some(InternalEvent::Event(Event::Resize(new_size.0, new_size.1))));
             }
 
             #[cfg(feature = "event-stream")]

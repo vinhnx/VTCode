@@ -150,58 +150,32 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
     ),
     built_in_command_spec!(
         "config",
-        "Browse categorized settings, focused memory/permission/model controls, or reset the active layer (usage: /config [memory|permissions|model|<path>|reset])",
-        "/config [memory|permissions|model|<path>|reset]",
-        "configuration"
-    ),
-    built_in_command_spec!(
-        "permissions",
-        "Open the permissions settings section and effective summary",
-        "/permissions",
-        "configuration"
-    ),
-    built_in_command_spec!(
-        "memory",
-        "Show memory status, loaded AGENTS/rules, and quick memory actions",
-        "/memory",
+        "Browse settings and run workspace panels: memory, permissions, model, ide, tasks, jobs, log, subprocess, notify, checkup, or reset the active layer (usage: /config [memory|permissions|model|ide|tasks|jobs|log|subprocess|notify|checkup|<path>|reset])",
+        "/config [memory|permissions|model|ide|tasks|jobs|log|subprocess|notify|checkup|<path>|reset]",
         "configuration"
     ),
     CommandSkillSpec {
         slash_name: "model",
         skill_name: "cmd-model",
-        description: "Launch the interactive model picker",
+        description: "Launch the interactive model picker (includes reasoning effort)",
         usage: "/model (alias: /models)",
         category: "configuration",
         aliases: &["models"],
         backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
     },
     built_in_command_spec!(
+        "fast",
+        "Toggle native OpenAI ultrafast or Claude fast at premium pricing (usage: /fast [on|off])",
+        "/fast [on|off]",
+        "configuration"
+    ),
+    built_in_command_spec!(
         "mode",
         "Switch the active agent mode (usage: /mode [agent-name])",
         "/mode [agent-name]",
         "configuration"
     ),
-    built_in_command_spec!(
-        "effort",
-        "Set model effort level for this conversation (usage: /effort [--persist] [level])",
-        "/effort [--persist] [none|minimal|low|medium|high|xhigh|max]",
-        "configuration"
-    ),
-    built_in_command_spec!("ide", "Toggle IDE context for this session", "/ide", "configuration"),
     built_in_command_spec!("theme", "Switch UI theme (usage: /theme <theme-id>)", "/theme [theme-id]", "configuration"),
-    built_in_command_spec!(
-        "edit",
-        "Open file in external editor (tools.editor config, then VISUAL/EDITOR) (usage: /edit [file])",
-        "/edit [file]",
-        "tools"
-    ),
-    traditional_command_spec!(
-        "analyze",
-        "Perform comprehensive codebase analysis and generate reports (usage: /analyze [full|security|performance])",
-        "/analyze [full|security|performance]",
-        "tools",
-        ".system/cmd-analyze"
-    ),
     traditional_command_spec!(
         "review",
         "Review the current diff or selected files (usage: /review [instructions | --last-diff | --target <expr> | --file <path> | files...] [--style <style>])",
@@ -216,14 +190,6 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "tools"
     ),
     built_in_command_spec!("copy", "Copy the latest complete assistant reply to clipboard", "/copy", "tools"),
-    built_in_command_spec!("tasks", "Toggle the dedicated TODO panel fed by task_tracker output", "/tasks", "tools"),
-    built_in_command_spec!("jobs", "Inspect active/background command sessions", "/jobs", "tools"),
-    built_in_command_spec!(
-        "log",
-        "View session event log inline (usage: /log [--json|--text] [--thread|--all] [--save])",
-        "/log [--json|--text] [--thread|--all] [--save]",
-        "debug"
-    ),
     built_in_command_spec!(
         "skills",
         "Open interactive skills manager (usage: /skills, /skills manager)",
@@ -236,30 +202,9 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "/agent [list|threads|inspect <id>|close <id>|create [project|user] [name]|edit [name]|delete <name>]",
         "tools"
     ),
-    built_in_command_spec!(
-        "subprocess",
-        "Open local agents or manage background subprocesses (usage: /subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>])",
-        "/subprocess[es] [list|toggle|refresh|inspect <id>|stop <id>|cancel <id>]",
-        "tools"
-    ),
     built_in_command_spec!("status", "Show model, provider, workspace, and tool status", "/status", "status"),
-    built_in_command_spec!(
-        "notify",
-        "Send a VT Code notification immediately (usage: /notify [message])",
-        "/notify [message]",
-        "status"
-    ),
     built_in_command_spec!("stop", "Stop the active turn immediately", "/stop", "status"),
     built_in_command_spec!("pause", "Pause the active turn at the next safe boundary", "/pause", "status"),
-    CommandSkillSpec {
-        slash_name: "checkup",
-        skill_name: "cmd-checkup",
-        description: "Run a workspace checkup: clean unused skills/MCPs, dedup and split AGENTS.md, toggle slow hooks, update VT Code, enable auto mode, and pre-approve read-only commands (usage: /checkup [--quick|--full])",
-        usage: "/checkup [--quick|--full]",
-        category: "status",
-        aliases: &["doctor"],
-        backend: CommandSkillBackend::BuiltInCommand { executor: BuiltInCommandExecutor::SlashAlias },
-    },
     built_in_command_spec!(
         "update",
         "Check for new VT Code releases and install updates (usage: /update [check|install] [--force], or run `vtcode update` from the CLI)",
@@ -279,6 +224,12 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "integration"
     ),
     built_in_command_spec!(
+        "explain",
+        "Explain recorded execution without a model call",
+        "/explain [--scope task|session] [--details|diagram|--web|--export html]",
+        "status"
+    ),
+    built_in_command_spec!(
         "plugin",
         "Open interactive Agent Plugins manager (usage: /plugin, /plugin manager)",
         "/plugin [manager|list|info <name>|add <source> [--name <id>]|remove <name>|validate <path>|refresh|help]",
@@ -294,12 +245,6 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "resume",
         "List archived sessions when idle; resume the active turn while it is paused",
         "/resume [limit|--all]",
-        "session"
-    ),
-    built_in_command_spec!(
-        "continue",
-        "Resume the most recent archived session automatically (usage: /continue [--all])",
-        "/continue [--all]",
         "session"
     ),
     built_in_command_spec!(
@@ -341,12 +286,6 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "session"
     ),
     built_in_command_spec!("redo", "Restore files and conversation from before the last rewind", "/redo", "session"),
-    built_in_command_spec!(
-        "rewind-recover",
-        "Recover files and conversation after an interrupted rewind",
-        "/rewind-recover",
-        "session"
-    ),
     built_in_command_spec!(
         "plan",
         "Start or continue the planning workflow with an optional task prompt (usage: /plan [task])",
@@ -560,14 +499,29 @@ mod tests {
     }
 
     #[test]
-    fn checkup_command_is_registered_and_doctor_aliases_it() {
-        let checkup = find_command_skill_by_slash_name("checkup").expect("checkup spec");
-        assert_eq!(checkup.slash_name, "checkup");
-        assert_eq!(checkup.usage, "/checkup [--quick|--full]");
-
-        // The legacy `/doctor` name must still resolve to the same (canonical) spec.
-        let doctor = find_command_skill_by_slash_name("doctor").expect("doctor alias");
-        assert_eq!(doctor.slash_name, "checkup");
-        assert_eq!(doctor.skill_name, "cmd-checkup");
+    fn removed_config_consolidated_commands_are_not_registered() {
+        for removed in [
+            "checkup",
+            "doctor",
+            "permissions",
+            "ide",
+            "tasks",
+            "jobs",
+            "log",
+            "subprocess",
+            "notify",
+            "memory",
+            "effort",
+            "continue",
+            "edit",
+            "analyze",
+        ] {
+            assert!(
+                find_command_skill_by_slash_name(removed).is_none(),
+                "/{removed} must not be registered; use /config instead"
+            );
+        }
+        let config = find_command_skill_by_slash_name("config").expect("config spec");
+        assert!(config.usage.contains("checkup"));
     }
 }

@@ -150,22 +150,7 @@ fn resolve_background_subagent_executable_for_workspace(workspace_root: &Path, c
 }
 
 pub fn background_record_id(agent_name: &str) -> String {
-    format!("background-{}", sanitize_component(agent_name))
-}
-
-fn sanitize_component(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
+    format!("background-{}", super::controller_helpers::sanitize_component(agent_name))
 }
 
 // ─── Preview Utilities ─────────────────────────────────────────────────────

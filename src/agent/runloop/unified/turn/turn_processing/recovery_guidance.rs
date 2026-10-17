@@ -197,5 +197,23 @@ mod tests {
         assert!(directive.contains("git diff --check"));
         assert!(PLANNING_EMPTY_RESPONSE_VERIFY_EXAMPLES.contains("sed -n"));
         assert!(directive.len() < 4 * 1024);
+
+        use crate::agent::runloop::unified::turn::turn_loop_helpers::restore_fresh_turn_tool_guidance;
+
+        for directive in [
+            directive,
+            empty_response_recovery_reason(RecoveryMode::ToolFreeSynthesis).to_owned(),
+        ] {
+            let mut history = vec![uni::Message::system(directive)];
+            restore_fresh_turn_tool_guidance(&mut history, false);
+            assert_eq!(history.len(), 2, "the emitted synthesis directive must expire at a fresh turn");
+            restore_fresh_turn_tool_guidance(&mut history, false);
+            assert_eq!(history.len(), 2, "later fresh turns must not repeat restoration");
+        }
+        let mut enabled = vec![uni::Message::system(
+            empty_response_recovery_reason(RecoveryMode::ToolEnabledRetry).to_owned(),
+        )];
+        restore_fresh_turn_tool_guidance(&mut enabled, false);
+        assert_eq!(enabled.len(), 1, "tool-enabled recovery needs no restoration");
     }
 }

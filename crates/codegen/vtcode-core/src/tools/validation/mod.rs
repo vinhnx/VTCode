@@ -1,6 +1,5 @@
 pub mod commands;
 pub mod paths;
-pub mod unified_path;
 
 use jsonschema::ValidationError;
 use jsonschema::error::{TypeKind, ValidationErrorKind};
@@ -74,11 +73,13 @@ pub fn condensed_schema_hint(schema: &Value) -> Option<Value> {
 pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
     let path = err.instance_path().to_string();
     let path_label = if path.is_empty() { "(root)".to_string() } else { path };
+    let schema_path = err.schema_path().to_string();
     let value = err.instance();
-    let value_str = match &**value {
+    let raw_value_str = match &**value {
         Value::String(s) => format!("\"{s}\""),
         other => other.to_string(),
     };
+    let value_str = truncate_for_error(&raw_value_str, 500);
     match err.kind() {
         ValidationErrorKind::Enum { options } => {
             let opts = options
@@ -111,12 +112,127 @@ pub fn describe_jsonschema_error(err: &ValidationError<'_>) -> String {
                 Value::String(s) => s.clone(),
                 other => other.to_string(),
             };
-            format!("missing required property '{name}'")
+            format!("field '{path_label}' missing required property '{name}' (schema {schema_path})")
         }
         ValidationErrorKind::AdditionalProperties { unexpected } => {
             format!("unexpected field(s) {unexpected:?} not allowed by the schema (did you use the right field name?)")
         }
-        _ => format!("field '{path_label}' failed validation: {value_str}"),
+        ValidationErrorKind::Not { schema } => {
+            let forbidden = forbidden_properties_from_not_schema(schema);
+            if forbidden.is_empty() {
+                let schema_str = truncate_for_error(&schema.to_string(), 300);
+                format!(
+                    "field '{path_label}' value {value_str} is forbidden by schema {schema_path} (not {schema_str}); remove the forbidden field(s) and retry"
+                )
+            } else {
+                let present = present_forbidden_fields(value, &forbidden);
+                let offending = if present.is_empty() { forbidden.clone() } else { present };
+                format!(
+                    "field '{path_label}' must not include {offending:?} for this action (schema {schema_path} forbids them); remove {offending:?} and retry"
+                )
+            }
+        }
+        ValidationErrorKind::AnyOf { context } => {
+            describe_combinator_error(&path_label, &schema_path, "anyOf", context)
+        }
+        ValidationErrorKind::OneOfNotValid { context } => {
+            describe_combinator_error(&path_label, &schema_path, "oneOf", context)
+        }
+        ValidationErrorKind::OneOfMultipleValid { context } => {
+            let _ = context;
+            format!(
+                "field '{path_label}' value {value_str} matches more than one allowed shape (schema {schema_path} oneOf); make the call match exactly one variant"
+            )
+        }
+        ValidationErrorKind::FalseSchema => {
+            format!("field '{path_label}' value {value_str} is not allowed here (schema {schema_path} disallows it)")
+        }
+        _ => {
+            // Fall back to the validator's own message plus the schema location
+            // so conditional (`if`/`then`/`not`) failures don't collapse to a
+            // bare value dump. Truncate to keep large objects out of context.
+            let detail = truncate_for_error(&err.to_string(), 500);
+            if schema_path.is_empty() {
+                format!("field '{path_label}' failed validation: {detail}")
+            } else {
+                format!("field '{path_label}' failed validation (schema {schema_path}): {detail}")
+            }
+        }
+    }
+}
+
+fn truncate_for_error(raw: &str, limit: usize) -> String {
+    vtcode_commons::formatting::truncate_byte_budget(raw, limit, "…")
+}
+
+fn forbidden_properties_from_not_schema(schema: &Value) -> Vec<String> {
+    // Only `required` (direct or inside anyOf/oneOf/allOf branches) forbids
+    // presence. A bare `properties` entry without `required` does not forbid
+    // the key, so it must not be reported as forbidden.
+    let mut out = Vec::new();
+    if let Some(required) = schema.get("required").and_then(Value::as_array) {
+        for entry in required {
+            if let Some(name) = entry.as_str() {
+                out.push(name.to_string());
+            }
+        }
+    }
+    for key in ["anyOf", "oneOf", "allOf"] {
+        if let Some(branches) = schema.get(key).and_then(Value::as_array) {
+            for branch in branches {
+                for name in forbidden_properties_from_not_schema(branch) {
+                    if !out.contains(&name) {
+                        out.push(name);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+fn present_forbidden_fields(instance: &Value, forbidden: &[String]) -> Vec<String> {
+    let Some(map) = instance.as_object() else {
+        return Vec::new();
+    };
+    forbidden.iter().filter(|name| map.contains_key(*name)).cloned().collect()
+}
+
+fn describe_combinator_error(
+    path_label: &str,
+    schema_path: &str,
+    keyword: &str,
+    context: &[Vec<ValidationError<'static>>],
+) -> String {
+    // Label branches so the model can tell variants apart, and render inner
+    // errors through the same path-aware describer (one level only: nested
+    // combinators fall back to their Display to avoid exponential expansion).
+    let mut variants: Vec<String> = Vec::new();
+    for (idx, branch) in context.iter().take(3).enumerate() {
+        let mut parts: Vec<String> = Vec::new();
+        for error in branch.iter().take(2) {
+            let rendered = match error.kind() {
+                ValidationErrorKind::AnyOf { .. }
+                | ValidationErrorKind::OneOfNotValid { .. }
+                | ValidationErrorKind::OneOfMultipleValid { .. } => truncate_for_error(&error.to_string(), 300),
+                _ => truncate_for_error(&describe_jsonschema_error(error), 300),
+            };
+            parts.push(rendered);
+        }
+        if parts.is_empty() {
+            continue;
+        }
+        variants.push(format!("variant {}: {}", idx + 1, parts.join(" + ")));
+    }
+    if variants.is_empty() {
+        format!(
+            "field '{path_label}' does not match any allowed shape (schema {schema_path} {keyword}); adjust the arguments to match one variant and retry"
+        )
+    } else {
+        format!(
+            "field '{path_label}' does not match any allowed shape (schema {schema_path} {keyword}): {}",
+            variants.join(" | ")
+        )
     }
 }
 
@@ -191,5 +307,104 @@ mod tests {
 
         let hint = condensed_schema_hint(&schema).expect("object schema should produce a hint");
         assert_eq!(hint["properties"]["max_results"], "integer(min=1,max=100)");
+    }
+
+    #[test]
+    fn not_error_names_forbidden_fields_and_schema_path() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "action": {"type": "string"},
+                "index": {"type": "integer"},
+                "index_path": {"type": "string"}
+            },
+            "required": ["action"],
+            "allOf": [
+                {
+                    "if": {"properties": {"action": {"const": "create"}}, "required": ["action"]},
+                    "then": {"not": {"anyOf": [{"required": ["index"]}, {"required": ["index_path"]}]}}
+                }
+            ]
+        });
+        let instance = json!({"action": "create", "title": "README plan", "index": 1, "index_path": "1"});
+        let validator = jsonschema::validator_for(&schema).expect("schema is valid");
+        let errors: Vec<_> = validator.iter_errors(&instance).collect();
+        assert!(!errors.is_empty(), "expected a not-violation");
+        let messages: Vec<String> = errors.iter().map(describe_jsonschema_error).collect();
+        let combined = messages.join("; ");
+        assert!(combined.contains("must not include"), "msg was: {combined}");
+        assert!(combined.contains("index"), "msg was: {combined}");
+        assert!(
+            !combined.contains("failed validation: {\"action\""),
+            "should not dump the whole object, got: {combined}"
+        );
+    }
+
+    #[test]
+    fn fallback_includes_schema_path_instead_of_bare_dump() {
+        let schema = json!({
+            "type": "object",
+            "properties": {"name": {"type": "string", "minLength": 5}}
+        });
+        let instance = json!({"name": "abc"});
+        let validator = jsonschema::validator_for(&schema).expect("schema is valid");
+        let errors: Vec<_> = validator.iter_errors(&instance).collect();
+        assert!(!errors.is_empty());
+        let msg = describe_jsonschema_error(&errors[0]);
+        assert!(msg.contains("field '"), "msg was: {msg}");
+        assert!(msg.contains("/properties/name"), "msg was: {msg}");
+    }
+
+    #[test]
+    fn required_error_includes_instance_and_schema_location() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"description": {"type": "string"}},
+                        "required": ["description"]
+                    }
+                }
+            },
+            "required": ["items"]
+        });
+        // Asymmetric: first element valid, second missing description.
+        let instance = json!({"items": [{"description": "ok"}, {"status": "completed"}]});
+        let validator = jsonschema::validator_for(&schema).expect("schema is valid");
+        let errors: Vec<_> = validator.iter_errors(&instance).collect();
+        assert!(!errors.is_empty(), "expected a nested required violation");
+        let combined = errors.iter().map(describe_jsonschema_error).collect::<Vec<_>>().join("; ");
+        assert!(combined.contains("missing required property 'description'"), "msg was: {combined}");
+        assert!(combined.contains("/items/1"), "msg was: {combined}");
+    }
+
+    #[test]
+    fn combinator_error_labels_variants() {
+        let schema = json!({
+            "type": "object",
+            "properties": {"action": {"type": "string"}},
+            "required": ["action"],
+            "allOf": [
+                {
+                    "if": {"properties": {"action": {"const": "update"}}, "required": ["action"]},
+                    "then": {
+                        "anyOf": [
+                            {"required": ["index"]},
+                            {"required": ["index_path"]}
+                        ]
+                    }
+                }
+            ]
+        });
+        let instance = json!({"action": "update"});
+        let validator = jsonschema::validator_for(&schema).expect("schema is valid");
+        let errors: Vec<_> = validator.iter_errors(&instance).collect();
+        assert!(!errors.is_empty(), "expected an anyOf violation");
+        let combined = errors.iter().map(describe_jsonschema_error).collect::<Vec<_>>().join("; ");
+        assert!(combined.contains("does not match any allowed shape"), "msg was: {combined}");
+        assert!(combined.contains("variant 1"), "msg was: {combined}");
     }
 }

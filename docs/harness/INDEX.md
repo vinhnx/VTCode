@@ -2,9 +2,12 @@
 
 ## Purpose
 
-This directory establishes an agent-first operating environment for VT Code development. It implements the "harness engineering" pattern: structured documentation designed to be consumed by AI agents as their primary knowledge source, while remaining useful to human contributors.
+This directory establishes an agent-first operating environment for VT Code development. It implements the "harness
+engineering" pattern: structured documentation designed to be consumed by AI agents as their primary knowledge source,
+while remaining useful to human contributors.
 
-The principle: if an agent cannot complete a task autonomously from information in this repository, the repository is missing context — fix the repo, not the agent prompt.
+The principle: if an agent cannot complete a task autonomously from information in this repository, the repository is
+missing context — fix the repo, not the agent prompt.
 
 ## File Index
 
@@ -13,7 +16,7 @@ The principle: if an agent cannot complete a task autonomously from information 
 | [INDEX.md](INDEX.md)                                       | This file. Entry point to the harness knowledge base.                                                   |
 | [CORE_BELIEFS.md](CORE_BELIEFS.md)                         | Agent-first operating principles. The "why" behind every decision.                                      |
 | [ARCHITECTURAL_INVARIANTS.md](ARCHITECTURAL_INVARIANTS.md) | Mechanical enforcement rules. Each invariant includes violation detection and remediation instructions. |
-| [ZEN_ALIGNMENT.md](ZEN_ALIGNMENT.md)                       | Full (all-19) Zen principle mapping and staged enforcement rollout.                                       |
+| [ZEN_ALIGNMENT.md](ZEN_ALIGNMENT.md)                       | Full (all-19) Zen principle mapping and staged enforcement rollout.                                     |
 | [QUALITY_SCORE.md](QUALITY_SCORE.md)                       | Quality grading (A/B/C/D) for each VT Code domain across 5 dimensions.                                  |
 | [EXEC_PLANS.md](EXEC_PLANS.md)                             | Execution plan methodology. Template and guidelines for self-contained design documents.                |
 | [TECH_DEBT_TRACKER.md](TECH_DEBT_TRACKER.md)               | Known technical debt items with priority (P0–P3) and review cadence.                                    |
@@ -21,14 +24,14 @@ The principle: if an agent cannot complete a task autonomously from information 
 
 ### Key Implementation Files
 
-| File | Description |
-| --- | --- |
-| `crates/codegen/vtcode-core/src/core/agent/evaluator.rs` | Structured evaluator with scoring dimensions and hard thresholds. |
-| `crates/codegen/vtcode-core/src/core/agent/handoff.rs` | Enriched handoff protocol with boundary status, test results, known issues. |
-| `crates/codegen/vtcode-core/src/core/agent/harness_artifacts.rs` | Sprint contract and outcome verification artifact support. |
-| `crates/codegen/vtcode-core/src/core/agent/orient.rs` | Orient phase: gathers orientation context from external artifacts. |
-| `crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs` | Monotonic progress monitoring with stall detection. |
-| `crates/codegen/vtcode-memory/src/progress.rs` | Durable progress ledger with handoff metadata. |
+| File                                                             | Description                                                                 |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `crates/codegen/vtcode-core/src/core/agent/evaluator.rs`         | Structured evaluator with scoring dimensions and hard thresholds.           |
+| `crates/codegen/vtcode-core/src/core/agent/handoff.rs`           | Enriched handoff protocol with boundary status, test results, known issues. |
+| `crates/codegen/vtcode-core/src/core/agent/harness_artifacts.rs` | Sprint contract and outcome verification artifact support.                  |
+| `crates/codegen/vtcode-core/src/core/agent/orient.rs`            | Orient phase: gathers orientation context from external artifacts.          |
+| `crates/codegen/vtcode-core/src/core/agent/progress_monitor.rs`  | Monotonic progress monitoring with stall detection.                         |
+| `crates/codegen/vtcode-memory/src/progress.rs`                   | Durable progress ledger with handoff metadata.                              |
 
 ### Directories
 
@@ -47,12 +50,12 @@ The principle: if an agent cannot complete a task autonomously from information 
 | Security Model           | `docs/security/SECURITY_MODEL.md`         | Security invariants reference the security docs.                                    |
 | MCP Integration          | `docs/mcp/MCP_INTEGRATION_GUIDE.md`       | MCP domain quality score references this.                                           |
 | Zen Principle Mapping    | `docs/harness/ZEN_ALIGNMENT.md`           | Additive enforcement mapping between Zen principles and VT Code controls.           |
-| Process Hardening        | `docs/development/PROCESS_HARDENING.md`               | Security domain quality score references this.                                      |
-| Provider Guides          | `docs/providers/PROVIDER_GUIDES.md`                 | LLM domain quality score references this.                                           |
+| Process Hardening        | `docs/development/PROCESS_HARDENING.md`   | Security domain quality score references this.                                      |
+| Provider Guides          | `docs/providers/PROVIDER_GUIDES.md`       | LLM domain quality score references this.                                           |
 
 ## Navigation
 
-```
+```text
 AGENTS.md (root)          ← Start here. The map.
   │
   ├── docs/harness/       ← You are here. Operating environment.

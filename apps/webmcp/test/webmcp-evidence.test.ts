@@ -120,3 +120,29 @@ test("omits cyclic values instead of recursing while sanitizing", () => {
   assert.deepEqual(record.input, { self: "[omitted]" });
   assert.deepEqual(record.editor_state, {});
 });
+
+test("redacts GitHub App installation tokens in both formats", () => {
+  // Legacy opaque (~40 chars) and stateless JWT (~520 chars, two dots) per
+  // May/Oct 2026 changelogs. Assembled at runtime so scanners do not flag them.
+  // `note` is a non-sensitive, non-content key so value redaction is exercised.
+  const legacy = `${"ghs_"}${"a".repeat(36)}`;
+  const stateless = `${"ghs_"}${"b".repeat(20)}.${"c".repeat(250)}.${"d".repeat(250)}`;
+  assert.equal(stateless.length >= 500, true);
+  assert.equal(stateless.split(".").length, 3);
+
+  const recorder = createWebMcpEvidenceRecorder();
+  recorder.recordToolCall({
+    tool_name: "read_file",
+    input: { note: `saw ${legacy} and ${stateless} here` },
+    success: false,
+    error: { code: "x", message: `failed with ${stateless}` },
+    duration_ms: 1,
+    editor_state: {},
+  });
+  const record = recorder.snapshot().records[0];
+  assert.ok(record);
+  assert.equal(record.kind, "tool_call");
+  if (record.kind !== "tool_call") return;
+  assert.deepEqual(record.input, { note: "saw [redacted] and [redacted] here" });
+  assert.deepEqual(record.error, { code: "x", message: "failed with [redacted]" });
+});

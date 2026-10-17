@@ -291,6 +291,83 @@ async fn remember_planner_requests_missing_details() {
 }
 
 #[tokio::test]
+async fn remember_planner_combines_supplemental_answer_with_request() {
+    let workspace = tempdir().expect("workspace");
+    let provider = StaticProvider::new(
+        r#"{
+          "kind": "remember",
+          "facts": [{"topic": "preferences", "fact": "Always run cargo nextest for Rust workspaces."}],
+          "selected_ids": [],
+          "missing": null,
+          "message": null
+        }"#,
+    );
+    let route = MemoryModelRoute {
+        provider_name: "stub".to_string(),
+        model: "stub-model".to_string(),
+        temperature: 0.0,
+    };
+    let plan = plan_memory_operation_with_provider(
+        &provider,
+        &route,
+        workspace.path(),
+        MemoryOpKind::Remember,
+        "document and make sure to remember this rule for future reference",
+        Some("For missing field 'rule': Always run cargo nextest for Rust workspaces."),
+        None,
+        &[],
+    )
+    .await
+    .expect("plan");
+
+    assert_eq!(plan.kind, MemoryOpKind::Remember);
+    assert_eq!(plan.facts.len(), 1);
+    let prompt = provider.last_request().messages[0].content.as_text().to_string();
+    assert!(prompt.contains("combine it with the user request"));
+    assert!(prompt.contains("Only return ask_missing when a required value is still genuinely missing"));
+    assert!(prompt.contains("For missing field 'rule': Always run cargo nextest"));
+    assert!(prompt.contains("Keep it separate from the supplemental answer"));
+}
+
+#[tokio::test]
+async fn remember_planner_prompt_keeps_deictic_and_supplemental_separate() {
+    let workspace = tempdir().expect("workspace");
+    let provider = StaticProvider::new(
+        r#"{
+          "kind": "remember",
+          "facts": [{"topic": "preferences", "fact": "Prefer pnpm over npm for JavaScript projects."}],
+          "selected_ids": [],
+          "missing": null,
+          "message": null
+        }"#,
+    );
+    let route = MemoryModelRoute {
+        provider_name: "stub".to_string(),
+        model: "stub-model".to_string(),
+        temperature: 0.0,
+    };
+    let plan = plan_memory_operation_with_provider(
+        &provider,
+        &route,
+        workspace.path(),
+        MemoryOpKind::Remember,
+        "remember it",
+        Some("For missing field 'rule': Prefer pnpm over npm."),
+        Some("You should use pnpm for JavaScript workspaces."),
+        &[],
+    )
+    .await
+    .expect("plan");
+
+    assert_eq!(plan.kind, MemoryOpKind::Remember);
+    let prompt = provider.last_request().messages[0].content.as_text().to_string();
+    assert!(prompt.contains("Immediately preceding assistant reply"));
+    assert!(prompt.contains("You should use pnpm for JavaScript workspaces."));
+    assert!(prompt.contains("For missing field 'rule': Prefer pnpm over npm."));
+    assert!(prompt.contains("combine it with the user request"));
+}
+
+#[tokio::test]
 async fn remember_planner_uses_immediately_preceding_assistant_reply_for_deictic_request() {
     let workspace = tempdir().expect("workspace");
     let provider = StaticProvider::new(

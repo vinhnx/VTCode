@@ -209,16 +209,7 @@ fn truncate_header_text(text: &str, max_chars: usize) -> String {
     if max_chars == 0 {
         return String::new();
     }
-    if text.chars().count() <= max_chars {
-        return text.to_string();
-    }
-
-    let mut out = String::new();
-    for c in text.chars().take(max_chars.saturating_sub(1)) {
-        out.push(c);
-    }
-    out.push('…');
-    out
+    vtcode_commons::formatting::truncate_within(text, max_chars, "…")
 }
 
 fn is_home_directory(workspace_path: &Path) -> bool {
@@ -286,6 +277,9 @@ pub(crate) async fn build_inline_header_context(
     } else {
         format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label.trim())
     };
+    let service_tier = vt_cfg
+        .and_then(|cfg| super::unified::fast_mode::effective_speed_label(config, cfg))
+        .map(|label| format!("{}{}", ui::HEADER_SERVICE_TIER_PREFIX, label));
 
     let trust_value = match session_bootstrap.acp_workspace_trust {
         Some(level) => {
@@ -351,9 +345,9 @@ pub(crate) async fn build_inline_header_context(
         search_tools,
         persistent_memory,
         pr_review: None,
-        editor_context: None,
         git: chain_entries.get(1).cloned().unwrap_or_default(),
         reasoning,
+        service_tier,
         workspace_trust: trust_value,
         tools: chain_entries.first().cloned().unwrap_or_default(),
         mcp: mcp_value,

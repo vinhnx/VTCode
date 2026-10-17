@@ -1,31 +1,26 @@
 # Text Search Guide
 
-> **Note:** legacy text-search dispatcher names are internal implementation
-> details. The AI-facing default path for text search is `exec_command.cmd`
-> with `rg`.
+> **Note:** legacy text-search dispatcher names are internal implementation details. The AI-facing default path for text
+> search is `exec_command.cmd` with `rg`.
 
-Shell examples follow the active shell prompt profile. Linux, macOS, and WSL
-use the Unix-like profile by default; native Windows uses PowerShell. VT Code
-does not rewrite GNU flags for macOS BSD tools and does not translate Unix
+Shell examples follow the active shell prompt profile. Linux, macOS, and WSL use the Unix-like profile by default;
+native Windows uses PowerShell. VT Code does not rewrite GNU flags for macOS BSD tools and does not translate Unix
 commands to PowerShell. Use WSL when you want Unix-like workflows on Windows.
 
 ## Overview
 
-Use **ripgrep** (`rg`) through `exec_command.cmd` for fast text and regex
-search across codebases. Use shell `grep` only when `rg` is unavailable or when
-you need a host-specific grep feature. The advanced profile also provides
-`code_search` for one bounded literal query (or `|`-separated literal
-alternatives, e.g. `tokio|async-std|runtime`) across definitions, syntactic
-usages, text, and paths.
+Use **ripgrep** (`rg`) through `exec_command.cmd` for fast text and regex search across codebases. Use shell `grep` only
+when `rg` is unavailable or when you need a host-specific grep feature. The advanced profile also provides `code_search`
+for one bounded literal query (or `|`-separated literal alternatives, e.g. `tokio|async-std|runtime`) across
+definitions, syntactic usages, text, and paths.
 
 ## Architecture
 
--   **Backend**: `rg` on PATH, or `grep` as a fallback
--   **Search type**: regex by default, literal string matching with `rg -F`
--   **File filtering**: `rg --glob`, `rg -t`, path arguments, and size limits
--   **Performance**: `rg` respects `.gitignore` and `.ignore` files by default
--   **Output control**: line numbers, column numbers, filename-only output, and
-    nearby lines are shell flags
+- **Backend**: `rg` on PATH, or `grep` as a fallback
+- **Search type**: regex by default, literal string matching with `rg -F`
+- **File filtering**: `rg --glob`, `rg -t`, path arguments, and size limits
+- **Performance**: `rg` respects `.gitignore` and `.ignore` files by default
+- **Output control**: line numbers, column numbers, filename-only output, and nearby lines are shell flags
 
 ## Basic Usage
 
@@ -59,46 +54,46 @@ rg -n -i --glob "**/*.ts" "^import\\s.*from" .
 
 ### Core Flags
 
-| Need | `rg` command form |
-| --- | --- |
-| Search under a path | `rg "TODO" src` |
-| Show line numbers | `rg -n "TODO" src` |
-| Limit result volume | `rg -n "TODO" src | head -c 4000` |
+| Need                  | `rg` command form  |
+| --------------------- | ------------------ | ------------- |
+| Search under a path   | `rg "TODO" src`    |
+| Show line numbers     | `rg -n "TODO" src` |
+| Limit result volume   | `rg -n "TODO" src  | head -c 4000` |
 | Return only filenames | `rg -l "TODO" src` |
 
 ### Pattern Matching
 
-| Need | `rg` flag |
-| --- | --- |
-| Literal string search | `-F` |
-| Case-insensitive search | `-i` |
-| Case-sensitive search | `-s` |
-| Smart-case search | `-S` |
-| Whole-word search | `-w` |
-| Invert a match | `-v` |
-| Show only matched text | `-o` |
+| Need                    | `rg` flag |
+| ----------------------- | --------- |
+| Literal string search   | `-F`      |
+| Case-insensitive search | `-i`      |
+| Case-sensitive search   | `-s`      |
+| Smart-case search       | `-S`      |
+| Whole-word search       | `-w`      |
+| Invert a match          | `-v`      |
+| Show only matched text  | `-o`      |
 
 ### File Filtering
 
-| Need | `rg` flag |
-| --- | --- |
-| Glob file filter | `--glob "**/*.rs"` |
-| Language type filter | `-t rust`, `-t python`, `-t ts` |
-| Skip large files | `--max-filesize 5M` |
-| Search hidden files | `--hidden` |
-| Include ignored files | `--no-ignore` |
-| Search binary files | `-a` |
+| Need                  | `rg` flag                       |
+| --------------------- | ------------------------------- |
+| Glob file filter      | `--glob "**/*.rs"`              |
+| Language type filter  | `-t rust`, `-t python`, `-t ts` |
+| Skip large files      | `--max-filesize 5M`             |
+| Search hidden files   | `--hidden`                      |
+| Include ignored files | `--no-ignore`                   |
+| Search binary files   | `-a`                            |
 
 ### Output Formatting
 
-| Need | `rg` flag |
-| --- | --- |
-| Nearby lines | `-C 3` |
-| Lines before matches | `-B 2` |
-| Lines after matches | `-A 2` |
-| Column numbers | `--column` |
-| Trim leading whitespace | `--trim` |
-| JSON output for scripts | `--json` |
+| Need                    | `rg` flag  |
+| ----------------------- | ---------- |
+| Nearby lines            | `-C 3`     |
+| Lines before matches    | `-B 2`     |
+| Lines after matches     | `-A 2`     |
+| Column numbers          | `--column` |
+| Trim leading whitespace | `--trim`   |
+| JSON output for scripts | `--json`   |
 
 ## Common Patterns
 
@@ -196,8 +191,8 @@ rg -n -i -C 1 "config\\." .
 
 Use `rg -S` for smart-case matching:
 
--   `rg -S "todo"` matches `TODO`, `Todo`, and `todo`
--   `rg -S "TODO"` matches `TODO` only
+- `rg -S "todo"` matches `TODO`, `Todo`, and `todo`
+- `rg -S "TODO"` matches `TODO` only
 
 Use `rg -s` when you always need case-sensitive matching:
 
@@ -209,32 +204,31 @@ rg -n -s "ERROR" src
 
 1. **Use specific globs** instead of searching all files:
 
-    ```sh
-    rg -n --glob "src/**/*.rs" "fn deploy" .
-    ```
+   ```sh
+   rg -n --glob "src/**/*.rs" "fn deploy" .
+   ```
 
 2. **Use type filters** for language filtering:
 
-    ```sh
-    rg -n -t python "class MyClass" .
-    ```
+   ```sh
+   rg -n -t python "class MyClass" .
+   ```
 
 3. **Respect ignore files** by default:
-
-    - Skips `node_modules`, `.git`, and build artefacts automatically
-    - Use `--no-ignore` only when you need ignored directories
+   - Skips `node_modules`, `.git`, and build artefacts automatically
+   - Use `--no-ignore` only when you need ignored directories
 
 4. **Limit nearby lines** in large searches:
 
-    ```sh
-    rg -n "needle" src
-    ```
+   ```sh
+   rg -n "needle" src
+   ```
 
 5. **Use literal matching** when searching exact strings:
 
-    ```sh
-    rg -n -F "const.ERROR_MSG" src
-    ```
+   ```sh
+   rg -n -F "const.ERROR_MSG" src
+   ```
 
 ## Advanced Examples
 
@@ -266,45 +260,40 @@ rg -n -i -C 1 "hardcoded.*password|api.*key.*=|token.*=" .
 
 ## Comparison with ast-grep
 
-| Feature | `rg` | ast-grep |
-| --- | --- | --- |
-| **Speed** | Very fast | Fast |
-| **Pattern type** | Regex and literal text | AST queries |
-| **File filtering** | Glob, type, size | Language-aware source files |
-| **Language support** | All text files | Supported programming languages |
-| **Installation** | Usually pre-installed | Requires binary |
-| **Learning curve** | Regex knowledge | AST query knowledge |
-| **Use cases** | General code search, prose, config | Syntax-aware code queries |
+| Feature              | `rg`                               | ast-grep                        |
+| -------------------- | ---------------------------------- | ------------------------------- |
+| **Speed**            | Very fast                          | Fast                            |
+| **Pattern type**     | Regex and literal text             | AST queries                     |
+| **File filtering**   | Glob, type, size                   | Language-aware source files     |
+| **Language support** | All text files                     | Supported programming languages |
+| **Installation**     | Usually pre-installed              | Requires binary                 |
+| **Learning curve**   | Regex knowledge                    | AST query knowledge             |
+| **Use cases**        | General code search, prose, config | Syntax-aware code queries       |
 
 ## Advanced `code_search`
 
-`code_search` is visible only in the advanced profile. It accepts required
-`query` and optional `path`, `file_types`, `result_types`, and `max_results`.
-Omitting `result_types` enables all four categories:
+`code_search` is visible only in the advanced profile. It accepts required `query` and optional `path`, `file_types`,
+`result_types`, and `max_results`. Omitting `result_types` enables all four categories:
 
-| Result type | Meaning |
-| --- | --- |
-| `definition` | A recognised declaration whose name exactly matches the query. |
-| `usage` | An exact syntactic identifier outside recognised declaration names. It is not a resolved reference. |
-| `text` | A literal match in prose, configuration, comments, strings, or otherwise unclassified content. |
-| `path` | A matching existing filename or path. |
+| Result type  | Meaning                                                                                             |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| `definition` | A recognised declaration whose name exactly matches the query.                                      |
+| `usage`      | An exact syntactic identifier outside recognised declaration names. It is not a resolved reference. |
+| `text`       | A literal match in prose, configuration, comments, strings, or otherwise unclassified content.      |
+| `path`       | A matching existing filename or path.                                                               |
 
-A wholly lower-case query matches without case sensitivity. A query containing
-an upper-case character is case-sensitive. Query punctuation is literal. A
-query containing `|` is split into trimmed literal alternatives (empty terms
-are dropped), so `tokio|async-std|runtime` matches any of the three terms;
-each term is escaped as a literal, so `|` is the only character with special
-meaning.
+A wholly lower-case query matches without case sensitivity. A query containing an upper-case character is
+case-sensitive. Query punctuation is literal. A query containing `|` is split into trimmed literal alternatives (empty
+terms are dropped), so `tokio|async-std|runtime` matches any of the three terms; each term is escaped as a literal, so
+`|` is the only character with special meaning.
 
 ```json
 {"query":"ToolRegistration","path":"crates/codegen/vtcode-core/src/tools","file_types":["rust"],"result_types":["definition","usage"],"max_results":20}
 ```
 
-Each search component is bounded. `truncated: true` means further candidates
-may exist, without claiming an exact repository-wide total. Narrow `path`,
-`file_types`, or `result_types` in another independent call. Use
-`exec_command` or the specialised ast-grep skill for arbitrary structural
-patterns.
+Each search component is bounded. `truncated: true` means further candidates may exist, without claiming an exact
+repository-wide total. Narrow `path`, `file_types`, or `result_types` in another independent call. Use `exec_command` or
+the specialised ast-grep skill for arbitrary structural patterns.
 
 ## Troubleshooting
 
@@ -312,8 +301,7 @@ patterns.
 
 1. Check regex syntax and escape special characters.
 2. Verify the path exists.
-3. Check whether files are ignored by `.gitignore`; use `--no-ignore` only
-   when that is intentional.
+3. Check whether files are ignored by `.gitignore`; use `--no-ignore` only when that is intentional.
 4. Add `-C 1` to see nearby lines.
 
 ### Too Many Results
@@ -331,8 +319,7 @@ patterns.
 
 ## Return Format
 
-Text search returns normal shell output from `exec_command`. Use concise shell
-formats for AI-facing work:
+Text search returns normal shell output from `exec_command`. Use concise shell formats for AI-facing work:
 
 ```sh
 rg -n "TODO" src
@@ -345,8 +332,7 @@ rg --json "TODO" src | head -c 4000
 ### Inspecting Matches
 
 1. Use `rg` through `exec_command.cmd` to locate text.
-2. Use `sed`, `cat`, or another shell command through `exec_command.cmd` to
-   inspect full context.
+2. Use `sed`, `cat`, or another shell command through `exec_command.cmd` to inspect full context.
 3. Use `apply_patch` to make changes.
 
 ### Scripted Search
@@ -359,5 +345,5 @@ todos = [line for line in results.stdout.splitlines() if "TODO" in line]
 
 ## See Also
 
--   [AGENTS.md](../../AGENTS.md) for system prompt integration
--   [Tool Registry](../modules/vtcode_docs_map.md) for tool execution
+- [AGENTS.md](../../AGENTS.md) for system prompt integration
+- [Tool Registry](../modules/vtcode_docs_map.md) for tool execution

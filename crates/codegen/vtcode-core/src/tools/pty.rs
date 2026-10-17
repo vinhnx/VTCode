@@ -49,6 +49,19 @@ pub(crate) struct PtyOutputStats {
     pub spool_integrity: Option<crate::tools::output_spooler::SpoolIntegrity>,
 }
 
+/// Termination behavior used when closing a PTY session.
+///
+/// `Graceful` writes `exit\n` and gives the child a SIGTERM grace window so
+/// in-session closes let it clean up. `Immediate` goes straight to a process-
+/// group SIGKILL: user-initiated program exit must not park the terminal on a
+/// 500 ms grace window per live session when the OS reaps any remainder at
+/// process exit anyway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PtyCloseMode {
+    Graceful,
+    Immediate,
+}
+
 // ── Shared types (headless) ─────────────────────────────────────────────────
 
 #[cfg(not(feature = "tui"))]
@@ -65,6 +78,8 @@ mod headless_pty {
     use crate::tools::types::VTCodePtySession;
     use crate::utils::path::ensure_path_within_workspace;
     use crate::zsh_exec_bridge::ZshExecBridgeSession;
+
+    use super::PtyCloseMode;
 
     pub use portable_pty::PtySize;
 
@@ -182,7 +197,13 @@ mod headless_pty {
             Err(anyhow!("PTY support disabled in headless build"))
         }
 
+        pub fn close_session_with_mode(&self, _session_id: &str, _mode: PtyCloseMode) -> Result<VTCodePtySession> {
+            Err(anyhow!("PTY support disabled in headless build"))
+        }
+
         pub fn terminate_all_sessions(&self) {}
+
+        pub fn terminate_all_sessions_with_mode(&self, _mode: PtyCloseMode) {}
     }
 
     #[derive(Clone, Default)]

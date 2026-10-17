@@ -1,16 +1,19 @@
 # VT Code Sandbox Deep Dive
 
-This document describes VT Code's sandboxing implementation, inspired by the [Codex sandboxing model](https://pierce.dev/notes/a-deep-dive-on-agent-sandboxes) and the AI sandbox field guide.
+This document describes VT Code's sandboxing implementation, inspired by the
+[Codex sandboxing model](https://pierce.dev/notes/a-deep-dive-on-agent-sandboxes) and the AI sandbox field guide.
 
 ## Design Philosophy
 
-VT Code implements **configurable sandbox execution with selective escalation**. Sandboxing is opt-in via `[sandbox].enabled = true`; when enabled, commands flow through a centralized execution system that decides whether to run commands raw, under macOS Seatbelt, or through Linux Landlock + seccomp.
+VT Code implements **configurable sandbox execution with selective escalation**. Sandboxing is opt-in via
+`[sandbox].enabled = true`; when enabled, commands flow through a centralized execution system that decides whether to
+run commands raw, under macOS Seatbelt, or through Linux Landlock + seccomp.
 
-Runtime enforcement for shell execution is applied in the active
-`exec_command` path after loading `[sandbox]` from `vtcode.toml`, before PTY
-process launch.
+Runtime enforcement for shell execution is applied in the active `exec_command` path after loading `[sandbox]` from
+`vtcode.toml`, before PTY process launch.
 
 Key design principles:
+
 1. **Platform-specific implementations unified behind a common policy abstraction**
 2. **Configurable sandbox execution with selective escalation when needed**
 3. **Session-based trust lists that reduce approval fatigue**
@@ -21,13 +24,16 @@ Key design principles:
 VT Code supports three main isolation levels (`SandboxPolicy`):
 
 ### ReadOnly
+
 - Can read files and answer questions
 - No file writes except `/dev/null`
 - No network access
 - Conservative resource limits (512MB memory, 64 PIDs)
-- Harness compatibility: mutating `run_pty_cmd` workflows are adaptively upgraded to `WorkspaceWrite` to avoid blocking normal agent edit/build loops.
+- Harness compatibility: mutating `run_pty_cmd` workflows are adaptively upgraded to `WorkspaceWrite` to avoid blocking
+  normal agent edit/build loops.
 
 ### WorkspaceWrite policy
+
 - Read files everywhere
 - Write only to workspace roots
 - **`.git` directories are read-only** (agents can't corrupt git history)
@@ -35,6 +41,7 @@ VT Code supports three main isolation levels (`SandboxPolicy`):
 - Sensitive paths blocked by default
 
 ### DangerFullAccess
+
 - No restrictions
 - Use with extreme caution
 
@@ -68,10 +75,12 @@ VT Code uses Apple's Seatbelt framework (`/usr/bin/sandbox-exec`) with dynamical
 ### Linux Landlock + seccomp
 
 On Linux, VT Code uses:
+
 - **Landlock** (Linux 5.13+): Capability-based filesystem access control
 - **seccomp-BPF**: System call filtering with programmable filters
 
 The sandbox helper receives:
+
 1. `--sandbox-policy`: Landlock filesystem rules
 2. `--seccomp-profile`: Blocked syscalls list
 3. `--resource-limits`: Memory, PID, disk, CPU limits
@@ -83,20 +92,19 @@ The sandbox helper receives:
 Following Codex: "Completely clear the environment and rebuild it with only the variables you actually want."
 
 **Filtered variables** (removed from sandbox):
+
 - API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, etc.
 - Cloud credentials: `AWS_*`, `AZURE_*`, `GOOGLE_*`
 - Dynamic linker: `LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`
 - Database passwords: `DATABASE_URL`, `PGPASSWORD`, `MYSQL_PWD`
 
-The same filter is applied to provider-owned child processes, including local
-Ollama/LM Studio/llama.cpp helpers and custom provider authentication
-commands. Copilot and its optional `gh` status probe use narrow, explicit
-GitHub-auth exceptions so they can complete their intended login flow without
-inheriting unrelated provider credentials. Command-specific environment
-overrides are applied only after this boundary and cannot restore filtered
-names.
+The same filter is applied to provider-owned child processes, including local Ollama/LM Studio/llama.cpp helpers and
+custom provider authentication commands. Copilot and its optional `gh` status probe use narrow, explicit GitHub-auth
+exceptions so they can complete their intended login flow without inheriting unrelated provider credentials.
+Command-specific environment overrides are applied only after this boundary and cannot restore filtered names.
 
 **Preserved variables**:
+
 - Shell basics: `PATH`, `HOME`, `USER`, `SHELL`, `TERM`
 - Build tools: `CARGO_HOME`, `RUSTUP_HOME`, `GOPATH`
 - Temp directories: `TMPDIR`, `TEMP`, `TMP`
@@ -104,6 +112,7 @@ names.
 ### Sandbox Markers
 
 Child processes receive environment markers so downstream tools know they're sandboxed:
+
 - `VTCODE_SANDBOX_ACTIVE=1`
 - `VTCODE_SANDBOX_NETWORK_DISABLED=1` (when network is blocked)
 - `VTCODE_SANDBOX_TYPE=MacosSeatbelt` (or `LinuxLandlock`)
@@ -112,11 +121,13 @@ Child processes receive environment markers so downstream tools know they're san
 ### Parent Death Signal (Linux)
 
 Using `prctl(PR_SET_PDEATHSIG, SIGKILL)`:
+
 > "Ensures sandboxed children die if the main process gets killed - you don't want orphaned processes running around."
 
 ### Sensitive Path Blocking
 
 Default blocked paths:
+
 - `~/.ssh` - SSH keys
 - `~/.aws` - AWS credentials
 - `~/.config/gcloud` - Google Cloud
@@ -130,6 +141,7 @@ Default blocked paths:
 ### .git Directory Protection
 
 Following the Codex pattern:
+
 > "Agents can modify your workspace but can't mess up your git history."
 
 All `.git` directories within writable roots are explicitly denied write access in the Seatbelt profile.
@@ -137,6 +149,7 @@ All `.git` directories within writable roots are explicitly denied write access 
 ### Seccomp Syscall Blocking
 
 Dangerous syscalls blocked in sandbox:
+
 - `ptrace` - Debugging/tracing (sandbox escape risk)
 - `mount`, `umount` - Filesystem namespace changes
 - `init_module`, `finit_module` - Kernel module loading
@@ -149,6 +162,7 @@ Dangerous syscalls blocked in sandbox:
 ### Resource Limits
 
 Conservative limits for untrusted code:
+
 - Memory: 512MB
 - PIDs: 64 (prevents fork bombs)
 - Disk: 1GB writes
@@ -189,6 +203,7 @@ let blocked = test_network_blocked(&policy, Path::new("/tmp"), None).await?;
 ## Command Whitelisting
 
 The `ExecPolicyManager` coordinates:
+
 1. **Policy rules**: Prefix-based matching for known commands
 2. **Trusted patterns**: Session-scoped amendments
 3. **Heuristics**: Safe commands (`ls`, `cat`) auto-allowed, dangerous commands (`rm`, `sudo`) forbidden

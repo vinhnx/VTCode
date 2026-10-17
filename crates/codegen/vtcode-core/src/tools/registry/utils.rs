@@ -32,10 +32,11 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
         *stderr = json!(s.trim_end());
     }
 
-    if obj
-        .get("content_kind")
-        .and_then(|value| value.as_str())
-        .is_some_and(|value| value == "text")
+    if !obj.contains_key("path")
+        && obj
+            .get("content_kind")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| value == "text")
         && let Some(content) = obj.get_mut("content")
         && let Some(s) = content.as_str()
     {
@@ -72,17 +73,6 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
     }
     obj.remove("raw_output");
     val
-}
-
-pub(super) fn lines_match(content_lines: &[&str], expected_lines: &[&str]) -> bool {
-    if content_lines.len() != expected_lines.len() {
-        return false;
-    }
-
-    content_lines
-        .iter()
-        .zip(expected_lines.iter())
-        .all(|(content_line, expected_line)| content_line.trim() == expected_line.trim())
 }
 
 #[cfg(test)]
@@ -218,13 +208,13 @@ mod tests {
     }
 
     #[test]
-    fn trims_trailing_newline_from_text_content() {
+    fn preserves_complete_source_text_including_trailing_newline() {
         let normalized = normalize_tool_output(json!({
             "content": "via alias\n",
             "path": "note.txt",
             "content_kind": "text"
         }));
 
-        assert_eq!(normalized["content"], "via alias");
+        assert_eq!(normalized["content"], "via alias\n");
     }
 }

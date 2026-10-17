@@ -15,6 +15,7 @@ use hashbrown::HashMap;
 #[cfg(test)]
 use std::ffi::OsString;
 use std::path::PathBuf;
+use vtcode_commons::validation::NonEmptySlice;
 
 /// Known-safe shell binaries that can be used as shell overrides.
 /// This list is intentionally restrictive to prevent prompt-injected LLMs
@@ -112,11 +113,9 @@ impl CommandTool {
     )]
     async fn prepare_invocation(&self, input: &EnhancedTerminalInput) -> Result<CommandInvocation> {
         let command = &input.command;
-        if command.is_empty() {
-            return Err(anyhow!("Command cannot be empty"));
-        }
+        let parsed = NonEmptySlice::from_slice(command).ok_or_else(|| anyhow!("Command cannot be empty"))?;
 
-        let program = &command[0];
+        let program = parsed.first();
         // Validate that the executable is non-empty after trimming
         if program.trim().is_empty() {
             return Err(anyhow!("Command executable cannot be empty"));
@@ -172,7 +171,7 @@ impl CommandTool {
             // Program provided as absolute/relative path: run directly
             CommandInvocation {
                 program: program.to_owned(),
-                args: command[1..].to_vec(),
+                args: parsed.rest().to_vec(),
                 display: input.raw_command.clone().unwrap_or_else(|| format_command(command)),
             }
         } else {
@@ -231,17 +230,17 @@ fn format_command(command: &[String]) -> String {
 }
 
 fn is_risky_command(command: &[String]) -> bool {
-    if command.is_empty() {
+    let Some(parsed) = NonEmptySlice::from_slice(command) else {
         return false;
-    }
+    };
 
     // Centralized detection for dangerous command patterns (git/rm/mkfs/dd/etc.).
     if command_might_be_dangerous(command) {
         return true;
     }
 
-    let program = command[0].as_str();
-    let args = &command[1..];
+    let program = parsed.first().as_str();
+    let args = parsed.rest();
 
     // Supplemental checks outside centralized detection coverage.
     if program == "rm" && args.iter().any(|a| a == "/") {

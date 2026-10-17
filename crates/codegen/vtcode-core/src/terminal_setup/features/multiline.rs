@@ -79,8 +79,9 @@ chars = "\n"
 /// Zed: JSON keybinding configuration
 fn generate_zed_config() -> String {
     r#"{
+  "context": "Terminal",
   "bindings": {
-    "shift-enter": "editor::Newline"
+    "shift-enter": ["terminal::SendText", "\n"]
   }
 }
 "#
@@ -221,5 +222,12 @@ mod tests {
     fn test_unknown_terminal_error() {
         let result = generate_config(TerminalType::Unknown);
         result.unwrap_err();
+    }
+    #[test]
+    fn zed_binding_sends_literal_newline_only_in_terminal_context() {
+        let value: serde_json::Value = serde_json::from_str(&generate_config(TerminalType::Zed).unwrap()).unwrap();
+        assert_eq!(value["context"], "Terminal");
+        assert_eq!(value["bindings"]["shift-enter"], serde_json::json!(["terminal::SendText", "\n"]));
+        assert_eq!(value["bindings"].as_object().unwrap().len(), 1);
     }
 }

@@ -128,7 +128,10 @@ impl FilePalette {
         !self.filtered_files.is_empty() || !self.all_files.is_empty()
     }
 
+    /// Whether the current listing exceeds the panel's visible-row budget, so the
+    /// header can show a truncation indicator. The list still scrolls through every
+    /// entry; this only drives the count affordance.
     pub fn has_more_items(&self) -> bool {
-        false
+        self.filtered_files.len() > crate::tui::config::constants::ui::INLINE_LIST_MAX_ROWS
     }
 }

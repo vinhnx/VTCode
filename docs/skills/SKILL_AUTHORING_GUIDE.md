@@ -20,10 +20,9 @@ By default this creates:
 
 ## Write `SKILL.md`
 
-Use the core Agent Skills frontmatter fields. VT Code also accepts the
-client-side `disable-model-invocation` flag when a skill should stay callable
-through explicit harness paths but should not be advertised in the model-facing
-startup catalog.
+Use the core Agent Skills frontmatter fields. VT Code also accepts the client-side `disable-model-invocation` flag when
+a skill should stay callable through explicit harness paths but should not be advertised in the model-facing startup
+catalog.
 
 ```yaml
 ---
@@ -69,7 +68,8 @@ Summarize the workflow and outcome.
 vtcode skills validate ./.agents/skills/my-skill
 ```
 
-Validation fails if `SKILL.md` contains unsupported fields such as `version`, `author`, `when-to-use`, `when-not-to-use`, `model`, `mode`, `context`, `agent`, `network`, or `permissions`.
+Validation fails if `SKILL.md` contains unsupported fields such as `version`, `author`, `when-to-use`,
+`when-not-to-use`, `model`, `mode`, `context`, `agent`, `network`, or `permissions`.
 
 ## Routing Guidance
 

@@ -10,6 +10,8 @@ use tokio::process::Child;
 use crate::process_env::{sanitize_std_command_environment, sanitize_tokio_command_environment};
 use vtcode_config::constants::{env_vars, urls};
 
+use super::common::override_base_url;
+
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 // ---------------------------------------------------------------------------
@@ -78,7 +80,9 @@ impl LocalProvider {
     }
 
     fn base_url(self) -> String {
-        resolve_base_url(self.default_base_url(), self.base_url_env())
+        // Shared trim/empty-filter chain: no explicit override exists at
+        // this call site, so resolution is env-first and default-fallback.
+        override_base_url(self.default_base_url(), None, Some(self.base_url_env()))
     }
 
     fn host_root(self) -> String {
@@ -695,13 +699,6 @@ fn caps_llamacpp() -> LocalServerCapabilities {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn resolve_base_url(default: &str, env_var: &str) -> String {
-    std::env::var(env_var)
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| default.to_string())
-}
 
 /// Returns true when `base_url` points at a loopback/local endpoint.
 ///

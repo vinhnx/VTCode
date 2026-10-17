@@ -26,7 +26,6 @@ impl ToolRegistry {
         let patch = crate::tools::editing::Patch::parse(&patch_input.text)?;
         let mutation_paths = self.patch_mutation_paths(&patch).await?;
         let _mutation_leases = self.acquire_patch_mutations(&mutation_paths).await;
-        let planned_writes = self.planned_patch_writes(&patch).await?;
         for operation in patch.operations() {
             if let Some(conflict) = self
                 .detect_patch_operation_conflict(operation, override_snapshot.clone())
@@ -36,8 +35,16 @@ impl ToolRegistry {
             }
         }
 
+        let inspection = self.edited_file_monitor_ref().source_inspection();
+        let inspection_plan = inspection.prepare_patch(&patch, self.workspace_root()).await?;
+        let planned_writes = self.planned_patch_writes(&patch).await?;
+
         let diff = self.patch_diff_previews(&planned_writes);
         let results = patch.apply(&self.workspace_root_owned()).await?;
+        inspection.commit_patch(
+            inspection_plan,
+            crate::tools::source_inspection::call_key(crate::config::constants::tools::APPLY_PATCH, &args),
+        );
         for write in planned_writes {
             let (path, result) = match write {
                 PlannedPatchWrite::Text { path, content, .. } => {
@@ -194,24 +201,9 @@ impl ToolRegistry {
             }
             crate::tools::editing::PatchOperation::UpdateFile { path, new_path, chunks } => {
                 let canonical_path = self.file_ops_tool().normalize_user_path(path).await?;
-                let source_content =
-                    if let Some(content) = self.edited_file_monitor_ref().tracked_read_text(&canonical_path).await {
-                        content
-                    } else {
-                        match fs::read_to_string(&canonical_path).await {
-                            Ok(content) => content,
-                            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                                return Err(anyhow!(crate::tools::editing::PatchError::MissingFile {
-                                    path: canonical_path.display().to_string(),
-                                }));
-                            }
-                            Err(err) => {
-                                return Err(err).with_context(|| {
-                                    format!("Failed to read patch source content for {}", canonical_path.display())
-                                });
-                            }
-                        }
-                    };
+                let source_content = fs::read_to_string(&canonical_path)
+                    .await
+                    .with_context(|| format!("Failed to read patch source {}", canonical_path.display()))?;
 
                 let rendered = crate::tools::editing::patch::render_patch_update_content(
                     &canonical_path,
@@ -220,7 +212,7 @@ impl ToolRegistry {
                     path,
                 )
                 .await
-                .map_err(|err| anyhow!("Failed to plan patch output for {}: {err}", canonical_path.display()))?;
+                .with_context(|| format!("Failed to plan patch output for {}", canonical_path.display()))?;
 
                 let mut writes = Vec::new();
                 if let Some(destination) = new_path.as_ref().filter(|candidate| candidate.as_str() != path.as_str()) {

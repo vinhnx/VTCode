@@ -34,8 +34,7 @@ pub struct ShellLineStyles {
 
 impl ShellLineStyles {
     /// Styles derived from the process-global UI theme (used by PTY live view
-    /// when no session is available). Mirrors
-    /// `PtyLineStyles::new()` in the binary.
+    /// when no session is available). The binary's PTY stream reuses this type.
     pub fn new() -> Self {
         let theme_styles = crate::theme::active_styles();
         Self::from_ansi_styles(theme_styles.primary, theme_styles.pty_output)
@@ -92,7 +91,7 @@ impl Default for ShellLineStyles {
     }
 }
 
-fn is_bash_keyword(token: &str) -> bool {
+pub fn is_bash_keyword(token: &str) -> bool {
     matches!(
         token,
         "if" | "then"
@@ -118,7 +117,7 @@ fn is_bash_keyword(token: &str) -> bool {
     )
 }
 
-fn is_command_separator(token: &str) -> bool {
+pub fn is_command_separator(token: &str) -> bool {
     matches!(token, "|" | "||" | "&&" | ";" | ";;" | "&")
 }
 

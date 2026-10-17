@@ -15,7 +15,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
 
     match actual_tool_name {
         name if name == tool_names::EXEC_COMMAND => Cow::Borrowed("Run command"),
-        name if name == tool_names::WRITE_STDIN => Cow::Borrowed("Send command input"),
+        name if name == tool_names::WRITE_STDIN => Cow::Borrowed(write_stdin_action_label(args)),
         name if name == tool_names::RUN_PTY_CMD => Cow::Borrowed("Run command"),
         name if name == tool_names::EXECUTE_CODE => Cow::Borrowed("Run code"),
         name if name == tool_names::GET_ERRORS => Cow::Borrowed("List errors"),
@@ -38,18 +38,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
         name if name == tool_names::SEND_PTY_INPUT => Cow::Borrowed("Send command input"),
         name if name == tool_names::CLOSE_PTY_SESSION => Cow::Borrowed("Close command session"),
         name if name == tool_names::RESIZE_PTY_SESSION => Cow::Borrowed("Resize command session"),
-        name if name == tool_names::UNIFIED_EXEC => match tool_intent::command_session_action(args).unwrap_or("run") {
-            "run" => Cow::Borrowed("Run command"),
-            "write" => Cow::Borrowed("Send command input"),
-            "poll" => Cow::Borrowed("Read command session"),
-            "wait" => Cow::Borrowed("Wait for command session"),
-            "continue" => Cow::Borrowed("Continue command session"),
-            "inspect" => Cow::Borrowed("Inspect command output"),
-            "list" => Cow::Borrowed("List command sessions"),
-            "close" => Cow::Borrowed("Close command session"),
-            "code" => Cow::Borrowed("Run code"),
-            _ => Cow::Borrowed("Exec action"),
-        },
+        name if name == tool_names::UNIFIED_EXEC => Cow::Borrowed(unified_exec_action_label(args)),
         name if name == tool_names::CODE_SEARCH => Cow::Borrowed("Search code"),
         name if name == tool_names::UNIFIED_FILE => match tool_intent::file_operation_action(args).unwrap_or("read") {
             "read" => Cow::Borrowed("Read file"),
@@ -64,6 +53,73 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> Cow<'static, str> {
         "fetch" | tool_names::WEB_FETCH | tool_names::FETCH_URL | tool_names::DEFUDDLE_FETCH => Cow::Borrowed("Fetch"),
         _ => Cow::Owned(humanize_tool_name(actual_tool_name)),
     }
+}
+
+pub fn unified_exec_action_label(args: &Value) -> &'static str {
+    let action = tool_intent::command_session_action(args).unwrap_or("run");
+    if action.eq_ignore_ascii_case("run") {
+        "Run command"
+    } else if action.eq_ignore_ascii_case("write") {
+        "Send command input"
+    } else if action.eq_ignore_ascii_case("poll") {
+        "Read command session"
+    } else if action.eq_ignore_ascii_case("wait") {
+        "Wait for command session"
+    } else if action.eq_ignore_ascii_case("continue") {
+        "Continue command session"
+    } else if action.eq_ignore_ascii_case("inspect") {
+        "Inspect command output"
+    } else if action.eq_ignore_ascii_case("list") {
+        "List command sessions"
+    } else if action.eq_ignore_ascii_case("close") {
+        "Close command session"
+    } else if action.eq_ignore_ascii_case("code") {
+        "Run code"
+    } else {
+        "Exec action"
+    }
+}
+
+pub fn write_stdin_action_label(args: &Value) -> &'static str {
+    if let Some(action) = args.get("action").and_then(Value::as_str) {
+        if action.eq_ignore_ascii_case("wait") {
+            return "Wait for command session";
+        }
+        if action.eq_ignore_ascii_case("poll") {
+            return "Read command session";
+        }
+        if action.eq_ignore_ascii_case("inspect") {
+            return "Inspect command output";
+        }
+        if action.eq_ignore_ascii_case("close") {
+            return "Close command session";
+        }
+        if action.eq_ignore_ascii_case("terminate") {
+            return "Terminate command session";
+        }
+        if action.eq_ignore_ascii_case("write") {
+            // Match `write_stdin_dispatch`: explicit write with empty/missing
+            // input polls instead of sending, so label it as a read.
+            return if has_session_input(args) {
+                "Send command input"
+            } else {
+                "Read command session"
+            };
+        }
+    }
+    if has_session_input(args) {
+        "Send command input"
+    } else {
+        // A session_id-only follow-up polls output; calling it "Send" misleads
+        // (screenshot 2026-10-02: pure waits rendered as sends).
+        "Read command session"
+    }
+}
+
+fn has_session_input(args: &Value) -> bool {
+    ["chars", "input", "text"]
+        .iter()
+        .any(|key| args.get(key).and_then(Value::as_str).is_some_and(|s| !s.is_empty()))
 }
 
 fn normalize_tool_name(tool_name: &str) -> &str {
@@ -102,5 +158,78 @@ mod tests {
     #[test]
     fn code_search_uses_stable_label() {
         assert_eq!(tool_action_label(tools::CODE_SEARCH, &json!({"query": "Widget"})), "Search code");
+    }
+
+    #[test]
+    fn write_stdin_distinguishes_wait_from_send() {
+        assert_eq!(
+            tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-wait-1", "action": "wait"})),
+            "Wait for command session"
+        );
+        assert_eq!(
+            tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-send-2", "chars": "y\n"})),
+            "Send command input"
+        );
+        assert_eq!(tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-poll-3"})), "Read command session");
+    }
+
+    #[test]
+    fn unified_exec_wait_is_case_insensitive() {
+        for action in ["wait", "Wait", "WAIT", "WaIt"] {
+            assert_eq!(
+                tool_action_label(tools::UNIFIED_EXEC, &json!({"session_id": "run-abc", "action": action})),
+                "Wait for command session",
+                "action {action} must map case-insensitively"
+            );
+        }
+    }
+
+    #[test]
+    fn write_stdin_explicit_action_wins_over_chars() {
+        let chars = "y\n";
+        assert_eq!(
+            tool_action_label(
+                tools::WRITE_STDIN,
+                &json!({"session_id": "run-explicit-wait", "action": "wait", "chars": chars})
+            ),
+            "Wait for command session"
+        );
+        assert_eq!(
+            tool_action_label(
+                tools::WRITE_STDIN,
+                &json!({"session_id": "run-explicit-write", "action": "write", "chars": chars})
+            ),
+            "Send command input"
+        );
+    }
+
+    #[test]
+    fn write_stdin_empty_vs_whitespace_chars_boundary() {
+        assert_eq!(
+            tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-empty", "chars": ""})),
+            "Read command session"
+        );
+        assert_eq!(
+            tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-space", "chars": "   "})),
+            "Send command input",
+            "whitespace-only chars are still stdin bytes"
+        );
+    }
+
+    #[test]
+    fn write_stdin_explicit_write_without_input_reads_as_poll() {
+        // Matches `write_stdin_dispatch`: explicit write with empty/missing
+        // input executes as Poll, so the label must not claim a send.
+        assert_eq!(
+            tool_action_label(
+                tools::WRITE_STDIN,
+                &json!({"session_id": "run-write-empty", "action": "write", "chars": ""})
+            ),
+            "Read command session"
+        );
+        assert_eq!(
+            tool_action_label(tools::WRITE_STDIN, &json!({"session_id": "run-write-none", "action": "write"})),
+            "Read command session"
+        );
     }
 }

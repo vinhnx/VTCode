@@ -4,10 +4,11 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader};
+use tokio::io::BufReader;
 use tokio::process::Command;
 
-use crate::tools::ast_grep_installer::AstGrepStatus;
+use super::grep_backend::{BoundedRecordRead, kill_and_reap_search_child, read_bounded_record};
+use crate::tools::ast_grep_binary::resolve_ast_grep_binary_from_env_and_fs;
 use crate::tools::ast_grep_language::AstGrepLanguage;
 use vtcode_commons::canonicalize;
 use vtcode_commons::exclusions::is_sensitive_file;
@@ -42,53 +43,6 @@ pub(crate) struct DeclarationSearchOutcome {
     pub files: Vec<DeclarationFileRecord>,
     pub stream_complete: bool,
     pub truncated: bool,
-}
-
-async fn kill_and_reap_declaration_child(child: &mut tokio::process::Child) {
-    let _ = child.start_kill();
-    let _ = child.wait().await;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BoundedRecordRead {
-    Record,
-    Eof,
-    Exhausted,
-}
-
-async fn read_bounded_record<R: AsyncBufRead + Unpin>(
-    reader: &mut R,
-    record: &mut Vec<u8>,
-    bytes_read: &mut usize,
-    byte_cap: usize,
-) -> std::io::Result<BoundedRecordRead> {
-    loop {
-        let available = reader.fill_buf().await?;
-        if available.is_empty() {
-            return Ok(if record.is_empty() {
-                BoundedRecordRead::Eof
-            } else {
-                BoundedRecordRead::Record
-            });
-        }
-        if *bytes_read >= byte_cap {
-            return Ok(BoundedRecordRead::Exhausted);
-        }
-
-        let remaining = byte_cap - *bytes_read;
-        let bounded = &available[..available.len().min(remaining)];
-        let consumed = bounded
-            .iter()
-            .position(|byte| *byte == b'\n')
-            .map_or(bounded.len(), |index| index + 1);
-        let record_complete = bounded.get(consumed.saturating_sub(1)) == Some(&b'\n');
-        record.extend_from_slice(&bounded[..consumed]);
-        reader.consume(consumed);
-        *bytes_read += consumed;
-        if record_complete {
-            return Ok(BoundedRecordRead::Record);
-        }
-    }
 }
 
 fn smart_case_eq(left: &str, query: &str) -> bool {
@@ -137,11 +91,9 @@ pub(crate) async fn search_declarations_bounded(
     languages: &[AstGrepLanguage],
     candidate_cap: usize,
 ) -> Result<DeclarationSearchOutcome> {
-    let binary = match AstGrepStatus::check() {
-        AstGrepStatus::Available { binary, .. } => binary,
-        AstGrepStatus::NotFound => bail!("definition search is unavailable"),
-        AstGrepStatus::Error { .. } => bail!("definition search is unavailable"),
-    };
+    // Execute the requested operation directly; a synchronous version probe
+    // adds an unowned child before the cancellable search even starts.
+    let binary = resolve_ast_grep_binary_from_env_and_fs().context("definition search is unavailable")?;
     let mut command_paths = outline_paths(workspace_root, resolved_path, languages).peekable();
     let mut bytes_read = 0usize;
     let mut retained = 0usize;
@@ -151,6 +103,7 @@ pub(crate) async fn search_declarations_bounded(
         let command_args = next_outline_path_batch(&binary, &mut command_paths)?;
         let mut command = Command::new(&binary);
         command
+            .kill_on_drop(true)
             .current_dir(workspace_root)
             .env("RAYON_NUM_THREADS", "1")
             .args(CODE_SEARCH_OUTLINE_FIXED_ARGS)
@@ -160,7 +113,7 @@ pub(crate) async fn search_declarations_bounded(
 
         let mut child = command.spawn().context("failed to run definition search")?;
         let Some(stdout) = child.stdout.take() else {
-            kill_and_reap_declaration_child(&mut child).await;
+            kill_and_reap_search_child(&mut child).await;
             bail!("failed to capture definition search output");
         };
         let mut reader = BufReader::new(stdout);
@@ -175,7 +128,7 @@ pub(crate) async fn search_declarations_bounded(
                     Ok(read) => read,
                     Err(error) => {
                         drop(reader);
-                        kill_and_reap_declaration_child(&mut child).await;
+                        kill_and_reap_search_child(&mut child).await;
                         return Err(error).context("failed to read definition stream");
                     }
                 };
@@ -191,7 +144,7 @@ pub(crate) async fn search_declarations_bounded(
                 Ok(file) => file,
                 Err(error) => {
                     drop(reader);
-                    kill_and_reap_declaration_child(&mut child).await;
+                    kill_and_reap_search_child(&mut child).await;
                     return Err(error).context("failed to parse definition stream record");
                 }
             };
@@ -220,7 +173,7 @@ pub(crate) async fn search_declarations_bounded(
         }
         let status = child.wait().await.context("failed to reap definition search process")?;
         if !truncated && !status.success() {
-            bail!("definition search failed");
+            bail!("definition search failed ({status})");
         }
     }
 

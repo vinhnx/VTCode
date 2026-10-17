@@ -1,25 +1,15 @@
+// Shared config defaults retain their existing TUI import paths.
+pub use vtcode_config::constants::ui::{
+    DEFAULT_INLINE_VIEWPORT_ROWS, MODAL_CONTENT_HORIZONTAL_PADDING, MODAL_CONTENT_VERTICAL_PADDING, MODAL_HEIGHT_RATIO,
+    MODAL_INSTRUCTIONS_BULLET, MODAL_INSTRUCTIONS_TITLE, MODAL_LIST_MIN_HEIGHT, MODAL_MAX_HEIGHT_RATIO,
+    MODAL_MAX_WIDTH_RATIO, MODAL_MIN_HEIGHT, MODAL_MIN_WIDTH, MODAL_WIDTH_RATIO, SLASH_PALETTE_CONTENT_PADDING,
+    SLASH_PALETTE_HINT_PRIMARY, SLASH_PALETTE_HINT_SECONDARY, SLASH_PALETTE_HORIZONTAL_MARGIN,
+    SLASH_PALETTE_MIN_HEIGHT, SLASH_PALETTE_MIN_WIDTH, SLASH_PALETTE_TOP_OFFSET,
+};
+
 pub const TOOL_OUTPUT_MODE_COMPACT: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_COMPACT;
 pub const TOOL_OUTPUT_MODE_FULL: &str = vtcode_config::constants::ui::TOOL_OUTPUT_MODE_FULL;
 pub const DEFAULT_REASONING_VISIBLE: bool = vtcode_config::constants::ui::DEFAULT_REASONING_VISIBLE;
-pub const DEFAULT_INLINE_VIEWPORT_ROWS: u16 = 16;
-pub const SLASH_PALETTE_MIN_WIDTH: u16 = 40;
-pub const SLASH_PALETTE_MIN_HEIGHT: u16 = 9;
-pub const SLASH_PALETTE_HORIZONTAL_MARGIN: u16 = 8;
-pub const SLASH_PALETTE_TOP_OFFSET: u16 = 3;
-pub const SLASH_PALETTE_CONTENT_PADDING: u16 = 6;
-pub const SLASH_PALETTE_HINT_PRIMARY: &str = "Type to filter slash commands.";
-pub const SLASH_PALETTE_HINT_SECONDARY: &str = "Press Enter to apply • Esc to dismiss.";
-pub const MODAL_MIN_WIDTH: u16 = 36;
-pub const MODAL_MIN_HEIGHT: u16 = 16;
-pub const MODAL_LIST_MIN_HEIGHT: u16 = 12;
-pub const MODAL_WIDTH_RATIO: f32 = 0.6;
-pub const MODAL_HEIGHT_RATIO: f32 = 0.6;
-pub const MODAL_MAX_WIDTH_RATIO: f32 = 0.9;
-pub const MODAL_MAX_HEIGHT_RATIO: f32 = 0.8;
-pub const MODAL_CONTENT_HORIZONTAL_PADDING: u16 = 8;
-pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
-pub const MODAL_INSTRUCTIONS_TITLE: &str = "";
-pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
 pub const INLINE_HEADER_HEIGHT: u16 = 3;
 pub const INLINE_INPUT_HEIGHT: u16 = 4;
 pub const INLINE_INPUT_PADDING_HORIZONTAL: u16 = 1;
@@ -32,6 +22,10 @@ pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
 pub const INLINE_STACKED_NAVIGATION_PERCENT: u16 = INLINE_NAVIGATION_PERCENT;
 pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
 pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 2;
+pub(crate) const INLINE_TRANSCRIPT_WIDE_GUTTER_MIN_WIDTH: u16 = 120;
+pub(crate) const INLINE_TRANSCRIPT_STANDARD_GUTTER_MIN_WIDTH: u16 = 60;
+pub(crate) const INLINE_TRANSCRIPT_WIDE_GUTTER_COLUMNS: u16 = 2;
+pub(crate) const INLINE_TRANSCRIPT_STANDARD_GUTTER_COLUMNS: u16 = 1;
 
 /// Effective transcript bottom padding rows for a viewport, clamped so at
 /// least one content row stays visible. Single source of truth for the four
@@ -43,6 +37,18 @@ pub fn effective_transcript_bottom_padding(viewport_rows: usize) -> usize {
 pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
 pub const INLINE_PREVIEW_ELLIPSIS: &str = crate::design::constants::INLINE_PREVIEW_ELLIPSIS;
 pub const INLINE_PASTE_COLLAPSE_LINE_THRESHOLD: usize = 10;
+/// Collapse the composer when pasted/typed text reaches this char count,
+/// even when the line count stays below the paste threshold (e.g. minified
+/// JSON, base64 image data, long single-line file-token lists).
+pub const INLINE_INPUT_COMPACT_CHAR_THRESHOLD: usize = 1000;
+/// Collapse the composer when this many image tokens/attachments are present
+/// (`[Image #N]`, `data:image/…`, or image file paths).
+pub const INLINE_INPUT_COMPACT_IMAGE_THRESHOLD: usize = 3;
+/// Collapse the composer when this many `@file` reference tokens are present.
+pub const INLINE_INPUT_COMPACT_FILE_TOKEN_THRESHOLD: usize = 5;
+/// Head/tail snippet sizes for the generic large-input summary preview.
+pub const INLINE_INPUT_COMPACT_PREVIEW_HEAD_CHARS: usize = 120;
+pub const INLINE_INPUT_COMPACT_PREVIEW_TAIL_CHARS: usize = 120;
 pub const INLINE_JSON_TAIL_LINES: usize = 30;
 pub const INLINE_JSON_COLLAPSE_LINE_THRESHOLD: usize = 200;
 pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
@@ -69,6 +75,18 @@ pub const TUI_TRANSCRIPT_MAX_MSGS: usize = 5000;
 /// Number of oldest message lines removed per eviction pass.
 pub const TUI_TRANSCRIPT_EVICT_CHUNK: usize = 1000;
 
+/// Maximum full PTY/tool capture lines retained per `ToolOutputBlock` for the
+/// review overlay. Older capture lines are dropped from the head so a flood
+/// cannot grow without bound; the live transcript is already capped separately.
+pub const TUI_TOOL_OUTPUT_CAPTURE_MAX_LINES: usize = 20_000;
+/// Maximum number of retained full tool/PTY capture blocks.
+pub const TUI_TOOL_OUTPUT_BLOCKS_MAX: usize = 64;
+/// Maximum compact-activity rows retained (FIFO).
+pub const TUI_COMPACT_ACTIVITY_MAX_ENTRIES: usize = 512;
+/// Maximum UTF-8 bytes retained for a collapsed paste's expand payload. Larger
+/// pastes keep a tail so review/expand stays bounded under paste floods.
+pub const TUI_COLLAPSED_PASTE_MAX_BYTES: usize = 256 * 1024;
+
 /// Scroll percentage format in status bar
 pub const SCROLL_INDICATOR_FORMAT: &str = "↕";
 
@@ -90,10 +108,10 @@ pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
 pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
 pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
 pub const INLINE_PTY_PLACEHOLDER: &str = vtcode_config::constants::ui::INLINE_PTY_PLACEHOLDER;
-pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "│";
-pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "│ ";
-pub const INLINE_FILE_PICKER_TREE_PREFIX: &str = "▸ ";
-pub const INLINE_FILE_PICKER_TREE_INDENT: &str = "  ";
+pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "┃";
+pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "┃ ";
+/// Prefix for the synthetic `..` row that ascends one directory. Row kind
+/// glyphs (`▸` dir, `▧` image, `⚙` executable) come from `FileKind::glyph`.
 pub const INLINE_FILE_PICKER_PARENT_PREFIX: &str = "↑ ";
 pub const INLINE_LIST_PANEL_MIN_HEIGHT: u16 = 8;
 pub const INLINE_LIST_SCROLL_PADDING: u16 = 1;
@@ -114,6 +132,7 @@ pub const HEADER_PRIMARY_SEPARATOR: &str = " | ";
 pub const HEADER_SECONDARY_SEPARATOR: &str = " | ";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
+pub const HEADER_SERVICE_TIER_PREFIX: &str = vtcode_config::constants::ui::HEADER_SERVICE_TIER_PREFIX;
 pub const HEADER_REASONING_PREFIX: &str = "";
 pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
 pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
@@ -132,7 +151,7 @@ pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = "";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP;
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP;
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter run/steer • Ctrl+Enter queue • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Alt+P suggest • Tab next agent • Shift+Tab previous agent • Enter run/queue • Ctrl+Enter queue • Shift+Enter newline • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = vtcode_config::constants::ui::WELCOME_TEXT_WIDTH;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = vtcode_config::constants::ui::WELCOME_SHORTCUT_SECTION_TITLE;
@@ -165,13 +184,22 @@ pub const STATUS_LINE_MODE: &str = "auto";
 pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
 pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
-// TUI tick rate constants for smooth scrolling
-/// Tick rate (Hz) when user is actively interacting with the TUI
+// TUI tick rates are event-driven with on-demand animation ticks.
+// Input, commands (new messages), and crossterm events render immediately
+// without waiting for a tick (`render_if_dirty` runs in the same wakeup);
+// ticks exist only for animations (spinner 80ms, shimmer 33ms, drag 50ms)
+// and transient expiry cleanup (scroll-steady 250ms, copy notification 2s).
+/// Tick rate (Hz) while interacting or animating — 60Hz matches display vsync
+/// for smooth scrolling and keeps input-to-draw under a single frame.
 pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;
-/// Tick rate (Hz) when TUI is idle to save CPU
-pub const TUI_IDLE_TICK_RATE_HZ: f64 = 10.0;
-/// Duration (ms) to remain in active mode after last input
-pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 2000;
+/// Upkeep rate (Hz) when idle with nothing pending — safety net only for
+/// missed expiries or races. A truly idle loop blocks on input/commands and
+/// wakes immediately on events or new messages instead of polling.
+pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
+/// Duration (ms) to remain at the active rate after last input or animation
+/// need. Animations (`needs_animation_tick`) extend active mode independently,
+/// so this window only needs to cover scroll momentum and cursor-steady (250ms).
+pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
 /// Shimmer frame interval in milliseconds
 pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 33;
 /// Shimmer sweep duration in milliseconds

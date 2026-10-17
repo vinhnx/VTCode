@@ -23,6 +23,7 @@ fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
         InlineCommand::Inline { .. } => "Inline",
         InlineCommand::ReplaceLast { .. } => "ReplaceLast",
         InlineCommand::RecordToolOutput { .. } => "RecordToolOutput",
+        InlineCommand::FocusTranscriptReview { .. } => "FocusTranscriptReview",
         InlineCommand::AppendToolOutputLine { .. } => "AppendToolOutputLine",
         InlineCommand::AppendCompactActivity(_) => "AppendCompactActivity",
         InlineCommand::ReplaceCompactActivity(_) => "ReplaceCompactActivity",
@@ -32,7 +33,10 @@ fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
         InlineCommand::SetMessageLabels { .. } => "SetMessageLabels",
         InlineCommand::SetHeaderContext { .. } => "SetHeaderContext",
         InlineCommand::SetInputStatus { .. } => "SetInputStatus",
+        InlineCommand::SetConfiguredInputStatus { .. } => "SetConfiguredInputStatus",
+        InlineCommand::ProgramStatus(_) => "ProgramStatus",
         InlineCommand::SetActivityState(_) => "SetActivityState",
+        InlineCommand::UpdateProgress(_) => "UpdateProgress",
         InlineCommand::SetTerminalTitleItems { .. } => "SetTerminalTitleItems",
         InlineCommand::SetTerminalTitleThreadLabel { .. } => "SetTerminalTitleThreadLabel",
         InlineCommand::SetTerminalTitleGitBranch { .. } => "SetTerminalTitleGitBranch",
@@ -221,13 +225,13 @@ fn test_tui_with_different_header_contexts() {
     for (name, context) in contexts {
         let expected = match name {
             "basic_context" => {
-                r#"InlineHeaderContext { app_name: "VT Code", provider: "openai", model: "gpt-oss-20b", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
+                r#"InlineHeaderContext { app_name: "VT Code", provider: "openai", model: "gpt-oss-20b", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, git: "git: unavailable", reasoning: "unavailable", reasoning_stage: None, service_tier: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
             }
             "advanced_context" => {
-                r#"InlineHeaderContext { app_name: "VT Code", provider: "anthropic", model: "claude-3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "analytical", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
+                r#"InlineHeaderContext { app_name: "VT Code", provider: "anthropic", model: "claude-3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, git: "git: unavailable", reasoning: "analytical", reasoning_stage: None, service_tier: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
             }
             "minimal_context" => {
-                r#"InlineHeaderContext { app_name: "VT Code", provider: "local", model: "llama3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, editor_context: None, git: "git: unavailable", reasoning: "unavailable", reasoning_stage: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
+                r#"InlineHeaderContext { app_name: "VT Code", provider: "local", model: "llama3", context_window_size: None, version: "test-version", search_tools: None, persistent_memory: None, pr_review: None, git: "git: unavailable", reasoning: "unavailable", reasoning_stage: None, service_tier: None, workspace_trust: "Trust: unavailable", tools: "Tools: unavailable", mcp: "MCP: unavailable", primary_agent: None, primary_agent_color: None, highlights: [], subagent_badges: [] }"#
             }
             _ => panic!("unexpected context fixture"),
         };

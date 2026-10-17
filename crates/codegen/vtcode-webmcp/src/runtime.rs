@@ -7,6 +7,8 @@ use std::borrow::Cow;
 /// Runtime status exposed to a paired browser.
 #[derive(Debug, Clone, Serialize)]
 pub struct RuntimeStatus {
+    /// Whether deterministic explanation queries are supported by this adapter.
+    pub explanations_available: bool,
     /// Displayed workspace root, never a secret.
     pub workspace_root: String,
     /// Whether the bridge has a connected runtime adapter.
@@ -88,6 +90,26 @@ pub struct TurnResult {
 /// The runtime boundary used by the WebMCP transport.
 #[async_trait]
 pub trait RuntimeAdapter: Send + Sync {
+    /// Return a page from the canonical execution projection.
+    async fn explanation_get(
+        &self,
+        _scope: vtcode_memory::explanation::ExplanationScope,
+        _offset: usize,
+    ) -> Result<vtcode_memory::explanation::ExplanationPage> {
+        Err(crate::WebmcpError::Unsupported("execution explanations".into()))
+    }
+    /// Return a redacted canonical evidence page.
+    async fn explanation_evidence(
+        &self,
+        _reference: vtcode_memory::explanation::EvidenceRef,
+        _offset: usize,
+    ) -> Result<vtcode_memory::explanation::EvidencePage> {
+        Err(crate::WebmcpError::Unsupported("execution evidence".into()))
+    }
+    /// Focus retained evidence through a typed UI channel; never submits input.
+    async fn explanation_navigate(&self, _reference: vtcode_memory::explanation::EvidenceRef) -> Result<bool> {
+        Err(crate::WebmcpError::Unsupported("execution navigation".into()))
+    }
     /// Return current workspace and permission state.
     async fn status(&self) -> Result<RuntimeStatus>;
 

@@ -128,7 +128,10 @@ impl McpConnectionPool {
         }
 
         // Refresh tools
-        if let Err(err) = provider.cached_tools_or_refresh(&allowlist_snapshot, tool_timeout_opt).await {
+        if let Err(err) = provider
+            .cached_tools_or_refresh_shared(&allowlist_snapshot, tool_timeout_opt)
+            .await
+        {
             warn!("Failed to fetch tools for provider '{}': {}", config.name, err);
         }
 

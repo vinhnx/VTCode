@@ -3,10 +3,21 @@ use crate::client::LLMClient;
 use crate::provider::{self, LLMNormalizedStream};
 use crate::types as llm_types;
 use async_trait::async_trait;
+use futures::StreamExt;
 use vtcode_config::constants::models;
 
 #[async_trait]
 impl provider::LLMProvider for OpenAIProvider {
+    fn supports_decisions(&self) -> bool {
+        self.decisions_eligible()
+    }
+
+    async fn decide_choice(
+        &self,
+        request: provider::ChoiceDecisionRequest,
+    ) -> Result<provider::ChoiceDecisionResponse, provider::LLMError> {
+        self.decide_choice_request(request).await
+    }
     fn name(&self) -> &str {
         self.provider_key_override.as_deref().unwrap_or("openai")
     }
@@ -115,18 +126,54 @@ impl provider::LLMProvider for OpenAIProvider {
     }
 
     async fn stream(&self, request: provider::LLMRequest) -> Result<provider::LLMStream, provider::LLMError> {
-        self.stream_request(request).await
+        let Some(tracker) = self.cache_comparison_tracker(&request) else {
+            return self.stream_request(request).await;
+        };
+        let mut stream = self.stream_request(request).await?;
+        Ok(Box::pin(async_stream::try_stream! {
+            while let Some(event) = stream.next().await {
+                let event = event?;
+                if let provider::LLMStreamEvent::Completed { response } = &event {
+                    tracker.record_completion(response);
+                }
+                yield event;
+            }
+        }))
     }
 
     async fn stream_normalized(
         &self,
         request: provider::LLMRequest,
     ) -> Result<LLMNormalizedStream, provider::LLMError> {
-        self.stream_normalized_request(request).await
+        let Some(tracker) = self.cache_comparison_tracker(&request) else {
+            return self.stream_normalized_request(request).await;
+        };
+        let mut stream = self.stream_normalized_request(request).await?;
+        Ok(Box::pin(async_stream::try_stream! {
+            while let Some(event) = stream.next().await {
+                let event = event?;
+                if let provider::NormalizedStreamEvent::Done { response } = &event {
+                    tracker.record_completion(response);
+                }
+                yield event;
+            }
+        }))
     }
 
     async fn generate(&self, request: provider::LLMRequest) -> Result<provider::LLMResponse, provider::LLMError> {
-        self.generate_request(request).await
+        let tracker = self.cache_comparison_tracker(&request);
+        let response = self.generate_request(request).await?;
+        if let Some(tracker) = tracker {
+            tracker.record_completion(&response);
+        }
+        Ok(response)
+    }
+
+    async fn generate_auxiliary(
+        &self,
+        request: provider::LLMRequest,
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
+        self.generate_request_with_websocket(request, false).await
     }
 
     async fn compact_history(

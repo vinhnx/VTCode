@@ -11,6 +11,13 @@ struct ScriptedProvider {
     supports_streaming: bool,
     recorded_previous_response_ids: Arc<Mutex<Vec<Option<String>>>>,
     outcomes: Mutex<VecDeque<ScriptedProviderOutcome>>,
+    resume_wake: Option<ResumeWake>,
+}
+
+struct ResumeWake {
+    notify: Arc<tokio::sync::Notify>,
+    entered: Arc<tokio::sync::Notify>,
+    release: Arc<tokio::sync::Notify>,
 }
 
 enum ScriptedProviderOutcome {
@@ -34,6 +41,7 @@ impl ScriptedProvider {
             supports_streaming: false,
             recorded_previous_response_ids,
             outcomes: Mutex::new(VecDeque::from(outcomes)),
+            resume_wake: None,
         }
     }
 
@@ -62,6 +70,12 @@ impl uni::LLMProvider for ScriptedProvider {
             .lock()
             .expect("previous_response_id recorder")
             .push(request.previous_response_id.clone());
+
+        if let Some(wake) = &self.resume_wake {
+            wake.entered.notify_one();
+            wake.notify.notify_one();
+            wake.release.notified().await;
+        }
 
         match self
             .outcomes
@@ -111,6 +125,61 @@ fn retryable_llm_error_includes_internal_server_error_message() {
 #[test]
 fn retryable_llm_error_excludes_non_transient_messages() {
     assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+}
+
+#[tokio::test]
+async fn retry_progress_preserves_operation_and_clears_after_completion() {
+    use vtcode_commons::ui_protocol::{ProgressPhase, ProgressUpdate};
+    use vtcode_core::ui::{InlineCommand, InlineHandle};
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(sender);
+    let guard = handle.begin_progress(ProgressPhase::PreparingContext);
+    let operation = guard.operation();
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    ctx.handle = &handle;
+    *ctx.provider_client = Box::new(ScriptedProvider::new(
+        "mycorp",
+        false,
+        Arc::new(Mutex::new(Vec::new())),
+        vec![
+            ScriptedProviderOutcome::Error(uni::LLMError::Provider {
+                message: "503 Service Unavailable".into(),
+                metadata: None,
+            }),
+            ScriptedProviderOutcome::Success { content: Some("recovered"), request_id: None },
+        ],
+    ));
+    ctx.working_history.push(uni::Message::user("hello".into()));
+    assert!(
+        execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None)
+            .await
+            .is_ok()
+    );
+    drop(guard);
+
+    let mut phases = Vec::new();
+    let mut finished = false;
+    while let Ok(command) = receiver.try_recv() {
+        match command {
+            InlineCommand::UpdateProgress(ProgressUpdate::Phase { operation: current, phase }) => {
+                assert_eq!(current, operation);
+                phases.push(phase);
+            }
+            InlineCommand::UpdateProgress(ProgressUpdate::Finish { operation: current }) => {
+                assert_eq!(current, operation);
+                finished = true;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(phases.iter().filter(|phase| **phase == ProgressPhase::WaitingForModel).count(), 2);
+    let retry = phases.iter().position(|phase| *phase == ProgressPhase::Retrying).unwrap();
+    assert_eq!(phases[retry + 1], ProgressPhase::WaitingForModel);
+    assert_eq!(phases.last(), Some(&ProgressPhase::ReceivingResponse));
+    assert!(finished);
+    assert!(handle.current_progress_operation().is_none());
 }
 
 #[tokio::test]
@@ -914,4 +983,86 @@ fn harness_streaming_bridge_tracks_streamed_tool_call_item_ids() {
         Some("turn_tool_map-step-5-assistant-stream-2-tool-call-call_42")
     );
     assert_eq!(item_ids.get("call_42").map(|(_, name)| name.as_str()), Some("shell"));
+}
+
+#[tokio::test]
+async fn resume_wake_during_non_streaming_request_preserves_fresh_planning() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let mut ctx = backing.turn_processing_context();
+    ctx.ctrl_c_state.request_local_cancel();
+    ctx.ctrl_c_state.mark_cancel_handled();
+    ctx.ctrl_c_state.reset();
+    let mut provider = ScriptedProvider::new(
+        "mycorp",
+        false,
+        Arc::new(Mutex::new(Vec::new())),
+        vec![ScriptedProviderOutcome::Success {
+            content: Some("continued planning"),
+            request_id: None,
+        }],
+    );
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    provider.resume_wake = Some(ResumeWake {
+        notify: ctx.ctrl_c_notify.clone(),
+        entered: entered.clone(),
+        release: release.clone(),
+    });
+    *ctx.provider_client = Box::new(provider);
+    ctx.working_history
+        .push(uni::Message::user("Continue drafting the proposal.".into()));
+    let request = execute_llm_request(&mut ctx, 1, "noop-model", Some(320), false, None);
+    let finish = async {
+        entered.notified().await;
+        task::yield_now().await;
+        release.notify_one();
+    };
+    let (response, ()) = tokio::join!(request, finish);
+    let response = response.expect("fresh planning request");
+    assert_eq!(response.0.content.as_deref(), Some("continued planning"));
+    assert!(ctx.is_planning_active());
+    assert!(!ctx.ctrl_c_state.is_cancel_requested());
+}
+
+#[tokio::test]
+async fn anthropic_fast_capacity_errors_use_existing_bounded_retries_without_clearing_preference() {
+    for status in [429, 529] {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let provider = ScriptedProvider::new(
+            "anthropic",
+            false,
+            Arc::clone(&calls),
+            vec![
+                ScriptedProviderOutcome::Error(uni::LLMError::Provider {
+                    message: "capacity unavailable".to_owned(),
+                    metadata: Some(uni::LLMErrorMetadata::new(
+                        "anthropic",
+                        Some(status),
+                        None,
+                        None,
+                        None,
+                        Some("7".to_owned()),
+                        None,
+                    )),
+                }),
+                ScriptedProviderOutcome::Success {
+                    content: Some("fast capacity recovered"),
+                    request_id: None,
+                },
+            ],
+        );
+        let mut backing = TestTurnProcessingBacking::new(4).await;
+        let mut cfg = vtcode_config::VTCodeConfig::default();
+        cfg.provider.anthropic.speed = Some(vtcode_config::AnthropicSpeed::Fast);
+        backing.set_vt_cfg_for_test(cfg);
+        let mut ctx = backing.turn_processing_context();
+        *ctx.provider_client = Box::new(provider);
+        ctx.working_history.push(uni::Message::user("continue".to_owned()));
+        execute_llm_request(&mut ctx, 1, "claude-opus-5-5", Some(320), false, None)
+            .await
+            .unwrap();
+        assert_eq!(calls.lock().unwrap().len(), 2, "status {status}");
+        assert_eq!(ctx.vt_cfg.unwrap().provider.anthropic.speed, Some(vtcode_config::AnthropicSpeed::Fast));
+    }
 }

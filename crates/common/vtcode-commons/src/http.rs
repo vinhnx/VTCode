@@ -85,6 +85,18 @@ pub fn create_client_with_timeouts(connect_timeout: Duration, request_timeout: D
     build_client(|builder| builder.timeout(request_timeout).connect_timeout(connect_timeout))
 }
 
+/// Build an origin-bound client without a fallback that could enable redirects.
+pub fn create_client_without_redirects(
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> Result<Client, reqwest::Error> {
+    apply_platform_proxy_policy(ClientBuilder::new())
+        .timeout(request_timeout)
+        .connect_timeout(connect_timeout)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+}
+
 /// Create an HTTP client with a specific user agent
 pub fn create_client_with_user_agent(user_agent: &str) -> Client {
     build_client(|builder| builder.user_agent(user_agent).timeout(DEFAULT_TIMEOUT))

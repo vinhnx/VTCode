@@ -101,6 +101,42 @@ impl RegistrationMetadataSnapshot {
             deny_patterns: leak_patterns(registration.metadata().denylist()).or_else(|| tool.deny_patterns()),
         }
     }
+
+    /// Shared metadata accessors for the three wrapper tools below.
+    ///
+    /// These bodies are intentionally identical across `RegistryFnTool`,
+    /// `RegistrationBackedTool`, and `RegistrationBackedDynTool`: keep them
+    /// here so a future per-wrapper edit cannot silently diverge one copy.
+    /// `description()` / `parameter_schema()` stay per-impl: they carry the
+    /// task_tracker live-metadata branch, which `RegistryFnTool` cannot
+    /// share (it holds no inner tool to delegate to).
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    fn config_schema(&self) -> Option<Value> {
+        self.config_schema.clone()
+    }
+
+    fn state_schema(&self) -> Option<Value> {
+        self.state_schema.clone()
+    }
+
+    fn prompt_path(&self) -> Option<Cow<'static, str>> {
+        self.prompt_path.clone().map(Cow::Owned)
+    }
+
+    fn default_permission(&self) -> ToolPolicy {
+        self.default_permission.clone()
+    }
+
+    fn allow_patterns(&self) -> Option<&'static [&'static str]> {
+        self.allow_patterns
+    }
+
+    fn deny_patterns(&self) -> Option<&'static [&'static str]> {
+        self.deny_patterns
+    }
 }
 
 struct RegistryFnTool {
@@ -131,7 +167,7 @@ impl Tool for RegistryFnTool {
     }
 
     fn name(&self) -> &str {
-        self.metadata.name.as_ref()
+        self.metadata.name()
     }
 
     fn description(&self) -> &str {
@@ -143,27 +179,27 @@ impl Tool for RegistryFnTool {
     }
 
     fn config_schema(&self) -> Option<Value> {
-        self.metadata.config_schema.clone()
+        self.metadata.config_schema()
     }
 
     fn state_schema(&self) -> Option<Value> {
-        self.metadata.state_schema.clone()
+        self.metadata.state_schema()
     }
 
     fn prompt_path(&self) -> Option<Cow<'static, str>> {
-        self.metadata.prompt_path.clone().map(Cow::Owned)
+        self.metadata.prompt_path()
     }
 
     fn default_permission(&self) -> ToolPolicy {
-        self.metadata.default_permission.clone()
+        self.metadata.default_permission()
     }
 
     fn allow_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.allow_patterns
+        self.metadata.allow_patterns()
     }
 
     fn deny_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.deny_patterns
+        self.metadata.deny_patterns()
     }
 }
 
@@ -198,7 +234,7 @@ where
     }
 
     fn name(&self) -> &str {
-        self.metadata.name.as_ref()
+        self.metadata.name()
     }
 
     fn description(&self) -> &str {
@@ -222,27 +258,27 @@ where
     }
 
     fn config_schema(&self) -> Option<Value> {
-        self.metadata.config_schema.clone()
+        self.metadata.config_schema()
     }
 
     fn state_schema(&self) -> Option<Value> {
-        self.metadata.state_schema.clone()
+        self.metadata.state_schema()
     }
 
     fn prompt_path(&self) -> Option<Cow<'static, str>> {
-        self.metadata.prompt_path.clone().map(Cow::Owned)
+        self.metadata.prompt_path()
     }
 
     fn default_permission(&self) -> ToolPolicy {
-        self.metadata.default_permission.clone()
+        self.metadata.default_permission()
     }
 
     fn allow_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.allow_patterns
+        self.metadata.allow_patterns()
     }
 
     fn deny_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.deny_patterns
+        self.metadata.deny_patterns()
     }
 
     fn is_mutating(&self) -> bool {
@@ -291,7 +327,7 @@ impl Tool for RegistrationBackedDynTool {
     }
 
     fn name(&self) -> &str {
-        self.metadata.name.as_ref()
+        self.metadata.name()
     }
 
     fn description(&self) -> &str {
@@ -315,27 +351,27 @@ impl Tool for RegistrationBackedDynTool {
     }
 
     fn config_schema(&self) -> Option<Value> {
-        self.metadata.config_schema.clone()
+        self.metadata.config_schema()
     }
 
     fn state_schema(&self) -> Option<Value> {
-        self.metadata.state_schema.clone()
+        self.metadata.state_schema()
     }
 
     fn prompt_path(&self) -> Option<Cow<'static, str>> {
-        self.metadata.prompt_path.clone().map(Cow::Owned)
+        self.metadata.prompt_path()
     }
 
     fn default_permission(&self) -> ToolPolicy {
-        self.metadata.default_permission.clone()
+        self.metadata.default_permission()
     }
 
     fn allow_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.allow_patterns
+        self.metadata.allow_patterns()
     }
 
     fn deny_patterns(&self) -> Option<&'static [&'static str]> {
-        self.metadata.deny_patterns
+        self.metadata.deny_patterns()
     }
 
     fn is_mutating(&self) -> bool {
@@ -638,6 +674,109 @@ mod tests {
             .await
             .expect("should execute dual");
         assert_eq!(dual.tool_name, "registered_trait_object_cgp_test");
+    }
+
+    #[tokio::test]
+    async fn registration_wrappers_share_snapshot_metadata_accessors() {
+        // The seven snapshot-sourced accessors are byte-identical across all
+        // three wrapper types; only description()/parameter_schema() carry a
+        // task_tracker live-metadata branch. Wrap one non-task_tracker tool
+        // all three ways and require identical output, so a future
+        // per-wrapper edit cannot silently diverge one copy. Asymmetric
+        // controls: the inner tool disagrees with its registration on every
+        // accessor (proving the snapshot wins), and a TraitObject
+        // registration is rejected by RegistryFnTool (proving why it has no
+        // live branch to share).
+        struct MetaTool;
+
+        #[async_trait]
+        impl Tool for MetaTool {
+            async fn execute(&self, _args: Value) -> Result<Value> {
+                Ok(Value::Null)
+            }
+
+            fn name(&self) -> &str {
+                "meta_probe_inner"
+            }
+
+            fn description(&self) -> &str {
+                "inner description"
+            }
+        }
+
+        fn echo_executor<'a>(_registry: &'a ToolRegistry, args: Value) -> BoxFuture<'a, Result<Value>> {
+            Box::pin(async move { Ok(args) })
+        }
+
+        let parameter_schema = serde_json::json!({
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+        });
+        let config_schema = serde_json::json!({ "type": "object" });
+        let state_schema = serde_json::json!({ "type": "object" });
+        let registration = ToolRegistration::from_tool_with_metadata(
+            "meta_probe",
+            crate::config::types::CapabilityLevel::Basic,
+            Arc::new(MetaTool),
+            crate::tools::registry::ToolMetadata::default()
+                .with_description("registered description")
+                .with_parameter_schema(parameter_schema.clone())
+                .with_config_schema(config_schema.clone())
+                .with_state_schema(state_schema.clone())
+                .with_prompt_path("tools/meta_probe.md")
+                .with_permission(ToolPolicy::Allow)
+                .with_allowlist(["tool://allowed"])
+                .with_denylist(["tool://blocked"]),
+        );
+
+        let snapshot = RegistrationMetadataSnapshot::from_registration(&registration);
+        assert_eq!(snapshot.name(), "meta_probe");
+        assert_eq!(snapshot.config_schema(), Some(config_schema.clone()));
+        assert_eq!(snapshot.state_schema(), Some(state_schema.clone()));
+        assert_eq!(snapshot.prompt_path().as_deref(), Some("tools/meta_probe.md"));
+        assert_eq!(snapshot.default_permission(), ToolPolicy::Allow);
+        assert_eq!(snapshot.allow_patterns(), Some(&["tool://allowed"][..]));
+        assert_eq!(snapshot.deny_patterns(), Some(&["tool://blocked"][..]));
+
+        let backed = RegistrationBackedTool::from_registration(MetaTool, &registration);
+        let backed_dyn = RegistrationBackedDynTool::from_registration(Arc::new(MetaTool), &registration);
+        for (label, tool) in [
+            ("backed", &backed as &dyn Tool),
+            ("backed_dyn", &backed_dyn as &dyn Tool),
+        ] {
+            assert_eq!(tool.name(), snapshot.name(), "{label} name");
+            assert_eq!(tool.description(), "registered description", "{label} keeps snapshot over inner");
+            assert_eq!(tool.parameter_schema(), Some(parameter_schema.clone()), "{label} parameter schema");
+            assert_eq!(tool.config_schema(), snapshot.config_schema(), "{label} config schema");
+            assert_eq!(tool.state_schema(), snapshot.state_schema(), "{label} state schema");
+            assert_eq!(tool.prompt_path().as_deref(), Some("tools/meta_probe.md"), "{label} prompt path");
+            assert_eq!(tool.default_permission(), ToolPolicy::Allow, "{label} permission");
+            assert_eq!(tool.allow_patterns(), Some(&["tool://allowed"][..]), "{label} allowlist");
+            assert_eq!(tool.deny_patterns(), Some(&["tool://blocked"][..]), "{label} denylist");
+        }
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let fn_registration =
+            ToolRegistration::new("meta_probe_fn", crate::config::types::CapabilityLevel::Basic, false, echo_executor);
+        let func = RegistryFnTool::from_registration(registry, &fn_registration)
+            .expect("RegistryFn handler registration must wrap");
+        let fn_snapshot = RegistrationMetadataSnapshot::from_registration(&fn_registration);
+        assert_eq!(func.name(), fn_snapshot.name());
+        assert_eq!(func.description(), "");
+        assert_eq!(func.parameter_schema(), None);
+        assert_eq!(func.config_schema(), fn_snapshot.config_schema());
+        assert_eq!(func.state_schema(), fn_snapshot.state_schema());
+        assert_eq!(func.prompt_path().as_deref(), None);
+        assert_eq!(func.default_permission(), ToolPolicy::Prompt);
+        assert_eq!(func.allow_patterns(), None);
+        assert_eq!(func.deny_patterns(), None);
+
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        assert!(
+            RegistryFnTool::from_registration(registry, &registration).is_none(),
+            "TraitObject registrations must not wrap as RegistryFnTool"
+        );
     }
 
     #[tokio::test]

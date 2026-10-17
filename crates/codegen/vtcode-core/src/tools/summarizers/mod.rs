@@ -39,9 +39,8 @@ pub(super) fn truncate_line<'a>(line: &'a str, max_len: usize) -> Cow<'a, str> {
     if line.len() <= max_len {
         Cow::Borrowed(line)
     } else {
-        let target = max_len.saturating_sub(3);
-        let end = line.char_indices().map(|(i, _)| i).rfind(|&i| i <= target).unwrap_or(0);
-        Cow::Owned(format!("{}...", &line[..end]))
+        let prefix = vtcode_commons::formatting::truncate_utf8_prefix(line, max_len.saturating_sub(3));
+        Cow::Owned(format!("{prefix}..."))
     }
 }
 

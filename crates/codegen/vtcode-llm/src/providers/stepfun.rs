@@ -362,14 +362,18 @@ impl StepFunProvider {
             payload["reasoning"] = json!({"effort": effort});
         }
 
-        if let Some(tools) = &request.tools
-            && !matches!(request.tool_choice, Some(ToolChoice::None))
-        {
+        // Keep tool definitions on the wire even when tools are disabled so the
+        // rendered prefix stays cache-stable. StepFun accepts only
+        // `tool_choice: "auto"`, so omit the choice field for ToolChoice::None
+        // instead of removing the catalog (OpenAI caching guidance).
+        if let Some(tools) = &request.tools {
             let serialized = serialize_tools(tools);
             if !serialized.is_empty() {
                 payload["tools"] = Value::Array(serialized);
-                // StepFun currently accepts only the string "auto".
-                payload["tool_choice"] = json!("auto");
+                if !matches!(request.tool_choice, Some(ToolChoice::None)) {
+                    // StepFun currently accepts only the string "auto".
+                    payload["tool_choice"] = json!("auto");
+                }
             }
         }
 
@@ -816,7 +820,7 @@ mod tests {
     use vtcode_config::constants::models;
     use vtcode_config::types::ReasoningEffortLevel;
     use wiremock::matchers::{body_partial_json, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Mock, ResponseTemplate};
 
     fn build_payload(request: &LLMRequest) -> Value {
         let provider = StepFunProvider::new("test-key".to_string());
@@ -834,29 +838,7 @@ mod tests {
         )
     }
 
-    fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
-        if let Some(message) = payload.downcast_ref::<String>() {
-            return message.clone();
-        }
-        if let Some(message) = payload.downcast_ref::<&str>() {
-            return (*message).to_string();
-        }
-        "unknown panic".to_string()
-    }
-
-    async fn start_mock_server_or_skip() -> Option<MockServer> {
-        match tokio::spawn(async { MockServer::start().await }).await {
-            Ok(server) => Some(server),
-            Err(err) if err.is_panic() => {
-                let message = panic_message(err.into_panic());
-                if message.contains("Operation not permitted") || message.contains("PermissionDenied") {
-                    return None;
-                }
-                panic!("mock server should start: {message}");
-            }
-            Err(err) => panic!("mock server task should complete: {err}"),
-        }
-    }
+    use crate::providers::test_support::start_mock_server_or_skip;
 
     fn completed_response_body() -> Value {
         json!({
@@ -1199,6 +1181,27 @@ mod tests {
         assert_eq!(tool["description"], "Get the weather");
         assert!(tool.get("function").is_none(), "Responses tools are flat, not nested");
         assert_eq!(payload["tool_choice"], "auto");
+    }
+
+    #[test]
+    fn payload_keeps_tools_but_omits_choice_for_tool_choice_none() {
+        let payload = build_payload(&LLMRequest {
+            model: models::stepfun::STEP_3_7_FLASH.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get the weather".to_string(),
+                json!({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}),
+            )])),
+            tool_choice: Some(crate::provider::ToolChoice::None),
+            ..Default::default()
+        });
+
+        assert!(payload.get("tools").is_some(), "tool definitions stay on the wire for cache stability");
+        assert!(
+            payload.get("tool_choice").is_none(),
+            "StepFun accepts only tool_choice=auto, so none must omit the field"
+        );
     }
 
     #[test]

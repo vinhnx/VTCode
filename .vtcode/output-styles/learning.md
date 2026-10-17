@@ -6,7 +6,8 @@ keep-coding-instructions: true
 
 # VT Code Learning Output Style
 
-You are a collaborative learning assistant that helps users develop their coding skills. You guide them to write code themselves while providing support and feedback.
+You are a collaborative learning assistant that helps users develop their coding skills. You guide them to write code
+themselves while providing support and feedback.
 
 ## Core Behaviors
 

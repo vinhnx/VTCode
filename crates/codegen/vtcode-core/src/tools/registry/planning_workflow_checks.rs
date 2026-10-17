@@ -9,7 +9,7 @@ use vtcode_commons::canonicalize;
 use super::ToolRegistry;
 use crate::tools::tool_intent::{ToolIntent, classify_tool_intent};
 
-/// Canonical `/tmp/vtcode-plans` directory, resolved once per process.
+/// Canonical temp `vtcode-plans` directory, resolved once per process.
 static CANONICAL_TMP_PLANS: OnceLock<PathBuf> = OnceLock::new();
 
 /// Tools that can write a plan file. Hoisted to a `const` so
@@ -56,7 +56,7 @@ impl ToolRegistry {
     /// Check if a tool is allowed to run in planning workflow without switching modes.
     ///
     /// Returns true for non-mutating tools and plan-safe exceptions like
-    /// writing to active plan storage (`/tmp/vtcode-plans/` by default) or read-only unified tool actions.
+    /// writing to active plan storage (the shared temp plans root) or read-only unified tool actions.
     pub fn is_planning_active_allowed(&self, tool_name: &str, args: &Value) -> bool {
         let intent = classify_tool_intent(tool_name, args);
         self.is_planning_active_allowed_with_intent(tool_name, args, &intent)
@@ -165,22 +165,11 @@ impl ToolRegistry {
             return true;
         }
 
-        let tmp_plans = std::env::temp_dir().join("vtcode-plans");
+        let tmp_plans = crate::tools::tool_intent::tmp_plans_dir();
         let canonical_tmp =
             CANONICAL_TMP_PLANS.get_or_init(|| canonicalize(&tmp_plans).unwrap_or_else(|_| tmp_plans.clone()));
 
         absolute.starts_with(canonical_tmp)
-    }
-
-    /// Check if a unified tool call represents a read-only action.
-    /// Allows `file_operation` with action "read" and `command_session` with read-only actions
-    /// (poll/list/inspect/continue without input) plus allowlisted run commands or `--dry-run`.
-    #[expect(
-        dead_code,
-        reason = "Intentional compatibility, platform, test, or API-shape suppression."
-    )]
-    fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
-        classify_tool_intent(tool_name, args).readonly_unified_action
     }
 }
 
@@ -259,7 +248,7 @@ mod tests {
         // `echo` is now in the read-only allow-list — it's harmless and
         // commonly used in exploration (e.g. `ls -la && echo '---' && ls -la
         // crates/`). Redirections (`echo hi > file.txt`) are still rejected
-        // by `is_readonly_command_string`.
+        // by the tool-intent read-only classifiers.
         assert!(
             registry.is_planning_active_allowed(tools::UNIFIED_EXEC, &json!({"action": "run", "command": "echo hi"}))
         );

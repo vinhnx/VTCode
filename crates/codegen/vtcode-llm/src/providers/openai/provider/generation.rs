@@ -23,14 +23,19 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
 }
 
 fn truncate_for_log(input: &str, max_chars: usize) -> String {
-    input.chars().take(max_chars).collect()
+    vtcode_commons::formatting::truncate_text(input, max_chars, "")
 }
 
-fn payload_uses_flex_service_tier(payload: &Value) -> bool {
-    payload
-        .get("service_tier")
-        .and_then(Value::as_str)
-        .is_some_and(|value| value.eq_ignore_ascii_case("flex"))
+/// Whether the payload carries a tier eligible for the strip-and-retry
+/// fallback. The `flex_` name is historical (built for flex first): any
+/// user-selectable tier can be rejected per model, account, or project
+/// policy, and omitting it resolves to the project default.
+pub(super) fn payload_uses_flex_service_tier(payload: &Value) -> bool {
+    payload_service_tier(payload).is_some_and(|value| {
+        value.eq_ignore_ascii_case("flex")
+            || value.eq_ignore_ascii_case("ultrafast")
+            || value.eq_ignore_ascii_case("priority")
+    })
 }
 
 fn payload_without_service_tier(payload: &Value) -> Value {
@@ -39,6 +44,38 @@ fn payload_without_service_tier(payload: &Value) -> Value {
         object.remove("service_tier");
     }
     payload
+}
+
+pub(super) fn payload_service_tier(payload: &Value) -> Option<&str> {
+    payload
+        .get("service_tier")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn is_ultrafast_service_tier(value: &str) -> bool {
+    value.eq_ignore_ascii_case("ultrafast")
+}
+
+/// Shared tier-rejection warn so Responses and Chat Completions stay in sync.
+/// Ultrafast carries guidance for checking the requested model and project.
+pub(super) fn log_service_tier_rejection(api: &str, model: &str, client_request_id: &str, tier: &str) {
+    if is_ultrafast_service_tier(tier) {
+        tracing::warn!(
+            model = %model,
+            client_request_id = %client_request_id,
+            tier = %tier,
+            "OpenAI {api} request rejected service_tier=ultrafast; retrying without it (check the requested model, project settings, and organization limits; ultrafast is broadly available for gpt-6-astra/gpt-6.1-sol)"
+        );
+    } else {
+        tracing::warn!(
+            model = %model,
+            client_request_id = %client_request_id,
+            tier = %tier,
+            "OpenAI {api} request rejected service_tier; retrying without it"
+        );
+    }
 }
 
 fn append_manual_compaction_instructions(
@@ -90,8 +127,7 @@ async fn collect_streamed_response(stream: provider::LLMStream) -> Result<provid
 }
 
 impl OpenAIProvider {
-    /// Check if `service_tier=flex` is known to be unsupported for this model.
-    /// Returns `true` if the model was previously rejected with flex tier.
+    /// Check whether a service tier was previously rejected for this model.
     fn is_flex_unsupported_for_model(&self, model: &str) -> bool {
         self.service_tier_unsupported_cache
             .lock()
@@ -101,25 +137,25 @@ impl OpenAIProvider {
             .unwrap_or(false)
     }
 
-    /// Mark `service_tier=flex` as unsupported for this model so future
-    /// requests skip it entirely, avoiding the wasted first request + retry.
-    fn mark_flex_unsupported_for_model(&self, model: &str) {
+    /// Cache a model's service-tier rejection so future requests omit the tier,
+    /// avoiding the wasted first request and retry.
+    pub(super) fn mark_flex_unsupported_for_model(&self, model: &str) {
         self.service_tier_unsupported_cache
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(model.to_string(), true);
-        tracing::info!(model = %model, "cached service_tier=flex unsupported for model");
+        tracing::info!(model = %model, "cached service tier rejection for model");
     }
 
     /// Strip `service_tier` from the payload if it was previously rejected
     /// for this model. Returns a borrowed reference when no modification is
     /// needed (the common case), avoiding a deep clone of the full request
     /// payload.
-    fn maybe_strip_flex_service_tier<'a>(&self, model: &str, payload: &'a Value) -> Cow<'a, Value> {
+    pub(super) fn maybe_strip_flex_service_tier<'a>(&self, model: &str, payload: &'a Value) -> Cow<'a, Value> {
         if self.is_flex_unsupported_for_model(model) && payload_uses_flex_service_tier(payload) {
             tracing::debug!(
                 model = %model,
-                "skipping service_tier=flex (previously unsupported)"
+                "omitting service tier previously rejected for model"
             );
             Cow::Owned(payload_without_service_tier(payload))
         } else {
@@ -127,7 +163,19 @@ impl OpenAIProvider {
         }
     }
 
-    async fn retry_without_service_tier(
+    /// Ultrafast is fastest on a persistent WebSocket; HTTP handshake overhead
+    /// erodes the gain on agentic tool-call bursts. Emit a one-line hint when
+    /// an ultrafast request will run over HTTP because `websocket_mode` is off.
+    pub(super) fn log_ultrafast_websocket_hint(&self, model: &str, payload: &Value) {
+        if payload_service_tier(payload).is_some_and(is_ultrafast_service_tier) && !self.websocket_mode_enabled(model) {
+            tracing::debug!(
+                model = %model,
+                "service_tier=ultrafast without websocket_mode; set provider.openai.websocket_mode=true to keep one Responses WebSocket + previous_response_id chain for tool-call bursts"
+            );
+        }
+    }
+
+    pub(super) async fn retry_without_service_tier(
         &self,
         url: &str,
         metadata: &Option<Value>,
@@ -178,11 +226,6 @@ impl OpenAIProvider {
         let request = provider::LLMRequest {
             model: resolved_model.clone(),
             messages: std::sync::Arc::new(history.to_vec()),
-            max_tokens: options.max_output_tokens,
-            reasoning_effort: options.reasoning_effort,
-            verbosity: options.verbosity,
-            response_store: options.response_store,
-            responses_include: options.responses_include.clone(),
             service_tier: options.service_tier.clone(),
             prompt_cache_key: options.prompt_cache_key.clone(),
             ..Default::default()
@@ -200,7 +243,6 @@ impl OpenAIProvider {
         let mut compact_payload = json!({
             "model": resolved_model,
             "input": input,
-            "stream": true,
         });
         if let Some(map) = compact_payload.as_object_mut() {
             let merged_instructions = append_manual_compaction_instructions(
@@ -211,19 +253,25 @@ impl OpenAIProvider {
                 map.insert("instructions".to_string(), json!(instructions));
             }
 
+            // Standalone compaction has a narrower schema than Responses
+            // generation; even `stream: false` is an unknown parameter.
+            // https://developers.openai.com/api/reference/resources/responses/methods/compact
             for key in [
-                "max_output_tokens",
                 "service_tier",
-                "store",
-                "include",
-                "reasoning",
-                "text",
                 "prompt_cache_key",
                 "prompt_cache_options",
                 "prompt_cache_retention",
             ] {
                 if let Some(value) = responses_request.get(key) {
-                    map.insert(key.to_string(), value.clone());
+                    let mut value = value.clone();
+                    // Diagnostics compare generation responses; standalone
+                    // compaction has a narrower options schema.
+                    if key == "prompt_cache_options"
+                        && let Some(options) = value.as_object_mut()
+                    {
+                        options.remove("comparison_response_id");
+                    }
+                    map.insert(key.to_string(), value);
                 }
             }
         }
@@ -282,13 +330,28 @@ impl OpenAIProvider {
         &self,
         request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
+        self.generate_request_with_websocket(request, true).await
+    }
+
+    pub(super) async fn generate_request_with_websocket(
+        &self,
+        request: provider::LLMRequest,
+        use_websocket: bool,
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
         let mut request = request;
 
         crate::providers::common::ensure_model(&mut request, &self.model);
 
-        if Self::requires_streaming_responses(&request.model) {
+        // The ChatGPT subscription backend (chatgpt.com/backend-api/codex)
+        // rejects non-streaming Responses requests with `400 Stream must be
+        // set to true`. `supports_non_streaming()` already reports false for
+        // that backend, but `generate` callers (planner, evaluator, skeptic
+        // panel) hardcode `stream: false`. Honor the capability here so every
+        // direct `generate` caller transparently uses the streaming path,
+        // mirroring `collect_single_response` behavior.
+        if self.is_chatgpt_backend() || Self::requires_streaming_responses(&request.model) {
             request.stream = true;
-            let stream = self.stream_request(request).await?;
+            let stream = self.stream_request_with_websocket(request, use_websocket).await?;
             return collect_streamed_response(stream).await;
         }
 
@@ -306,7 +369,7 @@ impl OpenAIProvider {
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = should_attempt_responses_api(responses_state);
         if attempt_responses {
-            if self.websocket_mode_enabled(&request.model) {
+            if use_websocket && self.websocket_mode_enabled(&request.model) {
                 if let Ok(response) = self.generate_via_responses_websocket(&request).await {
                     return Ok(response);
                 }
@@ -315,6 +378,7 @@ impl OpenAIProvider {
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             // Skip flex tier if it was previously rejected for this model
             let openai_request = self.maybe_strip_flex_service_tier(&request.model, &openai_request);
+            self.log_ultrafast_websocket_hint(&request.model, &openai_request);
             let url = &self.responses_url[..];
             let client_request_id = Self::new_client_request_id();
 
@@ -344,11 +408,8 @@ impl OpenAIProvider {
                 {
                     // Cache this so future requests skip flex tier entirely
                     self.mark_flex_unsupported_for_model(&request.model);
-                    tracing::warn!(
-                        model = %request.model,
-                        client_request_id = %client_request_id,
-                        "OpenAI Responses request rejected service_tier=flex; retrying without it"
-                    );
+                    let rejected_tier = payload_service_tier(&openai_request).unwrap_or("flex");
+                    log_service_tier_rejection("Responses", &request.model, &client_request_id, rejected_tier);
 
                     let (retry_response, retry_client_request_id) = self
                         .retry_without_service_tier(url, &request.metadata, &openai_request, true)
@@ -510,11 +571,8 @@ impl OpenAIProvider {
             {
                 // Cache this so future requests skip flex tier entirely
                 self.mark_flex_unsupported_for_model(&request.model);
-                tracing::warn!(
-                    model = %request.model,
-                    client_request_id = %client_request_id,
-                    "OpenAI Chat Completions request rejected service_tier=flex; retrying without it"
-                );
+                let rejected_tier = payload_service_tier(&openai_request).unwrap_or("flex");
+                log_service_tier_rejection("Chat Completions", &request.model, &client_request_id, rejected_tier);
 
                 let (retry_response, retry_client_request_id) = self
                     .retry_without_service_tier(url, &request.metadata, &openai_request, false)
@@ -566,12 +624,24 @@ impl OpenAIProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::{ResponsesApiState, should_attempt_responses_api};
+    use super::{ResponsesApiState, is_ultrafast_service_tier, payload_service_tier, should_attempt_responses_api};
+    use serde_json::json;
 
     #[test]
     fn responses_attempt_logic_prefers_responses_for_allowed_and_required() {
         assert!(should_attempt_responses_api(ResponsesApiState::Allowed));
         assert!(should_attempt_responses_api(ResponsesApiState::Required));
         assert!(!should_attempt_responses_api(ResponsesApiState::Disabled));
+    }
+
+    #[test]
+    fn ultrafast_tier_detection_is_case_insensitive_and_trims() {
+        assert!(is_ultrafast_service_tier("ultrafast"));
+        assert!(is_ultrafast_service_tier("ULTRAFAST"));
+        assert!(!is_ultrafast_service_tier("flex"));
+        assert!(!is_ultrafast_service_tier("priority"));
+        assert_eq!(payload_service_tier(&json!({"service_tier": "ultrafast"})), Some("ultrafast"));
+        assert_eq!(payload_service_tier(&json!({"service_tier": "   "})), None);
+        assert_eq!(payload_service_tier(&json!({})), None);
     }
 }

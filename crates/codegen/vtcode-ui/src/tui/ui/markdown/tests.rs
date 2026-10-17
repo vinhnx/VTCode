@@ -199,6 +199,61 @@ fn test_inline_code_content_is_not_rewritten_by_plan_cleanup() {
 }
 
 #[test]
+fn plan_cleanup_keeps_inline_delimiters_across_ordinary_lines() {
+    let mut ticks = None;
+    assert_eq!(strip_plan_markup_tags("before ``literal", &mut ticks), "before ``literal");
+    assert_eq!(ticks, Some(2));
+    for text in ["ordinary café 東京", "", "left > right"] {
+        assert_eq!(strip_plan_markup_tags(text, &mut ticks), text);
+        assert_eq!(ticks, Some(2));
+    }
+    assert_eq!(strip_plan_markup_tags("` <plan>inside</plan>", &mut ticks), "` <plan>inside</plan>");
+    assert_eq!(ticks, Some(2), "a single backtick must not close a double delimiter");
+    assert_eq!(strip_plan_markup_tags("end`` <PLAN>outside</PLAN>", &mut ticks), "end`` outside");
+    assert_eq!(ticks, None);
+    assert_eq!(strip_plan_markup_tags("plain after code", &mut ticks), "plain after code");
+    assert_eq!(ticks, None);
+}
+
+#[test]
+fn plan_cleanup_preserves_fenced_code_and_normalizes_crlf() {
+    let cases = [
+        ("line café\r\nsecond 東京\r\n", "line café\nsecond 東京\n"),
+        (
+            "before ``literal\r\nordinary café 東京\r\nend`` after\r\n",
+            "before ``literal\nordinary café 東京\nend`` after\n",
+        ),
+        ("ordinary\r\n\r\n", "ordinary\n"),
+        (
+            "```text\n<plan>literal</plan>\n```\n<PLAN>after</PLAN>\n",
+            "```text\n<plan>literal</plan>\n```\nafter\n",
+        ),
+        (
+            "<PlAn>\r\nbefore ``literal\r\nordinary café 東京\r\n<plan>inside</plan>\r\nend`` after\r\n</pLaN>\r\n",
+            "\nbefore ``literal\nordinary café 東京\n<plan>inside</plan>\nend`` after\n",
+        ),
+        (
+            "<proposed_plan>\n```text\n<plan>literal</plan>\n```\n~~~md\n<proposed_plan>other literal</proposed_plan>\n~~~\n</proposed_plan>",
+            "\n```text\n<plan>literal</plan>\n```\n~~~md\n<proposed_plan>other literal</proposed_plan>\n~~~\n",
+        ),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(preprocess_plan_wrappers(source), expected);
+    }
+}
+
+#[test]
+fn multiline_inline_plan_tags_remain_literal_in_rendered_output() {
+    let markdown = "<plan>\nOrdinary before ``literal\nborrowed café 東京\n<plan>kept</plan>\nend`` after.\n</plan>";
+    let output = lines_to_text(&render_markdown(markdown)).join("\n");
+    assert_eq!(output.matches("<plan>").count(), 1, "only the inline code tag must remain");
+    assert_eq!(output.matches("</plan>").count(), 1);
+    assert!(output.contains("literal borrowed café 東京 <plan>kept</plan> end"), "{output}");
+    assert!(output.starts_with("Ordinary before "), "{output}");
+    assert!(output.ends_with(" after."), "{output}");
+}
+
+#[test]
 fn test_markdown_table_box_drawing() {
     let markdown = r#"
 | Header 1 | Header 2 |

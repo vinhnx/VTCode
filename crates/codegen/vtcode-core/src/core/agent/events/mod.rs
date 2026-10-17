@@ -1,10 +1,12 @@
 //! Event recording utilities for the agent runner.
 
+mod context;
 mod lifecycle;
+pub use context::{ExecutionContextTracker, decision_completed_event, validate_decision_input};
 pub use lifecycle::{
-    SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event, tool_invocation_completed_event,
-    tool_output_completed_event, tool_output_item_id, tool_output_payload_from_value, tool_output_started_event,
-    tool_output_updated_event, tool_started_event,
+    SharedLifecycleEmitter, ToolOutputPayload, error_item_completed_event, file_change_completed_event,
+    tool_invocation_completed_event, tool_output_completed_event, tool_output_item_id, tool_output_payload_from_value,
+    tool_output_started_event, tool_output_updated_event, tool_started_event,
 };
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
@@ -12,7 +14,7 @@ use crate::exec::events::{
     CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, EVENT_SCHEMA_VERSION, ErrorItem,
     HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, ThreadCompactBoundaryEvent,
     ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
-    ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
+    ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
     tool_outcome_from_status,
 };
 use anyhow::{Context, Result, anyhow};
@@ -34,9 +36,83 @@ use vtcode_memory::event_log::DEFAULT_MAX_EVENTS;
 
 const SESSION_STORE_DRAIN_CAPACITY: usize = 8192;
 const SESSION_STORE_DRAIN_MAX_BYTES: usize = 16 * 1024 * 1024;
+const EXPLANATION_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 /// Callback type alias for streaming structured events.
 pub type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
+
+/// Ordered validation of canonical evidence identities within the current task.
+pub type DecisionEvidenceValidator =
+    Arc<dyn Fn(String, Vec<String>) -> futures::future::BoxFuture<'static, Result<()>> + Send + Sync>;
+
+fn decision_validator(state: Arc<SessionStoreSinkState>) -> DecisionEvidenceValidator {
+    Arc::new(move |task, ids| {
+        let state = Arc::clone(&state);
+        Box::pin(async move {
+            anyhow::ensure!(
+                !state.health.failed.load(Ordering::Acquire),
+                "canonical persistence failed; decision evidence unavailable"
+            );
+            let (reply, receiver) = tokio::sync::oneshot::channel();
+            state
+                .sender
+                .lock()
+                .as_ref()
+                .context("canonical event sink is closed")?
+                .try_send(SessionStoreRequest::ValidateDecision(task, ids, reply))
+                .map_err(|error| anyhow!("canonical event queue unavailable; retry decision recording: {error}"))?;
+            receiver.await.context("decision evidence drain unavailable")?
+        })
+    })
+}
+
+fn matrix_persistence(state: Arc<SessionStoreSinkState>) -> crate::subagents::matrix::MatrixPersistence {
+    let write_state = Arc::clone(&state);
+    crate::subagents::matrix::MatrixPersistence {
+        persist: Arc::new(move |snapshot| {
+            let state = Arc::clone(&write_state);
+            Box::pin(async move {
+                anyhow::ensure!(!state.health.failed.load(Ordering::Acquire), "canonical persistence failed");
+                let event = ThreadEvent::MatrixUpdated(Box::new(snapshot));
+                let queued = prepare_queued_session_event(&state, &event)?;
+                let reserved_bytes = queued.reserved_bytes;
+                let (reply, receiver) = tokio::sync::oneshot::channel();
+                let sent = state
+                    .sender
+                    .lock()
+                    .as_ref()
+                    .context("canonical event sink is closed")
+                    .and_then(|sender| {
+                        sender
+                            .try_send(SessionStoreRequest::MatrixPersist(queued, reply))
+                            .map_err(|error| anyhow!("canonical matrix queue unavailable: {error}"))
+                    });
+                if let Err(error) = sent {
+                    release_reserved_bytes(&state, reserved_bytes);
+                    state.health.failed.store(true, Ordering::Release);
+                    return Err(error);
+                }
+                state.health.accepted_events.fetch_add(1, Ordering::Relaxed);
+                receiver.await.context("matrix persistence barrier unavailable")?
+            })
+        }),
+        load: Arc::new(move || {
+            let state = Arc::clone(&state);
+            Box::pin(async move {
+                anyhow::ensure!(!state.health.failed.load(Ordering::Acquire), "canonical persistence failed");
+                let (reply, receiver) = tokio::sync::oneshot::channel();
+                state
+                    .sender
+                    .lock()
+                    .as_ref()
+                    .context("canonical event sink is closed")?
+                    .try_send(SessionStoreRequest::MatrixLoad(reply))
+                    .map_err(|error| anyhow!("canonical matrix queue unavailable: {error}"))?;
+                receiver.await.context("matrix replay barrier unavailable")?
+            })
+        }),
+    }
+}
 
 #[derive(Debug, Default)]
 struct SessionStoreSinkHealth {
@@ -73,13 +149,34 @@ impl SessionStoreSinkHealth {
     }
 }
 
+enum SessionStoreRequest {
+    MatrixPersist(QueuedSessionEvent, tokio::sync::oneshot::Sender<Result<()>>),
+    MatrixLoad(tokio::sync::oneshot::Sender<Result<Vec<crate::exec::events::matrix::MatrixSnapshot>>>),
+    Event(QueuedSessionEvent),
+    ValidateDecision(String, Vec<String>, tokio::sync::oneshot::Sender<Result<()>>),
+    Explanation(
+        vtcode_memory::explanation::ExplanationScope,
+        tokio::sync::oneshot::Sender<Result<vtcode_memory::explanation::ExplanationModel>>,
+    ),
+    ExplanationPage(
+        vtcode_memory::explanation::ExplanationScope,
+        usize,
+        tokio::sync::oneshot::Sender<Result<vtcode_memory::explanation::ExplanationPage>>,
+    ),
+    Evidence(
+        vtcode_memory::explanation::EvidenceRef,
+        usize,
+        tokio::sync::oneshot::Sender<Result<vtcode_memory::explanation::EvidencePage>>,
+    ),
+}
+
 struct QueuedSessionEvent {
     event: ThreadEvent,
     reserved_bytes: usize,
 }
 
 struct SessionStoreSinkState {
-    sender: Mutex<Option<mpsc::SyncSender<QueuedSessionEvent>>>,
+    sender: Mutex<Option<mpsc::SyncSender<SessionStoreRequest>>>,
     reserved_bytes: AtomicU64,
     max_bytes: usize,
     health: Arc<SessionStoreSinkHealth>,
@@ -96,6 +193,12 @@ pub(crate) struct SessionStoreSinkHandle {
 }
 
 impl SessionStoreSinkHandle {
+    pub(crate) fn matrix_persistence(&self) -> crate::subagents::matrix::MatrixPersistence {
+        matrix_persistence(Arc::clone(&self.state))
+    }
+    pub(crate) fn decision_validator(&self) -> DecisionEvidenceValidator {
+        decision_validator(Arc::clone(&self.state))
+    }
     pub(crate) async fn close(mut self) -> Result<()> {
         self.state.sender.lock().take();
         if let Some(drain) = self.drain.take() {
@@ -130,6 +233,14 @@ pub struct SessionStoreSink {
 }
 
 impl SessionStoreSink {
+    /// Ordered, acknowledged matrix writes and replay through this session drain.
+    pub fn matrix_persistence(&self) -> crate::subagents::matrix::MatrixPersistence {
+        matrix_persistence(Arc::clone(&self.state))
+    }
+    /// Validate task-owned evidence after all previously accepted events.
+    pub fn decision_validator(&self) -> DecisionEvidenceValidator {
+        decision_validator(Arc::clone(&self.state))
+    }
     /// Open the canonical session store and start its bounded drain.
     pub async fn open(workspace: &Path, session_id: &str) -> Result<Self> {
         let (state, handle) = open_session_store_sink(workspace, session_id, SESSION_STORE_DRAIN_CAPACITY).await?;
@@ -148,6 +259,51 @@ impl SessionStoreSink {
     /// Return the callback form used by the core event recorder.
     pub fn event_sink(&self) -> EventSink {
         event_sink_for_state(Arc::clone(&self.state))
+    }
+
+    /// Ordered query barrier; accepted events precede this retained snapshot.
+    pub async fn explanation(
+        &self,
+        scope: vtcode_memory::explanation::ExplanationScope,
+    ) -> Result<vtcode_memory::explanation::ExplanationModel> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.enqueue_query(SessionStoreRequest::Explanation(scope, sender))?;
+        receiver.await.context("explanation snapshot drain unavailable")?
+    }
+
+    /// Return only a bounded page from the ordered cached projection.
+    pub async fn explanation_page(
+        &self,
+        scope: vtcode_memory::explanation::ExplanationScope,
+        offset: usize,
+    ) -> Result<vtcode_memory::explanation::ExplanationPage> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.enqueue_query(SessionStoreRequest::ExplanationPage(scope, offset, sender))?;
+        receiver.await.context("explanation page drain unavailable")?
+    }
+
+    /// Resolve a bounded evidence page through the same ordered barrier.
+    pub async fn evidence(
+        &self,
+        reference: vtcode_memory::explanation::EvidenceRef,
+        offset: usize,
+    ) -> Result<vtcode_memory::explanation::EvidencePage> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.enqueue_query(SessionStoreRequest::Evidence(reference, offset, sender))?;
+        receiver.await.context("explanation evidence drain unavailable")?
+    }
+
+    fn enqueue_query(&self, request: SessionStoreRequest) -> Result<()> {
+        if self.state.health.failed.load(Ordering::Acquire) {
+            return Err(anyhow!("canonical persistence failed; explanation unavailable"));
+        }
+        self.state
+            .sender
+            .lock()
+            .as_ref()
+            .context("canonical event sink is closed")?
+            .try_send(request)
+            .map_err(|error| anyhow!("canonical event queue unavailable; retry explanation query: {error}"))
     }
 
     /// Drain and close the canonical persistence task.
@@ -224,7 +380,7 @@ async fn open_session_store_sink_with_limits(
         .context("canonical session store open task failed")??;
 
     let queue_capacity = capacity.max(1);
-    let (sender, receiver) = mpsc::sync_channel::<QueuedSessionEvent>(queue_capacity);
+    let (sender, receiver) = mpsc::sync_channel::<SessionStoreRequest>(queue_capacity);
     let health = Arc::new(SessionStoreSinkHealth::default());
     let state = Arc::new(SessionStoreSinkState {
         sender: Mutex::new(Some(sender)),
@@ -257,13 +413,226 @@ fn event_sink_for_state(state: Arc<SessionStoreSinkState>) -> EventSink {
     })
 }
 
+struct CachedExplanation {
+    scope: vtcode_memory::explanation::ExplanationScope,
+    model: Arc<vtcode_memory::explanation::ExplanationModel>,
+}
+
+fn cached_explanation(
+    log: &vtcode_memory::SessionEventLog,
+    scope: vtcode_memory::explanation::ExplanationScope,
+    explanations: &mut Vec<CachedExplanation>,
+) -> Result<Arc<vtcode_memory::explanation::ExplanationModel>> {
+    if let Some(cached) = explanations.iter().find(|cached| cached.scope == scope) {
+        return Ok(Arc::clone(&cached.model));
+    }
+    let model = Arc::new(vtcode_memory::explanation::query_explanation(log, scope)?);
+    // Two scopes, invalidated on append; oversized projections remain uncached.
+    let mut counter = LimitedByteCounter { bytes: 0, limit: EXPLANATION_CACHE_MAX_BYTES };
+    if serde_json::to_writer(&mut counter, model.as_ref()).is_ok() {
+        explanations.push(CachedExplanation { scope, model: Arc::clone(&model) });
+    }
+    Ok(model)
+}
+
+fn matrix_command_completed_event(
+    snapshot: &crate::exec::events::matrix::MatrixSnapshot,
+    task: &crate::exec::events::matrix::MatrixTaskState,
+    evidence: &crate::exec::events::matrix::MatrixCommandEvidence,
+    session_id: &str,
+) -> ThreadEvent {
+    ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            id: evidence.event_id.clone(),
+            context: Some(Box::new(crate::exec::events::ItemContext {
+                task_id: format!("{}/{}", snapshot.spec.id, task.id),
+                turn_id: evidence.attempt_id.clone(),
+                actor_id: evidence.worker_id.clone(),
+                parent_actor_id: Some(session_id.to_owned()),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                activity: Some(crate::exec::events::CommandActivity::Verification),
+            })),
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                command: evidence.command.clone(),
+                arguments: Some(serde_json::json!({
+                    "matrix_id":snapshot.spec.id, "task_id":task.id,
+                    "attempt_id":evidence.attempt_id, "worker_id":evidence.worker_id,
+                    "generation":evidence.generation, "cancelled":evidence.cancelled,
+                })),
+                aggregated_output: String::new(),
+                exit_code: evidence.exit_code,
+                status: if evidence.exit_code == Some(0) && !evidence.cancelled {
+                    CommandExecutionStatus::Completed
+                } else {
+                    CommandExecutionStatus::Failed
+                },
+            })),
+        },
+    })
+}
+
+fn restore_matrix_evidence_ids(
+    log: &vtcode_memory::SessionEventLog,
+    ids: &mut std::collections::HashSet<String>,
+) -> Result<()> {
+    log.visit_snapshot(|_, bytes| {
+        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes) {
+            match versioned.into_event() {
+                ThreadEvent::ItemCompleted(event)
+                    if matches!(event.item.details, ThreadItemDetails::CommandExecution(_)) =>
+                {
+                    ids.insert(event.item.id);
+                }
+                ThreadEvent::MatrixUpdated(snapshot) => {
+                    // Cap rewrites can retain checkpoints after evicting the
+                    // command records. Their evidence remains historical.
+                    ids.extend(
+                        snapshot
+                            .tasks
+                            .into_iter()
+                            .flat_map(|task| task.attempts)
+                            .flat_map(|attempt| attempt.evidence)
+                            .map(|evidence| evidence.event_id),
+                    );
+                }
+                _ => {}
+            }
+        }
+    })
+    .context("restore canonical matrix command identities")?;
+    Ok(())
+}
+
 fn drain_session_events(
-    rx: Receiver<QueuedSessionEvent>,
+    rx: Receiver<SessionStoreRequest>,
     log: vtcode_memory::SessionEventLog,
     session_id: String,
     state: Arc<SessionStoreSinkState>,
 ) {
-    while let Ok(queued) = rx.recv() {
+    let mut explanations = Vec::new();
+    let mut matrix_evidence_ids = std::collections::HashSet::new();
+    let mut matrix_evidence_restored = false;
+    while let Ok(request) = rx.recv() {
+        let queued = match request {
+            SessionStoreRequest::MatrixPersist(queued, reply) => {
+                let result = (|| -> Result<()> {
+                    if let ThreadEvent::MatrixUpdated(snapshot) = &queued.event {
+                        if !matrix_evidence_restored {
+                            restore_matrix_evidence_ids(&log, &mut matrix_evidence_ids)?;
+                            matrix_evidence_restored = true;
+                        }
+                        for task in &snapshot.tasks {
+                            for attempt in &task.attempts {
+                                for evidence in &attempt.evidence {
+                                    if matrix_evidence_ids.insert(evidence.event_id.clone()) {
+                                        log.append(&matrix_command_completed_event(
+                                            snapshot,
+                                            task,
+                                            evidence,
+                                            &session_id,
+                                        ))?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    log.append(&queued.event)?;
+                    log.flush()?;
+                    Ok(())
+                })();
+                release_reserved_bytes(&state, queued.reserved_bytes);
+                let failed = result.is_err();
+                if failed {
+                    state.health.append_failures.fetch_add(1, Ordering::Relaxed);
+                    state.health.failed.store(true, Ordering::Release);
+                } else {
+                    state.health.persisted_events.fetch_add(1, Ordering::Relaxed);
+                }
+                explanations.clear();
+                let _ = reply.send(result);
+                if failed {
+                    break;
+                }
+                continue;
+            }
+            SessionStoreRequest::MatrixLoad(reply) => {
+                let result = (|| -> Result<_> {
+                    let mut latest = std::collections::BTreeMap::<String, vtcode_memory::matrix::MatrixState>::new();
+                    let mut replay_error = None;
+                    log.visit_snapshot(|_, bytes| {
+                        if replay_error.is_some() {
+                            return;
+                        }
+                        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes)
+                            && let ThreadEvent::MatrixUpdated(snapshot) = versioned.into_event()
+                        {
+                            let previous = latest.remove(&snapshot.spec.id);
+                            let events = previous
+                                .into_iter()
+                                .map(|state| state.event())
+                                .chain([ThreadEvent::MatrixUpdated(snapshot)]);
+                            match vtcode_memory::matrix::replay(events) {
+                                Ok(replayed) => latest.extend(replayed),
+                                Err(error) => replay_error = Some(error),
+                            }
+                        }
+                    })?;
+                    if let Some(error) = replay_error {
+                        return Err(error.into());
+                    }
+                    Ok(latest.into_values().map(|state| state.snapshot().clone()).collect())
+                })();
+                let _ = reply.send(result);
+                continue;
+            }
+            SessionStoreRequest::Event(event) => event,
+            SessionStoreRequest::ValidateDecision(task_id, ids, reply) => {
+                let result = (|| -> Result<()> {
+                    let mut found = std::collections::HashSet::new();
+                    log.visit_snapshot(|_, bytes| {
+                        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes) {
+                            let item = match versioned.into_event() {
+                                ThreadEvent::ItemStarted(e) => Some(e.item),
+                                ThreadEvent::ItemUpdated(e) => Some(e.item),
+                                ThreadEvent::ItemCompleted(e) => Some(e.item),
+                                _ => None,
+                            };
+                            if let Some(item) = item
+                                && item.context.as_ref().is_some_and(|c| c.task_id == task_id)
+                                && ids.contains(&item.id)
+                            {
+                                found.insert(item.id);
+                            }
+                        }
+                    })?;
+                    anyhow::ensure!(
+                        ids.iter().all(|id| found.contains(id)),
+                        "decision evidence is unavailable or does not belong to the current task"
+                    );
+                    Ok(())
+                })();
+                let _ = reply.send(result);
+                continue;
+            }
+            SessionStoreRequest::Explanation(scope, reply) => {
+                let result = cached_explanation(&log, scope, &mut explanations).map(|model| model.as_ref().clone());
+                let _ = reply.send(result);
+                continue;
+            }
+            SessionStoreRequest::ExplanationPage(scope, offset, reply) => {
+                let result = cached_explanation(&log, scope, &mut explanations)
+                    .map(|model| vtcode_memory::explanation::page_explanation(&model, offset));
+                let _ = reply.send(result);
+                continue;
+            }
+            SessionStoreRequest::Evidence(reference, offset, reply) => {
+                let result = vtcode_memory::explanation::query_evidence(&log, &reference, offset, 32 * 1024)
+                    .map_err(anyhow::Error::from);
+                let _ = reply.send(result);
+                continue;
+            }
+        };
+        explanations.clear();
         let reserved_bytes = queued.reserved_bytes;
         match log.append(&queued.event) {
             Ok(()) => {
@@ -278,8 +647,11 @@ fn drain_session_events(
                     "failed to persist session event; stopping authoritative drain"
                 );
                 release_reserved_bytes(&state, reserved_bytes);
-                while let Ok(queued) = rx.try_recv() {
-                    release_reserved_bytes(&state, queued.reserved_bytes);
+                while let Ok(request) = rx.try_recv() {
+                    if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request
+                    {
+                        release_reserved_bytes(&state, queued.reserved_bytes);
+                    }
                 }
                 break;
             }
@@ -298,7 +670,7 @@ fn drain_session_events(
     }
 }
 
-fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<()> {
+fn prepare_queued_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<QueuedSessionEvent> {
     if state.health.failed.load(Ordering::Acquire) {
         state.health.channel_failures.fetch_add(1, Ordering::Relaxed);
         return Err(anyhow!("canonical session event sink has failed"));
@@ -327,7 +699,12 @@ fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> 
         return Err(anyhow!("canonical session event queue reached its bounded byte capacity"));
     }
 
-    let queued = QueuedSessionEvent { event: event.clone(), reserved_bytes };
+    Ok(QueuedSessionEvent { event: event.clone(), reserved_bytes })
+}
+
+fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<()> {
+    let queued = prepare_queued_session_event(state, event)?;
+    let reserved_bytes = queued.reserved_bytes;
     let sender = state.sender.lock();
     let Some(sender) = sender.as_ref() else {
         release_reserved_bytes(state, reserved_bytes);
@@ -335,13 +712,15 @@ fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> 
         state.health.channel_failures.fetch_add(1, Ordering::Relaxed);
         return Err(anyhow!("canonical session event sink is closed"));
     };
-    match sender.try_send(queued) {
+    match sender.try_send(SessionStoreRequest::Event(queued)) {
         Ok(()) => {
             state.health.accepted_events.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
-        Err(TrySendError::Full(queued) | TrySendError::Disconnected(queued)) => {
-            release_reserved_bytes(state, queued.reserved_bytes);
+        Err(TrySendError::Full(request) | TrySendError::Disconnected(request)) => {
+            if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request {
+                release_reserved_bytes(state, queued.reserved_bytes);
+            }
             state.health.failed.store(true, Ordering::Release);
             state.health.channel_failures.fetch_add(1, Ordering::Relaxed);
             Err(anyhow!("canonical session event queue could not accept the event"))
@@ -436,6 +815,7 @@ impl ActiveToolHandle {
 /// Helper responsible for recording execution events and relaying them to optional sinks.
 #[derive(Default)]
 pub struct ExecEventRecorder {
+    context: ExecutionContextTracker,
     thread_id: String,
     events: Vec<ThreadEvent>,
     event_sink: Option<EventSink>,
@@ -453,6 +833,7 @@ impl ExecEventRecorder {
     ) -> Self {
         let thread_id = thread_id.into();
         let mut recorder = Self {
+            context: ExecutionContextTracker::default(),
             thread_id: thread_id.clone(),
             events: Vec::new(),
             event_sink,
@@ -473,8 +854,11 @@ impl ExecEventRecorder {
         &mut self,
         submission_id: Option<SubmissionId>,
         turn_id: Option<String>,
-        event: ThreadEvent,
+        mut event: ThreadEvent,
     ) {
+        self.context.annotate(&mut event);
+        let decision = decision_completed_event(&event);
+        let exec_completion = self.context.background_exec_output_event(&mut event);
         if let Some(sink) = &self.event_sink {
             let mut callback = sink.lock();
             callback(&event);
@@ -483,6 +867,22 @@ impl ExecEventRecorder {
             handle.record_event(submission_id, turn_id, event.clone());
         }
         self.events.push(event);
+        if let Some(decision) = decision {
+            self.record(decision);
+        }
+        if let Some(completion) = exec_completion {
+            self.record(completion);
+        }
+    }
+
+    /// Attach a session result to its original verifier's canonical output.
+    pub fn record_exec_session_output(&mut self, call_item_id: &str, tool_name: &str, args: &Value, output: &Value) {
+        if let Some(event) = self.context.exec_session_output_event(call_item_id, tool_name, args, output) {
+            self.record(event);
+        }
+        if let Some(event) = self.context.delegation_status_event(call_item_id, tool_name, output) {
+            self.record(event);
+        }
     }
 
     pub fn record_thread_event(&mut self, event: ThreadEvent) {
@@ -509,6 +909,14 @@ impl ExecEventRecorder {
     }
 
     pub fn turn_started(&mut self) {
+        let turn_id = format!("turn-{}", Uuid::new_v4());
+        self.context
+            .begin(&self.thread_id, &turn_id, "", crate::exec::events::InputOrigin::Continuation);
+        self.active_turn_id = Some(turn_id);
+        self.begin_turn_submission();
+    }
+
+    fn begin_turn_submission(&mut self) {
         if let Some(handle) = &self.thread_handle {
             match handle.begin_turn() {
                 Ok(submission_id) => self.active_submission_id = Some(submission_id),
@@ -522,18 +930,38 @@ impl ExecEventRecorder {
                     self.active_submission_id = None;
                 }
             }
-            self.active_turn_id = Some(format!("turn-{}", Uuid::new_v4()));
         }
         self.record(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
     }
 
+    /// Start a task with its original public request.
+    pub fn task_started(&mut self, goal: &str) -> String {
+        let context = self.context.begin(
+            &self.thread_id,
+            &format!("turn-{}", Uuid::new_v4()),
+            goal,
+            crate::exec::events::InputOrigin::User,
+        );
+        self.active_turn_id = Some(context.turn_id);
+        self.begin_turn_submission();
+        context.task_id
+    }
+
     pub fn turn_completed(&mut self, usage: Usage) {
-        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent { usage, in_progress_exec_sessions: Vec::new() }));
+        self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
+            usage,
+            in_progress_exec_sessions: Vec::new(),
+        }));
         self.finish_turn();
     }
 
     pub fn turn_failed(&mut self, message: &str, usage: Option<Usage>) {
-        self.record(ThreadEvent::TurnFailed(TurnFailedEvent { message: message.to_string(), usage }));
+        self.record(ThreadEvent::TurnFailed(TurnFailedEvent {
+            completed_at: None,
+            message: message.to_string(),
+            usage,
+        }));
         self.finish_turn();
     }
 
@@ -553,6 +981,7 @@ impl ExecEventRecorder {
         num_turns: usize,
     ) {
         self.record(ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
+            completed_at: None,
             thread_id: self.thread_id.clone(),
             session_id: session_id.to_string(),
             subtype,
@@ -797,6 +1226,7 @@ impl ExecEventRecorder {
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {
         let id = self.next_item_id();
         let item = ThreadItem {
+            context: None,
             id: id.clone(),
             details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: command.to_string(),
@@ -818,6 +1248,7 @@ impl ExecEventRecorder {
         aggregated_output: &str,
     ) {
         let item = ThreadItem {
+            context: None,
             id: handle.id.clone(),
             details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: handle.command.clone(),
@@ -832,6 +1263,7 @@ impl ExecEventRecorder {
 
     pub fn warning(&mut self, message: &str) {
         let item = ThreadItem {
+            context: None,
             id: self.next_item_id(),
             details: ThreadItemDetails::Error(ErrorItem { message: message.to_string() }),
         };
@@ -849,6 +1281,7 @@ impl ExecEventRecorder {
         error_category: Option<String>,
     ) {
         let item = ThreadItem {
+            context: None,
             id: self.next_item_id(),
             details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                 event,
@@ -884,6 +1317,7 @@ impl ExecEventRecorder {
         error_category: Option<&str>,
     ) {
         let item = ThreadItem {
+            context: None,
             id: self.next_item_id(),
             details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                 event: HarnessEventKind::ToolLatencyRecorded,
@@ -948,6 +1382,261 @@ impl ExecEventRecorder {
 
 #[cfg(test)]
 mod tests {
+    fn pending_verifier(recorder: &mut ExecEventRecorder, session: &str) -> String {
+        let args = serde_json::json!({"cmd":"cargo check --locked"});
+        let launch = recorder.tool_started("exec_command", Some(&args), Some(session));
+        recorder.tool_finished(&launch, crate::exec::events::ToolCallStatus::Completed, None, "still running", None);
+        recorder.record_exec_session_output(
+            &launch.id,
+            "exec_command",
+            &args,
+            &serde_json::json!({"session_id":session,"output":"still running"}),
+        );
+        launch.id
+    }
+
+    #[tokio::test]
+    async fn exec_session_verification_tracks_terminal_output_and_preserves_launch_task() {
+        use vtcode_memory::explanation::ExplanationScope;
+        let workspace = tempfile::tempdir().unwrap();
+        let sink = SessionStoreSink::open(workspace.path(), "exec-verification").await.unwrap();
+        let mut recorder = ExecEventRecorder::new("exec-verification", Some(sink.event_sink()), None);
+        let launch_task = recorder.task_started("Verify changes");
+        for session in ["successful", "failed", "pending"] {
+            pending_verifier(&mut recorder, session);
+        }
+        let pending = sink.explanation(ExplanationScope::Task).await.unwrap();
+        assert_eq!(pending.verification.len(), 3);
+        assert!(
+            pending
+                .verification
+                .iter()
+                .all(|entry| entry.fact.status == "pending" && !entry.fresh)
+        );
+        for (requested, returned) in [("unrelated", "unrelated"), ("successful", "failed")] {
+            recorder.record_exec_session_output(
+                "poll",
+                "write_stdin",
+                &serde_json::json!({"session_id":requested,"chars":""}),
+                &serde_json::json!({"session_id":returned,"exit_code":0}),
+            );
+        }
+        assert!(
+            sink.explanation(ExplanationScope::Task)
+                .await
+                .unwrap()
+                .verification
+                .iter()
+                .all(|entry| entry.fact.status == "pending")
+        );
+        for (session, exit) in [("successful", Some(0)), ("failed", Some(7)), ("pending", None)] {
+            recorder.record_exec_session_output(
+                "poll",
+                "write_stdin",
+                &serde_json::json!({"session_id":session,"chars":""}),
+                &serde_json::json!({"session_id":session,"exit_code":exit,"output":"terminal observation"}),
+            );
+        }
+        let terminal = sink.explanation(ExplanationScope::Task).await.unwrap();
+        assert_eq!(
+            terminal
+                .verification
+                .iter()
+                .map(|entry| (entry.fact.status.as_str(), entry.exit_code, entry.fresh))
+                .collect::<Vec<_>>(),
+            vec![
+                ("passed", Some(0), true),
+                ("failed or denied", Some(7), false),
+                ("pending", None, false)
+            ]
+        );
+        let new_task = recorder.task_started("A different task");
+        assert_ne!(launch_task, new_task);
+        recorder.record_exec_session_output(
+            "poll-new-task",
+            "write_stdin",
+            &serde_json::json!({"session_id":"pending","chars":""}),
+            &serde_json::json!({"session_id":"pending","exit_code":0}),
+        );
+        assert!(sink.explanation(ExplanationScope::Task).await.unwrap().verification.is_empty());
+        let all = sink.explanation(ExplanationScope::Session).await.unwrap();
+        assert_eq!(all.verification.len(), 3);
+        assert!(
+            all.verification
+                .iter()
+                .all(|entry| entry.fact.task_id.as_deref() == Some(launch_task.as_str()))
+        );
+        assert_eq!(all.verification[2].fact.status, "passed");
+        sink.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn exec_session_verification_launched_before_a_mutation_remains_stale() {
+        let workspace = tempfile::tempdir().unwrap();
+        let sink = SessionStoreSink::open(workspace.path(), "exec-freshness").await.unwrap();
+        let mut recorder = ExecEventRecorder::new("exec-freshness", Some(sink.event_sink()), None);
+        recorder.task_started("Verify changes");
+        pending_verifier(&mut recorder, "before-edit");
+        recorder.record_thread_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "edit".into(),
+                context: None,
+                details: ThreadItemDetails::FileChange(Box::new(crate::exec::events::FileChangeItem {
+                    changes: vec![crate::exec::events::FileUpdateChange {
+                        path: "parser.rs".into(),
+                        kind: crate::exec::events::PatchChangeKind::Update,
+                    }],
+                    status: crate::exec::events::PatchApplyStatus::Completed,
+                    unified_diff: None,
+                    diff_incomplete: None,
+                    additions: Some(1),
+                    deletions: Some(0),
+                })),
+            },
+        }));
+        recorder.record_exec_session_output(
+            "poll",
+            "write_stdin",
+            &serde_json::json!({"session_id":"before-edit","chars":""}),
+            &serde_json::json!({"session_id":"before-edit","exit_code":0}),
+        );
+        let model = sink
+            .explanation(vtcode_memory::explanation::ExplanationScope::Task)
+            .await
+            .unwrap();
+        assert_eq!(model.verification[0].fact.status, "passed");
+        assert!(!model.verification[0].fresh);
+        pending_verifier(&mut recorder, "after-edit");
+        recorder.record_exec_session_output(
+            "poll",
+            "write_stdin",
+            &serde_json::json!({"session_id":"after-edit","chars":""}),
+            &serde_json::json!({"session_id":"after-edit","exit_code":0}),
+        );
+        assert!(
+            sink.explanation(vtcode_memory::explanation::ExplanationScope::Task)
+                .await
+                .unwrap()
+                .verification[1]
+                .fresh
+        );
+        sink.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn explanation_barrier_and_decision_validation_include_accepted_events() {
+        let workspace = tempfile::tempdir().unwrap();
+        let sink = SessionStoreSink::open(workspace.path(), "explanation-barrier").await.unwrap();
+        let mut recorder = ExecEventRecorder::new("explanation-barrier", Some(sink.event_sink()), None);
+        let task_id = recorder.task_started("Fix parser");
+        recorder.record_thread_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "parser-change".into(),
+                context: None,
+                details: ThreadItemDetails::Decision(Box::new(crate::exec::events::DecisionItem {
+                    summary: "Use existing parser".into(),
+                    rationale: "Preserve validated inputs".into(),
+                    alternatives: vec![],
+                    evidence_ids: vec![],
+                })),
+            },
+        }));
+        let validate = sink.decision_validator();
+        validate(task_id.clone(), vec!["parser-change".into()]).await.unwrap();
+        assert!(validate("other-task".into(), vec!["parser-change".into()]).await.is_err());
+        assert!(validate(task_id.clone(), vec!["missing".into()]).await.is_err());
+        let model = sink
+            .explanation(vtcode_memory::explanation::ExplanationScope::Task)
+            .await
+            .unwrap();
+        assert_eq!(model.task_id.as_deref(), Some(task_id.as_str()));
+        assert_eq!(model.decisions.len(), 1);
+        let projected_page = sink
+            .explanation_page(vtcode_memory::explanation::ExplanationScope::Task, 0)
+            .await
+            .unwrap();
+        assert_eq!(projected_page.model.revision, model.revision);
+        assert_eq!(projected_page.model.decisions, model.decisions);
+        let reference = model.decisions[0].fact.evidence.clone();
+        let page = sink.evidence(reference, 0).await.unwrap();
+        assert!(page.text.contains("Preserve validated inputs"));
+        recorder.turn_completed(Usage::default());
+        recorder.turn_started();
+        let updated_page = sink
+            .explanation_page(vtcode_memory::explanation::ExplanationScope::Task, 0)
+            .await
+            .unwrap();
+        assert_ne!(updated_page.model.revision, projected_page.model.revision);
+        assert_eq!(updated_page.model.decisions, model.decisions);
+        let starts: Vec<_> = recorder
+            .events
+            .iter()
+            .filter_map(|e| {
+                if let ThreadEvent::TurnStarted(t) = e {
+                    t.context.as_deref()
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(starts.len(), 2);
+        assert_eq!(starts[0].task_id, starts[1].task_id);
+        assert_ne!(starts[0].turn_id, starts[1].turn_id);
+        sink.close().await.unwrap();
+        assert!(validate(task_id, vec!["parser-change".into()]).await.is_err());
+    }
+    #[test]
+    fn ten_thousand_events_share_cached_projections_for_bounded_pages() {
+        use vtcode_memory::explanation::{ExplanationScope, page_explanation};
+
+        let workspace = tempfile::tempdir().unwrap();
+        let log = vtcode_memory::open(workspace.path(), "large-explanation", DEFAULT_MAX_EVENTS).unwrap();
+        let mut context = ExecutionContextTracker::default();
+        context.begin("root", "turn", "Verify retained work", crate::exec::events::InputOrigin::User);
+        let mut started = ThreadEvent::TurnStarted(TurnStartedEvent::default());
+        context.annotate(&mut started);
+        log.append(&started).unwrap();
+        for index in 0..DEFAULT_MAX_EVENTS - 1 {
+            let mut event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: format!("check-{index}"),
+                    context: None,
+                    details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                        command: format!("cargo check --locked # {}", "x".repeat(256)),
+                        arguments: None,
+                        aggregated_output: "discarded output".repeat(64),
+                        exit_code: Some(0),
+                        status: CommandExecutionStatus::Completed,
+                    })),
+                },
+            });
+            context.annotate(&mut event);
+            log.append(&event).unwrap();
+        }
+        let mut cache = Vec::new();
+        let original = cached_explanation(&log, ExplanationScope::Task, &mut cache).unwrap();
+        assert_eq!(original.actions.len(), DEFAULT_MAX_EVENTS - 1);
+        let mut counter = LimitedByteCounter { bytes: 0, limit: EXPLANATION_CACHE_MAX_BYTES };
+        serde_json::to_writer(&mut counter, original.as_ref()).unwrap();
+        assert!(counter.bytes > 8 * 1024 * 1024, "fixture exceeds the old cache ceiling");
+        let mut offset = 0;
+        let mut seen = 0;
+        loop {
+            let shared = cached_explanation(&log, ExplanationScope::Task, &mut cache).unwrap();
+            assert!(Arc::ptr_eq(&original, &shared), "pages reuse the same reduced snapshot");
+            let page = page_explanation(&shared, offset);
+            assert!(serde_json::to_vec(&page).unwrap().len() <= 64 * 1024);
+            assert_eq!(page.model.revision, original.revision);
+            seen += page.model.actions.len();
+            match page.next_offset {
+                Some(next) => offset = next,
+                None => break,
+            }
+        }
+        assert_eq!(seen, original.actions.len());
+        assert_eq!(cache.len(), 1);
+    }
+
     use super::*;
     use crate::core::threads::{ThreadBootstrap, ThreadManager};
     use std::fs;
@@ -1008,6 +1697,7 @@ mod tests {
             ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
             ThreadEvent::TurnStarted(TurnStartedEvent::default()),
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }),
@@ -1041,8 +1731,8 @@ mod tests {
         let persisted = fs::read_to_string(event_path)
             .expect("read persisted events")
             .lines()
-            .map(|line| serde_json::from_str::<vtcode_exec_events::VersionedThreadEvent>(line).expect("decode event"))
-            .map(vtcode_exec_events::VersionedThreadEvent::into_event)
+            .map(|line| serde_json::from_str::<VersionedThreadEvent>(line).expect("decode event"))
+            .map(VersionedThreadEvent::into_event)
             .collect::<Vec<_>>();
         assert_eq!(persisted, events);
         assert_eq!(health.snapshot().append_failures, 0);
@@ -1146,6 +1836,7 @@ mod tests {
         };
         let first = ThreadEvent::TurnStarted(TurnStartedEvent::default());
         let second = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         });

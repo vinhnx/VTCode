@@ -23,6 +23,21 @@ pub(crate) static COLOR_SCHEME_REPORTS_ENABLED: AtomicBool = AtomicBool::new(fal
 /// screen already restores it.
 pub(crate) static ALTERNATE_SCREEN_ACTIVE: AtomicBool = AtomicBool::new(false);
 pub(crate) static RESTORE_DONE: AtomicBool = AtomicBool::new(false);
+/// One-shot claim for the cooked-mode (raw-mode) transition.
+///
+/// Separate from [`RESTORE_DONE`]: the escape-sequence restore may run via
+/// `restore_tui_keep_raw_mode` while deliberately leaving the tty raw during
+/// teardown. Force paths (`restore_tui`, Drop backstops, emergency exit) must
+/// still be able to finish the cooked transition exactly once.
+pub(crate) static RAW_MODE_RESTORE_DONE: AtomicBool = AtomicBool::new(false);
+/// Original iTerm2 profile name to revert to on teardown.
+///
+/// Set when the TUI applies its one-shot `OSC 1337;SetProfile=VT Code` switch
+/// (the tab-icon profile). `SetProfile` is a sticky session-profile change
+/// with no automatic reversion, so the canonical restore path must emit the
+/// matching switch back to the session's original profile. `None` means no
+/// switch was applied and nothing needs reverting.
+static ITERM2_PROFILE_TO_RESTORE: Mutex<Option<String>> = Mutex::new(None);
 static TERMINAL_OPERATION_LOCK: Mutex<()> = Mutex::new(());
 static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 pub(crate) static COLOR_EYRE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
@@ -96,6 +111,7 @@ pub(crate) fn app_metadata() -> AppMetadata {
 pub(crate) fn mark_tui_initialized() {
     TUI_INITIALIZED.store(true, Ordering::SeqCst);
     RESTORE_DONE.store(false, Ordering::SeqCst);
+    RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
     RAW_MODE_WAS_ENABLED.store(false, Ordering::SeqCst);
     // Fresh session: alternate-screen state is set by the runner when it enters one.
     ALTERNATE_SCREEN_ACTIVE.store(false, Ordering::SeqCst);
@@ -137,6 +153,25 @@ pub(crate) fn is_alternate_screen_active() -> bool {
     ALTERNATE_SCREEN_ACTIVE.load(Ordering::SeqCst)
 }
 
+/// Record the original iTerm2 profile to revert to on teardown.
+///
+/// Also marks the terminal modified so the canonical restore path cannot
+/// early-return before emitting the profile switch-back.
+pub(crate) fn mark_iterm2_profile_switched(original: String) {
+    *ITERM2_PROFILE_TO_RESTORE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(original);
+    mark_terminal_modified();
+}
+
+/// Take the pending iTerm2 profile restore, clearing it so it is emitted once.
+pub(crate) fn take_iterm2_profile_to_restore() -> Option<String> {
+    ITERM2_PROFILE_TO_RESTORE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take()
+}
+
 /// Track whether raw mode was enabled before the TUI took control.
 /// This allows the canonical restore path to return the terminal to the
 /// exact prior raw-mode state instead of unconditionally disabling it.
@@ -164,6 +199,12 @@ pub(crate) fn lock_terminal_operations() -> MutexGuard<'static, ()> {
 
 pub(crate) fn try_claim_restore() -> bool {
     !RESTORE_DONE.swap(true, Ordering::SeqCst)
+}
+
+/// Claim the one-shot cooked-mode transition. `true` means this caller owns
+/// restoring raw mode to its pre-TUI state.
+pub(crate) fn try_claim_raw_mode_restore() -> bool {
+    !RAW_MODE_RESTORE_DONE.swap(true, Ordering::SeqCst)
 }
 
 /// Whether terminal restoration has already been claimed (by this task, the
@@ -223,5 +264,33 @@ mod tests {
         assert!(is_restore_claimed());
         assert!(!try_claim_restore(), "second claim must fail");
         RESTORE_DONE.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn raw_mode_restore_claim_is_independent_of_escape_restore() {
+        RESTORE_DONE.store(false, Ordering::SeqCst);
+        RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+
+        assert!(try_claim_restore());
+        assert!(!RAW_MODE_RESTORE_DONE.load(Ordering::SeqCst), "escape claim must not finish cooked restore");
+        assert!(try_claim_raw_mode_restore());
+        assert!(!try_claim_raw_mode_restore());
+
+        RESTORE_DONE.store(false, Ordering::SeqCst);
+        RAW_MODE_RESTORE_DONE.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn iterm2_profile_restore_is_stored_and_taken_once() {
+        // Clear any residue from other tests.
+        let _ = take_iterm2_profile_to_restore();
+
+        mark_iterm2_profile_switched("Solarized Dark".to_string());
+        assert!(is_terminal_modified(), "switching the profile must mark the terminal modified");
+
+        assert_eq!(take_iterm2_profile_to_restore().as_deref(), Some("Solarized Dark"));
+        assert_eq!(take_iterm2_profile_to_restore(), None, "restore must be emitted only once");
+
+        mark_terminal_restored();
     }
 }

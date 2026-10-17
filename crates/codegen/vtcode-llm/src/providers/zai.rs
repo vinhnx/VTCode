@@ -8,6 +8,11 @@ use crate::provider::{LLMError, LLMRequest};
 pub struct ZaiSpec;
 
 fn resolve_zai_base_url(base_url: Option<String>) -> String {
+    // Semantic variant, deliberately not layered on `override_base_url`:
+    // z.ai has a legacy env layer with lower precedence than the current
+    // env var, and the shared helper's env position would let the legacy
+    // value override an explicit configuration (regression-locked by
+    // `base_url_resolution_chains_explicit_then_legacy_env_then_default`).
     if let Some(url) = base_url {
         let trimmed = url.trim();
         if !trimmed.is_empty() {
@@ -180,6 +185,39 @@ mod tests {
     use std::sync::Arc;
     use vtcode_config::constants::models;
     use vtcode_config::types::ReasoningEffortLevel;
+
+    /// Explicit config wins over both env layers; blank explicit values keep
+    /// falling to the legacy env var, and the default is the last resort.
+    /// Asymmetric on every layer boundary rather than one happy path.
+    #[test]
+    #[serial_test::serial]
+    fn base_url_resolution_chains_explicit_then_legacy_env_then_default() {
+        use vtcode_config::constants::env_vars;
+        let guard = vtcode_commons::env_lock::lock();
+        let prior_current = std::env::var_os(env_vars::ZAI_BASE_URL);
+        let prior_legacy = std::env::var_os(env_vars::Z_AI_BASE_URL);
+        guard.remove_var(env_vars::ZAI_BASE_URL);
+        guard.remove_var(env_vars::Z_AI_BASE_URL);
+
+        guard.set_var(env_vars::Z_AI_BASE_URL, "https://legacy.example/v4");
+        assert_eq!(resolve_zai_base_url(None), "https://legacy.example/v4");
+        assert_eq!(resolve_zai_base_url(Some("   ".to_string())), "https://legacy.example/v4");
+        assert_eq!(
+            resolve_zai_base_url(Some("  https://explicit.example/v4  ".to_string())),
+            "https://explicit.example/v4",
+            "explicit override wins over the legacy env layer"
+        );
+
+        guard.remove_var(env_vars::Z_AI_BASE_URL);
+        assert_eq!(
+            resolve_zai_base_url(None),
+            vtcode_config::constants::urls::ZAI_API_BASE,
+            "default applies only when both env layers are absent"
+        );
+
+        guard.restore_var(env_vars::ZAI_BASE_URL, prior_current);
+        guard.restore_var(env_vars::Z_AI_BASE_URL, prior_legacy);
+    }
 
     #[test]
     fn payload_includes_top_p() {

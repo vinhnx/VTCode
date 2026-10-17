@@ -1,5 +1,11 @@
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
-use vtcode_core::llm::provider::{Message, ToolDefinition};
+use vtcode_core::llm::provider::{Message, ToolDefinition, Usage};
+
+pub(super) fn prompt_cache_hit_ratio(provider: &str, usage: &Usage) -> f64 {
+    vtcode_core::llm::usage_cost::normalized_turn_usage(provider, usage)
+        .cache_hit_rate()
+        .unwrap_or(0.0)
+}
 
 #[derive(Copy, Clone)]
 pub(super) struct ToolCatalogCacheMetrics<'a> {
@@ -267,3 +273,6 @@ pub(super) fn emit_token_budget_breakdown(ctx: &TurnProcessingContext<'_>, break
         ts: chrono::Utc::now().timestamp(),
     });
 }
+
+#[cfg(test)]
+mod tests;

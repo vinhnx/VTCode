@@ -76,22 +76,52 @@ fn manual_thinking_config(budget: u32, max_tokens: u32, display: Option<Thinking
     Some(ThinkingConfig::Enabled { budget_tokens: effective_budget, display })
 }
 
-/// Whether a profiled model accepts `thinking: {type: "disabled"}`.
-/// Adaptive-only models (Opus 5.5, Fable 5.x) reject it outright, and Opus 5
-/// accepts it only at effort `high` or below. The Opus 5.5 id contains the
-/// Opus 5 id, so the adaptive-only check must run first.
-fn disabled_thinking_allowed(
+/// The `thinking` value that expresses "no up-front thinking" as a direct
+/// request to `model`, or `None` when the model has no such setting.
+///
+/// Adaptive-only models (Opus 5.5, Fable 5.x) reject every "thinking off"
+/// request. Claude Sonnet 5 accepts `disabled`; Claude Opus 5 accepts it only
+/// at effort `high` or below; Claude Sonnet 5.5 rejects `disabled` and takes
+/// `between_tools` instead, which is itself rejected at `xhigh`/`max` effort.
+/// The 5-generation ids are substrings of their 5.5 counterparts, so the
+/// `between_tools` check must run before the Opus 5 effort gate.
+fn lowest_thinking_config(
     profile: &ClaudeThinkingProfile,
     model: &str,
     effort_is_at_most_high: impl FnOnce() -> bool,
-) -> bool {
+) -> Option<ThinkingConfig> {
     if profile.adaptive_only {
-        return false;
+        return None;
+    }
+    if profile.rejects_disabled_thinking {
+        return effort_is_at_most_high().then_some(ThinkingConfig::BetweenTools);
     }
     if matches_model(model, anthropic::CLAUDE_OPUS_5) {
-        return effort_is_at_most_high();
+        return effort_is_at_most_high().then_some(ThinkingConfig::Disabled);
     }
-    true
+    Some(ThinkingConfig::Disabled)
+}
+
+/// Rewrites a "thinking off" config into the lowest setting `model` accepts,
+/// falling back to adaptive thinking when it has none. `None` means the config
+/// is already valid as a direct request to `model`.
+fn rewrite_lowest_thinking(
+    thinking: &ThinkingConfig,
+    profile: &ClaudeThinkingProfile,
+    model: &str,
+    effort: Option<&str>,
+) -> Option<ThinkingConfig> {
+    let lowest =
+        lowest_thinking_config(profile, model, || effort_str_is_at_most_high(effort.unwrap_or(profile.default_effort)));
+    let already_valid = matches!(
+        (thinking, &lowest),
+        (ThinkingConfig::Disabled, Some(ThinkingConfig::Disabled))
+            | (ThinkingConfig::BetweenTools, Some(ThinkingConfig::BetweenTools))
+    );
+    if already_valid {
+        return None;
+    }
+    Some(lowest.unwrap_or(ThinkingConfig::Adaptive { display: None }))
 }
 
 /// Rewrites `thinking` into a config that is valid as a direct request to
@@ -101,9 +131,9 @@ fn disabled_thinking_allowed(
 /// Server-side fallback entries are merged into the primary request, so the
 /// merged request must satisfy the fallback model's own rules: models without
 /// manual-budget support get adaptive thinking instead of `budget_tokens`, and
-/// a `disabled` config the model rejects becomes adaptive. `effort` is the
-/// request's `output_config.effort`, which fallback entries inherit; `None`
-/// means the model's default effort applies.
+/// a "thinking off" config the model rejects becomes its own lowest setting.
+/// `effort` is the request's `output_config.effort`, which fallback entries
+/// inherit; `None` means the model's default effort applies.
 pub(crate) fn rewrite_thinking_for_model(
     thinking: &ThinkingConfig,
     model: &str,
@@ -115,12 +145,8 @@ pub(crate) fn rewrite_thinking_for_model(
         ThinkingConfig::Enabled { display, .. } if !profile.supports_manual_budget => {
             Some(ThinkingConfig::Adaptive { display: *display })
         }
-        ThinkingConfig::Disabled
-            if !disabled_thinking_allowed(&profile, resolved_model, || {
-                effort_str_is_at_most_high(effort.unwrap_or(profile.default_effort))
-            }) =>
-        {
-            Some(ThinkingConfig::Adaptive { display: None })
+        ThinkingConfig::Disabled | ThinkingConfig::BetweenTools => {
+            rewrite_lowest_thinking(thinking, &profile, resolved_model, effort)
         }
         _ => None,
     });
@@ -140,7 +166,8 @@ pub(crate) fn rewrite_thinking_for_model(
 fn thinking_display(thinking: &ThinkingConfig) -> Option<ThinkingDisplay> {
     match thinking {
         ThinkingConfig::Adaptive { display } | ThinkingConfig::Enabled { display, .. } => *display,
-        ThinkingConfig::Disabled | ThinkingConfig::Unknown => None,
+        // `between_tools` takes no other field, so it never carries a display.
+        ThinkingConfig::Disabled | ThinkingConfig::BetweenTools | ThinkingConfig::Unknown => None,
     }
 }
 
@@ -172,15 +199,15 @@ pub(crate) fn build_thinking_config(
     if let Some(overrides) = request.anthropic_request_overrides.as_ref() {
         match overrides.thinking_mode {
             AnthropicThinkingModeOverride::Disabled => {
-                // Models that think by default need an explicit `disabled`
-                // when they accept one; otherwise the field is omitted and the
-                // model runs its default thinking mode.
+                // Models that think by default need an explicit "thinking off"
+                // setting when they accept one; otherwise the field is omitted
+                // and the model runs its default thinking mode.
                 if let Some(profile) = profile.filter(|p| p.default_thinking_enabled)
-                    && disabled_thinking_allowed(&profile, resolved_model, || {
+                    && let Some(thinking) = lowest_thinking_config(&profile, resolved_model, || {
                         effort_is_at_most_high(request, anthropic_config)
                     })
                 {
-                    return Ok((Some(ThinkingConfig::Disabled), None));
+                    return Ok((Some(thinking), None));
                 }
                 return Ok((None, None));
             }
@@ -202,6 +229,15 @@ pub(crate) fn build_thinking_config(
 
     let thinking_enabled = if default_thinking {
         if !anthropic_config.extended_thinking_enabled {
+            // Omitting the field would run the model's own default, which is
+            // adaptive thinking, so an opt-out has to name the model's lowest
+            // setting explicitly. Adaptive-only models have none: the field
+            // stays absent and they keep thinking regardless.
+            if let Some(off) = profile.and_then(|p| {
+                lowest_thinking_config(&p, resolved_model, || effort_is_at_most_high(request, anthropic_config))
+            }) {
+                return Ok((Some(off), None));
+            }
             tracing::warn!(
                 model = %request.model,
                 "extended_thinking_enabled=false overridden by model default thinking profile; thinking will be enabled"
@@ -269,6 +305,120 @@ mod tests {
     use vtcode_config::constants::models::anthropic;
 
     #[test]
+    fn sonnet_5_5_disabled_thinking_override_becomes_between_tools() {
+        let request = LLMRequest {
+            model: anthropic::CLAUDE_SONNET_5_5.to_string(),
+            anthropic_request_overrides: Some(crate::provider::AnthropicRequestOverrides {
+                thinking_mode: AnthropicThinkingModeOverride::Disabled,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, reasoning) =
+            build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("thinking config");
+
+        // `disabled` is a 400 on Sonnet 5.5; `between_tools` is its lowest setting.
+        assert!(matches!(thinking, Some(ThinkingConfig::BetweenTools)), "got {thinking:?}");
+        assert!(reasoning.is_none());
+    }
+
+    #[test]
+    fn sonnet_5_5_falls_back_to_adaptive_above_high_effort() {
+        // `between_tools` is rejected at `xhigh`/`max`, so the config must be
+        // omitted and let the model run its own adaptive default.
+        let request = LLMRequest {
+            model: anthropic::CLAUDE_SONNET_5_5.to_string(),
+            effort: Some("xhigh".to_string()),
+            anthropic_request_overrides: Some(crate::provider::AnthropicRequestOverrides {
+                thinking_mode: AnthropicThinkingModeOverride::Disabled,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, _) =
+            build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("thinking config");
+
+        assert!(thinking.is_none(), "got {thinking:?}");
+    }
+
+    #[test]
+    fn extended_thinking_disabled_uses_the_model_lowest_setting() {
+        let config = AnthropicConfig {
+            extended_thinking_enabled: false,
+            ..AnthropicConfig::default()
+        };
+        for (model, expected) in [
+            (anthropic::CLAUDE_SONNET_5_5, "between_tools"),
+            (anthropic::CLAUDE_SONNET_5, "disabled"),
+            (anthropic::CLAUDE_OPUS_5, "disabled"),
+            // Adaptive-only models have no "thinking off" setting.
+            (anthropic::CLAUDE_OPUS_5_5, "adaptive"),
+            (anthropic::CLAUDE_FABLE_5_1, "adaptive"),
+        ] {
+            let request = LLMRequest { model: model.to_string(), ..Default::default() };
+            let (thinking, _) = build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("config");
+            let serialized = thinking
+                .as_ref()
+                .map(|thinking| serde_json::to_value(thinking).expect("serialize"))
+                .and_then(|value| value.get("type").cloned())
+                .unwrap_or_else(|| json!("omitted"));
+            assert_eq!(serialized, json!(expected), "{model}");
+        }
+    }
+
+    #[test]
+    fn between_tools_serializes_without_extra_fields() {
+        let thinking = ThinkingConfig::BetweenTools;
+        let value = serde_json::to_value(thinking).expect("serialize thinking");
+        assert_eq!(value, json!({ "type": "between_tools" }));
+    }
+
+    #[test]
+    fn disabled_thinking_is_rewritten_to_between_tools_for_sonnet_5_5() {
+        let rewritten =
+            rewrite_thinking_for_model(&ThinkingConfig::Disabled, anthropic::CLAUDE_SONNET_5_5, "", Some("medium"));
+        assert!(matches!(rewritten, Some(ThinkingConfig::BetweenTools)), "got {rewritten:?}");
+
+        // Above `high` effort Sonnet 5.5 falls back to adaptive thinking.
+        let rewritten =
+            rewrite_thinking_for_model(&ThinkingConfig::Disabled, anthropic::CLAUDE_SONNET_5_5, "", Some("xhigh"));
+        assert!(matches!(rewritten, Some(ThinkingConfig::Adaptive { display: None })), "got {rewritten:?}");
+    }
+
+    #[test]
+    fn between_tools_is_rewritten_to_disabled_for_sonnet_5() {
+        let rewritten =
+            rewrite_thinking_for_model(&ThinkingConfig::BetweenTools, anthropic::CLAUDE_SONNET_5, "", Some("medium"));
+        assert!(matches!(rewritten, Some(ThinkingConfig::Disabled)), "got {rewritten:?}");
+
+        // Already valid for the model that produced it.
+        let rewritten =
+            rewrite_thinking_for_model(&ThinkingConfig::BetweenTools, anthropic::CLAUDE_SONNET_5_5, "", Some("low"));
+        assert!(rewritten.is_none(), "got {rewritten:?}");
+        let rewritten =
+            rewrite_thinking_for_model(&ThinkingConfig::Disabled, anthropic::CLAUDE_SONNET_5, "", Some("low"));
+        assert!(rewritten.is_none(), "got {rewritten:?}");
+    }
+
+    #[test]
+    fn sonnet_5_5_defaults_to_updates_display_like_opus_5_5() {
+        let request = LLMRequest {
+            model: anthropic::CLAUDE_SONNET_5_5.to_string(),
+            ..Default::default()
+        };
+        let config = AnthropicConfig::default();
+        let (thinking, _) =
+            build_thinking_config(&request, &config, anthropic::DEFAULT_MODEL).expect("thinking config");
+
+        match thinking {
+            Some(ThinkingConfig::Adaptive { display: Some(ThinkingDisplay::Updates) }) => {}
+            other => panic!("expected Adaptive with Updates display, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn ignores_explicit_budget_for_opus_5() {
         let request = LLMRequest {
             model: anthropic::CLAUDE_OPUS_5.to_string(),
@@ -308,7 +458,7 @@ mod tests {
     fn manual_budget_override_becomes_adaptive_for_every_profiled_model() {
         let config = AnthropicConfig::default();
         for model in [
-            anthropic::CLAUDE_SONNET_5,
+            anthropic::CLAUDE_SONNET_5_5,
             anthropic::CLAUDE_OPUS_5,
             anthropic::CLAUDE_OPUS_5_5,
             anthropic::CLAUDE_FABLE_5,
@@ -496,6 +646,7 @@ mod tests {
         let config = AnthropicConfig::default();
         for model in [
             anthropic::CLAUDE_OPUS_5_5,
+            anthropic::CLAUDE_SONNET_5_5,
             anthropic::CLAUDE_FABLE_5,
             anthropic::CLAUDE_FABLE_5_1,
         ] {

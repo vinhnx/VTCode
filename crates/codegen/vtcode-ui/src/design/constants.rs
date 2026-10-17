@@ -40,6 +40,17 @@ pub const SPACING_NORMAL: u16 = 2;
 /// Loose spacing (4 cells).
 pub const SPACING_LOOSE: u16 = 4;
 
+/// Target column width before a trailing `value` in list rows (settings,
+/// model capabilities). Shorter titles are padded so values line up.
+pub const VALUE_COL: usize = 28;
+
+// ── Group header chrome ───────────────────────────────────────────────────
+
+/// Anchor prefix for modal group headers (`» Title`).
+/// Reuses the tracker current-task marker so section headings and focused
+/// rows read as one system on plain terminals.
+pub const GROUP_HEADER_ANCHOR: &str = "» ";
+
 #[cfg(test)]
 mod tests {
     use super::*;

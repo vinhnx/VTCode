@@ -9,7 +9,7 @@ use vtcode_config::models::model_catalog_entry;
 
 use super::AnthropicProvider;
 use super::common::{override_base_url, resolve_model};
-use super::opencode_shared::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec};
+use super::opencode_shared::{OpenCodeCompatibleProvider, OpenCodeGoInnerSpec, validate_normalized_request};
 
 const PROVIDER_NAME: &str = "OpenCode Go";
 const PROVIDER_KEY: &str = "opencode-go";
@@ -198,24 +198,13 @@ impl LLMProvider for OpenCodeGoProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        let supported_models = models::opencode_go::SUPPORTED_MODELS
-            .iter()
-            .map(|model| model.to_string())
-            .collect::<Vec<_>>();
-
-        // The caller (generate/stream) already normalizes the model. Avoid
-        // cloning the entire request when the model is already normalized or
-        // empty — the common case.
-        let needs_normalization =
-            !request.model.trim().is_empty() && self.requested_model(&request.model) != request.model.as_str();
-
-        if !needs_normalization {
-            super::common::validate_request_common(request, PROVIDER_NAME, PROVIDER_KEY, Some(&supported_models))
-        } else {
-            let mut normalized = request.clone();
-            normalized.model = self.requested_model(&normalized.model).to_string();
-            super::common::validate_request_common(&normalized, PROVIDER_NAME, PROVIDER_KEY, Some(&supported_models))
-        }
+        validate_normalized_request(
+            request,
+            self.requested_model(&request.model),
+            PROVIDER_NAME,
+            PROVIDER_KEY,
+            models::opencode_go::SUPPORTED_MODELS,
+        )
     }
 }
 

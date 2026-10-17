@@ -5,33 +5,36 @@ use std::sync::Arc;
 use crate::tui::ui::FileColorizer;
 
 mod filtering;
+mod kind;
 mod listing;
 mod navigation;
 mod references;
 mod search;
 
+pub use kind::{DirEntryInfo, FileKind};
 pub(crate) use references::extract_file_reference;
 
 /// Lists the immediate children of a directory without recursing, so the picker
-/// only touches the directories the user actually opens. Returns `(path, is_dir)`
-/// pairs with absolute paths. Supplied by the runloop (which owns the indexer) so
-/// the UI crate stays free of indexing logic and dependencies.
+/// only touches the directories the user actually opens. Returns [`DirEntryInfo`]
+/// rows with absolute paths, including symlink and file-kind metadata. Supplied
+/// by the runloop (which owns the indexer) so the UI crate stays free of
+/// indexing logic and dependencies.
 #[derive(Clone)]
 #[allow(
     clippy::type_complexity,
     reason = "Intentional compatibility, platform, or test-only suppression."
 )]
-pub struct DirLister(Arc<dyn Fn(&Path) -> Vec<(PathBuf, bool)> + Send + Sync>);
+pub struct DirLister(Arc<dyn Fn(&Path) -> Vec<DirEntryInfo> + Send + Sync>);
 
 impl DirLister {
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&Path) -> Vec<(PathBuf, bool)> + Send + Sync + 'static,
+        F: Fn(&Path) -> Vec<DirEntryInfo> + Send + Sync + 'static,
     {
         Self(Arc::new(f))
     }
 
-    fn list(&self, dir: &Path) -> Vec<(PathBuf, bool)> {
+    fn list(&self, dir: &Path) -> Vec<DirEntryInfo> {
         (self.0)(dir)
     }
 }
@@ -50,6 +53,40 @@ pub struct FileEntry {
     pub(crate) is_dir: bool,
     /// `true` for the synthetic `..` entry that ascends one directory.
     pub(crate) is_parent: bool,
+    /// Type classification driving the row glyph.
+    pub(crate) kind: FileKind,
+    /// Resolved symlink target, rendered as `→ target` when present.
+    pub(crate) symlink_target: Option<PathBuf>,
+    /// `true` when the entry is a symlink whose target is missing.
+    pub(crate) symlink_broken: bool,
+}
+
+impl FileEntry {
+    /// Build a plain entry (no symlink metadata) with a classified kind.
+    ///
+    /// Search mode flattens the recursive file list, which carries no per-file
+    /// metadata, so entries built here are classified without the POSIX exec
+    /// bit. Only the `Executable`-by-bit distinction is lost; extension-based
+    /// kinds (code/image/executable-by-extension) stay accurate.
+    pub(crate) fn new(
+        path: String,
+        display_name: String,
+        relative_path: String,
+        is_dir: bool,
+        is_parent: bool,
+    ) -> Self {
+        let kind = FileKind::classify(Path::new(&path), is_dir, false);
+        Self {
+            path,
+            display_name,
+            relative_path,
+            is_dir,
+            is_parent,
+            kind,
+            symlink_target: None,
+            symlink_broken: false,
+        }
+    }
 }
 
 /// Whether the palette is browsing a single directory or searching across the
@@ -85,6 +122,10 @@ pub struct FilePalette {
     file_colorizer: FileColorizer,
     /// Supplies immediate directory contents on demand (see [`DirLister`]).
     dir_lister: DirLister,
+    /// Whether the background recursive index has been delivered. Tracked
+    /// explicitly (rather than inferred from `all_files`) so an empty or
+    /// fully-ignored workspace is not mistaken for "still indexing".
+    search_index_delivered: bool,
 }
 
 impl FilePalette {
@@ -101,6 +142,7 @@ impl FilePalette {
             workspace_root,
             file_colorizer: FileColorizer::new(),
             dir_lister: DirLister::new(|_| Vec::new()),
+            search_index_delivered: false,
         }
     }
 
@@ -119,6 +161,7 @@ impl FilePalette {
         self.mode = PickerMode::Browse;
         self.last_entered = None;
         self.selected = None;
+        self.search_index_delivered = false;
         self.rebuild_dir_listing();
     }
 
@@ -127,6 +170,7 @@ impl FilePalette {
     /// require it. Rebuilds the search view if the user is already searching.
     pub(crate) fn set_search_index(&mut self, files: Vec<String>) {
         listing::build_entries(self, files, false);
+        self.search_index_delivered = true;
         if self.mode == PickerMode::Search {
             self.rebuild_search();
         }
@@ -154,6 +198,7 @@ impl FilePalette {
         self.selected = None;
         self.last_entered = None;
         self.mode = PickerMode::Browse;
+        self.search_index_delivered = false;
     }
 
     pub(crate) fn list_entries(&self) -> &[FileEntry] {
@@ -174,6 +219,14 @@ impl FilePalette {
 
     pub(crate) fn is_search_mode(&self) -> bool {
         self.mode == PickerMode::Search
+    }
+
+    /// Whether the background recursive index has arrived. Search cannot return
+    /// results until it does; Browse mode does not need it. Distinct from an
+    /// empty `all_files`, which also occurs for a genuinely empty or fully
+    /// ignored workspace.
+    pub(crate) fn search_index_loaded(&self) -> bool {
+        self.search_index_delivered
     }
 
     /// Human-readable breadcrumb of the current directory relative to the

@@ -11,6 +11,171 @@ use vtcode_core::config::ToolDisplayMode;
 use vtcode_core::tools::registry::ToolExecutionError;
 
 #[tokio::test]
+async fn parallel_reads_persist_actual_outcomes_and_consume_streamed_items() {
+    assert_parallel_read_lifecycle(false).await;
+}
+
+#[tokio::test]
+async fn cancelled_parallel_reads_persist_terminal_events_while_draining() {
+    assert_parallel_read_lifecycle(true).await;
+}
+
+struct ParallelReadCase {
+    call_id: &'static str,
+    args: serde_json::Value,
+    status: &'static str,
+    exit_code: Option<i64>,
+}
+
+async fn assert_parallel_read_lifecycle(cancelled: bool) {
+    use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+    use crate::agent::runloop::unified::run_loop_context::StreamedToolCallItem;
+    use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+    use vtcode_core::core::agent::events::tool_started_event;
+
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().expect("sample workspace").to_path_buf();
+    let emitter = HarnessEventEmitter::new_async(&workspace, "parallel-outcomes", None)
+        .await
+        .expect("canonical emitter");
+    let read_cases = [
+        ParallelReadCase {
+            call_id: "parallel_read",
+            args: json!({"cmd":"sed -n '1p' sample.txt", "workdir":workspace}),
+            status: "completed",
+            exit_code: Some(0),
+        },
+        ParallelReadCase {
+            call_id: "parallel_no_match",
+            args: json!({"cmd":"grep 'absent-pattern' sample.txt", "workdir":workspace}),
+            status: "completed",
+            exit_code: Some(1),
+        },
+    ];
+    for case in &read_cases {
+        cache_tool_permission(&mut backing, tool_names::EXEC_COMMAND, &case.args, PermissionGrant::Permanent).await;
+    }
+    backing.harness_state.remember_streamed_tool_call_items([(
+        "parallel_read".to_string(),
+        StreamedToolCallItem {
+            item_id: "streamed-read".to_string(),
+            tool_name: tool_names::EXEC_COMMAND.to_string(),
+        },
+    )]);
+    emitter
+        .emit(tool_started_event(
+            "streamed-read".to_string(),
+            tool_names::EXEC_COMMAND,
+            Some(&read_cases[0].args),
+            Some("parallel_read"),
+        ))
+        .expect("streamed start");
+    let calls = read_cases
+        .iter()
+        .map(|case| {
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                case.call_id.to_string(),
+                tool_names::EXEC_COMMAND.to_string(),
+                serde_json::to_string(&case.args).expect("arguments"),
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    {
+        let mut ctx = backing.turn_processing_context();
+        ctx.full_auto = true;
+        ctx.harness_emitter = Some(&emitter);
+        if cancelled {
+            ctx.ctrl_c_state.request_local_cancel();
+            ctx.ctrl_c_notify.notify_one();
+        }
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+        let outcome = handle_tool_calls(&mut outcome_ctx, &calls).await.expect("parallel reads");
+        if cancelled {
+            assert!(matches!(outcome, Some(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled))));
+        } else {
+            assert!(outcome.is_none());
+        }
+        assert!(
+            ctx.harness_state.take_all_streamed_tool_call_item_ids().is_empty(),
+            "turn teardown must not close executed calls again"
+        );
+        if !cancelled {
+            for case in &read_cases {
+                let response = ctx
+                    .working_history
+                    .iter()
+                    .find(|message| message.tool_call_id.as_deref() == Some(case.call_id))
+                    .expect("provider tool response");
+                assert!(!response.content.as_text().contains("before it could execute"));
+            }
+        }
+    }
+    emitter.finish().await.expect("persist canonical events");
+    let persisted = std::fs::read_to_string(workspace.join(".vtcode/sessions/parallel-outcomes/events.jsonl"))
+        .expect("canonical events");
+    let events = persisted
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("event JSON"))
+        .collect::<Vec<_>>();
+    for case in &read_cases {
+        let call_id = case.call_id;
+        let status = if cancelled { "failed" } else { case.status };
+        let exit_code = if cancelled { None } else { case.exit_code };
+        let matching = events
+            .iter()
+            .filter(|record| record["event"]["item"]["tool_call_id"] == call_id)
+            .map(|record| &record["event"])
+            .collect::<Vec<_>>();
+        let starts = matching
+            .iter()
+            .filter(|event| event["type"] == "item.started" && event["item"]["type"] == "tool_invocation")
+            .collect::<Vec<_>>();
+        assert_eq!(starts.len(), 1, "one invocation start for {call_id}");
+        let completions = matching
+            .iter()
+            .filter(|event| event["type"] == "item.completed")
+            .collect::<Vec<_>>();
+        assert_eq!(completions.len(), 2, "invocation and output completion for {call_id}");
+        let invocation = completions
+            .iter()
+            .find(|event| event["item"]["type"] == "tool_invocation")
+            .expect("invocation completion");
+        assert_eq!(invocation["item"]["id"], starts[0]["item"]["id"]);
+        assert_eq!(invocation["item"]["status"], status);
+        let output = completions
+            .iter()
+            .find(|event| event["item"]["type"] == "tool_output")
+            .expect("output completion");
+        assert_eq!(output["item"]["status"], status);
+        assert_eq!(output["item"]["exit_code"].as_i64(), exit_code);
+        if call_id == "parallel_read" {
+            assert_eq!(invocation["item"]["id"], "streamed-read");
+        }
+        let output_text = output["item"]["output"].as_str().expect("output text");
+        if cancelled {
+            let payload: serde_json::Value = serde_json::from_str(output_text).expect("cancelled response JSON");
+            assert_eq!(payload["interrupted"], true);
+            assert_eq!(payload["not_executed"], true);
+            assert!(payload["error"].as_str().unwrap().contains("cancelled before execution"));
+        } else if call_id == "parallel_read" {
+            assert!(output_text.contains("hello"));
+        }
+    }
+    assert_eq!(
+        persisted.matches("tool_latency_recorded").count(),
+        if cancelled { 0 } else { 2 },
+        "pre-cancelled calls never enter the execution pipeline; executed calls record latency once"
+    );
+}
+
+#[tokio::test]
 async fn blocked_tool_call_guard_emits_tool_and_system_messages() {
     let mut backing = TestContextBacking::new(4).await;
     let mut ctx = backing.turn_processing_context();
@@ -381,15 +546,18 @@ async fn malformed_tool_calls_trip_preflight_circuit_at_configured_cap() {
     // tool-free recovery and push the synthesis directive.
     assert!(ctx.harness_state.recovery_is_tool_free(), "preflight circuit trip must arm tool-free recovery mode");
     assert!(ctx.harness_state.consume_recovery_pass(), "recovery pass must be pending after the circuit flush");
-    assert!(ctx.working_history.iter().any(|message| {
-        message.role == uni::MessageRole::System
-            && message.content.as_text().contains("circuit breaker")
-            && message.content.as_text().contains("tools are disabled for this pass")
-    }));
+    assert!(
+        !ctx.working_history.iter().any(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text().contains("circuit breaker")
+                && message.content.as_text().contains("tools are disabled for this pass")
+        }),
+        "preflight synthesis must be request-only"
+    );
 }
 
 #[tokio::test]
-async fn valid_admitted_tool_call_resets_preflight_circuit_streak() {
+async fn unrelated_admitted_tool_call_preserves_preflight_circuit_streak() {
     let mut backing = TestContextBacking::new(4).await;
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
@@ -436,7 +604,8 @@ async fn valid_admitted_tool_call_resets_preflight_circuit_streak() {
         let ctx = backing.turn_processing_context();
         max_consecutive_blocked_tool_calls_per_turn(&ctx)
     };
-    for failure in 1..max_failures {
+    assert_eq!(backing.harness_state.consecutive_preflight_failures, 2);
+    for failure in 3..max_failures {
         let mut ctx = backing.turn_processing_context();
         let mut outcome_ctx = ToolOutcomeContext {
             ctx: &mut ctx,
@@ -612,9 +781,18 @@ async fn prose_blob_tool_names_do_not_trip_circuit_or_skip_valid_siblings() {
 
     assert!(outcome.is_none(), "name mistakes must not trip the preflight circuit or arm recovery");
     assert_eq!(
-        ctx.harness_state.consecutive_preflight_failures, 0,
-        "name mistakes must not advance the preflight failure streak"
+        ctx.harness_state.consecutive_preflight_failures, 1,
+        "the empty exec_command arguments are invalid; unrelated sibling success must retain that failure"
     );
+    for id in ["blob_0", "blob_1"] {
+        let response = ctx
+            .working_history
+            .iter()
+            .find(|message| message.tool_call_id.as_deref() == Some(id))
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_str(&response.content.as_text()).unwrap();
+        assert_eq!(payload["failure_count"], 0, "name mistakes must not advance the failure streak");
+    }
     // Every call still gets a tool response (providers require one per call).
     for tool_call_id in expected_ids {
         assert!(
@@ -640,6 +818,126 @@ async fn prose_blob_tool_names_do_not_trip_circuit_or_skip_valid_siblings() {
                 && message.content.as_text().contains("schema_correction")
         }),
         "name mistakes must report preflight_validation (not circuit_breaker)"
+    );
+}
+
+#[tokio::test]
+async fn cleared_history_stub_echo_is_bounded_by_preflight_circuit() {
+    // Historical placeholders are invalid calls, not an exemption from recovery limits.
+    assert!(super::super::is_cleared_tool_input_echo(Some(&json!({"cleared": "tool_input"}))));
+    assert!(!super::super::is_cleared_tool_input_echo(Some(&json!({"command": "ls"}))));
+    assert!(!super::super::is_cleared_tool_input_echo(None));
+    assert!(!super::super::is_cleared_tool_input_echo(Some(&json!({"cleared": "other"}))));
+
+    let mut backing = TestContextBacking::new(4).await;
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let cleared_call = |id: &str| {
+        PreparedAssistantToolCall::new(uni::ToolCall::function(
+            id.to_string(),
+            tool_names::EXEC_COMMAND.to_string(),
+            r#"{"cleared":"tool_input"}"#.to_string(),
+        ))
+    };
+
+    let mut config = vtcode_core::config::VTCodeConfig::default();
+    config.tools.max_consecutive_blocked_tool_calls_per_turn = 3;
+    for index in 0..3 {
+        let mut ctx = backing.turn_processing_context();
+        ctx.vt_cfg = Some(&config);
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+        let outcome = handle_tool_calls(&mut outcome_ctx, &[cleared_call(&format!("cleared_{index}"))])
+            .await
+            .expect("cleared echo should be recoverable");
+        assert_eq!(outcome.is_some(), index == 2, "the third invalid call must arm recovery");
+    }
+    let ctx = backing.turn_processing_context();
+    assert_eq!(
+        ctx.harness_state.consecutive_preflight_failures, 3,
+        "cleared echoes count toward the preflight streak"
+    );
+    assert!(ctx.harness_state.recovery_is_tool_free(), "the validation cap arms tool-free recovery");
+    assert!(
+        ctx.working_history.iter().any(|message| {
+            message.tool_call_id.as_deref() == Some("cleared_0")
+                && message.content.as_text().contains("Do not echo the history stub")
+                && message.content.as_text().contains("requires")
+                && message.content.as_text().contains("cmd")
+        }),
+        "exec_command cleared echo must name the public `cmd` contract"
+    );
+
+    let mut tracker_backing = TestContextBacking::new(4).await;
+    let mut tracker_attempts = LoopTracker::new();
+    let mut tracker_files = BTreeSet::new();
+    let mut tracker_ctx = tracker_backing.turn_processing_context();
+    let mut tracker_outcome_ctx = ToolOutcomeContext {
+        ctx: &mut tracker_ctx,
+        repeated_tool_attempts: &mut tracker_attempts,
+        turn_modified_files: &mut tracker_files,
+    };
+    assert!(
+        handle_tool_calls(
+            &mut tracker_outcome_ctx,
+            &[PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "cleared_tracker".to_string(),
+                tool_names::TASK_TRACKER.to_string(),
+                r#"{"cleared":"tool_input"}"#.to_string(),
+            ))]
+        )
+        .await
+        .expect("task_tracker cleared echo should be recoverable")
+        .is_none()
+    );
+    assert!(
+        tracker_ctx.working_history.iter().any(|message| {
+            message.tool_call_id.as_deref() == Some("cleared_tracker")
+                && message.content.as_text().contains("Do not echo the history stub")
+                && !message.content.as_text().contains("exec_command requires")
+        }),
+        "task_tracker cleared echo must not mention exec_command"
+    );
+}
+
+#[tokio::test]
+async fn exec_command_missing_command_correction_names_cmd_contract() {
+    // Public schema requires `cmd` (vtcode-utility-tool-specs), internal
+    // UNIFIED_EXEC validation reports `command`. The correction must name the
+    // public `cmd` contract with `command` as alias, not just repeat the
+    // internal name.
+    let mut backing = TestContextBacking::new(4).await;
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    assert!(
+        handle_tool_calls(
+            &mut outcome_ctx,
+            &[PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "missing_cmd".to_string(),
+                tool_names::EXEC_COMMAND.to_string(),
+                r#"{"yield_time_ms":10000}"#.to_string(),
+            ))]
+        )
+        .await
+        .expect("missing cmd should be recoverable")
+        .is_none()
+    );
+    assert!(
+        ctx.working_history.iter().any(|message| {
+            message.tool_call_id.as_deref() == Some("missing_cmd")
+                && message.content.as_text().contains("cmd")
+                && message.content.as_text().contains("alias")
+        }),
+        "exec_command missing-arg correction must name `cmd` with `command` alias"
     );
 }
 
@@ -714,8 +1012,7 @@ async fn preflight_circuit_does_not_block_approved_plan_execution() {
 #[tokio::test]
 async fn flush_preflight_circuit_recovery_is_idempotent_and_arms_tool_free_mode() {
     // The flush must be safe to call multiple times (dispatch calls it at
-    // several exit points) and must push the directive exactly once while
-    // arming tool-free recovery — mirroring the budget-exhaustion flush.
+    // several exit points) and must arm request-only tool-free recovery once.
     let mut backing = TestContextBacking::new(4).await;
     let mut ctx = backing.turn_processing_context();
 
@@ -732,7 +1029,7 @@ async fn flush_preflight_circuit_recovery_is_idempotent_and_arms_tool_free_mode(
         .count();
     assert_eq!(directive_count_before, 0, "directive must not be pushed before flush");
 
-    // First flush pushes the directive and arms recovery.
+    // First flush arms recovery without persisting the directive.
     flush_preflight_circuit_recovery(&mut ctx);
     let directive_count_after = ctx
         .working_history
@@ -743,7 +1040,7 @@ async fn flush_preflight_circuit_recovery_is_idempotent_and_arms_tool_free_mode(
                 && message.content.as_text().contains("tools are disabled for this pass")
         })
         .count();
-    assert_eq!(directive_count_after, 1, "directive must be pushed exactly once");
+    assert_eq!(directive_count_after, 0, "directive must stay request-only");
     assert!(ctx.harness_state.recovery_is_tool_free(), "flush must arm tool-free recovery mode");
     assert!(ctx.harness_state.consume_recovery_pass(), "recovery pass must be pending after flush");
 
@@ -758,7 +1055,7 @@ async fn flush_preflight_circuit_recovery_is_idempotent_and_arms_tool_free_mode(
                 && message.content.as_text().contains("tools are disabled for this pass")
         })
         .count();
-    assert_eq!(directive_count_final, 1, "directive must not be duplicated");
+    assert_eq!(directive_count_final, 0, "canonical history must stay free of synthesis directives");
 }
 
 #[test]
@@ -774,6 +1071,22 @@ fn dynamic_find_preflight_feedback_names_safe_static_alternatives() {
     assert!(correction.contains("Do not retry"));
 }
 
+#[test]
+fn policy_preflight_feedback_does_not_recommend_json_repair() {
+    let security = preflight_schema_correction(
+        tool_names::EXEC_COMMAND,
+        "Command security check failed: Command injection pattern detected",
+    );
+    assert!(security.contains("security policy"));
+    assert!(!security.contains("matching the declared schema"));
+    assert!(security.contains("Do not retry"));
+    let planning = preflight_schema_correction(tool_names::EXEC_COMMAND, "tool denied by planning workflow");
+    assert!(planning.contains("command -v"));
+    assert!(planning.contains("defer unknown scripts"));
+    let malformed = preflight_schema_correction(tool_names::EXEC_COMMAND, "Invalid arguments: missing cmd");
+    assert!(malformed.contains("matching the declared schema"));
+}
+
 #[tokio::test]
 async fn planning_preflight_recovery_requires_plan_artifact() {
     let mut backing = TestContextBacking::new(4).await;
@@ -783,11 +1096,10 @@ async fn planning_preflight_recovery_requires_plan_artifact() {
 
     flush_preflight_circuit_recovery(&mut ctx);
 
-    assert!(ctx.working_history.iter().any(|message| {
-        let content = message.content.as_text();
-        message.role == uni::MessageRole::System
-            && content.contains("exactly one complete `<proposed_plan>`")
-            && content.contains("## Test Cases and Validation")
+    assert!(ctx.harness_state.recovery_is_tool_free());
+    assert_eq!(ctx.harness_state.recovery_reason.as_deref(), Some("preflight validation circuit breaker"));
+    assert!(!ctx.working_history.iter().any(|message| {
+        message.role == uni::MessageRole::System && message.content.as_text().contains("tools are disabled")
     }));
 }
 
@@ -958,6 +1270,19 @@ async fn validate_tool_call_blocks_when_wall_clock_budget_exhausted() {
             .await
             .expect("validate second wall-clock-exhausted tool call");
     assert!(matches!(second, ValidationResult::Blocked));
+    let stub = ctx
+        .working_history
+        .iter()
+        .find(|message| message.tool_call_id.as_deref() == Some("wall_clock_exhausted_2"))
+        .expect("wall-clock rejection response");
+    let payload: serde_json::Value = serde_json::from_str(&stub.content.as_text()).unwrap();
+    assert!(
+        payload["next_action"]
+            .as_str()
+            .unwrap()
+            .contains("Synthesize your final answer now")
+    );
+    assert!(!stub.content.as_text().contains("alternative tool"));
     let policy_violation_count = ctx
         .working_history
         .iter()
@@ -1072,8 +1397,16 @@ async fn recovery_skip_step_pushes_structured_tool_message() {
 
 #[tokio::test]
 async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
+    use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+    use crate::agent::runloop::unified::run_loop_context::StreamedToolCallItem;
+    use vtcode_core::core::agent::events::tool_started_event;
+
     let mut backing = TestContextBacking::new(4).await;
     backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+    let emitter = HarnessEventEmitter::new_async(&workspace, "cached-read-lifecycle", None)
+        .await
+        .unwrap();
     let args = json!({
         "path": backing.sample_file.to_string_lossy()
     });
@@ -1081,6 +1414,7 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
     let mut tp_ctx = backing.turn_processing_context();
+    tp_ctx.harness_emitter = Some(&emitter);
     let mut outcome_ctx = ToolOutcomeContext {
         ctx: &mut tp_ctx,
         repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1109,11 +1443,30 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
             .is_some()
     );
 
-    let second = handle_single_tool_call(&mut outcome_ctx, "read_twice", tool_names::READ_FILE, args)
+    outcome_ctx.ctx.harness_state.remember_streamed_tool_call_items([(
+        "read_twice".to_owned(),
+        StreamedToolCallItem {
+            item_id: "streamed-cached-read".to_owned(),
+            tool_name: tool_names::READ_FILE.to_owned(),
+        },
+    )]);
+    emitter
+        .emit(tool_started_event(
+            "streamed-cached-read".to_owned(),
+            tool_names::READ_FILE,
+            Some(&args),
+            Some("read_twice"),
+        ))
+        .unwrap();
+    let second = handle_single_tool_call(&mut outcome_ctx, "read_twice", tool_names::READ_FILE, args.clone())
         .await
         .expect("duplicate readonly call should be reused");
 
     assert!(second.is_none());
+    assert!(
+        outcome_ctx.ctx.harness_state.take_all_streamed_tool_call_item_ids().is_empty(),
+        "cached reads must not be cancelled by teardown"
+    );
     assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
     assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), 1);
     assert_eq!(
@@ -1124,6 +1477,31 @@ async fn repeated_identical_readonly_call_in_same_turn_reuses_recent_result() {
             .reused_results,
         1
     );
+    emitter.finish().await.unwrap();
+    let persisted =
+        std::fs::read_to_string(workspace.join(".vtcode/sessions/cached-read-lifecycle/events.jsonl")).unwrap();
+    let events = persisted
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let completions = events
+        .iter()
+        .map(|record| &record["event"])
+        .filter(|event| event["type"] == "item.completed" && event["item"]["tool_call_id"] == "read_twice")
+        .collect::<Vec<_>>();
+    assert_eq!(completions.len(), 2, "one cached invocation and output completion");
+    let invocation = completions
+        .iter()
+        .find(|event| event["item"]["type"] == "tool_invocation")
+        .unwrap();
+    assert_eq!(invocation["item"]["id"], "streamed-cached-read");
+    assert_eq!(invocation["item"]["status"], "completed");
+    assert_eq!(invocation["item"]["outcome"], "success");
+    assert_eq!(invocation["item"]["arguments"], args);
+    let output = completions.iter().find(|event| event["item"]["type"] == "tool_output").unwrap();
+    assert_eq!(output["item"]["status"], "completed");
+    assert!(output["item"]["output"].as_str().unwrap().contains("hello"));
+    assert!(!output["item"]["output"].as_str().unwrap().contains("before it could execute"));
     assert!(
         outcome_ctx
             .ctx
@@ -1268,6 +1646,393 @@ async fn repeated_identical_slice_read_trips_read_family_cap() {
 }
 
 #[tokio::test]
+async fn intermittent_path_cap_rejections_allow_progress_but_consecutive_retries_trip_fuse() {
+    for productive in [true, false] {
+        let mut backing = TestContextBacking::new(64).await;
+        backing.select_build_primary_agent();
+        let sample = backing.sample_file.clone();
+        let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-hello\n+continued after read cap\n*** End Patch\n"});
+        cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch, PermissionGrant::Permanent).await;
+        let mut tracker = LoopTracker::new();
+        let mut modified = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let cap = max_consecutive_blocked_tool_calls_per_turn(&ctx);
+        for _ in 0..6 {
+            ctx.harness_state
+                .record_file_read_path_call(sample.to_string_lossy().into_owned());
+        }
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut tracker,
+            turn_modified_files: &mut modified,
+        };
+        let attempts = if productive { cap * 2 + 1 } else { cap + 1 };
+        for index in 1..=attempts {
+            let before = outcome_ctx.ctx.tool_registry.execution_history_len();
+            handle_single_tool_call(
+                &mut outcome_ctx,
+                &format!("capped_{index}"),
+                tool_names::READ_FILE,
+                json!({"path":sample, "offset":index, "limit":1}),
+            )
+            .await
+            .unwrap();
+            assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), before, "capped reads cannot execute");
+            if productive {
+                let other = sample.with_file_name(format!("other_{index}.txt"));
+                std::fs::write(&other, format!("distinct evidence {index}\n")).unwrap();
+                handle_single_tool_call(
+                    &mut outcome_ctx,
+                    &format!("progress_{index}"),
+                    tool_names::READ_FILE,
+                    json!({"path":other, "offset":1, "limit":1}),
+                )
+                .await
+                .unwrap();
+                assert!(outcome_ctx.ctx.tool_registry.execution_history_len() > before);
+                assert!(!outcome_ctx.ctx.harness_state.blocked_tool_recovery_pending());
+            }
+        }
+        assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);
+        assert_eq!(
+            outcome_ctx.ctx.harness_state.blocked_tool_recovery_pending() || outcome_ctx.ctx.is_recovery_active(),
+            !productive,
+        );
+        if productive {
+            handle_single_tool_call(&mut outcome_ctx, "continue_patch", tool_names::APPLY_PATCH, patch)
+                .await
+                .unwrap();
+            assert_eq!(std::fs::read_to_string(sample).unwrap(), "continued after read cap\n");
+        } else {
+            assert_eq!(outcome_ctx.ctx.harness_state.consecutive_blocked_tool_calls, cap + 1);
+            assert_eq!(std::fs::read_to_string(sample).unwrap(), "hello\n");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn concentrated_search_coaching_keeps_distinct_queries_available() {
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+    let content = ('A'..='G').map(|letter| format!("unique_fact_{letter}\n")).collect::<String>();
+    std::fs::write(workspace.join("README.md"), content).unwrap();
+    let args = json!({"query":"unique_fact_A","path":"README.md","result_types":["text"]});
+    cache_tool_permission(&mut backing, tool_names::CODE_SEARCH, &args, PermissionGrant::Permanent).await;
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified,
+    };
+    for (index, letter) in ('A'..='G').enumerate() {
+        let id = format!("focused_{letter}");
+        let mut args = args.clone();
+        args["query"] = json!(format!("unique_fact_{letter}"));
+        let call = PreparedAssistantToolCall::new(uni::ToolCall::function(
+            id.clone(),
+            tool_names::CODE_SEARCH.to_string(),
+            serde_json::to_string(&args).unwrap(),
+        ));
+        assert!(handle_tool_calls(&mut outcome_ctx, &[call]).await.unwrap().is_none());
+        let history = &outcome_ctx.ctx.working_history;
+        let output = history
+            .iter()
+            .find(|message| message.tool_call_id.as_deref() == Some(&id))
+            .unwrap()
+            .content
+            .as_text();
+        let payload: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(payload["returned"], 1, "expected a distinct line for {letter}: {output}");
+        let notices = history
+            .iter()
+            .filter(|message| message.content.as_text().contains("Several searches have concentrated"))
+            .count();
+        assert_eq!(notices, usize::from(index >= 5));
+        assert_eq!(outcome_ctx.repeated_tool_attempts.low_signal_tool_calls, 0);
+        assert!(!outcome_ctx.ctx.is_recovery_active());
+    }
+    assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);
+    assert!(!outcome_ctx.repeated_tool_attempts.verification_is_pending());
+    assert_eq!(outcome_ctx.repeated_tool_attempts.fix_edits_remaining, 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn redundant_sed_coaching_keeps_edits_and_verification_available() {
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+    std::fs::write(&backing.sample_file, "alpha\nbeta\ngamma\n").unwrap();
+    std::fs::create_dir(workspace.join("scripts")).unwrap();
+    std::fs::write(workspace.join("scripts/check_markdown.py"), "print('verified')\n").unwrap();
+    let first = json!({"cmd":"sed -n '1,3p' sample.txt", "workdir":workspace});
+    let repeated = json!({"cmd":"sed -n '2p' sample.txt", "workdir":workspace});
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-beta\n+delta\n*** End Patch\n"});
+    let verifier = json!({"cmd":"python3 scripts/check_markdown.py", "workdir":workspace});
+    for (name, args) in [
+        (tool_names::EXEC_COMMAND, &first),
+        (tool_names::EXEC_COMMAND, &repeated),
+        (tool_names::APPLY_PATCH, &patch),
+        (tool_names::EXEC_COMMAND, &verifier),
+    ] {
+        cache_tool_permission(&mut backing, name, args, PermissionGrant::Permanent).await;
+    }
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified,
+    };
+    for (id, args) in [("first_read", first), ("retained_read", repeated.clone())] {
+        let mut source_call = uni::Message::assistant(String::new());
+        source_call.tool_calls = Some(vec![uni::ToolCall::function(
+            id.into(),
+            tool_names::EXEC_COMMAND.into(),
+            args.to_string(),
+        )]);
+        outcome_ctx.ctx.working_history.push(source_call);
+        let call = PreparedAssistantToolCall::new(uni::ToolCall::function(
+            id.to_string(),
+            tool_names::EXEC_COMMAND.to_string(),
+            serde_json::to_string(&args).unwrap(),
+        ));
+        assert!(handle_tool_calls(&mut outcome_ctx, &[call]).await.unwrap().is_none());
+    }
+    outcome_ctx
+        .ctx
+        .tool_registry
+        .reconcile_source_inspection(outcome_ctx.ctx.working_history);
+    let history = &outcome_ctx.ctx.working_history;
+    let evidence_index = history
+        .iter()
+        .position(|m| m.tool_call_id.as_deref() == Some("retained_read"))
+        .unwrap();
+    let notice_index = history
+        .iter()
+        .position(|m| m.content.as_text().contains("This inspection returned only text evidence"))
+        .unwrap();
+    assert!(evidence_index < notice_index);
+    assert_eq!(outcome_ctx.repeated_tool_attempts.low_signal_tool_calls, 1);
+    assert!(!outcome_ctx.ctx.is_recovery_active());
+    assert!(!outcome_ctx.repeated_tool_attempts.verification_is_pending());
+    assert_eq!(outcome_ctx.repeated_tool_attempts.fix_edits_remaining, 0);
+    assert!(
+        handle_single_tool_call(&mut outcome_ctx, "useful_edit", tool_names::APPLY_PATCH, patch)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        handle_single_tool_call(&mut outcome_ctx, "changed_read", tool_names::EXEC_COMMAND, repeated)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(std::fs::read_to_string(workspace.join("sample.txt")).unwrap(), "alpha\ndelta\ngamma\n");
+    assert_eq!(outcome_ctx.repeated_tool_attempts.low_signal_tool_calls, 1, "the changed read is productive");
+    outcome_ctx.repeated_tool_attempts.mark_verification_pending();
+    assert!(
+        handle_single_tool_call(&mut outcome_ctx, "verify_continuation", tool_names::EXEC_COMMAND, verifier)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(!outcome_ctx.repeated_tool_attempts.verification_is_pending());
+    assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);
+    assert!(!outcome_ctx.ctx.is_recovery_active());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn masked_checker_feedback_is_bounded_and_standalone_verification_continues_loop() {
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+    std::fs::create_dir(workspace.join("scripts")).unwrap();
+    let checker = workspace.join("scripts/check_markdown.py");
+    std::fs::write(&checker, "import sys, time, pathlib\nwhile not pathlib.Path('release-checker').exists(): time.sleep(0.01)\nprint('README: checker failed')\nsys.exit(7)\n").unwrap();
+    let masked = json!({"cmd":"python3 scripts/check_markdown.py; echo \"lint exit: $?\"", "workdir":workspace, "yield_time_ms":250});
+    let standalone = json!({"cmd":"python3 scripts/check_markdown.py", "workdir":workspace});
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-hello\n+continued after verification\n*** End Patch\n"});
+    for (name, args) in [
+        (tool_names::EXEC_COMMAND, &masked),
+        (tool_names::EXEC_COMMAND, &standalone),
+        (tool_names::WRITE_STDIN, &json!({"session_id":"placeholder", "chars":""})),
+        (tool_names::APPLY_PATCH, &patch),
+    ] {
+        cache_tool_permission(&mut backing, name, args, PermissionGrant::Permanent).await;
+    }
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    ctx.tool_registry
+        .set_inspection_mode(vtcode_core::config::core::agent::InspectionMode::Off);
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified,
+    };
+    for index in 0..2 {
+        let mut call_id = format!("masked_checker_{index}");
+        let call = PreparedAssistantToolCall::new(uni::ToolCall::function(
+            call_id.clone(),
+            tool_names::EXEC_COMMAND.to_string(),
+            serde_json::to_string(&masked).unwrap(),
+        ));
+        assert!(handle_tool_calls(&mut outcome_ctx, &[call]).await.unwrap().is_none());
+        let output = outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .find(|message| message.tool_call_id.as_deref() == Some(&call_id))
+            .unwrap()
+            .content
+            .as_text();
+        if index == 0 {
+            let running: serde_json::Value = serde_json::from_str(&output).unwrap();
+            std::fs::write(workspace.join("release-checker"), "release").unwrap();
+            assert!(running.get("exit_code").is_none());
+            assert!(running["next_wait_args"]["session_id"].is_string(), "expected a running session: {running}");
+            assert!(!outcome_ctx.repeated_tool_attempts.piped_verification_notice_pending);
+            assert!(
+                !outcome_ctx
+                    .ctx
+                    .working_history
+                    .iter()
+                    .any(|message| message.content.as_text().contains("Verification was not recorded because"))
+            );
+            call_id = "masked_checker_poll".to_string();
+            let poll = PreparedAssistantToolCall::new(uni::ToolCall::function(
+                call_id.clone(),
+                tool_names::WRITE_STDIN.to_string(),
+                serde_json::to_string(&json!({"session_id":running["next_wait_args"]["session_id"], "action":"wait", "wait_timeout_seconds":10}))
+                    .unwrap(),
+            ));
+            assert!(handle_tool_calls(&mut outcome_ctx, &[poll]).await.unwrap().is_none());
+        }
+        let output = outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .find(|message| message.tool_call_id.as_deref() == Some(&call_id))
+            .unwrap()
+            .content
+            .as_text();
+        assert!(output.contains("lint exit: 7"), "the checker must really have failed: {output}");
+        let payload: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(payload["exit_code"], 0, "the final echo masks the checker's failure");
+        let notice_count = outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .filter(|message| {
+                message.role == uni::MessageRole::System
+                    && message.content.as_text().contains("Verification was not recorded because")
+            })
+            .count();
+        assert_eq!(notice_count, 1, "repeated completed calls must not repeat coaching");
+        if index == 0 {
+            let history = &outcome_ctx.ctx.working_history;
+            let output_index = history
+                .iter()
+                .position(|message| message.tool_call_id.as_deref() == Some(&call_id))
+                .unwrap();
+            let notice_index = history
+                .iter()
+                .position(|message| {
+                    message.role == uni::MessageRole::System
+                        && message.content.as_text().contains("Verification was not recorded because")
+                })
+                .unwrap();
+            assert!(output_index < notice_index, "coaching must follow the tool's evidence");
+        }
+        assert!(!outcome_ctx.repeated_tool_attempts.verification_is_pending());
+        assert_eq!(outcome_ctx.repeated_tool_attempts.fix_edits_remaining, 0);
+    }
+    std::fs::write(&checker, "print('README: checker passed')\n").unwrap();
+    outcome_ctx.repeated_tool_attempts.mark_verification_pending();
+    assert!(
+        handle_single_tool_call(&mut outcome_ctx, "standalone_checker", tool_names::EXEC_COMMAND, standalone)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(!outcome_ctx.repeated_tool_attempts.verification_is_pending());
+    assert!(
+        handle_single_tool_call(&mut outcome_ctx, "verified_edit", tool_names::APPLY_PATCH, patch)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(std::fs::read_to_string(workspace.join("sample.txt")).unwrap(), "continued after verification\n");
+    assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);
+    assert!(!outcome_ctx.ctx.is_recovery_active());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn filtered_verifier_failure_grants_repair_and_success_continues_loop() {
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+    std::fs::create_dir(workspace.join("scripts")).unwrap();
+    let checker = workspace.join("scripts/check_markdown.py");
+    let command = "python3 scripts/check_markdown.py 2>&1 | grep";
+    let args = json!({"cmd":command, "raw_command":command, "args":["README"], "workdir":workspace});
+    cache_tool_permission(&mut backing, tool_names::EXEC_COMMAND, &args, PermissionGrant::Permanent).await;
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-hello\n+verified continuation\n*** End Patch\n"});
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch, PermissionGrant::Permanent).await;
+    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    let mut modified = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified,
+    };
+    for (exit, pending) in [(7, true), (0, false)] {
+        std::fs::write(
+            &checker,
+            format!("import sys\nprint('README: checker output')\nprint('unrelated output')\nsys.exit({exit})\n"),
+        )
+        .unwrap();
+        let start = outcome_ctx.ctx.working_history.len();
+        handle_single_tool_call(
+            &mut outcome_ctx,
+            &format!("filtered_check_{exit}"),
+            tool_names::EXEC_COMMAND,
+            args.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome_ctx.repeated_tool_attempts.verification_is_pending(), pending);
+        let output = outcome_ctx.ctx.working_history[start..]
+            .iter()
+            .filter(|message| message.role == uni::MessageRole::Tool)
+            .map(|message| message.content.as_text())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(output.contains("README: checker output"), "{output}");
+        assert!(!output.contains("unrelated output"), "filter must be preserved: {output}");
+        if pending {
+            assert_eq!(outcome_ctx.repeated_tool_attempts.fix_edits_remaining, 2);
+        }
+        assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);
+    }
+    handle_single_tool_call(&mut outcome_ctx, "after_filtered_verification", tool_names::APPLY_PATCH, patch)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(workspace.join("sample.txt")).unwrap(), "verified continuation\n");
+    assert!(!outcome_ctx.ctx.is_recovery_active());
+}
+
+#[tokio::test]
 async fn repeated_paginated_sed_reads_eventually_trip_per_file_path_cap() {
     // turn_911-style regression: simple `sed -n` pagination should behave like
     // file reads. Different ranges must not trip the identical-slice family
@@ -1334,7 +2099,7 @@ async fn repeated_paginated_sed_reads_eventually_trip_per_file_path_cap() {
             let content = message.content.as_text();
             content.contains("repeated_read_path")
                 && content.contains("further reads of this path are blocked")
-                && content.contains("Reads of other paths, edits")
+                && content.to_ascii_lowercase().contains("reads of other paths, edits")
         }),
         "path-cap error should explain its scope and available next actions"
     );
@@ -1582,6 +2347,29 @@ async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
     assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
         message.role == uni::MessageRole::Tool && message.content.as_text().contains("exceeded max tool calls per turn")
     }));
+    let second_exhausted = validate_tool_call(
+        outcome_ctx.ctx,
+        "exhausted_stub",
+        tool_names::READ_FILE,
+        &json!({"path": valid_file.to_string_lossy()}),
+    )
+    .await
+    .expect("second budget rejection");
+    assert!(matches!(second_exhausted, ValidationResult::Blocked));
+    let stub = outcome_ctx
+        .ctx
+        .working_history
+        .iter()
+        .find(|message| message.tool_call_id.as_deref() == Some("exhausted_stub"))
+        .expect("tool-call budget rejection response");
+    let payload: serde_json::Value = serde_json::from_str(&stub.content.as_text()).unwrap();
+    assert!(
+        payload["next_action"]
+            .as_str()
+            .unwrap()
+            .contains("Synthesize your final answer now")
+    );
+    assert!(!stub.content.as_text().contains("narrower scope"));
 }
 
 #[tokio::test]
@@ -1758,418 +2546,206 @@ async fn repeated_read_only_guard_dedups_plan_file_in_planning_mode() {
     }));
 }
 
-fn exhaust_preview_budget_for_test(ctx: &mut TurnProcessingContext<'_>) {
-    let budget =
-        vtcode_config::constants::output_limits::turn_preview_budget_bytes(ctx.tool_registry.is_planning_active());
-    ctx.push_tool_response("call-exhaust-budget", Some(tool_names::EXEC_COMMAND), "x".repeat(budget + 1));
-    assert!(ctx.harness_state.model_visible_preview_budget_exhausted());
+async fn execute_tracker_regression_call(
+    outcome_ctx: &mut ToolOutcomeContext<'_, '_>,
+    call_id: &str,
+    args: serde_json::Value,
+) -> serde_json::Value {
+    let history_len = outcome_ctx.ctx.tool_registry.execution_history_len();
+    let outcome = handle_single_tool_call(outcome_ctx, call_id, tool_names::TASK_TRACKER, args)
+        .await
+        .expect("tracker call should execute");
+    assert!(outcome.is_none());
+    assert!(outcome_ctx.ctx.tool_registry.execution_history_len() > history_len, "tracker must execute live");
+    let response = outcome_ctx
+        .ctx
+        .working_history
+        .iter()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some(call_id))
+        .expect("tracker response");
+    let payload: serde_json::Value = serde_json::from_str(&response.content.as_text()).expect("tracker JSON");
+    assert!(payload.get("error").is_none(), "{payload}");
+    assert!(
+        payload.get("reused_recent_result").is_none(),
+        "stateful tracker results must never replay: {payload}"
+    );
+    payload
 }
 
 #[tokio::test]
-async fn registry_exhaustion_latches_runloop_and_blocks_the_next_inspection() {
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::ValidationResult;
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::read_guard::enforce_preview_exhaustion_inspection_gate;
-
-    let mut backing = TestContextBacking::new(32).await;
+async fn tracker_repeated_lists_observe_current_progress_without_replay() {
+    struct TrackerCallCase {
+        call_id: &'static str,
+        args: serde_json::Value,
+        expected_completed: usize,
+    }
+    let mut backing = TestContextBacking::new(12).await;
     backing.select_build_primary_agent();
-    let workspace = backing.sample_file.parent().expect("sample parent").to_path_buf();
-    let sample_file = backing.sample_file.clone();
-    let paths = (0..8)
-        .map(|index| {
-            let path = workspace.join(format!("preview-{index}.txt"));
-            std::fs::write(&path, format!("line-{index}-{}\n", "x".repeat(120)).repeat(2_000))
-                .expect("write preview fixture");
-            path
-        })
-        .collect::<Vec<_>>();
-
+    let calls = [
+        TrackerCallCase {
+            call_id: "create",
+            args: json!({"action":"create", "title":"README work", "items":["Revise copy", "Check links"]}),
+            expected_completed: 0,
+        },
+        TrackerCallCase {
+            call_id: "list_before",
+            args: json!({"action":"list"}),
+            expected_completed: 0,
+        },
+        TrackerCallCase {
+            call_id: "list_before_again",
+            args: json!({"action":"list"}),
+            expected_completed: 0,
+        },
+        TrackerCallCase {
+            call_id: "finish_links",
+            args: json!({"action":"update", "index":2, "status":"completed"}),
+            expected_completed: 1,
+        },
+        TrackerCallCase {
+            call_id: "list_after",
+            args: json!({"action":"list"}),
+            expected_completed: 1,
+        },
+        TrackerCallCase {
+            call_id: "list_after_again",
+            args: json!({"action":"list"}),
+            expected_completed: 1,
+        },
+    ];
+    for case in &calls {
+        cache_tool_permission(&mut backing, tool_names::TASK_TRACKER, &case.args, PermissionGrant::Permanent).await;
+    }
+    let mut ctx = backing.turn_processing_context();
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-    let mut ctx = backing.turn_processing_context();
     let mut outcome_ctx = ToolOutcomeContext {
         ctx: &mut ctx,
         repeated_tool_attempts: &mut repeated_tool_attempts,
         turn_modified_files: &mut turn_modified_files,
     };
-
-    for (index, path) in paths.iter().enumerate() {
-        outcome_ctx.ctx.harness_state.record_requested_tool_calls(1);
-        handle_single_tool_call(
-            &mut outcome_ctx,
-            &format!("registry-read-{index}"),
-            tool_names::READ_FILE,
-            json!({
-                "path": path,
-                "limit": 2_000,
-                "condense": false
-            }),
-        )
+    for case in calls {
+        let payload = execute_tracker_regression_call(&mut outcome_ctx, case.call_id, case.args).await;
+        assert_eq!(payload["checklist"]["completed"], case.expected_completed, "{}: {payload}", case.call_id);
+        assert_eq!(payload["checklist"]["total"], 2);
+    }
+    handle_single_tool_call(&mut outcome_ctx, "list_over_limit", tool_names::TASK_TRACKER, json!({"action":"list"}))
         .await
-        .expect("registry read should be handled");
-        if outcome_ctx.ctx.harness_state.model_visible_preview_budget_exhausted() {
-            break;
+        .expect("excessive tracker polling should return policy feedback");
+    let response = outcome_ctx
+        .ctx
+        .working_history
+        .iter()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some("list_over_limit"))
+        .expect("blocked tracker response");
+    let payload: serde_json::Value = serde_json::from_str(&response.content.as_text()).expect("tracker JSON");
+    assert_eq!(payload["error_class"], "policy_blocked", "repeat limits must remain active: {payload}");
+    assert!(payload.get("reused_recent_result").is_none());
+}
+
+#[tokio::test]
+async fn tracker_repeated_update_targets_replaced_checklist_instead_of_old_history() {
+    let mut backing = TestContextBacking::new(12).await;
+    backing.select_build_primary_agent();
+    let old_create = json!({"action":"create", "title":"Planning", "items":["Inspect README", "Draft plan"]});
+    let finish_second = json!({"action":"update", "index":2, "status":"completed"});
+    let new_create =
+        json!({"action":"create", "title":"Implementation", "items":["[x] Revise copy", "Check new links"]});
+    for args in [&old_create, &finish_second, &new_create] {
+        cache_tool_permission(&mut backing, tool_names::TASK_TRACKER, args, PermissionGrant::Permanent).await;
+    }
+    let mut ctx = backing.turn_processing_context();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    execute_tracker_regression_call(&mut outcome_ctx, "old_create", old_create).await;
+    let old_update = execute_tracker_regression_call(&mut outcome_ctx, "old_update", finish_second.clone()).await;
+    assert_eq!(old_update["checklist"]["completed"], 1);
+    execute_tracker_regression_call(&mut outcome_ctx, "new_create", new_create).await;
+    outcome_ctx.ctx.tool_registry.begin_tracker_request(false);
+    let new_update = execute_tracker_regression_call(&mut outcome_ctx, "new_update", finish_second).await;
+    assert_eq!(new_update["checklist"]["completed"], 2);
+    assert_eq!(new_update["changed_item"]["description"], "Check new links");
+    assert!(
+        outcome_ctx.ctx.tool_registry.tracker_adopted_for_request(),
+        "a repeated update must adopt the current request"
+    );
+}
+
+#[tokio::test]
+async fn repeated_registry_results_keep_new_inspections_visible() {
+    for planning in [false, true] {
+        let mut backing = TestContextBacking::new(120).await;
+        backing.select_build_primary_agent();
+        if planning {
+            backing.tool_registry.enable_planning();
         }
-    }
-
-    let diagnostics = outcome_ctx.ctx.harness_state.snapshot_turn_diagnostics(Default::default(), 0);
-    let tool_payloads = outcome_ctx
-        .ctx
-        .working_history
-        .iter()
-        .filter(|message| message.role == uni::MessageRole::Tool)
-        .map(|message| {
-            let content = message.content.as_text();
-            (content.len(), content.chars().take(160).collect::<String>())
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        diagnostics.model_visible_tool_preview_budget_exhausted,
-        "registry should emit enough provider-visible body to exhaust the upstream budget; diagnostics={diagnostics:?}, tool_payloads={tool_payloads:?}"
-    );
-    assert!(
-        outcome_ctx.ctx.working_history.iter().any(|message| {
-            message.role == uni::MessageRole::Tool
-                && serde_json::from_str::<serde_json::Value>(&message.content.as_text())
-                    .ok()
-                    .and_then(|value| value.get("preview_budget_exhausted").and_then(serde_json::Value::as_bool))
-                    == Some(true)
-        }),
-        "the real registry path must publish its authoritative exhaustion marker; tool_payloads={tool_payloads:?}"
-    );
-    assert!(diagnostics.suppressed_tool_previews > 0);
-    assert!(diagnostics.requested_tool_calls < 32, "exhaustion must converge before the tool-call ceiling");
-
-    // Registry markers remain authoritative when an in-progress response is
-    // replaced by its terminal update: suppression is counted once per call.
-    // Replace the call that actually carries the marker — the budget exhausts
-    // on whichever read overflows, not necessarily the first one issued.
-    let suppressed_before_replacement = diagnostics.suppressed_tool_previews;
-    let suppressed_call_id = outcome_ctx
-        .ctx
-        .working_history
-        .iter()
-        .filter(|message| message.role == uni::MessageRole::Tool)
-        .find(|message| {
-            serde_json::from_str::<serde_json::Value>(&message.content.as_text())
-                .ok()
-                .and_then(|value| value.get("preview_budget_exhausted").and_then(serde_json::Value::as_bool))
-                == Some(true)
-        })
-        .and_then(|message| message.tool_call_id.clone())
-        .expect("registry marker response must exist in working history");
-    outcome_ctx.ctx.push_tool_response(
-        suppressed_call_id,
-        Some(tool_names::READ_FILE),
-        json!({
-            "total_output_bytes": 80_000,
-            "preview_budget_exhausted": true
-        })
-        .to_string(),
-    );
-    let after_replacement = outcome_ctx.ctx.harness_state.snapshot_turn_diagnostics(Default::default(), 0);
-    assert_eq!(
-        after_replacement.suppressed_tool_previews, suppressed_before_replacement,
-        "replacing one registry-suppressed response must not double-count it"
-    );
-
-    for (id, command) in [
-        ("post-exhaustion-read", format!("sed -n '1,20p' {}", sample_file.display())),
-        ("post-exhaustion-search", format!("rg -n 'line' {}", sample_file.display())),
-        ("post-exhaustion-diff", "git diff -- sample.txt".to_string()),
-    ] {
-        let blocked = enforce_preview_exhaustion_inspection_gate(
-            outcome_ctx.ctx,
-            id,
-            tool_names::EXEC_COMMAND,
-            &json!({"cmd": command}),
-            true,
-        );
-        assert!(matches!(blocked, Some(ValidationResult::PreviewExhausted)), "{command}");
+        let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+        let paths = (0..16)
+            .map(|index| {
+                let path = workspace.join(format!("evidence-{index}.txt"));
+                std::fs::write(&path, format!("evidence-{index} {}\n", "x".repeat(8000))).unwrap();
+                path
+            })
+            .collect::<Vec<_>>();
+        let mut tracker = LoopTracker::new();
+        let mut modified = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut tracker,
+            turn_modified_files: &mut modified,
+        };
+        for (index, path) in paths.iter().enumerate() {
+            let result = handle_single_tool_call(
+                &mut outcome_ctx,
+                &format!("read-{index}"),
+                tool_names::READ_FILE,
+                json!({"path": path, "limit": 2_000, "condense": false}),
+            )
+            .await
+            .unwrap();
+            assert!(result.is_none(), "a productive read must not trigger a recovery outcome");
+            let stored = outcome_ctx
+                .ctx
+                .working_history
+                .iter()
+                .rev()
+                .find(|message| message.role == uni::MessageRole::Tool)
+                .unwrap()
+                .content
+                .as_text();
+            assert!(stored.contains(&format!("evidence-{index}")), "fresh evidence must remain visible: {stored}");
+            assert!(!stored.contains("preview_budget_exhausted"));
+        }
+        assert!(!outcome_ctx.ctx.is_recovery_active());
     }
 }
 
 #[tokio::test]
-async fn preview_exhaustion_gate_blocks_blind_inspection_but_keeps_useful_channels_open() {
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::ValidationResult;
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::read_guard::enforce_preview_exhaustion_inspection_gate;
-
-    let mut backing = TestContextBacking::new(8).await;
-    let mut ctx = backing.turn_processing_context();
-
-    // Fresh budget: everything passes through.
-    let fresh = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-fresh",
-        tool_names::READ_FILE,
-        &json!({"path": "src/main.rs"}),
-        true,
-    );
-    assert!(fresh.is_none(), "gate must not fire before exhaustion");
-
-    exhaust_preview_budget_for_test(&mut ctx);
-
-    // Ordinary inspection is blocked with actionable guidance.
-    let blocked = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-blind-read",
-        tool_names::READ_FILE,
-        &json!({"path": "src/main.rs"}),
-        true,
-    );
-    assert!(matches!(blocked, Some(ValidationResult::PreviewExhausted)));
-    assert!(
-        ctx.working_history
-            .iter()
-            .any(|message| { message.content.as_text().contains("preview budget") })
-    );
-
-    let blocked_search = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-blind-search",
-        tool_names::CODE_SEARCH,
-        &json!({"query": "fn main"}),
-        true,
-    );
-    assert!(matches!(blocked_search, Some(ValidationResult::PreviewExhausted)));
-
-    let blocked_grep = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-blind-grep",
-        tool_names::EXEC_COMMAND,
-        &json!({"cmd": "rg -n 'fn run' src/main.rs"}),
-        true,
-    );
-    assert!(matches!(blocked_grep, Some(ValidationResult::PreviewExhausted)));
-
-    // A tiny ordinary inspection is still an inspection: output size must not
-    // turn it into a verifier or bypass the post-exhaustion gate.
-    let blocked_tiny = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-blind-tiny",
-        tool_names::EXEC_COMMAND,
-        &json!({"cmd": "printf tiny"}),
-        true,
-    );
-    assert!(matches!(blocked_tiny, Some(ValidationResult::PreviewExhausted)));
-
-    // Verification verdicts survive in stub metadata: checks keep running.
-    let check = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-check",
-        tool_names::EXEC_COMMAND,
-        &json!({"cmd": "cargo check --locked"}),
-        true,
-    );
-    assert!(check.is_none(), "verification must stay open after exhaustion");
-
-    // Bookkeeping, interview, and session polling stay open.
-    for (id, name, args) in [
-        ("call-tracker", tool_names::TASK_TRACKER, json!({})),
-        (
-            "call-interview",
-            tool_names::REQUEST_USER_INPUT,
-            json!({"questions": [{"id": "q1", "header": "Q1", "question": "Go?"}]}),
-        ),
-        ("call-poll", tool_names::WRITE_STDIN, json!({"session_id": "1"})),
-    ] {
-        let outcome = enforce_preview_exhaustion_inspection_gate(&mut ctx, id, name, &args, true);
-        assert!(outcome.is_none(), "{name} must stay open after exhaustion");
-    }
-
-    // Spool paging stays visible through preview credit: let it through.
-    let spool = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-spool",
-        tool_names::READ_FILE,
-        &json!({"path": ".vtcode/context/tool_outputs/write_stdin_run-abc123.txt"}),
-        true,
-    );
-    assert!(spool.is_none(), "spool paging must stay open after exhaustion");
-
-    // Non-readonly calls never reach this gate.
-    let edit = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-edit",
-        tool_names::EDIT_FILE,
-        &json!({"path": "src/main.rs"}),
-        false,
-    );
-    assert!(edit.is_none());
-}
-
-#[tokio::test]
-async fn parallel_preview_gate_rejections_allow_one_corrective_response() {
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::read_guard::enforce_preview_exhaustion_inspection_gate;
-
-    let mut backing = TestContextBacking::new(8).await;
-    let mut ctx = backing.turn_processing_context();
-    exhaust_preview_budget_for_test(&mut ctx);
-
-    // The latest session sent four inspection calls together. They were one
-    // model decision, so they must not exhaust the policy-denial fuse.
-    for index in 0..4 {
-        let call_id = format!("blind-{index}");
-        let args = json!({"cmd": "rg -n 'reduce_motion' crates/codegen/vtcode-ui/src"});
-        let result =
-            enforce_preview_exhaustion_inspection_gate(&mut ctx, &call_id, tool_names::EXEC_COMMAND, &args, true)
-                .expect("inspection should be rejected");
-        assert!(matches!(result, ValidationResult::PreviewExhausted));
-        assert!(matches!(
-            finalize_validation_result(&mut ctx, &call_id, tool_names::EXEC_COMMAND, &args, result),
-            ValidationTransition::Return(None)
-        ));
-    }
-    flush_blocked_tool_recovery(&mut ctx);
-    assert_eq!(ctx.blocked_tool_calls(), 0);
-    assert!(!ctx.harness_state.recovery_is_tool_free());
-
-    // A spool page remains available on the corrective response.
-    let spool_args = json!({"cmd": "sed -n '1,20p' .vtcode/context/tool_outputs/write_stdin_run-abc123.txt"});
-    assert!(
-        enforce_preview_exhaustion_inspection_gate(
-            &mut ctx,
-            "spool-page",
-            tool_names::EXEC_COMMAND,
-            &spool_args,
-            true,
-        )
-        .is_none()
-    );
-
-    // A successfully handled tool on the corrective response resets the
-    // blind-batch streak; the next rejection gets its own chance to recover.
-    assert!(matches!(
-        finalize_validation_result(
-            &mut ctx,
-            "handled-page",
-            tool_names::READ_FILE,
-            &json!({"path": ".vtcode/context/tool_outputs/write_stdin_run-abc123.txt"}),
-            ValidationResult::Handled,
-        ),
-        ValidationTransition::Return(None)
-    ));
-
-    // Repeated blind batches still converge to bounded recovery.
-    let args = json!({"path": "src/main.rs"});
-    for (index, should_recover) in [(0, false), (1, true)] {
-        let call_id = format!("blind-again-{index}");
-        let result = enforce_preview_exhaustion_inspection_gate(&mut ctx, &call_id, tool_names::READ_FILE, &args, true)
-            .expect("inspection should be rejected");
-        finalize_validation_result(&mut ctx, &call_id, tool_names::READ_FILE, &args, result);
-        flush_blocked_tool_recovery(&mut ctx);
-        assert_eq!(ctx.harness_state.recovery_is_tool_free(), should_recover);
-    }
-    assert!(ctx.harness_state.recovery_is_tool_free());
-}
-
-#[tokio::test]
-async fn preview_exhaustion_gate_directs_planning_toward_synthesis() {
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::ValidationResult;
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::read_guard::enforce_preview_exhaustion_inspection_gate;
-
-    let mut backing = TestContextBacking::new(8).await;
-    backing.tool_registry.enable_planning();
-    let mut ctx = backing.turn_processing_context();
-    exhaust_preview_budget_for_test(&mut ctx);
-
-    let blocked = enforce_preview_exhaustion_inspection_gate(
-        &mut ctx,
-        "call-plan-read",
-        tool_names::READ_FILE,
-        &json!({"path": "src/main.rs"}),
-        true,
-    );
-    assert!(matches!(blocked, Some(ValidationResult::PreviewExhausted)));
-    assert!(
-        ctx.working_history
-            .iter()
-            .any(|message| { message.content.as_text().contains("<proposed_plan>") })
-    );
-}
-
-#[tokio::test]
-async fn preview_exhaustion_guidance_names_open_channels_without_inviting_retry() {
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::ValidationResult;
-    use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::read_guard::enforce_preview_exhaustion_inspection_gate;
-
-    // Planning: synthesis directive plus the channels that stay open.
-    let mut planning_backing = TestContextBacking::new(8).await;
-    planning_backing.tool_registry.enable_planning();
-    let mut planning_ctx = planning_backing.turn_processing_context();
-    exhaust_preview_budget_for_test(&mut planning_ctx);
-    let blocked = enforce_preview_exhaustion_inspection_gate(
-        &mut planning_ctx,
-        "call-plan-read",
-        tool_names::READ_FILE,
-        &json!({"path": "src/main.rs"}),
-        true,
-    );
-    assert!(matches!(blocked, Some(ValidationResult::PreviewExhausted)));
-    let planning_text = planning_ctx
-        .working_history
-        .iter()
-        .map(|message| message.content.as_text())
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(planning_text.contains("<proposed_plan>"));
-    assert!(planning_text.contains("spool paging"));
-    assert!(planning_text.contains("exhausted inspections are blocked"));
-    assert!(!planning_text.contains("repeat the call"));
-
-    // Execution: spool-paging recovery without a plan directive (asymmetric).
-    let mut exec_backing = TestContextBacking::new(8).await;
-    let mut exec_ctx = exec_backing.turn_processing_context();
-    exhaust_preview_budget_for_test(&mut exec_ctx);
-    let blocked = enforce_preview_exhaustion_inspection_gate(
-        &mut exec_ctx,
-        "call-exec-read",
-        tool_names::READ_FILE,
-        &json!({"path": "src/main.rs"}),
-        true,
-    );
-    assert!(matches!(blocked, Some(ValidationResult::PreviewExhausted)));
-    let exec_text = exec_ctx
-        .working_history
-        .iter()
-        .map(|message| message.content.as_text())
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(exec_text.contains("page it in small ranges"));
-    assert!(!exec_text.contains("<proposed_plan>"));
-}
-
-#[tokio::test]
-async fn spool_guard_pass_banks_preview_credit_for_the_page() {
+async fn spool_page_remains_visible_after_large_results() {
     use crate::agent::runloop::unified::turn::tool_outcomes::handlers::guards::spool_guard::enforce_spool_chunk_read_guard;
-
     let mut backing = TestContextBacking::new(8).await;
     let mut ctx = backing.turn_processing_context();
-    exhaust_preview_budget_for_test(&mut ctx);
-
-    // An admitted spool-page read banks credit: the page pushed right after
-    // stays model-visible despite the exhausted aggregate budget.
+    ctx.push_tool_response("large", Some(tool_names::EXEC_COMMAND), "x".repeat(100_000));
     let passed = enforce_spool_chunk_read_guard(
         &mut ctx,
-        "call-spool-page",
+        "page",
         tool_names::READ_FILE,
         &json!({"path": ".vtcode/context/tool_outputs/write_stdin_run-abc123.txt"}),
     )
     .await;
-    assert!(passed.is_none(), "first spool page must pass the guard");
-
-    let page = "visible page content ".repeat(64);
-    ctx.push_tool_response("call-page", Some(tool_names::READ_FILE), page.clone());
-    let stored = ctx
-        .working_history
-        .iter()
-        .rev()
-        .find(|message| message.role == uni::MessageRole::Tool)
-        .expect("paged response must be stored")
-        .content
-        .as_text()
-        .into_owned();
-    assert!(stored.contains(&page), "credited spool page must stay visible");
-    assert!(!stored.contains("preview_budget_exhausted"));
+    assert!(passed.is_none());
+    let page = "visible page content ".repeat(256);
+    ctx.push_tool_response("page", Some(tool_names::READ_FILE), page.clone());
+    assert!(ctx.working_history.last().unwrap().content.as_text().contains(&page));
+    assert!(!ctx.is_recovery_active());
 }
 
 #[tokio::test]
@@ -2512,4 +3088,894 @@ async fn failed_apply_patch_does_not_arm_read_after_write_guard() {
         outcome_ctx.ctx.tool_registry.execution_history_len() > history_len,
         "reads must stay available after a failed mutation"
     );
+}
+
+#[tokio::test]
+async fn patch_context_mismatch_gets_one_fresh_read_after_path_cap_then_corrected_edit() {
+    assert_mismatch_recovery_at_read_cap(false).await;
+}
+
+#[tokio::test]
+async fn literal_mismatch_gets_one_fresh_read_after_path_cap_then_corrected_edit() {
+    assert_mismatch_recovery_at_read_cap(true).await;
+}
+
+async fn assert_mismatch_recovery_at_read_cap(literal: bool) {
+    let mut backing = TestContextBacking::new(30).await;
+    backing.select_build_primary_agent();
+    let sample_file = backing.sample_file.clone();
+    std::fs::write(&sample_file, "old evidence\nsecond line\nthird line\n").expect("fixture");
+    let sample_path = sample_file.to_string_lossy().to_string();
+    let read_args = json!({"path":sample_path, "offset":1, "limit":2});
+    cache_tool_permission(&mut backing, tool_names::READ_FILE, &read_args, PermissionGrant::Permanent).await;
+    let bad_patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-vtcode.toml provider credentials\n+edited\n*** End Patch\n"});
+    let failure_tool = if literal {
+        tool_names::EDIT_FILE
+    } else {
+        tool_names::APPLY_PATCH
+    };
+    let bad_patch = if literal {
+        json!({"path":"sample.txt", "old_str":"vtcode.toml provider credentials", "new_str":"edited"})
+    } else {
+        bad_patch
+    };
+    cache_tool_permission(&mut backing, failure_tool, &bad_patch, PermissionGrant::Permanent).await;
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    handle_single_tool_call(&mut outcome_ctx, "initial_read", tool_names::READ_FILE, read_args.clone())
+        .await
+        .expect("seed cache");
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| message.content.as_text().contains("old evidence"))
+    );
+    // Fill the path counter without tripping the independent identical-slice guard.
+    for _ in 1..6 {
+        outcome_ctx.ctx.harness_state.record_file_read_path_call(sample_path.clone());
+    }
+    // Simulate external file changes; a replay would return the previous text.
+    std::fs::write(&sample_file, "fresh evidence\nsecond line\nthird line\n").expect("external update");
+    // Accept the disk version in the conflict monitor only. Retain the stale
+    // tool-result cache so this fixture isolates uncached mismatch recovery.
+    outcome_ctx
+        .ctx
+        .tool_registry
+        .edited_file_monitor_ref()
+        .accept_disk_version(&sample_file)
+        .await
+        .unwrap();
+    handle_single_tool_call(&mut outcome_ctx, "mismatched_patch", failure_tool, bad_patch.clone())
+        .await
+        .expect("typed patch mismatch");
+    assert_eq!(std::fs::read_to_string(&sample_file).unwrap(), "fresh evidence\nsecond line\nthird line\n");
+    assert!(
+        outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::READ_FILE, &read_args)
+    );
+    let history_start = outcome_ctx.ctx.working_history.len();
+    let mut source_call = uni::Message::assistant(String::new());
+    source_call.tool_calls = Some(vec![uni::ToolCall::function(
+        "fresh_recovery_read".into(),
+        tool_names::READ_FILE.into(),
+        read_args.to_string(),
+    )]);
+    outcome_ctx.ctx.working_history.push(source_call);
+    handle_single_tool_call(&mut outcome_ctx, "fresh_recovery_read", tool_names::READ_FILE, read_args.clone())
+        .await
+        .expect("one read beyond cap");
+    let outputs = outcome_ctx.ctx.working_history[history_start..]
+        .iter()
+        .map(|message| message.content.as_text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(outputs.contains("fresh evidence"), "{outputs}");
+    assert!(!outputs.contains("old evidence"), "cached evidence must not be reused: {outputs}");
+    assert!(!outputs.contains("reused_recent_result"), "{outputs}");
+    assert!(
+        !outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::READ_FILE, &read_args)
+    );
+    // Another failure on the same path must not replenish the allowance.
+    handle_single_tool_call(&mut outcome_ctx, "repeated_mismatch", failure_tool, bad_patch)
+        .await
+        .expect("second mismatch");
+    assert!(
+        !outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::READ_FILE, &read_args)
+    );
+    let before_block = outcome_ctx.ctx.tool_registry.execution_history_len();
+    handle_single_tool_call(&mut outcome_ctx, "second_recovery_read", tool_names::READ_FILE, read_args)
+        .await
+        .expect("read cap rejection");
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), before_block);
+    assert!(
+        outcome_ctx
+            .ctx
+            .working_history
+            .iter()
+            .any(|message| message.content.as_text().contains("repeated_read_path"))
+    );
+    outcome_ctx
+        .ctx
+        .tool_registry
+        .reconcile_source_inspection(outcome_ctx.ctx.working_history);
+    let corrected = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-fresh evidence\n+edited evidence\n*** End Patch\n"});
+    let corrected = if literal {
+        json!({"path":"sample.txt", "old_str":"fresh evidence", "new_str":"edited evidence"})
+    } else {
+        corrected
+    };
+    handle_single_tool_call(&mut outcome_ctx, "corrected_patch", failure_tool, corrected)
+        .await
+        .expect("corrected edit");
+    assert_eq!(std::fs::read_to_string(&sample_file).unwrap(), "edited evidence\nsecond line\nthird line\n");
+    assert!(!outcome_ctx.turn_modified_files.is_empty(), "successful mutation must be reported");
+    assert!(!outcome_ctx.ctx.is_recovery_active());
+}
+
+#[test]
+fn patch_preflight_correction_names_canonical_json_input() {
+    for (name, error) in [
+        (tool_names::APPLY_PATCH, "Missing required argument: input"),
+        (
+            tool_names::APPLY_PATCH,
+            "Tool preflight validation failed for 'apply_patch': Missing required argument: patch",
+        ),
+        (tool_names::EXEC_COMMAND, "apply_patch is a tool, not a shell executable"),
+    ] {
+        let correction = preflight_schema_correction(name, error);
+        assert!(correction.contains(r#"{"input":"*** Begin Patch\n"#));
+        assert!(correction.contains("retry once"));
+        assert!(correction.contains("do not run apply_patch in a shell"));
+    }
+}
+
+#[tokio::test]
+async fn patch_context_mismatch_allows_one_uncached_shell_range_after_six_reads() {
+    let mut backing = TestContextBacking::new(30).await;
+    backing.select_build_primary_agent();
+    let sample_file = backing.sample_file.clone();
+    std::fs::write(&sample_file, "old shell evidence\nsecond\nthird\nfourth\nfifth\nsixth\n").unwrap();
+    let sample_path = sample_file.to_string_lossy().to_string();
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-vtcode.toml credentials\n+edited\n*** End Patch\n"});
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch, PermissionGrant::Permanent).await;
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    for index in 1..=6 {
+        handle_single_tool_call(
+            &mut outcome_ctx,
+            &format!("shell_page_{index}"),
+            tool_names::EXEC_COMMAND,
+            json!({"cmd":format!("sed -n '{index},{index}p' {sample_path}")}),
+        )
+        .await
+        .unwrap();
+    }
+    std::fs::write(&sample_file, "fresh shell evidence\nsecond\nthird\nfourth\nfifth\nsixth\n").unwrap();
+    handle_single_tool_call(&mut outcome_ctx, "shell_patch_mismatch", tool_names::APPLY_PATCH, patch)
+        .await
+        .unwrap();
+    let args = json!({"cmd":format!("sed -n '1,1p' {sample_path}")});
+    assert!(
+        outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::EXEC_COMMAND, &args)
+    );
+    // Cached identical reads can already be at the family boundary when a
+    // mismatch asks for this same slice again. The one fresh read covers both caps.
+    for _ in 0..3 {
+        outcome_ctx
+            .ctx
+            .harness_state
+            .record_file_read_family_call(format!("unified_exec::read::{sample_path}::off=1::lim=1"));
+    }
+    let start = outcome_ctx.ctx.working_history.len();
+    let mut source_call = uni::Message::assistant(String::new());
+    source_call.tool_calls = Some(vec![uni::ToolCall::function(
+        "fresh_shell_range".into(),
+        tool_names::EXEC_COMMAND.into(),
+        args.to_string(),
+    )]);
+    outcome_ctx.ctx.working_history.push(source_call);
+    handle_single_tool_call(&mut outcome_ctx, "fresh_shell_range", tool_names::EXEC_COMMAND, args.clone())
+        .await
+        .unwrap();
+    let outputs = outcome_ctx.ctx.working_history[start..]
+        .iter()
+        .map(|message| message.content.as_text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(outputs.contains("fresh shell evidence"), "{outputs}");
+    assert!(!outputs.contains("old shell evidence"), "{outputs}");
+    assert!(!outputs.contains("repeated_read_path"), "{outputs}");
+    assert!(
+        !outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::EXEC_COMMAND, &args)
+    );
+    outcome_ctx
+        .ctx
+        .tool_registry
+        .reconcile_source_inspection(outcome_ctx.ctx.working_history);
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-fresh shell evidence\n+edited shell evidence\n*** End Patch\n"});
+    handle_single_tool_call(&mut outcome_ctx, "fixed_shell_patch", tool_names::APPLY_PATCH, patch)
+        .await
+        .unwrap();
+    assert!(
+        std::fs::read_to_string(&sample_file)
+            .unwrap()
+            .starts_with("edited shell evidence\n")
+    );
+}
+
+#[tokio::test]
+async fn patch_recovery_path_cap_exception_is_reserved_before_batch_execution() {
+    for prior_reads in [5, 6] {
+        let mut backing = TestContextBacking::new(30).await;
+        backing.select_build_primary_agent();
+        let sample_path = backing.sample_file.to_string_lossy().to_string();
+        let bad_patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-missing context\n+edited\n*** End Patch\n"});
+        cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &bad_patch, PermissionGrant::Permanent).await;
+        let read_args = json!({"path":sample_path, "offset":1, "limit":2});
+        cache_tool_permission(&mut backing, tool_names::READ_FILE, &read_args, PermissionGrant::Permanent).await;
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+        handle_single_tool_call(&mut outcome_ctx, "mismatch", tool_names::APPLY_PATCH, bad_patch)
+            .await
+            .expect("typed mismatch");
+        for _ in 0..prior_reads {
+            outcome_ctx.ctx.harness_state.record_file_read_path_call(sample_path.clone());
+        }
+        let history_len = outcome_ctx.ctx.tool_registry.execution_history_len();
+        let first = validate_tool_call(outcome_ctx.ctx, "first_batch_read", tool_names::READ_FILE, &read_args)
+            .await
+            .expect("first batch admission");
+        assert!(matches!(first, ValidationResult::Proceed(_)), "prior reads: {prior_reads}");
+        let second = validate_tool_call(
+            outcome_ctx.ctx,
+            "second_batch_read",
+            tool_names::READ_FILE,
+            &json!({"path":sample_path, "offset":3, "limit":2}),
+        )
+        .await
+        .expect("second batch admission");
+        assert!(matches!(second, ValidationResult::ReadCapBlocked), "prior reads: {prior_reads}");
+        assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), history_len);
+        assert!(
+            outcome_ctx
+                .ctx
+                .tool_registry
+                .has_patch_recovery_read(tool_names::READ_FILE, &read_args)
+        );
+    }
+}
+
+#[tokio::test]
+async fn patch_recovery_rejects_ignored_limit_alias_at_the_path_cap() {
+    let mut backing = TestContextBacking::new(30).await;
+    backing.select_build_primary_agent();
+    let path = backing.sample_file.to_string_lossy().to_string();
+    std::fs::write(&backing.sample_file, (1..=400).map(|line| format!("fixture-{line}\n")).collect::<String>())
+        .unwrap();
+    let bad_patch =
+        json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-missing\n+edited\n*** End Patch\n"});
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &bad_patch, PermissionGrant::Permanent).await;
+    let bounded = json!({"path":path, "limit":1, "condense":false});
+    cache_tool_permission(&mut backing, tool_names::READ_FILE, &bounded, PermissionGrant::Permanent).await;
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    handle_single_tool_call(&mut outcome_ctx, "mismatch", tool_names::APPLY_PATCH, bad_patch)
+        .await
+        .unwrap();
+    for _ in 0..6 {
+        outcome_ctx.ctx.harness_state.record_file_read_path_call(path.clone());
+    }
+    let history_len = outcome_ctx.ctx.tool_registry.execution_history_len();
+    handle_single_tool_call(
+        &mut outcome_ctx,
+        "ignored_limit",
+        tool_names::READ_FILE,
+        json!({"path":path, "limit_lines":1, "condense":false}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome_ctx.ctx.tool_registry.execution_history_len(), history_len);
+    assert!(
+        outcome_ctx
+            .ctx
+            .tool_registry
+            .has_patch_recovery_read(tool_names::READ_FILE, &bounded)
+    );
+    let history_start = outcome_ctx.ctx.working_history.len();
+    handle_single_tool_call(&mut outcome_ctx, "bounded_read", tool_names::READ_FILE, bounded)
+        .await
+        .unwrap();
+    let output = outcome_ctx.ctx.working_history[history_start..]
+        .iter()
+        .map(|message| message.content.as_text())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(output.contains("fixture-1"), "{output}");
+    assert!(!output.contains("fixture-201"), "{output}");
+    assert!(!output.contains("fixture-400"), "{output}");
+}
+
+#[tokio::test]
+async fn preflight_archived_tracker_fixture_stops_after_one_corrective_turn() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/tracker_preflight_session.json")).unwrap();
+    let sequence = fixture["sequence"].as_array().unwrap();
+    let arguments = fixture["rejected_arguments"].as_array().unwrap();
+    assert_eq!(sequence.len(), 39);
+    assert_eq!(arguments.len(), 6);
+    assert_eq!(fixture["baseline_internal_continuations"], 17);
+    let mut config = vtcode_core::config::VTCodeConfig::default();
+    config.tools.max_consecutive_blocked_tool_calls_per_turn = 6;
+    let mut backing = TestContextBacking::new(32).await;
+    backing.select_build_primary_agent();
+    assert!(backing.session_stats.record_tracker_continuation_turn_with_limit(3));
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut calls = 0;
+    let mut continuations = 0;
+    let mut distinct = BTreeSet::new();
+    for index in sequence {
+        let args = arguments[index.as_u64().unwrap() as usize].clone();
+        distinct.insert(args.to_string());
+        let call = PreparedAssistantToolCall::new(uni::ToolCall::function(
+            format!("fixture-{calls}"),
+            tool_names::TASK_TRACKER.to_string(),
+            args.to_string(),
+        ));
+        let mut ctx = backing.turn_processing_context();
+        ctx.vt_cfg = Some(&config);
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+        let outcome = handle_tool_calls(&mut outcome_ctx, &[call]).await.unwrap();
+        calls += 1;
+        if ctx.session_stats.preflight_recovery.exhausted() {
+            break;
+        }
+        if matches!(outcome, Some(TurnHandlerOutcome::Continue)) {
+            assert!(ctx.session_stats.preflight_recovery.corrective_pending());
+            assert_eq!(continuations, 0);
+            continuations += 1;
+            ctx.session_stats.preflight_recovery.begin_corrective_turn();
+            let prompt = format!(
+                "{} Correct rejected tracker arguments.",
+                crate::agent::runloop::unified::state::PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX
+            );
+            assert_eq!(
+                ctx.session_stats.register_follow_up_prompt(&prompt),
+                crate::agent::runloop::unified::state::FollowUpPromptAction::None
+            );
+            *ctx.harness_state =
+                HarnessTurnState::new(TurnRunId("corrective".into()), TurnId("corrective".into()), 32, 60, 0);
+        }
+    }
+    assert_eq!(
+        calls, 7,
+        "six initial failures, one changed corrective call, then its semantic repeat stops recovery: \
+         cosmetic status/max_output_tokens variation on the same invalid `list` cannot open another turn"
+    );
+    // One `create` variant collapses into the lead `create`'s identity, so the
+    // independently counted exact duplicates changed with semantic identity.
+    assert_eq!(calls - distinct.len(), 2, "independently counted duplicate calls");
+    assert_eq!(continuations, 1);
+    assert!(backing.session_stats.preflight_recovery.exhausted());
+    assert_eq!(
+        backing.session_stats.tracker_continuation_turns(),
+        1,
+        "validation must not replenish tracker budgets"
+    );
+    assert_eq!(
+        backing
+            .working_history
+            .iter()
+            .filter(|message| message.role == uni::MessageRole::Tool)
+            .count(),
+        calls
+    );
+    assert!(
+        !backing
+            .working_history
+            .iter()
+            .any(|message| message.role == uni::MessageRole::System
+                && message.content.as_text().contains("tools are disabled"))
+    );
+}
+
+#[tokio::test]
+async fn preflight_corrective_turn_revalidates_live_schema_and_stops_unchanged_calls() {
+    for correct in [true, false] {
+        let mut backing = TestContextBacking::new(32).await;
+        backing.select_build_primary_agent();
+        let args = json!({"action":"list","index":2});
+        let mut ctx = backing.turn_processing_context();
+        assert!(
+            ctx.tool_registry
+                .admit_public_tool_call(tool_names::TASK_TRACKER, &args)
+                .is_err()
+        );
+        ctx.session_stats.preflight_recovery.reject(
+            tool_names::TASK_TRACKER,
+            crate::agent::runloop::unified::state::ValidationCategory::Arguments,
+            Some(&args),
+            6,
+            false,
+        );
+        ctx.session_stats.preflight_recovery.synthesis();
+        ctx.session_stats.preflight_recovery.begin_corrective_turn();
+        assert!(ctx.session_stats.record_tracker_continuation_turn_with_limit(3));
+        let retry = if correct {
+            json!({"action":"list"})
+        } else {
+            json!({"index":2,"action":"list","max_output_tokens":20})
+        };
+        let result = validate_tool_call(&mut ctx, "corrective", tool_names::TASK_TRACKER, &retry)
+            .await
+            .unwrap();
+        if correct {
+            assert!(matches!(result, ValidationResult::Proceed(_)));
+            assert!(!ctx.session_stats.preflight_recovery.is_clear(), "admission alone must not clear recovery");
+            let mut repeated_tool_attempts = LoopTracker::new();
+            let mut turn_modified_files = BTreeSet::new();
+            let mut outcome_ctx = ToolOutcomeContext {
+                ctx: &mut ctx,
+                repeated_tool_attempts: &mut repeated_tool_attempts,
+                turn_modified_files: &mut turn_modified_files,
+            };
+            handle_single_tool_call(&mut outcome_ctx, "corrected-execution", tool_names::TASK_TRACKER, retry)
+                .await
+                .unwrap();
+            assert!(ctx.session_stats.preflight_recovery.is_clear());
+            assert_eq!(ctx.session_stats.tracker_continuation_turns(), 1);
+        } else {
+            assert!(matches!(result, ValidationResult::Outcome(TurnHandlerOutcome::Break(_))));
+            assert!(ctx.session_stats.preflight_recovery.exhausted());
+            let response = ctx.working_history.last().unwrap().content.as_text();
+            assert!(response.contains("Repeated preflight rejection"));
+            assert!(!response.contains("Expected schema"), "repeat feedback must remain compact");
+        }
+    }
+}
+
+#[tokio::test]
+async fn preflight_batch_closes_every_invocation_and_retains_parsed_arguments() {
+    use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;
+    for cancelled in [false, true] {
+        let mut backing = TestContextBacking::new(32).await;
+        backing.select_build_primary_agent();
+        let workspace = backing.sample_file.parent().unwrap().to_path_buf();
+        let emitter = HarnessEventEmitter::new_async(&workspace, "preflight-batch", None)
+            .await
+            .unwrap();
+        let valid = json!({"path":backing.sample_file});
+        cache_tool_permission(&mut backing, tool_names::READ_FILE, &valid, PermissionGrant::Permanent).await;
+        let invalid = json!({"action":"list","index":3});
+        let calls = [
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "admitted-first".into(),
+                tool_names::READ_FILE.into(),
+                valid.to_string(),
+            )),
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "invalid".into(),
+                tool_names::TASK_TRACKER.into(),
+                invalid.to_string(),
+            )),
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "malformed".into(),
+                tool_names::TASK_TRACKER.into(),
+                "{not-json".into(),
+            )),
+        ];
+        let mut config = vtcode_core::config::VTCodeConfig::default();
+        config.tools.max_consecutive_blocked_tool_calls_per_turn = 1;
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+        {
+            let mut ctx = backing.turn_processing_context();
+            ctx.vt_cfg = Some(&config);
+            ctx.harness_emitter = Some(&emitter);
+            if cancelled {
+                ctx.ctrl_c_state.request_local_cancel();
+            }
+            let mut outcome_ctx = ToolOutcomeContext {
+                ctx: &mut ctx,
+                repeated_tool_attempts: &mut repeated_tool_attempts,
+                turn_modified_files: &mut turn_modified_files,
+            };
+            let outcome = handle_tool_calls(&mut outcome_ctx, &calls).await.unwrap();
+            assert!(outcome.is_some());
+            if cancelled {
+                assert!(matches!(
+                    outcome,
+                    Some(TurnHandlerOutcome::Break(
+                        crate::agent::runloop::unified::turn::context::TurnLoopResult::Cancelled
+                    ))
+                ));
+                assert!(!ctx.session_stats.preflight_recovery.corrective_pending());
+                assert!(!ctx.harness_state.recovery_is_tool_free());
+            }
+            for call in &calls {
+                assert_eq!(
+                    ctx.working_history
+                        .iter()
+                        .filter(|message| message.tool_call_id.as_deref() == Some(call.call_id()))
+                        .count(),
+                    1
+                );
+            }
+        }
+        emitter.finish().await.unwrap();
+        let persisted =
+            std::fs::read_to_string(workspace.join(".vtcode/sessions/preflight-batch/events.jsonl")).unwrap();
+        let events: Vec<serde_json::Value> =
+            persisted.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        for (id, expected_args) in [
+            ("admitted-first", Some(&valid)),
+            ("invalid", Some(&invalid)),
+            ("malformed", None),
+        ] {
+            let completed: Vec<_> = events
+                .iter()
+                .filter(|record| {
+                    record["event"]["type"] == "item.completed" && record["event"]["item"]["tool_call_id"] == id
+                })
+                .collect();
+            assert_eq!(completed.len(), 2, "invocation and output close exactly once: {id}");
+            let invocation = completed
+                .iter()
+                .find(|record| record["event"]["item"]["type"] == "tool_invocation")
+                .unwrap();
+            assert_eq!(invocation["event"]["item"].get("arguments"), expected_args);
+        }
+    }
+}
+
+#[tokio::test]
+async fn preflight_corrective_turn_uses_current_schema_before_identity_check() {
+    let mut backing = TestContextBacking::new(32).await;
+    backing.select_build_primary_agent();
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"action":"update","index":0,"status":"completed"});
+    ctx.tool_registry.enable_planning();
+    assert!(
+        ctx.tool_registry
+            .admit_public_tool_call(tool_names::TASK_TRACKER, &args)
+            .is_err()
+    );
+    ctx.session_stats.preflight_recovery.reject(
+        tool_names::TASK_TRACKER,
+        crate::agent::runloop::unified::state::ValidationCategory::Arguments,
+        Some(&args),
+        6,
+        true,
+    );
+    ctx.session_stats.preflight_recovery.synthesis();
+    ctx.session_stats.preflight_recovery.begin_corrective_turn();
+    ctx.tool_registry.disable_planning();
+    let result = validate_tool_call(&mut ctx, "live-schema", tool_names::TASK_TRACKER, &args)
+        .await
+        .unwrap();
+    assert!(
+        matches!(result, ValidationResult::Proceed(_)),
+        "index zero checklist completion is valid outside planning"
+    );
+    assert!(!ctx.session_stats.preflight_recovery.exhausted());
+}
+
+#[tokio::test]
+async fn preflight_failed_corrective_execution_does_not_clear_episode() {
+    let mut backing = TestContextBacking::new(32).await;
+    backing.select_build_primary_agent();
+    std::fs::create_dir_all(backing.config.workspace.join(".vtcode/tasks/current_task.md")).unwrap();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    ctx.session_stats.preflight_recovery.reject(
+        tool_names::TASK_TRACKER,
+        crate::agent::runloop::unified::state::ValidationCategory::Arguments,
+        Some(&json!({"action":"list","index":1})),
+        6,
+        false,
+    );
+    ctx.session_stats.preflight_recovery.synthesis();
+    ctx.session_stats.preflight_recovery.begin_corrective_turn();
+    let mut outcome_ctx = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut repeated_tool_attempts,
+        turn_modified_files: &mut turn_modified_files,
+    };
+    handle_single_tool_call(&mut outcome_ctx, "failed-correction", tool_names::TASK_TRACKER, json!({"action":"list"}))
+        .await
+        .unwrap();
+    assert!(!ctx.session_stats.preflight_recovery.is_clear());
+    ctx.session_stats.preflight_recovery.finish_corrective_turn();
+    assert!(ctx.session_stats.preflight_recovery.exhausted());
+}
+
+#[tokio::test]
+async fn preflight_tracker_corrections_match_live_operations_and_canonical_aliases() {
+    struct CorrectionCase {
+        rejected_name: &'static str,
+        rejected_args: serde_json::Value,
+        correction: serde_json::Value,
+        clears: bool,
+    }
+    for case in [
+        CorrectionCase {
+            rejected_name: tool_names::TASK_TRACKER,
+            rejected_args: json!({"action":"lst"}),
+            correction: json!({"action":"list"}),
+            clears: true,
+        },
+        CorrectionCase {
+            rejected_name: tool_names::TASK_TRACKER,
+            rejected_args: json!({"action":"update","index":1}),
+            correction: json!({"action":"update","index":2,"status":"in_progress"}),
+            clears: false,
+        },
+        CorrectionCase {
+            rejected_name: "track_tasks",
+            rejected_args: json!({"action":"update","index":1}),
+            correction: json!({"action":"update","index":1,"status":"completed"}),
+            clears: true,
+        },
+        CorrectionCase {
+            rejected_name: tool_names::TASK_TRACKER,
+            rejected_args: json!({"action":"update","index_path":"01"}),
+            correction: json!({"action":"update","index":1,"status":"completed"}),
+            clears: true,
+        },
+    ] {
+        let mut backing = TestContextBacking::new(32).await;
+        backing.select_build_primary_agent();
+        let mut repeated_tool_attempts = LoopTracker::new();
+        let mut turn_modified_files = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+        handle_single_tool_call(&mut outcome_ctx, "seed", tool_names::TASK_TRACKER,
+            json!({"action":"create","title":"Correction regression","items":["First operation","Different operation"]}))
+            .await.unwrap();
+        assert!(
+            outcome_ctx
+                .ctx
+                .tool_registry
+                .admit_public_tool_call(case.rejected_name, &case.rejected_args)
+                .is_err()
+        );
+        validate_tool_call(outcome_ctx.ctx, "rejected", case.rejected_name, &case.rejected_args)
+            .await
+            .unwrap();
+        assert!(!outcome_ctx.ctx.session_stats.preflight_recovery.is_clear());
+        outcome_ctx.ctx.session_stats.preflight_recovery.synthesis();
+        outcome_ctx.ctx.session_stats.preflight_recovery.begin_corrective_turn();
+        handle_single_tool_call(&mut outcome_ctx, "correction", tool_names::TASK_TRACKER, case.correction)
+            .await
+            .unwrap();
+        assert_eq!(outcome_ctx.ctx.session_stats.preflight_recovery.is_clear(), case.clears);
+        if !case.clears {
+            let persisted =
+                std::fs::read_to_string(outcome_ctx.ctx.config.workspace.join(".vtcode/tasks/current_task.md"))
+                    .unwrap();
+            assert!(persisted.contains("- [ ] First operation"));
+            assert!(persisted.contains("- [/] Different operation"), "the unrelated update must actually execute");
+            assert_eq!(outcome_ctx.ctx.harness_state.consecutive_preflight_failures, 1);
+            handle_single_tool_call(
+                &mut outcome_ctx,
+                "same-target",
+                tool_names::TASK_TRACKER,
+                json!({"action":"update","index":1,"status":"completed"}),
+            )
+            .await
+            .unwrap();
+            assert!(outcome_ctx.ctx.session_stats.preflight_recovery.is_clear());
+        }
+        assert_eq!(outcome_ctx.ctx.harness_state.consecutive_preflight_failures, 0);
+        outcome_ctx.ctx.session_stats.preflight_recovery.finish_corrective_turn();
+        assert!(!outcome_ctx.ctx.session_stats.preflight_recovery.exhausted());
+    }
+}
+
+#[tokio::test]
+async fn preflight_alias_spelling_cannot_bypass_unchanged_call_detection() {
+    let mut backing = TestContextBacking::new(32).await;
+    backing.select_build_primary_agent();
+    let mut ctx = backing.turn_processing_context();
+    let arguments = json!({"action":"list","index":1});
+    validate_tool_call(&mut ctx, "alias-rejected", "track_tasks", &arguments)
+        .await
+        .unwrap();
+    ctx.session_stats.preflight_recovery.synthesis();
+    ctx.session_stats.preflight_recovery.begin_corrective_turn();
+    let repeated = validate_tool_call(&mut ctx, "canonical-repeat", tool_names::TASK_TRACKER, &arguments)
+        .await
+        .unwrap();
+    assert!(matches!(repeated, ValidationResult::Outcome(TurnHandlerOutcome::Break(_))));
+    assert!(ctx.session_stats.preflight_recovery.exhausted());
+}
+
+#[tokio::test]
+async fn source_inspection_refresh_survives_read_cap_without_replenishing_quota() {
+    let mut backing = TestContextBacking::new(30).await;
+    backing.select_build_primary_agent();
+    let sample = backing.sample_file.clone();
+    std::fs::write(&sample, "before\nunseen\n").unwrap();
+    let sample_path = sample.to_string_lossy().to_string();
+    let read = json!({"path":sample_path,"offset":1,"limit":1,"max_tokens":4096,"condense":false});
+    let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-before\n+after\n*** End Patch"});
+    cache_tool_permission(&mut backing, tool_names::READ_FILE, &read, PermissionGrant::Permanent).await;
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch, PermissionGrant::Permanent).await;
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let mut ctx = backing.turn_processing_context();
+    ctx.tool_registry
+        .set_inspection_mode(vtcode_core::config::core::agent::InspectionMode::Enforce);
+    for _ in 0..6 {
+        ctx.harness_state.record_file_read_path_call(sample_path.clone());
+    }
+    let mut outcomes = ToolOutcomeContext {
+        ctx: &mut ctx,
+        repeated_tool_attempts: &mut tracker,
+        turn_modified_files: &mut modified,
+    };
+    handle_single_tool_call(&mut outcomes, "blind", tool_names::APPLY_PATCH, patch.clone())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(&sample).unwrap(), "before\nunseen\n");
+    assert!(outcomes.ctx.tool_registry.has_patch_recovery_read(tool_names::READ_FILE, &read));
+    let mut assistant = uni::Message::assistant(String::new());
+    assistant.tool_calls = Some(vec![uni::ToolCall::function(
+        "refresh".into(),
+        tool_names::READ_FILE.into(),
+        read.to_string(),
+    )]);
+    outcomes.ctx.working_history.push(assistant);
+    handle_single_tool_call(&mut outcomes, "refresh", tool_names::READ_FILE, read.clone())
+        .await
+        .unwrap();
+    outcomes
+        .ctx
+        .tool_registry
+        .reconcile_source_inspection(outcomes.ctx.working_history);
+    assert!(!outcomes.ctx.tool_registry.has_patch_recovery_read(tool_names::READ_FILE, &read));
+    handle_single_tool_call(&mut outcomes, "inspected", tool_names::APPLY_PATCH, patch)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(&sample).unwrap(), "after\nunseen\n");
+    let unseen = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-unseen\n+bad\n*** End Patch"});
+    handle_single_tool_call(&mut outcomes, "still_unseen", tool_names::APPLY_PATCH, unseen)
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(&sample).unwrap(), "after\nunseen\n");
+    assert!(!outcomes.ctx.tool_registry.has_patch_recovery_read(tool_names::READ_FILE, &read));
+}
+
+#[tokio::test]
+async fn placeholder_policy_failure_keeps_policy_correction_and_single_prefix() {
+    let mut backing = TestContextBacking::new(4).await;
+    let mut ctx = backing.turn_processing_context();
+    let args = json!({"cleared":"tool_input"});
+    super::super::handle_preflight_failure(
+        &mut ctx,
+        "policy-placeholder",
+        tool_names::EXEC_COMMAND,
+        "Tool preflight validation failed: Command security check failed: command injection",
+        Some(&args),
+        None,
+    );
+    assert_eq!(ctx.harness_state.consecutive_preflight_failures, 1);
+    assert!(ctx.session_stats.preflight_recovery.is_clear(), "policy is not schema recovery");
+    let replies: Vec<_> = ctx
+        .working_history
+        .iter()
+        .filter(|m| m.tool_call_id.as_deref() == Some("policy-placeholder"))
+        .collect();
+    assert_eq!(replies.len(), 1);
+    let payload: serde_json::Value = serde_json::from_str(&replies[0].content.as_text()).unwrap();
+    assert!(!payload["schema_correction"].as_str().unwrap().contains("Do not echo"));
+    assert_eq!(
+        payload["error"]
+            .as_str()
+            .unwrap()
+            .matches("Tool preflight validation failed")
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn preflight_placeholder_and_invalid_arguments_allow_schema_correct_execution() {
+    for (invalid, command_key) in [
+        (r#"{"cleared":"tool_input"}"#, "cmd"),
+        (r#"{}"#, "command"),
+        (r#"{"cmd":" "}"#, "cmd"),
+        (r#"{"cmd":42}"#, "command"),
+        ("{", "cmd"),
+    ] {
+        let mut backing = TestContextBacking::new(20).await;
+        backing.select_build_primary_agent();
+        let mut tracker = LoopTracker::new();
+        let mut files = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let mut outcomes = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut tracker,
+            turn_modified_files: &mut files,
+        };
+        let mut valid = json!({"yield_time_ms":10000});
+        valid[command_key] = json!("rustc --version");
+        let calls = [
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "invalid".into(),
+                tool_names::EXEC_COMMAND.into(),
+                invalid.into(),
+            )),
+            PreparedAssistantToolCall::new(uni::ToolCall::function(
+                "corrected".into(),
+                tool_names::EXEC_COMMAND.into(),
+                valid.to_string(),
+            )),
+        ];
+        assert!(handle_tool_calls(&mut outcomes, &calls).await.unwrap().is_none(), "{invalid}");
+        assert!(outcomes.ctx.session_stats.preflight_recovery.is_clear(), "successful correction: {invalid}");
+        for id in ["invalid", "corrected"] {
+            let replies: Vec<_> = outcomes
+                .ctx
+                .working_history
+                .iter()
+                .filter(|m| m.tool_call_id.as_deref() == Some(id))
+                .collect();
+            assert_eq!(replies.len(), 1, "one terminal response: {invalid} / {id}");
+            if id == "corrected" {
+                assert!(replies[0].content.as_text().contains("rustc"));
+                let payload: serde_json::Value = serde_json::from_str(&replies[0].content.as_text()).unwrap();
+                assert_eq!(payload["exit_code"], 0, "the verifier must finish successfully");
+            }
+        }
+    }
 }

@@ -2,15 +2,18 @@
 
 ## Overview
 
-The `web_fetch` tool now includes comprehensive security checks to prevent fetching from sensitive, malicious, or privacy-compromising URLs. These checks are applied at the validation stage before any network request is made.
+The `web_fetch` tool now includes comprehensive security checks to prevent fetching from sensitive, malicious, or
+privacy-compromising URLs. These checks are applied at the validation stage before any network request is made.
 
 ## Security Layers
 
 ### 1. Protocol Validation
+
 - **HTTPS only**: All URLs must use HTTPS protocol
 - **Rejects**: HTTP, FTP, and other non-secure protocols
 
 ### 2. Network Isolation
+
 - **Blocks local/private networks**: `localhost`, `127.0.0.1`, `0.0.0.0`, `::1`, `.local`, `.internal`
 - **Prevents SSRF attacks**: Protects against Server-Side Request Forgery
 
@@ -19,6 +22,7 @@ The `web_fetch` tool now includes comprehensive security checks to prevent fetch
 Blocks access to sensitive/privacy-sensitive domains including:
 
 #### Banking & Financial
+
 - `paypal.com`
 - `stripe.com`
 - `square.com`
@@ -26,6 +30,7 @@ Blocks access to sensitive/privacy-sensitive domains including:
 - `wire.com`
 
 #### Authentication & Identity
+
 - `github.com/login`
 - `gitlab.com/users/login`
 - `okta.com`
@@ -35,25 +40,30 @@ Blocks access to sensitive/privacy-sensitive domains including:
 - `login.apple.com`
 
 #### Email Providers
+
 - `mail.google.com`
 - `outlook.live.com`
 - `icloud.com/mail`
 
 #### Personal/Private Services
+
 - `myfitnesspal.com`
 - `health.apple.com`
 - `health.google.com`
 
 #### VPN & Proxy Services
+
 - `expressvpn.com`
 - `nordvpn.com`
 
 #### Medical & Health Records
+
 - `healthvault.com`
 - `epic.com`
 - `cerner.com`
 
 #### Legal Documents
+
 - `docusign.com`
 - `adobe.com/sign`
 
@@ -70,15 +80,19 @@ Blocks URLs containing sensitive query parameters and paths:
 Blocks URLs containing common malware and phishing indicators:
 
 #### Obfuscation & Evasion
+
 - Executable file patterns: `.zip"`, `.exe"`, `.scr"`, `.bat"`, `.cmd"`, `.vbs"`, `.ps1"`
 
 #### Domain Confusion (Typosquatting)
+
 - Homograph attacks: `g00gle`, `g0ogle`, `gooogle`, `micr0soft`, `micro$oft`, `amaz0n`, `facebk`, `faceb00k`
 
 #### Suspicious Subdomains
+
 - `admin.`, `backup.`, `dev.`, `test.`, `temp.`, `tmp.`
 
 #### URL Shorteners
+
 - `bit.ly/`, `short.link/`, `tinyurl.com/`, `goo.gl/`
 - These can obscure the real destination and are commonly used in phishing campaigns
 
@@ -97,7 +111,7 @@ When a URL is blocked, the tool returns a clear error message indicating the rea
 
 ### Validation Flow
 
-```
+```text
 URL Input
   ↓
 Protocol Check (HTTPS only)
@@ -134,6 +148,7 @@ The implementation includes comprehensive test cases:
 - `rejects_url_shorteners()` - URL shortener blocking
 
 Run tests with:
+
 ```bash
 cargo test --lib web_fetch
 ```
@@ -171,7 +186,8 @@ Potential improvements:
 
 ### Adding New Blocked Domains
 
-Edit `crates/codegen/vtcode-core/src/tools/web_fetch.rs` in the `validate_url_safety()` function's `blocked_domains` array.
+Edit `crates/codegen/vtcode-core/src/tools/web_fetch.rs` in the `validate_url_safety()` function's `blocked_domains`
+array.
 
 ### Updating Malicious Patterns
 

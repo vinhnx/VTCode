@@ -267,6 +267,7 @@ pub fn create_provider_for_model_route(
             timeouts: None,
             openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
             anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
+            openrouter: vt_cfg.map(|cfg| cfg.provider.openrouter.clone()),
             model_behavior: runtime_config.model_behavior.clone(),
             workspace_root: Some(runtime_config.workspace.clone()),
         },

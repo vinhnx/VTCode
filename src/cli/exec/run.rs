@@ -342,7 +342,15 @@ async fn handle_codex_exec_command_impl(
     let thread_started = ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: session_id.clone() });
     emit_canonical_event(&canonical, &thread_started, "thread.started").await?;
     event_processor.process_event(&thread_started);
-    let turn_started = ThreadEvent::TurnStarted(TurnStartedEvent::default());
+    let mut execution_context = vtcode_core::core::agent::events::ExecutionContextTracker::default();
+    execution_context.begin(
+        &session_id,
+        &format!("turn-{}", uuid::Uuid::new_v4()),
+        &prompt,
+        vtcode_core::exec::events::InputOrigin::User,
+    );
+    let mut turn_started = ThreadEvent::TurnStarted(TurnStartedEvent::default());
+    execution_context.annotate(&mut turn_started);
     emit_canonical_event(&canonical, &turn_started, "turn.started").await?;
     event_processor.process_event(&turn_started);
 
@@ -364,14 +372,17 @@ async fn handle_codex_exec_command_impl(
 
     let completed = match codex_result {
         Ok(completed) => {
-            let turn_completed = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            let mut turn_completed = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             });
+            execution_context.annotate(&mut turn_completed);
             emit_canonical_event(&canonical, &turn_completed, "turn.completed").await?;
             event_processor.process_event(&turn_completed);
             let thread_completed = ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
                 thread_id: completed.thread_id.clone(),
+                completed_at: Some(Utc::now().to_rfc3339()),
                 session_id: session_id.clone(),
                 subtype: ThreadCompletionSubtype::Success,
                 outcome_code: "completed".to_string(),
@@ -392,13 +403,19 @@ async fn handle_codex_exec_command_impl(
             completed
         }
         Err(error) => {
-            let turn_failed = ThreadEvent::TurnFailed(TurnFailedEvent { message: error.to_string(), usage: None });
+            let mut turn_failed = ThreadEvent::TurnFailed(TurnFailedEvent {
+                completed_at: None,
+                message: error.to_string(),
+                usage: None,
+            });
+            execution_context.annotate(&mut turn_failed);
             if let Err(event_error) = canonical.emit(&turn_failed) {
                 tracing::error!(target: "vtcode.exec", error = %event_error, "failed to enqueue turn.failed canonical session event");
             }
             event_processor.process_event(&turn_failed);
             let thread_completed = ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
                 thread_id: session_id.clone(),
+                completed_at: Some(Utc::now().to_rfc3339()),
                 session_id: session_id.clone(),
                 subtype: ThreadCompletionSubtype::ErrorDuringExecution,
                 outcome_code: "failed".to_string(),

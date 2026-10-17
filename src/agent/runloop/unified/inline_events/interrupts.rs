@@ -5,7 +5,6 @@ use vtcode_ui::tui::app::InlineHandle;
 
 use super::action::InlineLoopAction;
 use super::queue::InlineQueueState;
-use crate::agent::runloop::unified::display::reset_inline_input;
 use crate::agent::runloop::unified::state::CtrlCState;
 use vtcode_core::hooks::SessionEndReason;
 
@@ -20,6 +19,13 @@ impl<'a> InlineInterruptCoordinator<'a> {
     }
 
     pub(crate) fn reset_after_user_action(self, notice_displayed: &mut bool) {
+        if !self.state.is_cancel_requested() && !self.state.is_cancel_handled() {
+            self.state.reset();
+            *notice_displayed = false;
+        }
+    }
+
+    pub(crate) fn reset_after_submission(self, notice_displayed: &mut bool) {
         self.state.reset();
         *notice_displayed = false;
     }
@@ -69,7 +75,7 @@ impl<'a> InlineInterruptCoordinator<'a> {
         } else {
             renderer.line(MessageStyle::Info, "Interrupt received. Stopping task...")?;
         }
-        reset_inline_input(handle, Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()));
+        handle.set_placeholder(Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()));
         Ok(())
     }
 }

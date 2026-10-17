@@ -31,7 +31,9 @@ MAIN_USER="kernitus"
 
 # Curated Core Contributors membership; anyone not listed here falls back to
 # commit-count classification (>= CORE_MIN_COMMITS -> Core, else Contributor).
-CORE_USERS="7jrxt42BxFZo4iAnN4CX oiwn Sachin-Bhat chenrui333 gzsombor leonj1 netbrah xcrong mouse-value-add"
+# NOTE: mouse-value-add was removed 2026-10-12 - the GitHub account is deleted
+# (404), so the contributors API no longer lists them.
+CORE_USERS="7jrxt42BxFZo4iAnN4CX oiwn Sachin-Bhat chenrui333 gzsombor leonj1 netbrah xcrong"
 CORE_MIN_COMMITS=7
 
 # Curated security-advisor attributions, tab-separated: login<TAB>title<TAB>border
@@ -47,6 +49,8 @@ note_for() {
         vivekgupta-memcode) echo "Memcode OAuth setup docs (#763)" ;;
         S2thend) echo "checkpoint rewind/redo (#771)" ;;
         EvoLinkAI) echo "Evolink provider (#664)" ;;
+        rs545837) echo "optional Sem code discovery docs (#783)" ;;
+        georgeatparallel) echo "opt-in Parallel Search MCP config (#779)" ;;
         *) echo "" ;;
     esac
 }
@@ -64,7 +68,7 @@ border_for_group() {
 
 avatar_html() {
     local login=$1 url=$2 avatar=$3 title=$4 border=$5
-    printf '  <a href="%s"><img src="%s&s=60" width="40" height="40" alt="@%s" title="%s" style="border-radius: 50%%; border: 2px solid %s;" /></a>&nbsp;' \
+    printf '<a href="%s"><img src="%s&s=60" width="40" height="40" alt="@%s" title="%s" style="border-radius: 50%%; border: 2px solid %s;" /></a>&nbsp;' \
         "$url" "$avatar" "$login" "$title" "$border"
 }
 
@@ -185,7 +189,7 @@ emit_group() {
     if [[ -n "$html" ]]; then
         html+=$'\n\n'
     fi
-    html+="**${header}**"$'\n\n'"${body}"
+    html+="### ${header}"$'\n\n'"${body}"
 }
 
 emit_group "Security Advisors" advisors_html
@@ -210,7 +214,7 @@ import os
 readme_path = os.environ["README"]
 marker_start = os.environ["MARKER_START"]
 marker_end = os.environ["MARKER_END"]
-html = os.environ["HTML"]
+html = "<!-- markdownlint-disable MD013 -->\n\n" + os.environ["HTML"] + "\n\n<!-- markdownlint-enable MD013 -->"
 
 with open(readme_path) as f:
     content = f.read()

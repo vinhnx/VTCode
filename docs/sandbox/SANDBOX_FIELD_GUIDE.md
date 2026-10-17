@@ -1,6 +1,7 @@
 # VT Code Sandbox Field Guide
 
-This document describes VT Code's sandboxing architecture, following the principles from the AI sandbox field guide. The system implements defense-in-depth through multiple layers of isolation.
+This document describes VT Code's sandboxing architecture, following the principles from the AI sandbox field guide. The
+system implements defense-in-depth through multiple layers of isolation.
 
 ## The Three-Question Model
 
@@ -18,15 +19,16 @@ VT Code's sandbox system is designed around these questions.
 
 VT Code implements kernel-enforced sandboxing using platform-native mechanisms:
 
-| Platform | Mechanism | Description |
-|----------|-----------|-------------|
-| macOS | Seatbelt | SBPL profiles with deny-default semantics |
-| Linux | Landlock + Seccomp | Filesystem rules + syscall filtering |
-| Windows | Restricted Tokens | (Planned) Job objects and restricted tokens |
+| Platform | Mechanism          | Description                                 |
+| -------- | ------------------ | ------------------------------------------- |
+| macOS    | Seatbelt           | SBPL profiles with deny-default semantics   |
+| Linux    | Landlock + Seccomp | Filesystem rules + syscall filtering        |
+| Windows  | Restricted Tokens  | (Planned) Job objects and restricted tokens |
 
-These are **local OS sandboxes** - they share the host kernel but enforce policy through kernel-level security primitives.
+These are **local OS sandboxes** - they share the host kernel but enforce policy through kernel-level security
+primitives.
 
-```
+```text
 Container < gVisor < MicroVM < Wasm
      ^
      |
@@ -42,6 +44,7 @@ The boundary determines which syscalls reach the host kernel:
 - **Linux Seccomp**: BPF program filters syscalls by number and arguments
 
 VT Code blocks dangerous syscalls by default:
+
 - `ptrace` - debugger attachment
 - `mount/umount` - filesystem namespace changes
 - `kexec_load` - kernel replacement
@@ -68,6 +71,7 @@ enum SandboxPolicy {
 Following the field guide: "Default-deny outbound network, then allowlist."
 
 Operational recommendation:
+
 - Keep an org-level/domain baseline allowlist small and stable.
 - Narrow each task/request to the minimum subset of domains needed.
 - Treat "skills + network" as high risk and require explicit, minimal allowlists for workflow runs.
@@ -122,11 +126,12 @@ timeout_secs = 600
 ```
 
 Presets:
-| Preset | Memory | PIDs | CPU Time | Timeout |
-|--------|--------|------|----------|---------|
-| conservative | 512 MB | 64 | 60s | 120s |
-| moderate | 2 GB | 256 | 300s | 600s |
-| generous | 8 GB | 1024 | unlimited | 3600s |
+
+| Preset       | Memory | PIDs | CPU Time  | Timeout |
+| ------------ | ------ | ---- | --------- | ------- |
+| conservative | 512 MB | 64   | 60s       | 120s    |
+| moderate     | 2 GB   | 256  | 300s      | 600s    |
+| generous     | 8 GB   | 1024 | unlimited | 3600s   |
 
 ## Lifecycle
 
@@ -212,12 +217,12 @@ vcpus = 1
 
 ## Decision Matrix
 
-| Scenario | Recommended Boundary | Policy |
-|----------|---------------------|--------|
-| Trusted internal code | OS sandbox | WorkspaceWrite + moderate limits |
-| User-submitted code | OS sandbox + strict seccomp | ReadOnly + conservative limits |
-| Multi-tenant SaaS | MicroVM or Docker | WorkspaceWrite + network allowlist |
-| Plugin execution | OS sandbox | ReadOnly + no network |
+| Scenario              | Recommended Boundary        | Policy                             |
+| --------------------- | --------------------------- | ---------------------------------- |
+| Trusted internal code | OS sandbox                  | WorkspaceWrite + moderate limits   |
+| User-submitted code   | OS sandbox + strict seccomp | ReadOnly + conservative limits     |
+| Multi-tenant SaaS     | MicroVM or Docker           | WorkspaceWrite + network allowlist |
+| Plugin execution      | OS sandbox                  | ReadOnly + no network              |
 
 ## Configuration Reference
 
@@ -268,12 +273,14 @@ sandbox_type = "none"
 ### Threat Model
 
 In scope:
+
 - Prompt injection leading to file access attempts
 - Accidental credential exposure
 - Resource exhaustion (fork bombs, memory)
 - Unintended network access
 
 Out of scope:
+
 - Kernel 0-days
 - Hardware side channels
 - Physical access

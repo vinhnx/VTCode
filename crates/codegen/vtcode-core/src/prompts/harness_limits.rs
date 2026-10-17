@@ -1,10 +1,11 @@
 use crate::core::loop_detector::MAX_TOTAL_READONLY_CALLS;
-use crate::prompts::sections::{SectionBoundaryMode, find_prompt_section_bounds};
+use crate::prompts::sections::{SectionBoundaryMode, remove_prompt_section, trim_trailing_newlines};
 use std::fmt::Write as _;
 
 /// Per-file-path read cap advertised in the system prompt. Must match
-/// `guards::MAX_SAME_FILE_PATH_READ_CALLS`. Reading the same file more than
-/// this many times in a turn triggers recovery.
+/// `guards::MAX_SAME_FILE_PATH_READ_CALLS` (pinned by
+/// `read_guard.rs::advertised_per_path_read_cap_matches_enforcement`).
+/// Reading the same file more than this many times in a turn triggers recovery.
 const MAX_SAME_FILE_PATH_READS: usize = 6;
 
 /// Keep prompt guidance aligned with the selected user-visible harness limits.
@@ -28,25 +29,18 @@ pub fn upsert_harness_limits_section(
         format!("{max_tool_wall_clock_secs} seconds")
     };
 
-    while let Some((section_start, section_end)) =
-        find_prompt_section_bounds(prompt, "[Harness Limits]", SectionBoundaryMode::BracketOnly)
-    {
-        prompt.replace_range(section_start..section_end, "");
-    }
-
-    while prompt.ends_with('\n') {
-        prompt.pop();
-    }
+    remove_prompt_section(prompt, "[Harness Limits]", SectionBoundaryMode::BracketOnly);
+    trim_trailing_newlines(prompt);
 
     let section = format!(
         "[Harness Limits]\n\
          - max_tool_calls_per_turn: {max_tool_calls_label}\n\
-         - max_tool_wall_clock_secs: {max_tool_wall_clock_label} (per turn; run long builds with exec_command, then wait through write_stdin next_wait_args)\n\
+         - max_tool_wall_clock_secs: {max_tool_wall_clock_label} (per turn; run long builds with exec_command, then call write_stdin next_wait_args with action:\"wait\" verbatim)\n\
          - max_tool_retries: {max_tool_retries}\n\
          - max_readonly_tool_calls: {MAX_TOTAL_READONLY_CALLS} (global budget across all read-only tools; produce output before exhausting)\n\
          - max_same_file_path_reads: {MAX_SAME_FILE_PATH_READS} (per file path per turn; read a file once in full rather than paginating)\n\
          - exec wait/inspect are exempt from max_tool_calls_per_turn\n\
-         - long commands: set yield_time_ms above 10000 on the initial run for a single-call long run (no outer timeout), or omit it and steer with next_wait_args; both stay budget-exempt"
+         - long commands: set yield_time_ms above 10000 on the initial run for a single-call long run (no outer timeout), or reuse next_wait_args in write_stdin to block until exit or deadline"
     );
 
     if prompt.is_empty() {
@@ -74,6 +68,21 @@ mod tests {
         assert!(prompt.contains("- max_same_file_path_reads: 6"));
         assert!(prompt.contains("exec wait/inspect are exempt from max_tool_calls_per_turn"));
         assert!(prompt.contains("single-call long run"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_states_wait_inspect_exemption_once() {
+        // The wait/inspect budget exemption is one directive: the long-commands
+        // line must not restate it. Asymmetric pin: deleting the canonical
+        // line drops the count to 0, re-adding the restatement raises it to 2.
+        let mut prompt = "Base prompt".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 12, 180, 2);
+
+        assert_eq!(prompt.matches("exempt").count(), 1);
+        assert!(prompt.contains("exec wait/inspect are exempt from max_tool_calls_per_turn"));
+        assert!(prompt.contains("single-call long run"));
+        assert!(prompt.contains("write_stdin next_wait_args"));
     }
 
     #[test]

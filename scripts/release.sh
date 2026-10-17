@@ -17,12 +17,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
+# Shared four-target Homebrew formula transformation.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/homebrew-formula.sh"
 # Legacy updater compatibility bridge helpers (.tar.gz.compat raw exec assets).
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/release-assets.sh"
 # Shared macOS Developer ID signing and notarization helpers.
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/macos-release-signing.sh"
+# Changelog formatting and shared commit classification.
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/release-changelog.sh"
 
 # Temporary file to store release notes
 RELEASE_NOTES_FILE=$(mktemp)
@@ -57,91 +63,6 @@ package_release_archive() {
 	fi
 }
 
-# Get GitHub username from commit author email
-get_github_username() {
-	local email=$1
-	# Common email-to-username mappings
-	case "$email" in
-	vinhnguyen*) echo "vinhnx" ;;
-	noreply@vtcode.com) echo "vtcode-release-bot" ;;
-	*@users.noreply.github.com)
-		local username="${email%%@*}"
-		# Handle GitHub ID format: 123456+username
-		if [[ "$username" == *+* ]]; then
-			username="${username##*+}"
-		fi
-		echo "$username"
-		;;
-	*)
-		# Extract username from email (before @)
-		local username="${email%%@*}"
-		echo "$username"
-		;;
-	esac
-}
-
-# Add @username tags to changelog entries
-add_username_tags() {
-	local changelog=$1
-	local commits_range=$2
-
-	# Create a temporary file to store the mapping of commit hashes to usernames
-	local temp_mapping_file
-	temp_mapping_file=$(mktemp)
-
-	# Populate the mapping - use a subshell to avoid variable scoping issues
-	(
-		git log "$commits_range" --no-merges --pretty=format:"%h|%ae"
-	) | while IFS= read -r line; do
-		if [[ -n "$line" ]]; then
-			local hash author_email
-			hash=$(echo "$line" | cut -d'|' -f1)
-			author_email=$(echo "$line" | cut -d'|' -f2)
-			local username
-			username=$(get_github_username "$author_email")
-			echo "$hash|$username"
-		fi
-	done >"$temp_mapping_file"
-
-	# Process changelog and add @username tags
-	local result=""
-	while IFS= read -r entry; do
-		# Extract commit hash from entry (format: "... (commit_hash)")
-		if [[ $entry =~ \(([a-f0-9]+)\)$ ]]; then
-			local full_hash="${BASH_REMATCH[1]}"
-			# Find username from the temporary file
-			local username=""
-			local found=0
-
-			while IFS= read -r mapping_line; do
-				if [[ -n "$mapping_line" && $found -eq 0 ]]; then
-					local map_hash map_username
-					map_hash=$(echo "$mapping_line" | cut -d'|' -f1)
-					map_username=$(echo "$mapping_line" | cut -d'|' -f2)
-					# Check if the full hash starts with the map hash (to match short vs full hashes)
-					if [[ ${full_hash} == ${map_hash}* || ${map_hash} == ${full_hash}* ]]; then
-						username="$map_username"
-						found=1
-					fi
-				fi
-			done <"$temp_mapping_file"
-
-			if [[ -n "$username" ]]; then
-				# Append @username to the entry if not already present
-				if [[ $entry != *"@$username"* ]]; then
-					entry="$entry (@$username)"
-				fi
-			fi
-		fi
-		result+="$entry"$'\n'
-	done <<<"$changelog"
-
-	# Clean up
-	rm -f "$temp_mapping_file"
-
-	echo "${result%$'\n'}"
-}
-
 show_usage() {
 	cat <<'USAGE'
 Usage: ./scripts/release.sh [version|level] [options]
@@ -160,8 +81,11 @@ Options:
   --skip-crates       Skip the crates.io publish handoff
   --skip-binaries     Skip building and uploading binaries (and Homebrew update)
   --skip-docs         Skip docs.rs rebuild trigger
-  --full-ci           Use GitHub Actions for ALL platforms (including macOS)
-                      Default: builds macOS locally, CI for Linux/Windows
+  --skip-release      Resume finalization for an already-tagged release: skip
+                      the local sanity build, cargo-release (version/tag/push),
+                      and the CI trigger, but still run Steps 4-6 (collect
+                      binaries, upload assets, Homebrew). Use with an explicit
+                      version, e.g. `./scripts/release.sh 0.171.5 --skip-release`.
   --ci-only           Trigger CI for Linux/Windows only (skip local macOS build)
                       Useful when macOS binaries already built locally
   -h, --help          Show this help message
@@ -171,246 +95,12 @@ Cost Optimization:
     • macOS binaries: built locally (no CI cost, faster)
     • Linux/Windows: built on GitHub Actions (free for public repos)
 
-  --full-ci mode (all CI, higher cost):
-    • All platforms built on GitHub Actions
-    • Uses 4 runners: 2x macOS, 1x Ubuntu, 1x Windows
-    • Estimated cost: ~20-30 minutes of runner time
-
   --ci-only mode (hybrid):
     • Skip local macOS build
     • Only trigger CI for Linux/Windows
     • Use when you already have macOS binaries
 
 USAGE
-}
-
-# Parse commit type from conventional commit message
-parse_commit_type() {
-	local message="$1"
-	# Extract type from conventional commit format: type(scope): message or type: message
-	# Use sed to extract the type prefix
-	local type
-	type=$(echo "$message" | sed -E 's/^([a-z]+)(\([^)]+\))?:.*/\1/')
-	if [[ "$type" == "$message" ]]; then
-		echo "other"
-	else
-		echo "$type"
-	fi
-}
-
-# Get prefix indicator for commit type (text-based, no emoji)
-get_type_prefix() {
-	local type="$1"
-	case "$type" in
-	feat) echo "[FEAT]" ;;
-	fix) echo "[FIX]" ;;
-	perf) echo "[PERF]" ;;
-	refactor) echo "[REFACTOR]" ;;
-	docs) echo "[DOCS]" ;;
-	test) echo "[TEST]" ;;
-	build) echo "[BUILD]" ;;
-	ci) echo "[CI]" ;;
-	chore) echo "[CHORE]" ;;
-	security) echo "[SECURITY]" ;;
-	deps) echo "[DEPS]" ;;
-	*) echo "" ;;
-	esac
-}
-
-# Get human-readable title for commit type
-get_type_title() {
-	local type="$1"
-	case "$type" in
-	feat) echo "Features" ;;
-	fix) echo "Bug Fixes" ;;
-	perf) echo "Performance" ;;
-	refactor) echo "Refactors" ;;
-	docs) echo "Documentation" ;;
-	test) echo "Tests" ;;
-	build) echo "Build" ;;
-	ci) echo "CI" ;;
-	chore) echo "Chores" ;;
-	security) echo "Security" ;;
-	deps) echo "Dependencies" ;;
-	*) echo "Other" ;;
-	esac
-}
-
-# Clean commit message by removing the type prefix
-clean_commit_message() {
-	local message="$1"
-	# Remove conventional commit prefix (type(scope): or type:)
-	echo "$message" | sed -E 's/^[a-z]+(\([^)]+\))?:[[:space:]]*//'
-}
-
-# Collect unique contributors from a commit range
-generate_contributors_section() {
-	local commits_range="$1"
-	local contributors=""
-	local seen_usernames=""
-
-	while IFS= read -r author_email; do
-		[[ -z "$author_email" ]] && continue
-		local username
-		username=$(get_github_username "$author_email")
-		[[ -z "$username" || "$username" == "vtcode-release-bot" ]] && continue
-
-		# Deduplicate (bash 3.2 compatible)
-		if [[ "$seen_usernames" != *"|${username}|"* ]]; then
-			seen_usernames="${seen_usernames}|${username}|"
-			if [[ -n "$contributors" ]]; then
-				contributors="${contributors}, @${username}"
-			else
-				contributors="@${username}"
-			fi
-		fi
-	done < <(git log "$commits_range" --no-merges --pretty=format:"%ae")
-
-	if [[ -n "$contributors" ]]; then
-		echo "### Contributors"$'\n'
-		echo "$contributors"
-	fi
-}
-
-# Group commits by type and generate structured changelog
-# Produces a Highlights section (Features, Bug Fixes, Documentation) followed by Other Changes,
-# inspired by the OpenAI Codex release format (https://github.com/openai/codex/releases)
-# Note: Uses simple arrays instead of associative arrays for bash 3.2 compatibility (macOS)
-generate_structured_changelog() {
-	local commits_range="$1"
-
-	# Highlight types shown at the top; everything else goes under "Other Changes"
-	local highlight_types="feat fix docs"
-	local other_types="perf refactor security test build ci deps chore other"
-
-	# Initialize storage for each type (using prefix variables instead of associative arrays)
-	local feat_commits=""
-	local fix_commits=""
-	local perf_commits=""
-	local refactor_commits=""
-	local security_commits=""
-	local docs_commits=""
-	local test_commits=""
-	local build_commits=""
-	local ci_commits=""
-	local deps_commits=""
-	local chore_commits=""
-	local other_commits=""
-
-	# Get commits with their hashes, subjects, and author emails in a single git log call
-	while IFS='|' read -r hash message author_email; do
-		[[ -z "$hash" ]] && continue
-
-		local type
-		type=$(parse_commit_type "$message")
-		local clean_msg
-		clean_msg=$(clean_commit_message "$message")
-
-		# Skip excluded patterns
-		if [[ "$message" =~ (chore\(release\):|bump version|update version|version bump|release v[0-9]+\.[0-9]+\.[0-9]+|chore.*version|chore.*release|build.*version|update.*version.*number|bump.*version.*to|update homebrew|update changelog) ]]; then
-			continue
-		fi
-
-		local username=""
-		if [[ -n "$author_email" ]]; then
-			username=$(get_github_username "$author_email")
-		fi
-
-		# Build entry
-		local entry="- $clean_msg ($hash)"
-		if [[ -n "$username" && "$username" != "vtcode-release-bot" ]]; then
-			entry="$entry (@$username)"
-		fi
-
-		# Add to appropriate group using prefix variables
-		case "$type" in
-		feat) feat_commits="${feat_commits}${entry}"$'\n' ;;
-		fix) fix_commits="${fix_commits}${entry}"$'\n' ;;
-		perf) perf_commits="${perf_commits}${entry}"$'\n' ;;
-		refactor) refactor_commits="${refactor_commits}${entry}"$'\n' ;;
-		security) security_commits="${security_commits}${entry}"$'\n' ;;
-		docs) docs_commits="${docs_commits}${entry}"$'\n' ;;
-		test) test_commits="${test_commits}${entry}"$'\n' ;;
-		build) build_commits="${build_commits}${entry}"$'\n' ;;
-		ci) ci_commits="${ci_commits}${entry}"$'\n' ;;
-		deps) deps_commits="${deps_commits}${entry}"$'\n' ;;
-		chore) chore_commits="${chore_commits}${entry}"$'\n' ;;
-		*) other_commits="${other_commits}${entry}"$'\n' ;;
-		esac
-	done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s|%ae")
-
-	# --- Build output with Highlights / Other Changes split ---
-	local output=""
-	local has_highlights=false
-	local has_other=false
-
-	# Highlights section (Features, Bug Fixes, Documentation)
-	output+="### Highlights"$'\n\n'
-
-	for type in $highlight_types; do
-		local commits=""
-		case "$type" in
-		feat) commits="$feat_commits" ;;
-		fix) commits="$fix_commits" ;;
-		docs) commits="$docs_commits" ;;
-		esac
-
-		if [[ -n "$commits" ]]; then
-			local title
-			title=$(get_type_title "$type")
-			output+="#### ${title}"$'\n\n'
-			output+="${commits}"$'\n'
-			has_highlights=true
-		fi
-	done
-
-	if [[ "$has_highlights" == false ]]; then
-		output+="*No highlighted changes*"$'\n\n'
-	fi
-
-	# Other Changes section (Performance, Refactors, Security, Tests, Build, CI, Deps, Chores, Other)
-	local other_output=""
-
-	for type in $other_types; do
-		local commits=""
-		case "$type" in
-		perf) commits="$perf_commits" ;;
-		refactor) commits="$refactor_commits" ;;
-		security) commits="$security_commits" ;;
-		test) commits="$test_commits" ;;
-		build) commits="$build_commits" ;;
-		ci) commits="$ci_commits" ;;
-		deps) commits="$deps_commits" ;;
-		chore) commits="$chore_commits" ;;
-		other) commits="$other_commits" ;;
-		esac
-
-		if [[ -n "$commits" ]]; then
-			local title
-			title=$(get_type_title "$type")
-			other_output+="#### ${title}"$'\n\n'
-			other_output+="${commits}"$'\n'
-			has_other=true
-		fi
-	done
-
-	if [[ "$has_other" == true ]]; then
-		output+="### Other Changes"$'\n\n'
-		output+="${other_output}"
-	fi
-
-	# Contributors section
-	local contributors_section
-	contributors_section=$(generate_contributors_section "$commits_range")
-	if [[ -n "$contributors_section" ]]; then
-		output+="${contributors_section}"$'\n'
-	fi
-
-	if [[ "$has_highlights" == false && "$has_other" == false ]]; then
-		output="*No significant changes*"$'\n'
-	fi
-
-	echo "$output"
 }
 
 # Changelog generation using git-cliff
@@ -502,24 +192,19 @@ update_changelog_from_commits() {
 			} >"$RELEASE_NOTES_FILE"
 
 			if [[ -f CHANGELOG.md ]]; then
-				# Check if this version already exists in the changelog
+				# A re-run must replace a stale section (e.g. an aborted
+				# `--minor` run that pre-inserted this version) instead of
+				# skipping: skipping leaves the file out of order and drops
+				# the real commits for this release.
 				if grep -q "^## $version " CHANGELOG.md; then
-					print_warning "Version $version already exists in CHANGELOG.md, skipping update"
+					print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+					remove_changelog_version_section "$version"
+				fi
+				# Insert git-cliff's generated content above the newest version
+				if [[ -n "$version_section" ]]; then
+					insert_changelog_entry "$version_section"
 				else
-					# Use git-cliff's generated content, insert after header
-					local header
-					header=$(head -n 4 CHANGELOG.md)
-					local remainder
-					remainder=$(tail -n +5 CHANGELOG.md)
-					{
-						printf '%s\n' "$header"
-						if [[ -n "$version_section" ]]; then
-							printf '%s\n' "$version_section"
-						else
-							printf '%s\n' "$changelog_content"
-						fi
-						printf '%s\n' "$remainder"
-					} >CHANGELOG.md
+					insert_changelog_entry "$changelog_content"
 				fi
 			else
 				# Create new changelog with git-cliff output
@@ -606,21 +291,12 @@ update_changelog_builtin() {
 	changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 
 	if [[ -f CHANGELOG.md ]]; then
-		# Check if this version already exists in the changelog
 		if grep -q "^## $version " CHANGELOG.md; then
-			print_warning "Version $version already exists in CHANGELOG.md, skipping update"
-		else
-			# Insert new entry after the header
-			local header
-			header=$(head -n 4 CHANGELOG.md)
-			local remainder
-			remainder=$(tail -n +5 CHANGELOG.md)
-			{
-				printf '%s\n' "$header"
-				printf '%b\n' "$changelog_entry"
-				printf '%s\n' "$remainder"
-			} >CHANGELOG.md
+			print_warning "Version $version already exists in CHANGELOG.md, regenerating entry"
+			remove_changelog_version_section "$version"
 		fi
+		# Insert new entry above the newest version
+		insert_changelog_entry "$changelog_entry"
 	else
 		{
 			printf '%s\n' "# Changelog - vtcode"
@@ -686,54 +362,11 @@ trigger_docs_rs_rebuild() {
 		vtcode-core vtcode-acp vtcode
 	)
 	for crate in "${crates[@]}"; do
-		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true
+		# Fire-and-forget rebuild pings; each is an independent HTTPS GET,
+		# so all 21 run concurrently instead of sequentially.
+		curl -s -o /dev/null "https://docs.rs/${crate}/${version}" || true &
 	done
-}
-
-update_homebrew_formula_file() {
-	local formula_path=$1
-	local version=$2
-	local x86_64_macos_sha=$3
-	local aarch64_macos_sha=$4
-	local aarch64_linux_sha=${5:-}
-
-	FORMULA_PATH="$formula_path" \
-		FORMULA_VERSION="$version" \
-		FORMULA_X86_64_MACOS_SHA="$x86_64_macos_sha" \
-		FORMULA_AARCH64_MACOS_SHA="$aarch64_macos_sha" \
-		FORMULA_AARCH64_LINUX_SHA="$aarch64_linux_sha" \
-		python3 <<'PYTHON_SCRIPT'
-import os
-import re
-from pathlib import Path
-
-formula_path = Path(os.environ["FORMULA_PATH"])
-version = os.environ["FORMULA_VERSION"]
-x86_64_macos_sha = os.environ["FORMULA_X86_64_MACOS_SHA"]
-aarch64_macos_sha = os.environ["FORMULA_AARCH64_MACOS_SHA"]
-aarch64_linux_sha = os.environ.get("FORMULA_AARCH64_LINUX_SHA", "")
-
-content = formula_path.read_text()
-content = re.sub(r'version\s+"[^"]*"', f'version "{version}"', content)
-content = re.sub(
-    r'(aarch64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-    lambda match: f'{match.group(1)}{aarch64_macos_sha}{match.group(3)}',
-    content,
-)
-content = re.sub(
-    r'(x86_64-apple-darwin\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-    lambda match: f'{match.group(1)}{x86_64_macos_sha}{match.group(3)}',
-    content,
-)
-if aarch64_linux_sha:
-    content = re.sub(
-        r'(aarch64-unknown-linux-gnu\.tar\.gz"\s+sha256\s+")([^"]*)(")',
-        lambda match: f'{match.group(1)}{aarch64_linux_sha}{match.group(3)}',
-        content,
-    )
-
-formula_path.write_text(content)
-PYTHON_SCRIPT
+	wait 2>/dev/null || true
 }
 
 publish_homebrew_tap() {
@@ -741,6 +374,7 @@ publish_homebrew_tap() {
 	local x86_64_macos_sha=${2:-}
 	local aarch64_macos_sha=${3:-}
 	local aarch64_linux_sha=${4:-}
+	local x86_64_linux_sha=${5:-}
 	local formula_path="homebrew/vtcode.rb"
 
 	# If checksums were not passed as arguments, try dist/ then GitHub release
@@ -753,9 +387,12 @@ publish_homebrew_tap() {
 	if [[ -z "$aarch64_linux_sha" ]]; then
 		aarch64_linux_sha=$(cat "dist/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
 	fi
+	if [[ -z "$x86_64_linux_sha" ]]; then
+		x86_64_linux_sha=$(cat "dist/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+	fi
 
 	# Last resort: download .sha256 files from the GitHub release
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
+	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
 		print_info "Fetching checksums from GitHub release $version..."
 		local sha_tmp
 		sha_tmp=$(mktemp -d)
@@ -769,17 +406,20 @@ publish_homebrew_tap() {
 			if [[ -z "$aarch64_linux_sha" ]]; then
 				aarch64_linux_sha=$(cat "$sha_tmp/vtcode-$version-aarch64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
 			fi
+			if [[ -z "$x86_64_linux_sha" ]]; then
+				x86_64_linux_sha=$(cat "$sha_tmp/vtcode-$version-x86_64-unknown-linux-gnu.sha256" 2>/dev/null | awk '{print $1}' || echo "")
+			fi
 		fi
 		rm -rf "$sha_tmp"
 	fi
 
-	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" ]]; then
-		print_error "Missing macOS checksums, cannot publish Homebrew tap"
+	if [[ -z "$x86_64_macos_sha" || -z "$aarch64_macos_sha" || -z "$aarch64_linux_sha" || -z "$x86_64_linux_sha" ]]; then
+		print_error "Missing Homebrew target checksums, cannot publish Homebrew tap"
 		return 1
 	fi
 
 	print_info "Updating local Homebrew formula at $formula_path..."
-	if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha"; then
+	if ! update_homebrew_formula_file "$formula_path" "$version" "$x86_64_macos_sha" "$aarch64_macos_sha" "$aarch64_linux_sha" "$x86_64_linux_sha"; then
 		print_error "Failed to update local Homebrew formula"
 		return 1
 	fi
@@ -862,7 +502,7 @@ main() {
 	local skip_crates=false
 	local skip_binaries=false
 	local skip_docs=false
-	local full_ci=false
+	local skip_release=false
 	local ci_only=false
 
 	while [[ $# -gt 0 ]]; do
@@ -903,8 +543,8 @@ main() {
 			skip_docs=true
 			shift
 			;;
-		--full-ci)
-			full_ci=true
+		--skip-release)
+			skip_release=true
 			shift
 			;;
 		--ci-only)
@@ -1010,35 +650,6 @@ main() {
 		print_info "Releasing version: $next_version"
 	fi
 
-	# Check if using full CI mode
-	if [[ "$full_ci" == 'true' ]]; then
-		print_info "Full CI mode: Using GitHub Actions for ALL platforms (including macOS)"
-
-		if [[ "$dry_run" == 'true' ]]; then
-			print_info "Dry run - would trigger full CI workflow for $next_version"
-			print_info "Command: gh workflow run release.yml --field tag=$next_version"
-		else
-			# Trigger full CI release workflow
-			if gh workflow run release.yml --field tag="$next_version"; then
-				print_success "Full CI workflow triggered for $next_version"
-				print_info "Monitor progress: https://github.com/vinhnx/vtcode/actions/workflows/release.yml"
-				print_info ""
-				print_info "The CI will:"
-				print_info "  1. Build all platforms (macOS, Linux, Windows)"
-				print_info "  2. Create GitHub Release"
-				print_info "  3. Upload all binaries"
-				print_info ""
-				print_info "Note: cargo-release and changelog updates still run locally"
-			else
-				print_error "Failed to trigger full CI workflow"
-				exit 1
-			fi
-		fi
-
-		# In full CI mode, skip local binary builds but still do cargo-release
-		skip_binaries=true
-	fi
-
 	# Check if using CI-only mode (Linux/Windows only, skip macOS)
 	if [[ "$ci_only" == 'true' ]]; then
 		print_info "CI-only mode: Triggering CI for Linux/Windows only (skip macOS build)"
@@ -1080,15 +691,23 @@ main() {
 		fi
 	fi
 
-	# 1. Local Build (both macOS architectures for Homebrew, or current platform on Linux)
-	if [[ "$skip_binaries" == 'false' ]]; then
+	# 1. Local sanity check (fast `cargo check`, no codegen/LTO).
+	# Skipped under --skip-release: the irreversible version bump already happened,
+	# so the pre-bump sanity check has no purpose and Step 4 builds the real
+	# artifacts anyway.
+	# NOTE: this deliberately does NOT build binaries. Step 1 used to run the
+	# full `build-and-upload-binaries.sh --only-build-local` (two fat-LTO
+	# macOS release builds), then Step 4 rebuilt both architectures again after
+	# the version bump invalidated the cache — the Step 1 output was always
+	# thrown away. A release-profile `cargo check` validates the same
+	# workspace (features, targets, lockfile) in ~1-2 min without codegen.
+	if [[ "$skip_binaries" == 'false' && "$skip_release" == 'false' ]]; then
 		if [[ "$dry_run" == 'true' ]]; then
-			print_info "Step 1 (dry-run): Would build binaries for x86_64-apple-darwin and aarch64-apple-darwin"
+			print_info "Step 1 (dry-run): Would run cargo check for x86_64-apple-darwin and aarch64-apple-darwin"
 		else
-			print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
-
-			local build_args=(-v "$next_version" --only-build-local)
-			env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
+			print_info "Step 1: Local sanity check (macOS: both architectures)..."
+			env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo check --locked --profile release \
+				--target x86_64-apple-darwin --target aarch64-apple-darwin --jobs 4
 		fi
 	fi
 
@@ -1099,9 +718,18 @@ main() {
 	# 3. Cargo Release (version, tag, and push only)
 	print_info "Step 3: Running cargo release (version, tag, and push only)..."
 
-	local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
+	# `--registry crates-io` is passed even though we never publish here (--no-publish).
+	# Without it, cargo-release unconditionally fetches every workspace crate's entry from
+	# the crates.io sparse index (to decide `ensure_owners`). For freshly published crates
+	# those index paths are slow/uncached at the CDN edge and cargo-release has no retry, so a
+	# single 30s timeout aborts the whole release. Naming a registry short-circuits that lookup
+	# (cargo-release's `CratesIoIndex::krate` returns early when a registry is set) and is safe
+	# because `--no-publish` means the registry is otherwise unused.
+	local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish --registry crates-io)
 
-	if [[ "$dry_run" == 'true' ]]; then
+	if [[ "$skip_release" == 'true' ]]; then
+		print_info "Skipping cargo release (--skip-release); keeping existing version and tag $next_version."
+	elif [[ "$dry_run" == 'true' ]]; then
 		print_info "Dry run - would run: ${command[*]}"
 	else
 		env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= "${command[@]}"
@@ -1115,7 +743,7 @@ main() {
 		exit 0
 	fi
 
-	if [[ "$skip_crates" == 'false' ]]; then
+	if [[ "$skip_crates" == 'false' && "$skip_release" == 'false' ]]; then
 		print_distribution "Publishing crates in dependency order..."
 		# Ensure publish script is executable (defensive against lost +x on fresh checkout or noexec FS)
 		if [[ ! -x "$SCRIPT_DIR/publish_extracted_crates.sh" ]]; then
@@ -1142,7 +770,9 @@ main() {
 	fi
 
 	# 3.5 Trigger CI for Linux and Windows builds
-	if [[ "$skip_binaries" == 'false' ]]; then
+	# Skipped under --skip-release: the CI run for this tag already exists and
+	# Step 4's fallback discovery reuses its successful artifacts.
+	if [[ "$skip_binaries" == 'false' && "$skip_release" == 'false' ]]; then
 		print_info "Step 3.5: Triggering CI for Linux and Windows builds..."
 
 		if [[ "$dry_run" == 'true' ]]; then
@@ -1153,59 +783,52 @@ main() {
 			git push origin --tags --no-verify 2>/dev/null || true
 
 			# Trigger the build-linux-windows workflow
+			# Timestamp the dispatch (minus a 5-minute skew margin for local
+			# clock vs GitHub server drift): run selection below only accepts
+			# runs created after this point, so a delayed new run is never
+			# confused with the previous release's run. The margin keeps a
+			# fast local clock from excluding the real run.
+			local trigger_epoch trigger_time
+			trigger_epoch=$(($(date +%s) - 300))
+			if [[ "$(uname -s)" == "Darwin" ]]; then
+				trigger_time=$(date -u -r "$trigger_epoch" +%Y-%m-%dT%H:%M:%SZ)
+			else
+				trigger_time=$(date -u -d "@$trigger_epoch" +%Y-%m-%dT%H:%M:%SZ)
+			fi
 			if gh workflow run build-linux-windows.yml --field tag="$released_version"; then
 				print_success "CI workflow triggered for $released_version"
 
-				# Wait for CI to complete (with timeout)
-				print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
-				local wait_start
-				wait_start=$(date +%s)
-				local timeout=7800 # 130 minutes
+				# Wait for CI to complete.
+				print_info "Waiting for CI builds to complete..."
 				local run_id=""
 
-				# Get the workflow run ID - wait for it to appear
+				# Get the workflow run ID - wait for it to appear. GitHub can
+				# take several minutes to register a dispatched run, so poll
+				# for up to ~6 minutes before giving up.
 				local find_run_attempts=0
-				local max_find_attempts=24 # Wait up to 2 minutes for run to appear
+				local max_find_attempts=36 # 36 x 10s ~= 6 minutes
 				while [[ -z "$run_id" && $find_run_attempts -lt $max_find_attempts ]]; do
-					sleep 5
-					# Look for the most recent run of this workflow
-					run_id=$(gh run list --workflow build-linux-windows.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+					sleep 10
+					# Newest run of this workflow created after the dispatch
+					# above (ISO-8601 Zulu timestamps sort lexicographically).
+					run_id=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,createdAt --jq --arg since "$trigger_time" '[.[] | select(.createdAt > $since)] | .[0].databaseId // empty' 2>/dev/null || true)
 					find_run_attempts=$((find_run_attempts + 1))
 				done
 
 				if [[ -z "$run_id" ]]; then
 					print_warning "Could not find CI workflow run - will use macOS binaries only"
+				# `gh run watch` blocks until the run completes and exits
+				# nonzero unless the conclusion is success. CI jobs carry
+				# 45m timeouts, so a stalled run is bounded server-side.
+				elif gh run watch "$run_id" --exit-status >/dev/null 2>&1; then
+					print_success "CI builds completed successfully"
+					# Store run_id for later download
+					CI_RUN_ID="$run_id"
 				else
-					# Wait for the run to complete
-					local status="in_progress"
-					local conclusion=""
-					while [[ "$status" == "in_progress" || "$status" == "queued" ]]; do
-						sleep 30
-						local run_info
-						run_info=$(gh run view "$run_id" --json status,conclusion 2>/dev/null || echo '{"status":"failed","conclusion":"failure"}')
-						status=$(echo "$run_info" | jq -r '.status')
-						conclusion=$(echo "$run_info" | jq -r '.conclusion')
-
-						# Check timeout
-						local now
-						now=$(date +%s)
-						local elapsed=$((now - wait_start))
-						if [[ $elapsed -gt $timeout ]]; then
-							print_warning "CI build timeout after $timeout seconds - will use macOS binaries only"
-							break
-						fi
-
-						print_info "CI status: $status (${elapsed}s elapsed)"
-					done
-
-					if [[ "$conclusion" == "success" ]]; then
-						print_success "CI builds completed successfully"
-						# Store run_id for later download
-						CI_RUN_ID="$run_id"
-					else
-						print_warning "CI build failed with conclusion: $conclusion - will use macOS binaries only"
-						gh run view "$run_id" --log || true
-					fi
+					local conclusion
+					conclusion=$(gh run view "$run_id" --json conclusion --jq '.conclusion' 2>/dev/null || echo "unknown")
+					print_warning "CI build failed with conclusion: $conclusion - will use macOS binaries only"
+					gh run view "$run_id" --log || true
 				fi
 			else
 				print_warning "Failed to trigger CI workflow - will use macOS binaries only"
@@ -1277,13 +900,14 @@ main() {
 		fi
 
 		# Generate the full man page set (main + every subcommand) once and
-		# include it in every platform archive.
+		# include it in every platform archive. Runs in the background
+		# alongside the macOS builds: `cargo run -p xtask` compiles the dev
+		# profile (minutes) while the release builds run fat LTO — overlapping
+		# hides the man-page compile inside the longer release compile.
+		# `--jobs 2` leaves cores for the two `--jobs 4` release builds.
 		local man_stage="$binaries_dir/man/man1"
-		if cargo run --locked -p xtask -- gen-man --out-dir "$man_stage" >/dev/null 2>&1; then
-			print_info "Generated $(ls "$man_stage" | wc -l | tr -d ' ') man pages"
-		else
-			print_warning "Man page generation failed; archives will ship without man pages"
-		fi
+		cargo run --locked --jobs 2 -p xtask -- gen-man --out-dir "$man_stage" &>/dev/null &
+		local pid_man=$!
 
 		# Build macOS binaries in parallel
 		print_info "Building macOS binaries in parallel..."
@@ -1304,6 +928,15 @@ main() {
 		env CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS="-C link-arg=-Wl,-dead_strip" \
 			cargo build --locked --profile release --target aarch64-apple-darwin --jobs 4 &>/dev/null &
 		local pid_arm=$!
+
+		# Man pages must be ready before packaging (every archive embeds
+		# man/). This only blocks if gen-man outlasts the builds; the
+		# release compiles keep running concurrently.
+		if wait "$pid_man" 2>/dev/null; then
+			print_info "Generated $(ls "$man_stage" 2>/dev/null | wc -l | tr -d ' ') man pages"
+		else
+			print_warning "Man page generation failed; archives will ship without man pages"
+		fi
 
 		# Wait for x86_64
 		if wait "$pid_x86"; then
@@ -1361,8 +994,26 @@ main() {
 		local run_id="${CI_RUN_ID:-}"
 
 		if [[ -z "$run_id" ]]; then
-			# Try to find a successful run if CI_RUN_ID wasn't set
-			run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 1 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -1)
+			# Newest successful run (--limit 10: the newest runs may still be
+			# in progress, or may have failed).
+			run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 10 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' 2>/dev/null | head -1 || true)
+		fi
+
+		if [[ -z "$run_id" ]]; then
+			# No success yet — the typical `--skip-release` resume while CI
+			# still builds. Wait for the newest active run instead of
+			# aborting into a macOS-only release.
+			local active_run=""
+			active_run=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 5 --json databaseId,status --jq '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId' 2>/dev/null | head -1 || true)
+			if [[ -n "$active_run" ]]; then
+				print_info "CI run $active_run still in progress; waiting for completion..."
+				if gh run watch "$active_run" --exit-status >/dev/null 2>&1; then
+					print_success "CI builds completed successfully"
+					run_id="$active_run"
+				else
+					print_warning "CI run $active_run did not succeed - will use macOS binaries only"
+				fi
+			fi
 		fi
 
 		# Windows x86_64 is REQUIRED for the legacy updater bridge by default so
@@ -1381,44 +1032,44 @@ main() {
 
 			# Download Linux x86_64 artifact
 			print_info "Downloading Linux x86_64 artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-unknown-linux-gnu" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux x86_64 gnu"
 			else
-				print_warning "Could not download: Linux x86_64 gnu"
+				print_warning "Could not download: Linux x86_64 gnu (run $run_id)"
 			fi
 
 			# Download Linux x86_64 musl artifact
 			print_info "Downloading Linux x86_64 musl artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-musl" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-unknown-linux-musl" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux x86_64 musl"
 			else
-				print_warning "Could not download: Linux x86_64 musl"
+				print_warning "Could not download: Linux x86_64 musl (run $run_id)"
 			fi
 
 			# Download Linux aarch64 artifact
 			print_info "Downloading Linux aarch64 artifact..."
-			if gh run download "$run_id" --name "vtcode-${released_version}-aarch64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+			if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-aarch64-unknown-linux-gnu" "$ci_artifacts_dir"; then
 				mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
 				mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 				print_success "Downloaded: Linux aarch64"
 			else
-				print_warning "Could not download: Linux aarch64"
+				print_warning "Could not download: Linux aarch64 (run $run_id)"
 			fi
 
 			# Download Windows x86_64 artifact. Required for the bridge; the
 			# required-target coverage check below fails the release if missing.
 			if [[ "$require_windows" == "true" ]]; then
 				print_info "Downloading Windows x86_64 artifact..."
-				if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
+				if download_ci_artifact_with_retry "$run_id" "vtcode-${released_version}-x86_64-pc-windows-msvc" "$ci_artifacts_dir"; then
 					mv "$ci_artifacts_dir"/*.zip "$binaries_dir/" 2>/dev/null || true
 					mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
 					print_success "Downloaded: Windows x86_64"
 				else
-					print_warning "Could not download: Windows x86_64"
+					print_warning "Could not download: Windows x86_64 (run $run_id)"
 				fi
 			else
 				print_info "Skipping Windows artifact download (RELEASE_REQUIRE_WINDOWS=false)"
@@ -1455,7 +1106,9 @@ main() {
 		done
 		if [[ "$missing_required" -ne 0 ]]; then
 			print_error "Release aborted: not all required target archives are present."
-			print_info "Ensure the build-linux-windows workflow succeeded and macOS builds completed."
+			print_info "CI run used: $run_id — verify with: gh run view $run_id --json jobs --jq '.jobs[] | \"\\(.name): \\(.conclusion)\"'"
+			print_info "If the workflow succeeded, re-run with --skip-release to retry the download (transient gh failures are retried 5x)."
+			print_info "Otherwise ensure the build-linux-windows workflow succeeded and macOS builds completed."
 			exit 1
 		fi
 
@@ -1467,8 +1120,15 @@ main() {
 		# asset is selected; its `.compat` final extension is treated as a plain
 		# uncompressed binary, sidestepping the missing `compression-tar-gz`
 		# feature. See scripts/release-assets.sh for the full rationale.
-		print_info "Generating legacy updater compatibility assets..."
+		print_info "Generating legacy updater compatibility assets (parallel)..."
 		local -a compat_assets=()
+		# Each asset derives from a distinct archive into a distinct output,
+		# so all six generate concurrently. Failures are collected via status
+		# files (background jobs cannot `exit 1` the parent) and abort below,
+		# preserving the previous fail-fast behavior.
+		local compat_status_dir
+		compat_status_dir=$(mktemp -d)
+		local -a compat_pids=()
 		for item in "${required_targets[@]}"; do
 			local ctarget="${item%%:*}"
 			local cext="${item##*:}"
@@ -1478,18 +1138,27 @@ main() {
 				print_error "Failed to derive compatibility asset path for $normal_archive"
 				exit 1
 			fi
-			if ! create_compatibility_asset "$normal_archive" "$compat_path"; then
-				print_error "Failed to generate compatibility asset from $normal_archive"
+			compat_assets+=("$compat_path")
+			(
+				create_compatibility_asset "$normal_archive" "$compat_path" &&
+					{ [[ "$ctarget" != *-apple-darwin ]] || verify_macos_release_binary "$compat_path"; } ||
+					touch "$compat_status_dir/$(basename "$compat_path").failed"
+			) &
+			compat_pids+=($!)
+		done
+		local compat_pid
+		for compat_pid in "${compat_pids[@]}"; do
+			wait "$compat_pid" 2>/dev/null || true
+		done
+		local compat_failed_file
+		for compat_failed_file in "$compat_status_dir"/*.failed; do
+			if [[ -e "$compat_failed_file" ]]; then
+				print_error "Failed to generate compatibility asset $(basename "$compat_failed_file" .failed)"
+				rm -rf "$compat_status_dir"
 				exit 1
 			fi
-			if [[ "$ctarget" == *-apple-darwin ]]; then
-				if ! verify_macos_release_binary "$compat_path"; then
-					print_error "macOS compatibility asset failed Gatekeeper verification: $compat_path"
-					exit 1
-				fi
-			fi
-			compat_assets+=("$compat_path")
 		done
+		rm -rf "$compat_status_dir"
 		print_success "Generated ${#compat_assets[@]} compatibility assets"
 
 		# Upload all binaries to GitHub Release
@@ -1524,22 +1193,19 @@ main() {
 		# prefix is what makes the legacy updater pick them). Uploading compat
 		# first is harmless defense-in-depth kept for clarity.
 		local upload_failed=0
+		# Single parallel upload queue: compatibility assets first, then normal
+		# archives, checksums, and install scripts. Upload order does NOT
+		# control legacy selection (GitHub re-sorts assets alphabetically by
+		# name; the `compat-` prefix is what makes the legacy updater pick
+		# them), so all files upload concurrently (4-way) to cut wall time
+		# from ~5-10m sequential to ~2-3m. Each asset is retried
+		# independently inside `upload_release_asset_with_retry` (transient
+		# HTTP 500 on large raw compat binaries), and failures are collected
+		# via status files since background jobs cannot set flags directly.
+		local -a upload_queue=()
 		if [[ ${#compat_assets[@]} -gt 0 ]]; then
-			print_info "Uploading compatibility assets (legacy bridge)..."
-			# Per-file upload with retry: uploads.github.com intermittently
-			# returns HTTP 500 on large (~40-80MB) raw compat binaries. A
-			# single batch upload would fail all remaining assets on one
-			# transient error, so each asset is retried independently.
-			local compat_file
-			for compat_file in "${compat_assets[@]}"; do
-				if ! upload_release_asset_with_retry "$released_version" "$compat_file"; then
-					print_error "Failed to upload compatibility asset $(basename "$compat_file") to GitHub Release"
-					upload_failed=1
-				fi
-			done
-			if [[ "$upload_failed" -ne 0 ]]; then
-				print_error "Failed to upload compatibility assets to GitHub Release"
-			fi
+			print_info "Queuing ${#compat_assets[@]} compatibility assets (legacy bridge)..."
+			upload_queue+=("${compat_assets[@]}")
 		fi
 
 		shopt -s nullglob
@@ -1567,14 +1233,39 @@ main() {
 			filtered_normal_files+=("$binaries_dir/checksums.txt")
 		fi
 		if [[ ${#filtered_normal_files[@]} -gt 0 ]]; then
-			print_info "Uploading normal archives, checksums, and install scripts..."
-			local normal_file
-			for normal_file in "${filtered_normal_files[@]}"; do
-				if ! upload_release_asset_with_retry "$released_version" "$normal_file"; then
-					print_error "Failed to upload $(basename "$normal_file") to GitHub Release"
+			print_info "Queuing ${#filtered_normal_files[@]} normal archives, checksums, and install scripts..."
+			upload_queue+=("${filtered_normal_files[@]}")
+		fi
+
+		if [[ ${#upload_queue[@]} -gt 0 ]]; then
+			print_info "Uploading ${#upload_queue[@]} assets (4 parallel)..."
+			local upload_status_dir
+			upload_status_dir=$(mktemp -d)
+			local -a upload_pids=()
+			local upload_file
+			for upload_file in "${upload_queue[@]}"; do
+				(
+					upload_release_asset_with_retry "$released_version" "$upload_file" ||
+						touch "$upload_status_dir/$(basename "$upload_file").failed"
+				) &
+				upload_pids+=($!)
+				while [[ ${#upload_pids[@]} -ge 4 ]]; do
+					wait "${upload_pids[0]}" 2>/dev/null || true
+					upload_pids=("${upload_pids[@]:1}")
+				done
+			done
+			local upload_pid
+			for upload_pid in "${upload_pids[@]}"; do
+				wait "$upload_pid" 2>/dev/null || true
+			done
+			local upload_failed_file
+			for upload_failed_file in "$upload_status_dir"/*.failed; do
+				if [[ -e "$upload_failed_file" ]]; then
+					print_error "Failed to upload $(basename "$upload_failed_file" .failed) to GitHub Release"
 					upload_failed=1
 				fi
 			done
+			rm -rf "$upload_status_dir"
 			if [[ "$upload_failed" -ne 0 ]]; then
 				print_error "Failed to upload binaries to GitHub Release"
 			fi
@@ -1589,6 +1280,7 @@ main() {
 		local release_x86_sha=""
 		local release_arm_sha=""
 		local release_arm_linux_sha=""
+		local release_x86_linux_sha=""
 		if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256" ]]; then
 			release_x86_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256")
 		fi
@@ -1598,6 +1290,9 @@ main() {
 		if [[ -f "$binaries_dir/vtcode-$released_version-aarch64-unknown-linux-gnu.sha256" ]]; then
 			release_arm_linux_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-aarch64-unknown-linux-gnu.sha256")
 		fi
+		if [[ -f "$binaries_dir/vtcode-$released_version-x86_64-unknown-linux-gnu.sha256" ]]; then
+			release_x86_linux_sha=$(awk '{print $1}' "$binaries_dir/vtcode-$released_version-x86_64-unknown-linux-gnu.sha256")
+		fi
 
 		# Cleanup
 		rm -rf "$binaries_dir"
@@ -1606,7 +1301,7 @@ main() {
 	# 5. Publish Homebrew tap
 	if [[ "$skip_binaries" == 'false' ]]; then
 		print_info "Step 5: Publishing Homebrew formula to vinhnx/homebrew-tap..."
-		publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}" "${release_arm_linux_sha:-}"
+		publish_homebrew_tap "$released_version" "${release_x86_sha:-}" "${release_arm_sha:-}" "${release_arm_linux_sha:-}" "${release_x86_linux_sha:-}"
 	fi
 
 	# 6. Handle docs.rs rebuild
@@ -1625,7 +1320,7 @@ main() {
 	print_info "  • Linux/Windows binaries: built on GitHub Actions (free for public repo)"
 	print_info ""
 	# Fixed: previous line 1561 had truncated `nfo` (from `print_info`) -> `nfo: command not found`
-	print_info "Tip: Use --full-ci to build ALL platforms on GitHub Actions"
+	print_info "Tip: Use --ci-only to skip the local macOS build and use CI for Linux/Windows"
 }
 
 main "$@"

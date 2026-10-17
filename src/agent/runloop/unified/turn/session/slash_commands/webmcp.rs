@@ -115,6 +115,7 @@ pub(crate) async fn handle_start_webmcp(
         ctx.vt_cfg.as_ref(),
         &origin,
         ctx.webmcp_prompt_sender.clone(),
+        ctx.harness_emitter.map(|e| (e.clone(), ctx.handle.clone())),
     )
     .await?;
     let endpoint = bridge.endpoint().to_string();
@@ -261,6 +262,7 @@ async fn confirm_webmcp_action(
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(CONFIRM_WEBMCP_ACTION.to_string())),
                 search_value: Some("confirm proceed yes".to_string()),
+                ..Default::default()
             },
             InlineListItem {
                 title: "Cancel".to_string(),
@@ -269,6 +271,7 @@ async fn confirm_webmcp_action(
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(CANCEL_WEBMCP_ACTION.to_string())),
                 search_value: Some("cancel keep current no".to_string()),
+                ..Default::default()
             },
         ],
         Some(InlineListSelection::ConfigAction(CANCEL_WEBMCP_ACTION.to_string())),

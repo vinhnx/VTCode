@@ -64,7 +64,7 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
             DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange,
             EnableMouseCapture, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
         },
-        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+        terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
     };
     use signal_hook::{consts::signal::SIGTSTP, low_level::raise};
 
@@ -79,6 +79,10 @@ fn suspend_to_shell<B: Backend, S: TuiSessionDriver>(
             tracing::debug!(%error, "failed to suspend keyboard enhancement flags");
         }
         if use_alternate_screen {
+            // Purge the alternate viewport before leaving so suspending to the
+            // shell never reveals the last TUI frame in the main scrollback
+            // (mirrors the canonical `panic_hook::restore_tui` ordering).
+            let _ = execute!(stderr, Clear(ClearType::All));
             execute!(stderr, LeaveAlternateScreen).context("failed to leave alternate screen before suspend")?;
         }
 
@@ -171,6 +175,7 @@ fn handle_inline_command<S: TuiSessionDriver>(
     }
 
     session.handle_command(command);
+    session.flush_program_status();
 
     Ok(EventStreamAction::None)
 }
@@ -222,7 +227,11 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
     mouse_pointer: &mut MousePointerShape,
     input_started_at: Option<Instant>,
 ) -> Result<()> {
-    if event_channels.rx_paused.load(Ordering::Acquire) || !session.take_redraw() {
+    if event_channels.rx_paused.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    if !session.take_redraw() {
+        crate::tui::frame_metrics::record_frame_skipped();
         return Ok(());
     }
 
@@ -260,8 +269,9 @@ fn render_if_dirty<B: Backend, S: TuiSessionDriver>(
         .map_err(|e| anyhow::anyhow!("failed to draw inline session: {e}"))?;
     vtcode_commons::startup_trace::record_first_render();
     let draw_elapsed = draw_started_at.elapsed();
-    if let Some(input_started_at) = input_started_at {
-        let input_to_draw_elapsed = input_started_at.elapsed();
+    let input_to_draw_elapsed = input_started_at.map(|started| started.elapsed());
+    crate::tui::frame_metrics::record_draw(draw_elapsed, input_to_draw_elapsed);
+    if let Some(input_to_draw_elapsed) = input_to_draw_elapsed {
         if input_to_draw_elapsed.as_millis() >= INPUT_TO_DRAW_WARN_MS || draw_elapsed.as_millis() >= DRAW_WARN_MS {
             tracing::debug!(
                 target: "vtcode.tui.latency",
@@ -343,7 +353,13 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
         // Update terminal title based on current activity state
         session.update_terminal_title();
 
-        if session.thinking_spinner_active() || session.is_running_activity() || session.has_status_spinner() {
+        // Keep active-rate ticks while animations or transient expiries are
+        // pending, independently of recent user input. Input, commands (new
+        // messages), and crossterm events already render immediately in the
+        // same wakeup; ticks only drive spinner/shimmer frames (80/33ms),
+        // drag auto-scroll steps (50ms), and expiry cleanup. A truly idle
+        // session therefore rests at the low upkeep rate instead of polling.
+        if session.needs_animation_tick() {
             event_channels.record_input();
         }
 

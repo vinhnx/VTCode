@@ -4,7 +4,7 @@ This directory contains dynamic context files for VT Code agent operations.
 
 ## Directory Structure
 
-```
+```text
 .vtcode/
   context/
     tool_outputs/     # Large tool outputs spooled to files
@@ -22,8 +22,8 @@ This directory contains dynamic context files for VT Code agent operations.
 
 ## Purpose
 
-These files implement **dynamic context discovery** - a pattern where large outputs
-are written to files instead of being truncated. This allows the agent to:
+These files implement **dynamic context discovery** - a pattern where large outputs are written to files instead of
+being truncated. This allows the agent to:
 
 1. Inspect full tool-output files on demand with `exec_command.cmd` using `sed`, `cat`, or `rg`
 2. Search code with advanced `code_search`, and search spooled text with `exec_command.cmd` plus `rg`
@@ -45,4 +45,5 @@ sync_skills = true
 ```
 
 ---
-*This directory is managed by VT Code. Files may be automatically created, updated, or cleaned up.*
+
+_This directory is managed by VT Code. Files may be automatically created, updated, or cleaned up._

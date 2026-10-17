@@ -233,4 +233,17 @@ mod tests {
         assert_eq!(previous.prefix_hash(), next.prefix_hash());
         assert_eq!(previous.catalog_hash(), next.catalog_hash());
     }
+
+    #[test]
+    fn begin_segment_shares_prompt_and_catalog_without_deep_clone() {
+        // A new segment must not rebuild the prompt/tool catalog: the frozen
+        // `Arc<str>`/`Arc<Vec<ToolDefinition>>` owners are shared so the wire
+        // prefix stays byte-identical and no deep clone is paid.
+        let previous =
+            SessionRequestEnvelope::new("segment-1", "fixed prompt", vec![tool("alpha"), tool("exec_command")], 42);
+        let next = previous.begin_segment("segment-2");
+
+        assert!(Arc::ptr_eq(&previous.system_prompt(), &next.system_prompt()));
+        assert!(Arc::ptr_eq(&previous.ordered_tools(), &next.ordered_tools()));
+    }
 }

@@ -11,9 +11,10 @@ else
 fi
 
 export CARGO_PROFILE_RELEASE_DEBUG="line-tables-only"
+export CARGO_PROFILE_RELEASE_STRIP="false"
 
 echo "[perf] building release with frame pointers and line tables"
-(cd "${ROOT_DIR}" && cargo build --release "$@")
+(cd "${ROOT_DIR}" && cargo build --release --locked "$@")
 
 echo "[perf] done"
 echo "[perf] next: run your profiler (e.g., samply, perf, flamegraph) against target/release/vtcode"

@@ -8,8 +8,8 @@ use super::docs::{FIELD_DOCS, FieldDoc};
 use super::mutations::resolve_cycle_options;
 use super::path::{PathToken, get_node, parse_path_tokens, path_with_key};
 use super::render::{
-    action_item, collection_subtitle, display_title, search_value_for_missing_doc, search_value_with_content,
-    section_item, section_subtitle, setting_subtitle, summarize_value,
+    action_item, action_item_with_tone, display_title, search_value_for_missing_doc, search_value_with_content,
+    section_item, summarize_value,
 };
 use super::{
     ACTION_BACK, ACTION_CONFIGURE_EDITOR, ACTION_PICK_MAIN_MODEL, ACTION_PREFIX_ARRAY_ADD, ACTION_PREFIX_ARRAY_POP,
@@ -68,6 +68,7 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
         paths: &[
             "permissions.enabled",
             "permissions.audit_enabled",
+            "permissions.auto.use_decisions_probe",
             "permissions.allow",
             "permissions.ask",
             "permissions.deny",
@@ -96,8 +97,6 @@ static CURATED_GROUPS: &[CuratedSettingsGroup] = &[
             "mcp.enabled",
             "mcp.providers",
             "acp.enabled",
-            "ide_context.enabled",
-            "ide_context.show_in_tui",
         ],
     },
     CuratedSettingsGroup {
@@ -177,23 +176,31 @@ pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlVal
 
     if state.view_path.as_deref() == Some(RESET_CONFIRMATION_VIEW) {
         items.push(section_item("Confirm reset"));
-        items.push(action_item(
-            "Reset configuration",
-            "Clear every setting in the current write target",
-            Some("Confirm"),
+        items.push(action_item_with_tone(
+            "Reset everything",
+            "Clear every setting in the current write target (credentials are preserved)",
+            Some("Destructive"),
             ACTION_RESET_CONFIRM,
+            vtcode_commons::ui_protocol::InlineTone::Danger,
         ));
-        items.push(action_item(
-            "Cancel reset",
+        items.push(action_item_with_tone(
+            "Keep settings",
             "Return to the settings sections without changing configuration",
-            Some("Back"),
+            Some("Cancel"),
             ACTION_RESET_CANCEL,
+            vtcode_commons::ui_protocol::InlineTone::Neutral,
         ));
         return Ok(items);
     }
 
     if let Some(view_path) = state.view_path.as_deref() {
-        items.push(action_item("Back to settings", "Return to the previous settings view", None, ACTION_BACK));
+        items.push(action_item_with_tone(
+            "← Back",
+            "Return to the previous settings view",
+            None,
+            ACTION_BACK,
+            vtcode_commons::ui_protocol::InlineTone::Neutral,
+        ));
         items.push(action_item(
             "Reload configuration",
             "Reload effective values from current configuration files",
@@ -232,17 +239,19 @@ pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlVal
         append_node_items(&mut items, view_path, node, draft)?;
     } else {
         append_curated_root_items(&mut items, draft);
+        items.push(section_item("Actions"));
         items.push(action_item(
             "Reload configuration",
-            "Reload effective values from current configuration files",
+            "Re-read effective values from the config files",
             None,
             super::ACTION_RELOAD,
         ));
-        items.push(action_item(
+        items.push(action_item_with_tone(
             "Reset configuration",
-            "Clear every setting in the current write target (confirmation required)",
+            "Clear every setting in the write target (asks first)",
             None,
             ACTION_RESET,
+            vtcode_commons::ui_protocol::InlineTone::Danger,
         ));
     }
 
@@ -258,19 +267,21 @@ fn append_curated_root_items(items: &mut Vec<InlineListItem>, draft: &TomlValue)
             "editable settings"
         };
         let paths = group.paths.join(" ");
-        items.push(InlineListItem {
-            title: group.title.to_string(),
-            subtitle: Some(format!("{} • {count} {count_label}", group.description)),
-            badge: Some("Group".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
-                "{ACTION_PREFIX_OPEN}{SETTINGS_GROUP_PREFIX}{}",
-                group.id
-            ))),
-            search_value: Some(
+        items.push(
+            vtcode_ui::design::list::action(
+                group.title,
+                format!("{} • {count} {count_label}", group.description),
+                None,
+                vtcode_commons::ui_protocol::InlineTone::Neutral,
+                Some(InlineListSelection::ConfigAction(format!(
+                    "{ACTION_PREFIX_OPEN}{SETTINGS_GROUP_PREFIX}{}",
+                    group.id
+                ))),
+            )
+            .with_search_value(
                 format!("{} {} {} {paths}", group.title, group.id, group.description).to_ascii_lowercase(),
             ),
-        });
+        );
     }
 
     items.push(action_item(
@@ -279,7 +290,7 @@ fn append_curated_root_items(items: &mut Vec<InlineListItem>, draft: &TomlValue)
             "Search the complete documented configuration • {} editable settings",
             advanced_editable_count(draft)
         ),
-        Some("Search"),
+        None,
         &format!("{ACTION_PREFIX_OPEN}{SETTINGS_ADVANCED_VIEW_PATH}"),
     ));
 }
@@ -456,21 +467,17 @@ fn advanced_schema_item(path: &str, doc: &FieldDoc) -> InlineListItem {
     }
     terms.extend(doc.options.iter().cloned());
 
-    InlineListItem {
-        title: label,
-        subtitle: Some(format!(
+    vtcode_ui::design::list::hint(label)
+        .with_subtitle(format!(
             "{path} • {}",
             if doc.description.is_empty() {
                 "Documented schema field; configure a concrete entry to edit it."
             } else {
                 doc.description.as_str()
             }
-        )),
-        badge: Some("Schema".to_string()),
-        indent: 0,
-        selection: None,
-        search_value: Some(terms.join(" ").to_ascii_lowercase()),
-    }
+        ))
+        .with_badge("Schema", vtcode_commons::ui_protocol::InlineTone::Neutral)
+        .with_search_value(terms.join(" ").to_ascii_lowercase())
 }
 
 fn advanced_label(path: &str) -> String {
@@ -649,62 +656,73 @@ fn append_missing_optional_doc_items(items: &mut Vec<InlineListItem>, root: &Tom
     }
 }
 
+/// Canonical setting row: title + value + description (design::list::setting).
+fn setting_row(
+    title: String,
+    value: String,
+    description: Option<String>,
+    tone: vtcode_commons::ui_protocol::InlineTone,
+    selection: Option<InlineListSelection>,
+    search_value: String,
+) -> InlineListItem {
+    let mut row = vtcode_ui::design::list::setting(title, Some(value), description, selection);
+    row.badge_tone = tone;
+    row.search_value = Some(search_value);
+    row
+}
+
 fn item_for_value(label: &str, path: &str, value: &TomlValue, draft_root: &TomlValue) -> InlineListItem {
+    use vtcode_commons::ui_protocol::InlineTone;
+
     let doc = FIELD_DOCS.lookup(path);
     let title = display_title(label, path, value);
-    let description = doc
-        .and_then(|entry| {
-            if entry.description.is_empty() {
-                None
-            } else {
-                Some(entry.description.clone())
-            }
-        })
-        .unwrap_or_default();
-
+    let description = doc.and_then(|entry| (!entry.description.is_empty()).then(|| entry.description.clone()));
     let summary = summarize_value(value);
-    let subtitle = setting_subtitle(&summary, &description, false);
     let search_value = search_value_with_content(path, label, value, doc);
 
     if path == "agent.default_model" {
-        return InlineListItem {
+        return setting_row(
             title,
-            subtitle: Some(subtitle),
-            badge: Some("Pick".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(ACTION_PICK_MAIN_MODEL.to_string())),
-            search_value: Some(search_value),
-        };
+            summary,
+            description,
+            InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction(ACTION_PICK_MAIN_MODEL.to_string())),
+            search_value,
+        );
     }
 
     if path == "tools.editor" {
-        return InlineListItem {
+        return setting_row(
             title,
-            subtitle: Some(section_subtitle(path, value)),
-            badge: Some("Setup".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(ACTION_CONFIGURE_EDITOR.to_string())),
-            search_value: Some(search_value),
-        };
+            summary,
+            description,
+            InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction(ACTION_CONFIGURE_EDITOR.to_string())),
+            search_value,
+        );
     }
 
     match value {
-        TomlValue::Boolean(_) => InlineListItem {
+        TomlValue::Boolean(enabled) => setting_row(
             title,
-            subtitle: Some(subtitle),
-            badge: Some("On/Off".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:toggle"))),
-            search_value: Some(search_value),
-        },
-        TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
+            if *enabled { "On".to_string() } else { "Off".to_string() },
+            description,
+            if *enabled {
+                InlineTone::Success
+            } else {
+                InlineTone::Neutral
+            },
+            Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:toggle"))),
+            search_value,
+        ),
+        TomlValue::Integer(_) | TomlValue::Float(_) => setting_row(
             title,
-            subtitle: Some(setting_subtitle(&summary, &description, true)),
-            badge: Some("Step".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:inc"))),
-            search_value: Some(search_value),
-        },
+            summary,
+            description,
+            InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_SET}{path}:inc"))),
+            search_value,
+        ),
         TomlValue::String(current) => {
             let has_options = resolve_cycle_options(Some(draft_root), path, current).len() > 1;
             let action = if has_options {
@@ -712,50 +730,38 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue, draft_root: &TomlV
             } else {
                 format!("{ACTION_PREFIX_EDIT}{path}")
             };
-            InlineListItem {
+            setting_row(
                 title,
-                subtitle: Some(setting_subtitle(&summary, &description, has_options)),
-                badge: Some(if has_options { "Pick" } else { "Edit" }.to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(action)),
-                search_value: Some(search_value),
-            }
+                summary,
+                description,
+                InlineTone::Accent,
+                Some(InlineListSelection::ConfigAction(action)),
+                search_value,
+            )
         }
-        TomlValue::Array(entries) => InlineListItem {
+        TomlValue::Array(entries) => setting_row(
             title,
-            subtitle: Some(collection_subtitle(
-                format!("{} item{}", entries.len(), if entries.len() == 1 { "" } else { "s" }),
-                &description,
-            )),
-            badge: Some("List".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
-            search_value: Some(search_value),
-        },
-        TomlValue::Table(_) => InlineListItem {
+            format!("{} item{}", entries.len(), if entries.len() == 1 { "" } else { "s" }),
+            description,
+            InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
+            search_value,
+        ),
+        TomlValue::Table(_) => setting_row(
             title,
-            subtitle: Some(section_subtitle(path, value)),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
-            search_value: Some(search_value),
-        },
-        _ => InlineListItem {
-            title,
-            subtitle: Some(setting_subtitle(&summary, &description, false)),
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: Some(search_value),
-        },
+            summary,
+            description,
+            InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{ACTION_PREFIX_OPEN}{path}"))),
+            search_value,
+        ),
+        _ => setting_row(title, summary, description, InlineTone::Neutral, None, search_value),
     }
 }
 
 fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
     let doc = FIELD_DOCS.lookup(path);
-    let description = doc
-        .and_then(|entry| (!entry.description.is_empty()).then(|| entry.description.clone()))
-        .unwrap_or_default();
+    let description = doc.and_then(|entry| (!entry.description.is_empty()).then(|| entry.description.clone()));
     let has_options = doc.map(|entry| !entry.options.is_empty()).unwrap_or(false);
     let action = if has_options {
         format!("{ACTION_PREFIX_SET}{path}:cycle")
@@ -763,14 +769,14 @@ fn item_for_missing_doc_value(label: &str, path: &str) -> InlineListItem {
         format!("{ACTION_PREFIX_EDIT}{path}")
     };
 
-    InlineListItem {
-        title: humanize_identifier(label),
-        subtitle: Some(setting_subtitle("<unset>", &description, has_options)),
-        badge: Some(if has_options { "Pick" } else { "Edit" }.to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(action)),
-        search_value: Some(search_value_for_missing_doc(path, label, doc)),
-    }
+    setting_row(
+        humanize_identifier(label),
+        "<unset>".to_string(),
+        description,
+        vtcode_commons::ui_protocol::InlineTone::Neutral,
+        Some(InlineListSelection::ConfigAction(action)),
+        search_value_for_missing_doc(path, label, doc),
+    )
 }
 
 fn missing_doc_label<'a>(path: &'a str, parent_path: Option<&str>) -> Option<&'a str> {

@@ -1,3 +1,8 @@
+//! Legacy crate-internal HTTP ACP stack (date versions, `/rpc`+SSE).
+//!
+//! Not the ACP stdio transport. Do not extend for new protocol work; canonical
+//! agent surface lives in `zed/` on upstream `agent-client-protocol`.
+//!
 //! ACP capabilities and initialization types
 //!
 //! This module implements the capability negotiation as defined by ACP:

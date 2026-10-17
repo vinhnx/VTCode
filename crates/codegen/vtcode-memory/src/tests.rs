@@ -21,11 +21,13 @@ fn sample_turn() -> Vec<ThreadEvent> {
         ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "thread".to_string() }),
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
         ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
             thread_id: "thread".to_string(),
+            completed_at: None,
             session_id: "session".to_string(),
             subtype: ThreadCompletionSubtype::Success,
             outcome_code: "completed".to_string(),
@@ -69,6 +71,7 @@ fn event_log_batches_appends_until_turn_boundary() {
     assert_eq!(fs::metadata(&events_path).expect("metadata").len(), 0);
 
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
     }))
@@ -142,6 +145,7 @@ fn reopening_mid_turn_preserves_state_for_completion() {
     let reopened = open(dir.path(), "sess-mid-turn-resume", DEFAULT_MAX_EVENTS).expect("reopen");
     reopened
         .append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }))
@@ -211,6 +215,105 @@ fn migrate_legacy_imports_history_and_trajectory() {
     // recent_sessions lists the migrated sessions.
     let sessions = recent_sessions(dir.path(), 10);
     assert_eq!(sessions.len(), 2);
+}
+
+fn sample_zero_turn_completion() -> Vec<ThreadEvent> {
+    vec![
+        ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "empty".to_string() }),
+        ThreadEvent::ThreadCompleted(Box::new(ThreadCompletedEvent {
+            thread_id: "empty".to_string(),
+            completed_at: None,
+            session_id: "session".to_string(),
+            subtype: ThreadCompletionSubtype::Cancelled,
+            outcome_code: "exit".to_string(),
+            result: None,
+            stop_reason: None,
+            usage: Usage::default(),
+            total_cost_usd: None,
+            num_turns: 0,
+        })),
+    ]
+}
+
+#[test]
+fn retention_evicts_zero_turn_completed_stores_immediately() {
+    let dir = TempDir::new().expect("tempdir");
+    // Empty shell: thread.started + thread.completed, never a turn.
+    let empty = open(dir.path(), "empty-shell", DEFAULT_MAX_EVENTS).expect("open empty");
+    for e in &sample_zero_turn_completion() {
+        empty.append(e).expect("append empty");
+    }
+    empty.complete().expect("complete empty");
+    drop(empty);
+
+    // Real work: has a turn, must survive.
+    let worked = open(dir.path(), "worked-session", DEFAULT_MAX_EVENTS).expect("open worked");
+    for e in &sample_turn() {
+        worked.append(e).expect("append");
+    }
+    worked.complete().expect("complete worked");
+    drop(worked);
+
+    // Generous age/count: only the empty shell is removed.
+    let removed = apply_retention(dir.path(), crate::retention::RetentionPolicy { max_sessions: 50, max_age_days: 30 })
+        .expect("retain");
+    assert_eq!(removed, 1, "exactly the empty shell must be evicted");
+    assert!(!sessions_root(dir.path()).join("empty-shell").exists());
+    assert!(sessions_root(dir.path()).join("worked-session").exists());
+}
+
+#[test]
+fn evict_zero_turn_completed_store_is_a_noop_for_real_sessions() {
+    let dir = TempDir::new().expect("tempdir");
+    let worked = open(dir.path(), "worked", DEFAULT_MAX_EVENTS).expect("open");
+    for e in &sample_turn() {
+        worked.append(e).expect("append");
+    }
+    worked.complete().expect("complete");
+    drop(worked);
+
+    assert!(!crate::retention::evict_zero_turn_completed_store(dir.path(), "worked").expect("noop"));
+    assert!(sessions_root(dir.path()).join("worked").exists());
+
+    let empty = open(dir.path(), "empty", DEFAULT_MAX_EVENTS).expect("open empty");
+    for e in &sample_zero_turn_completion() {
+        empty.append(e).expect("append empty");
+    }
+    empty.complete().expect("complete empty");
+    drop(empty);
+    assert!(crate::retention::evict_zero_turn_completed_store(dir.path(), "empty").expect("evict"));
+    assert!(!sessions_root(dir.path()).join("empty").exists());
+}
+
+#[test]
+fn evict_zero_turn_completed_store_skips_live_and_pinned() {
+    let dir = TempDir::new().expect("tempdir");
+    // Live: handle still held (liveness flock active).
+    let live = open(dir.path(), "live-empty", DEFAULT_MAX_EVENTS).expect("open live");
+    for e in &sample_zero_turn_completion() {
+        live.append(e).expect("append");
+    }
+    live.complete().expect("complete live");
+    assert!(
+        !crate::retention::evict_zero_turn_completed_store(dir.path(), "live-empty").expect("live noop"),
+        "a live process's store must not be evicted"
+    );
+    assert!(sessions_root(dir.path()).join("live-empty").exists());
+    drop(live);
+
+    // Pinned: retention pin wins even for a 0-turn completed store.
+    let pinned = open(dir.path(), "pinned-empty", DEFAULT_MAX_EVENTS).expect("open pinned");
+    for e in &sample_zero_turn_completion() {
+        pinned.append(e).expect("append");
+    }
+    pinned.complete().expect("complete pinned");
+    drop(pinned);
+    crate::retention::pin_session_retention(&sessions_root(dir.path()).join("pinned-empty"), "test").expect("pin");
+    assert!(
+        !crate::retention::evict_zero_turn_completed_store(dir.path(), "pinned-empty").expect("pin noop"),
+        "a pinned store must not be evicted"
+    );
+    assert!(sessions_root(dir.path()).join("pinned-empty").exists());
 }
 
 #[test]
@@ -618,6 +721,7 @@ fn current_manifest_rejects_a_stale_but_well_formed_turn_index() {
     for event in [
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -629,6 +733,7 @@ fn current_manifest_rejects_a_stale_but_well_formed_turn_index() {
     for event in [
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -681,6 +786,7 @@ fn legacy_manifest_uses_valid_index_base_when_scanning() {
             log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
                 .expect("append turn start");
             log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }))
@@ -736,6 +842,7 @@ fn cap_rewrite_keeps_event_log_appendable_and_reopenable() {
         [
             ThreadEvent::TurnStarted(TurnStartedEvent::default()),
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }),
@@ -770,6 +877,7 @@ fn cap_eviction_summary_contains_bounded_grounded_facts() {
         .expect("append turn start");
     log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {
+            context: None,
             id: "message-1".into(),
             details: ThreadItemDetails::AgentMessage(AgentMessageItem {
                 text: "The canonical event recorded a grounded implementation fact.".into(),
@@ -778,6 +886,7 @@ fn cap_eviction_summary_contains_bounded_grounded_facts() {
     }))
     .expect("append message");
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
     }))
@@ -785,6 +894,7 @@ fn cap_eviction_summary_contains_bounded_grounded_facts() {
     log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
         .expect("append second turn start");
     log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
     }))
@@ -815,6 +925,7 @@ fn cap_eviction_counts_session_records_removed_with_oldest_turn() {
         log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
             .expect("append turn start");
         log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }))
@@ -843,6 +954,7 @@ fn scan_after_cap_rewrite_crash_preserves_retained_turn_ordinals() {
             log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
                 .expect("append turn start");
             log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }))
@@ -879,6 +991,7 @@ fn scan_after_full_cap_rewrite_crash_preserves_next_turn_ordinal() {
         for event in [
             ThreadEvent::TurnStarted(TurnStartedEvent::default()),
             ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }),
@@ -900,6 +1013,7 @@ fn scan_after_full_cap_rewrite_crash_preserves_next_turn_ordinal() {
         .expect("append next turn start");
     reopened
         .append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }))
@@ -920,6 +1034,7 @@ fn pending_cap_rewrite_recovers_when_index_is_missing() {
             log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
                 .expect("append turn start");
             log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }))
@@ -970,6 +1085,7 @@ fn pending_cap_rewrite_recovers_when_index_is_invalid() {
             log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default()))
                 .expect("append turn start");
             log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             }))
@@ -1017,6 +1133,7 @@ fn multiple_open_handles_share_turn_state_and_file_lock() {
     for event in [
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -1026,6 +1143,7 @@ fn multiple_open_handles_share_turn_state_and_file_lock() {
     for event in [
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -1048,6 +1166,7 @@ fn failed_eviction_summary_keeps_canonical_events() {
     for event in [
         ThreadEvent::TurnStarted(TurnStartedEvent::default()),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         }),
@@ -1056,6 +1175,7 @@ fn failed_eviction_summary_keeps_canonical_events() {
         let _ = log.append(&event);
     }
     let error = log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+        completed_at: None,
         usage: Usage::default(),
         in_progress_exec_sessions: Vec::new(),
     }));
@@ -1098,6 +1218,7 @@ fn scan_fallback_when_manifest_missing() {
         VersionedThreadEvent::new(ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "t-1".to_string() })),
         VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
         VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         })),
@@ -1121,6 +1242,7 @@ fn scan_skips_malformed_lifecycle_payloads() {
     let valid_events = [
         VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
         VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         })),

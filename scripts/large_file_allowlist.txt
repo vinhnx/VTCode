@@ -9,10 +9,6 @@
 #   **/fixtures/*.gif
 #   docs/screenshots/*.png=600_000
 
-# Allow the pre-built Zed extension binary, which is required for the
-# integration tests and kept under 1 MB.
-extensions/zed-extension/extension.wasm=1_000_000
-
 # Keep changelog history available while capping growth.
 CHANGELOG.md=1_200_000
 

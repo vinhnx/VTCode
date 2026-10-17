@@ -1,6 +1,9 @@
 //! Tool intent classification: mutating vs read-only, parallel-safe, and
 //! action extraction for unified tool surfaces.
 
+mod mutation;
+pub use mutation::{is_docs_only_write, is_plan_artifact_write, tmp_plans_dir};
+
 pub mod actions;
 pub mod activity;
 pub mod classify;
@@ -13,14 +16,16 @@ pub use actions::{
 };
 pub use activity::{
     GENERIC_VERIFIER_DESCRIPTION, ShellActivity, VERIFIER_SHELL_FORM_NOTE, classify_shell_activity,
-    default_verifier_for_workspace, rewrite_truncation_only_verifier, shell_args_as_executed,
-    shell_command_is_admitted_verification_attempt, verification_recovery_directive, verifier_reference,
+    default_verifier_for_workspace, exec_mutation_should_incur_debt, rewrite_truncation_only_verifier,
+    shell_args_as_executed, shell_command_contains_verifier, shell_command_is_admitted_verification_attempt,
+    shell_command_is_output_search, shell_command_is_standalone_grep_search, verification_recovery_directive,
+    verifier_reference,
 };
 pub use classify::{
     builtin_tool_behavior, canonical_command_session_tool_name, classify_tool_intent, is_command_run_tool,
-    is_command_run_tool_call, is_command_tool, is_edited_file_conflict_guarded_call, is_parallel_safe_call,
-    is_turn_budget_exempt_call, planning_allowed_actions, remap_file_operation_command_args_to_command_session,
-    should_use_spool_reference_only,
+    is_command_run_tool_call, is_command_session_tool, is_command_tool, is_edited_file_conflict_guarded_call,
+    is_exec_session_cleanup_call, is_parallel_safe_call, is_parallel_safe_call_with_intent, is_turn_budget_exempt_call,
+    planning_allowed_actions, remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
 };
 pub use readonly::{is_readonly_command_session_command, is_spool_file_read_command};
 pub use types::{ToolBehavior, ToolIntent, ToolIntentClassifier, ToolMutationModel, ToolSurfaceKind};
@@ -29,8 +34,9 @@ pub use types::{ToolBehavior, ToolIntent, ToolIntentClassifier, ToolMutationMode
 mod tests {
     use super::{
         canonical_command_session_tool_name, classify_tool_intent, file_operation_action, is_command_run_tool_call,
-        is_edited_file_conflict_guarded_call, is_parallel_safe_call,
-        remap_file_operation_command_args_to_command_session, should_use_spool_reference_only,
+        is_command_session_tool, is_edited_file_conflict_guarded_call, is_parallel_safe_call,
+        is_parallel_safe_call_with_intent, remap_file_operation_command_args_to_command_session,
+        should_use_spool_reference_only,
     };
     use crate::config::constants::tools;
     use serde_json::json;
@@ -253,6 +259,31 @@ mod tests {
     }
 
     #[test]
+    fn parallel_safe_with_intent_matches_classifying_variant() {
+        // The with-intent variant must agree with the classifying variant for
+        // every branch: command-run payloads, non-command builtin behaviors,
+        // and unknown tools that fall back to plain intent classification.
+        for (tool_name, args) in [
+            (tools::UNIFIED_EXEC, json!({"action": "run", "command": "rg -n 'todo' src"})),
+            (tools::UNIFIED_EXEC, json!({"action": "run", "command": "rm -rf /tmp/test"})),
+            (tools::UNIFIED_EXEC, json!({"action": "poll", "session_id": "run-1"})),
+            (tools::EXEC_COMMAND, json!({"cmd": "sed -n '1,40p' README.md"})),
+            (tools::READ_FILE, json!({"path": "README.md"})),
+            (tools::WRITE_FILE, json!({"path": "README.md", "content": "x"})),
+            (tools::APPLY_PATCH, json!({"input": "*** Begin Patch\n*** End Patch\n"})),
+            ("totally_unknown_tool", json!({"path": "README.md"})),
+        ] {
+            let with_intent =
+                is_parallel_safe_call_with_intent(tool_name, &args, &classify_tool_intent(tool_name, &args));
+            assert_eq!(
+                with_intent,
+                is_parallel_safe_call(tool_name, &args),
+                "variants disagree for {tool_name} with {args}"
+            );
+        }
+    }
+
+    #[test]
     fn command_session_cmd_alias_infers_run() {
         let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "rm -rf /tmp/test"}));
         assert!(intent.mutating);
@@ -434,7 +465,10 @@ mod tests {
             "container.exec",
         ] {
             assert_eq!(canonical_command_session_tool_name(alias), Some(tools::UNIFIED_EXEC));
+            assert!(is_command_session_tool(alias));
         }
+        assert!(!is_command_session_tool(tools::READ_FILE));
+        assert!(!is_command_session_tool(""));
     }
 
     #[test]

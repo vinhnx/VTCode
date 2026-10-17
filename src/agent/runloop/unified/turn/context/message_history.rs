@@ -2,6 +2,16 @@ use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line, i
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
 
+/// Index of the most recent user message in `history`, scanned from the end.
+pub(crate) fn last_user_message_index(history: &[uni::Message]) -> Option<usize> {
+    history.iter().rposition(|message| message.role == uni::MessageRole::User)
+}
+
+/// Most recent user message in `history`, scanned from the end.
+pub(crate) fn last_user_message(history: &[uni::Message]) -> Option<&uni::Message> {
+    last_user_message_index(history).map(|index| &history[index])
+}
+
 pub(super) fn reasoning_duplicates_content(reasoning: &str, content: &str) -> bool {
     let r = reasoning.trim();
     let c = content.trim();
@@ -152,11 +162,7 @@ fn message_is_git_diff_tool_output(message: &uni::Message) -> bool {
 }
 
 fn last_user_message_text(history: &[uni::Message]) -> Option<String> {
-    history
-        .iter()
-        .rev()
-        .find(|message| message.role == uni::MessageRole::User)
-        .map(|message| message.content.as_text().to_ascii_lowercase())
+    last_user_message(history).map(|message| message.content.as_text().to_ascii_lowercase())
 }
 
 fn last_user_requested_diff_view(history: &[uni::Message]) -> bool {

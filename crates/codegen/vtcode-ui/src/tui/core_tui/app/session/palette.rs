@@ -220,6 +220,32 @@ impl AppSession {
                     true
                 }
             }
+            // Alt+Enter references the highlighted directory (`@dir/`) instead of
+            // descending into it, so folders can be mentioned like files.
+            KeyCode::Enter if key.modifiers.contains(KeyModifiers::ALT) => {
+                let action = palette.get_selected().map(|e| (e.is_dir, e.is_parent, e.relative_path.clone()));
+                match action {
+                    Some((true, false, path)) => {
+                        let dir_path = format!("{}/", path.trim_end_matches('/'));
+                        self.insert_file_reference(&dir_path);
+                        self.close_file_palette();
+                        self.mark_dirty();
+                        true
+                    }
+                    Some((_, true, _)) => {
+                        palette.go_up();
+                        self.mark_visual_dirty();
+                        true
+                    }
+                    Some((false, _, path)) => {
+                        self.insert_file_reference(&path);
+                        self.close_file_palette();
+                        self.mark_dirty();
+                        true
+                    }
+                    None => false,
+                }
+            }
             KeyCode::Right | KeyCode::Enter => {
                 let action = palette.get_selected().map(|e| (e.is_dir, e.relative_path.clone()));
                 match action {
@@ -236,6 +262,16 @@ impl AppSession {
                     }
                     None => false,
                 }
+            }
+            KeyCode::PageUp => {
+                palette.page_up();
+                self.mark_visual_dirty();
+                true
+            }
+            KeyCode::PageDown => {
+                palette.page_down();
+                self.mark_visual_dirty();
+                true
             }
             KeyCode::Tab => {
                 palette.select_best_match();

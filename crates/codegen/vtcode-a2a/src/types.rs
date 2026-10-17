@@ -392,6 +392,28 @@ impl Task {
         self
     }
 
+    /// Clone only the history and artifacts included by the query response.
+    pub(crate) fn clone_for_query(&self, history_length: usize, include_artifacts: bool) -> Self {
+        Self {
+            id: self.id.clone(),
+            context_id: self.context_id.clone(),
+            status: self.status.clone(),
+            artifacts: if include_artifacts {
+                self.artifacts.clone()
+            } else {
+                Vec::new()
+            },
+            history: self
+                .history
+                .iter()
+                .skip(self.history.len().saturating_sub(history_length))
+                .cloned()
+                .collect(),
+            metadata: self.metadata.clone(),
+            kind: self.kind.clone(),
+        }
+    }
+
     /// Get the current state
     pub(crate) fn state(&self) -> TaskState {
         self.status.state

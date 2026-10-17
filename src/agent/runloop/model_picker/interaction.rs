@@ -13,8 +13,8 @@ use super::rendering::{
     static_model_subtitle,
 };
 use super::selection::{
-    ReasoningChoice, SelectionDetail, ServiceTierChoice, reasoning_level_description, reasoning_level_label,
-    selection_from_option_with_mode, service_tier_label,
+    ReasoningChoice, SelectionDetail, ServiceTierChoice, available_service_tiers, reasoning_level_description,
+    reasoning_level_label, selection_from_option_with_mode, service_tier_choice_meta, service_tier_label,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh dynamic model lists";
@@ -71,7 +71,13 @@ pub(super) fn select_model_with_ratatui_list(
                 entry: SelectionEntry::new(
                     option.display.to_string(),
                     Some(format!("{description}\n{}", option.description)),
-                ),
+                )
+                .with_keywords([
+                    provider.label().to_string(),
+                    provider.as_ref().to_string(),
+                    option.id.clone(),
+                    option.display.clone(),
+                ]),
                 outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option_with_mode(option, storage_mode)),
             });
         }
@@ -98,7 +104,13 @@ pub(super) fn select_model_with_ratatui_list(
                             entry: SelectionEntry::new(
                                 detail.model_display.clone(),
                                 Some(format!("{description}\nLocally available {} model", provider.label(),)),
-                            ),
+                            )
+                            .with_keywords([
+                                provider.label().to_string(),
+                                detail.model_id.clone(),
+                                detail.model_display.clone(),
+                                "local".to_string(),
+                            ]),
                             outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
                         });
                     }
@@ -239,31 +251,27 @@ pub(super) fn select_service_tier_with_ratatui(
     let current_choice = match current {
         Some(OpenAIServiceTier::Flex) => ServiceTierChoice::Flex,
         Some(OpenAIServiceTier::Priority) => ServiceTierChoice::Priority,
+        Some(OpenAIServiceTier::Ultrafast) => ServiceTierChoice::Ultrafast,
         None => ServiceTierChoice::ProjectDefault,
     };
+    fn to_choice(tier: Option<OpenAIServiceTier>) -> ServiceTierChoice {
+        match tier {
+            Some(OpenAIServiceTier::Flex) => ServiceTierChoice::Flex,
+            Some(OpenAIServiceTier::Priority) => ServiceTierChoice::Priority,
+            Some(OpenAIServiceTier::Ultrafast) => ServiceTierChoice::Ultrafast,
+            None => ServiceTierChoice::ProjectDefault,
+        }
+    }
 
-    let choices = [
-        (
-            format!("Keep current ({})", service_tier_label(current)),
-            "Retain the existing service tier configuration.".to_string(),
-            current_choice,
-        ),
-        (
-            "Project default".to_string(),
-            "Do not send service_tier; inherit the OpenAI Project setting.".to_string(),
-            ServiceTierChoice::ProjectDefault,
-        ),
-        (
-            "Flex".to_string(),
-            "Send service_tier=flex for lower-cost, lower-priority processing.".to_string(),
-            ServiceTierChoice::Flex,
-        ),
-        (
-            "Priority".to_string(),
-            "Send service_tier=priority for lower and more consistent latency.".to_string(),
-            ServiceTierChoice::Priority,
-        ),
-    ];
+    let mut choices = vec![(
+        format!("Keep current ({})", service_tier_label(current)),
+        "Retain the existing service tier configuration.".to_string(),
+        current_choice,
+    )];
+    for tier in available_service_tiers(selection) {
+        let (title, subtitle) = service_tier_choice_meta(tier);
+        choices.push((title.to_string(), subtitle.to_string(), to_choice(tier)));
+    }
 
     let entries: Vec<SelectionEntry> = choices
         .iter()
@@ -282,5 +290,37 @@ pub(super) fn select_service_tier_with_ratatui(
         return Ok(None);
     };
 
+    Ok(Some(choices[index].2))
+}
+
+pub(super) fn select_decisions_probe_with_ratatui() -> Result<Option<Option<bool>>> {
+    let choices = [
+        (
+            "Keep current (disabled)".to_string(),
+            "Leave permissions.auto.use_decisions_probe unchanged.".to_string(),
+            None,
+        ),
+        (
+            "Enable Decisions probe".to_string(),
+            "Experimental OpenAI Decisions classification for suspicious tool output. Billed to your OpenAI API account.".to_string(),
+            Some(true),
+        ),
+        (
+            "Keep disabled".to_string(),
+            "Continue with the generation probe only.".to_string(),
+            Some(false),
+        ),
+    ];
+    let entries: Vec<SelectionEntry> = choices
+        .iter()
+        .map(|(title, subtitle, _)| SelectionEntry::new(title.clone(), Some(subtitle.clone())))
+        .collect();
+    let instructions =
+        "Enable the experimental Decisions probe? Esc keeps the current setting. See docs/guides/decisions-probe.md."
+            .to_string();
+    let selection_index = run_interactive_selection("Decisions probe", &instructions, &entries, 0)?;
+    let Some(index) = selection_index else {
+        return Ok(None);
+    };
     Ok(Some(choices[index].2))
 }

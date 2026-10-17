@@ -1,3 +1,8 @@
+//! Legacy crate-internal HTTP session types (`message_delta`, `tool_call_start`, ...).
+//!
+//! Not the ACP stdio `session/update` surface. Do not extend; canonical session
+//! lifecycle lives in `zed/agent/session_state.rs`.
+//!
 //! ACP session types and lifecycle management
 //!
 //! This module implements the session lifecycle as defined by ACP:

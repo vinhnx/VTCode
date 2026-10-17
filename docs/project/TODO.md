@@ -1,82 +1,66 @@
-turn budget is constantly exhausted, CRITICAL REVIEW needed.
+Inspect code changes from the last 24 hours for high-confidence risks involving runtime failures, data loss, authorization bypasses, resource leaks, or cross-platform compatibility, and attach code and commit/diff evidence. Perform read-only analysis using only verifiable repository facts; state when evidence is insufficient, do not speculate, and do not modify code or external state. Also scan for large and monolith files and module and plan deduplication and refactor and extract reusable components.
 
-session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20260927T030348Z_353055-84925 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20260927T023955Z_014451-52652
+---
 
-==
+Audit the codebase for oversized files, monolithic modules, duplicated logic, and tightly coupled components. Identify refactoring opportunities, extract reusable components, and improve modularity and separation of concerns. Prioritize by complexity, duplication, maintainability, and impact. Produce a phased refactoring plan with file references, proposed module boundaries, and risks. Follow KISS/DRY, preserve existing behavior and public APIs, and avoid unnecessary abstractions.
 
-CRITICAL: check when VT Code agent is in build mode, and when it nees to switch to plan mode for planning. a34d5bfcaca291dbab4d2e3fe371f977e298b651 the plan mode stuck and not continuing. check commit a34d5bfcaca291dbab4d2e3fe371f977e298b651.
+---
 
-it should be able to switch from build mode to plan mode seamlessly when planning is required, without getting stuck. and then follow plan mode approval flow to switch back to implementation mode when approve.
-also, ensure that any errors or exceptions during the mode switch are properly handled and logged for debugging purposes.
+Inspect code changes from the last 24 hours for high-confidence risks involving runtime failures, data loss, authorization bypasses, resource leaks, or cross-platform compatibility, and attach code and commit/diff evidence. Perform read-only analysis using only verifiable repository facts; state when evidence is insufficient, do not speculate, and do not modify code or external state. Also scan for large and monolith files and module and plan deduplication and refactor and extract reusable components. Also check context management and proper resource cleanup. Check for wasted, redundant, or inefficient tools calls and suggest optimizations where applicable. Check recent sessions for any anomalies or unusual patterns that could indicate potential issues.
+
+--
+
+gui
+
+--
+
+computer use
+
+---
 
 ```
-Review the last 24 hours of changes for high-confidence runtime, data-loss, auth,
-resource-leak, or cross-platform regressions, backed by concrete repo evidence only,
-with strict read-only analysis. use plan mode
-  I'll enter the read-only Planning workflow for this regression review, then inspect
-  the last 24 hours of repo changes.
-Planning workflow is active. Continue refining the plan; approval controls appear only
-after a validated draft is persisted.
-Planning workflow: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or
-say `keep planning` to revise.
-  ❋ Drafting plan — researching codebase...
-• Start planning
-  └ Description: Read-only review of the last 2…ed by concrete repo evidence.
-  └ Plan name: review-last-24h-regressions
-MCP tools ready (3 registered). Use /mcp tools to inspect the catalog.
-┏Logs╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍┓
-╏[2026-09-27T03:03:48Z] INFO  vtcode::agent::runloop::unified::session_setup::init   ╏
-╏Setting up async MCP client with 1 providers                                        ╏
-╏[2026-09-27T03:03:48Z] INFO                                                         ╏
-╏vtcode::agent::runloop::unified::session_setup::skill_setup Deferring skill         ╏
-╏discovery until an explicit /skills command                                         ╏
-╏workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode                     ╏
-╏[2026-09-27T03:03:48Z] DEBUG vtcode_core::core::agent::state History invariants are ╏
-╏valid                                                                               ╏
-╏[2026-09-27T03:03:48Z] INFO  vtcode_core::tools::registry::tool_catalog_facade tool ╏
-╏catalog cache epoch bumped cache_epoch=1 version=1 reason=cgp_pipeline_enable       ╏
-╏pending_refreshes={}                                                                ╏
-╏[2026-09-27T03:03:48Z] INFO  vtcode_core::tools::registry::cgp_facade CGP pipeline  ╏
-┗╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍┛
- Continue… Tab switch agent • @files /commands • Enter run/steer • Ctrl+Enter queue
-Copied to clipboard                                                           10:15:1
+Use [@OpenAI Developers](plugin://plugin_connector_1p_32dba5a7095c8191adca04ee30276304) and the official prompt-caching guide at [https://developers.openai.com/api/docs/guides/prompt-caching](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+Analyze the OpenAI API usage in my selected repository and suggest how to optimize prompt caching. If no repository is selected, ask me to choose one.
+
+Inspect request construction, reusable prompt prefixes, conversation history, tool definitions, cache keys, caching modes, retention, and any available usage measurements. Apply only guidance supported by the models in use.
+
+Give prioritized recommendations with file references, tradeoffs, and a plan to measure cache reads, writes, and input cost. Distinguish measured results from estimates. Do not change files or run paid API requests until I approve.
 ```
 
-session:
+---
 
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20260927T030348Z_353055-84925 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20260927T023955Z_014451-52652
+```
+Review the prompts, model choices, and model settings in my selected repository. Suggest how to improve prompt quality and balance cost, intelligence, and latency for each task. If no repository is selected, ask me to choose one.
 
-===
+Apply current prompting best practices for the models in use. Suggest concrete prompt rewrites that clarify instructions, provide relevant context and examples, remove ambiguity, and define the desired output while preserving intended behavior.
 
-for command human in the loop modal pop up: check commit and apply for full command display instead of condensed for user review. check recent commits for context. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-09-27 at 10.26.59.png'
+Evaluate model choice and supported settings such as reasoning effort, output length, and verbosity. Recommend where a faster or less expensive configuration is sufficient and where stronger reasoning is worth the extra cost and latency.
 
-===
+Give prioritized recommendations with file references, before-and-after prompt examples, and tradeoffs. Propose a small evaluation using representative tasks to compare output quality, token cost, and response latency against the current setup. Distinguish measured results from estimates. Do not change files or run paid API requests until I approve.
 
-check and fix "Execution summary: blocked; changed files: README.md; verification: see the final
-response and task tracker; blockers: pending checklist items: Verify every Contents
-TOC anchor in `README.md` resolves to an actual heading slug (e.g. `#webmcp-browser-
-bridge-opt-in` vs `### WebMCP browser bridge (opt-in)`) and fix any mismatch, Fix
-wrapping and trailing-whitespace inconsistencies in edited paragraphs of `README.md`
-so lines stay within the file's existing ~100-column wrap style, Re-read the final
-diff of `README.md` for accidental content loss, especially around the contributors `<
-details>` block and the Product Hunt badge markup."
+Use [@OpenAI Developers](plugin://plugin_connector_1p_32dba5a7095c8191adca04ee30276304) and $openai-docs for current OpenAI API guidance and API key creation only if needed.
+```
 
-session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20260927T032144Z_505933-08881
+---
 
-===
+```
+$openai-docs make a plan to migrate this project to the latest model family. suggest updates to the prompt to make it stronger for this latest model and suggest which model to migrate to based on my current model.
+```
 
-refine and rework file picker functionality and UI. Ensure it handles various file types correctly and provides a smooth user experience. it should andle both files and folders hierarchically visually and respect files ignored by the system.
+---
 
-===
+````
+use Codex `Plugin Creator`, Help me build a plugin. Start by asking what it should do, then help me package it as a ZIP for upload to OpenAI Platform.
+```
+````
 
-add numbering keyboard shortcut for shared/common human in the loop modal to quickly select options. for example, pressing "1" selects the first option, "2" selects the second, and so on. ensure it works consistently across different terminals and respects the modal's current focus state. and provide visual feedback for the selected option. also reference the image attached for design and structure guidance.
+## Benchmarking TODO
 
-ref: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-09-27 at 16.25.34.png'
+- [ ] Run a real VT Code evaluation on SWE-bench Lite. Follow the
+      [evaluation plan](../benchmarks/PLAN-VTCODE-SWEBENCH-LITE.md), pilot first, and submit reproducible
+      results if eligible.
 
-===
+---
 
-add /config option to let user copy on click on TUI or copy manually from keyboard shortcuts.
-
-===
-
-implement /config options searchs functionality to allow users to quickly find and access specific configuration options within the TUI. Ensure the search is responsive and provides relevant results as the user types.
+https://developers.openai.com/api/docs/guides/decisions-voice

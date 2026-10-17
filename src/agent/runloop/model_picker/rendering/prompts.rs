@@ -8,9 +8,22 @@ use vtcode_core::ui::{InlineListItem, InlineListSelection, OpenAIServiceTierChoi
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
-    SelectionDetail, reasoning_level_description, reasoning_level_label, service_tier_label,
+    SelectionDetail, available_service_tiers, reasoning_level_description, reasoning_level_label,
+    service_tier_choice_meta, service_tier_label,
 };
-use super::{CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_THREE_TITLE, STEP_TWO_TITLE};
+use super::{KEEP_CURRENT_DESCRIPTION, STEP_FOUR_TITLE, STEP_THREE_TITLE, STEP_TWO_TITLE};
+use vtcode_commons::modal_hints::MODEL_PICKER_FOLLOW_UP_HINT;
+
+pub(in crate::agent::runloop::model_picker) fn back_to_model_list_row() -> InlineListItem {
+    vtcode_ui::design::list::action(
+        "← Back to model list",
+        "Return to step 1 without cancelling the picker.",
+        None,
+        vtcode_commons::ui_protocol::InlineTone::Neutral,
+        Some(InlineListSelection::ConfigAction(super::PICKER_BACK_ACTION.to_string())),
+    )
+    .with_search_value("back model list")
+}
 
 pub(crate) fn render_reasoning_inline(
     renderer: &mut AnsiRenderer,
@@ -18,56 +31,46 @@ pub(crate) fn render_reasoning_inline(
     current: ReasoningEffortLevel,
 ) -> Result<()> {
     let mut items = Vec::new();
-    items.push(InlineListItem {
-        title: format!("Keep current ({})", reasoning_level_label(current)),
-        subtitle: Some(KEEP_CURRENT_DESCRIPTION.to_string()),
-        badge: Some(CURRENT_BADGE.to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(current))),
-        search_value: None,
-    });
+    items.push(back_to_model_list_row());
+    items.push(vtcode_ui::design::list::current_choice(
+        format!("Keep current ({})", reasoning_level_label(current)),
+        Some(KEEP_CURRENT_DESCRIPTION.to_string()),
+        Some(InlineListSelection::Reasoning(reasoning_to_selection_string(current))),
+    ));
 
     let levels = selection.reasoning_effort_levels();
     if levels.contains(&ReasoningEffortLevel::None) {
-        items.push(InlineListItem {
-            title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
-            subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
-            badge: Some("GPT-5.x".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(ReasoningEffortLevel::None))),
-            search_value: None,
-        });
+        items.push(vtcode_ui::design::list::choice(
+            reasoning_level_label(ReasoningEffortLevel::None),
+            Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
+            Some(InlineListSelection::Reasoning(reasoning_to_selection_string(ReasoningEffortLevel::None))),
+        ));
     }
 
     for level in levels.into_iter().filter(|level| *level != ReasoningEffortLevel::None) {
-        items.push(InlineListItem {
-            title: reasoning_level_label(level).to_string(),
-            subtitle: Some(reasoning_level_description(level).to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::Reasoning(reasoning_to_selection_string(level))),
-            search_value: None,
-        });
+        items.push(vtcode_ui::design::list::choice(
+            reasoning_level_label(level),
+            Some(reasoning_level_description(level).to_string()),
+            Some(InlineListSelection::Reasoning(reasoning_to_selection_string(level))),
+        ));
     }
 
     if let Some(alternative) = selection.reasoning_off_model.as_ref() {
-        items.push(InlineListItem {
-            title: format!("Use {} (reasoning off)", alternative.display_name()),
-            subtitle: Some(format!(
+        items.push(vtcode_ui::design::list::choice(
+            format!("Use {} (reasoning off)", alternative.display_name()),
+            Some(format!(
                 "Switch to {} ({}) without enabling structured reasoning.",
                 alternative.display_name(),
                 alternative.as_str()
             )),
-            badge: Some(REASONING_OFF_BADGE.to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::DisableReasoning),
-            search_value: None,
-        });
+            Some(InlineListSelection::DisableReasoning),
+        ));
     }
-    let mut lines = vec![format!(
-        "Step 2 – select reasoning effort for {}.",
-        selection.model_display
-    )];
+    let mut lines = vec![
+        "Step 2 · Reasoning".to_string(),
+        format!("Selected: {}", selection.model_display),
+        format!("Current reasoning: {}", reasoning_level_label(current)),
+    ];
     if let Some(alternative) = selection.reasoning_off_model.as_ref() {
         lines.push(format!(
             "Select \"Use {} (reasoning off)\" to switch to {}.",
@@ -75,12 +78,13 @@ pub(crate) fn render_reasoning_inline(
             alternative.as_str()
         ));
     }
-    renderer.show_list_modal(
+    renderer.show_list_modal_with_footer(
         STEP_TWO_TITLE,
         lines,
         items,
         Some(InlineListSelection::Reasoning(reasoning_to_selection_string(current))),
         None,
+        Some(MODEL_PICKER_FOLLOW_UP_HINT.to_string()),
     );
     Ok(())
 }
@@ -199,58 +203,42 @@ pub(crate) fn render_service_tier_inline(
     selection: &SelectionDetail,
     current: Option<OpenAIServiceTier>,
 ) -> Result<()> {
-    let items = vec![
-        InlineListItem {
-            title: format!("Keep current ({})", service_tier_label(current)),
-            subtitle: Some("Retain the existing service tier configuration.".to_string()),
-            badge: Some(CURRENT_BADGE.to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(match current {
-                Some(OpenAIServiceTier::Flex) => OpenAIServiceTierChoice::Flex,
-                Some(OpenAIServiceTier::Priority) => OpenAIServiceTierChoice::Priority,
-                None => OpenAIServiceTierChoice::ProjectDefault,
-            })),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Project default".to_string(),
-            subtitle: Some("Do not send service_tier; inherit the OpenAI Project setting.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::ProjectDefault)),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Flex".to_string(),
-            subtitle: Some("Send service_tier=flex for lower-cost, lower-priority processing.".to_string()),
-            badge: Some("OpenAI".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::Flex)),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Priority".to_string(),
-            subtitle: Some("Send service_tier=priority for lower and more consistent latency.".to_string()),
-            badge: Some("OpenAI".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::OpenAIServiceTier(OpenAIServiceTierChoice::Priority)),
-            search_value: None,
-        },
-    ];
-
-    renderer.show_list_modal(
-        STEP_THREE_TITLE,
-        vec![
-            format!("Select a service tier for {}.", selection.model_display),
-            "Applies only to native OpenAI models that support OpenAI service tiers.".to_string(),
-        ],
-        items,
-        Some(InlineListSelection::OpenAIServiceTier(match current {
+    fn to_choice(tier: Option<OpenAIServiceTier>) -> OpenAIServiceTierChoice {
+        match tier {
             Some(OpenAIServiceTier::Flex) => OpenAIServiceTierChoice::Flex,
             Some(OpenAIServiceTier::Priority) => OpenAIServiceTierChoice::Priority,
+            Some(OpenAIServiceTier::Ultrafast) => OpenAIServiceTierChoice::Ultrafast,
             None => OpenAIServiceTierChoice::ProjectDefault,
-        })),
+        }
+    }
+
+    let mut items = vec![
+        back_to_model_list_row(),
+        vtcode_ui::design::list::current_choice(
+            format!("Keep current ({})", service_tier_label(current)),
+            Some("Retain the existing service tier configuration.".to_string()),
+            Some(InlineListSelection::OpenAIServiceTier(to_choice(current))),
+        ),
+    ];
+    for tier in available_service_tiers(selection) {
+        let (title, subtitle) = service_tier_choice_meta(tier);
+        items.push(vtcode_ui::design::list::choice(
+            title,
+            Some(subtitle.to_string()),
+            Some(InlineListSelection::OpenAIServiceTier(to_choice(tier))),
+        ));
+    }
+
+    renderer.show_list_modal_with_footer(
+        STEP_THREE_TITLE,
+        vec![
+            format!("Selected: {}", selection.model_display),
+            "Applies only to OpenAI-compatible models that support service tiers.".to_string(),
+        ],
+        items,
+        Some(InlineListSelection::OpenAIServiceTier(to_choice(current))),
         None,
+        Some(MODEL_PICKER_FOLLOW_UP_HINT.to_string()),
     );
     Ok(())
 }
@@ -260,16 +248,32 @@ pub(crate) fn prompt_service_tier_plain(
     selection: &SelectionDetail,
     current: Option<OpenAIServiceTier>,
 ) -> Result<()> {
+    let mut options: Vec<&str> = available_service_tiers(selection)
+        .into_iter()
+        .map(|tier| match tier {
+            None => "default",
+            Some(OpenAIServiceTier::Flex) => "flex",
+            Some(OpenAIServiceTier::Priority) => "priority",
+            Some(OpenAIServiceTier::Ultrafast) => "ultrafast",
+        })
+        .collect();
+    if options.is_empty() {
+        options.push("default");
+    }
     renderer.line(
         MessageStyle::Info,
         &format!(
-            "Service tier – choose 'flex', 'priority', or 'default' for {}. Type 'skip' to keep {}.",
+            "Service tier – choose {} for {}. Type 'skip' to keep {}.",
+            options
+                .iter()
+                .map(|option| format!("'{option}'"))
+                .collect::<Vec<_>>()
+                .join(", "),
             selection.model_display,
             service_tier_label(current)
         ),
     )?;
-    renderer
-        .line(MessageStyle::Info, "This applies only to native OpenAI models that support OpenAI service tiers.")?;
+    renderer.line(MessageStyle::Info, "This applies only to OpenAI-compatible models that support service tiers.")?;
     Ok(())
 }
 
@@ -278,18 +282,17 @@ pub(crate) fn show_secure_api_modal(
     selection: &SelectionDetail,
     _workspace: Option<&Path>,
 ) {
-    let storage_line = "Saved to secure storage (OS keyring or encrypted file).".to_string();
-    let mask_preview = "●●●●●●";
     let lines = vec![
+        "## Provider".to_string(),
         format!("Bring your own key (BYOK) for {}.", selection.provider_label),
         format!("Expected env: {}", selection.env_key),
-        format!("Secure display hint: {}", mask_preview),
-        storage_line,
-        "Key will NOT be stored in vtcode.toml.".to_string(),
+        "## Storage".to_string(),
+        "Saved to secure storage (OS keyring or encrypted file).".to_string(),
+        "**Key will NOT be stored in vtcode.toml.**".to_string(),
         "Paste the key — it will be auto-detected and saved securely.".to_string(),
     ];
     let prompt_label = format!("{} API key ({})", selection.provider_label, selection.env_key);
-    renderer.show_secure_prompt_modal("Secure API key setup", lines, prompt_label);
+    renderer.show_secure_prompt_modal("Secure API key • Final step", lines, prompt_label);
 }
 
 pub(crate) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<()> {
@@ -308,24 +311,22 @@ pub(crate) fn prompt_custom_model_entry(renderer: &mut AnsiRenderer) -> Result<(
 
 pub(crate) fn render_mimo_auth_method_inline(renderer: &mut AnsiRenderer) -> Result<()> {
     let items = vec![
-        InlineListItem {
-            title: "Pay-as-you-go".to_string(),
-            subtitle: Some("Standard API access. Uses sk- key with api-key header.".to_string()),
-            badge: Some("Default".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("mimo-auth:pay-as-you-go".to_string())),
-            search_value: Some("mimo payg pay-as-you-go sk api key".to_string()),
-        },
-        InlineListItem {
-            title: "Token Plan".to_string(),
-            subtitle: Some(
-                "Subscription-based access. Uses tp- key with Bearer token. Includes more models.".to_string(),
-            ),
-            badge: Some("Subscription".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("mimo-auth:token-plan".to_string())),
-            search_value: Some("mimo token plan subscription tp bearer".to_string()),
-        },
+        vtcode_ui::design::list::action(
+            "Pay-as-you-go",
+            "Standard API access. Uses sk- key with api-key header.",
+            Some("Default".to_string()),
+            vtcode_commons::ui_protocol::InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction("mimo-auth:pay-as-you-go".to_string())),
+        )
+        .with_search_value("mimo payg pay-as-you-go sk api key"),
+        vtcode_ui::design::list::action(
+            "Token Plan",
+            "Subscription-based access. Uses tp- key with Bearer token. Includes more models.",
+            Some("Subscription".to_string()),
+            vtcode_commons::ui_protocol::InlineTone::Accent,
+            Some(InlineListSelection::ConfigAction("mimo-auth:token-plan".to_string())),
+        )
+        .with_search_value("mimo token plan subscription tp bearer"),
     ];
 
     renderer.show_list_modal(
@@ -352,6 +353,59 @@ pub(crate) fn prompt_mimo_auth_method_plain(renderer: &mut AnsiRenderer) -> Resu
     renderer.line(
         MessageStyle::Info,
         "Note: Token Plan defaults to Europe cluster (token-plan-ams). Set MIMO_TOKEN_PLAN_BASE_URL to use China (token-plan-cn) or Singapore (token-plan-sgp).",
+    )?;
+    Ok(())
+}
+
+pub(crate) const DECISIONS_PROBE_ENABLE_ACTION: &str = "decisions-probe:enable";
+pub(crate) const DECISIONS_PROBE_DISABLE_ACTION: &str = "decisions-probe:disable";
+pub(crate) const DECISIONS_PROBE_SKIP_ACTION: &str = "decisions-probe:skip";
+
+pub(crate) fn render_decisions_probe_inline(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> Result<()> {
+    let items = vec![
+        back_to_model_list_row(),
+        vtcode_ui::design::list::current_choice(
+            "Keep current (disabled)",
+            Some("Leave permissions.auto.use_decisions_probe unchanged.".to_string()),
+            Some(InlineListSelection::ConfigAction(DECISIONS_PROBE_SKIP_ACTION.to_string())),
+        ),
+        vtcode_ui::design::list::choice(
+            "Enable Decisions probe",
+            Some("Experimental OpenAI Decisions classification for suspicious tool output. Billed to your OpenAI API account.".to_string()),
+            Some(InlineListSelection::ConfigAction(DECISIONS_PROBE_ENABLE_ACTION.to_string())),
+        ),
+        vtcode_ui::design::list::choice(
+            "Keep disabled",
+            Some("Continue with the generation probe only.".to_string()),
+            Some(InlineListSelection::ConfigAction(DECISIONS_PROBE_DISABLE_ACTION.to_string())),
+        ),
+    ];
+    renderer.show_list_modal_with_footer(
+        STEP_FOUR_TITLE,
+        vec![
+            format!("Selected: {}", selection.model_display),
+            "Experimental, default-off. OpenAI API-key at the standard endpoint only.".to_string(),
+            "See docs/guides/decisions-probe.md for costs and limits.".to_string(),
+        ],
+        items,
+        Some(InlineListSelection::ConfigAction(DECISIONS_PROBE_SKIP_ACTION.to_string())),
+        None,
+        Some(MODEL_PICKER_FOLLOW_UP_HINT.to_string()),
+    );
+    Ok(())
+}
+
+pub(crate) fn prompt_decisions_probe_plain(renderer: &mut AnsiRenderer, selection: &SelectionDetail) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Decisions probe for {} ({}): type 'yes' to enable, 'no' to keep disabled, or 'skip' to leave unchanged.",
+            selection.model_display, selection.model_id
+        ),
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "Experimental, default-off. OpenAI API-key at the standard endpoint only; billed to your OpenAI API account. See docs/guides/decisions-probe.md.",
     )?;
     Ok(())
 }

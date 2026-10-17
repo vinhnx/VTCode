@@ -1,6 +1,8 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::app::InlineListSelection;
 
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
@@ -155,78 +157,78 @@ async fn run_interactive_mcp_manager(ctx: &mut SlashCommandContext<'_>) -> Resul
 
 fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
     let items = vec![
-        InlineListItem {
-            title: "Status overview".to_string(),
-            subtitle: Some("Show MCP runtime status and health".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}status"))),
-            search_value: Some("status overview health".to_string()),
-        },
-        InlineListItem {
-            title: "List providers".to_string(),
-            subtitle: Some("Show configured MCP providers".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}providers"))),
-            search_value: Some("providers list".to_string()),
-        },
-        InlineListItem {
-            title: "List tools".to_string(),
-            subtitle: Some("Show tools exposed by active providers".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}tools"))),
-            search_value: Some("tools list".to_string()),
-        },
-        InlineListItem {
-            title: "Refresh tools".to_string(),
-            subtitle: Some("Reload tool metadata from providers".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}refresh"))),
-            search_value: Some("refresh reload".to_string()),
-        },
-        InlineListItem {
-            title: "Show config".to_string(),
-            subtitle: Some("Display effective MCP configuration".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}config"))),
-            search_value: Some("config show".to_string()),
-        },
-        InlineListItem {
-            title: "Edit config guidance".to_string(),
-            subtitle: Some("Show how to edit MCP config files".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}edit"))),
-            search_value: Some("edit config".to_string()),
-        },
-        InlineListItem {
-            title: "Repair runtime".to_string(),
-            subtitle: Some("Restart providers and repair MCP runtime".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}repair"))),
-            search_value: Some("repair fix runtime".to_string()),
-        },
-        InlineListItem {
-            title: "Diagnose".to_string(),
-            subtitle: Some("Run deeper diagnostics for MCP issues".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}diagnose"))),
-            search_value: Some("diagnose diagnostics".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close interactive MCP manager".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(MCP_ACTION_BACK.to_string())),
-            search_value: Some("back close".to_string()),
-        },
+        ui_list::action(
+            "Status overview",
+            "Show MCP runtime status and health".to_string(),
+            Some("Recommended".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}status"))),
+        )
+        .with_search_value("status overview health".to_string()),
+        ui_list::action(
+            "List providers",
+            "Show configured MCP providers".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}providers"))),
+        )
+        .with_search_value("providers list".to_string()),
+        ui_list::action(
+            "List tools",
+            "Show tools exposed by active providers".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}tools"))),
+        )
+        .with_search_value("tools list".to_string()),
+        ui_list::action(
+            "Refresh tools",
+            "Reload tool metadata from providers".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}refresh"))),
+        )
+        .with_search_value("refresh reload".to_string()),
+        ui_list::action(
+            "Show config",
+            "Display effective MCP configuration".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}config"))),
+        )
+        .with_search_value("config show".to_string()),
+        ui_list::action(
+            "Edit config guidance",
+            "Show how to edit MCP config files".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}edit"))),
+        )
+        .with_search_value("edit config".to_string()),
+        ui_list::action(
+            "Repair runtime",
+            "Restart providers and repair MCP runtime".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}repair"))),
+        )
+        .with_search_value("repair fix runtime".to_string()),
+        ui_list::action(
+            "Diagnose",
+            "Run deeper diagnostics for MCP issues".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(format!("{MCP_ACTION_PREFIX}diagnose"))),
+        )
+        .with_search_value("diagnose diagnostics".to_string()),
+        ui_list::action(
+            "Back",
+            "Close interactive MCP manager".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(MCP_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back close".to_string()),
     ];
 
     ctx.renderer.show_list_modal(

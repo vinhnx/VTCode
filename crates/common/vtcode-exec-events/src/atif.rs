@@ -313,6 +313,7 @@ pub struct FinalMetrics {
 /// (deterministic timestamps for tests). Call [`finish`](Self::finish) to
 /// produce the final trajectory.
 pub struct AtifTrajectoryBuilder {
+    completed_at: Option<String>,
     agent: AtifAgent,
     session_id: Option<String>,
     steps: Vec<Step>,
@@ -342,6 +343,7 @@ impl AtifTrajectoryBuilder {
     pub fn new(agent: AtifAgent) -> Self {
         Self {
             agent,
+            completed_at: None,
             session_id: None,
             steps: Vec::new(),
             next_step_id: 1,
@@ -367,6 +369,7 @@ impl AtifTrajectoryBuilder {
 
     /// Process a thread event with an explicit timestamp (for deterministic tests).
     pub fn process_event_at(&mut self, event: &ThreadEvent, ts: DateTime<Utc>) {
+        let first_step = self.steps.len();
         let ts_str = ts.to_rfc3339();
         match event {
             ThreadEvent::ThreadStarted(e) => {
@@ -375,6 +378,7 @@ impl AtifTrajectoryBuilder {
                 }
             }
             ThreadEvent::ThreadCompleted(e) => {
+                self.completed_at = e.completed_at.clone();
                 if self.session_id.is_none() {
                     self.session_id = Some(e.session_id.clone());
                 }
@@ -476,7 +480,16 @@ impl AtifTrajectoryBuilder {
                 self.push_step(step);
             }
             // Skip streaming/lifecycle events that don't map to ATIF steps
-            ThreadEvent::TurnStarted(_)
+            ThreadEvent::TurnStarted(e) => {
+                if let Some(context) = &e.context {
+                    let mut step = Step::agent(self.next_step_id, context.goal.as_deref().unwrap_or("Turn started"));
+                    step.source = StepSource::User;
+                    step.timestamp = Some(context.timestamp.clone());
+                    step.extra = Some(serde_json::json!({"execution_context": context}));
+                    self.push_step(step);
+                }
+            }
+            ThreadEvent::MatrixUpdated(_)
             | ThreadEvent::ItemStarted(_)
             | ThreadEvent::ItemUpdated(_)
             | ThreadEvent::PlanDelta(_)
@@ -487,10 +500,49 @@ impl AtifTrajectoryBuilder {
             | ThreadEvent::Interjected(_)
             | ThreadEvent::Unknown => {}
         }
+        for step in self.steps.iter_mut().skip(first_step) {
+            let context = match event {
+                ThreadEvent::ItemCompleted(e) => e.item.context.as_deref(),
+                _ => None,
+            };
+            if let Some(context) = context {
+                step.timestamp = Some(context.timestamp.clone());
+                let extra = step.extra.get_or_insert_with(|| serde_json::json!({}));
+                if let Some(extra) = extra.as_object_mut() {
+                    let _ = extra.insert("item_context".into(), serde_json::json!(context));
+                }
+            }
+            match event {
+                ThreadEvent::TurnCompleted(e) => {
+                    if let Some(ts) = &e.completed_at {
+                        step.timestamp = Some(ts.to_string());
+                    }
+                }
+                ThreadEvent::TurnFailed(e) => {
+                    if let Some(ts) = &e.completed_at {
+                        step.timestamp = Some(ts.to_string());
+                    }
+                }
+                ThreadEvent::TurnBlocked(e) => {
+                    if let Some(ts) = &e.completed_at {
+                        step.timestamp = Some(ts.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     fn process_item_completed(&mut self, item_id: &str, details: &ThreadItemDetails, ts: &str) {
         match details {
+            ThreadItemDetails::Decision(d) => {
+                let mut step = Step::agent(self.next_step_id, &d.summary);
+                step.timestamp = Some(ts.to_owned());
+                step.extra = Some(
+                    serde_json::json!({"vtcode_item_type": "decision", "public_rationale": d.rationale, "alternatives": d.alternatives, "evidence_ids": d.evidence_ids}),
+                );
+                self.push_step(step);
+            }
             ThreadItemDetails::AgentMessage(msg) => {
                 let mut step = Step::agent(self.next_step_id, &msg.text);
                 step.timestamp = Some(ts.to_string());
@@ -686,7 +738,7 @@ impl AtifTrajectoryBuilder {
             steps: self.steps,
             notes: None,
             final_metrics: Some(final_metrics),
-            extra: None,
+            extra: self.completed_at.map(|timestamp| serde_json::json!({"completed_at":timestamp})),
         }
     }
 
@@ -713,6 +765,59 @@ mod tests {
 
     fn fixed_ts() -> DateTime<Utc> {
         "2025-01-15T10:30:00Z".parse().unwrap()
+    }
+
+    #[test]
+    fn terminal_timestamps_survive_export_without_synthetic_steps() {
+        let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
+        let timestamp = "2026-10-03T01:02:03Z";
+        let blocked = serde_json::from_value(
+            serde_json::json!({"type":"turn.blocked", "message":"Blocked", "completed_at":timestamp}),
+        )
+        .unwrap();
+        builder.process_event_at(&blocked, fixed_ts());
+        let completed = serde_json::from_value(serde_json::json!({"type":"thread.completed", "completed_at":timestamp, "thread_id":"thread", "session_id":"session", "subtype":"success", "outcome_code":"completed", "usage":Usage::default(), "num_turns":1})).unwrap();
+        builder.process_event_at(&completed, fixed_ts());
+        let trajectory = builder.finish(None);
+        assert_eq!(trajectory.steps.len(), 1);
+        assert_eq!(trajectory.steps[0].timestamp.as_deref(), Some(timestamp));
+        assert_eq!(trajectory.extra.as_ref().unwrap()["completed_at"], timestamp);
+    }
+
+    #[test]
+    fn explanation_metadata_and_public_rationale_preserve_recorded_time() {
+        let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
+        let context = crate::ItemContext {
+            task_id: "task-1".into(),
+            turn_id: "turn-1".into(),
+            actor_id: "root".into(),
+            parent_actor_id: None,
+            timestamp: "2026-10-03T01:02:03Z".into(),
+            activity: None,
+        };
+        builder.process_event_at(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "decision-1".into(),
+                    context: Some(Box::new(context.clone())),
+                    details: ThreadItemDetails::Decision(Box::new(crate::DecisionItem {
+                        summary: "Reuse parser".into(),
+                        rationale: "Preserve checks".into(),
+                        alternatives: vec!["Replace parser".into()],
+                        evidence_ids: vec!["read-1".into()],
+                    })),
+                },
+            }),
+            fixed_ts(),
+        );
+        let trajectory = builder.finish(None);
+        assert_eq!(trajectory.steps.len(), 1);
+        let step = &trajectory.steps[0];
+        assert_eq!(step.timestamp.as_deref(), Some(context.timestamp.as_str()));
+        let extra = step.extra.as_ref().unwrap();
+        assert_eq!(extra["public_rationale"], "Preserve checks");
+        assert_eq!(extra["item_context"]["task_id"], "task-1");
+        assert_eq!(extra["evidence_ids"][0], "read-1");
     }
 
     #[test]
@@ -748,6 +853,7 @@ mod tests {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
         let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "msg-1".to_string(),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Hello, world!".to_string() }),
             },
@@ -767,6 +873,7 @@ mod tests {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
         let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "background-completion:task-1:exec-1".to_string(),
                 details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                     event: HarnessEventKind::BackgroundSubprocessCompleted,
@@ -811,6 +918,7 @@ mod tests {
         // Tool invocation
         let inv_event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "tool_1".to_string(),
                 details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
                     tool_name: "read_file".to_string(),
@@ -826,6 +934,7 @@ mod tests {
         // Tool output
         let out_event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "tool_1:output".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
                     call_id: "tool_1".to_string(),
@@ -859,6 +968,7 @@ mod tests {
     fn builder_turn_completed_accumulates_metrics() {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
         let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage {
                 input_tokens: 500,
                 cached_input_tokens: 100,
@@ -880,6 +990,7 @@ mod tests {
     fn builder_turn_completed_preserves_in_progress_sessions_for_resume() {
         let mut builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
         let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: vec!["run-7".to_string()],
         });
@@ -893,6 +1004,7 @@ mod tests {
         // Empty ids stay omitted so steady-state export is unchanged.
         let mut empty_builder = AtifTrajectoryBuilder::new(AtifAgent::vtcode());
         let empty = ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
             usage: Usage::default(),
             in_progress_exec_sessions: Vec::new(),
         });

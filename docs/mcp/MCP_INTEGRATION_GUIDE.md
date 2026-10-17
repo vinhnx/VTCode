@@ -1,12 +1,16 @@
 # MCP Integration Guide for VT Code
 
-This document outlines how VT Code implements Model Context Protocol (MCP) based on Claude's official MCP specifications and best practices.
+This document outlines how VT Code implements Model Context Protocol (MCP) based on Claude's official MCP specifications
+and best practices.
 
-> **Note:** This file is a high-level architecture reference. For accurate, current configuration and behavior, use [`docs/guides/mcp-integration.md`](../guides/mcp-integration.md).
+> **Note:** This file is a high-level architecture reference. For accurate, current configuration and behavior, use
+> [`docs/guides/mcp-integration.md`](../guides/mcp-integration.md).
 
 ## Overview
 
-VT Code integrates MCP to connect with external tools, databases, and APIs through the `crates/codegen/vtcode-core/src/mcp/` module. MCP provides a standardized interface for AI agents to access tools beyond their native capabilities.
+VT Code integrates MCP to connect with external tools, databases, and APIs through the
+`crates/codegen/vtcode-core/src/mcp/` module. MCP provides a standardized interface for AI agents to access tools beyond
+their native capabilities.
 
 ## Architecture
 
@@ -14,7 +18,7 @@ VT Code integrates MCP to connect with external tools, databases, and APIs throu
 
 **Location**: `crates/codegen/vtcode-core/src/mcp/`
 
-```
+```text
 mcp/
 ├── mod.rs                    # Main MCP client and provider management
 ├── cli.rs                    # MCP CLI commands and user interaction
@@ -30,16 +34,19 @@ mcp/
 ### Key Abstractions
 
 **McpClient** (`mod.rs:176`)
+
 - High-level client managing multiple MCP providers
 - Enforces VT Code policies (tool allowlists, security validation)
 - Handles provider lifecycle (initialize, shutdown, tool execution)
 
-**McpProvider**
+#### McpProvider
+
 - Individual provider connection
 - Handles MCP handshake and protocol communication
 - Manages tool, resource, and prompt discovery
 
 **McpToolExecutor** (trait, `mod.rs:167`)
+
 - Interface for the tool registry to execute MCP tools
 - Enables integration with VT Code's native tool system
 
@@ -48,6 +55,7 @@ mcp/
 ### Configuration Files
 
 **Runtime Configuration (`vtcode.toml`)**:
+
 ```toml
 # vtcode.toml
 [mcp]
@@ -66,20 +74,20 @@ max_concurrent_requests = 1
 ### Configuration Precedence
 
 1. **Environment Variables** (highest priority)
-   - `MCP_TIMEOUT`: Startup timeout in milliseconds (default: 10000)
-   - `MAX_MCP_OUTPUT_TOKENS`: Maximum output token limit (default: 25000)
-   - API keys and authentication tokens
-   - Custom timezone via `VT_LOCAL_TIMEZONE`
+    - `MCP_TIMEOUT`: Startup timeout in milliseconds (default: 10000)
+    - `MAX_MCP_OUTPUT_TOKENS`: Maximum output token limit (default: 25000)
+    - API keys and authentication tokens
+    - Custom timezone via `VT_LOCAL_TIMEZONE`
 
 2. **vtcode.toml** (runtime configuration)
-   - MCP enablement
-   - Timeout settings
-   - Provider definitions
-   - Security policies
+    - MCP enablement
+    - Timeout settings
+    - Provider definitions
+    - Security policies
 
 3. **Code Constants** (`crates/codegen/vtcode-core/src/config/constants.rs`)
-   - Default values
-   - Built-in limits
+    - Default values
+    - Built-in limits
 
 ## Transport Types
 
@@ -90,8 +98,8 @@ VT Code supports three transport mechanisms for MCP servers:
 ```toml
 [[mcp.providers]]
 name = "example"
-transport = { 
-  type = "stdio", 
+transport = {
+  type = "stdio",
   command = "npx",
   args = ["mcp-server-example"],
   working_directory = "/path/to/dir"
@@ -99,6 +107,7 @@ transport = {
 ```
 
 **Implementation**: `rmcp_transport.rs:create_stdio_transport()`
+
 - Direct process communication via stdin/stdout
 - Best for local tools and development
 
@@ -107,13 +116,14 @@ transport = {
 ```toml
 [[mcp.providers]]
 name = "remote-api"
-transport = { 
+transport = {
   type = "http",
   url = "https://mcp.example.com/api"
 }
 ```
 
 **Implementation**: `rmcp_transport.rs:create_http_transport()`
+
 - Requires `experimental_use_rmcp_client = true`
 - Remote server integration
 - OAuth CLI login/logout flows are not implemented in VT Code yet
@@ -127,11 +137,13 @@ Used internally for managed stdio connections with enhanced lifecycle control.
 ### Validation Framework
 
 **Argument Validation** (`mod.rs:312`):
+
 ```rust
 pub fn validate_tool_arguments(&self, _tool_name: &str, args: &Value) -> Result<()>
 ```
 
 Checks:
+
 - **Size Limits**: `max_argument_size` enforcement
 - **Path Traversal Protection**: Blocks `../` and `..\\` patterns
 - **Schema Validation**: Enforces JSON schema compliance
@@ -139,6 +151,7 @@ Checks:
 ### Allow Lists
 
 **Configuration**:
+
 ```toml
 [mcp.allowlist]
 tools = ["allowed_tool_1", "allowed_tool_2"]
@@ -147,6 +160,7 @@ prompts = ["prompt_name"]
 ```
 
 **Enforcement**:
+
 - Tools not in allowlist are rejected
 - Allowlists can use glob patterns
 - Per-provider granularity supported
@@ -154,10 +168,12 @@ prompts = ["prompt_name"]
 ### Access Control
 
 **Token/API Key Management**:
+
 - Use `api_key_env` or `env_http_headers` to source credentials from environment variables
 - Avoid embedding secrets directly in config files
 
 **API Key Handling**:
+
 - Read from environment variables (recommended)
 - Never hardcoded
 - Per-provider configuration
@@ -166,19 +182,22 @@ prompts = ["prompt_name"]
 
 ### Discovery Process
 
-**Phase 1: List Tools**
+#### Phase 1: List Tools
+
 ```rust
 // Called during provider initialization
 pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>>
 ```
 
 Returns:
+
 - Tool name
 - Description
 - Input schema (JSON Schema)
 - Provider source
 
-**Phase 2: Cache Tools**
+#### Phase 2: Cache Tools
+
 ```rust
 pub async fn refresh_tools(&self, allowlist: &McpAllowListConfig, timeout: Duration) -> Result<()>
 ```
@@ -186,16 +205,19 @@ pub async fn refresh_tools(&self, allowlist: &McpAllowListConfig, timeout: Durat
 - Applies allowlist filtering
 - Caches tool metadata
 - Validates input schemas
+- Sorts tools by name, resources by URI, and prompts by name per provider, and aggregates providers in name order, so the catalog (and the LLM prompt-cache prefix) is stable regardless of server ordering; when providers expose the same tool name, the first provider by name owns it
 
 ### Tool Execution
 
 **Execution Flow** (`mod.rs:344`):
+
 1. **Validation**: Arguments checked against security policies
 2. **Resolution**: Determine which provider owns the tool
 3. **Execution**: Call tool on the appropriate provider
 4. **Formatting**: Standard result format applied
 
 **Timeout Handling**:
+
 ```rust
 async fn run_with_timeout<F, T>(
     fut: F,
@@ -213,18 +235,21 @@ async fn run_with_timeout<F, T>(
 ### Resource Management
 
 **API**:
+
 ```rust
 pub async fn list_resources(&self) -> Result<Vec<McpResourceInfo>>
 pub async fn read_resource(&self, uri: &str) -> Result<McpResourceData>
 ```
 
 **Features**:
+
 - Lazy loading of resource contents
 - URI-based resource identification
 - MIME type support
 - Size metadata
 
 **Usage in VT Code**:
+
 - File system resources (`file://` URIs)
 - Database resources
 - API responses
@@ -233,16 +258,18 @@ pub async fn read_resource(&self, uri: &str) -> Result<McpResourceData>
 ### Prompt Templates
 
 **API**:
+
 ```rust
 pub async fn list_prompts(&self) -> Result<Vec<McpPromptInfo>>
 pub async fn get_prompt(
-    &self, 
-    prompt_name: &str, 
+    &self,
+    prompt_name: &str,
     arguments: Option<HashMap<String, String>>
 ) -> Result<McpPromptDetail>
 ```
 
 **Features**:
+
 - Parameterized prompts
 - Multiple message formats
 - Argument validation
@@ -255,31 +282,32 @@ pub async fn get_prompt(
 **From MCP Provider to VT Code**:
 
 1. **Logging** (`on_logging_message`)
-   - Standard logging integration
-   - Severity levels: debug, info, warning, error
+    - Standard logging integration
+    - Severity levels: debug, info, warning, error
 
 2. **Progress** (`on_progress`)
-   - Long-running operation feedback
-   - Token-based tracking
-   - Message and percentage updates
+    - Long-running operation feedback
+    - Token-based tracking
+    - Message and percentage updates
 
 3. **Resource Updates** (`on_resource_updated`, `on_resource_list_changed`)
-   - File/data modifications
-   - Cache invalidation signals
+    - File/data modifications
+    - Cache invalidation signals
 
 4. **Tool List Changes** (`on_tool_list_changed`)
-   - Dynamic tool availability
-   - Discovery cache refresh triggers
+    - Dynamic tool availability
+    - Discovery cache refresh triggers
 
 5. **Prompt List Changes** (`on_prompt_list_changed`)
-   - Template updates
-   - Cache invalidation
+    - Template updates
+    - Cache invalidation
 
 ### Elicitation (User Interaction)
 
 **Purpose**: MCP providers can request user input during tool execution
 
 **Flow**:
+
 ```rust
 pub struct McpElicitationRequest {
     pub message: String,
@@ -293,6 +321,7 @@ pub struct McpElicitationResponse {
 ```
 
 **Implementation**:
+
 - Custom `McpElicitationHandler` trait
 - Schema-based validation
 - Examples: interactive authentication, file selection
@@ -346,11 +375,13 @@ fn get_status(&self) -> McpClientStatus
 ### Connection Pooling
 
 **Design Pattern** (connection pooling via semaphore):
+
 - Reuse connections across tool calls
 - Semaphore-based concurrency control (per provider)
 - Automatic cleanup and timeout handling
 
 **Current Implementation**:
+
 ```rust
 pub struct McpProvider {
     // ...
@@ -361,11 +392,13 @@ pub struct McpProvider {
 ### Caching Strategy
 
 **Tool Metadata Caching** (`tool_discovery.rs`):
+
 - Cache tools during initialization
 - Invalidate on `tool_list_changed` notification
 - Manual refresh via `refresh_tools()`
 
 **Resource Caching**:
+
 - Lazy loading (fetch only when accessed)
 - No persistent caching by default
 - Per-request caching available
@@ -373,6 +406,7 @@ pub struct McpProvider {
 ### Output Token Management
 
 **Limits**:
+
 - Default max: 25,000 tokens per tool call
 - Configurable via `MAX_MCP_OUTPUT_TOKENS` environment variable
 - Warning threshold: 10,000 tokens
@@ -389,13 +423,16 @@ pub struct McpProvider {
 // /etc/claude-code/managed-mcp.json (Linux/WSL)
 // C:\Program Files\ClaudeCode\managed-mcp.json (Windows)
 {
-  "mcpServers": {
-    "approved_server": { /* config */ }
-  }
+    "mcpServers": {
+        "approved_server": {
+            /* config */
+        }
+    }
 }
 ```
 
 **Effects**:
+
 - Takes exclusive control over MCP servers
 - Users cannot add or modify servers
 - Requires administrator privileges to deploy
@@ -406,18 +443,17 @@ pub struct McpProvider {
 
 ```json
 {
-  "allowedMcpServers": [
-    { "name": "fetch" },
-    { "command": "uvx mcp-server-*" },
-    { "serverUrl": "https://mcp.company.com/*" }
-  ],
-  "deniedMcpServers": [
-    { "name": "dangerous_server" }
-  ]
+    "allowedMcpServers": [
+        { "name": "fetch" },
+        { "command": "uvx mcp-server-*" },
+        { "serverUrl": "https://mcp.company.com/*" }
+    ],
+    "deniedMcpServers": [{ "name": "dangerous_server" }]
 }
 ```
 
 **Matching Rules**:
+
 - Name-based: Exact match against server name
 - Command-based: Pattern match against command
 - URL-based: Wildcard patterns for remote servers
@@ -427,22 +463,26 @@ pub struct McpProvider {
 
 ### Common Issues
 
-**1. Connection Timeout**
+#### 1. Connection Timeout
+
 - Check `MCP_TIMEOUT` environment variable
 - Verify server startup time
 - Review provider `startup_timeout_ms` configuration
 
-**2. Tool Not Found**
+#### 2. Tool Not Found
+
 - Ensure tool is in allowlist
 - Verify provider initialization succeeded
 - Check provider logs for discovery errors
 
-**3. Large Output Warnings**
+#### 3. Large Output Warnings
+
 - Increase `MAX_MCP_OUTPUT_TOKENS` if needed
 - Configure server pagination/filtering
 - Review output size in tool design
 
-**4. Authentication Failures**
+#### 4. Authentication Failures
+
 - Verify API keys and header env vars are set
 - Confirm `api_key_env` / `env_http_headers` entries match exported variable names
 
@@ -491,6 +531,7 @@ mcp_client.set_elicitation_handler(Arc::new(MyElicitationHandler));
 ### Custom Transport
 
 Implement additional transport types by extending `rmcp_transport.rs`:
+
 - WebSocket connections
 - gRPC endpoints
 - Custom protocols
@@ -498,36 +539,36 @@ Implement additional transport types by extending `rmcp_transport.rs`:
 ## Best Practices
 
 1. **Security First**
-   - Always use allowlists in production
-   - Validate all external tool inputs
-   - Never hardcode API keys
-   - Use environment variables for secrets
+    - Always use allowlists in production
+    - Validate all external tool inputs
+    - Never hardcode API keys
+    - Use environment variables for secrets
 
 2. **Error Handling**
-   - Always use `.with_context()` for error messages
-   - Never use `.unwrap()` in production code
-   - Provide detailed error messages to users
+    - Always use `.with_context()` for error messages
+    - Never use `.unwrap()` in production code
+    - Provide detailed error messages to users
 
 3. **Performance**
-   - Set appropriate timeout values based on tool behavior
-   - Use resource pagination for large datasets
-   - Monitor token usage with `MAX_MCP_OUTPUT_TOKENS`
+    - Set appropriate timeout values based on tool behavior
+    - Use resource pagination for large datasets
+    - Monitor token usage with `MAX_MCP_OUTPUT_TOKENS`
 
 4. **Configuration Management**
-   - Configure MCP providers in `vtcode.toml`
-   - Keep secrets in environment variables
-   - Document custom servers in project README
+    - Configure MCP providers in `vtcode.toml`
+    - Keep secrets in environment variables
+    - Document custom servers in project README
 
 5. **Testing**
-   - Mock MCP providers in unit tests
-   - Integration tests with real providers
-   - Test timeout and error scenarios
-   - Validate allowlist enforcement
+    - Mock MCP providers in unit tests
+    - Integration tests with real providers
+    - Test timeout and error scenarios
+    - Validate allowlist enforcement
 
 ## Related Documentation
 
-- **MCP Official**: https://modelcontextprotocol.io/
-- **Claude MCP Docs**: https://code.claude.com/docs/en/mcp
+- **MCP Official**: <https://modelcontextprotocol.io/>
+- **Claude MCP Docs**: <https://code.claude.com/docs/en/mcp>
 - **VT Code Architecture**: `docs/ARCHITECTURE.md`
 - **Configuration Guide**: `docs/config/CONFIGURATION_PRECEDENCE.md`
 - **Security Model**: `docs/SECURITY_MODEL.md`

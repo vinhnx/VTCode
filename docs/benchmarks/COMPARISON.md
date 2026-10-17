@@ -9,7 +9,8 @@ This document compares VT Code's performance across different models and configu
 | **gpt-5-nano**         | OpenAI   | **94.5%** | 10.4s         | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
 | gemini-3-flash-preview | Google   | 61.6%     | 0.97s         | $0.00 (free)   | 2025-10-22 | Mid-Range    |
 
-**Major Achievement:** gpt-5-nano achieves frontier-tier performance (94.5%), ranking in TOP 5 globally at very affordable pricing.
+**Major Achievement:** gpt-5-nano achieves frontier-tier performance (94.5%), ranking in TOP 5 globally at very
+affordable pricing.
 
 See [README.md](README.md) for benchmark details.
 
@@ -71,26 +72,26 @@ Based on published benchmarks and model capabilities:
 
 1. Run benchmark:
 
-    ```bash
-    make bench-humaneval PROVIDER=<provider> MODEL='<model>' N_HE=164
-    ```
+   ```bash
+   make bench-humaneval PROVIDER=<provider> MODEL='<model>' N_HE=164
+   ```
 
 2. Generate visualization:
 
-    ```bash
-    python3 scripts/generate_benchmark_chart.py reports/HE_*.json
-    ```
+   ```bash
+   python3 scripts/generate_benchmark_chart.py reports/HE_*.json
+   ```
 
 3. Compare with existing:
 
-    ```bash
-    python3 scripts/compare_benchmarks.py reports/HE_*.json
-    ```
+   ```bash
+   python3 scripts/compare_benchmarks.py reports/HE_*.json
+   ```
 
 4. Document results:
-    - Create `HUMANEVAL_YYYY-MM-DD_<model>.md`
-    - Update this comparison table
-    - Update `SUMMARY.md`
+   - Create `HUMANEVAL_YYYY-MM-DD_<model>.md`
+   - Update this comparison table
+   - Update `SUMMARY.md`
 
 ## Analysis Framework
 
@@ -129,9 +130,9 @@ To add benchmark results:
 2. Verify results are reproducible (run 2-3 times)
 3. Document configuration and environment
 4. Submit PR with:
-    - Raw JSON report
-    - Detailed analysis document
-    - Updated comparison tables
+   - Raw JSON report
+   - Detailed analysis document
+   - Updated comparison tables
 
 ## References
 

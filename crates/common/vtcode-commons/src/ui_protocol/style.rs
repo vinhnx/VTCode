@@ -126,6 +126,62 @@ pub struct InlineTheme {
 }
 
 // ---------------------------------------------------------------------------
+// List / modal presentation tones
+// ---------------------------------------------------------------------------
+
+/// Semantic tone for list badges, values, and modal status strips.
+///
+/// Renderers map each tone onto theme styles; callers pick the tone, never a
+/// raw color, so every surface stays theme-consistent and WCAG-checked.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InlineTone {
+    #[default]
+    Neutral,
+    Accent,
+    Success,
+    Warning,
+    Danger,
+    /// Live/current selection marker (the active model, the current value).
+    Current,
+}
+
+/// A short-lived status message shown inside a list modal (footer strip).
+///
+/// One status is kept at a time; a new action overwrites the previous status.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineStatus {
+    pub tone: InlineTone,
+    pub message: String,
+}
+
+impl InlineStatus {
+    #[must_use]
+    pub fn new(tone: InlineTone, message: impl Into<String>) -> Self {
+        Self { tone, message: message.into() }
+    }
+
+    #[must_use]
+    pub fn success(message: impl Into<String>) -> Self {
+        Self::new(InlineTone::Success, message)
+    }
+
+    #[must_use]
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self::new(InlineTone::Warning, message)
+    }
+
+    #[must_use]
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(InlineTone::Danger, message)
+    }
+
+    #[must_use]
+    pub fn info(message: impl Into<String>) -> Self {
+        Self::new(InlineTone::Accent, message)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Header context types
 // ---------------------------------------------------------------------------
 
@@ -171,10 +227,12 @@ pub struct InlineHeaderContext {
     pub search_tools: Option<InlineHeaderStatusBadge>,
     pub persistent_memory: Option<InlineHeaderStatusBadge>,
     pub pr_review: Option<InlineHeaderStatusBadge>,
-    pub editor_context: Option<String>,
     pub git: String,
     pub reasoning: String,
     pub reasoning_stage: Option<String>,
+    /// Configured native OpenAI `service_tier` (`Tier: <name>`), when set.
+    /// Rendered in the header summary only when present; `None` hides it.
+    pub service_tier: Option<String>,
     pub workspace_trust: String,
     pub tools: String,
     pub mcp: String,
@@ -201,10 +259,10 @@ impl Default for InlineHeaderContext {
             search_tools: None,
             persistent_memory: None,
             pr_review: None,
-            editor_context: None,
             git: "git: unavailable".to_string(),
             reasoning: "unavailable".to_string(),
             reasoning_stage: None,
+            service_tier: None,
             workspace_trust: "Trust: unavailable".to_string(),
             tools: "Tools: unavailable".to_string(),
             mcp: "MCP: unavailable".to_string(),

@@ -315,6 +315,11 @@ impl HuggingFaceProvider {
         lower.contains("minimax")
     }
 
+    fn is_muse_spark_open_model(&self, model: &str) -> bool {
+        let lower = model.to_ascii_lowercase();
+        lower.contains("muse-spark-open") || lower.contains("muse-spark")
+    }
+
     fn apply_model_defaults(&self, request: &mut LLMRequest) {
         if self.is_minimax_model(&request.model) {
             if request.temperature.is_none() {
@@ -756,6 +761,7 @@ impl LLMProvider for HuggingFaceProvider {
         // Same robustness logic for reasoning effort
         self.is_glm_model(model)
             || self.is_deepseek_model(model)
+            || self.is_muse_spark_open_model(model)
             || self
                 .model_behavior
                 .as_ref()
@@ -1109,21 +1115,6 @@ mod tests {
             .expect("message serialization should succeed");
 
         assert_eq!(messages[0]["content"], json!("<think>trace</think>done"));
-    }
-
-    #[test]
-    fn normalize_step35_flash_provider_suffix() {
-        let provider = HuggingFaceProvider::with_model("test-key".to_string(), "stepfun-ai/Step-3.5-Flash".to_string());
-
-        let normalized = provider
-            .normalize_model_id("stepfun-ai/Step-3.5-Flash")
-            .expect("normalization should succeed");
-        assert_eq!(normalized, "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string());
-
-        let normalized_legacy = provider
-            .normalize_model_id("stepfun-ai/Step-3.5-Flash:fastest")
-            .expect("legacy suffix normalization should succeed");
-        assert_eq!(normalized_legacy, "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string());
     }
 
     #[test]

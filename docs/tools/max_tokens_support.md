@@ -1,28 +1,24 @@
 # Per-Call Output Limits
 
-Function-tool output caps default to 10,000 tokens. Public overrides are
-bounded to 1–50,000 tokens; oversized output is retained in the spool while the
-model receives only the bounded preview.
+Function-tool output caps default to 10,000 tokens. Public overrides are bounded to 1–50,000 tokens; oversized output is
+retained in the spool while the model receives only the bounded preview.
 
 ## Overview
 
-Public command tools can cap large responses per call. Prefer
-`max_output_tokens` in model-facing calls; internal compatibility paths may still
-normalise older output-limit field names.
+Public command tools can cap large responses per call. Prefer `max_output_tokens` in model-facing calls; internal
+compatibility paths may still normalise older output-limit field names.
 
-Output caps reduce prompt pressure while preserving command status, exit codes,
-and spool metadata when the full output is too large for the response.
+Output caps reduce prompt pressure while preserving command status, exit codes, and spool metadata when the full output
+is too large for the response.
 
 ## Supported Public Tools
 
 - `exec_command`: caps stdout and stderr returned from a command.
 - `write_stdin`: caps output returned after sending input to a live session.
-- `code_search`: returns bounded code-search results when available in the
-  advanced profile.
+- `code_search`: returns bounded code-search results when available in the advanced profile.
 
-File inspection in the default profile uses shell commands through
-`exec_command.cmd`. Use commands such as `sed`, `head`, `tail`, `rg`, and
-`find` to request the slice of data you need.
+File inspection in the default profile uses shell commands through `exec_command.cmd`. Use commands such as `sed`,
+`head`, `tail`, `rg`, and `find` to request the slice of data you need.
 
 ## Examples
 
@@ -70,25 +66,25 @@ Command responses preserve execution metadata even when output is capped:
 }
 ```
 
-If a response includes `spool_path`, inspect it once with a targeted shell
-command rather than repeatedly dumping the whole file.
+If a response includes `spool_path`, inspect it once with a targeted shell command rather than repeatedly dumping the
+whole file. Completed spools include `spool_line_count`, the exact physical line count including a final line without a
+newline. Keep ranges within that extent, avoid rereading overlapping sections, and stop at EOF. Pending live spools do
+not advertise a final line count.
 
 ## Recommended Budgets
 
-| Operation | Recommended `max_output_tokens` |
-|---|---:|
-| Small file slice | 2,000 |
-| Medium file slice | 5,000 |
-| Large grep result | 8,000 |
-| Command output | 10,000 |
-| Session continuation | 10,000 |
+| Operation            | Recommended `max_output_tokens` |
+| -------------------- | ------------------------------: |
+| Small file slice     |                           2,000 |
+| Medium file slice    |                           5,000 |
+| Large grep result    |                           8,000 |
+| Command output       |                          10,000 |
+| Session continuation |                          10,000 |
 
 ## Guidance
 
 - Start with targeted shell commands that naturally return small output.
-- Use `rg --files`, `rg -n`, `sed -n`, `head`, and `tail` before reading broad
-  file content.
-- Use `code_search` for bounded definitions, syntactic usages, text, or path
-  results when the advanced profile is enabled.
-- If complete output matters, write it to a file and inspect precise slices with
-  follow-up shell commands.
+- Use `rg --files`, `rg -n`, `sed -n`, `head`, and `tail` before reading broad file content.
+- Use `code_search` for bounded definitions, syntactic usages, text, or path results when the advanced profile is
+  enabled.
+- If complete output matters, write it to a file and inspect precise slices with follow-up shell commands.

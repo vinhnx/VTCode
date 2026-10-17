@@ -1,39 +1,38 @@
 # vtcode-llm
 
-LLM provider abstraction layer for VT Code, providing a unified interface for
-multiple LLM providers including Gemini, OpenAI, Anthropic, Meta AI, DeepSeek, Ollama,
-and Copilot.
+LLM provider abstraction layer for VT Code, providing a unified interface for multiple LLM providers including Gemini,
+OpenAI, Anthropic, Meta AI, DeepSeek, Ollama, and Copilot.
 
 <!-- cargo-rdme start -->
 
-### vtcode-llm - LLM Provider Abstraction
+## vtcode-llm - LLM Provider Abstraction
 
-Provides a unified interface for multiple LLM providers including
-Gemini, OpenAI, Anthropic, Meta AI, DeepSeek, and Ollama.
+Provides a unified interface for multiple LLM providers including Gemini, OpenAI, Anthropic, Meta AI, DeepSeek, and
+Ollama.
 
 <!-- cargo-rdme end -->
 
 ## Modules
 
-| Module | Purpose |
-|---|---|
-| `capabilities` | Provider capability detection and feature flags |
-| `client` | Client trait and adapter implementations |
-| `config_adapter` | Configuration adapter for provider settings |
-| `copilot` | GitHub Copilot integration (feature-gated) |
-| `error_display` | User-friendly error message formatting |
-| `factory_types` | Factory pattern types for client creation |
-| `http_client` | HTTP client implementations |
-| `model_resolver` | Model ID resolution and capability matching |
-| `open_responses` | OpenAI Responses API support |
-| `optimized_client` | Optimized client for high-throughput scenarios |
-| `provider` | Provider trait and core types |
-| `providers` | Provider-specific implementations |
-| `rig_adapter` | Rig framework integration |
-| `system_prompt` | System prompt construction |
-| `tool_bridge` | Tool call bridging between LLM and local tools |
-| `types` | Core LLM types (messages, responses, streaming) |
-| `utils` | Shared utilities |
+| Module             | Purpose                                         |
+| ------------------ | ----------------------------------------------- |
+| `capabilities`     | Provider capability detection and feature flags |
+| `client`           | Client trait and adapter implementations        |
+| `config_adapter`   | Configuration adapter for provider settings     |
+| `copilot`          | GitHub Copilot integration (feature-gated)      |
+| `error_display`    | User-friendly error message formatting          |
+| `factory_types`    | Factory pattern types for client creation       |
+| `http_client`      | HTTP client implementations                     |
+| `model_resolver`   | Model ID resolution and capability matching     |
+| `open_responses`   | OpenAI Responses API support                    |
+| `optimized_client` | Optimized client for high-throughput scenarios  |
+| `provider`         | Provider trait and core types                   |
+| `providers`        | Provider-specific implementations               |
+| `rig_adapter`      | Rig framework integration                       |
+| `system_prompt`    | System prompt construction                      |
+| `tool_bridge`      | Tool call bridging between LLM and local tools  |
+| `types`            | Core LLM types (messages, responses, streaming) |
+| `utils`            | Shared utilities                                |
 
 ## Features
 

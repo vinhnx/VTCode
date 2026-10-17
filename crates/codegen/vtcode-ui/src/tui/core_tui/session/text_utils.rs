@@ -8,6 +8,21 @@ use unicode_width::UnicodeWidthStr;
 
 pub use vtcode_commons::ansi::strip_ansi_codes;
 
+pub(super) fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
+    while let Some(last) = spans.last_mut() {
+        let trimmed_len = last.content.trim_end_matches(char::is_whitespace).len();
+        if trimmed_len == last.content.len() {
+            break;
+        }
+        if trimmed_len == 0 {
+            spans.pop();
+            continue;
+        }
+        last.content.to_mut().truncate(trimmed_len);
+        break;
+    }
+}
+
 /// Terminal display width of `text` in cells.
 ///
 /// This is `unicode-width` plus the halfwidth-voiced-sound-mark correction
@@ -141,6 +156,17 @@ fn wrap_line_internal(
         return vec![Line::default()];
     }
 
+    // Fast path: single-style ASCII prose (the common transcript case). Avoids
+    // grapheme clustering, f64 clip_line, and per-token String rebuilds
+    // (hotpath: wrap_line was ~45% of TUI reflow time).
+    if prefer_word_boundaries && continuation_prefix.is_empty() && line.spans.len() == 1 {
+        let span = &line.spans[0];
+        let text = span.content.as_ref();
+        if text.is_ascii() && !text.contains('\n') && !text.contains('\r') {
+            return wrap_ascii_word_boundaries(text, span.style, max_width);
+        }
+    }
+
     line.spans = coalesce_adjacent_spans(line.spans);
     let derived_continuation_prefix = if prefer_word_boundaries && continuation_prefix.is_empty() {
         wrapped_continuation_prefix(&line)
@@ -164,21 +190,6 @@ fn wrap_line_internal(
         }
 
         spans.push(Span::styled(text.to_owned(), *style));
-    }
-
-    fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
-        while let Some(last) = spans.last_mut() {
-            let trimmed_len = last.content.trim_end_matches(char::is_whitespace).len();
-            if trimmed_len == last.content.len() {
-                break;
-            }
-            if trimmed_len == 0 {
-                spans.pop();
-                continue;
-            }
-            last.content.to_mut().truncate(trimmed_len);
-            break;
-        }
     }
 
     let continuation_width = UnicodeWidthStr::width(continuation_prefix);
@@ -397,6 +408,65 @@ fn wrap_line_internal(
         rows.push(Line::default());
     }
 
+    rows
+}
+
+/// Word-wrap a single-style ASCII string at spaces. Each output row is one
+/// `Span` sliced from the source (no per-token reallocation). Long words hard-
+/// break at `max_width` cells (ASCII ⇒ bytes == cells).
+fn wrap_ascii_word_boundaries(text: &str, style: Style, max_width: usize) -> Vec<Line<'static>> {
+    if text.len() <= max_width {
+        return vec![Line::from(Span::styled(text.to_owned(), style))];
+    }
+
+    let mut rows = Vec::with_capacity(text.len() / max_width + 1);
+    let bytes = text.as_bytes();
+    let mut line_start = 0usize;
+
+    while line_start < text.len() {
+        let remaining = text.len() - line_start;
+        if remaining <= max_width {
+            rows.push(Line::from(Span::styled(text[line_start..].to_owned(), style)));
+            break;
+        }
+
+        // Prefer breaking at the last space within the window.
+        let window_end = line_start + max_width;
+        let mut break_at = None;
+        let mut i = window_end;
+        while i > line_start {
+            i -= 1;
+            if bytes[i] == b' ' {
+                break_at = Some(i);
+                break;
+            }
+        }
+
+        match break_at {
+            Some(space) if space > line_start => {
+                let row = text[line_start..space].trim_end_matches(char::is_whitespace);
+                rows.push(Line::from(Span::styled(row.to_owned(), style)));
+                line_start = space + 1; // drop the break space
+            }
+            _ => {
+                // Hard break a long word.
+                let row = text[line_start..window_end].trim_end_matches(char::is_whitespace);
+                rows.push(Line::from(Span::styled(row.to_owned(), style)));
+                line_start = window_end;
+            }
+        }
+    }
+
+    if rows.is_empty() {
+        rows.push(Line::default());
+    }
+    // Last row: match wrap_line_internal's flush trim.
+    if let Some(last) = rows.last_mut() {
+        if let Some(span) = last.spans.first_mut() {
+            let trimmed = span.content.as_ref().trim_end_matches(char::is_whitespace).to_owned();
+            span.content = trimmed.into();
+        }
+    }
     rows
 }
 
@@ -679,6 +749,46 @@ pub fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trailing_wrap_whitespace_keeps_unicode_and_source_style() {
+        let style = Style::default().fg(Color::Red);
+        let mut spans = vec![
+            Span::styled("日本\u{2003}".to_string(), style),
+            Span::styled(" \t".to_string(), Style::default().fg(Color::Blue)),
+        ];
+        trim_trailing_wrap_whitespace(&mut spans);
+        assert_eq!(spans, vec![Span::styled("日本".to_string(), style)]);
+        trim_trailing_wrap_whitespace(&mut spans);
+        assert_eq!(spans, vec![Span::styled("日本".to_string(), style)]);
+
+        let mut whitespace = vec![Span::raw("\u{2003}\t".to_string())];
+        trim_trailing_wrap_whitespace(&mut whitespace);
+        assert!(whitespace.is_empty());
+        trim_trailing_wrap_whitespace(&mut whitespace);
+        assert!(whitespace.is_empty());
+    }
+
+    #[test]
+    fn wrap_ascii_fits_single_row() {
+        let rows = wrap_ascii_word_boundaries("hello world", Style::default(), 20);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spans[0].content.as_ref(), "hello world");
+    }
+
+    #[test]
+    fn wrap_ascii_breaks_on_spaces() {
+        let rows = wrap_ascii_word_boundaries("hello brave new world", Style::default(), 10);
+        let texts: Vec<&str> = rows.iter().map(|r| r.spans[0].content.as_ref()).collect();
+        assert_eq!(texts, vec!["hello", "brave new", "world"]);
+    }
+
+    #[test]
+    fn wrap_ascii_hard_breaks_long_word() {
+        let rows = wrap_ascii_word_boundaries("abcdefghijklmnop", Style::default(), 5);
+        let texts: Vec<&str> = rows.iter().map(|r| r.spans[0].content.as_ref()).collect();
+        assert_eq!(texts, vec!["abcde", "fghij", "klmno", "p"]);
+    }
 
     #[test]
     fn test_strip_ansi_codes() {

@@ -255,16 +255,21 @@ impl ModelId {
                 | ModelId::VercelDeepseekFlash
                 | ModelId::VercelOpenAiGpt56Luna
                 | ModelId::VercelAnthropicClaudeHaiku45
+                | ModelId::ClaudeHaiku55
                 | ModelId::MergeGatewayAnthropicClaudeHaiku4520251001
+                | ModelId::MergeGatewayAnthropicClaudeHaiku55
                 | ModelId::StepFun37Flash
                 | ModelId::MergeGatewayDeepseekFlash
                 | ModelId::DeepSeekFlash
+                | ModelId::OllamaDeepSeekV41FlashCloud
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
+                | ModelId::OllamaGlm53FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::MiMoV26Flash
+                | ModelId::MergeGatewayXiaomimimoMimoV26Flash
         )
     }
 
@@ -287,17 +292,22 @@ impl ModelId {
                 | ModelId::MergeGatewayOpenAIGpt56Luna
                 | ModelId::MergeGatewayOpenAIGpt6Luna
                 | ModelId::CopilotGPT54Mini
+                | ModelId::ClaudeHaiku55
+                | ModelId::MergeGatewayAnthropicClaudeHaiku55
                 | ModelId::DeepSeekFlash
+                | ModelId::OllamaDeepSeekV41FlashCloud
                 | ModelId::MergeGatewayDeepseekFlash
                 | ModelId::MetaMuseSpark11
                 | ModelId::MergeGatewayMinimaxH3
                 | ModelId::MiMoV26Flash
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
+                | ModelId::OllamaGlm53FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::VercelDeepseekFlash
+                | ModelId::MergeGatewayXiaomimimoMimoV26Flash
         )
     }
 
@@ -310,20 +320,26 @@ impl ModelId {
             self,
             ModelId::Gemini38Flash
                 | ModelId::MergeGatewayGoogleGemini38Flash
+                | ModelId::Gemini4Argon
+                | ModelId::MergeGatewayGoogleGemini4Argon
                 | ModelId::GPT6Astra
                 | ModelId::GPT6Sol
+                | ModelId::GPT61Sol
                 | ModelId::GPT56Sol
                 | ModelId::MergeGatewayOpenAIGpt56Sol
                 | ModelId::MergeGatewayOpenAIGpt56Terra
                 | ModelId::MergeGatewayOpenAIGpt56Luna
                 | ModelId::MergeGatewayOpenAIGpt6Astra
                 | ModelId::MergeGatewayOpenAIGpt6Sol
+                | ModelId::MergeGatewayOpenAIGpt61Sol
                 | ModelId::MergeGatewayOpenAIGpt6Luna
                 | ModelId::ClaudeSonnet5
+                | ModelId::ClaudeSonnet55
                 | ModelId::ClaudeFable5
                 | ModelId::ClaudeFable51
                 | ModelId::ClaudeOpus5
                 | ModelId::ClaudeOpus55
+                | ModelId::MistralLarge4
                 | ModelId::OpenCodeGoGlm53
                 | ModelId::MiMoV26Pro
                 | ModelId::MiMoV26ProUltraspeed
@@ -332,7 +348,8 @@ impl ModelId {
                 | ModelId::VercelDeepseekFlash
                 | ModelId::MetaMuseSpark13
                 | ModelId::MetaMuseSpark13Contributor
-                | ModelId::MergeGatewayMetaMuseSpark13
+                | ModelId::MetaMuseWonder10
+                | ModelId::MetaMuseWonderFull10
                 | ModelId::ZaiGlm53
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
@@ -346,11 +363,20 @@ impl ModelId {
                 | ModelId::MoonshotKimiK3
                 | ModelId::MergeGatewayMoonshotKimiK3
                 | ModelId::OllamaGlm53Cloud
+                | ModelId::OllamaGlm53FlashCloud
+                | ModelId::OllamaDeepSeekV41FlashCloud
+                | ModelId::OllamaMistralLarge4Cloud
+                | ModelId::OllamaMuseSparkOpenCloud
                 | ModelId::XaiGrok46
                 | ModelId::XaiGrok47
                 | ModelId::MergeGatewayXaiGrok46
                 | ModelId::MergeGatewayXaiGrok47
                 | ModelId::VercelSpacexaiGrok47
+                | ModelId::MergeGatewayXiaomimimoMimoV26Pro
+                | ModelId::MergeGatewayXiaomimimoMimoV26Flash
+                | ModelId::MergeGatewayMistralLarge4
+                | ModelId::MergeGatewayMetaMuseSparkOpen
+                | ModelId::HuggingFaceMuseSparkOpenBaseten
         )
     }
 
@@ -387,31 +413,48 @@ impl ModelId {
             // Gemini generations
             // OpenAI generations
             ModelId::GPT6Astra | ModelId::GPT6Sol | ModelId::GPT6Luna => "6",
+            ModelId::GPT61Sol => "6.1",
             ModelId::GPT56Sol | ModelId::GPT56Terra | ModelId::GPT56Luna => "5.6",
             ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeSonnet5 => "5",
+            ModelId::ClaudeSonnet55 => "5.5",
+            ModelId::ClaudeHaiku55 => "5.5",
             ModelId::ClaudeFable5 => "5",
             ModelId::ClaudeFable51 => "5.1",
             ModelId::ClaudeOpus5 => "5",
             ModelId::ClaudeOpus55 => "5.5",
             // DeepSeek generations
             ModelId::DeepSeekFlash => "4",
+            ModelId::OllamaDeepSeekV41FlashCloud => "4.1",
+            // Mistral generations
+            ModelId::MistralLarge3 => "3",
+            ModelId::MistralLarge4 => "4",
+            ModelId::OllamaMistralLarge4Cloud => "4",
             ModelId::MergeGatewayDeepseekFlash => "4.1",
             ModelId::MetaMuseSpark11 => "Muse-Spark-1.1",
             ModelId::MetaMuseSpark13 | ModelId::MetaMuseSpark13Contributor => "Muse-Spark-1.3",
+            ModelId::MergeGatewayMetaMuseSparkOpen | ModelId::HuggingFaceMuseSparkOpenBaseten => "Muse-Spark-Open",
+            ModelId::OllamaMuseSparkOpenCloud => "Muse-Spark-Open",
+            ModelId::MetaMuseWonder10 => "Muse-Wonder-1.0",
+            ModelId::MetaMuseWonderFull10 => "Muse-Wonder-Full-1.0",
             // Z.AI generations
             ModelId::ZaiGlm53
             | ModelId::ZaiGlm53Flash
             | ModelId::ZaiGlm53Flashx
             | ModelId::MergeGatewayZaiGlm53Flash
             | ModelId::MergeGatewayZaiGlm53Flashx => "5.3",
+            ModelId::OllamaGlm53FlashCloud => "5.3",
             ModelId::Gemini38Flash => "3.8",
             ModelId::MergeGatewayGoogleGemini38Flash => "3.8",
+            ModelId::Gemini4Argon => "4",
+            ModelId::MergeGatewayGoogleGemini4Argon => "4",
             ModelId::OpenCodeGoGlm53 => "5.3",
             ModelId::OpenCodeGoGpt56Luna => "5.6-luna",
             ModelId::OpenCodeGoKimiK3 => "k3",
             ModelId::MiMoV26Pro | ModelId::MiMoV26Flash | ModelId::MiMoV26ProUltraspeed => "v2.6",
+            ModelId::MergeGatewayXiaomimimoMimoV26Pro | ModelId::MergeGatewayXiaomimimoMimoV26Flash => "v2.6",
+            ModelId::MergeGatewayMistralLarge4 => "4",
             ModelId::OpenCodeGoMinimaxM3 => "m3",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
@@ -446,18 +489,19 @@ impl ModelId {
             ModelId::MergeGatewayAnthropicClaudeOpus5 => "5",
             ModelId::MergeGatewayAnthropicClaudeOpus55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeSonnet5 => "5",
+            ModelId::MergeGatewayAnthropicClaudeSonnet55 => "5.5",
+            ModelId::MergeGatewayAnthropicClaudeHaiku55 => "5.5",
             ModelId::MergeGatewayAnthropicClaudeFable51 => "5.1",
             ModelId::MergeGatewayAnthropicClaudeHaiku4520251001 => "4.5",
             ModelId::MergeGatewayMinimaxH3 => "H3",
             ModelId::MergeGatewayThinkingMachinesInkling => "Inkling",
-            ModelId::MergeGatewayMetaMuseSpark11 => "Muse-Spark-1.1",
-            ModelId::MergeGatewayMetaMuseSpark13 => "Muse-Spark-1.3",
             ModelId::MergeGatewayOpenAIGpt56Luna
             | ModelId::MergeGatewayOpenAIGpt56Sol
             | ModelId::MergeGatewayOpenAIGpt56Terra => "5.6",
             ModelId::MergeGatewayOpenAIGpt6Astra
             | ModelId::MergeGatewayOpenAIGpt6Sol
             | ModelId::MergeGatewayOpenAIGpt6Luna => "6",
+            ModelId::MergeGatewayOpenAIGpt61Sol => "6.1",
             // Vercel AI Gateway models
             ModelId::VercelAnthropicClaudeSonnet5 => "5",
             ModelId::VercelAnthropicClaudeOpus5 => "5",
@@ -480,6 +524,7 @@ impl ModelId {
             self,
             ModelId::GPT6Astra
                 | ModelId::GPT6Sol
+                | ModelId::GPT61Sol
                 | ModelId::GPT6Luna
                 | ModelId::GPT56Sol
                 | ModelId::GPT56Terra

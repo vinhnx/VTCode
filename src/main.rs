@@ -106,7 +106,19 @@ fn main() -> std::process::ExitCode {
                     // Reuse the multi-threaded runtime created during bootstrap
                     // instead of building a second one.
                     let BootstrapReady { prepared, runtime } = *ready;
-                    runtime.block_on(run(prepared))
+                    let result = runtime.block_on(run(prepared));
+                    // Bound runtime teardown. Dropping a multi-thread runtime
+                    // joins every worker and waits indefinitely for in-flight
+                    // `spawn_blocking` tasks (Tokio's `BlockingPool::drop`
+                    // calls `shutdown(None)`), so a stuck git snapshot, child
+                    // reap, or provider read can park the process after the
+                    // terminal is already restored. A short budget caps that
+                    // tail; normal teardown exits well within it.
+                    let runtime_shutdown_started = std::time::Instant::now();
+                    tracing::debug!(target: "vtcode.shutdown", boundary = "runtime_shutdown_started", elapsed_ms = 0u64);
+                    runtime.shutdown_timeout(std::time::Duration::from_millis(500));
+                    tracing::debug!(target: "vtcode.shutdown", boundary = "process_return", elapsed_ms = runtime_shutdown_started.elapsed().as_millis() as u64);
+                    result
                 }
             }
         }) {
@@ -454,8 +466,14 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     // printed by the shell as visible escape-code garbage after exit.
     // Finish it here so TTY replies are consumed before returning; when the
     // agent loop already awaited the probe this returns immediately.
+    // Bounded so a stuck `/dev/tty` read cannot park process exit.
     if startup_policy.run_terminal_probe() {
-        agent::probe::finish_terminal_palette_probe().await;
+        if tokio::time::timeout(std::time::Duration::from_millis(500), agent::probe::finish_terminal_palette_probe())
+            .await
+            .is_err()
+        {
+            tracing::debug!("terminal palette probe finish timed out during exit; continuing teardown");
+        }
     }
     perform_queued_runtime_relaunch();
     vtcode_core::utils::trace_writer::flush_trace_log();

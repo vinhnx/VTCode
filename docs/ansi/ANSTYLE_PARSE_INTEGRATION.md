@@ -1,6 +1,6 @@
 # anstyle-parse Integration Guide
 
-**Implementation Steps for vtcode System**
+## Implementation Steps for vtcode System
 
 ## Step 1: Add Dependency
 
@@ -16,7 +16,7 @@ anstyle-parse = "0.2"  # Add this line
 
 **File: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`**
 
-```rust
+````rust
 //! ANSI escape sequence parser wrapper using anstyle-parse
 //!
 //! Provides a high-level interface for parsing ANSI sequences from terminal output.
@@ -294,13 +294,14 @@ mod tests {
         assert_eq!(strip_ansi(input), "line1\nline2");
     }
 }
-```
+````
 
 ## Step 3: Update Module Exports
 
 **File: `crates/codegen/vtcode-core/src/utils/mod.rs`**
 
 Add:
+
 ```rust
 pub mod ansi_parser;
 ```
@@ -403,6 +404,7 @@ Simplifies from ~60 lines to 1 line!
 **File: `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` (already included in Step 2)**
 
 Run tests:
+
 ```bash
 cargo test ansi_parser::tests
 ```
@@ -422,7 +424,8 @@ fn test_ansi_parser_with_real_tool_output() {
 ## Step 7: Documentation
 
 Update `docs/ANSTYLE_PARSE_REVIEW.md` with:
--   Dependency added
+
+- Dependency added
 - Implementation dates
 - Performance benchmarks
 - Lessons learned
@@ -486,10 +489,10 @@ pub fn truncate_with_ansi(text: &str, width: usize) -> String {
 
 `anstyle-parse` vs alternatives:
 
-| Implementation | Speed | Code Size | Maintainability |
-|---|---|---|---|
-| Manual parser | Fast | 40 LOC | Low |
-| vte crate | Medium | Dependency | Medium |
-| **anstyle-parse** | **Medium** | **Dependency** | **High** |
+| Implementation    | Speed      | Code Size      | Maintainability |
+| ----------------- | ---------- | -------------- | --------------- |
+| Manual parser     | Fast       | 40 LOC         | Low             |
+| vte crate         | Medium     | Dependency     | Medium          |
+| **anstyle-parse** | **Medium** | **Dependency** | **High**        |
 
 Use `cargo bench` to compare if performance critical.

@@ -87,7 +87,7 @@ pub(crate) fn format_compacted_summary(
     elapsed: Duration,
 ) -> String {
     format!(
-        "Context compacted · {} ({} -> {} messages, {} compaction).",
+        "Context compacted · {} ({} -> {} context items, {} compaction). Prompt cache reuse may be lower on the next request.",
         format_duration_label(elapsed),
         original_len,
         compacted_len,
@@ -100,9 +100,25 @@ pub(crate) fn format_already_compact(elapsed: Duration) -> String {
     format!("Context already compact · {}.", format_duration_label(elapsed))
 }
 
-/// Final line for a failed pass. The caller appends the `{err:#}` chain.
-pub(crate) fn format_compaction_failed(elapsed: Duration) -> String {
-    format!("Compaction failed · {}.", format_duration_label(elapsed))
+/// Bounded, secret-redacted error chain for debug logs.
+pub(crate) fn format_compaction_error_details(error: &anyhow::Error) -> String {
+    vtcode_commons::sanitizer::sanitize_provider_diagnostic(format!("{error:#}").as_bytes())
+}
+
+/// Display the bounded root cause; the sanitized chain stays in the debug log.
+pub(crate) fn format_compaction_failed(elapsed: Duration, error: &anyhow::Error) -> String {
+    let cause = error.root_cause().to_string();
+    let cause = cause.split_once(". Body:").map_or(cause.as_str(), |(summary, _)| summary);
+    let safe = vtcode_commons::sanitizer::sanitize_provider_diagnostic(cause.as_bytes());
+    let single_line = safe.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut summary: String = single_line.chars().take(512).collect();
+    if single_line.chars().count() > 512 {
+        summary.push_str("...");
+    }
+    format!(
+        "Context compaction failed · {}. History preserved. Reason: {summary}. Details are in the debug log.",
+        format_duration_label(elapsed)
+    )
 }
 
 #[cfg(test)]
@@ -127,8 +143,34 @@ mod tests {
 
     #[test]
     fn failed_label_includes_duration() {
-        let label = format_compaction_failed(Duration::from_secs(5));
-        assert!(label.contains("Compaction failed"));
+        let error = anyhow::anyhow!("Unknown parameter: 'stream'. Body: {{\"error\":\"duplicate\"}}")
+            .context("Failed to compact history via provider-native compaction");
+        let label = format_compaction_failed(Duration::from_secs(5), &error);
+        assert!(label.contains("compaction failed"));
         assert!(label.contains("5s"));
+        assert!(label.contains("History preserved"));
+        assert!(label.contains("Unknown parameter: 'stream'"));
+        assert!(!label.contains("duplicate"));
+    }
+
+    #[test]
+    fn failed_label_bounds_untrusted_unicode_diagnostics() {
+        let error = anyhow::anyhow!("bad response\n{}", "故障".repeat(1000));
+        let label = format_compaction_failed(Duration::from_secs(1), &error);
+        assert!(!label.contains('\n'));
+        assert!(label.chars().count() < 650);
+        assert!(label.contains("..."));
+    }
+
+    #[test]
+    fn compaction_debug_details_preserve_chain_and_redact_secrets() {
+        let secret = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";
+        let error = anyhow::anyhow!("provider rejected api_key={secret}").context("Compaction request failed");
+        let details = format_compaction_error_details(&error);
+        assert!(details.contains("Compaction request failed"));
+        assert!(details.contains("provider rejected"));
+        assert!(!details.contains(secret));
+        let label = format_compaction_failed(Duration::from_secs(1), &error);
+        assert!(!label.contains(secret));
     }
 }

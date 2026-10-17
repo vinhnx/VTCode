@@ -166,7 +166,7 @@ fn test_models_for_provider() {
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
     assert!(anthropic_models.contains(&ModelId::ClaudeOpus5));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet5));
-    assert!(anthropic_models.contains(&ModelId::ClaudeSonnet5));
+    assert!(anthropic_models.contains(&ModelId::ClaudeSonnet55));
     assert!(!anthropic_models.contains(&ModelId::GPT56Sol));
 
     let zai_models = ModelId::models_for_provider(Provider::ZAI);

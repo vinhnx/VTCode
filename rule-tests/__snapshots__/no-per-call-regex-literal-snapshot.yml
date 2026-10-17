@@ -1,0 +1,80 @@
+id: no-per-call-regex-literal
+snapshots:
+  ? |
+    use regex::Regex;
+    fn check(html: &str) -> bool {
+        let re = Regex::new(
+            r"(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>",
+        )
+        .unwrap();
+        re.is_match(html)
+    }
+  : labels:
+    - source: |-
+        Regex::new(
+                r"(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>",
+            )
+      style: primary
+      start: 62
+      end: 146
+    - source: Regex::new
+      style: secondary
+      start: 62
+      end: 72
+  ? |
+    use regex::Regex;
+    fn check(line: &str) -> bool {
+        Regex::new(r"^\d+$").unwrap().is_match(line)
+    }
+  : labels:
+    - source: Regex::new(r"^\d+$")
+      style: primary
+      start: 53
+      end: 73
+    - source: Regex::new
+      style: secondary
+      start: 53
+      end: 63
+  ? |
+    use regex::Regex;
+    fn check(line: &str) -> bool {
+        let re = Regex::new(r"^\d+$").unwrap();
+        re.is_match(line)
+    }
+  : labels:
+    - source: Regex::new(r"^\d+$")
+      style: primary
+      start: 62
+      end: 82
+    - source: Regex::new
+      style: secondary
+      start: 62
+      end: 72
+  ? |
+    use regex::Regex;
+    fn check(line: &str) -> bool {
+        regex::Regex::new(r"^\d+$").unwrap().is_match(line)
+    }
+  : labels:
+    - source: regex::Regex::new(r"^\d+$")
+      style: primary
+      start: 53
+      end: 80
+    - source: regex::Regex::new
+      style: secondary
+      start: 53
+      end: 70
+  ? |
+    use regex::Regex;
+    fn check(text: &str) -> bool {
+        Regex::new("plain").unwrap().is_match(text)
+    }
+  : labels:
+    - source: Regex::new("plain")
+      style: primary
+      start: 53
+      end: 72
+    - source: Regex::new
+      style: secondary
+      start: 53
+      end: 63

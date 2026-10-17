@@ -2,18 +2,23 @@ use serde_json::Value;
 
 use crate::tools::output_limits::OUTPUT_PREVIEW_CHARS_PER_TOKEN;
 
+/// Primary single-string output fields, in precedence order. `stderr`,
+/// `content`, and `preview` participate only in preview capping, never in
+/// PTY-response detection.
+const TEXT_OUTPUT_FIELDS: [&str; 3] = ["raw_output", "output", "stdout"];
+
 fn has_text_output_field(value: &Value) -> bool {
-    ["raw_output", "output", "stdout"]
+    TEXT_OUTPUT_FIELDS
         .into_iter()
         .any(|field| value.get(field).is_some_and(Value::is_string))
 }
 
 fn is_pty_output_response(tool_name: &str, value: &Value) -> bool {
-    crate::tools::tool_intent::canonical_command_session_tool_name(tool_name).is_some() && has_text_output_field(value)
+    crate::tools::tool_intent::is_command_session_tool(tool_name) && has_text_output_field(value)
 }
 
 fn output_field_bytes(value: &Value) -> usize {
-    ["raw_output", "output", "stdout"]
+    TEXT_OUTPUT_FIELDS
         .into_iter()
         .filter_map(|field| value.get(field).and_then(Value::as_str))
         .map(str::len)
@@ -79,7 +84,7 @@ pub(super) fn limit_output_preview(mut value: Value, max_output_tokens: usize) -
         return value;
     };
     let mut preview_truncated = false;
-    for field in ["raw_output", "output", "stdout", "content", "preview"] {
+    for field in TEXT_OUTPUT_FIELDS.into_iter().chain(["stderr", "content", "preview"]) {
         let Some(text) = object.get(field).and_then(Value::as_str) else {
             continue;
         };

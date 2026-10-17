@@ -26,6 +26,7 @@ mod exec_command;
 mod exec_output;
 mod exec_sessions;
 mod exec_support;
+mod matrix;
 mod patch_pipeline;
 mod sandbox_runtime;
 mod search_introspection;
@@ -53,6 +54,7 @@ struct PreparedExecRunRequest {
     cols: Option<u16>,
     sandbox_active: bool,
     background: bool,
+    stdin: bool,
 }
 
 struct ResolvedExecSandboxRequest {
@@ -141,6 +143,23 @@ macro_rules! delegate_to_self {
 }
 
 impl ToolRegistry {
+    pub(super) fn record_decision_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            let decision = crate::core::agent::events::validate_decision_input(args)?;
+            let task = self
+                .harness_context_snapshot()
+                .task_id
+                .context("decision recording requires current task identity")?;
+            let validator = self
+                .harness_context
+                .decision_validator
+                .read()
+                .clone()
+                .context("canonical decision recording is unavailable")?;
+            validator(task, decision.evidence_ids).await?;
+            Ok(json!({"recorded":true,"rationale_source":"agent-reported"}))
+        })
+    }
     /// Unified `cron` executor: dispatches on `action` (create | list | delete).
     /// For legacy alias calls that omit `action`, the action is inferred from
     /// the argument shape: `prompt` implies create, `id` implies delete,
@@ -290,10 +309,18 @@ impl ToolRegistry {
     ) -> Result<PreparedExecRunRequest> {
         acquire_executor_rate_limit("exec_command:run", 2.0)?;
 
-        let payload = args
+        // Direct registry callers do not necessarily run model preflight.
+        // Normalize here as well so every pipe/PTY launch reports the same
+        // truthful verifier status the gate classifies. This is idempotent.
+        let executed_args = tool_intent::shell_args_as_executed(tools::EXEC_COMMAND, args);
+        let payload = executed_args
             .as_object()
             .ok_or_else(|| anyhow!("command execution requires a JSON object"))?;
         let background = payload.get("background").and_then(Value::as_bool).unwrap_or(false);
+        let stdin = match payload.get("stdin") {
+            None => false,
+            Some(value) => value.as_bool().ok_or_else(|| anyhow!("stdin must be a boolean"))?,
+        };
 
         let (command, auto_raw_command) = parse_command_parts(payload, missing_error, empty_error)?;
         let shell_program = match backend {
@@ -323,11 +350,17 @@ impl ToolRegistry {
         };
         if !self.inventory.command_policy_allows(policy_command) {
             return Err(anyhow!(
-                "command '{}' is not permitted by the execution policy",
+                "Execution policy violation: command '{}' is not permitted by the execution policy",
                 prepared_command.requested_command_display
             ));
         }
 
+        let inspection_cwd = self
+            .pty_manager()
+            .working_dir_candidate(crate::tools::command_args::working_dir_text(args))?;
+        self.edited_file_monitor_ref()
+            .source_inspection()
+            .check_shell(args, &inspection_cwd)?;
         let sandbox_request = self.resolve_exec_sandbox_request(payload).await?;
         let output_config = exec_run_output_config(payload, &prepared_command.display_command);
 
@@ -384,6 +417,7 @@ impl ToolRegistry {
             cols,
             sandbox_active,
             background,
+            stdin,
         })
     }
 
@@ -412,6 +446,17 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_command_session_internal(
+        &self,
+        args: Value,
+        exec_settlement_mode: ExecSettlementMode,
+    ) -> Result<Value> {
+        let launch = self.begin_completion_verifier(&args);
+        let result = self.execute_command_session_observed(args.clone(), exec_settlement_mode).await;
+        self.observe_completion_verifier(launch, &args, &result);
+        result
+    }
+
+    async fn execute_command_session_observed(
         &self,
         args: Value,
         exec_settlement_mode: ExecSettlementMode,
@@ -465,6 +510,10 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing code/command in execute_code"))?;
 
+        let cwd = self.workspace_root();
+        // Arbitrary interpreter code has the same file-writing authority as a
+        // shell script. It cannot be a route around guarded file mutations.
+        self.edited_file_monitor_ref().source_inspection().check_shell(&args, cwd)?;
         let language = code_language_from_args(&args);
 
         // The `code` action spawns the interpreter directly, so it must clear
@@ -645,21 +694,36 @@ impl ToolRegistry {
     }
 
     pub(super) fn write_stdin_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move {
-            let (args, dispatch) = normalize_write_stdin_args(&args)?;
+        Box::pin(self.execute_write_stdin(args, ExecSettlementMode::Manual))
+    }
 
+    pub(super) async fn execute_write_stdin(&self, args: Value, settlement_mode: ExecSettlementMode) -> Result<Value> {
+        let (args, dispatch) = normalize_write_stdin_args(&args)?;
+
+        let observed_args = args.clone();
+        let result = async {
             let response = match dispatch {
                 crate::tools::command_args::WriteStdinDispatch::Write => {
                     self.execute_command_session_write_for_tool(args, tools::WRITE_STDIN).await
                 }
                 crate::tools::command_args::WriteStdinDispatch::Poll => {
-                    self.execute_command_session_poll_for_tool(args, ExecSettlementMode::Manual, tools::WRITE_STDIN)
+                    self.execute_command_session_poll_for_tool(args, settlement_mode, tools::WRITE_STDIN)
                         .await
                 }
                 crate::tools::command_args::WriteStdinDispatch::Wait => self.execute_command_session_wait(args).await,
+                crate::tools::command_args::WriteStdinDispatch::Inspect => {
+                    self.execute_command_session_inspect(args).await
+                }
+                crate::tools::command_args::WriteStdinDispatch::Terminate => {
+                    self.execute_command_session_terminate(args).await
+                }
+                crate::tools::command_args::WriteStdinDispatch::Close => self.execute_command_session_close(args).await,
             }?;
             Ok(response)
-        })
+        }
+        .await;
+        self.observe_completion_verifier(None, &observed_args, &result);
+        result
     }
 
     pub(super) fn send_pty_input_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {

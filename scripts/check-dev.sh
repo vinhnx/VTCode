@@ -116,7 +116,7 @@ run_clippy() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running clippy ($SCOPE_LABEL)..."
-	if cargo clippy $(cargo_verbosity) "${scope_args[@]}" --all-targets --all-features -- -D warnings; then
+	if cargo clippy --locked $(cargo_verbosity) "${scope_args[@]}" --all-targets --all-features -- -D warnings; then
 		print_success "No clippy warnings found!"
 		return 0
 	else
@@ -137,7 +137,7 @@ run_check() {
 	SCOPE_LABEL="$label"
 
 	print_status "Running cargo check ($SCOPE_LABEL)..."
-	if cargo check $(cargo_verbosity) "${scope_args[@]}"; then
+	if cargo check --locked $(cargo_verbosity) "${scope_args[@]}"; then
 		print_success "Compilation successful!"
 		return 0
 	else
@@ -147,23 +147,22 @@ run_check() {
 }
 
 run_tests() {
-	local scope_args=""
 	local nextest_args=()
-	local nextest_available=false
 	local test_profile="default"
 
 	if [ "$RUN_WORKSPACE" = true ]; then
-		scope_args="--workspace"
 		nextest_args+=("--workspace")
 	fi
 
 	if cargo nextest --version &>/dev/null; then
-		nextest_available=true
 		if nextest_profile_available quick; then
 			test_profile="quick"
 		else
 			print_warning "nextest profile 'quick' is unavailable; using the default profile."
 		fi
+	else
+		print_error "cargo-nextest is required for tests. Install it with 'cargo install cargo-nextest --locked'."
+		return 1
 	fi
 	nextest_args+=("--profile" "$test_profile")
 
@@ -174,7 +173,9 @@ run_tests() {
 		if git rev-parse --git-dir >/dev/null 2>&1; then
 			print_status "Detecting changed crates since HEAD~1..."
 			local changed_package_names
-			changed_package_names=$(cargo metadata --no-deps --format-version 1 | python3 -c '
+			if ! changed_package_names=$(
+				set -o pipefail
+				cargo metadata --locked --no-deps --format-version 1 | python3 -c '
 import json
 import os
 import subprocess
@@ -193,7 +194,11 @@ for package in json.load(sys.stdin)["packages"]:
                 break
         except ValueError:
             continue
-')
+'
+			); then
+				print_error "Failed to detect changed packages; test selection is unavailable."
+				return 1
+			fi
 
 			local changed_package_args=()
 			while IFS= read -r package_name; do
@@ -211,7 +216,7 @@ for package in json.load(sys.stdin)["packages"]:
 			done <<<"$changed_package_names"
 
 			if [ ${#changed_package_args[@]} -eq 0 ]; then
-				print_status "No changed packages in the selected test scope; skipping tests."
+				print_always "No changed packages in the selected test scope; skipping tests."
 				return 0
 			fi
 			nextest_args+=("${changed_package_args[@]}")
@@ -223,26 +228,21 @@ for package in json.load(sys.stdin)["packages"]:
 	print_status "Running tests ($SCOPE_LABEL)..."
 	local test_exit=0
 
-	if [ "$nextest_available" = true ]; then
-		# Enable incremental compilation for local test builds to avoid full
-		# recompiles on every test run. Skip this when a distributed compiler
-		# wrapper such as sccache (the repo's recommended dev setup, which sets
-		# `incremental = false` in the dev profile) is active: sccache forbids
-		# incremental compilation, so forcing `CARGO_INCREMENTAL=1` makes
-		# `check-dev.sh --test` fail for sccache users.
-		local nextest_env=()
-		if [[ -z "${RUSTC_WRAPPER:-}" || "${RUSTC_WRAPPER}" != *sccache* ]]; then
-			nextest_env=(CARGO_INCREMENTAL=1)
-		fi
-		local nextest_verbosity=()
-		if [ "$QUIET" = true ]; then
-			nextest_verbosity=("--status-level" "fail")
-		fi
-		env "${nextest_env[@]}" cargo nextest run "${nextest_args[@]}" "${nextest_verbosity[@]}" --no-tests=warn || test_exit=$?
-	else
-		print_warning "cargo-nextest not found. Falling back to cargo test."
-		cargo test $scope_args || test_exit=$?
+	# Enable incremental compilation for local test builds to avoid full
+	# recompiles on every test run. Skip this when a distributed compiler
+	# wrapper such as sccache (the repo's recommended dev setup, which sets
+	# `incremental = false` in the dev profile) is active: sccache forbids
+	# incremental compilation, so forcing `CARGO_INCREMENTAL=1` makes
+	# `check-dev.sh --test` fail for sccache users.
+	local nextest_env=()
+	if [[ -z "${RUSTC_WRAPPER:-}" || "${RUSTC_WRAPPER}" != *sccache* ]]; then
+		nextest_env=(CARGO_INCREMENTAL=1)
 	fi
+	local nextest_verbosity=()
+	if [ "$QUIET" = true ]; then
+		nextest_verbosity=("--status-level" "fail")
+	fi
+	env "${nextest_env[@]}" cargo nextest run --locked "${nextest_args[@]}" "${nextest_verbosity[@]}" --no-tests=fail || test_exit=$?
 
 	if [ $test_exit -eq 0 ]; then
 		print_success "All tests passed!"
@@ -316,6 +316,7 @@ print_usage() {
 	echo "  - rustfmt (formatting)"
 	echo "  - clippy (linting, default-members)"
 	echo "  - cargo check (compilation)"
+	echo "Cargo checks, metadata, and tests use --locked to preserve Cargo.lock."
 	echo ""
 	echo "Options:"
 	echo "  --test, -t          Also run tests (uses nextest quick profile when available)"

@@ -1,19 +1,24 @@
 # Open Responses Specification Conformance
 
+<!-- markdownlint-disable-next-line MD013 -->
 <a href="https://www.openresponses.org/"><img src="https://img.shields.io/badge/Open%20Responses-Conformant-4CAF50?style=flat-square" alt="Open Responses Conformant"/></a>
 
-VT Code conforms to the [Open Responses](https://www.openresponses.org/) specification, an open, vendor-neutral standard for large language model APIs. This enables interoperable LLM workflows across different providers.
+VT Code conforms to the [Open Responses](https://www.openresponses.org/) specification, an open, vendor-neutral standard
+for large language model APIs. This enables interoperable LLM workflows across different providers.
 
 ## Conformance Overview
 
 VT Code provides full conformance with the Open Responses specification in two ways:
 
-1.  **Producer Conformance**: VT Code can emit Open Responses-conformant events and objects from its internal agent loop, allowing external tools to monitor and interact with VT Code using a standardized protocol.
-2.  **Consumer Conformance**: VT Code can use any Open Responses-compatible API as a backend provider, enabling seamless switching between different LLM providers that support the standard.
+1. **Producer Conformance**: VT Code can emit Open Responses-conformant events and objects from its internal agent loop,
+   allowing external tools to monitor and interact with VT Code using a standardized protocol.
+2. **Consumer Conformance**: VT Code can use any Open Responses-compatible API as a backend provider, enabling seamless
+   switching between different LLM providers that support the standard.
 
 ## What is Open Responses?
 
-Open Responses is an open-source specification for building **multi-provider, interoperable LLM interfaces** based on the OpenAI Responses API. It defines:
+Open Responses is an open-source specification for building **multi-provider, interoperable LLM interfaces** based on
+the OpenAI Responses API. It defines:
 
 - **Shared Schema**: Unified request/response structures across providers
 - **Semantic Streaming**: Events describe meaningful transitions, not raw token deltas
@@ -22,7 +27,8 @@ Open Responses is an open-source specification for building **multi-provider, in
 
 ## Implementation Details
 
-The Open Responses implementation is located in `crates/codegen/vtcode-core/src/open_responses/` (for production) and `crates/codegen/vtcode-core/src/llm/providers/openresponses/` (for consumption). It provides:
+The Open Responses implementation is located in `crates/codegen/vtcode-core/src/open_responses/` (for production) and
+`crates/codegen/vtcode-core/src/llm/providers/openresponses/` (for consumption). It provides:
 
 - **Unified Item Types**: State machine-based items with defined lifecycle states
 - **Semantic Streaming Events**: Meaningful events (not raw token deltas) for predictable streaming
@@ -38,7 +44,7 @@ VT Code implements the following core components of the specification:
 
 All items follow a state machine model with defined lifecycle states:
 
-```
+```text
 ┌─────────────┐
 │ in_progress │──────────────────────────────────┐
 └──────┬──────┘                                  │
@@ -185,17 +191,17 @@ let response = builder.response();
 
 ### Item Type Mapping
 
-| VT Code Item           | Open Responses Type                          |
-| ---------------------- | -------------------------------------------- |
-| `AgentMessageItem`     | `message` (role: assistant)                  |
-| `ReasoningItem`        | `reasoning`                                  |
-| `ToolInvocationItem`   | `function_call`                              |
-| `ToolOutputItem`       | `function_call_output`                       |
-| `CommandExecutionItem` | `custom` (type: `vtcode:command_execution`)  |
-| `McpToolCallItem`      | `function_call`                              |
-| `FileChangeItem`       | `custom` (type: `vtcode:file_change`)        |
-| `WebSearchItem`        | `custom` (type: `vtcode:web_search`)         |
-| `ErrorItem`            | `custom` (type: `vtcode:error`)              |
+| VT Code Item           | Open Responses Type                         |
+| ---------------------- | ------------------------------------------- |
+| `AgentMessageItem`     | `message` (role: assistant)                 |
+| `ReasoningItem`        | `reasoning`                                 |
+| `ToolInvocationItem`   | `function_call`                             |
+| `ToolOutputItem`       | `function_call_output`                      |
+| `CommandExecutionItem` | `custom` (type: `vtcode:command_execution`) |
+| `McpToolCallItem`      | `function_call`                             |
+| `FileChangeItem`       | `custom` (type: `vtcode:file_change`)       |
+| `WebSearchItem`        | `custom` (type: `vtcode:web_search`)        |
+| `ErrorItem`            | `custom` (type: `vtcode:error`)             |
 
 ## Error Handling
 
@@ -277,7 +283,7 @@ let open_usage = OpenUsage::from_exec_usage(&exec_usage);
 
 The correct streaming event flow per the specification:
 
-```
+```text
 response.created
   └─> response.in_progress
         └─> response.output_item.added
@@ -325,14 +331,12 @@ include_reasoning = true
 
 ### Session output path
 
-Interactive Open Responses exports are derived from the canonical session
-stream. When file output is enabled, the JSONL stream is written to
-`<workspace>/.vtcode/sessions/<session_id>/derived/open-responses.jsonl` and
-the authoritative source remains
-`<workspace>/.vtcode/sessions/<session_id>/events.jsonl`.
+Interactive Open Responses exports are derived from the canonical session stream. When file output is enabled, the JSONL
+stream is written to `<workspace>/.vtcode/sessions/<session_id>/derived/open-responses.jsonl` and the authoritative
+source remains `<workspace>/.vtcode/sessions/<session_id>/events.jsonl`.
 
-There is no default global Open Responses artifact. Existing files under
-legacy `VTCODE_HOME/sessions/` files remain untouched.
+There is no default global Open Responses artifact. Existing files under legacy `VTCODE_HOME/sessions/` files remain
+untouched.
 
 ### Programmatic Integration
 
@@ -368,11 +372,15 @@ if let Some(response) = integration.finish_response() {
 
 ## Compliance Testing
 
-VT Code includes a comprehensive compliance test suite to ensure strict adherence to the Open Responses specification. This suite validates:
+VT Code includes a comprehensive compliance test suite to ensure strict adherence to the Open Responses specification.
+This suite validates:
 
-- **Object Validity**: Verifies that `Response` and `Request` objects contain all mandatory fields and follow the correct JSON schema.
-- **State Machine Transitions**: Validates that items follow the state machine lifecycle (e.g., `in_progress` -> `completed`).
-- **Streaming Event Sequences**: Ensures events are emitted in the correct order (e.g., `response.created` before `response.output_item.added`).
+- **Object Validity**: Verifies that `Response` and `Request` objects contain all mandatory fields and follow the
+  correct JSON schema.
+- **State Machine Transitions**: Validates that items follow the state machine lifecycle (e.g., `in_progress` ->
+  `completed`).
+- **Streaming Event Sequences**: Ensures events are emitted in the correct order (e.g., `response.created` before
+  `response.output_item.added`).
 - **Extension Prefixing**: Validates that all custom items use the required `vendor:name` prefixing convention.
 - **Agentic Loops**: Verifies proper mapping of tool calls and reasoning items.
 

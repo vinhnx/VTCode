@@ -1,3 +1,4 @@
+use super::super::PtyCloseMode;
 use super::super::formatting::{format_terminal_file, sanitize_session_id};
 use super::super::manager_utils::exit_status_code;
 use super::super::session::{CommandEchoState, PtySessionHandle};
@@ -232,6 +233,10 @@ impl PtyManager {
     }
 
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
+        self.close_session_with_mode(session_id, PtyCloseMode::Graceful)
+    }
+
+    pub fn close_session_with_mode(&self, session_id: &str, mode: PtyCloseMode) -> Result<VTCodePtySession> {
         // Remove session from global map first
         let handle = {
             let mut sessions = self.inner.sessions.lock();
@@ -242,18 +247,26 @@ impl PtyManager {
 
         // Lock order: writer -> child -> reader_thread (follow documented order)
 
-        // 1. Close writer
-        {
+        // 1. Close writer. The `exit\n` courtesy is skipped on Immediate: a
+        // user-initiated exit kills the group right after, so the write would
+        // only race the SIGKILL.
+        if mode == PtyCloseMode::Graceful {
             let mut writer_guard = handle.writer.lock();
             if let Some(mut writer) = writer_guard.take() {
                 let _ = writer.write_all(b"exit\n");
                 let _ = writer.flush();
             }
+        } else {
+            drop(handle.writer.lock().take());
         }
 
-        // 2. Terminate child process using graceful termination
-        // This uses SIGTERM first, then SIGKILL after a grace period
-        handle.graceful_terminate();
+        // 2. Terminate child process. Graceful uses SIGTERM first, then SIGKILL
+        // after a grace period; Immediate signals SIGKILL to the group without
+        // waiting for a grace window.
+        match mode {
+            PtyCloseMode::Graceful => handle.graceful_terminate(),
+            PtyCloseMode::Immediate => handle.force_terminate(),
+        }
 
         // 3. Join reader thread with the same bounded helper Drop uses.
         // An unbounded join here blocked the async runloop whenever the PTY
@@ -270,12 +283,16 @@ impl PtyManager {
     }
 
     pub fn terminate_all_sessions(&self) {
+        self.terminate_all_sessions_with_mode(PtyCloseMode::Graceful);
+    }
+
+    pub fn terminate_all_sessions_with_mode(&self, mode: PtyCloseMode) {
         let session_ids: Vec<String> = {
             let sessions = self.inner.sessions.lock();
             sessions.keys().cloned().collect()
         };
         for id in session_ids {
-            if let Err(e) = self.close_session(&id) {
+            if let Err(e) = self.close_session_with_mode(&id, mode) {
                 warn!("Failed to close PTY session {}: {}", id, e);
             }
         }

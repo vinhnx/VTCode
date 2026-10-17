@@ -55,6 +55,100 @@ fn pluralize<'a>(count: u64, singular: &'a str, plural: &'a str) -> &'a str {
     if count == 1 { singular } else { plural }
 }
 
+/// Attribute only a successful file tool's recorded result, never current Git state.
+pub fn file_change_completed_event(
+    call_id: &str,
+    tool_name: &str,
+    args: &Value,
+    output: &Value,
+) -> Option<ThreadEvent> {
+    use crate::exec::events::{FileChangeItem, FileUpdateChange, PatchApplyStatus, PatchChangeKind};
+    let file_tool =
+        matches!(tool_name, "apply_patch" | "write_file" | "edit_file" | "create_file" | "delete_file" | "file")
+            || tool_name == crate::config::constants::tools::UNIFIED_FILE;
+    if !file_tool
+        || !crate::tools::tool_intent::classify_tool_intent(tool_name, args).mutating
+        || output.get("success").and_then(Value::as_bool) == Some(false)
+        || output.get("skipped").and_then(Value::as_bool) == Some(true)
+        || output.get("conflict").and_then(Value::as_bool) == Some(true)
+        || crate::tools::file_ops::diff_output_has_effective_change(output) == Some(false)
+    {
+        return None;
+    }
+    let previews = canonical_diff_previews(output);
+    let mut changes = Vec::new();
+    let mut diffs = Vec::new();
+    let mut additions = 0u64;
+    let mut deletions = 0u64;
+    let mut counts_available = true;
+    let mut diff_incomplete = previews.is_empty();
+    for preview in &previews {
+        if preview.get("is_empty").and_then(Value::as_bool) == Some(true)
+            && !matches!(preview.get("operation").and_then(Value::as_str), Some("created" | "deleted"))
+        {
+            continue;
+        }
+        let Some(path) = preview.get("path").and_then(Value::as_str) else {
+            continue;
+        };
+        let kind = match preview.get("operation").and_then(Value::as_str) {
+            Some("created" | "added") => PatchChangeKind::Add,
+            Some("deleted" | "removed") => PatchChangeKind::Delete,
+            _ => PatchChangeKind::Update,
+        };
+        changes.push(FileUpdateChange { path: path.to_owned(), kind });
+        diff_incomplete |= preview.get("truncated").and_then(Value::as_bool) == Some(true)
+            || preview.get("skipped").and_then(Value::as_bool) == Some(true)
+            || preview.get("content").and_then(Value::as_str).is_none();
+        if let Some(content) = preview.get("content").and_then(Value::as_str) {
+            diffs.push(content.to_owned());
+        }
+        if let (Some(a), Some(d)) = (
+            preview
+                .get("additions")
+                .or_else(|| preview.get("summary").and_then(|s| s.get("additions")))
+                .and_then(Value::as_u64),
+            preview
+                .get("deletions")
+                .or_else(|| preview.get("summary").and_then(|s| s.get("deletions")))
+                .and_then(Value::as_u64),
+        ) {
+            additions = additions.saturating_add(a);
+            deletions = deletions.saturating_add(d);
+        } else {
+            counts_available = false;
+        }
+    }
+    if changes.is_empty()
+        && let Some(paths) = output.get("modified_files").and_then(Value::as_array)
+    {
+        counts_available = false;
+        for path in paths.iter().filter_map(Value::as_str) {
+            changes.push(FileUpdateChange {
+                path: path.to_owned(),
+                kind: PatchChangeKind::Update,
+            });
+        }
+    }
+    if changes.is_empty() {
+        return None;
+    }
+    Some(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: ThreadItem {
+            id: format!("{call_id}:changes"),
+            context: None,
+            details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+                diff_incomplete: diff_incomplete.then_some(true),
+                changes,
+                status: PatchApplyStatus::Completed,
+                unified_diff: (!diffs.is_empty()).then(|| diffs.join("\n")),
+                additions: counts_available.then_some(additions),
+                deletions: counts_available.then_some(deletions),
+            })),
+        },
+    }))
+}
+
 fn trimmed_string_field<'a>(output: &'a Value, key: &str) -> Option<&'a str> {
     output
         .get(key)
@@ -647,6 +741,7 @@ impl SharedLifecycleEmitter {
         let item_id = self.next_item_id();
         self.pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: item_id,
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.to_string() }),
             },
@@ -698,11 +793,12 @@ impl SharedLifecycleEmitter {
         let item_id = self.next_item_id();
         self.pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: item_id,
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: text.to_string(),
                     stage: self.reasoning_stage.clone(),
-                }),
+                })),
             },
         }));
     }
@@ -743,7 +839,7 @@ impl SharedLifecycleEmitter {
         let item_id = item_id.unwrap_or_else(|| self.next_item_id());
         let stage = self.reasoning_stage.clone();
         emit_text_snapshot(&mut self.pending_events, &mut self.reasoning, item_id, move |text| {
-            ThreadItemDetails::Reasoning(ReasoningItem { text, stage: stage.clone() })
+            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { text, stage: stage.clone() }))
         })
     }
 
@@ -757,11 +853,12 @@ impl SharedLifecycleEmitter {
         };
         self.pending_events.push(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
             item: ThreadItem {
+                context: None,
                 id: item_id,
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: self.reasoning.text.clone(),
                     stage: self.reasoning_stage.clone(),
-                }),
+                })),
             },
         }));
         true
@@ -771,7 +868,7 @@ impl SharedLifecycleEmitter {
     pub fn complete_reasoning_stream(&mut self) -> bool {
         let stage = self.reasoning_stage.clone();
         complete_text_stream(&mut self.pending_events, &mut self.reasoning, move |text| {
-            ThreadItemDetails::Reasoning(ReasoningItem { text, stage: stage.clone() })
+            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { text, stage: stage.clone() }))
         })
     }
 
@@ -1043,6 +1140,7 @@ fn emit_text_snapshot(
 
     let item_id = state.item_id.get_or_insert(item_id).clone();
     let item = ThreadItem {
+        context: None,
         id: item_id,
         details: build_details(state.text.clone()),
     };
@@ -1074,7 +1172,11 @@ fn complete_text_stream(
     state.started = false;
     let text = std::mem::take(&mut state.text);
     pending_events.push(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: ThreadItem { id: item_id, details: build_details(text) },
+        item: ThreadItem {
+            context: None,
+            id: item_id,
+            details: build_details(text),
+        },
     }));
     true
 }
@@ -1093,6 +1195,7 @@ fn tool_invocation_item(
     outcome: Option<ToolOutcome>,
 ) -> ThreadItem {
     ThreadItem {
+        context: None,
         id: item_id,
         details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
             tool_name: tool_name.to_string(),
@@ -1113,6 +1216,7 @@ fn tool_output_item(
     output: impl Into<String>,
 ) -> ThreadItem {
     ThreadItem {
+        context: None,
         id: tool_output_item_id(call_item_id),
         details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
             call_id: call_item_id.to_string(),
@@ -1201,6 +1305,7 @@ pub fn tool_output_completed_event(
 pub fn error_item_completed_event(item_id: String, message: impl Into<String>) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {
+            context: None,
             id: item_id,
             details: ThreadItemDetails::Error(ErrorItem { message: message.into() }),
         },
@@ -1213,6 +1318,45 @@ fn progress_tool_arguments(arguments: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn explanation_file_attribution_ignores_noops_failures_and_unrelated_reads() {
+        let args = serde_json::json!({"path":"a.rs", "content":"same"});
+        let noop = serde_json::json!({"success":true,"diff":[{"path":"a.rs","operation":"updated","is_empty":true,"content":""}]});
+        assert!(file_change_completed_event("call", "write_file", &args, &noop).is_none());
+        let changed = serde_json::json!({"success":true,"diff":[{"path":"a.rs","operation":"updated","content":"--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new","additions":1,"deletions":1},{"path":"b.rs","operation":"updated","is_empty":true}]});
+        let event = file_change_completed_event("call", "write_file", &args, &changed).unwrap();
+        let ThreadEvent::ItemCompleted(e) = event else {
+            panic!("expected completed file change")
+        };
+        let ThreadItemDetails::FileChange(change) = e.item.details else {
+            panic!("expected file change")
+        };
+        assert_eq!(change.changes.len(), 1);
+        assert_eq!(change.changes[0].path, "a.rs");
+        assert_eq!(change.additions, Some(1));
+        assert_eq!(change.diff_incomplete, None);
+        let incomplete = serde_json::json!({"success":true,"diff":[{"path":"a.rs","operation":"updated","content":"+new","additions":1,"deletions":0,"truncated":true},{"path":"b.rs","operation":"updated","skipped":true}]});
+        let ThreadEvent::ItemCompleted(event) =
+            file_change_completed_event("second", "write_file", &args, &incomplete).unwrap()
+        else {
+            panic!("file event")
+        };
+        let ThreadItemDetails::FileChange(change) = event.item.details else {
+            panic!("file details")
+        };
+        assert_eq!(change.diff_incomplete, Some(true));
+        assert_eq!(change.additions, None, "partial totals must remain unavailable");
+        assert!(file_change_completed_event("call", "read_file", &args, &changed).is_none());
+        assert!(
+            file_change_completed_event(
+                "call",
+                "write_file",
+                &args,
+                &serde_json::json!({"success":false,"modified_files":["a.rs"]})
+            )
+            .is_none()
+        );
+    }
     use serde_json::json;
 
     use super::*;

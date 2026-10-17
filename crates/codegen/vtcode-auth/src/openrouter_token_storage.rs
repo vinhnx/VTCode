@@ -11,7 +11,7 @@ use ring::rand::{SecureRandom, SystemRandom};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::credentials::{AuthCredentialsStoreMode, CredentialStorage};
+use crate::credentials::{AuthCredentialsStoreMode, CredentialStorage, ResolvedStoreMode};
 use crate::storage_paths::{legacy_auth_file_paths, read_legacy_compatible_file};
 
 use super::openrouter_oauth::OpenRouterToken;
@@ -34,16 +34,17 @@ impl OpenRouterTokenStorage {
 
     pub(crate) fn save(&self, token: &OpenRouterToken, mode: AuthCredentialsStoreMode) -> Result<()> {
         self.backend
-            .store_json_exact_with_mode(token, mode)
+            .store_json_exact_with_mode(token, mode.effective_mode())
             .context("failed to persist openrouter token")
     }
 
     pub(crate) fn load(&self, mode: AuthCredentialsStoreMode) -> Result<Option<OpenRouterToken>> {
-        if let Some(token) = self.backend.load_json_exact_with_mode(mode)? {
+        let effective_mode = mode.effective_mode();
+        if let Some(token) = self.backend.load_json_exact_with_mode(effective_mode)? {
             return Ok(Some(token));
         }
 
-        if mode.effective_mode() != AuthCredentialsStoreMode::File {
+        if effective_mode != ResolvedStoreMode::File {
             return Ok(None);
         }
 
@@ -61,7 +62,7 @@ impl OpenRouterTokenStorage {
         if let Err(err) = self.backend.clear_exact_with_mode(effective_mode) {
             errors.push(err.to_string());
         }
-        if effective_mode == AuthCredentialsStoreMode::File {
+        if effective_mode == ResolvedStoreMode::File {
             if let Err(err) = clear_legacy_token_file() {
                 errors.push(err.to_string());
             }
@@ -78,7 +79,7 @@ impl OpenRouterTokenStorage {
     /// configured default mode.
     pub(crate) fn clear_all(&self) -> Result<()> {
         let mut errors = Vec::new();
-        for mode in [AuthCredentialsStoreMode::Keyring, AuthCredentialsStoreMode::File] {
+        for mode in [ResolvedStoreMode::Keyring, ResolvedStoreMode::File] {
             if let Err(err) = self.backend.clear_exact_with_mode(mode) {
                 errors.push(err.to_string());
             }

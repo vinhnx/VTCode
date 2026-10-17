@@ -361,10 +361,11 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
         path_outcome,
     } = inputs;
     let mut unavailable = Vec::new();
+    let mut backend_errors = Vec::new();
     let mut candidates = Vec::new();
     let mut truncated = false;
     let mut inventories: HashMap<PathBuf, DeclarationInventory> = HashMap::new();
-    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
+    let mut caches = backends::SourceTreeCache::default();
     let mut outline_stream_complete = false;
 
     if usage_enabled && !usage_backend_needed && !has_unsupported_files && !requested_unsupported_file_types {
@@ -376,25 +377,36 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
             truncated |= outcome.truncated;
             outline_stream_complete = outcome.stream_complete;
             for file in &outcome.files {
+                // Filter first: an empty-declaration file yields no definition
+                // candidates, and its inventory would have no exact name
+                // ranges, so the request-path `is_definition` dedup is
+                // unchanged. When `usage_backend_needed` is false, inventories
+                // are never consulted for completeness either, so skip the
+                // source read + parse entirely.
+                if !usage_backend_needed && file.declarations.is_empty() {
+                    continue;
+                }
                 backends::process_declaration_file(
                     &scope,
                     &languages,
                     &query,
                     file,
                     definition_enabled,
-                    &mut source_cache,
+                    &mut caches.sources,
                     &mut inventories,
                     &mut candidates,
                 );
             }
         }
-        Err(_) => {
+        Err(err) => {
+            backend_errors.push(format!("declaration: {}", format!("{err:#}").chars().take(240).collect::<String>()));
             if definition_enabled {
                 unavailable.push(CodeSearchResultType::Definition);
             }
             if usage_backend_needed {
                 unavailable.push(CodeSearchResultType::Usage);
             }
+            tracing::debug!(target: "vtcode.code_search", error = format!("{err:#}"), "declaration backend failed");
         }
         Ok(None) => {}
     }
@@ -416,18 +428,20 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
                 usage_backend_needed && !unavailable.contains(&CodeSearchResultType::Usage),
                 text_enabled,
                 outline_stream_complete,
-                &mut source_cache,
+                &mut caches,
                 &inventories,
                 &mut candidates,
             );
         }
-        Err(_) => {
+        Err(err) => {
+            backend_errors.push(format!("literal: {}", format!("{err:#}").chars().take(240).collect::<String>()));
             if text_enabled {
                 unavailable.push(CodeSearchResultType::Text);
             }
             if usage_backend_needed && !unavailable.contains(&CodeSearchResultType::Usage) {
                 unavailable.push(CodeSearchResultType::Usage);
             }
+            tracing::debug!(target: "vtcode.code_search", error = format!("{err:#}"), "literal backend failed");
         }
         Ok(None) => {}
     }
@@ -442,7 +456,11 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
             };
             ranking::append_path_candidates(&scope, base, outcome.paths, &languages, &mut candidates);
         }
-        Err(_) => unavailable.push(CodeSearchResultType::Path),
+        Err(err) => {
+            backend_errors.push(format!("path: {}", format!("{err:#}").chars().take(240).collect::<String>()));
+            unavailable.push(CodeSearchResultType::Path);
+            tracing::debug!(target: "vtcode.code_search", error = format!("{err:#}"), "path backend failed");
+        }
         Ok(None) => {}
     }
 
@@ -450,7 +468,20 @@ fn aggregate_search_results(inputs: SearchAggregationInputs) -> Result<Aggregate
     unavailable.dedup();
     let successful_count = result_types.len().saturating_sub(unavailable.len());
     if successful_count == 0 {
-        bail!("all requested code_search result categories are unavailable");
+        let requested = result_types
+            .iter()
+            .map(|kind| match kind {
+                CodeSearchResultType::Definition => "definition",
+                CodeSearchResultType::Usage => "usage",
+                CodeSearchResultType::Text => "text",
+                CodeSearchResultType::Path => "path",
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        bail!(
+            "all requested code_search result categories are unavailable (requested: {requested}; backend context: {}). Do not retry the identical query/path; drop file_types, broaden path, or use exec_command rg for literal text",
+            backend_errors.join("; ")
+        );
     }
 
     let mut results = ranking::deduplicate_and_order(candidates);
@@ -496,13 +527,44 @@ mod tests {
     use super::*;
     use crate::tools::ast_grep_binary::set_ast_grep_binary_override_for_tests;
     use crate::tools::ast_grep_language::AstGrepLanguage;
+    use crate::tools::grep_backend::LiteralSearchOutcome;
     use crate::tools::grep_file::LiteralSearchCandidate;
-    use crate::tools::outline_search::{DeclarationFileRecord, DeclarationRange, DeclarationRecord};
+    use crate::tools::outline_search::{
+        DeclarationFileRecord, DeclarationRange, DeclarationRecord, DeclarationSearchOutcome,
+    };
     use serde_json::json;
     use serial_test::serial;
     use std::collections::HashSet;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn code_search_unavailable_error_retains_bounded_backend_context() {
+        let fixture = code_search_fixture();
+        let scope = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").unwrap();
+        let Err(error) = aggregate_search_results(SearchAggregationInputs {
+            scope,
+            languages: vec![],
+            query: "Widget".into(),
+            result_types: vec![CodeSearchResultType::Text],
+            max_results: 5,
+            definition_enabled: false,
+            text_enabled: true,
+            usage_enabled: false,
+            usage_backend_needed: false,
+            has_unsupported_files: false,
+            requested_unsupported_file_types: false,
+            literal_outcome: Err(anyhow::anyhow!("backend refused: {}", "é".repeat(1000))),
+            declaration_outcome: Ok(None),
+            path_outcome: Ok(None),
+        }) else {
+            panic!("expected an unavailable category");
+        };
+        let text = error.to_string();
+        assert!(text.contains("literal: backend refused:"));
+        assert!(text.contains("requested: text"));
+        assert!(text.chars().count() < 600);
+    }
 
     #[test]
     fn result_identity_includes_effective_max_results() {
@@ -1085,6 +1147,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn code_search_leading_dash_text_query_succeeds_on_single_file() {
+        // Session session-vtcode-20261015T083154Z_961005-54191: text-only
+        // `path=README.md` queries starting with `- ` failed with "all
+        // requested categories unavailable" because ripgrep parsed the leading
+        // dash as flags. Asymmetric pair: dash-prefixed vs plain query must
+        // both succeed on the same single file.
+        let workspace = TempDir::new().expect("workspace");
+        fs::create_dir_all(workspace.path().join(".git")).expect("git marker");
+        fs::write(workspace.path().join("README.md"), "# Title\n\n- [Sessions](#sessions)\n\n## Sessions\n")
+            .expect("readme fixture");
+
+        let dashed = execute(
+            workspace.path(),
+            request(json!({
+                "query": "- [Sessions](#sessions)",
+                "path": "README.md",
+                "file_types": ["md"],
+                "result_types": ["text"]
+            })),
+        )
+        .await
+        .expect("leading-dash text search must succeed");
+        assert_eq!(dashed.returned, 1);
+        assert_eq!(dashed.results[0].result_type, CodeSearchResultType::Text);
+
+        let plain = execute(
+            workspace.path(),
+            request(json!({
+                "query": "Sessions",
+                "path": "README.md",
+                "result_types": ["text"]
+            })),
+        )
+        .await
+        .expect("plain text search must succeed");
+        assert!(plain.returned >= 1);
+    }
+
+    #[tokio::test]
     async fn code_search_bash_usage_is_successfully_unsupported() {
         let fixture = code_search_fixture();
         let response = execute(
@@ -1272,13 +1373,84 @@ mod tests {
             true,
             true,
             false,
-            &mut HashMap::new(),
+            &mut backends::SourceTreeCache::default(),
             &inventories,
             &mut candidates,
         );
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].result.result_type, CodeSearchResultType::Text);
+    }
+
+    #[test]
+    fn code_search_skips_empty_declaration_file_without_dropping_text() {
+        // Invariant guard for the filter-first skip in `aggregate_search_results`:
+        // when `usage_backend_needed` is false, a file with no matching
+        // declarations is not read/parsed, yet its literal (text) hits must
+        // still surface and no definition may be fabricated. The skip is
+        // output-neutral by construction (empty declarations imply empty exact
+        // name ranges); this pins that invariant against future refactors.
+        let fixture = code_search_fixture();
+        let scope = scope::resolve_scope(fixture.workspace.path(), "src/widget.rs").expect("scope");
+        let canonical = identity::canonicalize_existing_prefix(&fixture.workspace.path().join("src/widget.rs"));
+        let source = fs::read_to_string(&canonical).expect("fixture source");
+        let call_start = source.find("Widget();").expect("call site");
+
+        let literal_outcome = LiteralSearchOutcome {
+            candidates: vec![LiteralSearchCandidate {
+                path: fixture.workspace.path().join("src/widget.rs"),
+                line: 2,
+                column: 5,
+                byte_start: call_start,
+                byte_end: call_start + "Widget".len(),
+                matched_text: "Widget".to_string(),
+                snippet: "    Widget();".to_string(),
+            }],
+            truncated: false,
+        };
+        let declaration_outcome = DeclarationSearchOutcome {
+            files: vec![DeclarationFileRecord {
+                path: canonical,
+                language: AstGrepLanguage::Rust,
+                declarations: Vec::new(),
+                complete: true,
+            }],
+            stream_complete: true,
+            truncated: false,
+        };
+
+        let aggregation = aggregate_search_results(SearchAggregationInputs {
+            scope,
+            languages: vec![AstGrepLanguage::Rust],
+            query: "Widget".to_string(),
+            result_types: vec![CodeSearchResultType::Definition, CodeSearchResultType::Text],
+            max_results: 100,
+            definition_enabled: true,
+            text_enabled: true,
+            usage_enabled: false,
+            usage_backend_needed: false,
+            has_unsupported_files: false,
+            requested_unsupported_file_types: false,
+            literal_outcome: Ok(Some(literal_outcome)),
+            declaration_outcome: Ok(Some(declaration_outcome)),
+            path_outcome: Ok(None),
+        })
+        .expect("aggregation");
+
+        assert!(
+            aggregation
+                .results
+                .iter()
+                .any(|result| result.result_type == CodeSearchResultType::Text),
+            "empty-declaration file's literal hit must still surface as text"
+        );
+        assert!(
+            !aggregation
+                .results
+                .iter()
+                .any(|result| result.result_type == CodeSearchResultType::Definition),
+            "an empty-declaration file cannot yield definitions"
+        );
     }
 
     #[test]
@@ -1358,7 +1530,7 @@ mod tests {
             true,
             true,
             false,
-            &mut HashMap::new(),
+            &mut backends::SourceTreeCache::default(),
             &inventories,
             &mut mixed,
         );

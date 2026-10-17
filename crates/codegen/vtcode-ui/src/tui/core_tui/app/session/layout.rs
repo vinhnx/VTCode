@@ -14,6 +14,7 @@ pub(super) enum BottomPanelKind {
     HistoryPicker,
     SlashPalette,
     TaskPanel,
+    LocalAgents,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,11 +66,11 @@ pub(super) fn resolve_bottom_panel_spec(
         Some(TransientSurface::TaskPanel) => {
             panel_from_split(session, split_context, BottomPanelKind::TaskPanel, split_inline_task_panel_area)
         }
+        Some(TransientSurface::LocalAgents) => {
+            panel_from_split(session, split_context, BottomPanelKind::LocalAgents, split_inline_local_agents_area)
+        }
         Some(
-            TransientSurface::FloatingOverlay
-            | TransientSurface::DiffPreview
-            | TransientSurface::ToolOutputViewer
-            | TransientSurface::LocalAgents,
+            TransientSurface::FloatingOverlay | TransientSurface::DiffPreview | TransientSurface::ToolOutputViewer,
         )
         | None => None,
     };
@@ -118,6 +119,36 @@ fn split_inline_task_panel_area(session: &mut Session, area: Rect) -> (Rect, Opt
     let visible_lines = task_panel::row_count(panel_lines, area.width);
     let desired_list_rows = list_panel::rows_to_u16(visible_lines.min(ui::INLINE_LIST_MAX_ROWS_MULTILINE));
     let fixed_rows = list_panel::fixed_section_rows(1, 1, 0);
+    list_panel::split_bottom_list_panel(area, fixed_rows, desired_list_rows)
+}
+
+fn split_inline_local_agents_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.width == 0 || area.height == 0 {
+        return (area, None);
+    }
+    if !session.inline_lists_visible() || !session.local_agents_visible() {
+        return (area, None);
+    }
+    let fixed_rows = render::local_agents_fixed_rows();
+    let max_panel_height = area.height.saturating_sub(1);
+    if max_panel_height <= fixed_rows {
+        return (area, None);
+    }
+    if session.local_agents_is_expanded() {
+        let panel_height = render::local_agents_expanded_panel_height(max_panel_height);
+        if panel_height == 0 {
+            return (area, None);
+        }
+        let [content_area, panel_area] = area
+            .try_layout(&Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]))
+            .unwrap_or([area, Rect::ZERO]);
+        if panel_area.height == 0 {
+            return (area, None);
+        }
+        return (content_area, Some(panel_area));
+    }
+    let entry_count = session.local_agents_entry_count();
+    let desired_list_rows = list_panel::rows_to_u16(entry_count.clamp(1, ui::INLINE_LIST_MAX_ROWS));
     list_panel::split_bottom_list_panel(area, fixed_rows, desired_list_rows)
 }
 

@@ -351,6 +351,17 @@ impl<S: OpenAiCompatSpec> OpenAiCompatCore<S> {
         S::insert_tool_choice(self, request, &mut payload);
         S::insert_reasoning(self, request, &mut payload)?;
 
+        if let Some(tier) = request.service_tier.as_deref().map(str::trim).filter(|v| !v.is_empty())
+            && <vtcode_config::models::Provider as std::str::FromStr>::from_str(S::KEY)
+                .map(|provider| {
+                    use vtcode_config::models::ProviderModelSupport;
+                    provider.supports_service_tier(&request.model)
+                })
+                .unwrap_or(false)
+        {
+            payload.insert("service_tier".to_owned(), Value::String(tier.to_owned()));
+        }
+
         if S::INCLUDE_USER_ID
             && let Some(user_id) = request
                 .metadata

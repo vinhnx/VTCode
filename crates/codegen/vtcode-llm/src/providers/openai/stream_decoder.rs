@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 use std::time::Instant;
 use vtcode_commons::model_family::find_family_for_model;
 
-use super::responses_api::parse_responses_payload;
+use super::responses_api::parse_responses_completion;
 use super::streaming::OpenAIStreamTelemetry;
 
 fn strip_reasoning_for_model(model: &str, mut response: provider::LLMResponse) -> provider::LLMResponse {
@@ -350,9 +350,9 @@ fn create_chat_event_stream(
 
             buf.extend_from_slice(&chunk);
 
-            while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
-                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
-                offset = split_idx + delimiter_len;
+            while let Some(event) =
+                crate::providers::shared::next_sse_event(&buf, &mut offset).expect("valid utf-8 stream data")
+            {
 
                 if let Some(data_payload) = extract_data_payload(event) {
                     let trimmed_payload = data_payload.trim();
@@ -425,12 +425,9 @@ fn create_chat_event_stream(
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            if offset > 0 {
-                buf.drain(..offset);
-                offset = 0;
-            }
+            // Keep `buf` bounded to the unprocessed tail rather than growing
+            // for the entire stream.
+            crate::providers::shared::drain_consumed_sse(&mut buf, &mut offset);
         }
 
         let response = aggregator.finalize();
@@ -535,9 +532,9 @@ pub(crate) fn create_responses_stream(
 
             buf.extend_from_slice(&chunk);
 
-            while let Some((split_idx, delimiter_len)) = crate::providers::shared::find_sse_boundary_bytes(&buf, offset) {
-                let event = std::str::from_utf8(&buf[offset..split_idx]).expect("valid utf-8 stream data");
-                offset = split_idx + delimiter_len;
+            while let Some(event) =
+                crate::providers::shared::next_sse_event(&buf, &mut offset).expect("valid utf-8 stream data")
+            {
                 #[cfg(debug_assertions)]
                 {
                     streamed_events_counter = streamed_events_counter.saturating_add(1);
@@ -715,12 +712,9 @@ pub(crate) fn create_responses_stream(
                 }
             }
 
-            // Drain the consumed prefix so `buf` stays bounded to the
-            // unprocessed tail rather than growing for the entire stream.
-            if offset > 0 {
-                buf.drain(..offset);
-                offset = 0;
-            }
+            // Keep `buf` bounded to the unprocessed tail rather than growing
+            // for the entire stream.
+            crate::providers::shared::drain_consumed_sse(&mut buf, &mut offset);
 
             if done {
                 break;
@@ -739,7 +733,7 @@ pub(crate) fn create_responses_stream(
         };
 
         let final_aggregator_response = aggregator.finalize();
-        let mut response = match parse_responses_payload(response_value.clone(), model.clone(), include_metrics) {
+        let mut response = match parse_responses_completion(response_value.clone(), model.clone(), include_metrics) {
             Ok(response) => response,
             Err(_)
                 if final_response_output_is_empty(&response_value)

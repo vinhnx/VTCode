@@ -105,6 +105,7 @@ mod tests {
 
     fn failed_turn(message: &str) -> vtcode_core::exec::events::ThreadEvent {
         vtcode_core::exec::events::ThreadEvent::TurnFailed(vtcode_core::exec::events::TurnFailedEvent {
+            completed_at: None,
             message: message.to_string(),
             usage: None,
         })

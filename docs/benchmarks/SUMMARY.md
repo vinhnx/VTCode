@@ -2,9 +2,9 @@
 
 ## Quick Reference
 
-| Model                 | Pass@1    | Latency (P50) | Cost           | Date       | Tier         |
-| --------------------- | --------- | ------------- | -------------- | ---------- | ------------ |
-| **gpt-5-nano**        | **94.5%** | 10.4s         | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
+| Model                  | Pass@1    | Latency (P50) | Cost           | Date       | Tier         |
+| ---------------------- | --------- | ------------- | -------------- | ---------- | ------------ |
+| **gpt-5-nano**         | **94.5%** | 10.4s         | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
 | gemini-3-flash-preview | 61.6%     | 0.97s         | $0.00 (free)   | 2025-10-22 | Mid-Range    |
 
 ## Latest Results
@@ -13,17 +13,17 @@
 
 **Performance:**
 
--   155/164 tests passed (94.5%)
--   10.4s median latency
--   ~$0.10-0.30/1M tokens (very affordable)
--   TOP 5 globally
+- 155/164 tests passed (94.5%)
+- 10.4s median latency
+- ~$0.10-0.30/1M tokens (very affordable)
+- TOP 5 globally
 
 **Key Findings:**
 
--   Frontier-tier accuracy competitive with $15-60/1M models
--   Only 9 failures out of 164 tasks
--   Comparable to o1, Claude 3.7 Sonnet, GPT-4.5 Turbo
--   10-50x cheaper than premium competitors
+- Frontier-tier accuracy competitive with $15-60/1M models
+- Only 9 failures out of 164 tasks
+- Comparable to o1, Claude 3.7 Sonnet, GPT-4.5 Turbo
+- 10-50x cheaper than premium competitors
 
 **Full Report:** [README.md](README.md)
 
@@ -31,16 +31,16 @@
 
 **Performance:**
 
--     101/164 tests passed (61.6%)
--    0.97s median latency
--    $0.00 cost (free tier)
+- 101/164 tests passed (61.6%)
+- 0.97s median latency
+- $0.00 cost (free tier)
 
 **Key Findings:**
 
--   All failures were logic errors (no syntax errors)
--   Consistent sub-second response times
--   Suitable for development and prototyping
--   Consider premium models for >70% accuracy needs
+- All failures were logic errors (no syntax errors)
+- Consistent sub-second response times
+- Suitable for development and prototyping
+- Consider premium models for >70% accuracy needs
 
 **Full Report:** [HUMANEVAL_2025-10-22.md](HUMANEVAL_2025-10-22.md)
 
@@ -67,19 +67,19 @@ python3 scripts/generate_benchmark_chart.py reports/HE_20251022-135834_gemini-3-
 
 Output:
 
-```
+```text
 
-                        HUMANEVAL BENCHMARK RESULTS                           
+                        HUMANEVAL BENCHMARK RESULTS
 
-  PASS RATE:  61.6%                                                         
-                                                                              
-  []  
-   101 passed     63 failed                                              
+  PASS RATE:  61.6%
+
+  []
+   101 passed     63 failed
 
 ```
 
 ## Files
 
--   **Detailed Analysis:** [README.md](README.md)
--   **Methodology:** [README.md](README.md)
--   **Scripts:** `../../scripts/bench_humaneval.py`, `../../scripts/generate_benchmark_chart.py`
+- **Detailed Analysis:** [README.md](README.md)
+- **Methodology:** [README.md](README.md)
+- **Scripts:** `../../scripts/bench_humaneval.py`, `../../scripts/generate_benchmark_chart.py`

@@ -1,30 +1,19 @@
 //! Tool execution entrypoints for ToolRegistry.
 
 use anyhow::{Context, Result, anyhow};
-use hashbrown::HashMap;
-use once_cell::sync::Lazy;
-use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::borrow::Cow;
-use std::cell::RefCell;
 use std::future::Future;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tokio::task::Id as TokioTaskId;
 use tracing::{trace, warn};
 use vtcode_commons::ErrorCategory;
 
 use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::memory_pool::SizeRecommendation;
-use crate::mcp::McpToolExecutor;
-use crate::retry::RetryPolicyCoreExt;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
-use crate::tools::invocation::ToolInvocationId;
-use crate::tools::mcp::{legacy_mcp_tool_name, parse_canonical_mcp_tool_name};
 use crate::tools::request_response::{ToolCallRequest, ToolCallResponse};
-use crate::tools::safety_gateway::{SafetyContext, SafetyDecision, SafetyError as GatewaySafetyError};
 use crate::tools::tool_intent;
 use crate::tools::unified_error::UnifiedErrorKind;
 use crate::tools::unified_error::UnifiedToolError;
@@ -32,216 +21,17 @@ use crate::ui::search::fuzzy_match;
 
 use super::assembly::public_tool_name_candidates;
 use super::execution_kernel;
-use super::normalize_tool_output;
+use super::reentrancy::ToolReentrancyGuard;
 use super::{
     ExecSettlementMode, ExecutionPolicySnapshot, ToolErrorType, ToolExecutionError, ToolExecutionOutcome,
-    ToolExecutionRecord, ToolExecutionRequest, ToolHandler, ToolRegistry,
+    ToolExecutionRecord, ToolExecutionRequest, ToolRegistry,
 };
 use vtcode_config::constants::execution::{LOOP_THROTTLE_MAX_MS, LOOP_THROTTLE_REGISTRY_BASE_MS};
 
-const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
 /// When a read-only tool call has been repeated this many times, stop returning
 /// cached results and return a hard error instead.  Must be greater than
 /// MIN_READONLY_IDENTICAL_LIMIT (currently 2).
 const LOOP_HARD_BLOCK_REPEAT_COUNT: usize = 5;
-
-fn requests_unsandboxed_shell_permissions(tool_name: &str, args: &Value) -> bool {
-    if !tool_intent::is_command_run_tool_call(tool_name, args) {
-        return false;
-    }
-
-    matches!(
-        args.get("sandbox_permissions").and_then(Value::as_str),
-        Some(value) if value.eq_ignore_ascii_case("require_escalated") || value.eq_ignore_ascii_case("bypass_sandbox")
-    )
-}
-// Tools should never recursively re-enter themselves in a single task.
-// Keeping this at 1 blocks the first re-entry (A -> ... -> A) to fail fast
-// on alias/self-recursion bugs with minimal extra work.
-const REENTRANCY_PER_TOOL_LIMIT: usize = 1;
-
-/// Extract the file paths a non-readonly tool call is about to mutate.
-///
-/// Returns an empty Vec for tool calls that aren't path-mutating (in which
-/// case no cache invalidation is needed). Delegates to the canonical
-/// `apply_patch::mutation_target_paths`, which covers singular `path`
-/// fields, `destination`/`destination_path` (move/copy targets), and
-/// `items`/`paths`/`files` arrays.
-fn mutated_target_paths(tool_name: &str, args: &Value) -> Vec<String> {
-    crate::tools::apply_patch::mutation_target_paths(tool_name, args)
-        .into_iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect()
-}
-
-/// Returns `true` for shell/command tools that can mutate files without
-/// exposing a target path in their arguments (e.g. `sed -i`, `cargo build`,
-/// `make`). When such a command is classified as mutating we cannot know which
-/// files changed, so cached reads must be invalidated conservatively.
-fn is_pathless_mutating_command(tool_name: &str) -> bool {
-    matches!(tool_name, tools::UNIFIED_EXEC | tools::EXEC_COMMAND | tools::EXEC_PTY_CMD | tools::WRITE_STDIN)
-}
-
-fn structured_tool_output_error(value: &Value) -> Option<String> {
-    let obj = value.as_object()?;
-    if obj.get("success").and_then(Value::as_bool) == Some(false) {
-        return obj
-            .get("error")
-            .map(tool_error_value_to_string)
-            .or_else(|| Some("tool reported success=false".to_string()));
-    }
-
-    obj.get("error").map(tool_error_value_to_string)
-}
-
-fn tool_error_value_to_string(value: &Value) -> String {
-    if let Some(message) = value.as_str() {
-        return message.to_string();
-    }
-    if let Some(message) = value.get("message").and_then(Value::as_str) {
-        return message.to_string();
-    }
-    value.to_string()
-}
-
-/// Global reentrancy stacks for tokio tasks.
-///
-/// Uses `parking_lot::Mutex` for lower overhead on short critical sections.
-/// Each entry/exit is a single Vec push/pop under a task ID key.
-///
-/// If contention becomes an issue under high concurrency, consider:
-/// - Using a concurrent hash map (e.g., `dashmap`)
-/// - Using task-local storage via `tokio::task_local!`
-/// - Partitioning the map by task ID hash to reduce contention
-#[derive(Debug)]
-struct ReentrancyFrame {
-    id: u64,
-    tool_name: String,
-}
-
-static NEXT_REENTRANCY_FRAME_ID: AtomicU64 = AtomicU64::new(1);
-static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<ReentrancyFrame>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-thread_local! {
-    static THREAD_REENTRANCY_STACK: RefCell<Vec<ReentrancyFrame>> = const { RefCell::new(Vec::new()) };
-}
-
-fn lock_reentrancy_stacks() -> parking_lot::MutexGuard<'static, HashMap<TokioTaskId, Vec<ReentrancyFrame>>> {
-    TOOL_REENTRANCY_STACKS.lock()
-}
-
-#[derive(Debug)]
-struct ReentrancyViolation {
-    stack_depth: usize,
-    tool_reentry_count: usize,
-    stack_trace: String,
-}
-
-enum ReentrancyContext {
-    Task(TokioTaskId),
-    Thread,
-}
-
-struct ToolReentrancyGuard {
-    context: Option<ReentrancyContext>,
-    frame_id: u64,
-}
-
-impl ToolReentrancyGuard {
-    fn enter(tool_name: &str, allow_parallel_sibling: bool) -> std::result::Result<Self, ReentrancyViolation> {
-        let frame_id = NEXT_REENTRANCY_FRAME_ID.fetch_add(1, Ordering::Relaxed);
-        if let Some(task_id) = tokio::task::try_id() {
-            let mut stacks = lock_reentrancy_stacks();
-            let stack = stacks.entry(task_id).or_default();
-            let stack_depth = stack.len();
-            let tool_reentry_count = stack.iter().filter(|frame| frame.tool_name == tool_name).count();
-
-            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
-                || (!allow_parallel_sibling && tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT)
-            {
-                let stack_trace = if stack.is_empty() {
-                    "<empty>".to_string()
-                } else {
-                    stack
-                        .iter()
-                        .map(|frame| frame.tool_name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" -> ")
-                };
-                return Err(ReentrancyViolation { stack_depth, tool_reentry_count, stack_trace });
-            }
-
-            stack.push(ReentrancyFrame { id: frame_id, tool_name: tool_name.to_string() });
-            return Ok(Self {
-                context: Some(ReentrancyContext::Task(task_id)),
-                frame_id,
-            });
-        }
-
-        let violation = THREAD_REENTRANCY_STACK.with(|stack_cell| {
-            let mut stack = stack_cell.borrow_mut();
-            let stack_depth = stack.len();
-            let tool_reentry_count = stack.iter().filter(|frame| frame.tool_name == tool_name).count();
-
-            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
-                || (!allow_parallel_sibling && tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT)
-            {
-                let stack_trace = if stack.is_empty() {
-                    "<empty>".to_string()
-                } else {
-                    stack
-                        .iter()
-                        .map(|frame| frame.tool_name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" -> ")
-                };
-                Some(ReentrancyViolation { stack_depth, tool_reentry_count, stack_trace })
-            } else {
-                stack.push(ReentrancyFrame { id: frame_id, tool_name: tool_name.to_string() });
-                None
-            }
-        });
-
-        if let Some(violation) = violation {
-            return Err(violation);
-        }
-
-        Ok(Self { context: Some(ReentrancyContext::Thread), frame_id })
-    }
-}
-
-impl Drop for ToolReentrancyGuard {
-    fn drop(&mut self) {
-        let Some(context) = self.context.take() else {
-            return;
-        };
-
-        match context {
-            ReentrancyContext::Task(task_id) => {
-                let mut stacks = lock_reentrancy_stacks();
-                let should_remove = if let Some(stack) = stacks.get_mut(&task_id) {
-                    if let Some(position) = stack.iter().position(|frame| frame.id == self.frame_id) {
-                        stack.remove(position);
-                    }
-                    stack.is_empty()
-                } else {
-                    false
-                };
-                if should_remove {
-                    stacks.remove(&task_id);
-                }
-            }
-            ReentrancyContext::Thread => {
-                THREAD_REENTRANCY_STACK.with(|stack_cell| {
-                    let mut stack = stack_cell.borrow_mut();
-                    if let Some(position) = stack.iter().position(|frame| frame.id == self.frame_id) {
-                        stack.remove(position);
-                    }
-                });
-            }
-        }
-    }
-}
 
 impl ToolRegistry {
     fn annotate_timeout_error_payload(
@@ -257,77 +47,8 @@ impl ToolRegistry {
         }
     }
 
-    fn safety_denial_error(
-        &self,
-        tool_name: &str,
-        reason: &str,
-        violation: Option<GatewaySafetyError>,
-        retry_after: Option<Duration>,
-    ) -> ToolExecutionError {
-        let mut error = ToolExecutionError::policy_violation(
-            tool_name.to_string(),
-            format!("Safety gateway denied execution: {reason}"),
-        );
-
-        match violation {
-            Some(GatewaySafetyError::RateLimitExceeded { .. }) => {
-                error.error_type = ToolErrorType::NetworkError;
-                error.category = ErrorCategory::RateLimit;
-                error.retryable = true;
-                error.is_recoverable = true;
-            }
-            Some(GatewaySafetyError::TurnLimitReached { .. })
-            | Some(GatewaySafetyError::SessionLimitReached { .. }) => {
-                error.error_type = ToolErrorType::ExecutionError;
-                error.category = ErrorCategory::ResourceExhausted;
-                error.retryable = false;
-                error.is_recoverable = false;
-            }
-            Some(GatewaySafetyError::PlanningPolicyViolation(_)) => {
-                error.error_type = ToolErrorType::PolicyViolation;
-                error.category = ErrorCategory::PlanningPolicyViolation;
-                error.retryable = false;
-                error.is_recoverable = true;
-            }
-            Some(GatewaySafetyError::CommandPolicyDenied(_))
-            | Some(GatewaySafetyError::DotfileProtectionViolation(_))
-            | None => {}
-        }
-
-        if let Some(delay) = retry_after {
-            error.retry_after_ms = Some(delay.as_millis() as u64);
-        }
-        error.circuit_breaker_impact = error.category.should_trip_circuit_breaker();
-        error.recovery_suggestions = error.category.recovery_suggestions();
-        error
-    }
-
     pub fn safety_gateway(&self) -> std::sync::Arc<crate::tools::safety_gateway::SafetyGateway> {
         std::sync::Arc::clone(&self.safety_gateway)
-    }
-
-    async fn check_safety_for_request(
-        &self,
-        tool_name: &str,
-        args: &Value,
-        invocation_id: Option<String>,
-    ) -> Option<ToolExecutionError> {
-        let context = SafetyContext::new(self.harness_context_snapshot().session_id);
-        let invocation_id = invocation_id
-            .and_then(|id| ToolInvocationId::parse(&id).ok())
-            .unwrap_or_default();
-        let safety_result = self
-            .safety_gateway
-            .check_and_record_with_id(&context, tool_name, args, Some(invocation_id))
-            .await;
-
-        match safety_result.decision {
-            SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => None,
-            SafetyDecision::Deny(reason) => Some(
-                self.safety_denial_error(tool_name, &reason, safety_result.violation, safety_result.retry_after)
-                    .with_surface("tool_registry"),
-            ),
-        }
     }
 
     /// Inline-delegating wrapper that returns the inner future directly to
@@ -351,182 +72,6 @@ impl ToolRegistry {
                     .with_safety_prevalidated(false),
             );
         self.execute_tool_request_internal(request).await
-    }
-
-    async fn execute_tool_request_internal(&self, request: ToolExecutionRequest) -> ToolExecutionOutcome {
-        let execution_started_at = Instant::now();
-        let tool_name = &request.tool_name;
-        let policy = request.policy.clone();
-
-        if requests_unsandboxed_shell_permissions(tool_name, &request.args) {
-            let message = format!(
-                "sandbox_permissions in `{tool_name}` requires an enforced operator approval decision before unsandboxed execution"
-            );
-            let error = ToolExecutionError::new(tool_name.clone(), ToolErrorType::PolicyViolation, message)
-                .with_tool_call_context(tool_name, &request.args)
-                .with_surface("tool_registry");
-            return ToolExecutionOutcome::failure(tool_name.clone(), 1, error)
-                .with_execution_metadata(execution_started_at.elapsed(), None);
-        }
-
-        let mut retry_policy = crate::retry::RetryPolicy::from_retries(
-            policy.max_retries as u32,
-            policy.retry_base_delay,
-            policy.retry_max_delay,
-            policy.retry_multiplier,
-        );
-        retry_policy.jitter = policy.retry_jitter.clamp(0.0, 1.0);
-
-        let max_attempts = retry_policy.max_attempts.max(1);
-        let mut attempt_index: u32 = 0;
-        let mut last_error: Option<ToolExecutionError> = None;
-
-        while attempt_index < max_attempts {
-            if !policy.safety_prevalidated
-                && let Some(safety_error) = self
-                    .check_safety_for_request(tool_name, &request.args, policy.invocation_id.clone())
-                    .await
-            {
-                let decorated = safety_error
-                    .with_tool_call_context(tool_name, &request.args)
-                    .with_attempt(attempt_index + 1)
-                    .with_surface("tool_registry");
-                if let Some(terminal) = Self::classify_and_step(
-                    decorated,
-                    &retry_policy,
-                    tool_name,
-                    &mut attempt_index,
-                    max_attempts,
-                    &mut last_error,
-                )
-                .await
-                {
-                    let category = Some(terminal.category);
-                    return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal)
-                        .with_execution_metadata(execution_started_at.elapsed(), category);
-                }
-                continue;
-            }
-
-            let result = self
-                .execute_public_tool_ref_dispatch(
-                    tool_name,
-                    &request.args,
-                    policy.prevalidated,
-                    execution_kernel::DispatchMode::Harness,
-                    policy.exec_settlement_mode,
-                )
-                .await;
-
-            match result {
-                Ok(output) => {
-                    if let Some(structured_error) = ToolExecutionError::from_tool_output(&output) {
-                        let decorated = structured_error
-                            .with_tool_call_context(tool_name, &request.args)
-                            .with_attempt(attempt_index + 1)
-                            .with_surface("tool_registry");
-                        if let Some(terminal) = Self::classify_and_step(
-                            decorated,
-                            &retry_policy,
-                            tool_name,
-                            &mut attempt_index,
-                            max_attempts,
-                            &mut last_error,
-                        )
-                        .await
-                        {
-                            let category = Some(terminal.category);
-                            return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal)
-                                .with_execution_metadata(execution_started_at.elapsed(), category);
-                        }
-                        continue;
-                    }
-
-                    let recovered_category = last_error.as_ref().map(|error| error.category);
-                    return ToolExecutionOutcome::success(tool_name, attempt_index + 1, output)
-                        .with_execution_metadata(execution_started_at.elapsed(), recovered_category);
-                }
-                Err(error) => {
-                    let mut base = ToolExecutionError::from_anyhow(
-                        tool_name,
-                        &error,
-                        attempt_index,
-                        false,
-                        false,
-                        Some("tool_registry"),
-                    );
-                    let lower_message = base.message.to_ascii_lowercase();
-                    let lower_original = base.original_error.as_deref().unwrap_or_default().to_ascii_lowercase();
-                    if lower_message.contains("circuit breaker") || lower_original.contains("circuit breaker") {
-                        base.category = ErrorCategory::CircuitOpen;
-                        base.retryable = true;
-                        base.is_recoverable = true;
-                        if base.retry_delay_ms.is_none() {
-                            base.retry_delay_ms = Some(policy.retry_base_delay.as_millis() as u64);
-                        }
-                    }
-
-                    if let Some(terminal) = Self::classify_and_step(
-                        base,
-                        &retry_policy,
-                        tool_name,
-                        &mut attempt_index,
-                        max_attempts,
-                        &mut last_error,
-                    )
-                    .await
-                    {
-                        let category = Some(terminal.category);
-                        return ToolExecutionOutcome::failure(tool_name, attempt_index + 1, terminal)
-                            .with_execution_metadata(execution_started_at.elapsed(), category);
-                    }
-                    continue;
-                }
-            }
-        }
-
-        let outcome = ToolExecutionOutcome::failure(
-            tool_name,
-            max_attempts,
-            last_error.unwrap_or_else(|| {
-                ToolExecutionError::new(
-                    tool_name,
-                    ToolErrorType::ExecutionError,
-                    format!("Tool '{}' failed after {} attempts with no structured error", tool_name, max_attempts),
-                )
-                .with_surface("tool_registry")
-            }),
-        );
-        let category = outcome.last_error_category;
-        outcome.with_execution_metadata(execution_started_at.elapsed(), category)
-    }
-
-    /// Apply the retry policy to a `ToolExecutionError` and either schedule
-    /// the next attempt (sleep + bump index, return `None`) or report a
-    /// terminal failure (return `Some(structured)` for the caller to surface).
-    ///
-    /// Consolidates the three identical retry/sleep/continue blocks that
-    /// previously lived inline in `execute_tool_request_internal`.
-    async fn classify_and_step(
-        decorated: ToolExecutionError,
-        retry_policy: &crate::retry::RetryPolicy,
-        tool_name: &str,
-        attempt_index: &mut u32,
-        max_attempts: u32,
-        last_error: &mut Option<ToolExecutionError>,
-    ) -> Option<ToolExecutionError> {
-        let structured = retry_policy.apply_to_tool_execution_error(decorated, *attempt_index, Some(tool_name));
-        let retry_delay = structured.retry_after().or_else(|| structured.retry_delay());
-        if structured.retryable
-            && *attempt_index + 1 < max_attempts
-            && let Some(delay) = retry_delay
-        {
-            *last_error = Some(structured);
-            tokio::time::sleep(delay).await;
-            *attempt_index = attempt_index.saturating_add(1);
-            return None;
-        }
-        Some(structured)
     }
 
     async fn should_skip_loop_detection_for_exec_continuation(&self, tool_name: &str, args: &Value) -> bool {
@@ -707,7 +252,7 @@ impl ToolRegistry {
     /// [`execution_kernel::DispatchMode::Harness`]; direct model-originated entry always passes
     /// [`execution_kernel::DispatchMode::ModelPublic`], so a stray `prevalidated=true` can never by
     /// itself widen the dispatchable surface.
-    async fn execute_public_tool_ref_dispatch(
+    pub(super) async fn execute_public_tool_ref_dispatch(
         &self,
         name: &str,
         args: &Value,
@@ -735,6 +280,8 @@ impl ToolRegistry {
         prevalidated: bool,
         exec_settlement_mode: ExecSettlementMode,
     ) -> Result<Value> {
+        let resolved = self.resolve_tool_name_with_display(name);
+        self.enforce_matrix_role(&resolved.canonical)?;
         if let Err(error) = crate::core::agent::snapshots::declare_prompt_edit(
             self.harness_context_snapshot().session_id,
             name.to_owned(),
@@ -778,23 +325,10 @@ impl ToolRegistry {
             }
         }
 
-        // Look up the canonical tool name by trying to resolve the alias
-        // The inventory's registration_for() handles alias resolution
-        let (tool_name, tool_name_owned, display_name) =
-            if let Some(registration) = self.inventory.registration_for(name) {
-                let canonical = registration.name().to_string();
-                let display = if canonical == name {
-                    canonical.clone()
-                } else {
-                    format!("{name} (alias for {canonical})")
-                };
-                (canonical.clone(), canonical.clone(), display)
-            } else {
-                // If not found in registration, use the name as-is (for potential MCP tools or error handling)
-                let tool_name_owned = name.to_string();
-                let display_name = tool_name_owned.clone();
-                (tool_name_owned.clone(), tool_name_owned, display_name)
-            };
+        let resolved_name = self.resolve_tool_name_with_display(name);
+        let tool_name = resolved_name.canonical;
+        let tool_name_owned = tool_name.clone();
+        let display_name = resolved_name.display;
 
         // PERFORMANCE OPTIMIZATION: Check hot cache for tool lookup using the canonical name.
         // This must happen AFTER alias resolution so that aliased tools resolve to their
@@ -817,31 +351,10 @@ impl ToolRegistry {
             self.hot_tool_cache.write().put(tool_name.clone(), tool_arc.clone());
         }
 
-        let parameter_schema = self
-            .inventory
-            .registration_for(&tool_name)
-            .and_then(|registration| registration.parameter_schema().cloned());
-        let normalized_args = execution_kernel::normalize_tool_args(&tool_name, args, parameter_schema.as_ref())?;
-        // Plan-mode inspections default to a smaller per-result preview so a
-        // research fan-out fits the turn budget; explicit non-verification
-        // values are clamped to the plan max while verification commands keep
-        // the full default (same predicate as the
-        // fast-reuse exemption below).
-        let is_verification_command = matches!(
-            tool_intent::classify_shell_activity(&tool_name, normalized_args.as_ref()),
-            tool_intent::ShellActivity::Verification
-        );
-        let max_output_tokens = crate::tools::output_limits::resolve_max_output_tokens(
-            normalized_args.as_ref(),
-            self.is_planning_active(),
-            is_verification_command,
-        )?;
-        let handler_args = if crate::tools::output_limits::handler_accepts_output_metadata(parameter_schema.as_ref()) {
-            Cow::Borrowed(normalized_args.as_ref())
-        } else {
-            Cow::Owned(crate::tools::output_limits::args_without_output_metadata(normalized_args.as_ref()))
-        };
-        let args = handler_args.as_ref();
+        let execution_args = self.prepare_execution_args(&tool_name, args)?;
+        let is_verification_command = execution_args.is_verification_command;
+        let max_output_tokens = execution_args.max_output_tokens;
+        let args = execution_args.handler_args.as_ref();
         let requested_name = name.to_string();
 
         // Clone args once at the start for error recording paths (clone only here)
@@ -915,11 +428,12 @@ impl ToolRegistry {
             }
         };
 
-        // Classify the tool intent once and reuse it for the read-only
-        // classification and the planning-workflow enforcement below, instead
-        // of recomputing it on every tool call.
-        let intent = tool_intent::classify_tool_intent(&tool_name, args);
-        let readonly_classification = if prevalidated {
+        // Classify the tool intent once: the prevalidated fast path skips full
+        // preflight and classifies here; the full-preflight path reuses the
+        // intent the kernel already computed on the validated (executed) args,
+        // so planning enforcement below cannot disagree with
+        // `readonly_classification`.
+        let (intent, readonly_classification) = if prevalidated {
             #[cfg(debug_assertions)]
             {
                 if let Err(err) = execution_kernel::preflight_validate_resolved_call(self, &tool_name, args)
@@ -928,10 +442,11 @@ impl ToolRegistry {
                     debug_assert!(false, "prevalidated execution received invalid call for '{tool_name}': {err}");
                 }
             }
-            !intent.mutating
+            let intent = tool_intent::classify_tool_intent(&tool_name, args);
+            (intent, !intent.mutating)
         } else {
             match execution_kernel::preflight_validate_resolved_call(self, &tool_name, args) {
-                Ok(outcome) => outcome.readonly_classification,
+                Ok(outcome) => (outcome.intent, outcome.readonly_classification),
                 Err(err) => {
                     let err_msg = err.to_string();
                     record_failure(
@@ -1071,6 +586,17 @@ impl ToolRegistry {
             }
         }
 
+        let fresh_patch_read = self.consume_patch_recovery_read(&tool_name, args);
+        // Stateful tracker/decision calls must observe the current canonical
+        // task, including identical calls after request or permission changes.
+        let matrix_verification = self
+            .matrix_worker
+            .read()
+            .as_ref()
+            .is_some_and(|worker| worker.assignment.phase == crate::exec::events::matrix::MatrixPhase::Verify);
+        let reusable_result = readonly_classification
+            && !matrix_verification
+            && !matches!(tool_name.as_str(), tools::RECORD_DECISION | tools::TASK_TRACKER | tools::MATRIX);
         let skip_loop_detection = self.should_skip_loop_detection_for_exec_continuation(&tool_name, args).await;
         if skip_loop_detection {
             trace!(
@@ -1093,7 +619,7 @@ impl ToolRegistry {
         // (`is_verification_command` is bound once at preview-budget
         // resolution above; the stripped output-metadata field does not
         // affect shell classification.)
-        if readonly_classification && !is_verification_command && !skip_loop_detection {
+        if reusable_result && !is_verification_command && !skip_loop_detection && !fresh_patch_read {
             let fast_reuse_max_age = Duration::from_secs(60);
             let fast_reused = self
                 .execution_history
@@ -1147,6 +673,7 @@ impl ToolRegistry {
                     tool = %tool_name,
                     "Fast-reusing recent successful read-only result"
                 );
+                self.observe_source_output(&tool_name, args, &reused_value).await;
                 return Ok(reused_value);
             }
         }
@@ -1186,7 +713,7 @@ impl ToolRegistry {
                 // the model to see "success" and keep retrying.
                 let hard_block = loop_result.repeat_count >= LOOP_HARD_BLOCK_REPEAT_COUNT;
 
-                if readonly_classification && !hard_block {
+                if reusable_result && !is_verification_command && !hard_block && !fresh_patch_read {
                     let reuse_max_age = Duration::from_secs(120);
                     let reused = self
                         .execution_history
@@ -1210,6 +737,7 @@ impl ToolRegistry {
                             };
                             obj.insert("loop_detected_note".into(), json!(note));
                         }
+                        self.observe_source_output(&tool_name, args, &reused_value).await;
                         return Ok(reused_value);
                     }
                 }
@@ -1321,7 +849,7 @@ impl ToolRegistry {
 
         let gateway = self.policy_gateway.clone();
         let constrained_result = gateway.apply_policy_constraints(&tool_name, args).await;
-        let args = match constrained_result {
+        let mut args = match constrained_result {
             Ok(processed_args) => processed_args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
@@ -1348,63 +876,17 @@ impl ToolRegistry {
             }
         };
 
-        // First, check if we need a PTY session by checking if the tool exists and needs PTY
-        let mut needs_pty = false;
-        let mut tool_exists = false;
-        let mut is_mcp_tool = false;
-        let mut mcp_provider: Option<String> = None;
-        let mut mcp_tool_name: Option<String> = None;
-        let mut mcp_lookup_error: Option<anyhow::Error> = None;
-
-        // Check if it's a standard tool first
-        if let Some(registration) = self.inventory.registration_for(&tool_name) {
-            needs_pty = registration.uses_pty();
-            tool_exists = true;
-        }
-        // If not a standard tool, check if it's an MCP tool
-        if let Some((provider, remote_tool)) = parse_canonical_mcp_tool_name(&tool_name) {
-            needs_pty = true;
-            tool_exists = true;
-            is_mcp_tool = true;
-            mcp_provider = Some(provider.to_string());
-            mcp_tool_name = Some(remote_tool.to_string());
-        }
-
-        let mcp_client_opt = self.mcp_client.read().clone();
-        if !is_mcp_tool && let Some(mcp_client) = mcp_client_opt {
-            let mut resolved_mcp_name = legacy_mcp_tool_name(name)
-                .map(str::to_string)
-                .unwrap_or_else(|| tool_name_owned.clone());
-
-            if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await
-                && alias_target != resolved_mcp_name
-            {
-                trace!(
-                    requested = %resolved_mcp_name,
-                    resolved = %alias_target,
-                    "Resolved MCP tool alias"
-                );
-                resolved_mcp_name = alias_target;
-            }
-
-            match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
-                Ok(true) => {
-                    needs_pty = true;
-                    tool_exists = true;
-                    is_mcp_tool = true;
-                    mcp_provider = self.find_mcp_provider(&resolved_mcp_name).await;
-                    mcp_tool_name = Some(resolved_mcp_name);
-                }
-                Ok(false) => {
-                    // Don't modify tool_exists here - keep the result from standard tool check.
-                    // Setting tool_exists = false would incorrectly override a valid standard tool.
-                }
-                Err(err) => {
-                    warn!("Error checking MCP tool '{}': {}", resolved_mcp_name, err);
-                    mcp_lookup_error = Some(err);
-                }
-            }
-        }
+        let super::execution_stages::ExecutionRoute {
+            route:
+                super::execution_stages::ToolRoute {
+                    needs_pty,
+                    tool_exists,
+                    is_mcp: is_mcp_tool,
+                    mcp_provider,
+                    mcp_tool_name,
+                },
+            mcp_lookup_error,
+        } = self.resolve_execution_route(name, &tool_name).await;
 
         // If tool doesn't exist in either registry, return an error
         if !tool_exists {
@@ -1579,6 +1061,17 @@ impl ToolRegistry {
             }
         }
 
+        // Preserve registered approval/sandbox wrappers. The nonce changes any
+        // wrapper cache key and only disables file caching; it grants no authority.
+        if fresh_patch_read
+            && !tool_intent::is_command_run_tool_call(&tool_name, &args)
+            && let Some(object) = args.as_object_mut()
+        {
+            object.insert(
+                crate::tools::file_ops::PATCH_READ_CACHE_NONCE.to_string(),
+                json!(uuid::Uuid::new_v4().to_string()),
+            );
+        }
         let exec_future = async {
             if is_mcp_tool {
                 let mcp_name = mcp_tool_name
@@ -1602,58 +1095,10 @@ impl ToolRegistry {
                     self.execute_command_session_internal(exec_args, exec_settlement_mode).await
                 }
             } else if exec_settlement_mode.settle_noninteractive() && tool_name == tools::WRITE_STDIN {
-                let (exec_args, dispatch) = super::executors::normalize_write_stdin_args(&args)?;
-                match dispatch {
-                    crate::tools::command_args::WriteStdinDispatch::Write => {
-                        self.execute_command_session_write_for_tool(exec_args, tools::WRITE_STDIN).await
-                    }
-                    crate::tools::command_args::WriteStdinDispatch::Poll => {
-                        self.execute_command_session_poll_for_tool(exec_args, exec_settlement_mode, tools::WRITE_STDIN)
-                            .await
-                    }
-                    crate::tools::command_args::WriteStdinDispatch::Wait => {
-                        self.execute_command_session_wait(exec_args).await
-                    }
-                }
+                self.execute_write_stdin(args, exec_settlement_mode).await
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
-                // Log deprecation warning if tool is deprecated
-                if registration.is_deprecated() {
-                    if let Some(msg) = registration.deprecation_message() {
-                        warn!("Tool '{}' is deprecated: {}", tool_name, msg);
-                    } else {
-                        warn!("Tool '{}' is deprecated and may be removed in a future version", tool_name);
-                    }
-                }
-
-                let handler = registration.handler();
-                match handler {
-                    ToolHandler::RegistryFn(executor) => {
-                        // PERFORMANCE OPTIMIZATION: Use memory pool for tool execution if enabled
-                        if self.optimization_config.memory_pool.enabled {
-                            let _execution_guard = self.memory_pool.get_value();
-                            let _string_guard = self.memory_pool.get_string();
-                            let _vec_guard = self.memory_pool.get_vec();
-                            executor(self, args).await
-                        } else {
-                            executor(self, args).await
-                        }
-                    }
-                    ToolHandler::TraitObject(tool) => {
-                        // PERFORMANCE OPTIMIZATION: Use cached tool if available and optimizations enabled
-                        if self.optimization_config.tool_registry.use_optimized_registry {
-                            if let Some(cached_tool) = cached_tool.as_ref() {
-                                // Use cached tool instance to avoid registry lookup overhead
-                                cached_tool.execute(args).await
-                            } else {
-                                // Cache the tool for future use
-                                self.hot_tool_cache.write().put(tool_name.clone(), tool.clone());
-                                tool.execute(args).await
-                            }
-                        } else {
-                            tool.execute(args).await
-                        }
-                    }
-                }
+                self.execute_registered_handler(&tool_name, &registration, args, cached_tool.as_ref())
+                    .await
             } else {
                 // This should theoretically never happen since we checked tool_exists above
                 // Generate helpful error message with available tools
@@ -1804,49 +1249,18 @@ impl ToolRegistry {
                     self.decay_adaptive_timeout(timeout_category);
                 }
                 self.record_tool_latency(timeout_category, execution_started_at.elapsed());
-                // Dynamic context discovery: spool large outputs to files
-                let mut value = value;
-                if tool_intent::is_spool_file_read_command(&tool_name_owned, &args_for_recording) {
-                    if let Some(output) = value.as_object_mut() {
-                        output.insert("no_spool".to_string(), json!(true));
-                    } else {
-                        // `process_tool_output` can spool scalar/array values
-                        // based on their serialized size. Wrap an unusual
-                        // scalar result before that boundary so a safe spool
-                        // inspection can never create a nested spool reference.
-                        value = json!({"output": value, "no_spool": true});
-                    }
-                }
-                let processed_value = self
-                    .process_tool_output(&tool_name_owned, value, is_mcp_tool, max_output_tokens)
+                let super::execution_results::ExecutionOutput { normalized_value, structured_error } = self
+                    .prepare_execution_output(
+                        &tool_name_owned,
+                        &args_for_recording,
+                        value,
+                        is_mcp_tool,
+                        max_output_tokens,
+                    )
                     .await;
-                let mut normalized_value = normalize_tool_output(processed_value);
-                if tool_name_owned == tools::CODE_SEARCH
-                    && let Some(output) = normalized_value.as_object_mut()
-                {
-                    output.remove("success");
-                }
-                let structured_error = structured_tool_output_error(&normalized_value);
 
                 if !readonly_classification {
-                    // Invalidate only the cache records whose read target could
-                    // overlap the mutated file(s).  Wiping the entire history
-                    // (previous behavior) defeated cross-turn dedup: any write
-                    // tool call would discard unrelated read-only cache hits,
-                    // forcing the model to re-read files whose contents hadn't
-                    // changed at all.
-                    let targets = mutated_target_paths(&tool_name_owned, &args_for_recording);
-                    if targets.is_empty() && is_pathless_mutating_command(&tool_name_owned) {
-                        // A mutating shell command with no identifiable target
-                        // (e.g. `sed -i`, `cargo build`) could have touched any
-                        // file. Conservatively drop every cached read so no
-                        // record serves stale content.
-                        self.execution_history.invalidate_all_reads();
-                    } else {
-                        for target in targets {
-                            self.execution_history.invalidate_for_path(&target);
-                        }
-                    }
+                    self.invalidate_mutated_reads(&tool_name_owned, &args_for_recording);
                 }
 
                 if let Some(error_msg) = structured_error {
@@ -1915,6 +1329,7 @@ impl ToolRegistry {
                     Some("tool_registry"),
                 )
                 .with_tool_call_context(&tool_name_owned, &args_for_recording);
+                self.grant_patch_recovery_read(&error).await;
                 let error_category = error.category;
                 if error.circuit_breaker_impact
                     && let Some(breaker) = shared_circuit_breaker.as_ref()

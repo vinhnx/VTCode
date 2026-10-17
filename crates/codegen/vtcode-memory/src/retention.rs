@@ -64,8 +64,19 @@ pub fn apply_retention_preserving(
     // reclaim them. Live sessions stay `active` and remain unpinned.
     mark_abandoned_active_sessions(workspace, policy.max_age_days, preserve_session_id)?;
     let preserve_path = preserve_session_id.map(|session_id| crate::session_dir(workspace, session_id));
-    let mut sessions = retention_candidates(&root, preserve_path.as_deref())?;
+    let sessions = retention_candidates(&root, preserve_path.as_deref())?;
     let mut removed = 0usize;
+
+    // Phase 0: drop empty completed shells immediately. A 0-turn store is only
+    // `thread.started` + `thread.completed` noise; it never held work the user
+    // can resume. Age/count caps would otherwise keep these around for weeks.
+    let (empty, mut sessions): (Vec<_>, Vec<_>) = sessions
+        .into_iter()
+        .partition(|s| s.summary.turn_count == 0 && s.summary.status != "active");
+    for s in &empty {
+        remove_session(&root, &s.path)?;
+        removed += 1;
+    }
 
     // Phase 1: evict oldest sessions beyond the count cap.
     if sessions.len() > policy.max_sessions {
@@ -94,6 +105,36 @@ pub fn apply_retention_preserving(
 /// Sidecar marker written when a session must outlive ordinary retention
 /// because an unresolved blocker archive references it.
 pub const RETENTION_PIN_FILE: &str = "retention-pin.json";
+
+/// Delete a 0-turn completed session store immediately (close-path hygiene).
+///
+/// Empty shells (`thread.started` + `thread.completed` only) never held work
+/// the user can resume; keeping them pollutes `.vtcode/sessions/` and hides
+/// real sessions. No-op when the store has turns, is still active, is pinned,
+/// is live in another process, or the id is not a validated direct child.
+/// Returns whether the store was removed.
+pub fn evict_zero_turn_completed_store(workspace: &Path, session_id: &str) -> Result<bool, SessionStoreError> {
+    let root = sessions_root(workspace);
+    let dir = crate::session_dir(workspace, session_id);
+    if dir.parent() != Some(&root) {
+        return Ok(false);
+    }
+    if session_retention_pinned(&dir) || session_dir_is_live(&dir) {
+        return Ok(false);
+    }
+    let manifest_path = dir.join("manifest.json");
+    let Ok(bytes) = std::fs::read(&manifest_path) else {
+        return Ok(false);
+    };
+    let Ok(summary) = serde_json::from_slice::<SessionSummary>(&bytes) else {
+        return Ok(false);
+    };
+    if summary.turn_count > 0 || summary.status == "active" {
+        return Ok(false);
+    }
+    remove_session(&root, &dir)?;
+    Ok(true)
+}
 
 /// Whether a session directory is pinned against ordinary retention eviction.
 #[must_use]

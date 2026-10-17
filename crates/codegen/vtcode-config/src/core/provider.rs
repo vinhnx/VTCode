@@ -12,8 +12,9 @@ pub enum ThinkingDisplayMode {
     /// Thinking blocks are returned with an empty `thinking` field (default on Claude Opus 4.7).
     Omitted,
     /// Only the short progress updates written between tool calls come back as
-    /// text; reasoning stays hidden (Claude Opus 5.5, Claude Fable 5.x). Sent
-    /// with the `thinking-display-updates-2026-08-18` beta.
+    /// text; reasoning stays hidden (Claude Sonnet 5.5, Claude Opus 5.5,
+    /// Claude Fable 5.x). Sent with the `thinking-display-updates-2026-08-18`
+    /// beta.
     Updates,
     /// Catch-all for unknown display modes added by the Anthropic API.
     #[serde(other)]
@@ -39,6 +40,7 @@ impl ThinkingDisplayMode {
 pub enum OpenAIServiceTier {
     Flex,
     Priority,
+    Ultrafast,
 }
 
 impl OpenAIServiceTier {
@@ -46,6 +48,7 @@ impl OpenAIServiceTier {
         match self {
             Self::Flex => "flex",
             Self::Priority => "priority",
+            Self::Ultrafast => "ultrafast",
         }
     }
 
@@ -55,6 +58,8 @@ impl OpenAIServiceTier {
             Some(Self::Flex)
         } else if normalized.eq_ignore_ascii_case("priority") {
             Some(Self::Priority)
+        } else if normalized.eq_ignore_ascii_case("ultrafast") {
+            Some(Self::Ultrafast)
         } else {
             None
         }
@@ -390,9 +395,13 @@ pub struct OpenAIManualCompactionConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct OpenAIConfig {
-    /// Enable Responses API WebSocket transport for non-streaming requests on
+    /// Enable persistent Responses API WebSocket generation and streaming on
     /// native OpenAI and OpenAI-compatible Responses endpoints.
     /// This is an opt-in path designed for long-running, tool-heavy workflows.
+    /// A persistent connection removes per-request HTTP handshake overhead, so
+    /// pair it with `service_tier = "ultrafast"` on `gpt-6-astra`/`gpt-6.1-sol`
+    /// for agentic tool-call bursts (Ultrafast docs strongly recommend WebSockets).
+    /// Streaming falls back to HTTP only before any output event is exposed.
     #[serde(default)]
     pub websocket_mode: bool,
 
@@ -408,7 +417,11 @@ pub struct OpenAIConfig {
 
     /// Optional native OpenAI `service_tier` request parameter.
     /// Leave unset to inherit the Project-level default service tier.
-    /// Options: "flex", "priority"
+    /// Options: "flex", "priority", "ultrafast".
+    /// "ultrafast" is the fastest tier: GA for `gpt-6-astra` and `gpt-6.1-sol`,
+    /// preview-only for `gpt-5.6-sol` (contact your OpenAI account team). It costs more,
+    /// starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global
+    /// processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<OpenAIServiceTier>,
 
@@ -429,6 +442,10 @@ pub struct OpenAIConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnthropicConfig {
+    /// Native Claude speed (standard or fast). Fast uses premium pricing; unsupported routes keep this preference dormant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<super::AnthropicSpeed>,
+
     /// Enable adaptive or extended thinking for Anthropic models
     /// When enabled, Claude uses internal reasoning before responding, providing
     /// enhanced reasoning capabilities for complex tasks.
@@ -490,7 +507,8 @@ pub struct AnthropicConfig {
     ///   - "summarized": Thinking blocks contain summarized text (default on Opus 4.6 and earlier).
     ///   - "omitted": Thinking blocks have an empty `thinking` field (default on Opus 4.7+).
     ///   - "updates": Only the progress updates between tool calls are returned as text
-    ///     (Claude Opus 5.5 and Claude Fable 5.x; the VT Code default on Claude Opus 5.5).
+    ///     (Claude Sonnet 5.5, Claude Opus 5.5 and Claude Fable 5.x; the VT Code
+    ///     default on Claude Sonnet 5.5 and Claude Opus 5.5).
     ///     Ignored on models without progress updates.
     ///
     /// When set, this overrides the model-specific default.
@@ -613,6 +631,7 @@ impl AnthropicFallbacks {
 impl Default for AnthropicConfig {
     fn default() -> Self {
         Self {
+            speed: None,
             extended_thinking_enabled: default_extended_thinking_enabled(),
             interleaved_thinking_beta: default_interleaved_thinking_beta(),
             interleaved_thinking_budget_tokens: default_interleaved_thinking_budget_tokens(),
@@ -635,6 +654,81 @@ impl Default for AnthropicConfig {
 pub struct AnthropicMemoryConfig {
     #[serde(default)]
     pub enabled: bool,
+}
+
+/// OpenRouter app attribution (<https://openrouter.ai/docs/app-attribution>).
+///
+/// Opt-in only. When `enabled` is false no attribution headers are sent.
+/// When true, VT Code sends `HTTP-Referer`, `X-OpenRouter-Title`, and
+/// `X-OpenRouter-Categories: cli-agent`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenRouterAttributionConfig {
+    /// Master opt-in switch. Default false for privacy.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Override app URL used as `HTTP-Referer`. Defaults to the VT Code repo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referer: Option<String>,
+
+    /// Override display name used as `X-OpenRouter-Title`. Defaults to `VT Code`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+impl OpenRouterAttributionConfig {
+    /// Default referer sent when attribution is enabled and no override is set.
+    pub const DEFAULT_REFERER: &'static str = "https://github.com/vinhnx/vtcode";
+    /// Default title sent when attribution is enabled and no override is set.
+    pub const DEFAULT_TITLE: &'static str = "VT Code";
+    /// Fixed marketplace category. `cli-agent` is the allowlisted terminal-agent category.
+    pub const CATEGORIES: &'static str = "cli-agent";
+
+    /// Resolve whether attribution headers should be sent.
+    ///
+    /// The environment layer wins when set to a recognized value
+    /// (`ConfigLayerStack` env > file); unrecognized or unset values fall
+    /// through to the file value. Delegates to the canonical tri-state
+    /// parser — do not fork the accepted-value set.
+    pub fn is_enabled(&self) -> bool {
+        vtcode_commons::utils::parse_env_bool(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, self.enabled)
+    }
+
+    /// Header-safe override check: non-empty, bounded, no CTLs (reqwest
+    /// `HeaderValue` rejects `\r`/`\n`/control bytes; fall back to defaults).
+    fn header_safe(value: &str) -> bool {
+        !value.is_empty() && value.len() <= 512 && !value.bytes().any(|b| b < 0x20 || b == 0x7F)
+    }
+
+    /// Resolve effective referer, falling back to the default. Empty or
+    /// header-unsafe overrides are ignored.
+    pub fn resolved_referer(&self) -> &str {
+        self.referer
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| Self::header_safe(s))
+            .unwrap_or(Self::DEFAULT_REFERER)
+    }
+
+    /// Resolve effective title, falling back to the default. Empty or
+    /// header-unsafe overrides are ignored.
+    pub fn resolved_title(&self) -> &str {
+        self.title
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| Self::header_safe(s))
+            .unwrap_or(Self::DEFAULT_TITLE)
+    }
+}
+
+/// OpenRouter-specific provider configuration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
+pub struct OpenRouterConfig {
+    /// App attribution opt-in (`[provider.openrouter.attribution]`).
+    #[serde(default)]
+    pub attribution: OpenRouterAttributionConfig,
 }
 
 #[inline]
@@ -763,7 +857,8 @@ mod tests {
         AnthropicConfig, AnthropicFallbackMode, AnthropicFallbackTarget, AnthropicFallbacks, OpenAIConfig,
         OpenAIHostedShellConfig, OpenAIHostedShellDomainSecret, OpenAIHostedShellEnvironment,
         OpenAIHostedShellNetworkPolicy, OpenAIHostedShellNetworkPolicyType, OpenAIHostedSkill,
-        OpenAIHostedSkillVersion, OpenAIManualCompactionConfig, OpenAIServiceTier, ToolSearchAlgorithm,
+        OpenAIHostedSkillVersion, OpenAIManualCompactionConfig, OpenAIServiceTier, OpenRouterAttributionConfig,
+        OpenRouterConfig, ToolSearchAlgorithm,
     };
 
     #[test]
@@ -775,6 +870,22 @@ mod tests {
 
         let parsed: AnthropicConfig = toml::from_str("effort = \"high\"").expect("explicit effort");
         assert_eq!(parsed.effort, Some(super::ReasoningEffortLevel::High));
+    }
+
+    /// `OpenAIServiceTier` keeps its `as_str()`/`parse()`/serde paths in
+    /// lockstep; see [`crate::test_support::assert_string_enum_lockstep`].
+    #[test]
+    fn openai_service_tier_string_paths_stay_in_lockstep() {
+        use crate::test_support::assert_string_enum_lockstep;
+
+        assert_string_enum_lockstep!(
+            OpenAIServiceTier,
+            [
+                OpenAIServiceTier::Flex,
+                OpenAIServiceTier::Priority,
+                OpenAIServiceTier::Ultrafast,
+            ]
+        );
     }
 
     #[test]
@@ -932,6 +1043,14 @@ instructions = "Preserve the bug reproduction steps."
     fn openai_config_parses_flex_service_tier() {
         let parsed: OpenAIConfig = toml::from_str(r#"service_tier = "flex""#).expect("config should parse");
         assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Flex));
+    }
+
+    #[test]
+    fn openai_config_parses_ultrafast_service_tier() {
+        let parsed: OpenAIConfig = toml::from_str(r#"service_tier = "ultrafast""#).expect("config should parse");
+        assert_eq!(parsed.service_tier, Some(OpenAIServiceTier::Ultrafast));
+        assert_eq!(OpenAIServiceTier::Ultrafast.as_str(), "ultrafast");
+        assert_eq!(OpenAIServiceTier::parse("ULTRAFAST"), Some(OpenAIServiceTier::Ultrafast));
     }
 
     #[test]
@@ -1180,5 +1299,103 @@ always_available_tools = ["code_search", "custom_tool"]
 
         assert!(config.first_invalid_network_policy_message().is_none());
         assert!(config.has_valid_network_policy());
+    }
+
+    /// Stash `VTCODE_OPENROUTER_ATTRIBUTION` for hermetic attribution tests
+    /// (serialized via `serial` + the process-wide env lock; restored after).
+    fn stash_attribution_env() -> (vtcode_commons::env_lock::EnvGuard, Option<std::ffi::OsString>) {
+        let guard = vtcode_commons::env_lock::lock();
+        let prior = std::env::var_os(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION);
+        guard.remove_var(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION);
+        (guard, prior)
+    }
+
+    fn restore_attribution_env(guard: &vtcode_commons::env_lock::EnvGuard, prior: Option<std::ffi::OsString>) {
+        guard.restore_var(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, prior);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn openrouter_attribution_defaults_to_disabled() {
+        let (env, prior) = stash_attribution_env();
+        let config = OpenRouterAttributionConfig::default();
+        assert!(!config.enabled);
+        assert!(!config.is_enabled());
+        assert_eq!(config.resolved_referer(), OpenRouterAttributionConfig::DEFAULT_REFERER);
+        assert_eq!(config.resolved_title(), OpenRouterAttributionConfig::DEFAULT_TITLE);
+        assert_eq!(OpenRouterAttributionConfig::CATEGORIES, "cli-agent");
+
+        let parsed: OpenRouterConfig = toml::from_str("").expect("empty openrouter config");
+        assert!(!parsed.attribution.enabled);
+        assert!(!parsed.attribution.is_enabled());
+        restore_attribution_env(&env, prior);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn openrouter_attribution_parses_opt_in_with_overrides() {
+        let (env, prior) = stash_attribution_env();
+        let parsed: OpenRouterConfig = toml::from_str(
+            r#"
+[attribution]
+enabled = true
+referer = "https://example.com/my-fork"
+title = "My Fork"
+"#,
+        )
+        .expect("config should parse");
+        assert!(parsed.attribution.enabled);
+        assert!(parsed.attribution.is_enabled());
+        assert_eq!(parsed.attribution.resolved_referer(), "https://example.com/my-fork");
+        assert_eq!(parsed.attribution.resolved_title(), "My Fork");
+
+        // Blank overrides fall back to defaults rather than sending empty headers.
+        let blank = OpenRouterAttributionConfig {
+            enabled: true,
+            referer: Some("   ".to_string()),
+            title: Some("".to_string()),
+        };
+        assert_eq!(blank.resolved_referer(), OpenRouterAttributionConfig::DEFAULT_REFERER);
+        assert_eq!(blank.resolved_title(), OpenRouterAttributionConfig::DEFAULT_TITLE);
+        restore_attribution_env(&env, prior);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn openrouter_attribution_env_layer_wins_over_file() {
+        // Asymmetric both directions: env enables a disabled file, and env
+        // disables an enabled file (env > file precedence).
+        let (env, prior) = stash_attribution_env();
+        let disabled = OpenRouterAttributionConfig::default();
+        env.set_var(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, "yes");
+        assert!(disabled.is_enabled());
+        env.set_var(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, "0");
+        let enabled = OpenRouterAttributionConfig { enabled: true, referer: None, title: None };
+        assert!(!enabled.is_enabled());
+        // Unrecognized or blank env falls through to the file value.
+        env.set_var(crate::constants::env_vars::VTCODE_OPENROUTER_ATTRIBUTION, "maybe");
+        assert!(enabled.is_enabled());
+        assert!(!disabled.is_enabled());
+        restore_attribution_env(&env, prior);
+    }
+
+    #[test]
+    fn openrouter_attribution_rejects_header_unsafe_overrides() {
+        // CRLF/CTL injection attempts fall back to defaults instead of
+        // reaching reqwest header construction.
+        let injected = OpenRouterAttributionConfig {
+            enabled: true,
+            referer: Some("https://example.com/\r\nX-Injected: 1".to_string()),
+            title: Some("bad\ttitle\x7F".to_string()),
+        };
+        assert_eq!(injected.resolved_referer(), OpenRouterAttributionConfig::DEFAULT_REFERER);
+        assert_eq!(injected.resolved_title(), OpenRouterAttributionConfig::DEFAULT_TITLE);
+
+        let oversized = OpenRouterAttributionConfig {
+            enabled: true,
+            referer: Some(format!("https://example.com/{}", "a".repeat(600))),
+            title: None,
+        };
+        assert_eq!(oversized.resolved_referer(), OpenRouterAttributionConfig::DEFAULT_REFERER);
     }
 }

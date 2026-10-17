@@ -10,6 +10,7 @@
 
 mod activity;
 mod markdown;
+mod progress;
 mod selection;
 mod style;
 mod tool_summary;
@@ -17,6 +18,7 @@ mod types;
 
 pub use activity::*;
 pub use markdown::*;
+pub use progress::*;
 pub use selection::*;
 pub use style::*;
 pub use tool_summary::*;

@@ -17,6 +17,7 @@ pub(crate) mod mode;
 pub(crate) mod storage;
 
 pub use mode::AuthCredentialsStoreMode;
+pub(crate) use mode::ResolvedStoreMode;
 pub use storage::CredentialStorage;
 
 use std::collections::BTreeMap;

@@ -8,16 +8,6 @@
 //! full attribution.
 //!
 //! [codex-rs]: https://github.com/openai/codex
-//!
-//! ## Async-drop pattern
-//!
-//! `Drop` cannot be `async`, but some cleanup requires async operations
-//! (e.g. asking a runtime to stop a process, removing a container, closing
-//! a network connection). The pattern borrowed from `testcontainers-rs` is to
-//! spin a dedicated thread inside `Drop`, create a temporary Tokio runtime on
-//! that thread, and block the `Drop` call until the future resolves. This is
-//! heavier than a true `async drop`, but it lets us bridge sync `Drop` into
-//! async cleanup without requiring nightly Rust.
 
 use std::fmt;
 use std::io;
@@ -31,30 +21,6 @@ use tokio::task::{AbortHandle, JoinHandle};
 
 const POST_EXIT_DRAIN_QUIET_MS: u64 = 50;
 const POST_EXIT_DRAIN_MAX_MS: u64 = 500;
-
-/// Run an async cleanup future from synchronous `Drop`.
-///
-/// This bridges the gap between sync `Drop` and async resource cleanup.
-/// A dedicated thread is spawned with its own Tokio runtime so the future
-/// can make full use of async APIs. The `Drop` call blocks until the runtime
-/// shuts down, giving us deterministic cleanup semantics similar to RAII.
-///
-/// Borrowed from the `testcontainers-rs` pattern for async-drop in Rust
-/// (where true `async drop` is still nightly-only).
-pub(crate) fn async_drop<F, Fut>(f: F)
-where
-    F: FnOnce() -> Fut + Send + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
-{
-    let handle = std::thread::spawn(move || {
-        let rt = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(_) => return,
-        };
-        rt.block_on(f());
-    });
-    let _ = handle.join();
-}
 
 /// Trait for process termination strategies.
 ///
@@ -298,42 +264,16 @@ impl ProcessHandle {
 
 impl Drop for ProcessHandle {
     fn drop(&mut self) {
-        // Use the async-drop pattern so cleanup can block on async waits
-        // (e.g. waiting for the OS to reap the child) without blocking the
-        // caller's thread. This mirrors testcontainers-rs's approach for
-        // async resource cleanup from synchronous Drop.
-        //
-        // We must take ownership of the inner values here because the async
-        // block needs to own everything it captures.
-        let killer = self.killer.lock().ok().and_then(|mut g| g.take());
-        let mut reader_handle = self.reader_handle.lock().ok().and_then(|mut g| g.take());
-        let reader_abort_handles = self
-            .reader_abort_handles
-            .lock()
-            .ok()
-            .map(|mut g| g.drain(..).collect::<Vec<_>>());
-        let mut writer_handle = self.writer_handle.lock().ok().and_then(|mut g| g.take());
-        let mut wait_handle = self.wait_handle.lock().ok().and_then(|mut g| g.take());
-
-        async_drop(move || async move {
-            if let Some(mut killer) = killer {
-                let _ = killer.kill();
-            }
-            if let Some(handle) = reader_handle.take() {
-                handle.abort();
-            }
-            if let Some(handle) = writer_handle.take() {
-                handle.abort();
-            }
-            if let Some(handle) = wait_handle.take() {
-                handle.abort();
-            }
-            if let Some(handles) = reader_abort_handles {
-                for handle in handles {
-                    handle.abort();
-                }
-            }
-        });
+        // Synchronous kill + task aborts, reusing the same body as
+        // `terminate_internal`. Both operations are non-blocking (`kill`
+        // signals the process group; `abort` flags the tasks), so Drop never
+        // parks the caller. A previous revision bridged this through a
+        // dedicated thread + Tokio runtime (`async_drop`) for zero async
+        // work — the thread/runtime only added spawn latency per Drop and
+        // blocked the dropping thread, which serialized shutdown storms
+        // (many handles dropped at registry teardown) and could stall a Tokio
+        // worker during TUI exit.
+        self.terminate_internal();
     }
 }
 
@@ -529,5 +469,46 @@ mod tests {
         assert!(!handle.has_exited());
         exit_status.store(true, Ordering::SeqCst);
         assert!(handle.has_exited());
+    }
+
+    struct RecordingTerminator(Arc<AtomicBool>);
+    impl ChildTerminator for RecordingTerminator {
+        fn kill(&mut self) -> io::Result<()> {
+            self.0.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// Drop must kill the child and abort helper tasks synchronously, without
+    /// spawning a bridging thread/runtime (regression: a previous revision
+    /// bridged Drop through `async_drop`, adding spawn latency and blocking
+    /// the dropping thread during shutdown storms).
+    #[tokio::test]
+    async fn drop_kills_child_synchronously_without_bridging_runtime() {
+        let killed = Arc::new(AtomicBool::new(false));
+        let exit_status = Arc::new(AtomicBool::new(false));
+        let exit_code = Arc::new(StdMutex::new(None));
+        let (writer_tx, _) = mpsc::channel(1);
+        let (output_tx, initial_rx) = broadcast::channel(1);
+
+        // Tasks that never complete; Drop must abort them rather than wait.
+        let (handle, _) = ProcessHandle::new(
+            writer_tx,
+            output_tx,
+            initial_rx,
+            Box::new(RecordingTerminator(Arc::clone(&killed))),
+            tokio::spawn(std::future::pending()),
+            vec![],
+            tokio::spawn(std::future::pending()),
+            tokio::spawn(std::future::pending()),
+            exit_status,
+            exit_code,
+            None,
+        );
+
+        let started = std::time::Instant::now();
+        drop(handle);
+        assert!(killed.load(Ordering::SeqCst), "Drop must kill the child");
+        assert!(started.elapsed() < std::time::Duration::from_millis(250), "Drop must not block on async cleanup");
     }
 }

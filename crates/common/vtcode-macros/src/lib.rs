@@ -3,8 +3,9 @@
     reason = "Intentional compatibility, platform, or test-only suppression."
 )]
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{Data, DeriveInput, Fields, parse_macro_input};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{format_ident, quote};
+use syn::{Data, DataEnum, DeriveInput, Fields, parse_macro_input};
 
 /// Derive macro that generates the same boilerplate as the `string_newtype!`
 /// declarative macro. Apply to a tuple struct wrapping a single `String` field.
@@ -141,4 +142,178 @@ fn is_string_type(ty: &syn::Type) -> bool {
         return type_path.path.segments.first().is_some_and(|segment| segment.ident == "String");
     }
     false
+}
+
+/// Derive macro equivalent to `#[derive(Debug)]` but with `#[inline(never)]` on
+/// the generated `fmt` implementation.
+///
+/// Rust's built-in `Debug` derive emits `#[inline]` on `fmt`. For large or deeply
+/// nested types — typically error enums formatted on fan-out paths — that lets
+/// `rustc` inline the whole `Debug` tree into every `{:?}` / `?err` call site,
+/// which can bloat binary size. This derive preserves the exact `Debug` output and
+/// only changes the inlining hint.
+///
+/// Use it for large/nested types whose `Debug` is formatted in hot or fan-out
+/// paths; keep `#[derive(Debug)]` for small, hot, leaf types. See
+/// `docs/development/rust-performance-principles.md`, "Derived trait impls are
+/// `#[inline]`".
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use vtcode_macros::DebugNoInline;
+///
+/// #[derive(DebugNoInline)]
+/// pub struct Widgets {
+///     foo: u32,
+///     bar: usize,
+/// }
+///
+/// assert_eq!(
+///     format!("{:?}", Widgets { foo: 1, bar: 2 }),
+///     "Widgets { foo: 1, bar: 2 }"
+/// );
+/// ```
+#[proc_macro_derive(DebugNoInline)]
+pub fn derive_debug_no_inline(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match impl_debug_no_inline(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+fn impl_debug_no_inline(input: &DeriveInput) -> syn::Result<TokenStream2> {
+    let name = &input.ident;
+
+    // Mirror the built-in derive: bound every type parameter on `Debug`.
+    let mut generics = input.generics.clone();
+    for param in generics.type_params_mut() {
+        param.bounds.push(syn::parse_quote!(::core::fmt::Debug));
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    let body = match &input.data {
+        Data::Struct(data) => fmt_body_struct(&name.to_string(), &data.fields),
+        Data::Enum(data) => fmt_body_enum(data),
+        Data::Union(_) => {
+            return Err(syn::Error::new_spanned(name, "DebugNoInline cannot be derived for unions"));
+        }
+    };
+
+    Ok(quote! {
+        #[automatically_derived]
+        impl #impl_generics ::core::fmt::Debug for #name #ty_generics #where_clause {
+            #[inline(never)]
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                #body
+            }
+        }
+    })
+}
+
+/// Debug name for a field: strip a raw-identifier prefix so `r#type` renders as
+/// `type`, matching the built-in derive.
+fn field_name(ident: &syn::Ident) -> String {
+    let raw = ident.to_string();
+    raw.strip_prefix("r#").unwrap_or(raw.as_str()).to_string()
+}
+
+fn fmt_body_struct(type_name: &str, fields: &Fields) -> TokenStream2 {
+    match fields {
+        Fields::Unit => quote! { f.write_str(#type_name) },
+        Fields::Named(named) => {
+            let calls = named.named.iter().filter_map(|field| {
+                let ident = field.ident.as_ref()?;
+                let field_name = field_name(ident);
+                Some(quote! { __debug_builder.field(#field_name, &self.#ident); })
+            });
+            let builder = debug_builder_init("debug_struct", type_name);
+            quote! {
+                #builder
+                #(#calls)*
+                __debug_builder.finish()
+            }
+        }
+        Fields::Unnamed(unnamed) => {
+            let calls = unnamed.unnamed.iter().enumerate().map(|(index, _)| {
+                let index = syn::Index::from(index);
+                quote! { __debug_builder.field(&self.#index); }
+            });
+            let builder = debug_builder_init("debug_tuple", type_name);
+            quote! {
+                #builder
+                #(#calls)*
+                __debug_builder.finish()
+            }
+        }
+    }
+}
+
+fn fmt_body_enum(data: &DataEnum) -> TokenStream2 {
+    // An uninhabited enum has no variants to match. `match self {}` is not
+    // exhaustive because `&Never` is inhabited, so dereference: `match *self {}`.
+    if data.variants.is_empty() {
+        return quote! { match *self {} };
+    }
+
+    let arms = data.variants.iter().map(|variant| {
+        let variant_ident = &variant.ident;
+        let variant_name = variant.ident.to_string();
+        match &variant.fields {
+            Fields::Unit => quote! {
+                Self::#variant_ident => f.write_str(#variant_name),
+            },
+            Fields::Named(named) => {
+                let pairs: Vec<(syn::Ident, syn::Ident)> = named
+                    .named
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, field)| {
+                        let ident = field.ident.as_ref()?.clone();
+                        Some((ident, format_ident!("__self_{index}")))
+                    })
+                    .collect();
+                let pattern = pairs.iter().map(|(ident, binding)| quote! { #ident: #binding });
+                let calls = pairs.iter().map(|(ident, binding)| {
+                    let field_name = field_name(ident);
+                    quote! { __debug_builder.field(#field_name, #binding); }
+                });
+                let builder = debug_builder_init("debug_struct", &variant_name);
+                quote! {
+                    Self::#variant_ident { #(#pattern),* } => {
+                        #builder
+                        #(#calls)*
+                        __debug_builder.finish()
+                    }
+                }
+            }
+            Fields::Unnamed(unnamed) => {
+                let bindings: Vec<syn::Ident> = (0..unnamed.unnamed.len())
+                    .map(|index| format_ident!("__self_{index}"))
+                    .collect();
+                let calls = bindings.iter().map(|binding| quote! { __debug_builder.field(#binding); });
+                let builder = debug_builder_init("debug_tuple", &variant_name);
+                quote! {
+                    Self::#variant_ident( #(#bindings),* ) => {
+                        #builder
+                        #(#calls)*
+                        __debug_builder.finish()
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        match self {
+            #(#arms)*
+        }
+    }
+}
+
+/// Emit `let mut __debug_builder = f.<kind>("<name>");`. The builder is always
+/// `mut` because `field(...)` and `finish(...)` both take `&mut self`.
+fn debug_builder_init(kind: &str, name: &str) -> TokenStream2 {
+    let kind = format_ident!("{kind}");
+    quote! { let mut __debug_builder = f.#kind(#name); }
 }

@@ -19,14 +19,7 @@ pub(crate) fn read_env_var(name: &str) -> Option<String> {
 /// trimming whitespace.
 pub(crate) fn parse_env_bool(name: &str, default: bool) -> bool {
     read_env_var(name)
-        .and_then(|value| {
-            let normalized = value.trim().to_ascii_lowercase();
-            match normalized.as_str() {
-                "1" | "true" | "yes" | "on" => Some(true),
-                "0" | "false" | "no" | "off" => Some(false),
-                _ => None,
-            }
-        })
+        .and_then(|value| vtcode_commons::utils::parse_bool_env_value(&value))
         .unwrap_or(default)
 }
 

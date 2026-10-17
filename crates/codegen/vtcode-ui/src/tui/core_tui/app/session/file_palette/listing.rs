@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use super::{FileEntry, FilePalette};
+use super::{DirEntryInfo, FileEntry, FilePalette};
 
 fn make_relative(workspace: &Path, file_path: &str) -> String {
     let path = Path::new(file_path);
@@ -24,13 +24,7 @@ pub(super) fn build_entries(palette: &mut FilePalette, files: Vec<String>, detec
             } else {
                 relative_path.clone()
             };
-            FileEntry {
-                path,
-                display_name,
-                relative_path,
-                is_dir,
-                is_parent: false,
-            }
+            FileEntry::new(path, display_name, relative_path, is_dir, false)
         })
         .collect();
 
@@ -81,13 +75,7 @@ fn insert_child(
     let display_name = if is_dir { format!("{child_name}/") } else { child_name };
     let relative_path = make_relative(root, &child_path);
 
-    let entry = FileEntry {
-        path: child_path,
-        display_name,
-        relative_path,
-        is_dir,
-        is_parent: false,
-    };
+    let entry = FileEntry::new(child_path, display_name, relative_path, is_dir, false);
 
     let children = index.entry(parent.to_path_buf()).or_default();
     if is_dir && children.iter().any(|c| c.display_name == entry.display_name) {
@@ -104,11 +92,13 @@ fn ensure_dir_listing(palette: &mut FilePalette, dir: &Path) -> Vec<FileEntry> {
     let raw = palette.dir_lister.list(dir);
     let entries: Vec<FileEntry> = raw
         .into_iter()
-        .map(|(path, is_dir)| {
+        .map(|info| {
+            let DirEntryInfo { path, is_dir, kind, symlink_target, symlink_broken } = info;
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
             let display_name = if is_dir {
-                format!("{}/", path.file_name().and_then(|n| n.to_str()).unwrap_or_default())
+                format!("{file_name}/")
             } else {
-                path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string()
+                file_name.to_string()
             };
             let relative_path = make_relative(&palette.workspace_root, &path.display().to_string());
             FileEntry {
@@ -117,6 +107,9 @@ fn ensure_dir_listing(palette: &mut FilePalette, dir: &Path) -> Vec<FileEntry> {
                 relative_path,
                 is_dir,
                 is_parent: false,
+                kind,
+                symlink_target,
+                symlink_broken,
             }
         })
         .collect();
@@ -140,13 +133,7 @@ pub(super) fn rebuild_dir_listing(palette: &mut FilePalette) {
     if cur != root {
         let parent_path = cur.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| root.clone());
         let relative_path = make_relative(&root, &parent_path.display().to_string());
-        listing.push(FileEntry {
-            path: parent_path.display().to_string(),
-            display_name: "..".to_string(),
-            relative_path,
-            is_dir: true,
-            is_parent: true,
-        });
+        listing.push(FileEntry::new(parent_path.display().to_string(), "..".to_string(), relative_path, true, true));
     }
     listing.extend(children);
 

@@ -6,14 +6,11 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use anyhow::{Result, bail};
-use vtcode_config::IdeContextConfig;
-use vtcode_core::EditorContextSnapshot;
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
     IncrementalSystemPrompt, SystemPromptContext, hash_base_system_prompt,
 };
-use vtcode_commons::canonicalize;
 
 /// Parameters for building system prompts
 #[derive(Clone)]
@@ -44,15 +41,9 @@ pub(crate) struct ContextManager {
     cached_stats: ContextStats,
     /// Agent configuration
     agent_config: Option<vtcode_config::core::AgentConfig>,
-    /// Workspace root used for request-time editor context rendering.
+    /// Workspace root used for request-time instruction path rendering.
     workspace_root: Option<PathBuf>,
-    /// Normalized editor snapshot used for request-time prompt injection.
-    editor_context_snapshot: Option<EditorContextSnapshot>,
-    /// Prompt/TUI behavior for IDE context injection.
-    ide_context_config: IdeContextConfig,
-    /// Session-local override for IDE context enablement.
-    session_ide_context_enabled_override: Option<bool>,
-    /// Files observed through editor context or tool activity for instruction matching.
+    /// Files observed through tool activity for instruction matching.
     instruction_activity_paths: BTreeSet<PathBuf>,
 }
 
@@ -70,9 +61,6 @@ impl ContextManager {
             cached_stats: ContextStats::default(),
             agent_config,
             workspace_root: None,
-            editor_context_snapshot: None,
-            ide_context_config: IdeContextConfig::default(),
-            session_ide_context_enabled_override: None,
             instruction_activity_paths: BTreeSet::new(),
         }
     }
@@ -89,43 +77,6 @@ impl ContextManager {
     #[cfg(test)]
     pub(crate) fn default_for_test() -> Self {
         Self::new(String::new(), (), Arc::new(RwLock::new(HashMap::new())), None)
-    }
-
-    pub(crate) fn set_editor_context_snapshot(
-        &mut self,
-        snapshot: Option<EditorContextSnapshot>,
-        ide_context_config: Option<&IdeContextConfig>,
-    ) {
-        self.editor_context_snapshot = snapshot;
-        if let Some(config) = ide_context_config {
-            self.ide_context_config = config.clone();
-        }
-    }
-
-    fn with_session_ide_context_override(&self, mut config: IdeContextConfig) -> IdeContextConfig {
-        if let Some(enabled) = self.session_ide_context_enabled_override {
-            config.enabled = enabled;
-        }
-        config
-    }
-
-    pub(crate) fn effective_ide_context_config(&self) -> IdeContextConfig {
-        self.with_session_ide_context_override(self.ide_context_config.clone())
-    }
-
-    pub(crate) fn effective_ide_context_config_with_base(
-        &self,
-        ide_context_config: Option<&IdeContextConfig>,
-    ) -> IdeContextConfig {
-        self.with_session_ide_context_override(
-            ide_context_config.cloned().unwrap_or_else(|| self.ide_context_config.clone()),
-        )
-    }
-
-    pub(crate) fn toggle_session_ide_context(&mut self) -> bool {
-        let enabled = !self.effective_ide_context_config().enabled;
-        self.session_ide_context_enabled_override = Some(enabled);
-        enabled
     }
 
     pub(crate) fn record_instruction_activity_paths<I>(&mut self, paths: I)
@@ -346,38 +297,8 @@ impl ContextManager {
         Cow::Owned(normalized)
     }
 
-    /// The `## Active Editor Context` block for the current snapshot, when IDE
-    /// context injection is enabled for its provider family. The request
-    /// builder persists it in history only when it changes.
-    pub(crate) fn request_editor_context_block(&self) -> Option<String> {
-        let ide_context_config = self.effective_ide_context_config();
-        if !ide_context_config.enabled || !ide_context_config.inject_into_prompt {
-            return None;
-        }
-
-        let workspace = self.workspace_root.as_deref()?;
-        let block = self
-            .editor_context_snapshot
-            .as_ref()
-            .filter(|snapshot| ide_context_config.allows_provider_family(snapshot.provider_family))
-            .and_then(|snapshot| snapshot.prompt_block(workspace, ide_context_config.include_selection_text))?;
-
-        Some(block)
-    }
-
     fn active_instruction_directory(&self) -> Option<PathBuf> {
         let workspace = self.workspace_root.as_ref()?;
-        if let Some(snapshot) = self.editor_context_snapshot.as_ref()
-            && let Some(active_file) = snapshot.active_file.as_ref()
-            && let Some(path) = self.resolve_editor_context_path(active_file.path.as_str())
-            && path.starts_with(workspace)
-        {
-            return path
-                .parent()
-                .filter(|p| p.starts_with(workspace))
-                .map(Path::to_path_buf)
-                .or_else(|| Some(workspace.clone()));
-        }
 
         self.instruction_activity_paths
             .iter()
@@ -389,42 +310,12 @@ impl ContextManager {
     fn instruction_context_paths(&self) -> Vec<PathBuf> {
         let mut paths = BTreeSet::new();
 
-        if let Some(snapshot) = self.editor_context_snapshot.as_ref() {
-            if let Some(active_file) = snapshot.active_file.as_ref()
-                && let Some(path) = self.resolve_editor_context_path(active_file.path.as_str())
-            {
-                paths.insert(path);
-            }
-
-            for editor in &snapshot.visible_editors {
-                if let Some(path) = self.resolve_editor_context_path(editor.path.as_str()) {
-                    paths.insert(path);
-                }
-            }
-        }
-
         if let Some(active_dir) = self.active_instruction_directory() {
             paths.insert(active_dir);
         }
 
         paths.extend(self.instruction_activity_paths.iter().cloned());
         paths.into_iter().collect()
-    }
-
-    fn resolve_editor_context_path(&self, raw: &str) -> Option<PathBuf> {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.contains("://") || trimmed.starts_with("untitled:") {
-            return None;
-        }
-
-        let candidate = Path::new(trimmed);
-        let path = if candidate.is_absolute() {
-            candidate.to_path_buf()
-        } else {
-            self.workspace_root.as_ref()?.join(candidate)
-        };
-
-        canonicalize(&path).ok().or(Some(path))
     }
 }
 

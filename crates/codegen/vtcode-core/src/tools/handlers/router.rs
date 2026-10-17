@@ -59,7 +59,7 @@ fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
     let normalized = lowered.replace([' ', '-'], "_").replace(['(', ')', '\'', '"'], "");
 
     let mapped = match normalized.as_str() {
-        alias if tool_intent::canonical_command_session_tool_name(alias).is_some() => tools::UNIFIED_EXEC,
+        alias if tool_intent::is_command_session_tool(alias) => tools::UNIFIED_EXEC,
         "exec_code" | "run_code" | "run_command" | "run_command_pty" => tools::UNIFIED_EXEC,
         "search_text" | "search" | "find" => tools::GREP_FILE,
         "applypatch" | "apply_patch" => tools::APPLY_PATCH,

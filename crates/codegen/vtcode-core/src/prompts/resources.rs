@@ -86,15 +86,7 @@ impl CachedPromptTemplates {
         if let Some(ref h) = self.source_paths.1 {
             check.push(h.as_path());
         }
-        let mut newest = SystemTime::UNIX_EPOCH;
-        for path in &check {
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if let Ok(mtime) = metadata.modified() {
-                    newest = newest.max(mtime);
-                }
-            }
-        }
-        newest > self.source_mtime
+        newest_mtime(check) > self.source_mtime
     }
 }
 
@@ -111,15 +103,7 @@ impl CachedSystemPromptLayers {
     }
 
     fn is_source_stale(&self, check_paths: &[&Path]) -> bool {
-        let mut newest = SystemTime::UNIX_EPOCH;
-        for path in check_paths {
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if let Ok(mtime) = metadata.modified() {
-                    newest = newest.max(mtime);
-                }
-            }
-        }
-        newest > self.source_mtime
+        newest_mtime(check_paths.iter().copied()) > self.source_mtime
     }
 }
 
@@ -127,7 +111,7 @@ fn normalize_cache_path(path: &Path) -> PathBuf {
     dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn user_prompts_dir(home: &Path) -> PathBuf {
+pub(crate) fn user_prompts_dir(home: &Path) -> PathBuf {
     if dirs::home_dir().as_deref() == Some(home)
         && let Ok(paths) = VtCodePaths::resolve()
         && let Ok(prompt_dir) = paths.config_path("prompts")
@@ -137,7 +121,9 @@ fn user_prompts_dir(home: &Path) -> PathBuf {
     home.join(PROMPTS_DIR)
 }
 
-fn newest_source_mtime(paths: &[PathBuf]) -> SystemTime {
+/// Newest mtime across `paths`; missing or unreadable paths are ignored
+/// (they contribute `UNIX_EPOCH`, never the maximum).
+fn newest_mtime<'a>(paths: impl IntoIterator<Item = &'a Path>) -> SystemTime {
     let mut newest = SystemTime::UNIX_EPOCH;
     for path in paths {
         if let Ok(metadata) = std::fs::metadata(path) {
@@ -157,39 +143,86 @@ fn prompt_templates_cache() -> &'static RwLock<HashMap<PromptResourceCacheKey, C
     PROMPT_TEMPLATES_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
-fn get_cached_system_prompt_layers(key: &PromptResourceCacheKey) -> Option<CachedSystemPromptLayers> {
-    match system_prompt_layers_cache().read() {
+/// Entry contract for the bounded prompt-resource caches: expiry drives
+/// reads, and expiry plus insertion age drive eviction.
+trait ExpirableCacheEntry {
+    fn is_expired(&self) -> bool;
+    fn timestamp(&self) -> SystemTime;
+}
+
+impl ExpirableCacheEntry for CachedSystemPromptLayers {
+    fn is_expired(&self) -> bool {
+        self.is_expired()
+    }
+
+    fn timestamp(&self) -> SystemTime {
+        self.timestamp
+    }
+}
+
+impl ExpirableCacheEntry for CachedPromptTemplates {
+    fn is_expired(&self) -> bool {
+        self.is_expired()
+    }
+
+    fn timestamp(&self) -> SystemTime {
+        self.timestamp
+    }
+}
+
+/// Read-through guard shared by both caches: expired entries miss.
+fn get_cached<K, V>(cache: &RwLock<HashMap<K, V>>, key: &K, what: &str) -> Option<V>
+where
+    K: Eq + std::hash::Hash,
+    V: ExpirableCacheEntry + Clone,
+{
+    match cache.read() {
         Ok(cache) => cache.get(key).filter(|cached| !cached.is_expired()).cloned(),
         Err(_) => {
-            warn!("system prompt layers cache lock poisoned while reading cache");
+            warn!("{what} cache lock poisoned while reading cache");
             None
         }
     }
 }
 
+/// Make room for `key` when the cache is full: purge expired entries first,
+/// then evict the oldest. No-op when under budget or when `key` is present.
+fn evict_if_full<K, V>(cache: &mut HashMap<K, V>, key: &K)
+where
+    K: Eq + std::hash::Hash + Clone,
+    V: ExpirableCacheEntry,
+{
+    if cache.len() < PROMPT_RESOURCE_CACHE_MAX_ENTRIES || cache.contains_key(key) {
+        return;
+    }
+    let expired: Vec<K> = cache
+        .iter()
+        .filter(|(_, value)| value.is_expired())
+        .map(|(cache_key, _)| cache_key.clone())
+        .collect();
+    for cache_key in expired {
+        cache.remove(&cache_key);
+    }
+
+    if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES {
+        let oldest_key = cache
+            .iter()
+            .min_by_key(|(_, value)| value.timestamp())
+            .map(|(cache_key, _)| cache_key.clone());
+        if let Some(oldest_key) = oldest_key {
+            cache.remove(&oldest_key);
+        }
+    }
+}
+
+fn get_cached_system_prompt_layers(key: &PromptResourceCacheKey) -> Option<CachedSystemPromptLayers> {
+    get_cached(system_prompt_layers_cache(), key, "system prompt layers")
+}
+
 fn cache_system_prompt_layers(key: PromptResourceCacheKey, layers: &SystemPromptLayers) {
     match system_prompt_layers_cache().write() {
         Ok(mut cache) => {
-            if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES && !cache.contains_key(&key) {
-                let expired: Vec<_> = cache
-                    .iter()
-                    .filter(|(_, value)| value.is_expired())
-                    .map(|(cache_key, _)| cache_key.clone())
-                    .collect();
-                for cache_key in expired {
-                    cache.remove(&cache_key);
-                }
-
-                if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES {
-                    let oldest_key = cache
-                        .iter()
-                        .min_by_key(|(_, value)| value.timestamp)
-                        .map(|(cache_key, _)| cache_key.clone());
-                    if let Some(oldest_key) = oldest_key {
-                        cache.remove(&oldest_key);
-                    }
-                }
-            }
+            evict_if_full(&mut cache, &key);
 
             let mut source_paths = vec![
                 key.workspace_root.join(PROMPTS_DIR).join(SYSTEM_PROMPT_FILENAME),
@@ -200,7 +233,7 @@ fn cache_system_prompt_layers(key: PromptResourceCacheKey, layers: &SystemPrompt
                 source_paths.push(prompt_dir.join(SYSTEM_PROMPT_FILENAME));
                 source_paths.push(prompt_dir.join(APPEND_SYSTEM_PROMPT_FILENAME));
             }
-            let source_mtime = newest_source_mtime(&source_paths);
+            let source_mtime = newest_mtime(source_paths.iter().map(PathBuf::as_path));
 
             cache.insert(
                 key,
@@ -216,38 +249,13 @@ fn cache_system_prompt_layers(key: PromptResourceCacheKey, layers: &SystemPrompt
 }
 
 fn get_cached_prompt_templates(key: &PromptResourceCacheKey) -> Option<CachedPromptTemplates> {
-    match prompt_templates_cache().read() {
-        Ok(cache) => cache.get(key).filter(|cached| !cached.is_expired()).cloned(),
-        Err(_) => {
-            warn!("prompt templates cache lock poisoned while reading cache");
-            None
-        }
-    }
+    get_cached(prompt_templates_cache(), key, "prompt templates")
 }
 
 fn cache_prompt_templates(key: PromptResourceCacheKey, templates: &[PromptTemplate]) {
     match prompt_templates_cache().write() {
         Ok(mut cache) => {
-            if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES && !cache.contains_key(&key) {
-                let expired: Vec<_> = cache
-                    .iter()
-                    .filter(|(_, value)| value.is_expired())
-                    .map(|(cache_key, _)| cache_key.clone())
-                    .collect();
-                for cache_key in expired {
-                    cache.remove(&cache_key);
-                }
-
-                if cache.len() >= PROMPT_RESOURCE_CACHE_MAX_ENTRIES {
-                    let oldest_key = cache
-                        .iter()
-                        .min_by_key(|(_, value)| value.timestamp)
-                        .map(|(cache_key, _)| cache_key.clone());
-                    if let Some(oldest_key) = oldest_key {
-                        cache.remove(&oldest_key);
-                    }
-                }
-            }
+            evict_if_full(&mut cache, &key);
 
             let source_paths = (
                 key.workspace_root.join(PROMPTS_DIR).join(TEMPLATES_DIR),
@@ -257,7 +265,7 @@ fn cache_prompt_templates(key: PromptResourceCacheKey, templates: &[PromptTempla
             if let Some(ref p) = source_paths.1 {
                 mtime_paths.push(p.clone());
             }
-            let source_mtime = newest_source_mtime(&mtime_paths);
+            let source_mtime = newest_mtime(mtime_paths.iter().map(PathBuf::as_path));
 
             cache.insert(
                 key,
@@ -813,5 +821,106 @@ mod tests {
             expanded,
             "Review src/lib.rs against main.\nArgs: src/lib.rs main\nAgain: src/lib.rs main\nMissing: ''"
         );
+    }
+
+    struct TestEntry {
+        timestamp: SystemTime,
+        expired: bool,
+    }
+
+    impl ExpirableCacheEntry for TestEntry {
+        fn is_expired(&self) -> bool {
+            self.expired
+        }
+
+        fn timestamp(&self) -> SystemTime {
+            self.timestamp
+        }
+    }
+
+    fn full_live_cache(now: SystemTime) -> HashMap<u32, TestEntry> {
+        (0..PROMPT_RESOURCE_CACHE_MAX_ENTRIES as u32)
+            .map(|i| {
+                (
+                    i,
+                    TestEntry {
+                        // Key 0 is newest, the last key is oldest.
+                        timestamp: now - Duration::from_secs((i + 1) as u64 * 60),
+                        expired: false,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn evict_if_full_removes_oldest_live_entry_at_budget() {
+        let now = SystemTime::now();
+        let mut cache = full_live_cache(now);
+        assert_eq!(cache.len(), PROMPT_RESOURCE_CACHE_MAX_ENTRIES);
+
+        evict_if_full(&mut cache, &u32::MAX);
+        assert_eq!(cache.len(), PROMPT_RESOURCE_CACHE_MAX_ENTRIES - 1);
+        // Oldest (last key) evicted, newest (key 0) retained.
+        assert!(!cache.contains_key(&(PROMPT_RESOURCE_CACHE_MAX_ENTRIES as u32 - 1)));
+        assert!(cache.contains_key(&0));
+    }
+
+    #[test]
+    fn evict_if_full_prefers_expired_over_oldest_live_and_keeps_present_keys() {
+        let now = SystemTime::now();
+        let mut cache = full_live_cache(now);
+        // Expire the newest entry: it must go before the oldest live one.
+        cache.insert(0, TestEntry { timestamp: now, expired: true });
+
+        evict_if_full(&mut cache, &u32::MAX);
+        assert!(!cache.contains_key(&0));
+        assert!(cache.contains_key(&(PROMPT_RESOURCE_CACHE_MAX_ENTRIES as u32 - 1)));
+
+        // A present key at full budget means in-place update: no eviction.
+        let mut full = full_live_cache(now);
+        evict_if_full(&mut full, &0);
+        assert_eq!(full.len(), PROMPT_RESOURCE_CACHE_MAX_ENTRIES);
+
+        // Under budget: no-op for a new key.
+        full.remove(&0);
+        evict_if_full(&mut full, &u32::MAX);
+        assert_eq!(full.len(), PROMPT_RESOURCE_CACHE_MAX_ENTRIES - 1);
+        assert!(full.contains_key(&1));
+    }
+
+    #[test]
+    fn newest_mtime_is_order_independent_and_ignores_missing_paths() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let older = dir.path().join("older.md");
+        let newer = dir.path().join("newer.md");
+        std::fs::write(&older, "old").expect("write older");
+        std::fs::write(&newer, "new").expect("write newer");
+        let base = SystemTime::now();
+        std::fs::File::options()
+            .write(true)
+            .open(&older)
+            .expect("open older")
+            .set_modified(base - Duration::from_secs(100))
+            .expect("set older mtime");
+        std::fs::File::options()
+            .write(true)
+            .open(&newer)
+            .expect("open newer")
+            .set_modified(base)
+            .expect("set newer mtime");
+        let missing = dir.path().join("missing.md");
+
+        // Newer file wins regardless of argument order.
+        let forward = newest_mtime([older.as_path(), newer.as_path()]);
+        let reversed = newest_mtime([newer.as_path(), older.as_path()]);
+        assert_eq!(forward, reversed);
+        assert!(forward > base - Duration::from_secs(100));
+
+        // Missing paths never contribute: same result with or without them,
+        // and a lone missing path degrades to UNIX_EPOCH.
+        assert_eq!(newest_mtime([missing.as_path(), older.as_path(), newer.as_path()]), forward);
+        assert_eq!(newest_mtime([missing.as_path()]), SystemTime::UNIX_EPOCH);
+        assert_eq!(newest_mtime(Vec::<&Path>::new()), SystemTime::UNIX_EPOCH);
     }
 }

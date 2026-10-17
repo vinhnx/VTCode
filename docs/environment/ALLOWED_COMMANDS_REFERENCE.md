@@ -4,7 +4,8 @@ This document outlines all commands that VT Code allows agents to execute, organ
 
 ## Overview
 
-VT Code maintains a comprehensive allow-list of safe commands that the agent can execute. The list is defined in `crates/codegen/vtcode-config/src/constants.rs` and can be customized via `vtcode.toml`.
+VT Code maintains a comprehensive allow-list of safe commands that the agent can execute. The list is defined in
+`crates/codegen/vtcode-config/src/constants.rs` and can be customized via `vtcode.toml`.
 
 **Total Allowed Commands**: 380+ (as of v0.43.3)
 
@@ -14,30 +15,31 @@ VT Code maintains a comprehensive allow-list of safe commands that the agent can
 
 Essential Unix/Linux shell commands for file and process inspection:
 
-```
+```text
 cat, head, tail, more, less, wc, echo, printf, date, cal, basename, dirname,
 pwd, ls, find, locate, grep, egrep, fgrep, zgrep, sort, uniq, cut, awk, sed,
 true, false, test, [, ], which, type, file, stat, du, df, ps, top, htop, tree
 ```
 
-**Key Point**: These are always available as they're core to the system. The PATH fix ensures they're properly accessible.
+**Key Point**: These are always available as they're core to the system. The PATH fix ensures they're properly
+accessible.
 
 ### Version Control (5+)
 
--   `git` - Most important for development workflows
--   `hg` - Mercurial
--   `svn` - Subversion
--   `git-lfs` - Git Large File Storage
+- `git` - Most important for development workflows
+- `hg` - Mercurial
+- `svn` - Subversion
+- `git-lfs` - Git Large File Storage
 
 ### Build Systems (8+)
 
-```
+```text
 make, cmake, ninja, meson, bazel, buck2, scons, waf, xcodebuild
 ```
 
 ### Rust/Cargo Ecosystem (11+)
 
-```
+```text
 cargo, rustc, rustfmt, rustup, clippy, cargo-clippy, cargo-fmt,
 cargo-build, cargo-test, cargo-run, cargo-check, cargo-doc
 ```
@@ -48,7 +50,7 @@ cargo-build, cargo-test, cargo-run, cargo-check, cargo-doc
 
 Package managers and runtime:
 
-```
+```text
 npm, yarn, pnpm, bun, npx, node, yarnpkg,
 npm-run, npm-test, npm-start, npm-build, npm-lint, npm-install,
 yarn-test, yarn-start, yarn-build, yarn-lint, yarn-install,
@@ -58,7 +60,7 @@ bun-test, bun-start, bun-build, bun-lint, bun-install, bun-run
 
 ### Python Ecosystem (15+)
 
-```
+```text
 python, python3, pip, pip3, virtualenv, venv, conda, pytest,
 python-m-pytest, python3-m-pytest, python-m-pip, python3-m-pip,
 python-m-venv, python3-m-venv, black, flake8, mypy, pylint, isort, ruff, bandit
@@ -66,7 +68,7 @@ python-m-venv, python3-m-venv, black, flake8, mypy, pylint, isort, ruff, bandit
 
 ### Java Ecosystem (18+)
 
-```
+```text
 java, javac, jar, jarsigner, javadoc, jmap, jstack, jstat, jinfo,
 mvn, gradle, gradlew, ./gradlew, mvnw, ./mvnw,
 mvn-test, mvn-compile, mvn-package, mvn-install, mvn-clean,
@@ -75,7 +77,7 @@ gradle-test, gradle-build, gradle-check, gradle-run, gradle-clean
 
 ### Go Ecosystem (11+)
 
-```
+```text
 go, gofmt, goimports, golint, go-test, go-build, go-run, go-mod,
 golangci-lint, go-doc, go-vet, go-install, go-clean
 ```
@@ -84,7 +86,7 @@ golangci-lint, go-doc, go-vet, go-install, go-clean
 
 Compilers and tools:
 
-```
+```text
 gcc, g++, clang, clang++, clang-cl, cpp, cc, c++,
 gcc-ar, gcc-nm, gcc-ranlib, ld, lld, gold, bfdld,
 autotools, autoconf, automake, libtool, pkg-config, pkgconfig
@@ -92,7 +94,7 @@ autotools, autoconf, automake, libtool, pkg-config, pkgconfig
 
 ### Testing Frameworks (20+)
 
-```
+```text
 pytest, jest, mocha, jasmine, karma, chai, sinon, vitest,
 cypress, selenium, playwright, testcafe, tape, ava, qunit,
 junit, googletest, catch2, benchmark, hyperfine
@@ -100,7 +102,7 @@ junit, googletest, catch2, benchmark, hyperfine
 
 ### Linting & Formatting (20+)
 
-```
+```text
 eslint, prettier, tslint, jshint, jscs, stylelint, htmlhint,
 jsonlint, yamllint, toml-check, markdownlint, remark-cli,
 shellcheck, hadolint, rustfmt, gofmt, black, isort, ruff, clang-format, clang-tidy
@@ -108,7 +110,7 @@ shellcheck, hadolint, rustfmt, gofmt, black, isort, ruff, clang-format, clang-ti
 
 ### Documentation Tools (15+)
 
-```
+```text
 doxygen, sphinx, mkdocs, hugo, jekyll, gatsby, next, nuxt,
 vuepress, docusaurus, storybook, gitbook, readthedocs, pandoc,
 mdbook, mdBook
@@ -118,7 +120,7 @@ mdbook, mdBook
 
 Safe operations only (no destructive commands):
 
-```
+```text
 docker, docker-compose, docker-buildx, podman, buildah,
 docker-build, docker-run, docker-ps, docker-images,
 docker-inspect, docker-exec, docker-logs, docker-stats,
@@ -129,27 +131,27 @@ docker-system, docker-network
 
 For development/testing:
 
-```
+```text
 sqlite3, mysql, psql, mongosh, redis-cli, redis-server
 ```
 
 ### Cloud & Deployment (15+)
 
-```
+```text
 aws, gcloud, az, kubectl, helm, terraform, tf, terragrunt,
 serverless, sls, pulumi, cdk, sam, localstack, minikube
 ```
 
 ### Security & Analysis (10+)
 
-```
+```text
 trivy, snyk, npm-audit, pip-audit, cargo-audit,
 bandit, safety, pipenv, poetry
 ```
 
 ### Performance Tools (15+)
 
-```
+```text
 perf, strace, ltrace, valgrind, gdb, lldb,
 sar, iostat, vmstat, htop, iotop, nethogs, iftop,
 speedtest-cli, ab, wrk, hey
@@ -157,41 +159,41 @@ speedtest-cli, ab, wrk, hey
 
 ### CI/CD Tools (10+)
 
-```
+```text
 gh, gitlab-ci, bitbucket, azure-pipelines, circleci,
 jenkins, drone, buildkite, travis, appveyor
 ```
 
 ### Web Development (15+)
 
-```
+```text
 webpack, rollup, vite, parcel, esbuild, snowpack, turbo, swc,
 babel, postcss, sass, scss, less, stylus, tailwindcss
 ```
 
 ### Mobile Development (10+)
 
-```
+```text
 xcodebuild, fastlane, gradle, ./gradlew, cordova, ionic,
 react-native, flutter, expo, capacitor
 ```
 
 ### Text Processing & Archives (15+)
 
-```
+```text
 tr, fold, paste, join, comm, diff, patch,
 gzip, gunzip, bzip2, bunzip2, xz, unxz, tar, zip, unzip
 ```
 
 ### Cryptographic Tools (5+)
 
-```
+```text
 shasum, md5sum, sha256sum, sha512sum
 ```
 
 ### Numeric & Programming (5+)
 
-```
+```text
 bc, expr, seq
 ```
 
@@ -201,37 +203,37 @@ The following commands are **ALWAYS BLOCKED** and cannot be overridden:
 
 ### Destructive File Operations
 
-```
+```text
 rm, rmdir, del, format, fdisk, mkfs, dd, shred, wipe, srm, unlink
 ```
 
 ### Permission & System Changes
 
-```
+```text
 chmod, chown, passwd, usermod, userdel, systemctl, service
 ```
 
 ### Process Termination
 
-```
+```text
 kill, killall, pkill
 ```
 
 ### System Shutdown
 
-```
+```text
 reboot, shutdown, halt, poweroff
 ```
 
 ### Privilege Escalation
 
-```
+```text
 sudo, su, doas, runas
 ```
 
 ### System Mounting
 
-```
+```text
 mount, umount, mountpoint
 ```
 
@@ -239,7 +241,7 @@ mount, umount, mountpoint
 
 These commands are allowed but require sandbox:
 
-```
+```text
 wget, ftp, scp, rsync, ssh, telnet, nc, ncat, socat
 ```
 
@@ -247,14 +249,14 @@ wget, ftp, scp, rsync, ssh, telnet, nc, ncat, socat
 
 When executing commands, VT Code now preserves these critical environment variables from the parent shell:
 
--   `PATH` - Command search paths (enables finding custom installations)
--   `HOME` - User home directory
--   `SHELL` - Current shell program
--   `LANG`, `LC_*` - Locale settings
--   `USER`, `LOGNAME` - User identity
--   `PWD` - Current working directory
--   `EDITOR`, `VISUAL` - Default editors
--   Custom environment variables set by the user
+- `PATH` - Command search paths (enables finding custom installations)
+- `HOME` - User home directory
+- `SHELL` - Current shell program
+- `LANG`, `LC_*` - Locale settings
+- `USER`, `LOGNAME` - User identity
+- `PWD` - Current working directory
+- `EDITOR`, `VISUAL` - Default editors
+- Custom environment variables set by the user
 
 **Note**: VT Code overrides `PAGER`, `GIT_PAGER`, `LESS`, `TERM`, color-related vars for consistency.
 
@@ -366,7 +368,7 @@ If a command runs but shows permission errors:
 
 ## See Also
 
--   `docs/development/EXECUTION_POLICY.md` - Detailed execution policy documentation
--   `docs/guides/security.md` - Security best practices
--   `docs/environment/PATH_VISIBILITY_FIX.md` - Details on the PATH inheritance fix
--   `crates/codegen/vtcode-config/src/constants.rs` - Source of truth for command lists
+- `docs/development/EXECUTION_POLICY.md` - Detailed execution policy documentation
+- `docs/guides/security.md` - Security best practices
+- `docs/environment/PATH_VISIBILITY_FIX.md` - Details on the PATH inheritance fix
+- `crates/codegen/vtcode-config/src/constants.rs` - Source of truth for command lists

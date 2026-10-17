@@ -8,6 +8,7 @@ mod diagnostics;
 mod display;
 pub(crate) mod external_editor;
 pub(crate) mod external_url_guard;
+pub(super) mod fast_mode;
 mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;

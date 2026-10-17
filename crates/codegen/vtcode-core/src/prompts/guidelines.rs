@@ -1,11 +1,10 @@
-use std::collections::BTreeSet;
-use std::fmt::Write as _;
-
 use crate::config::constants::tools;
-use crate::config::types::{CapabilityLevel, ResolvedShellPromptProfile, ShellPromptProfile};
+use crate::config::types::{CapabilityLevel, ResolvedShellPromptProfile};
 use crate::core::agent::harness_kernel::SessionToolCatalogSnapshot;
 use crate::llm::provider::ToolDefinition;
-use crate::prompts::sections::SectionBoundaryMode;
+use crate::prompts::sections::{
+    SectionBoundaryMode, append_prompt_block, remove_prompt_section, trim_trailing_newlines,
+};
 use crate::tools::registry::tool_groups;
 
 const TOOL_EXEC_COMMAND: &str = tools::EXEC_COMMAND;
@@ -17,7 +16,13 @@ const TOOL_GREP_FILE: &str = tools::GREP_FILE;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
+const SOURCE_INSPECTION_GUIDANCE: &str =
+    "- Inspect relevant source, edit a bounded region, refresh after mismatch, then verify.";
+const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
+const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
+
+const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";
 
 /// Shared cross-turn resume pointer (invariant #22). The hint body itself stays
 /// transient via `append_transient_turn_notes`; tool guidance only advertises
@@ -36,19 +41,50 @@ const START_PLANNING_GUIDANCE_LINE: &str = "- For demanding, ambiguous, or multi
 /// routes to the plan sidecar, which rejects index 0 (`index_path components
 /// must be >= 1`); checklist-level `index: 0` completion exists only outside
 /// planning, so neither line advertises it.
-const PLANNING_TASK_TRACKER_COMPACT_LINE: &str = "- Keep blockers and verification open in `task_tracker`; updates use positive indices or index_path, and index 0 is invalid while planning.";
-const PLANNING_TASK_TRACKER_INDEX_LINE: &str = "- Use `task_tracker` action=update with positive flat indices or positive hierarchical index_path values (index 0 is invalid while planning), and use items for bulk updates.";
+const PLANNING_TASK_TRACKER_COMPACT_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; updates use positive index/index_path or items, never conflicting fields; index 0 is invalid while planning. Keep blockers and verification open.";
+const PLANNING_TASK_TRACKER_INDEX_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; update {\"action\":\"update\",\"index\":1,\"status\":\"in_progress\"}; bulk {\"action\":\"update\",\"items\":[\"[x] Done\",\"[ ] Remaining\"]}. Use positive flat indices or hierarchical index_path (index 0 is invalid while planning), or items for full checklist replacement. Omit unused fields; never combine index, index_path, and items.";
+
+/// Context-token ceiling at or below which Active Tools documentation
+/// resolves to the Minimal density.
+const MINIMAL_CONTEXT_TOKEN_CEILING: usize = 32_000;
+
+/// The single home of the parallel-call hint, shared by the Minimal and
+/// Default Active Tools; emitted only when the provider keeps parallel tool
+/// configuration enabled.
+const PARALLEL_TOOLS_LINE: &str = "- Run independent tools in parallel when inputs do not depend on each other.";
+
+/// The single home of the `code_search` filter hygiene rule, shared by the
+/// Minimal, Default, and planning Active Tools variants.
+const CODE_SEARCH_FILTER_LINE: &str = "- `code_search`: omit unused filters; no empty values (`path: \"\"`).";
+
+/// The single home of the `request_user_input` threshold rule, shared by the
+/// Minimal planning addendum and the planning Active Tools.
+const REQUEST_USER_INPUT_LINE: &str =
+    "- Use `request_user_input` only for material blockers remaining after repository exploration.";
+
+/// Read-only capability line shared by the capability-level and
+/// tool-fallback arms of `capability_mode_line`.
+const CAPABILITY_READ_ONLY_LINE: &str =
+    "- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.";
+
+/// Shared `write_stdin` recovery clause; each profile adds its own
+/// rerun/wait policy around it.
+const WRITE_STDIN_RECOVERY_CLAUSE: &str = "; if missing, recover prior output";
+
+/// Policy lines shared by both shell profiles: the profile governs syntax
+/// examples only, and VT Code never translates flags across shells.
+const SHELL_PROFILE_POLICY_SUFFIX: &str = "- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.\n- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.";
 
 /// Documentation density is independent of the tools a session may execute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolGuidanceProfile {
+pub(crate) enum ToolGuidanceProfile {
     Minimal,
     Default,
 }
 
 impl ToolGuidanceProfile {
     #[must_use]
-    pub fn resolve(
+    pub(crate) fn resolve(
         context_tokens: usize,
         default_prompt_tokens: usize,
         max_prompt_tokens: usize,
@@ -58,7 +94,7 @@ impl ToolGuidanceProfile {
         let exceeds_cost = input_usd_per_token.zip(max_budget_usd).is_some_and(|(price, budget)| {
             price.is_finite() && price >= 0.0 && budget.is_finite() && default_prompt_tokens as f64 * price > budget
         });
-        if (context_tokens > 0 && context_tokens <= 32_000)
+        if (context_tokens > 0 && context_tokens <= MINIMAL_CONTEXT_TOKEN_CEILING)
             || (max_prompt_tokens > 0 && default_prompt_tokens > max_prompt_tokens)
             || exceeds_cost
         {
@@ -69,98 +105,157 @@ impl ToolGuidanceProfile {
     }
 }
 
+/// Which guidance-gating tools a session exposes, computed once per build so
+/// every Active Tools variant branches on the same membership policy.
+struct ToolPresence {
+    exec: bool,
+    write_stdin: bool,
+    code_search: bool,
+    read_file: bool,
+    grep_file: bool,
+    list_files: bool,
+    apply_patch: bool,
+    request_user_input: bool,
+    task_tracker: bool,
+    start_planning: bool,
+    matrix: bool,
+    record_decision: bool,
+}
+
+impl ToolPresence {
+    fn of(available_tools: &[String]) -> Self {
+        // Single pass over the tool list: the old form ran one linear
+        // `any()` scan per flag (10 scans per call, up to 4 calls per
+        // model-aware prompt build). Same membership policy, one walk.
+        let mut presence = Self {
+            exec: false,
+            write_stdin: false,
+            code_search: false,
+            read_file: false,
+            grep_file: false,
+            list_files: false,
+            apply_patch: false,
+            request_user_input: false,
+            task_tracker: false,
+            start_planning: false,
+            matrix: false,
+            record_decision: false,
+        };
+        for tool in available_tools {
+            match tool.as_str() {
+                TOOL_EXEC_COMMAND => presence.exec = true,
+                TOOL_WRITE_STDIN => presence.write_stdin = true,
+                TOOL_CODE_SEARCH => presence.code_search = true,
+                TOOL_READ_FILE => presence.read_file = true,
+                TOOL_GREP_FILE => presence.grep_file = true,
+                TOOL_LIST_FILES => presence.list_files = true,
+                TOOL_APPLY_PATCH => presence.apply_patch = true,
+                TOOL_REQUEST_USER_INPUT => presence.request_user_input = true,
+                TOOL_TASK_TRACKER => presence.task_tracker = true,
+                TOOL_START_PLANNING => presence.start_planning = true,
+                "matrix" => presence.matrix = true,
+                "record_decision" => presence.record_decision = true,
+                _ => {}
+            }
+        }
+        presence
+    }
+}
+
 /// Render from resolved capabilities, without changing tool authorization.
-pub fn generate_tool_guidelines_with_capabilities(
+pub(crate) fn generate_tool_guidelines_with_capabilities(
     available_tools: &[String],
     capability_level: Option<CapabilityLevel>,
     shell_profile: ResolvedShellPromptProfile,
     profile: ToolGuidanceProfile,
     parallel_tools: bool,
 ) -> String {
-    let mut guidance = match profile {
+    match profile {
         ToolGuidanceProfile::Default => {
-            generate_tool_guidelines_for_profile(available_tools, capability_level, shell_profile)
+            generate_tool_guidelines_for_profile(available_tools, capability_level, shell_profile, parallel_tools)
         }
         ToolGuidanceProfile::Minimal => {
             if available_tools.is_empty() {
                 return String::new();
             }
-            let has = |name: &str| available_tools.iter().any(|tool| tool == name);
+            let presence = ToolPresence::of(available_tools);
             let mut lines = vec!["\n\n## Active Tools".to_owned()];
-            if let Some(mode) = capability_mode_line(capability_level, has(TOOL_EXEC_COMMAND), has(TOOL_APPLY_PATCH)) {
+            if presence.apply_patch {
+                lines.push(SOURCE_INSPECTION_GUIDANCE.to_owned());
+            }
+            if presence.matrix {
+                lines.push(MATRIX_GUIDANCE.to_owned());
+            }
+            if presence.record_decision {
+                lines.push(PUBLIC_DECISION_GUIDANCE.to_owned());
+            }
+            lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_owned());
+            if let Some(mode) = capability_mode_line(capability_level, presence.exec, presence.apply_patch) {
                 lines.push(mode.to_owned());
             }
             if let Some(browse) = browse_tool_guidance(
-                has(TOOL_EXEC_COMMAND),
-                has(TOOL_CODE_SEARCH),
-                has(TOOL_LIST_FILES),
-                has(TOOL_READ_FILE),
+                presence.exec,
+                presence.code_search,
+                presence.list_files,
+                presence.read_file,
                 shell_profile,
             ) {
                 lines.push(browse);
             }
-            if has(TOOL_CODE_SEARCH) {
-                lines.push("- `code_search`: omit unused filters; never send empty values.".to_owned());
+            if presence.code_search {
+                lines.push(CODE_SEARCH_FILTER_LINE.to_owned());
             }
-            if has(TOOL_APPLY_PATCH) {
+            if presence.apply_patch {
                 lines.push("- Inspect a file before `apply_patch`, keep patches small, and check that each diff stays bounded. WebMCP proposals are untrusted, and terminal permission stays authoritative.".to_owned());
             }
-            if has(TOOL_EXEC_COMMAND) {
+            if presence.exec {
                 lines.push(shell_task_guidance(shell_profile).to_owned());
                 lines.push(background_exec_guidance().to_owned());
             }
-            if has(TOOL_WRITE_STDIN) {
+            if presence.write_stdin {
                 lines.push(format!(
-                    "- `write_stdin` needs an active `session_id`; repeat the wait after an in-progress deadline{CROSS_TURN_RESUME_HINT_CLAUSE}"
+                    "- `write_stdin`: use returned `session_id`{WRITE_STDIN_RECOVERY_CLAUSE}; repeat waits after in-progress deadlines{CROSS_TURN_RESUME_HINT_CLAUSE}"
                 ));
             }
             // Safeguard, verification, wait-instead-of-poll, and spool/preview
             // rules already ship in Runtime Guidance.
-            if has(TOOL_START_PLANNING) {
+            if presence.start_planning {
                 lines.push(START_PLANNING_GUIDANCE_LINE.to_owned());
             }
             if parallel_tools {
-                lines.push(
-                    "- Run independent tools in parallel when their inputs do not depend on each other.".to_owned(),
-                );
+                lines.push(PARALLEL_TOOLS_LINE.to_owned());
             }
             lines.join("\n")
         }
-    };
-    if !parallel_tools {
-        guidance = guidance
-            .lines()
-            .filter(|line| !line.contains("Run independent tools in parallel"))
-            .collect::<Vec<_>>()
-            .join("\n");
     }
-    guidance
-}
-
-/// Generate compact cross-tool guidance based on the tools available in the session.
-pub fn generate_tool_guidelines(available_tools: &[String], capability_level: Option<CapabilityLevel>) -> String {
-    generate_tool_guidelines_for_profile(
-        available_tools,
-        capability_level,
-        ShellPromptProfile::Auto.resolve_for_current_platform(),
-    )
 }
 
 /// Generate compact cross-tool guidance with an explicit shell prompt profile.
-pub fn generate_tool_guidelines_for_profile(
+/// `parallel_tools` mirrors the provider's parallel-tool configuration: when
+/// false, the parallel-call hint is not emitted instead of stripped post hoc.
+pub(crate) fn generate_tool_guidelines_for_profile(
     available_tools: &[String],
     capability_level: Option<CapabilityLevel>,
     shell_profile: ResolvedShellPromptProfile,
+    parallel_tools: bool,
 ) -> String {
-    let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
-    let has_stdin = available_tools.iter().any(|tool| tool == TOOL_WRITE_STDIN);
-    let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
-    let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
-    let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
-    let has_apply_patch = available_tools.iter().any(|tool| tool == TOOL_APPLY_PATCH);
-    let has_start_planning = available_tools.iter().any(|tool| tool == TOOL_START_PLANNING);
+    let presence = ToolPresence::of(available_tools);
+    let has_exec = presence.exec;
+    let has_stdin = presence.write_stdin;
+    let has_search = presence.code_search;
+    let has_read_file = presence.read_file;
+    let has_list_files = presence.list_files;
+    let has_apply_patch = presence.apply_patch;
+    let has_start_planning = presence.start_planning;
 
     let mut lines = Vec::new();
+    if has_apply_patch {
+        lines.push(SOURCE_INSPECTION_GUIDANCE.to_owned());
+    }
+    if presence.matrix {
+        lines.push(MATRIX_GUIDANCE.to_owned());
+    }
+    lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_string());
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
         lines.push(mode_line.to_string());
     }
@@ -187,7 +282,13 @@ pub fn generate_tool_guidelines_for_profile(
         // classification (`tool_intent/activity.rs`, spool processing); the
         // prompt keeps only the outcome rule so wording cannot drift from
         // enforcement.
-        lines.push("- Run verifiers standalone or as a pure `&&` chain so the exit status is visible; a verifier piped only into `head` or `tail` counts as standalone, while results behind other pipes, `;`, or `||` stay unverified.".to_string());
+        lines.push("- Prefer standalone verifiers with `max_output_tokens`. Pure `head`/`tail` tails run standalone; static read-only filtering pipelines use fail-closed `pipefail`. Only terminal exit 0 clears verification; dynamic syntax, mutating tails, `;`, and `||` do not qualify. Recheck after `--fix`.".to_string());
+        // Low-effort models sometimes report a change as done without
+        // exercising it: require a real check (tests, type-checker, build,
+        // or the changed command itself). A syntax-only check, or a check
+        // command that failed to start, does not count. Applies to Sonnet
+        // 5.5 at `low` effort and any route where verification is skipped.
+        lines.push("- Run a real check that exercises the change; syntax-only or failed-to-start checks do not count. Install missing deps via the project's package manager, never sudo; if no check can run, say which and why.".to_string());
         // Tool-latency tail is dominated by full builds (observed p90 ~18s):
         // verify incrementally first. Kept tool-agnostic: fast checks exist
         // in every stack (`cargo check`, `tsc --noEmit`, `pytest --collect-only`).
@@ -196,16 +297,16 @@ pub fn generate_tool_guidelines_for_profile(
     // Tool-failure diagnosis, waiting on returned `next_wait_args` instead of
     // polling, the safeguard rule, the verification outcome rule (report
     // completion only after a check you ran), and spool paging with
-    // `preview_budget_exhausted` handling each have one home in Runtime
+    // per-result preview bounds each have one home in Runtime
     // Guidance, which every profile includes; do not restate them here.
     if has_stdin {
         lines.push(format!(
-            "- `write_stdin`: reuse the existing `session_id` of an active exec session; `spool_complete: false` marks readable partial output; an exited pending spool arrives on a later wait{CROSS_TURN_RESUME_HINT_CLAUSE}"
+            "- `write_stdin`: use the existing `session_id`{WRITE_STDIN_RECOVERY_CLAUSE}; rerun only for fresh results. `spool_complete: false` is partial; wait for exited pending spools{CROSS_TURN_RESUME_HINT_CLAUSE}"
         ));
     }
     if has_search {
-        lines.push("- `code_search`: omit unused filters; no empty values (`path: \"\"`).".to_string());
-        lines.push(code_search_guidance(has_exec, shell_profile));
+        lines.push(CODE_SEARCH_FILTER_LINE.to_string());
+        lines.push(code_search_guidance(has_exec));
     }
     if has_apply_patch || has_exec {
         lines.push(
@@ -213,8 +314,8 @@ pub fn generate_tool_guidelines_for_profile(
                 .to_string(),
         );
     }
-    if has_search || has_exec {
-        lines.push("- Run independent tools in parallel when inputs do not depend on each other.".to_string());
+    if (has_search || has_exec) && parallel_tools {
+        lines.push(PARALLEL_TOOLS_LINE.to_string());
     }
     if has_start_planning {
         lines.push(START_PLANNING_GUIDANCE_LINE.to_string());
@@ -224,20 +325,10 @@ pub fn generate_tool_guidelines_for_profile(
         return String::new();
     }
 
+    if presence.record_decision {
+        lines.push(PUBLIC_DECISION_GUIDANCE.to_owned());
+    }
     format!("\n\n## Active Tools\n{}", lines.join("\n"))
-}
-
-pub fn append_runtime_tool_prompt_sections(
-    prompt: &mut String,
-    tool_snapshot: &SessionToolCatalogSnapshot,
-    include_catalog_metadata: bool,
-) {
-    append_runtime_tool_prompt_sections_for_profile(
-        prompt,
-        tool_snapshot,
-        include_catalog_metadata,
-        ShellPromptProfile::Auto.resolve_for_current_platform(),
-    );
 }
 
 pub fn append_runtime_tool_prompt_sections_for_profile(
@@ -246,15 +337,81 @@ pub fn append_runtime_tool_prompt_sections_for_profile(
     include_catalog_metadata: bool,
     shell_profile: ResolvedShellPromptProfile,
 ) {
-    remove_prompt_section(prompt, "## Active Tools");
-    remove_prompt_section(prompt, "[Runtime Tool Catalog]");
-    while prompt.ends_with('\n') {
-        prompt.pop();
-    }
+    let names = snapshot_tool_names(tool_snapshot);
+    append_runtime_tool_sections_with_names(prompt, tool_snapshot, names, include_catalog_metadata, shell_profile);
+}
 
-    let available_tools = snapshot_tool_names(tool_snapshot);
-    let guidelines =
-        generate_runtime_tool_guidelines_for_profile(&available_tools, tool_snapshot.planning_active, shell_profile);
+/// Select documentation density using the active route and session budgets.
+pub fn append_runtime_tool_prompt_sections_for_model(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    include_catalog_metadata: bool,
+    shell_profile: ResolvedShellPromptProfile,
+    provider: &dyn crate::llm::provider::LLMProvider,
+    model: &str,
+    config: Option<&crate::config::VTCodeConfig>,
+) {
+    let names = snapshot_tool_names(tool_snapshot);
+    let default_guidance =
+        append_runtime_tool_sections_with_names(prompt, tool_snapshot, names, include_catalog_metadata, shell_profile);
+    let pricing = crate::config::models::model_catalog_entry(provider.name(), model).map(|entry| entry.pricing);
+    let profile = ToolGuidanceProfile::resolve(
+        crate::compaction::effective_context_budget(config, provider, model),
+        vtcode_commons::estimate_tokens(prompt),
+        config.map_or(0, |cfg| cfg.agent.max_system_prompt_tokens as usize),
+        pricing.and_then(|price| price.input),
+        config.and_then(|cfg| cfg.agent.harness.max_budget_usd),
+    );
+    let parallel_tools = provider.supports_parallel_tool_config(model);
+    // The planning mode section owns the output contract at every density.
+    // Default planning tool guidance contains no parallel-call hint.
+    if tool_snapshot.planning_active && profile == ToolGuidanceProfile::Default {
+        return;
+    }
+    remove_prompt_section(prompt, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
+    let presence = ToolPresence::of(names);
+    let capability_level = Some(infer_capability_level_from_presence(&presence));
+    let mut guidance = match profile {
+        ToolGuidanceProfile::Default => {
+            let mut guidance = default_guidance;
+            if let (Some(original), Some(effective)) = (
+                capability_mode_line(None, presence.exec, presence.apply_patch),
+                capability_mode_line(capability_level, presence.exec, presence.apply_patch),
+            ) && original != effective
+                && let Some(start) = guidance.find(original)
+            {
+                guidance.replace_range(start..start + original.len(), effective);
+            }
+            if !parallel_tools && let Some(start) = guidance.find(PARALLEL_TOOLS_LINE) {
+                guidance.replace_range(start.saturating_sub(1)..start + PARALLEL_TOOLS_LINE.len(), "");
+            }
+            guidance
+        }
+        ToolGuidanceProfile::Minimal => {
+            generate_tool_guidelines_with_capabilities(names, capability_level, shell_profile, profile, parallel_tools)
+        }
+    };
+    if tool_snapshot.planning_active {
+        append_minimal_planning_addendum(&mut guidance, &presence);
+    }
+    append_prompt_block(prompt, guidance.trim_start_matches('\n'));
+}
+
+/// Replace the runtime tool sections with guidance built from `names`, plus
+/// optional catalog metadata. Return the Default guidance so model-aware
+/// callers can reuse it after measuring the assembled prompt.
+fn append_runtime_tool_sections_with_names(
+    prompt: &mut String,
+    tool_snapshot: &SessionToolCatalogSnapshot,
+    names: &[String],
+    include_catalog_metadata: bool,
+    shell_profile: ResolvedShellPromptProfile,
+) -> String {
+    remove_prompt_section(prompt, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
+    remove_prompt_section(prompt, "[Runtime Tool Catalog]", SectionBoundaryMode::BracketOrMarkdown);
+    trim_trailing_newlines(prompt);
+
+    let guidelines = generate_runtime_tool_guidelines_for_profile(names, tool_snapshot.planning_active, shell_profile);
     if !guidelines.is_empty() {
         append_prompt_block(prompt, guidelines.trim_start_matches('\n'));
     }
@@ -276,68 +433,38 @@ pub fn append_runtime_tool_prompt_sections_for_profile(
         );
         append_prompt_block(prompt, &catalog_metadata);
     }
+    guidelines
 }
 
-/// Select documentation density using the active route and session budgets.
-pub fn append_runtime_tool_prompt_sections_for_model(
-    prompt: &mut String,
-    tool_snapshot: &SessionToolCatalogSnapshot,
-    include_catalog_metadata: bool,
-    shell_profile: ResolvedShellPromptProfile,
-    provider: &dyn crate::llm::provider::LLMProvider,
-    model: &str,
-    config: Option<&crate::config::VTCodeConfig>,
-) {
-    append_runtime_tool_prompt_sections_for_profile(prompt, tool_snapshot, include_catalog_metadata, shell_profile);
-    let pricing = crate::config::models::model_catalog_entry(provider.name(), model).map(|entry| entry.pricing);
-    let profile = ToolGuidanceProfile::resolve(
-        crate::compaction::effective_context_budget(config, provider, model),
-        vtcode_commons::estimate_tokens(prompt),
-        config.map_or(0, |cfg| cfg.agent.max_system_prompt_tokens as usize),
-        pricing.and_then(|price| price.input),
-        config.and_then(|cfg| cfg.agent.harness.max_budget_usd),
-    );
-    let parallel_tools = provider.supports_parallel_tool_config(model);
-    // The detailed planning contract contains no parallel-call hint and remains
-    // intact in Default. Minimal retains the same read-only and output contract.
-    if tool_snapshot.planning_active && profile == ToolGuidanceProfile::Default {
-        return;
+/// Compact tool reminders; the planning mode section retains the canonical
+/// research, step-quality, output, and persistence contract at every density.
+fn append_minimal_planning_addendum(guidance: &mut String, presence: &ToolPresence) {
+    guidance.push_str("\n- Planning is read-only.");
+    let mut read_tools = Vec::with_capacity(4);
+    if presence.read_file {
+        read_tools.push(TOOL_READ_FILE);
     }
-    remove_prompt_section(prompt, "## Active Tools");
-    let names = snapshot_tool_names(tool_snapshot);
-    let capability_level = Some(infer_capability_level(&names));
-    let mut guidance =
-        generate_tool_guidelines_with_capabilities(&names, capability_level, shell_profile, profile, parallel_tools);
-    if tool_snapshot.planning_active {
-        append_minimal_planning_addendum(&mut guidance, &names);
+    if presence.grep_file {
+        read_tools.push(TOOL_GREP_FILE);
     }
-    append_prompt_block(prompt, guidance.trim_start_matches('\n'));
-}
-
-/// Planning addendum for the compact (Minimal) tool guidance, where the
-/// detailed planning contract is dropped to fit the budget.
-fn append_minimal_planning_addendum(guidance: &mut String, names: &[String]) {
-    guidance.push_str("\n- Planning is read-only. Stop research when the plan is specified or the budget is near; emit one `<proposed_plan>` block with concrete targets and verification for each step.");
-    let read_tools = [TOOL_READ_FILE, TOOL_GREP_FILE, TOOL_CODE_SEARCH, TOOL_LIST_FILES]
-        .into_iter()
-        .filter(|tool| names.iter().any(|name| name == tool))
-        .collect::<Vec<_>>();
-    if read_tools.is_empty() {
-        guidance.push_str("\n- Keep inspections small: keep `max_output_tokens` small, avoid batching multiple large inspections in parallel; start git history with `git log --oneline` before targeted `git show --stat`.");
-    } else {
-        guidance.push_str(&format!(
-            "\n- Keep inspections small: prefer `{}` over `exec_command` shell reads; keep `max_output_tokens` small, avoid batching multiple large inspections in parallel; start git history with `git log --oneline` before targeted `git show --stat`.",
-            read_tools.join("`/`")
-        ));
+    if presence.code_search {
+        read_tools.push(TOOL_CODE_SEARCH);
     }
-    if names.iter().any(|name| name == TOOL_TASK_TRACKER) {
+    if presence.list_files {
+        read_tools.push(TOOL_LIST_FILES);
+    }
+    guidance.push_str("\n- Keep inspections small: ");
+    if !read_tools.is_empty() {
+        guidance.push_str(&format!("prefer `{}` over `exec_command` shell reads; ", read_tools.join("`/`")));
+    }
+    guidance.push_str("keep `max_output_tokens` small, avoid batching multiple large inspections in parallel; start git history with `git log --oneline` before targeted `git show --stat`.");
+    if presence.task_tracker {
         guidance.push('\n');
         guidance.push_str(PLANNING_TASK_TRACKER_COMPACT_LINE);
     }
-    if names.iter().any(|name| name == TOOL_REQUEST_USER_INPUT) {
-        guidance.push_str(
-            "\n- Use `request_user_input` only for material blockers remaining after repository exploration.",
-        );
+    if presence.request_user_input {
+        guidance.push('\n');
+        guidance.push_str(REQUEST_USER_INPUT_LINE);
     }
 }
 
@@ -349,7 +476,7 @@ fn append_minimal_planning_addendum(guidance: &mut String, names: &[String]) {
 /// descriptions are server-provided and unbounded, so each line is truncated
 /// to `DEFERRED_TOOLS_MAX_DESC_CHARS` characters.
 pub fn append_deferred_tools_prompt_section(prompt: &mut String, tools: &[ToolDefinition]) {
-    remove_prompt_section(prompt, "[Deferred Tools]");
+    remove_prompt_section(prompt, "[Deferred Tools]", SectionBoundaryMode::BracketOrMarkdown);
 
     let mut groups: Vec<_> = tool_groups(tools)
         .into_iter()
@@ -396,33 +523,14 @@ const DEFERRED_TOOLS_MAX_GROUPS: usize = 8;
 const DEFERRED_TOOLS_MAX_DESC_CHARS: usize = 120;
 
 fn truncate_deferred_description(description: &str) -> String {
-    if description.chars().count() <= DEFERRED_TOOLS_MAX_DESC_CHARS {
+    // Single pass: visit at most `MAX + 1` chars. The old form ran
+    // `chars().count()` over the whole string, then `chars().take()` again.
+    let mut chars = description.chars();
+    let truncated: String = chars.by_ref().take(DEFERRED_TOOLS_MAX_DESC_CHARS).collect();
+    if chars.next().is_none() {
         return description.to_string();
     }
-    let truncated: String = description.chars().take(DEFERRED_TOOLS_MAX_DESC_CHARS).collect();
     format!("{}...", truncated.trim_end())
-}
-
-fn append_prompt_block(prompt: &mut String, block: &str) {
-    if block.is_empty() {
-        return;
-    }
-
-    if prompt.is_empty() {
-        prompt.push_str(block);
-    } else {
-        let _ = write!(prompt, "\n\n{block}");
-    }
-}
-
-fn remove_prompt_section(prompt: &mut String, section_header: &str) {
-    while let Some((section_start, section_end)) = find_prompt_section_bounds(prompt, section_header) {
-        prompt.replace_range(section_start..section_end, "");
-    }
-}
-
-fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usize, usize)> {
-    crate::prompts::sections::find_prompt_section_bounds(prompt, section_header, SectionBoundaryMode::BracketOrMarkdown)
 }
 
 fn generate_runtime_tool_guidelines_for_profile(
@@ -431,20 +539,22 @@ fn generate_runtime_tool_guidelines_for_profile(
     shell_profile: ResolvedShellPromptProfile,
 ) -> String {
     if !planning_active {
-        return generate_tool_guidelines_for_profile(available_tools, None, shell_profile);
+        // Measurement parity: this Default-density build feeds the prompt size
+        // that `ToolGuidanceProfile::resolve` reads, so it keeps shipping the
+        // parallel-call hint unconditionally like the static composition path.
+        return generate_tool_guidelines_for_profile(available_tools, None, shell_profile, true);
     }
 
-    let has_exec = available_tools.iter().any(|tool| tool == TOOL_EXEC_COMMAND);
-    let has_search = available_tools.iter().any(|tool| tool == TOOL_CODE_SEARCH);
-    let has_read_file = available_tools.iter().any(|tool| tool == TOOL_READ_FILE);
-    let has_list_files = available_tools.iter().any(|tool| tool == TOOL_LIST_FILES);
-    let has_request_user_input = available_tools.iter().any(|tool| tool == TOOL_REQUEST_USER_INPUT);
-    let has_task_tracker = available_tools.iter().any(|tool| matches!(tool.as_str(), TOOL_TASK_TRACKER));
+    let presence = ToolPresence::of(available_tools);
+    let has_exec = presence.exec;
+    let has_search = presence.code_search;
+    let has_read_file = presence.read_file;
+    let has_list_files = presence.list_files;
+    let has_request_user_input = presence.request_user_input;
+    let has_task_tracker = presence.task_tracker;
 
     let mut lines = vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
-    lines.push("- Monitor the available planning tool-loop budget; stop research when the plan is specified or the limit is near, then synthesize one compact decision-ready plan from existing evidence.".to_string());
-    lines.push("- Every implementation step in the final plan must name a concrete repository target and include a concrete verification command or observable check.".to_string());
-    lines.push("- When the plan is ready, emit only one `<proposed_plan>` block; do not repeat planning policy text or add surrounding prose.".to_string());
+    lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_string());
     if let Some(browse_guidance) =
         browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file, shell_profile)
     {
@@ -454,34 +564,28 @@ fn generate_runtime_tool_guidelines_for_profile(
         lines.push("- In Planning workflow, use `exec_command` only for read-only verification.".to_string());
     }
     if has_search {
-        lines.push("- `code_search`: omit unused filters; no empty values (`path: \"\"`).".to_string());
+        lines.push(CODE_SEARCH_FILTER_LINE.to_string());
     }
     if has_task_tracker {
-        lines.push("- Keep `task_tracker` updated as you refine the plan.".to_string());
+        lines.push("- Keep `task_tracker` updated as you refine the plan. Indexed updates return totals and the changed item; use action=list for the full checklist.".to_string());
         lines.push("- Keep blockers and verification open in `task_tracker` until resolved.".to_string());
         lines.push(PLANNING_TASK_TRACKER_INDEX_LINE.to_string());
     }
     if has_request_user_input {
-        lines.push(
-            "- Use `request_user_input` only for material blockers that remain after repository exploration."
-                .to_string(),
-        );
+        lines.push(REQUEST_USER_INPUT_LINE.to_string());
     }
     if has_search || has_exec {
         lines.push("- If calls repeat without progress, tighten the plan instead of retrying identically.".to_string());
+    }
+    if presence.record_decision {
+        lines.push(PUBLIC_DECISION_GUIDANCE.to_owned());
     }
 
     format!("\n\n## Active Tools\n{}", lines.join("\n"))
 }
 
-fn snapshot_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> Vec<String> {
-    tool_snapshot
-        .active_tool_names
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+fn snapshot_tool_names(tool_snapshot: &SessionToolCatalogSnapshot) -> &[String] {
+    &tool_snapshot.active_tool_names
 }
 
 fn browse_tool_guidance(
@@ -502,15 +606,16 @@ fn browse_tool_guidance(
     Some("- Use available read-only repository tools for browsing; do not modify files.".to_string())
 }
 
-pub fn render_shell_profile_guidance(shell_profile: ResolvedShellPromptProfile) -> String {
-    match shell_profile {
+pub(crate) fn render_shell_profile_guidance(shell_profile: ResolvedShellPromptProfile) -> String {
+    let profile_lines = match shell_profile {
         ResolvedShellPromptProfile::UnixLike => {
-            "## Shell Profile\n- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.\n- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools.\n- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.\n- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.".to_string()
+            "- Active shell profile: `unix_like`. Use Unix-like command syntax in `exec_command.cmd`, for example `ls`, `rg`, `find`, `cat`, `sed`, and `awk`.\n- On macOS, write BSD-compatible flags for BSD tools. VT Code does not rewrite GNU flags for macOS BSD tools."
         }
         ResolvedShellPromptProfile::PowerShell => {
-            "## Shell Profile\n- Active shell profile: `powershell`. Use native PowerShell syntax in `exec_command.cmd`, for example `Get-ChildItem`, `Select-String`, `Get-Content`, and `Where-Object`.\n- On native Windows, use WSL when you need Unix-like workflows or Unix command examples.\n- The shell profile controls prompt examples and expected command syntax only; command policy, sandboxing, and approvals remain separate runtime checks.\n- VT Code does not translate GNU-to-BSD, BSD-to-GNU, Unix-to-PowerShell, or PowerShell-to-Unix command flags.".to_string()
+            "- Active shell profile: `powershell`. Use native PowerShell syntax in `exec_command.cmd`, for example `Get-ChildItem`, `Select-String`, `Get-Content`, and `Where-Object`.\n- On native Windows, use WSL when you need Unix-like workflows or Unix command examples."
         }
-    }
+    };
+    format!("## Shell Profile\n{profile_lines}\n{SHELL_PROFILE_POLICY_SUFFIX}")
 }
 
 fn shell_browse_guidance(shell_profile: ResolvedShellPromptProfile, has_search: bool) -> String {
@@ -522,13 +627,11 @@ fn shell_browse_guidance(shell_profile: ResolvedShellPromptProfile, has_search: 
     const SEARCH_PREFERENCE_POWERSHELL: &str = " Prefer `code_search` over `Select-String` for code.";
     match shell_profile {
         ResolvedShellPromptProfile::UnixLike => {
-            let mut line = if has_search {
-                "- Use `exec_command.cmd` with `ls`, `find`, `cat`, `sed`, and `awk` for repository browsing."
-                    .to_string()
-            } else {
-                "- Use `exec_command.cmd` with `ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing."
-                    .to_string()
-            };
+            let mut line = String::from("- Use `exec_command.cmd` with `ls`, ");
+            if !has_search {
+                line.push_str("`rg`, ");
+            }
+            line.push_str("`find`, `cat`, `sed`, and `awk` for repository browsing.");
             if has_search {
                 line.push_str(SEARCH_PREFERENCE_UNIX);
             }
@@ -556,19 +659,19 @@ fn shell_task_guidance(shell_profile: ResolvedShellPromptProfile) -> &'static st
 }
 
 fn background_exec_guidance() -> &'static str {
-    "- For long-lived commands, set `background: true` on `exec_command`; it returns a bounded preview plus a stable `session_id` and wait arguments. At most three live background processes are retained per runtime, with no automatic eviction; reuse the session operations to wait, poll, write, inspect, terminate, or close."
+    "- For long-lived commands, set `background: true` on `exec_command`; it returns a bounded preview plus a stable `session_id` and wait arguments. At most three live background processes are retained per runtime, with no automatic eviction; `write_stdin` drives the session lifecycle."
 }
 
 fn read_only_batching_guidance(has_read_file: bool) -> &'static str {
     if has_read_file {
-        "- Batch independent read-only calls; use bounded `read_file` ranges, order dependencies, serialize mutations; narrow the range on `line_truncated`."
+        "- Batch independent read-only calls; use bounded `read_file` ranges, order dependencies, serialize mutations; narrow the range on `line_truncated`; prefer wider windows and reuse evidence over overlapping slices."
     } else {
         "- Batch independent read-only calls; order dependent reads, and serialize mutations."
     }
 }
 
-fn code_search_guidance(has_exec: bool, _shell_profile: ResolvedShellPromptProfile) -> String {
-    const BASE: &str = "- Advanced `code_search` takes `query`; filters `path`, `file_types`, `result_types`, `max_results`; results: definitions, exact syntactic usages. Queries use literal smart-case and `|`-separated literals; truncated: narrow. Example: `{\"query\":\"TurnLoop\",\"path\":\"src\",\"result_types\":[\"definition\"]}`. Do not JSON-encode arrays or integers as strings. Prefer `code_search` over `rg` on `.vtcode/context/tool_outputs/`.";
+fn code_search_guidance(has_exec: bool) -> String {
+    const BASE: &str = "- Advanced `code_search` takes `query`; filters `path`, `file_types`, `result_types`, `max_results`; results: definitions, exact syntactic usages. Queries use literal smart-case and `|`-separated literals; truncated: narrow; unavailable: do not retry identical, drop `file_types`/broaden `path`. Example: `{\"query\":\"TurnLoop\",\"path\":\"src\",\"result_types\":[\"definition\"]}`. Do not JSON-encode arrays or integers as strings. Prefer `code_search` over `rg` on `.vtcode/context/tool_outputs/`.";
     if has_exec {
         format!("{BASE} Use `exec_command` or a skill for syntax patterns.")
     } else {
@@ -585,33 +688,27 @@ fn capability_mode_line(
         Some(CapabilityLevel::Basic) => {
             Some("- Capabilities: limited. Ask the user to enable more capabilities if file work is required.")
         }
-        Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => {
-            Some("- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.")
-        }
-        _ if !has_exec && !has_file => {
-            Some("- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.")
-        }
+        Some(CapabilityLevel::FileReading | CapabilityLevel::FileListing) => Some(CAPABILITY_READ_ONLY_LINE),
+        _ if !has_exec && !has_file => Some(CAPABILITY_READ_ONLY_LINE),
         _ => None,
     }
 }
 
 /// Infer capability level from available tools.
-pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
-    let has_search = available_tools.iter().any(|t| t == TOOL_CODE_SEARCH);
-    let has_edit = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
-    let has_read = has_edit || available_tools.iter().any(|t| t == TOOL_READ_FILE);
-    let has_list = has_search || available_tools.iter().any(|t| t == TOOL_LIST_FILES);
-    let has_exec = available_tools.iter().any(|t| t == TOOL_EXEC_COMMAND);
+pub(crate) fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
+    infer_capability_level_from_presence(&ToolPresence::of(available_tools))
+}
 
-    if has_search {
+fn infer_capability_level_from_presence(presence: &ToolPresence) -> CapabilityLevel {
+    if presence.code_search {
         CapabilityLevel::CodeSearch
-    } else if has_edit {
+    } else if presence.apply_patch {
         CapabilityLevel::Editing
-    } else if has_exec {
+    } else if presence.exec {
         CapabilityLevel::Bash
-    } else if has_list {
+    } else if presence.list_files {
         CapabilityLevel::FileListing
-    } else if has_read {
+    } else if presence.read_file {
         CapabilityLevel::FileReading
     } else {
         CapabilityLevel::Basic
@@ -621,6 +718,197 @@ pub fn infer_capability_level(available_tools: &[String]) -> CapabilityLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::types::ShellPromptProfile;
+
+    /// Default-density guidance with the platform shell profile and the
+    /// parallel-call hint, matching what static composition ships.
+    fn guidelines_for(tools: &[String], capability_level: Option<CapabilityLevel>) -> String {
+        generate_tool_guidelines_for_profile(
+            tools,
+            capability_level,
+            ShellPromptProfile::Auto.resolve_for_current_platform(),
+            true,
+        )
+    }
+
+    /// Reference the previous model-aware assembly: measure Default guidance,
+    /// then regenerate it with resolved density and capabilities.
+    fn rebuilt_model_tool_prompt(
+        mut prompt: String,
+        snapshot: &SessionToolCatalogSnapshot,
+        metadata: bool,
+        shell: ResolvedShellPromptProfile,
+        provider: &dyn crate::llm::provider::LLMProvider,
+        model: &str,
+        config: &crate::config::VTCodeConfig,
+    ) -> String {
+        append_runtime_tool_prompt_sections_for_profile(&mut prompt, snapshot, metadata, shell);
+        let names = snapshot_tool_names(snapshot);
+        let pricing = crate::config::models::model_catalog_entry(provider.name(), model).map(|entry| entry.pricing);
+        let profile = ToolGuidanceProfile::resolve(
+            crate::compaction::effective_context_budget(Some(config), provider, model),
+            vtcode_commons::estimate_tokens(&prompt),
+            config.agent.max_system_prompt_tokens as usize,
+            pricing.and_then(|price| price.input),
+            config.agent.harness.max_budget_usd,
+        );
+        if snapshot.planning_active && profile == ToolGuidanceProfile::Default {
+            return prompt;
+        }
+        remove_prompt_section(&mut prompt, "## Active Tools", SectionBoundaryMode::BracketOrMarkdown);
+        let presence = ToolPresence::of(names);
+        let mut guidance = generate_tool_guidelines_with_capabilities(
+            names,
+            Some(infer_capability_level_from_presence(&presence)),
+            shell,
+            profile,
+            provider.supports_parallel_tool_config(model),
+        );
+        if snapshot.planning_active {
+            append_minimal_planning_addendum(&mut guidance, &presence);
+        }
+        append_prompt_block(&mut prompt, guidance.trim_start_matches('\n'));
+        prompt
+    }
+
+    #[test]
+    fn model_tool_prompt_reuse_matches_rebuild_across_density_and_capabilities() {
+        use crate::config::constants::models;
+        use crate::llm::provider::LLMProvider;
+        use crate::llm::providers::{AnthropicProvider, HuggingFaceProvider};
+
+        struct ProviderCase {
+            provider: Box<dyn LLMProvider>,
+            model: &'static str,
+            parallel: bool,
+        }
+        let providers = [
+            ProviderCase {
+                provider: Box::new(AnthropicProvider::new("offline-fixture".into())),
+                model: models::anthropic::DEFAULT_MODEL,
+                parallel: true,
+            },
+            ProviderCase {
+                provider: Box::new(HuggingFaceProvider::new("offline-fixture".into())),
+                model: "offline-fixture",
+                parallel: false,
+            },
+        ];
+        let initial = "Base prompt\n\n## Active Tools\nold guidance\n\n# PLANNING WORKFLOW (READ-ONLY)\nKeep the canonical contract.\n\n[Runtime Tool Catalog]\nold metadata\n\n## Tail\nKeep this section.\n\n";
+        for case in providers {
+            assert_eq!(case.provider.supports_parallel_tool_config(case.model), case.parallel);
+            for names in [
+                None,
+                Some(&[][..]),
+                Some(&[TOOL_TASK_TRACKER, TOOL_REQUEST_USER_INPUT][..]),
+                Some(&[TOOL_READ_FILE][..]),
+                Some(&[TOOL_WRITE_STDIN][..]),
+                Some(&[TOOL_EXEC_COMMAND, TOOL_APPLY_PATCH, TOOL_CODE_SEARCH, "record_decision"][..]),
+            ] {
+                for planning in [false, true] {
+                    let snapshot = SessionToolCatalogSnapshot::new(
+                        7,
+                        9,
+                        planning,
+                        true,
+                        names.map(|names| {
+                            std::sync::Arc::new(
+                                names
+                                    .iter()
+                                    .map(|name| {
+                                        ToolDefinition::function(
+                                            (*name).to_string(),
+                                            "fixture".to_string(),
+                                            serde_json::json!({"type": "object"}),
+                                        )
+                                    })
+                                    .collect(),
+                            )
+                        }),
+                        false,
+                    );
+                    for shell in [
+                        ResolvedShellPromptProfile::UnixLike,
+                        ResolvedShellPromptProfile::PowerShell,
+                    ] {
+                        for metadata in [false, true] {
+                            let mut measured = initial.to_string();
+                            append_runtime_tool_prompt_sections_for_profile(&mut measured, &snapshot, metadata, shell);
+                            let measured_tokens = vtcode_commons::estimate_tokens(&measured) as u64;
+                            for budget in [1, measured_tokens - 1, measured_tokens, 100_000] {
+                                let mut config = crate::config::VTCodeConfig::default();
+                                config.context.max_context_tokens = 128_000;
+                                config.agent.max_system_prompt_tokens = budget;
+                                let expected = rebuilt_model_tool_prompt(
+                                    initial.to_string(),
+                                    &snapshot,
+                                    metadata,
+                                    shell,
+                                    case.provider.as_ref(),
+                                    case.model,
+                                    &config,
+                                );
+                                let mut actual = initial.to_string();
+                                append_runtime_tool_prompt_sections_for_model(
+                                    &mut actual,
+                                    &snapshot,
+                                    metadata,
+                                    shell,
+                                    case.provider.as_ref(),
+                                    case.model,
+                                    Some(&config),
+                                );
+
+                                assert_eq!(
+                                    actual,
+                                    expected,
+                                    "provider={}, names={names:?}, planning={planning}, shell={shell:?}, metadata={metadata}, budget={budget}",
+                                    case.provider.name()
+                                );
+                                assert_eq!(
+                                    actual.matches("## Active Tools").count(),
+                                    usize::from(
+                                        budget >= measured_tokens || names.is_some_and(|names| !names.is_empty())
+                                    )
+                                );
+                                assert!(
+                                    actual.contains("# PLANNING WORKFLOW (READ-ONLY)\nKeep the canonical contract.")
+                                );
+                                assert!(actual.contains("## Tail\nKeep this section."));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn matrix_guidance_has_presence_and_budget_in_both_densities() {
+        for profile in [ToolGuidanceProfile::Default, ToolGuidanceProfile::Minimal] {
+            let enabled = generate_tool_guidelines_with_capabilities(
+                &["matrix".to_string(), "request_user_input".to_string()],
+                None,
+                ResolvedShellPromptProfile::UnixLike,
+                profile,
+                false,
+            );
+            let disabled = generate_tool_guidelines_with_capabilities(
+                &["request_user_input".to_string()],
+                None,
+                ResolvedShellPromptProfile::UnixLike,
+                profile,
+                false,
+            );
+            assert_eq!(enabled.matches(MATRIX_GUIDANCE).count(), 1);
+            assert!(enabled.contains("declared input changes"));
+            assert!(enabled.contains("effective permissions and sandbox gates"));
+            assert!(enabled.contains("Replay restores admission before discovery"));
+            assert!(enabled.contains("user cancel is terminal"));
+            assert!(!disabled.contains("scheduler-owned"));
+            assert!(vtcode_commons::estimate_tokens(&enabled) <= 220, "{profile:?}: {enabled}");
+        }
+    }
 
     /// Universal rules have one home in Runtime Guidance (or the shared
     /// contract). Compose every static profile with each tool-guidance variant
@@ -661,9 +949,9 @@ mod tests {
             ToolGuidanceProfile::Minimal,
             false,
         );
-        append_minimal_planning_addendum(&mut minimal_planning, &planning_tools);
+        append_minimal_planning_addendum(&mut minimal_planning, &ToolPresence::of(&planning_tools));
         let variants = [
-            ("default", generate_tool_guidelines_for_profile(&execution_tools, None, shell), false),
+            ("default", generate_tool_guidelines_for_profile(&execution_tools, None, shell, true), false),
             (
                 "minimal",
                 generate_tool_guidelines_with_capabilities(
@@ -682,10 +970,12 @@ mod tests {
         // or the shared contract and must not be restated by tool sections.
         let markers = [
             "never claim a check passed",
-            "diagnose it and change approach",
-            "rather than polling",
-            "small ranges",
-            "preview_budget_exhausted",
+            "Diagnose failures; change approach",
+            "Use returned `next_wait_args`",
+            "Treat empty searches as evidence",
+            "Check optional tools once",
+            "small non-overlapping ranges",
+            "accumulated output never exhausts tool access",
             "additional_permissions",
             "bypass safeguards",
             "Delegate only sizeable",
@@ -742,7 +1032,7 @@ mod tests {
         );
         assert_eq!(
             minimal,
-            "\n\n## Active Tools\n- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.\n- Use available read-only repository tools for browsing; do not modify files."
+            "\n\n## Active Tools\n- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.\n- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.\n- Use available read-only repository tools for browsing; do not modify files."
         );
         let default = generate_tool_guidelines_with_capabilities(
             &tools,
@@ -753,8 +1043,42 @@ mod tests {
         );
         assert_eq!(
             default,
-            "\n\n## Active Tools\n- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.\n- Use available read-only repository tools for browsing; do not modify files.\n- Batch independent read-only calls; use bounded `read_file` ranges, order dependencies, serialize mutations; narrow the range on `line_truncated`."
+            "\n\n## Active Tools\n- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.\n- Capabilities: read-only. Analyze and search, but do not modify files or run shell commands.\n- Use available read-only repository tools for browsing; do not modify files.\n- Batch independent read-only calls; use bounded `read_file` ranges, order dependencies, serialize mutations; narrow the range on `line_truncated`; prefer wider windows and reuse evidence over overlapping slices."
         );
+    }
+
+    #[test]
+    fn tool_presence_flags_record_decision_in_the_single_pass() {
+        let with = ToolPresence::of(&["matrix".to_string(), "record_decision".to_string()]);
+        assert!(with.matrix);
+        assert!(with.record_decision);
+        let without = ToolPresence::of(&["matrix".to_string()]);
+        assert!(without.matrix);
+        assert!(!without.record_decision);
+    }
+
+    #[test]
+    fn public_decision_guidance_is_optional_and_bounded() {
+        for profile in [ToolGuidanceProfile::Minimal, ToolGuidanceProfile::Default] {
+            let enabled = generate_tool_guidelines_with_capabilities(
+                &[TOOL_READ_FILE.into(), "record_decision".into()],
+                None,
+                ResolvedShellPromptProfile::UnixLike,
+                profile,
+                false,
+            );
+            let disabled = generate_tool_guidelines_with_capabilities(
+                &[TOOL_READ_FILE.into()],
+                None,
+                ResolvedShellPromptProfile::UnixLike,
+                profile,
+                false,
+            );
+            assert!(enabled.contains(PUBLIC_DECISION_GUIDANCE));
+            assert!(!disabled.contains("record_decision"));
+            assert!(enabled.len().saturating_sub(disabled.len()) < 300);
+            assert!(!enabled.contains("chain of thought"));
+        }
     }
 
     #[test]
@@ -793,7 +1117,7 @@ mod tests {
     #[test]
     fn test_read_only_capability_detection() {
         let tools = vec![TOOL_CODE_SEARCH.to_string()];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = guidelines_for(&tools, None);
         assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify files"));
     }
@@ -801,7 +1125,7 @@ mod tests {
     #[test]
     fn test_tool_preference_guidance() {
         let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_CODE_SEARCH.to_string()];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
         assert!(guidelines.contains("Advanced `code_search` takes `query`"));
         assert!(guidelines.contains("literal smart-case"));
         assert!(guidelines.contains("exact syntactic usages"));
@@ -826,7 +1150,7 @@ mod tests {
     #[test]
     fn test_edit_workflow_guidance() {
         let tools = vec![TOOL_APPLY_PATCH.to_string()];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = guidelines_for(&tools, None);
         assert!(guidelines.contains("Use `apply_patch`"));
         assert!(guidelines.contains("patches small"));
         // Completion-as-checkpoint guidance lives in the operating profiles;
@@ -841,7 +1165,7 @@ mod tests {
             TOOL_WRITE_STDIN.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
 
         assert!(guidelines.contains("exec_command.cmd"));
         for command in ["ls", "rg", "find", "cat", "sed", "awk"] {
@@ -869,7 +1193,13 @@ mod tests {
         assert!(guidelines.contains(&format!("\n{PLANNING_TASK_TRACKER_INDEX_LINE}")));
         assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains("positive flat indices"));
         assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains("(index 0 is invalid while planning)"));
-        assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains("use items for bulk updates"));
+        assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains("full checklist replacement"));
+        assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains(r#"{"action":"list"}"#));
+        assert!(PLANNING_TASK_TRACKER_INDEX_LINE.contains(r#"{"action":"update","index":1,"status":"in_progress"}"#));
+        assert!(
+            PLANNING_TASK_TRACKER_INDEX_LINE.contains(r#"{"action":"update","items":["[x] Done","[ ] Remaining"]}"#)
+        );
+        assert!(PLANNING_TASK_TRACKER_COMPACT_LINE.contains("never conflicting fields"));
         // The planning sidecar rejects index 0, so no planning line may present
         // it as a valid checklist-completion index.
         for line in [PLANNING_TASK_TRACKER_INDEX_LINE, PLANNING_TASK_TRACKER_COMPACT_LINE] {
@@ -882,7 +1212,7 @@ mod tests {
     #[test]
     fn unix_like_guidance_makes_command_reuse_explicit() {
         let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_WRITE_STDIN.to_string()];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
 
         assert!(guidelines.contains("one-shot `exec_command` calls"));
         assert!(guidelines.contains("`!!`, `!$`, `!ssh`, or `fc`"));
@@ -904,9 +1234,12 @@ mod tests {
     #[test]
     fn write_stdin_guidance_advertises_cross_turn_resume_hint() {
         let tools = vec![TOOL_WRITE_STDIN.to_string()];
-        let default_guidance = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let default_guidance =
+            generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
         assert!(default_guidance.contains("`Exec session resume:`"));
         assert!(default_guidance.contains("prior turn ended mid-run"));
+        assert!(default_guidance.contains("if missing, recover prior output"));
+        assert!(default_guidance.contains("rerun only for fresh results"));
 
         let minimal = generate_tool_guidelines_with_capabilities(
             &tools,
@@ -917,6 +1250,7 @@ mod tests {
         );
         assert!(minimal.contains("`Exec session resume:`"));
         assert!(minimal.contains("prior turn ended mid-run"));
+        assert!(minimal.contains("if missing, recover prior output"));
     }
 
     #[test]
@@ -926,7 +1260,8 @@ mod tests {
             TOOL_CODE_SEARCH.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::PowerShell);
+        let guidelines =
+            generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::PowerShell, true);
 
         assert!(guidelines.contains("native PowerShell commands"));
         assert!(guidelines.contains("`Get-ChildItem`"));
@@ -960,7 +1295,7 @@ mod tests {
     #[test]
     fn test_harness_browse_tool_guidance() {
         let tools = vec![TOOL_LIST_FILES.to_string(), TOOL_READ_FILE.to_string()];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = guidelines_for(&tools, None);
         assert!(guidelines.contains("available read-only repository tools"));
         assert!(guidelines.contains("bounded `read_file` ranges"));
         assert!(!guidelines.contains("list_files"));
@@ -975,7 +1310,7 @@ mod tests {
             TOOL_LIST_FILES.to_string(),
             "read_file".to_string(),
         ];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = guidelines_for(&tools, None);
         assert!(guidelines.contains("available read-only repository tools"));
         assert!(guidelines.contains("code_search"));
         assert!(guidelines.contains("bounded `read_file` ranges"));
@@ -984,7 +1319,7 @@ mod tests {
     #[test]
     fn test_capability_basic_guidance() {
         let tools = vec![];
-        let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::Basic));
+        let guidelines = guidelines_for(&tools, Some(CapabilityLevel::Basic));
         assert!(guidelines.contains("Capabilities: limited"));
         assert!(guidelines.contains("enable more capabilities"));
     }
@@ -992,7 +1327,7 @@ mod tests {
     #[test]
     fn test_capability_file_reading_guidance() {
         let tools = vec![TOOL_APPLY_PATCH.to_string()];
-        let guidelines = generate_tool_guidelines(&tools, Some(CapabilityLevel::FileReading));
+        let guidelines = guidelines_for(&tools, Some(CapabilityLevel::FileReading));
         assert!(guidelines.contains("Capabilities: read-only"));
         assert!(guidelines.contains("do not modify"));
     }
@@ -1008,6 +1343,7 @@ mod tests {
             &tools,
             Some(CapabilityLevel::Editing),
             ResolvedShellPromptProfile::UnixLike,
+            true,
         );
 
         assert!(!guidelines.contains("Capabilities: limited"));
@@ -1017,7 +1353,7 @@ mod tests {
     #[test]
     fn test_empty_tools_shows_read_only_capabilities() {
         let tools = vec![];
-        let guidelines = generate_tool_guidelines(&tools, None);
+        let guidelines = guidelines_for(&tools, None);
         assert!(guidelines.contains("Capabilities: read-only"));
     }
 
@@ -1032,6 +1368,46 @@ mod tests {
             generate_runtime_tool_guidelines_for_profile(&tools, true, ResolvedShellPromptProfile::UnixLike);
         assert!(guidelines.contains("Keep `task_tracker` updated"));
         assert!(guidelines.contains("blockers and verification open"));
+    }
+
+    #[test]
+    fn tool_presence_of_sets_each_flag_in_one_pass() {
+        let tools = vec![
+            TOOL_EXEC_COMMAND.to_string(),
+            TOOL_WRITE_STDIN.to_string(),
+            TOOL_CODE_SEARCH.to_string(),
+            TOOL_READ_FILE.to_string(),
+            TOOL_LIST_FILES.to_string(),
+            TOOL_APPLY_PATCH.to_string(),
+            TOOL_REQUEST_USER_INPUT.to_string(),
+            TOOL_TASK_TRACKER.to_string(),
+            TOOL_START_PLANNING.to_string(),
+            "matrix".to_string(),
+            "unknown_tool".to_string(),
+        ];
+        let presence = ToolPresence::of(&tools);
+        assert!(presence.exec);
+        assert!(presence.write_stdin);
+        assert!(presence.code_search);
+        assert!(presence.read_file);
+        assert!(presence.list_files);
+        assert!(presence.apply_patch);
+        assert!(presence.request_user_input);
+        assert!(presence.task_tracker);
+        assert!(presence.start_planning);
+        assert!(presence.matrix);
+
+        let empty = ToolPresence::of(&[]);
+        assert!(!empty.exec);
+        assert!(!empty.write_stdin);
+        assert!(!empty.code_search);
+        assert!(!empty.read_file);
+        assert!(!empty.list_files);
+        assert!(!empty.apply_patch);
+        assert!(!empty.request_user_input);
+        assert!(!empty.task_tracker);
+        assert!(!empty.start_planning);
+        assert!(!empty.matrix);
     }
 
     #[test]
@@ -1073,24 +1449,30 @@ mod tests {
             TOOL_LIST_FILES.to_string(),
             "apply_patch".to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
         assert!(guidelines.contains("Batch independent read-only calls"));
         assert!(guidelines.contains("code_search"));
-        // Shipped verifier discipline: every exec-capable profile must carry
-        // the truthful-status outcome rule (standalone/pure-`&&`, a pure
-        // `head`/`tail` truncator counts as standalone, other pipes stay
-        // unverified), matching `VERIFIER_SHELL_FORM_NOTE`. Elision and `max_output_tokens` detail
-        // lives in runtime enforcement, not prompt text.
-        assert!(guidelines.contains("stay unverified"));
-        assert!(guidelines.contains("pure `&&`"));
+        // Exec-capable profiles describe the fail-closed verifier pipeline
+        // contract, including the terminal outcome and rejected shell forms.
+        assert!(guidelines.contains("static read-only filtering pipelines use fail-closed `pipefail`"));
+        assert!(guidelines.contains("Only terminal exit 0 clears verification"));
+        assert!(guidelines.contains("Recheck after `--fix`"));
+        assert!(guidelines.contains("dynamic syntax, mutating tails, `;`, and `||` do not qualify"));
         assert!(!guidelines.contains("elided"));
-        assert!(!guidelines.contains("max_output_tokens"));
+        assert!(guidelines.contains("max_output_tokens"));
         assert!(guidelines.contains("Build and Auto share tools and safety gates"));
         let approx_tokens = vtcode_commons::estimate_tokens(&guidelines);
         // The batching, bounded-diff, and verifier-discipline guardrails are
         // intentionally part of the compact shared prompt. Raised from 500 so
         // the verifier rule can state its reason (a visible exit status).
-        assert!(approx_tokens < 520, "got ~{approx_tokens} tokens");
+        // Raised to 580 for the Sonnet 5.5 low-effort real-check rule
+        // (syntax-only/failed-to-start do not count; project package manager,
+        // never sudo; state which check was skipped and why).
+        // Raised to 640 for wider-window reuse and code_search unavailable
+        // no-retry guardrails (session-20261015 overlapping reads + identical
+        // retries).
+        // Source inspection is separate from verification and retained in both densities.
+        assert!(approx_tokens < 640, "got ~{approx_tokens} tokens");
     }
 
     #[test]
@@ -1155,13 +1537,49 @@ mod tests {
     }
 
     #[test]
+    fn truncate_deferred_description_keeps_boundaries_and_char_safety() {
+        // Asymmetric boundaries: exactly at the cap stays verbatim, one over
+        // truncates with an ellipsis. Unicode stays on char boundaries.
+        let short = "Tools provided by MCP server";
+        assert_eq!(truncate_deferred_description(short), short);
+
+        let empty = "";
+        assert_eq!(truncate_deferred_description(empty), "");
+
+        let exact: String = "a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS);
+        assert_eq!(truncate_deferred_description(&exact), exact);
+
+        let one_over: String = "a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS + 1);
+        let truncated = truncate_deferred_description(&one_over);
+        assert!(truncated.ends_with("..."));
+        assert!(!truncated.contains(&"a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS + 1)));
+        assert_eq!(truncated.chars().count(), DEFERRED_TOOLS_MAX_DESC_CHARS + 3);
+
+        // Multi-byte chars at the cut point must not panic or split bytes.
+        let unicode_exact = format!("{}🚀", "a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS - 1));
+        assert_eq!(unicode_exact.chars().count(), DEFERRED_TOOLS_MAX_DESC_CHARS);
+        assert_eq!(truncate_deferred_description(&unicode_exact), unicode_exact);
+
+        let unicode_over = format!("{}🚀b", "a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS - 1));
+        let unicode_truncated = truncate_deferred_description(&unicode_over);
+        assert!(unicode_truncated.ends_with("..."));
+        assert!(unicode_truncated.contains("🚀"));
+
+        // Trailing blanks inside the window are trimmed before the ellipsis.
+        let padded = format!("{}   {}", "a".repeat(DEFERRED_TOOLS_MAX_DESC_CHARS - 4), "b".repeat(10));
+        let padded_truncated = truncate_deferred_description(&padded);
+        assert!(padded_truncated.ends_with("..."));
+        assert!(!padded_truncated.contains(" ..."));
+    }
+
+    #[test]
     fn test_parallel_tool_call_guidance() {
         let tools = vec![
             TOOL_EXEC_COMMAND.to_string(),
             TOOL_CODE_SEARCH.to_string(),
             TOOL_APPLY_PATCH.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
         assert!(guidelines.contains("parallel"), "Should include parallel tool call guidance");
         assert!(guidelines.contains("inputs do not depend"), "Should mention independent inputs");
     }
@@ -1173,20 +1591,20 @@ mod tests {
             TOOL_READ_FILE.to_string(),
             TOOL_LIST_FILES.to_string(),
         ];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
 
         assert!(guidelines.contains("Batch independent read-only calls"));
         assert!(guidelines.contains("`read_file` ranges"));
         assert!(guidelines.contains("serialize mutations"));
         // No exec tools in this profile: the verifier truthful-status rule is
         // exec-conditional and must not spend budget here.
-        assert!(!guidelines.contains("stay unverified"));
+        assert!(!guidelines.contains("Only terminal exit 0 clears verification"));
     }
 
     #[test]
     fn execution_agents_can_suggest_planning_for_demanding_tasks() {
         let tools = vec![TOOL_START_PLANNING.to_string(), TOOL_EXEC_COMMAND.to_string()];
-        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike);
+        let guidelines = generate_tool_guidelines_for_profile(&tools, None, ResolvedShellPromptProfile::UnixLike, true);
 
         assert_eq!(guidelines.matches(START_PLANNING_GUIDANCE_LINE).count(), 1);
         let minimal = generate_tool_guidelines_with_capabilities(
@@ -1202,8 +1620,22 @@ mod tests {
             &[TOOL_EXEC_COMMAND.to_string()],
             None,
             ResolvedShellPromptProfile::UnixLike,
+            true,
         );
         assert!(!without.contains("start_planning"));
+    }
+
+    #[test]
+    fn markdown_validation_is_optional_in_planning_and_execution() {
+        let tools = vec![TOOL_EXEC_COMMAND.to_string(), TOOL_READ_FILE.to_string()];
+        for planning in [false, true] {
+            let guidance =
+                generate_runtime_tool_guidelines_for_profile(&tools, planning, ResolvedShellPromptProfile::UnixLike);
+            assert_eq!(guidance.matches(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE).count(), 1);
+            assert!(guidance.contains("report skipped"));
+            assert!(guidance.contains("without installing tools"));
+            assert!(guidance.contains("Lint errors remain failures"));
+        }
     }
 
     #[test]
@@ -1218,10 +1650,31 @@ mod tests {
 
         assert!(guidelines.contains("Planning workflow active"));
         assert!(guidelines.contains("`exec_command` only for read-only verification"));
-        assert!(guidelines.contains("concrete repository target"));
-        assert!(guidelines.contains("emit only one `<proposed_plan>` block"));
+        assert!(!guidelines.contains("<proposed_plan>"));
+        assert!(!guidelines.contains("Every implementation step"));
         assert!(guidelines.contains("omit unused filters"));
         assert!(!guidelines.contains("Inspect before edit"));
+    }
+
+    #[test]
+    fn minimal_planning_addendum_prefers_read_tools_over_shell_reads() {
+        // Asymmetric pair over read-tool presence: with read tools the
+        // inspection line names them and prefers them over shell reads;
+        // without, only the generic small-inspection rule remains. Both
+        // share the same git-history tail.
+        let tail = "start git history with `git log --oneline`";
+        let with_readers = ToolPresence::of(&[TOOL_READ_FILE.to_string(), TOOL_CODE_SEARCH.to_string()]);
+        let mut guidance = String::new();
+        append_minimal_planning_addendum(&mut guidance, &with_readers);
+        assert!(guidance.contains("prefer `read_file`/`code_search` over `exec_command` shell reads"));
+        assert!(guidance.contains(tail));
+
+        let without_readers = ToolPresence::of(&[TOOL_EXEC_COMMAND.to_string()]);
+        let mut bare = String::new();
+        append_minimal_planning_addendum(&mut bare, &without_readers);
+        assert!(!bare.contains("prefer `"));
+        assert!(!bare.contains("over `exec_command` shell reads"));
+        assert!(bare.contains(tail));
     }
 
     #[test]
@@ -1258,6 +1711,21 @@ mod tests {
         assert!(guidelines.contains("shell-only tasks"));
         assert!(!guidelines.contains("native PowerShell commands"));
         assert!(!guidelines.contains("`Get-ChildItem`"));
+    }
+
+    #[test]
+    fn shell_browse_guidance_lists_rg_only_without_code_search() {
+        // Asymmetric pair over `has_search`: without the dedicated search
+        // tool the browse line must name `rg`; with it, `rg` drops out in
+        // favor of the `code_search` preference suffix.
+        let without_search = shell_browse_guidance(ResolvedShellPromptProfile::UnixLike, false);
+        assert!(without_search.contains("`ls`, `rg`, `find`, `cat`, `sed`, and `awk` for repository browsing"));
+        assert!(!without_search.contains("Prefer `code_search`"));
+
+        let with_search = shell_browse_guidance(ResolvedShellPromptProfile::UnixLike, true);
+        assert!(with_search.contains("`ls`, `find`, `cat`, `sed`, and `awk` for repository browsing"));
+        assert!(!with_search.contains("`ls`, `rg`, `find`"));
+        assert!(with_search.contains("Prefer `code_search` over `rg`/`grep` for code"));
     }
 
     #[test]
@@ -1333,7 +1801,12 @@ mod tests {
             false,
         );
 
-        append_runtime_tool_prompt_sections(&mut prompt, &snapshot, true);
+        append_runtime_tool_prompt_sections_for_profile(
+            &mut prompt,
+            &snapshot,
+            true,
+            ShellPromptProfile::Auto.resolve_for_current_platform(),
+        );
 
         assert!(prompt.contains("## Active Tools"));
         assert!(prompt.contains("[Runtime Tool Catalog]"));
@@ -1370,8 +1843,9 @@ mod tests {
             false,
         );
 
-        append_runtime_tool_prompt_sections(&mut prompt, &first, true);
-        append_runtime_tool_prompt_sections(&mut prompt, &second, true);
+        let shell = ShellPromptProfile::Auto.resolve_for_current_platform();
+        append_runtime_tool_prompt_sections_for_profile(&mut prompt, &first, true, shell);
+        append_runtime_tool_prompt_sections_for_profile(&mut prompt, &second, true, shell);
 
         assert_eq!(prompt.matches("## Active Tools").count(), 1);
         assert_eq!(prompt.matches("[Runtime Tool Catalog]").count(), 1);

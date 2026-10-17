@@ -24,7 +24,7 @@ Last reviewed: 2026-03-03
 | 8 | Special cases aren't special enough to break the rules. | Exceptions must be limited and audited. | `python3 scripts/check_zen_allowlist.py --mode warn` | Added |
 | 9 | Although practicality beats purity. | Use staged rollout over disruptive hard-fail adoption. | Warn-first CI (`zen-governance`) | Active |
 | 10 | Errors should never pass silently. | Checks must surface failures with details. | Non-zero exits in enforce mode + explicit findings | Active |
-| 11 | Unless explicitly silenced. | Every allowlisted exception must state rationale. | `check_zen_allowlist.py` requires `| rationale` | Added |
+| 11 | Unless explicitly silenced. | Every allowlisted exception must state rationale. | `check_zen_allowlist.py` requires `\| rationale` | Added |
 | 12 | In the face of ambiguity, refuse the temptation to guess. | Require explicit mode (`warn`/`enforce`) in governance checks. | Script CLI mode flags | Active |
 | 13 | There should be one-- and preferably only one --obvious way to do it. | One local governance path for developers. | `./scripts/check.sh zen` | Active |
 | 14 | Although that way may not be obvious at first unless you're Dutch. | Document the path clearly so discoverability is fast. | `docs/harness/INDEX.md` + this file | Active |
@@ -44,14 +44,17 @@ Last reviewed: 2026-03-03
 ## Rollout
 
 1. Phase 0 (completed)
+
 - Repair broken core docs links.
 - Resolve docs top-level and large-file allowlist drift.
 
-2. Phase 1 (active)
+1. Phase 1 (active)
+
 - Run Zen governance in warn mode in CI and `check.sh`.
 - Include allowlist hygiene for explicit exception silencing.
 
-3. Phase 2 (planned)
+1. Phase 2 (planned)
+
 - Promote `check_zen_allowlist.py` to enforce.
 - Promote selected `unwrap/expect` and file-length thresholds to enforce.
 

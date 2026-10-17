@@ -247,6 +247,30 @@ fn agent_messages_use_zero_indent_prose() {
 }
 
 #[test]
+fn labeled_agent_message_continuations_align_under_the_body() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.labels.agent = Some("Assistant: ".to_string());
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![make_segment(
+            "This response wraps so its continuation should start beneath the message body.",
+        )],
+    );
+
+    let lines = session.reflow_transcript_lines(28);
+    let content_lines: Vec<String> = lines.iter().map(line_text).filter(|text| !text.trim().is_empty()).collect();
+    let first = content_lines.first().expect("first labeled message row");
+    let second = content_lines.get(1).expect("wrapped continuation row");
+    let prefix_width = "Assistant: ".chars().count();
+
+    assert!(first.starts_with("Assistant: This"), "role label should remain on the first row: {first:?}");
+    assert!(
+        second.starts_with(&" ".repeat(prefix_width)),
+        "continuation should align under the message body: {second:?}",
+    );
+}
+
+#[test]
 fn agent_prose_has_no_bullet_gap() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(InlineMessageKind::Agent, vec![make_segment("Response")]);
@@ -1260,6 +1284,37 @@ fn tool_command_header_does_not_use_accent_tool_body_as_fallback() {
 }
 
 #[test]
+fn tool_actions_use_theme_semantic_colors_instead_of_terminal_palette_colors() {
+    let primary = AnsiColorEnum::Rgb(RgbColor(0x70, 0x90, 0xB0));
+    let tool_accent = AnsiColorEnum::Rgb(RgbColor(0xD0, 0x70, 0x60));
+    let mut session = Session::new(
+        InlineTheme {
+            foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xF0, 0xF0, 0xF0))),
+            primary: Some(primary),
+            tool_accent: Some(tool_accent),
+            ..InlineTheme::default()
+        },
+        None,
+        VIEW_ROWS,
+    );
+    session.push_line(InlineMessageKind::Tool, vec![make_segment("• Write file.rs")]);
+    session.push_line(InlineMessageKind::Tool, vec![make_segment("• git status")]);
+    session.push_line(InlineMessageKind::Tool, vec![make_segment("• version_control status")]);
+
+    let rendered = session.reflow_transcript_lines(80);
+    for (action_name, expected_color) in [("Write", tool_accent), ("git", primary), ("version_control", primary)] {
+        let action = rendered
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .find(|span| span.content.as_ref() == action_name)
+            .unwrap_or_else(|| panic!("tool action span {action_name:?}"));
+
+        assert_eq!(action.style.fg, Some(ratatui_color_from_ansi(expected_color)));
+        assert!(action.style.add_modifier.contains(Modifier::BOLD));
+    }
+}
+
+#[test]
 fn tool_output_is_not_dimmed_and_tool_header_is_opaque() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(
@@ -1985,4 +2040,179 @@ fn pty_command_header_wraps_in_full_without_truncation() {
             assert!(text.chars().count() <= usize::from(width), "width {width}: row overflows viewport, got: {text:?}");
         }
     }
+}
+
+#[test]
+fn streaming_append_preserves_header_cache() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let _ = session.header_lines();
+    assert!(session.header_lines_cache.is_some(), "header cache should be populated");
+
+    // First chunk creates the line; later chunks stream into it.
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("hello")]);
+    assert!(session.header_lines_cache.is_some(), "push_line must not drop header cache");
+
+    session.append_inline(
+        InlineMessageKind::Agent,
+        InlineSegment {
+            text: " world".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        },
+    );
+    assert!(
+        session.header_lines_cache.is_some(),
+        "streaming append must not drop header cache (invalidation thrash)"
+    );
+}
+
+#[test]
+fn eviction_keeps_surviving_reflow_entries_valid() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    for idx in 0..(ui::TUI_TRANSCRIPT_MAX_MSGS + 1) {
+        session.push_line(InlineMessageKind::Info, vec![make_segment(&format!("row-{idx}"))]);
+    }
+    // Force a reflow so the cache is populated (this path uses ensure_reflow_cache).
+    let _ = session.total_transcript_rows(80);
+    assert!(session.transcript_cache.is_some());
+    let cache = session.transcript_cache.as_ref().expect("cache");
+    assert_eq!(cache.messages.len(), session.lines.len());
+    assert!(!cache.needs_reflow(0, session.lines[0].revision), "pre-eviction cache entry should be valid");
+
+    // One more push triggers a chunked eviction from the front.
+    session.push_line(InlineMessageKind::Info, vec![make_segment("after-evict")]);
+    assert!(session.lines.len() <= ui::TUI_TRANSCRIPT_MAX_MSGS);
+
+    // Refresh the cache (same path the renderer uses).
+    let _ = session.total_transcript_rows(80);
+    let cache = session.transcript_cache.as_ref().expect("cache after eviction");
+    assert_eq!(
+        cache.messages.len(),
+        session.lines.len(),
+        "reflow cache must track live lines after prefix eviction"
+    );
+    assert!(
+        !cache.needs_reflow(0, session.lines[0].revision),
+        "surviving reflow entries must stay valid — full invalidate would reflow 5000 msgs"
+    );
+    assert!(cache.total_rows() > 0);
+}
+
+/// Smoke-timing: 200 frames of a large transcript should stay well under a
+/// 16ms frame budget on TestBackend. Prints averages for the performance Report.
+#[test]
+fn large_transcript_render_stays_under_frame_budget() {
+    use ratatui::{Terminal, backend::TestBackend};
+    use std::time::Instant;
+
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    for idx in 0..800 {
+        session.push_line(
+            InlineMessageKind::Agent,
+            vec![make_segment(&format!(
+                "line {idx}: the quick brown fox jumps over the lazy dog while streaming tool output"
+            ))],
+        );
+    }
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+    // Warm caches.
+    for _ in 0..5 {
+        terminal.draw(|frame| session.render(frame)).expect("warm render");
+    }
+    let frames = 200usize;
+    let started = Instant::now();
+    for _ in 0..frames {
+        session.mark_visual_dirty();
+        terminal.draw(|frame| session.render(frame)).expect("render");
+    }
+    let elapsed = started.elapsed();
+    let avg_us = elapsed.as_micros() as f64 / frames as f64;
+    eprintln!("large_transcript_render: {frames} frames in {elapsed:?} ({avg_us:.1} us/frame avg)");
+    // Generous ceiling so loaded CI machines do not flake; the printed avg is
+    // the number to watch for regressions (typically ~0.2ms on TestBackend).
+    assert!(avg_us < 50_000.0, "avg frame {avg_us:.1}us is pathologically slow on TestBackend");
+}
+
+#[test]
+fn capture_blocks_and_activity_entries_stay_bounded() {
+    use crate::tui::core_tui::app::session::AppSession;
+
+    let mut session = AppSession::new_with_logs(
+        InlineTheme::default(),
+        None,
+        VIEW_ROWS,
+        false,
+        None,
+        Vec::new(),
+        "vtcode".to_string(),
+    );
+
+    // Flooding full captures must not grow past the FIFO block bound.
+    for id in 0..(ui::TUI_TOOL_OUTPUT_BLOCKS_MAX + 8) {
+        let lines: Vec<String> = (0..32).map(|row| format!("capture-{id}-row-{row}")).collect();
+        session.record_tool_output_block(id as u64, lines);
+    }
+    assert!(session.tool_output_blocks.len() <= ui::TUI_TOOL_OUTPUT_BLOCKS_MAX);
+
+    // Per-capture line count is tail-bounded.
+    let huge: Vec<String> = (0..(ui::TUI_TOOL_OUTPUT_CAPTURE_MAX_LINES + 50))
+        .map(|row| format!("huge-{row}"))
+        .collect();
+    session.record_tool_output_block(9_999, huge);
+    let last = session.tool_output_blocks.last().expect("capture");
+    assert!(last.lines.len() <= ui::TUI_TOOL_OUTPUT_CAPTURE_MAX_LINES);
+}
+
+#[test]
+fn collapsed_paste_payload_is_tail_bounded() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let mut json = String::from("{\n");
+    for i in 0..20_000 {
+        json.push_str(&format!("  \"k{i}\": \"{}\",\n", "x".repeat(40)));
+    }
+    json.push_str("  \"end\": true\n}");
+    let line_count = json.lines().count();
+    let oversized = json.len() > ui::TUI_COLLAPSED_PASTE_MAX_BYTES;
+    assert!(oversized, "fixture must exceed the paste bound");
+
+    session.append_pasted_message(InlineMessageKind::Tool, json, line_count);
+    assert_eq!(session.collapsed_pastes.len(), 1);
+    assert!(session.collapsed_pastes[0].full_text.len() <= ui::TUI_COLLAPSED_PASTE_MAX_BYTES + 4);
+}
+
+#[test]
+fn eviction_shifts_dirty_hint_to_appended_line() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    // Agent lines are not info-grouped, so each line is its own dirty unit.
+    for idx in 0..ui::TUI_TRANSCRIPT_MAX_MSGS {
+        session.push_line(InlineMessageKind::Agent, vec![make_segment(&format!("row-{idx}"))]);
+    }
+    let _ = session.total_transcript_rows(80);
+    session.first_dirty_line = None;
+
+    // This push exceeds the cap, so it also triggers a front-eviction chunk.
+    session.push_line(InlineMessageKind::Agent, vec![make_segment("after-evict")]);
+    assert_eq!(
+        session.first_dirty_line,
+        Some(session.lines.len() - 1),
+        "eviction must shift the dirty hint to the appended line, not invent dirty=0"
+    );
+}
+
+#[test]
+fn input_render_cache_rejects_same_length_content_change() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.input_manager.set_content("aaa".to_string());
+    session.input_manager.set_cursor(3);
+    let _ = session.build_input_render_for_test(40, 3);
+    session.input_manager.set_content("bbb".to_string());
+    session.input_manager.set_cursor(3);
+    let rebuilt = session.build_input_render_for_test(40, 3);
+    let text: String = rebuilt
+        .text
+        .lines
+        .iter()
+        .flat_map(|l| l.spans.iter().map(|s| s.content.as_ref().to_string()))
+        .collect();
+    assert!(text.contains("bbb"), "same-length edit must not serve cached glyphs: {text:?}");
+    assert!(!text.contains("aaa"), "stale cached glyphs leaked: {text:?}");
 }

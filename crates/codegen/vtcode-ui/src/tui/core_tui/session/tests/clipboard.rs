@@ -65,6 +65,34 @@ impl Drop for FailingClipboardGuard {
 }
 
 #[test]
+fn progress_only_transcript_never_copies_transient_text() {
+    use crate::tui::core_tui::widgets::TranscriptWidget;
+    use ratatui::{Terminal, backend::TestBackend};
+    use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
+
+    let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
+    let _clipboard = FailingClipboardGuard::install();
+    let mut session = Session::new(InlineTheme::default(), None, 12);
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation: ProgressOperation::start(),
+        phase: ProgressPhase::WaitingForModel,
+    }));
+    session.mouse_selection.set_selection((0, 2), (20, 2));
+    session.mouse_selection.request_copy();
+    let mut terminal = Terminal::new(TestBackend::new(80, 4)).unwrap();
+    terminal
+        .draw(|frame| {
+            TranscriptWidget::new(&mut session).render(Rect::new(0, 2, 80, 1), frame.buffer_mut());
+            assert!(session.transcript_area().is_none());
+            let viewport = frame.area();
+            session.finalize_mouse_selection(frame, viewport);
+        })
+        .unwrap();
+    assert!(session.copy_notification_text().is_none(), "no clipboard attempt may include progress text");
+    assert!(!session.mouse_selection.needs_copy());
+}
+
+#[test]
 fn manual_copy_mode_skips_input_auto_copy_but_ctrl_c_still_copies() {
     let _guard = CLIPBOARD_TEST_LOCK.lock().expect("clipboard test lock should not be poisoned");
     let _clipboard = FailingClipboardGuard::install();
@@ -237,8 +265,8 @@ fn double_click_selects_transcript_word_and_copies_it() {
         .map(|span| span.content.as_ref())
         .collect::<String>();
     assert!(
-        rendered_status.contains("Copied to clipboard"),
-        "transcript copy should surface a temporary confirmation"
+        rendered_status.contains("copied 5 chars to clipboard"),
+        "transcript copy should surface a temporary confirmation with char count, got: {rendered_status}"
     );
 }
 
@@ -272,8 +300,8 @@ fn selecting_input_text_auto_copies_and_keeps_selection() {
 
     let rendered = rendered_app_session_lines(&mut session, VIEW_ROWS);
     assert!(
-        rendered.iter().any(|line| line.contains("Copied to clipboard")),
-        "input copy should surface a temporary confirmation"
+        rendered.iter().any(|line| line.contains("copied 5 chars to clipboard")),
+        "input copy should surface a temporary confirmation with char count"
     );
 
     for _ in 0..500 {

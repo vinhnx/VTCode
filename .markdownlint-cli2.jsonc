@@ -1,0 +1,46 @@
+// Correctness rules stay enabled; exceptions belong beside intentional examples.
+{
+  "noProgress": true,
+  "config": {
+    "default": true,
+    "MD003": {
+      "style": "atx"
+    },
+    "MD004": {
+      "style": "dash"
+    },
+    "MD007": {
+      "indent": 2
+    },
+    "MD013": {
+      "line_length": 120,
+      "code_blocks": false,
+      "tables": false,
+      "headings": false
+    },
+    "MD024": {
+      "siblings_only": true
+    },
+    "MD029": {
+      "style": "ordered"
+    },
+    "MD033": {
+      "allowed_elements": [
+        "a",
+        "br",
+        "details",
+        "div",
+        "img",
+        "kbd",
+        "p",
+        "picture",
+        "source",
+        "sub",
+        "summary",
+        "sup",
+        "strong",
+        "em"
+      ]
+    }
+  }
+}

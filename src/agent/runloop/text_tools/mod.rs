@@ -11,6 +11,22 @@ mod parse_yaml;
 mod parser;
 mod validate;
 
+fn collect_enclosed_regions(text: &str, open_marker: &str, close_marker: &str, regions: &mut Vec<(usize, usize)>) {
+    let mut search_start = 0usize;
+    while let Some(relative_start) = text[search_start..].find(open_marker) {
+        let start = search_start + relative_start;
+        let content_start = start + open_marker.len();
+        let end = text[content_start..]
+            .find(close_marker)
+            .map(|idx| content_start + idx + close_marker.len())
+            .unwrap_or(text.len());
+        if start < end && end <= text.len() {
+            regions.push((start, end));
+        }
+        search_start = end.max(content_start);
+    }
+}
+
 #[cfg(test)]
 mod tests;
 

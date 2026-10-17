@@ -6,7 +6,9 @@ use crate::tui::config::constants::ui;
 use super::Session;
 
 use vtcode_commons::ansi_codes::{set_iterm2_profile, set_terminal_title_and_icon};
-use vtcode_commons::terminal_detection::{ITERM2_PROFILE_NAME, should_apply_iterm2_profile_now};
+use vtcode_commons::terminal_detection::{
+    ITERM2_PROFILE_NAME, original_iterm2_profile_name, should_apply_iterm2_profile_now,
+};
 
 const MAX_TITLE_LENGTH: usize = 128;
 
@@ -172,7 +174,11 @@ impl Session {
         match status {
             TerminalTitleStatus::Ready => None,
             TerminalTitleStatus::ActionRequired => Some("!".to_string()),
-            TerminalTitleStatus::Thinking => Some(self.thinking_spinner.current_frame().to_string()),
+            TerminalTitleStatus::Thinking => Some(if self.appearance.should_animate_progress_status() {
+                self.thinking_spinner.current_frame().to_string()
+            } else {
+                status.label().to_string()
+            }),
             TerminalTitleStatus::Working | TerminalTitleStatus::Waiting | TerminalTitleStatus::Undoing => {
                 Some("...".to_string())
             }
@@ -264,6 +270,12 @@ fn write_terminal_title(title: &str) -> std::io::Result<()> {
 /// the tab icon, and repeated switches would fight manual profile changes
 /// mid-session. Sessions without the installed profile file are untouched,
 /// so deleting it uninstalls the behavior.
+///
+/// `OSC 1337;SetProfile=` is a sticky session-profile change with no automatic
+/// reversion, so the session's original profile is recorded here and restored
+/// by the canonical teardown path ([`restore_tui`](super::super::panic_hook::restore_tui)).
+/// Sessions whose original profile is unknown or already [`ITERM2_PROFILE_NAME`]
+/// are skipped rather than left switched.
 pub(crate) fn apply_iterm2_profile_once() {
     if !cfg!(target_os = "macos") {
         return;
@@ -271,9 +283,14 @@ pub(crate) fn apply_iterm2_profile_once() {
     if !should_apply_iterm2_profile_now() {
         return;
     }
+    let Some(original) = original_iterm2_profile_name() else {
+        return;
+    };
     if let Err(error) = write_iterm2_profile_switch() {
         tracing::debug!(%error, "failed to switch to iTerm2 profile");
+        return;
     }
+    super::super::panic_hook::state::mark_iterm2_profile_switched(original);
 }
 
 fn write_iterm2_profile_switch() -> std::io::Result<()> {
@@ -323,15 +340,7 @@ fn is_stripped_terminal_title_char(ch: char) -> bool {
 }
 
 fn truncate_title(title: &str) -> String {
-    const ELLIPSIS: &str = crate::design::constants::ELLIPSIS_ASCII;
-    let char_count = title.chars().count();
-    if char_count <= MAX_TITLE_LENGTH {
-        return title.to_string();
-    }
-
-    let keep = MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.chars().count());
-    let truncated = title.chars().take(keep).collect::<String>();
-    format!("{truncated}{ELLIPSIS}")
+    vtcode_commons::formatting::truncate_within(title, MAX_TITLE_LENGTH, crate::design::constants::ELLIPSIS_ASCII)
 }
 
 fn normalize_title_part(value: &str) -> String {
@@ -497,5 +506,23 @@ mod tests {
             terminal_title_sequence(&sanitized),
             "\u{1b}]1;alpha ]0;bad beta\u{7}\u{1b}]2;alpha ]0;bad beta\u{7}"
         );
+    }
+    #[test]
+    fn thinking_title_respects_accessibility_policy() {
+        for (reduced, keep_animation, screen_reader, expected) in [
+            (false, false, false, "⠋ demo-project"),
+            (true, false, false, "Thinking demo-project"),
+            (true, true, false, "⠋ demo-project"),
+            (false, true, true, "Thinking demo-project"),
+            (true, true, true, "Thinking demo-project"),
+        ] {
+            let mut session = session_for_title_tests();
+            session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+            session.thinking_spinner.start();
+            session.appearance.reduce_motion_mode = reduced;
+            session.appearance.reduce_motion_keep_progress_animation = keep_animation;
+            session.appearance.screen_reader_mode = screen_reader;
+            assert_eq!(session.render_terminal_title().as_deref(), Some(expected));
+        }
     }
 }

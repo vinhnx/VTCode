@@ -6,12 +6,49 @@ use crate::provider::{
 use crate::providers::common::append_normalized_reasoning_detail_items;
 use crate::providers::openai::types::{InstructionSegmentKind, MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload};
 use crate::providers::shared::{
-    collect_tool_references_from_tool_search_output, function_output_value_from_message_content,
-    parse_cache_write_tokens_from_usage, parse_cached_prompt_tokens_from_usage,
-    tool_result_content_from_message_content,
+    RESPONSES_COMPLETION_TOKEN_KEYS, RESPONSES_PROMPT_TOKEN_KEYS, collect_tool_references_from_tool_search_output,
+    function_output_value_from_message_content, parse_cache_write_tokens_from_usage,
+    parse_cached_prompt_tokens_from_usage, tool_result_content_from_message_content, usage_u32_from_keys,
 };
 use hashbrown::HashMap;
 use serde_json::{Value, json};
+use std::borrow::Cow;
+use std::path::Path;
+
+mod cache_diagnostics;
+
+// OpenAI's file-input guide uses MIME-prefixed data URLs for inline files.
+// Normalize at the wire boundary so raw base64 in existing history also works.
+fn inline_file_data_url<'a>(filename: Option<&str>, data: &'a str) -> Cow<'a, str> {
+    let data = data.trim();
+    if data.starts_with("data:") {
+        return Cow::Borrowed(data);
+    }
+
+    let extension = filename
+        .and_then(|name| Path::new(name).extension())
+        .and_then(|ext| ext.to_str());
+    let mime_type = match extension.unwrap_or_default().to_ascii_lowercase().as_str() {
+        "pdf" => "application/pdf",
+        "md" | "markdown" => "text/markdown",
+        "json" => "application/json",
+        "html" | "htm" => "text/html",
+        "xml" => "text/xml",
+        "csv" => "text/csv",
+        "tsv" => "text/tsv",
+        "iif" => "text/x-iif",
+        "doc" | "dot" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "odt" => "application/vnd.oasis.opendocument.text",
+        "rtf" => "application/rtf",
+        "ppt" | "pps" | "pot" | "ppa" | "pwz" | "wiz" => "application/vnd.ms-powerpoint",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "xls" | "xla" | "xlb" | "xlc" | "xlm" | "xlt" | "xlw" => "application/vnd.ms-excel",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        _ => "text/plain",
+    };
+    Cow::Owned(format!("data:{mime_type};base64,{data}"))
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResponsesToolCallKind {
@@ -100,6 +137,17 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
                         }
                     }
                     ContentPart::Image { data, mime_type, .. } => {
+                        // Providers accept only JPEG/PNG/GIF/WebP. Anything else
+                        // (notably SVG auto-attached from quoted paths in diffs)
+                        // fails the whole request with 400, so drop it here
+                        // instead of letting one bad part poison the turn.
+                        if !vtcode_commons::image::is_supported_image_mime_type(mime_type) {
+                            tracing::warn!(
+                                mime_type = %mime_type,
+                                "dropping unsupported image MIME type for Responses API"
+                            );
+                            continue;
+                        }
                         let image_url = {
                             let mut s = String::with_capacity(13 + mime_type.len() + data.len());
                             s.push_str("data:");
@@ -129,7 +177,10 @@ fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &M
                                 map.insert("file_id".to_owned(), json!(id));
                             }
                             if let Some(data) = file_data {
-                                map.insert("file_data".to_owned(), json!(data));
+                                map.insert(
+                                    "file_data".to_owned(),
+                                    json!(inline_file_data_url(filename.as_deref(), data)),
+                                );
                             }
                             if let Some(url) = file_url {
                                 map.insert("file_url".to_owned(), json!(url));
@@ -260,6 +311,43 @@ fn append_tool_result_to_instructions(
     s.push('\n');
     s.push_str(&text);
     instructions_segments.push((InstructionSegmentKind::FoldedHistory, s));
+}
+
+/// Parse a server completion and record its served tier once. Replay parsing
+/// uses `parse_responses_payload` directly and must not emit completion evidence.
+pub(crate) fn parse_responses_completion(
+    response_json: Value,
+    model: String,
+    include_cached_prompt_metrics: bool,
+) -> Result<LLMResponse, LLMError> {
+    let cache_diagnostics = cache_diagnostics::parse(&response_json);
+    let service_tier = response_json
+        .get("service_tier")
+        .and_then(Value::as_str)
+        .filter(|tier| matches!(*tier, "default" | "standard" | "auto" | "flex" | "priority" | "fast" | "ultrafast"))
+        .map(compact_str::CompactString::new);
+    // Streaming can deliver usable deltas with an empty authoritative output.
+    // Its existing fallback reconstructs the answer after this parser rejects
+    // the empty array; cache evidence belongs to the completion envelope and
+    // must be recorded independently of that content reconstruction.
+    if let Some(diagnostics) = cache_diagnostics {
+        tracing::info!(
+            model = %model,
+            cache_comparison_type = diagnostics.kind,
+            cache_miss_reason = diagnostics.reason,
+            cache_missed_tokens = diagnostics.missed_tokens,
+            comparison_reusable_tokens = diagnostics.reusable_tokens,
+            "OpenAI Responses prompt cache comparison"
+        );
+    }
+    let response = parse_responses_payload(response_json, model, include_cached_prompt_metrics)?;
+    if let Some(service_tier) = service_tier {
+        tracing::info!(
+            service_tier = service_tier.as_str(),
+            "OpenAI Responses completed with server-reported service tier"
+        );
+    }
+    Ok(response)
 }
 
 pub(crate) fn parse_responses_payload(
@@ -411,23 +499,9 @@ pub(crate) fn parse_responses_payload(
         let cache_creation_tokens = parse_cache_write_tokens_from_usage(usage_value, include_cached_prompt_metrics);
 
         Usage {
-            prompt_tokens: usage_value
-                .get("input_tokens")
-                .or_else(|| usage_value.get("prompt_tokens"))
-                .and_then(|pt| pt.as_u64())
-                .and_then(|v| u32::try_from(v).ok())
-                .unwrap_or(0),
-            completion_tokens: usage_value
-                .get("output_tokens")
-                .or_else(|| usage_value.get("completion_tokens"))
-                .and_then(|ct| ct.as_u64())
-                .and_then(|v| u32::try_from(v).ok())
-                .unwrap_or(0),
-            total_tokens: usage_value
-                .get("total_tokens")
-                .and_then(|tt| tt.as_u64())
-                .and_then(|v| u32::try_from(v).ok())
-                .unwrap_or(0),
+            prompt_tokens: usage_u32_from_keys(usage_value, RESPONSES_PROMPT_TOKEN_KEYS),
+            completion_tokens: usage_u32_from_keys(usage_value, RESPONSES_COMPLETION_TOKEN_KEYS),
+            total_tokens: usage_u32_from_keys(usage_value, &["total_tokens"]),
             cached_prompt_tokens,
             cache_creation_tokens,
             cache_read_tokens: None,
@@ -708,6 +782,28 @@ mod tests {
 
         let payload = build_standard_responses_payload(&request, true).expect("payload should build");
         assert_multimodal_tool_result(payload);
+    }
+
+    #[test]
+    fn standard_payload_drops_unsupported_svg_image_parts() {
+        // Regression: an SVG auto-attached from a quoted path in a WebMCP diff
+        // must not reach the wire — providers fail the whole request with 400
+        // `invalid_value` when any `input_image` carries an unsupported type.
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![Message::user_with_parts(vec![
+                crate::provider::ContentPart::text("see the logo".to_string()),
+                crate::provider::ContentPart::image("PHN2Zz48L3N2Zz4=".to_string(), "image/svg+xml".to_string()),
+            ])]
+            .into(),
+            ..Default::default()
+        };
+
+        let payload = build_standard_responses_payload(&request, true).expect("payload should build");
+        let serialized = serde_json::to_string(&payload.input).expect("payload input should serialize");
+        assert!(!serialized.contains("image/svg+xml"), "SVG image must be dropped from the wire payload");
+        assert!(!serialized.contains("input_image"), "no image part should remain");
+        assert!(serialized.contains("see the logo"), "the text part must survive");
     }
 
     #[test]

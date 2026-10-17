@@ -864,7 +864,7 @@ plans/
 .vtcode/history/vtcode-share-hf/
 .vtcode/logs/
 .vtcode/history/
-
+.vtcode/reports/
 .node-version
 .worktrees/
 

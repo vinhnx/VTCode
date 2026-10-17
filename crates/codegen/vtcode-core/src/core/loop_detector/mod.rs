@@ -40,14 +40,14 @@ const SLIDING_WINDOW_MAX_REPEATS: usize = 3;
 /// evade per-tool limits. Fires a hard stop when exhausted.
 ///
 /// Also referenced by `prompts::harness_limits` to advertise the budget in the
-/// system prompt -- keep both in sync.
+/// system prompt; harness_limits imports this const, so there is no second copy.
 pub(crate) const MAX_TOTAL_READONLY_CALLS: usize = 30;
 
 /// Subagent-specific read-only budget. Subagents should do focused work and
 /// need less exploration headroom than the main agent.
 ///
 /// Also referenced by `subagents::config` to state the budget in writable
-/// child instructions -- keep both in sync.
+/// child instructions; config imports this const, so there is no second copy.
 pub(crate) const SUBAGENT_MAX_TOTAL_READONLY_CALLS: usize = 20;
 
 /// Navigation streak thresholds -- warning and hard stop.
@@ -734,6 +734,20 @@ impl Default for LoopDetector {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn matrix_actions_are_distinct_but_repeated_status_still_hits_the_limit() {
+        let mut detector = LoopDetector::with_max_repeated_calls(2);
+        for action in ["create", "start", "status"] {
+            detector.record_call(tools::MATRIX, &serde_json::json!({"action":action,"matrix_id":"work"}));
+            assert!(!detector.is_hard_limit_exceeded(tools::MATRIX));
+        }
+        assert!(
+            detector
+                .record_call(tools::MATRIX, &serde_json::json!({"action":"status","matrix_id":"work"}))
+                .is_some()
+        );
+        assert!(detector.is_hard_limit_exceeded(tools::MATRIX));
+    }
     use super::*;
     use serde_json::json;
 

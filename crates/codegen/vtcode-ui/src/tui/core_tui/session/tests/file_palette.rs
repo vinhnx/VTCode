@@ -16,6 +16,36 @@ fn file_palette_insertion_uses_at_alias_in_input() {
 }
 
 #[test]
+fn alt_enter_references_selected_folder_with_trailing_slash() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    load_app_file_palette(&mut session, vec!["/workspace/src/main.rs".to_string()], PathBuf::from("/workspace"));
+    // Bare `@` browses the current directory, where `src/` is listed as a folder.
+    session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
+
+    assert!(session.file_palette_visible());
+    // Alt+Enter must reach the palette handler; the global composer handler
+    // would insert a newline instead (see `has_shift || has_alt` branch).
+    session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT));
+
+    assert_eq!(session.core.input_manager.content(), "@src/ ");
+    assert!(!session.file_palette_visible());
+}
+
+#[test]
+fn plain_enter_on_folder_descends_instead_of_referencing() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    load_app_file_palette(&mut session, vec!["/workspace/src/main.rs".to_string()], PathBuf::from("/workspace"));
+    session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
+
+    session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    // Descending keeps the palette open (referencing would close it) and leaves
+    // the input untouched.
+    assert!(session.file_palette_visible());
+    assert_eq!(session.core.input_manager.content(), "@");
+}
+
+#[test]
 fn set_input_command_activates_file_palette_for_at_query() {
     let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
     load_app_file_palette(&mut session, vec!["src/main.rs".to_string()], PathBuf::from("."));
@@ -108,4 +138,19 @@ fn file_palette_keeps_base_input_and_cursor_active() {
     assert!(session.file_palette_visible());
     assert!(session.core.input_enabled());
     assert!(session.core.build_input_widget_data(VIEW_WIDTH, 1).cursor_should_be_visible);
+}
+
+#[test]
+fn file_palette_renders_folder_glyph_in_browse_mode() {
+    let mut session = AppSession::new(InlineTheme::default(), None, VIEW_ROWS);
+    load_app_file_palette(&mut session, vec!["/workspace/src/main.rs".to_string()], PathBuf::from("/workspace"));
+    session.handle_command(app_types::InlineCommand::SetInput("@".to_string()));
+
+    let lines = rendered_app_session_lines(&mut session, 20);
+    // Folder rows carry the `▸` open glyph next to the name.
+    assert!(
+        lines.iter().any(|line| line.contains("▸") && line.contains("src/")),
+        "expected folder glyph row, got:\n{}",
+        lines.join("\n")
+    );
 }

@@ -3,6 +3,7 @@
   "available_tools": [
     "apply_patch",
     "exec_command",
+    "record_decision",
     "search_tools",
     "write_stdin"
   ],
@@ -11,14 +12,15 @@
     "exec_command": "allow",
     "write_stdin": "allow",
     "search_tools": "allow",
+    "record_decision": "allow",
+    "memory": "allow",
+    "start_planning": "prompt",
+    "code_search": "allow",
     "web_fetch": "prompt",
     "web_search": "prompt",
     "task_tracker": "prompt",
-    "memory": "allow",
     "request_user_input": "allow",
-    "code_search": "allow",
-    "mcp": "allow",
-    "start_planning": "prompt"
+    "mcp": "allow"
   },
   "constraints": {},
   "mcp": {

@@ -1,6 +1,7 @@
 # PTY and Pipe Infrastructure
 
-This document describes the process spawning infrastructure in VT Code, inspired by the [codex-rs](https://github.com/openai/codex) PTY utilities.
+This document describes the process spawning infrastructure in VT Code, inspired by the
+[codex-rs](https://github.com/openai/codex) PTY utilities.
 
 ## Overview
 
@@ -13,7 +14,7 @@ Both backends share a unified `ProcessHandle` interface for consistent interacti
 
 ## Module Structure
 
-```
+```text
 vtcode-bash-runner/
 ├── pipe.rs              # Async pipe-based process spawning
 ├── process.rs           # ProcessHandle and SpawnedProcess types
@@ -220,7 +221,8 @@ match result {
 
 ### Environment Filtering
 
-When using sandboxed execution (via `crates/codegen/vtcode-core/src/sandboxing/child_spawn.rs`), sensitive environment variables are filtered:
+When using sandboxed execution (via `crates/codegen/vtcode-core/src/sandboxing/child_spawn.rs`), sensitive environment
+variables are filtered:
 
 - API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
 - Cloud credentials (AWS*\*, AZURE*\_, GOOGLE\_\_)
@@ -243,8 +245,8 @@ Process working directories are validated against workspace boundaries to preven
 
 ## PTY Session Integration
 
-The PTY system in `crates/codegen/vtcode-core/src/tools/pty/` integrates with the process group utilities
-for robust process cleanup:
+The PTY system in `crates/codegen/vtcode-core/src/tools/pty/` integrates with the process group utilities for robust
+process cleanup:
 
 ### Graceful Termination
 
@@ -290,9 +292,9 @@ When a `PtySessionHandle` is dropped:
 
 1. Writer is closed with an `exit\n` command
 2. Process group receives graceful termination via `graceful_kill_process_group()`
-    - First: `SIGTERM` to the process group
-    - Wait: Up to 500ms for graceful exit
-    - Then: `SIGKILL` if still running
+   - First: `SIGTERM` to the process group
+   - Wait: Up to 500ms for graceful exit
+   - Then: `SIGKILL` if still running
 3. Reader thread is joined with timeout
 
 This ensures that:
@@ -304,7 +306,7 @@ This ensures that:
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │                   VT Code                        │
 ├─────────────────────────────────────────────────┤

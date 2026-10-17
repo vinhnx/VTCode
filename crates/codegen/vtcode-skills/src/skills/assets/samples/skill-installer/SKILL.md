@@ -7,21 +7,23 @@ metadata:
 
 # Skill Installer
 
-Helps install skills. By default these are from https://github.com/openai/skills/tree/main/skills/.curated, but users can also provide other locations.
+Helps install skills. By default these are from <https://github.com/openai/skills/tree/main/skills/.curated>, but users
+can also provide other locations.
 
 Use the helper scripts based on the task:
 
--   List curated skills when the user asks what is available, or if the user uses this skill without specifying what to do.
--   Install from the curated list when the user provides a skill name.
--   Install from another repo when the user provides a GitHub repo/path (including private repos).
+- List curated skills when the user asks what is available, or if the user uses this skill without specifying what to
+  do.
+- Install from the curated list when the user provides a skill name.
+- Install from another repo when the user provides a GitHub repo/path (including private repos).
 
 Install skills with the helper scripts.
 
 ## Communication
 
--   Start by confirming the task and running the appropriate command.
--   If something fails, report the exact error and ask what to do next.
--   Say only what is necessary.
+- Start by confirming the task and running the appropriate command.
+- If something fails, report the exact error and ask what to do next.
+- Say only what is necessary.
 
 ## Scripts
 
@@ -41,8 +43,8 @@ scripts/list-curated-skills.py --repo owner/repo --path skills/path --ref branch
 
 Output formats:
 
--   Default: numbered list with installation status
--   JSON: `--format json` for programmatic use
+- Default: numbered list with installation status
+- JSON: `--format json` for programmatic use
 
 ### Install from Curated List
 
@@ -95,13 +97,13 @@ If a skill with the same name already exists, the installer will:
 
 Before installing, the script validates:
 
--   SKILL.md exists and has valid frontmatter
--   Skill name follows naming conventions
--   No invalid or dangerous file patterns
+- SKILL.md exists and has valid frontmatter
+- Skill name follows naming conventions
+- No invalid or dangerous file patterns
 
 ## Notes
 
--   Skills installed from GitHub are placed in the User scope.
--   After installation, the skill is immediately available in the current session.
--   Use `/skills list` to verify installation.
--   Use `/skills load <skill-name>` to activate the skill.
+- Skills installed from GitHub are placed in the User scope.
+- After installation, the skill is immediately available in the current session.
+- Use `/skills list` to verify installation.
+- Use `/skills load <skill-name>` to activate the skill.

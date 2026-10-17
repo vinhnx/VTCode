@@ -7,6 +7,7 @@
 pub use vtcode_commons::provider::Provider;
 
 use super::{ModelId, model_catalog_entry};
+use crate::core::OpenAIServiceTier;
 use std::str::FromStr;
 
 const GENERIC_REASONING_EFFORTS: &[&str] = &["low", "medium", "high"];
@@ -44,6 +45,23 @@ pub trait ProviderModelSupport: AsRef<str> {
 
     /// Determine if the provider supports the `service_tier` request parameter.
     fn supports_service_tier(&self, model: &str) -> bool;
+
+    /// Determine if the provider supports a specific `service_tier` value.
+    /// `ultrafast` is a native-OpenAI-only tier: every other provider,
+    /// including OpenAI-compatible gateways that omit it wire-side, reports
+    /// false even when it accepts `flex`/`priority`.
+    fn supports_service_tier_value(&self, model: &str, tier: OpenAIServiceTier) -> bool {
+        match tier {
+            OpenAIServiceTier::Ultrafast => {
+                const ULTRAFAST_MODELS: &[&str] = &[
+                    crate::constants::models::openai::GPT_6_ASTRA,
+                    crate::constants::models::openai::GPT_6_1_SOL,
+                ];
+                self.as_ref() == Provider::OpenAI.as_ref() && ULTRAFAST_MODELS.contains(&model)
+            }
+            _ => self.supports_service_tier(model),
+        }
+    }
 }
 
 impl ProviderModelSupport for Provider {
@@ -110,7 +128,32 @@ impl ProviderModelSupport for Provider {
 
         match self {
             Provider::OpenAI => models::openai::SERVICE_TIER_MODELS.contains(&model),
-            _ => false,
+            Provider::MergeGateway => model.trim().starts_with("openai/"),
+            // All other OpenAI-compatible wire providers accept `service_tier`
+            // (including `ultrafast`); native non-OpenAI APIs do not.
+            Provider::DeepSeek
+            | Provider::Meta
+            | Provider::OpenRouter
+            | Provider::Ollama
+            | Provider::OllamaCloud
+            | Provider::LmStudio
+            | Provider::LlamaCpp
+            | Provider::Moonshot
+            | Provider::ZAI
+            | Provider::Minimax
+            | Provider::MiMo
+            | Provider::Mistral
+            | Provider::HuggingFace
+            | Provider::OpenCodeZen
+            | Provider::OpenCodeGo
+            | Provider::Qwen
+            | Provider::StepFun
+            | Provider::Evolink
+            | Provider::Poolside
+            | Provider::XAI
+            | Provider::NVIDIA
+            | Provider::Vercel => true,
+            Provider::Gemini | Provider::Anthropic | Provider::Copilot => false,
         }
     }
 }

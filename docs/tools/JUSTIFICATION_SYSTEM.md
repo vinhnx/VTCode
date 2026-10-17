@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Agent Justification System enables VT Code to capture and present agent reasoning when requesting approval for high-risk tool execution. This improves the user experience by explaining **why** the agent needs to run potentially dangerous operations, and learns from user approval patterns to reduce friction over time.
+The Agent Justification System enables VT Code to capture and present agent reasoning when requesting approval for
+high-risk tool execution. This improves the user experience by explaining **why** the agent needs to run potentially
+dangerous operations, and learns from user approval patterns to reduce friction over time.
 
 ## Architecture
 
@@ -24,9 +26,10 @@ pub struct ToolJustification {
 
 **Key Methods:**
 
--   `new()` - Create justification with tool name and reason
--   `with_outcome()` - Add expected outcome description
--   `format_for_dialog()` - Verbose multi-line format for logs/tests (78-char wrap with `Agent Reasoning:` / `Expected Outcome:` / `Risk Level:` headers)
+- `new()` - Create justification with tool name and reason
+- `with_outcome()` - Add expected outcome description
+- `format_for_dialog()` - Verbose multi-line format for logs/tests (78-char wrap with `Agent Reasoning:` /
+  `Expected Outcome:` / `Risk Level:` headers)
 
 #### 2. **JustificationManager** (`crates/codegen/vtcode-core/src/tools/registry/justification.rs`)
 
@@ -41,17 +44,17 @@ pub struct JustificationManager {
 
 **Key Methods:**
 
--   `record_decision()` - Record user approval/denial
--   `get_pattern()` - Retrieve approval history for a tool
--   `get_learning_summary()` - Get human-readable stats
+- `record_decision()` - Record user approval/denial
+- `get_pattern()` - Retrieve approval history for a tool
+- `get_learning_summary()` - Get human-readable stats
 
 **ApprovalPattern Structure:**
 
--   `tool_name` - Tool being tracked
--   `approve_count` - Times user approved
--   `deny_count` - Times user denied
--   `approval_rate()` - Approval percentage (0.0-1.0)
--   `has_high_approval_rate()` - True if ≥3 approvals AND >80% rate
+- `tool_name` - Tool being tracked
+- `approve_count` - Times user approved
+- `deny_count` - Times user denied
+- `approval_rate()` - Approval percentage (0.0-1.0)
+- `has_high_approval_rate()` - True if ≥3 approvals AND >80% rate
 
 #### 3. **ApprovalRecorder** (`crates/codegen/vtcode-core/src/tools/registry/approval_recorder.rs`)
 
@@ -65,10 +68,10 @@ pub struct ApprovalRecorder {
 
 **Key Methods:**
 
--   `record_approval()` - Async approval logging
--   `should_auto_approve()` - Check if tool can auto-approve
--   `get_auto_approval_suggestion()` - UX hint for frequent approvals
--   `get_approval_count()` - Query approval stats
+- `record_approval()` - Async approval logging
+- `should_auto_approve()` - Check if tool can auto-approve
+- `get_auto_approval_suggestion()` - UX hint for frequent approvals
+- `get_approval_count()` - Query approval stats
 
 #### 4. **JustificationExtractor** (`crates/codegen/vtcode-core/src/tools/registry/justification_extractor.rs`)
 
@@ -80,23 +83,24 @@ pub struct JustificationExtractor;
 
 **Key Methods:**
 
--   `extract_from_decision()` - Pull reasoning from a Decision
--   `extract_latest_from_tracker()` - Get latest decision reasoning
--   `extract_from_recent_decisions()` - Combine multiple decision reasons
--   `suggest_default_justification()` - Fallback for common tools
+- `extract_from_decision()` - Pull reasoning from a Decision
+- `extract_latest_from_tracker()` - Get latest decision reasoning
+- `extract_from_recent_decisions()` - Combine multiple decision reasons
+- `suggest_default_justification()` - Fallback for common tools
 
 **Default Justifications:**
 
--   `exec_command` - Execute shell operations or build/test
--   `write_stdin` - Continue a live command session
--   `apply_patch` - Implement code changes
--   `code_search` - Search recognised definitions, syntactic usages, literal text, and matching paths in the advanced profile
+- `exec_command` - Execute shell operations or build/test
+- `write_stdin` - Continue a live command session
+- `apply_patch` - Implement code changes
+- `code_search` - Search recognised definitions, syntactic usages, literal text, and matching paths in the advanced
+  profile
 
 ## Data Flow
 
 ### Approval Request Flow
 
-```
+```text
 1. Tool execution initiated
    ↓
 2. Risk scoring determines risk level
@@ -174,31 +178,30 @@ Stored in the user cache directory's approval-pattern file:
 
 ### Format
 
--   **Location**: `<cache>/approval_patterns.json`
--   **Format**: JSON serialized HashMap<String, ApprovalPattern>
--   **Persistence**: Automatic on each approval decision
+- **Location**: `<cache>/approval_patterns.json`
+- **Format**: JSON serialized HashMap<String, ApprovalPattern>
+- **Persistence**: Automatic on each approval decision
 
 ## Integration Points
 
 ### 1. Tool Routing (`src/agent/runloop/unified/tool_routing.rs`)
 
--   `prompt_tool_permission()` - Extended with optional justification parameter
--   `ensure_tool_permission()` - Routes justification to approval dialog
--   Dialog displays the minimal justification
-    (`What the agent is trying to do:` / `Risk:` single rows);
-    the verbose `format_for_dialog()` output remains for logs/tests
+- `prompt_tool_permission()` - Extended with optional justification parameter
+- `ensure_tool_permission()` - Routes justification to approval dialog
+- Dialog displays the minimal justification (`What the agent is trying to do:` / `Risk:` single rows); the verbose
+  `format_for_dialog()` output remains for logs/tests
 
 ### 2. Session Management (`src/agent/runloop/unified/turn/session.rs`)
 
--   Calls `ensure_tool_permission()` before tool execution
--   Passes decision_ledger reference for context extraction
--   Records approval decision after user responds
+- Calls `ensure_tool_permission()` before tool execution
+- Passes decision_ledger reference for context extraction
+- Records approval decision after user responds
 
 ### 3. Decision Ledger (`crates/codegen/vtcode-core/src/core/decision_tracker.rs`)
 
--   `latest_decision()` - Returns most recent decision
--   `recent_decisions(count)` - Returns last N decisions
--   Each Decision contains `reasoning: String` field
+- `latest_decision()` - Returns most recent decision
+- `recent_decisions(count)` - Returns last N decisions
+- Each Decision contains `reasoning: String` field
 
 ## Risk Level Aware Behavior
 
@@ -213,7 +216,7 @@ Stored in the user cache directory's approval-pattern file:
 
 User requests: "Run the build and check for errors"
 
-```
+```text
 1. Agent decides to run: `cargo build`
 2. Risk: High (command execution)
 3. Justification extraction:
@@ -234,17 +237,24 @@ User requests: "Run the build and check for errors"
      Deny Once                  Ask again next time
 
 
-5. User selects "Always Allow"
+5. User selects "Always approve"
 6. Decision recorded:
    - exec_command: approve_count = 4, deny_count = 0
 7. Pattern saved to disk
 ```
 
+For a demonstrably safe read-only shell command that belongs to a learned family (for example a write-free
+`awk 'NR>=a && NR<=b' README.md`, `sed -n <range> <path>`, or `find <dir>` read), the "Always approve" row is scoped to
+the family instead of the exact invocation — the subtitle names the family (for example, "Remember safe awk reads under
+README.md in this workspace"), and an equivalent read with different arguments reuses the approval instead of
+re-prompting. Mutating shapes such as `awk 'print > file'`, `find -delete`, or `sed -i` are never part of a learned
+family.
+
 ## Learning System
 
 ### Approval Rate Calculation
 
-```
+```text
 approval_rate = approve_count / (approve_count + deny_count)
 ```
 
@@ -252,12 +262,12 @@ approval_rate = approve_count / (approve_count + deny_count)
 
 Tool auto-approves when:
 
--   `approval_count >= 3` (at least 3 prior approvals)
--   `approval_rate > 0.8` (more than 80% approval rate)
+- `approval_count >= 3` (at least 3 prior approvals)
+- `approval_rate > 0.8` (more than 80% approval rate)
 
 ### Example Progression
 
-```
+```text
 First time: Prompt with default justification
   User approves → approve_count = 1
 
@@ -296,23 +306,23 @@ All modules include comprehensive tests:
 
 ### Justification Tests
 
--   `test_tool_justification_creation()` - Creation and formatting
--   `test_justification_formatting()` - TUI display
--   `test_approval_pattern_calculation()` - Rate calculation
--   `test_justification_manager_basic()` - Persistence
+- `test_tool_justification_creation()` - Creation and formatting
+- `test_justification_formatting()` - TUI display
+- `test_approval_pattern_calculation()` - Rate calculation
+- `test_justification_manager_basic()` - Persistence
 
 ### ApprovalRecorder Tests
 
--   `test_approval_recording()` - Basic recording
--   `test_auto_approval_suggestion()` - UX suggestions
--   `test_should_auto_approve()` - Threshold logic
+- `test_approval_recording()` - Basic recording
+- `test_auto_approval_suggestion()` - UX suggestions
+- `test_should_auto_approve()` - Threshold logic
 
 ### JustificationExtractor Tests
 
--   `test_extract_from_decision_low_risk()` - Risk filtering
--   `test_extract_from_decision_high_risk()` - Reasoning extraction
--   `test_extract_from_decision_empty_reasoning()` - Edge cases
--   `test_suggest_default_justification()` - Fallback strategies
+- `test_extract_from_decision_low_risk()` - Risk filtering
+- `test_extract_from_decision_high_risk()` - Reasoning extraction
+- `test_extract_from_decision_empty_reasoning()` - Edge cases
+- `test_suggest_default_justification()` - Fallback strategies
 
 Run tests with:
 
@@ -339,18 +349,18 @@ cargo test --lib justification_extractor
 
 ## Security Considerations
 
--   Justifications extracted from agent's own reasoning (trusted)
--   Approval patterns are client-side only (no cloud sync)
--   User always retains final approval authority
--   Pattern file is human-readable JSON (transparent)
--   High-risk tools never auto-approve (mandatory threshold)
+- Justifications extracted from agent's own reasoning (trusted)
+- Approval patterns are client-side only (no cloud sync)
+- User always retains final approval authority
+- Pattern file is human-readable JSON (transparent)
+- High-risk tools never auto-approve (mandatory threshold)
 
 ## Performance
 
--   **Pattern Lookup**: O(1) HashMap access
--   **Pattern Recording**: O(1) with async serialization
--   **Justification Extraction**: O(n) through recent decisions (n ≤ 10 typical)
--   **Memory**: ~50KB per 100 tools tracked
--   **Disk**: ~2KB per approval pattern entry
+- **Pattern Lookup**: O(1) HashMap access
+- **Pattern Recording**: O(1) with async serialization
+- **Justification Extraction**: O(n) through recent decisions (n ≤ 10 typical)
+- **Memory**: ~50KB per 100 tools tracked
+- **Disk**: ~2KB per approval pattern entry
 
 Typical approval decision latency: <5ms (after dialog shown)

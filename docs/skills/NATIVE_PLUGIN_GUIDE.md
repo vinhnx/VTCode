@@ -2,11 +2,14 @@
 
 ## Overview
 
-VT Code's Native Plugin System allows explicitly trusted integrations to extend VT Code's capabilities with high-performance, pre-compiled native code plugins. Built on the [`libloading`](https://docs.rs/libloading) crate, this system enables dynamic loading of native code while making the process-level security boundary explicit.
+VT Code's Native Plugin System allows explicitly trusted integrations to extend VT Code's capabilities with
+high-performance, pre-compiled native code plugins. Built on the [`libloading`](https://docs.rs/libloading) crate, this
+system enables dynamic loading of native code while making the process-level security boundary explicit.
 
 ## What are Native Plugins?
 
-Native plugins are dynamically-loaded libraries (`.dylib` on macOS, `.so` on Linux, `.dll` on Windows) that implement the VT Code plugin ABI. They provide:
+Native plugins are dynamically-loaded libraries (`.dylib` on macOS, `.so` on Linux, `.dll` on Windows) that implement
+the VT Code plugin ABI. They provide:
 
 - **High Performance**: Execute compute-intensive tasks at native speed
 - **Code Protection**: Keep proprietary algorithms in compiled form
@@ -19,7 +22,7 @@ Native plugins are dynamically-loaded libraries (`.dylib` on macOS, `.so` on Lin
 
 A native plugin skill consists of:
 
-```
+```text
 my-plugin/
 ├── plugin.json          # Required: Plugin metadata
 ├── libmy_plugin.dylib   # Required: Compiled plugin library (platform-specific extension)
@@ -44,11 +47,13 @@ my-plugin/
 ```
 
 **Required Fields:**
+
 - `name`: Plugin identifier (lowercase, hyphens, max 64 chars)
 - `description`: What the plugin does (max 1024 chars)
 - `version`: Semantic version string (e.g., "1.0.0")
 
 **Optional Fields:**
+
 - `author`: Plugin creator
 - `abi_version`: Plugin ABI version (defaults to 1)
 - `when_to_use`: Guidance on when to trigger this plugin
@@ -68,6 +73,7 @@ uint32_t vtcode_plugin_version(void);
 ```
 
 **Implementation:**
+
 ```c
 uint32_t vtcode_plugin_version(void) {
     return 1;  // Current ABI version
@@ -83,6 +89,7 @@ const char* vtcode_plugin_metadata(void);
 ```
 
 **Implementation:**
+
 ```c
 const char* vtcode_plugin_metadata(void) {
     return R"({
@@ -104,6 +111,7 @@ const char* vtcode_plugin_execute(const char* input_json);
 ```
 
 **Input JSON Format:**
+
 ```json
 {
   "input": {
@@ -118,6 +126,7 @@ const char* vtcode_plugin_execute(const char* input_json);
 ```
 
 **Output JSON Format:**
+
 ```json
 {
   "success": true,
@@ -131,12 +140,13 @@ const char* vtcode_plugin_execute(const char* input_json);
 ```
 
 **Implementation Example:**
+
 ```c
 const char* vtcode_plugin_execute(const char* input_json) {
     // Parse input_json
     // Execute plugin logic
     // Allocate and return result JSON
-    
+
     static thread_local std::string result;
     result = R"({
         "success": true,
@@ -162,6 +172,7 @@ You can write plugins in any language that supports C ABI:
 ### Step 2: Rust Plugin Example
 
 **Cargo.toml:**
+
 ```toml
 [package]
 name = "my-vtcode-plugin"
@@ -179,6 +190,7 @@ libc = "0.2"
 ```
 
 **src/lib.rs:**
+
 ```rust
 use libc::c_char;
 use serde::{Deserialize, Serialize};
@@ -222,18 +234,18 @@ pub extern "C" fn vtcode_plugin_execute(input_json: *const c_char) -> *const c_c
     unsafe {
         let input_str = std::ffi::CStr::from_ptr(input_json).to_str().unwrap();
         let input: PluginInput = serde_json::from_str(input_str).unwrap();
-        
+
         // Plugin logic here
         let mut output = HashMap::new();
         output.insert("result".to_string(), serde_json::json!("processed"));
-        
+
         let result = PluginOutput {
             success: true,
             output,
             error: None,
             files: vec![],
         };
-        
+
         let result_json = serde_json::to_string(&result).unwrap();
         CString::new(result_json).unwrap().into_raw()
     }
@@ -241,6 +253,7 @@ pub extern "C" fn vtcode_plugin_execute(input_json: *const c_char) -> *const c_c
 ```
 
 **Build:**
+
 ```bash
 cargo build --release
 # Output: target/release/libmy_plugin.dylib (macOS)
@@ -253,6 +266,7 @@ cargo build --release
 Copy the plugin to a VT Code plugin directory:
 
 **User Plugins:**
+
 ```bash
 # Set PLUGIN_DIR to the resolved user data directory's plugins/ path
 # shown by `vtcode --version`.
@@ -262,46 +276,43 @@ cp plugin.json "$PLUGIN_DIR/my-plugin/"
 ```
 
 **Project plugin metadata:**
+
 ```bash
 mkdir -p .vtcode/plugins/my-plugin
 cp plugin.json .vtcode/plugins/my-plugin/
 ```
 
-Repository plugin directories are metadata-only. Do not place a native
-library in `.vtcode/plugins/` or `.agents/plugins/` expecting the high-level
-skill loader to open it. Install native libraries in an application-managed
+Repository plugin directories are metadata-only. Do not place a native library in `.vtcode/plugins/` or
+`.agents/plugins/` expecting the high-level skill loader to open it. Install native libraries in an application-managed
 user plugin directory and obtain explicit user approval before loading them.
 
 ### Step 4: Use the Plugin
 
-Native plugins are not automatically loaded by the generic skill commands. An
-application integration must explicitly approve and load the plugin after
-reviewing its provenance and process-level privileges.
+Native plugins are not automatically loaded by the generic skill commands. An application integration must explicitly
+approve and load the plugin after reviewing its provenance and process-level privileges.
 
 ## Security Considerations
 
 ### Trusted Directories
 
 VT Code's native loader accepts only explicitly trusted directories:
+
 - canonical user data directory/`plugins/` - application-managed user plugins
 - other application-managed locations explicitly configured by the caller
 
-Repository-controlled `<project>/.vtcode/plugins/` and
-`<project>/.agents/plugins/` directories are metadata-only and are not native
-plugin trust roots. A plugin manifest, README, or `AGENTS.md` never grants
-permission to load a library.
+Repository-controlled `<project>/.vtcode/plugins/` and `<project>/.agents/plugins/` directories are metadata-only and
+are not native plugin trust roots. A plugin manifest, README, or `AGENTS.md` never grants permission to load a library.
 
-Trusted roots, plugin directories, and library files are canonicalized before
-loading. VT Code rejects `..` traversal and symlink escapes that would resolve
-outside a trusted root. Because library constructors run during `dlopen`,
-provenance and explicit user consent must be established before calling the
-native loader.
+Trusted roots, plugin directories, and library files are canonicalized before loading. VT Code rejects `..` traversal
+and symlink escapes that would resolve outside a trusted root. Because library constructors run during `dlopen`,
+provenance and explicit user consent must be established before calling the native loader.
 
 **Never load plugins from untrusted sources!** Native code executes with your user privileges.
 
 ### Plugin Validation
 
 VT Code validates plugins before loading:
+
 1. Checks plugin.json exists and is valid JSON
 2. Verifies required metadata fields
 3. Confirms dynamic library exists
@@ -310,6 +321,7 @@ VT Code validates plugins before loading:
 ### Future Enhancements
 
 Planned security features:
+
 - Plugin signature verification
 - Checksum validation
 - Sandboxed execution (where available)
@@ -345,8 +357,8 @@ pub extern "C" fn vtcode_plugin_metadata() -> *const c_char {
 
 ### 3. Concurrency
 
-ABI v1 plugins should still avoid unsynchronized global state, but VT Code
-currently executes each loaded plugin instance serially:
+ABI v1 plugins should still avoid unsynchronized global state, but VT Code currently executes each loaded plugin
+instance serially:
 
 ```rust
 use std::sync::Mutex;
@@ -366,6 +378,7 @@ Future parallel execution would require an explicit ABI or capability change.
 ### 5. Documentation
 
 Provide clear documentation:
+
 - What the plugin does
 - Input/output formats
 - Configuration options
@@ -378,6 +391,7 @@ Provide clear documentation:
 **Problem:** VT Code doesn't list your plugin
 
 **Solutions:**
+
 1. Verify the plugin is in an application-managed trusted directory
 2. Check plugin.json exists and is valid JSON
 3. Ensure library filename matches plugin name
@@ -394,6 +408,7 @@ Provide clear documentation:
 **Problem:** "Failed to load dynamic library" error
 
 **Solutions:**
+
 1. Check library has correct permissions (executable)
 2. Verify library is compiled for your platform
 3. Check for missing dependencies (`ldd` on Linux, `otool -L` on macOS)
@@ -404,6 +419,7 @@ Provide clear documentation:
 **Problem:** VT Code crashes when using plugin
 
 **Solutions:**
+
 1. Check plugin logs for error messages
 2. Run with `RUST_BACKTRACE=1` for detailed error info
 3. Verify plugin handles all input cases
@@ -482,6 +498,7 @@ let result = plugin.execute(&ctx)?;
 ## Examples
 
 See example plugins in the VT Code repository:
+
 - `examples/plugins/hello-world/` - Minimal plugin example
 - `examples/plugins/data-processor/` - Data processing plugin
 - `examples/plugins/file-analyzer/` - File analysis plugin
@@ -489,6 +506,7 @@ See example plugins in the VT Code repository:
 ## Contributing
 
 We welcome plugin contributions! Please:
+
 1. Follow the plugin specification
 2. Include comprehensive tests
 3. Document your plugin thoroughly
@@ -498,12 +516,13 @@ For questions or support, open an issue on the VT Code repository.
 
 ## License
 
-Native plugins are subject to the VT Code license (MIT OR Apache-2.0).
-Your plugin code can be licensed under terms of your choice.
+Native plugins are subject to the VT Code license (MIT OR Apache-2.0). Your plugin code can be licensed under terms of
+your choice.
 
 ---
 
 **See Also:**
+
 - [Agent Skills Guide](./SKILLS_GUIDE.md) - Traditional instruction-based skills
 - [libloading Documentation](https://docs.rs/libloading) - Underlying library
 - [FFI Guide](https://doc.rust-lang.org/nomicon/ffi.html) - Rust FFI best practices

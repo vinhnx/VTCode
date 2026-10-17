@@ -8,6 +8,7 @@ use crate::tools::apply_patch::{UNIFIED_FILE_MAX_PAYLOAD_BYTES_ENV, effective_ma
 use crate::tools::error_messages::agent_execution;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::registry::ToolCatalogSource;
+use crate::tools::tool_intent::ToolIntent;
 use crate::tools::validation::{commands, condensed_schema_hint, paths};
 use crate::utils::tool_name_parsing::MCP_QUALIFIED_TOOL_PREFIX;
 
@@ -76,6 +77,10 @@ pub struct ToolPreflightOutcome {
     pub readonly_classification: bool,
     pub parallel_safe_after_preflight: bool,
     pub effective_args: Value,
+    /// The intent classified on the validation args that become the executed
+    /// text. Consumers must reuse it instead of re-classifying, so planning
+    /// enforcement cannot disagree with `readonly_classification`.
+    pub intent: ToolIntent,
 }
 
 fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
@@ -84,7 +89,7 @@ fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
         tool_names::WRITE_FILE => &["path", "content"],
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         tool_names::RUN_PTY_CMD | tool_names::CREATE_PTY_SESSION => &["command"],
-        tool_names::APPLY_PATCH => &["patch"],
+        tool_names::APPLY_PATCH => &["input"],
         _ => &[],
     }
 }
@@ -101,7 +106,7 @@ fn is_missing_apply_patch_payload(args: &Value) -> bool {
         return false;
     }
 
-    let has_object_payload = |key: &str| args.get(key).is_some_and(|value| !value.is_null());
+    let has_object_payload = |key: &str| args.get(key).is_some_and(Value::is_string);
     !(has_object_payload("patch") || has_object_payload("input"))
 }
 
@@ -116,7 +121,7 @@ fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
             _ => is_missing_arg_value(args, key),
         };
     }
-    if tool_name == tool_names::APPLY_PATCH && key == "patch" {
+    if tool_name == tool_names::APPLY_PATCH && key == "input" {
         return is_missing_apply_patch_payload(args);
     }
     is_missing_arg_value(args, key)
@@ -418,21 +423,14 @@ pub(super) fn normalize_tool_args<'a>(
         if shell_args != *normalized.as_ref() {
             normalized = std::borrow::Cow::Owned(shell_args);
         }
-        // Truthful verifier status: a truncation-only piped verifier
-        // (`cargo check 2>&1 | tail -N`) reports the truncator's exit status,
-        // which reads as "verified" on success even when the build failed.
-        // Elide pure `head`/`tail` tails so the executed command is the
-        // standalone verifier and the observed status is its own. Pure
-        // function of the args (idempotent: rewritten text has no pipe), so
-        // validation below and every later normalize pass agree on the text.
-        // Non-matching shapes (filtering tails, joins, array forms) return
-        // `None` and run as typed. Only the canonical `command` key is
-        // replaced; the caller's original `cmd`/`raw_command` spellings are
-        // left intact as the typed record.
-        if let Some(rewritten) = crate::tools::tool_intent::rewrite_truncation_only_verifier(normalized.as_ref())
-            && let Some(payload) = normalized.to_mut().as_object_mut()
+        // Share truthful-status normalization with gate accounting. Pure
+        // truncators are elided; static read-only filters retain their output
+        // under fail-closed pipefail. Safety and permissions still validate
+        // the resulting command. Preserve the original cmd as typed evidence.
+        if let std::borrow::Cow::Owned(executed) =
+            crate::tools::tool_intent::shell_args_as_executed(normalized_tool_name, normalized.as_ref())
         {
-            payload.insert("command".to_string(), Value::String(rewritten));
+            normalized = std::borrow::Cow::Owned(executed);
         }
     }
 
@@ -461,10 +459,10 @@ fn public_exec_validation_args(normalized_tool_name: &str, args: &Value) -> Resu
     // Same truthful-status rewrite as `normalize_tool_args` (see above):
     // `EXEC_COMMAND` normalizes here rather than there, so the hook must be
     // repeated to keep validation and execution agreed on one command text.
-    if let Some(rewritten) = crate::tools::tool_intent::rewrite_truncation_only_verifier(&exec_args)
-        && let Some(payload) = exec_args.as_object_mut()
+    if let std::borrow::Cow::Owned(executed) =
+        crate::tools::tool_intent::shell_args_as_executed(normalized_tool_name, &exec_args)
     {
-        payload.insert("command".to_string(), Value::String(rewritten));
+        exec_args = executed;
     }
     let payload = exec_args
         .as_object_mut()
@@ -587,8 +585,8 @@ fn resolve_mcp_proxy_dispatch_target(registry: &ToolRegistry) -> Option<Result<S
 /// widen the harness-dispatchable surface.
 fn resolve_internal_dispatch_tool(registry: &ToolRegistry, name: &str) -> Option<String> {
     super::assembly::public_tool_name_candidates(name)
-        .into_iter()
-        .map(|candidate| candidate.trim().to_ascii_lowercase())
+        .iter()
+        .map(|candidate| candidate.trim())
         .filter(|candidate| !candidate.is_empty())
         .find(|candidate| {
             HARNESS_DISPATCHABLE_INTERNAL_TOOLS
@@ -596,6 +594,7 @@ fn resolve_internal_dispatch_tool(registry: &ToolRegistry, name: &str) -> Option
                 .any(|allowed| allowed.eq_ignore_ascii_case(candidate))
         })
         .and_then(|candidate| {
+            let candidate = candidate.to_ascii_lowercase();
             registry
                 .inventory
                 .registration_for(&candidate)
@@ -668,7 +667,11 @@ pub(super) fn preflight_validate_resolved_call(
     let mut failures = Vec::with_capacity(required.len());
     for key in required {
         if is_missing_required_arg(&validation_tool_name, validation_args.as_ref(), key) {
-            failures.push(missing_required_arg_failure(key));
+            failures.push(if validation_tool_name == tool_names::APPLY_PATCH {
+                crate::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION.to_string()
+            } else {
+                missing_required_arg_failure(key)
+            });
         }
     }
     if validation_tool_name == tool_names::UNIFIED_EXEC {
@@ -696,6 +699,17 @@ pub(super) fn preflight_validate_resolved_call(
         let command_value = crate::tools::command_args::normalized_command_value(validation_args.as_ref())
             .ok()
             .flatten();
+        let collision_command = match &command_value {
+            Some(Value::String(command)) => Some(command.as_str()),
+            Some(Value::Array(command)) => command.first().and_then(Value::as_str),
+            _ => None,
+        };
+        if collision_command.is_some_and(crate::tools::names::is_apply_patch_shell_collision_command) {
+            failures.push(format!(
+                "apply_patch is a tool, not a shell executable. {}",
+                crate::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION
+            ));
+        }
         let validation_result = match command_value {
             Some(Value::Array(_)) => crate::tools::command_args::command_words(validation_args.as_ref())
                 .ok()
@@ -740,7 +754,16 @@ pub(super) fn preflight_validate_resolved_call(
             let hint_msg = condensed_schema_hint(schema)
                 .map(|hint| format!("\nExpected schema (required fields and types): {hint}"))
                 .unwrap_or_default();
-            return Err(anyhow!("Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg}"));
+            let patch_hint = if validation_tool_name == tool_names::APPLY_PATCH {
+                crate::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION
+            } else if validation_tool_name == tool_names::TASK_TRACKER
+                && crate::tools::handlers::task_tracker::is_task_tracker_shape_error(&error_msg)
+            {
+                crate::tools::handlers::task_tracker::TASK_TRACKER_ARGUMENT_CORRECTION
+            } else {
+                ""
+            };
+            return Err(anyhow!("Invalid arguments for tool '{routed_tool_name}': {error_msg}{hint_msg} {patch_hint}"));
         }
     }
     if validation_tool_name == tool_names::CODE_SEARCH {
@@ -760,11 +783,13 @@ pub(super) fn preflight_validate_resolved_call(
     Ok(ToolPreflightOutcome {
         normalized_tool_name: routed_tool_name.clone(),
         readonly_classification,
-        parallel_safe_after_preflight: crate::tools::tool_intent::is_parallel_safe_call(
+        parallel_safe_after_preflight: crate::tools::tool_intent::is_parallel_safe_call_with_intent(
             &validation_tool_name,
             validation_args.as_ref(),
+            &intent,
         ),
         effective_args: effective_args.unwrap_or_else(|| validation_args.into_owned()),
+        intent,
     })
 }
 
@@ -773,10 +798,11 @@ mod tests {
     use super::super::ToolExecutionRequest;
     use super::super::assembly::public_tool_name_candidates;
     use super::{
-        ToolRegistry, coerce_string_to_schema_type_in_place, configured_file_operation_max_payload_bytes,
+        DispatchMode, ToolRegistry, coerce_string_to_schema_type_in_place, configured_file_operation_max_payload_bytes,
         enforce_file_operation_payload_limit, is_missing_required_arg, normalize_tool_args,
         parse_file_operation_max_payload_bytes, parse_string_as_schema_type, preflight_validate_call,
-        preflight_validate_resolved_call, public_exec_validation_args,
+        preflight_validate_resolved_call, public_exec_validation_args, resolve_dispatch_target,
+        resolve_internal_dispatch_tool,
     };
     use crate::config::constants::tools as tool_names;
     use crate::tools::command_args::parse_indexed_command_parts;
@@ -789,6 +815,57 @@ mod tests {
         let temp = tempfile::tempdir().expect("temp workspace");
         let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
         (temp, registry)
+    }
+
+    #[tokio::test]
+    async fn internal_dispatch_preserves_normalization_and_candidate_order() {
+        let (_temp, registry) = new_test_registry().await;
+        for name in [
+            "read_file",
+            "  ReAd_FiLe  ",
+            "functions.ReAd_FiLe",
+            "tools.read-file",
+            "READ FILE",
+            "unknown:READ_FILE",
+        ] {
+            assert_eq!(
+                resolve_internal_dispatch_tool(&registry, name).as_deref(),
+                Some(tool_names::READ_FILE),
+                "{name}"
+            );
+            assert_eq!(resolve_dispatch_target(&registry, name, DispatchMode::Harness).unwrap(), tool_names::READ_FILE);
+            assert!(resolve_dispatch_target(&registry, name, DispatchMode::ModelPublic).is_err(), "{name}");
+        }
+        for name in [tool_names::WRITE_FILE, tool_names::EDIT_FILE, tool_names::LIST_FILES] {
+            assert_eq!(resolve_internal_dispatch_tool(&registry, name).as_deref(), Some(name));
+        }
+        assert_eq!(
+            resolve_internal_dispatch_tool(&registry, "read_file<|channel|>WRITE_FILE").as_deref(),
+            Some(tool_names::WRITE_FILE)
+        );
+        assert_eq!(
+            resolve_internal_dispatch_tool(&registry, "read_file<|channel|>write_file:list_files").as_deref(),
+            Some(tool_names::READ_FILE)
+        );
+    }
+
+    #[tokio::test]
+    async fn internal_dispatch_rejects_hidden_tools_outside_allowlist_and_near_misses() {
+        let (_temp, registry) = new_test_registry().await;
+        assert!(registry.inventory.registration_for(tool_names::GET_ERRORS).is_some());
+        for name in [
+            "",
+            " \t\u{2003}",
+            "GET_ERRORS",
+            "functions.get_errors",
+            "read_files",
+            "repo_browser.read_file",
+            "READ_FİLE",
+        ] {
+            assert!(resolve_internal_dispatch_tool(&registry, name).is_none(), "{name:?}");
+            assert!(resolve_dispatch_target(&registry, name, DispatchMode::Harness).is_err(), "{name:?}");
+            assert!(resolve_dispatch_target(&registry, name, DispatchMode::ModelPublic).is_err(), "{name:?}");
+        }
     }
 
     #[test]
@@ -813,7 +890,7 @@ mod tests {
     #[test]
     fn normalize_leaves_non_rewritable_pipelines_untouched() {
         for command in [
-            "cargo check | grep error",
+            "cargo check | grep error; true",
             "cargo check && rm -rf target | tail -5",
             "cargo check | tail -5; rm foo.txt",
             "rg -n 'pattern' src | head -20",
@@ -1096,12 +1173,12 @@ mod tests {
 
     #[test]
     fn apply_patch_required_arg_accepts_input_alias() {
-        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!({"input": ""}), "patch"));
+        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!({"input": ""}), "input"));
     }
 
     #[test]
     fn apply_patch_required_arg_accepts_raw_string_payload() {
-        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!(""), "patch"));
+        assert!(!is_missing_required_arg(tool_names::APPLY_PATCH, &json!(""), "input"));
     }
 
     #[test]
@@ -1269,6 +1346,25 @@ mod tests {
         assert_eq!(result.effective_args["tty"], true);
         assert!(result.readonly_classification);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn planning_preflight_rejects_mutating_suffixes_and_conflicting_raw_aliases() {
+        let (_temp, registry) = new_test_registry().await;
+        registry.enable_planning();
+        for args in [
+            json!({"cmd":"cargo check | sort", "args":["-o", "changed.txt"]}),
+            json!({"cmd":"cat README.md", "raw_command":"printf changed > changed.txt"}),
+        ] {
+            let error = preflight_validate_call(&registry, tool_names::EXEC_COMMAND, &args)
+                .expect_err("mutating invocation cannot acquire planning admission");
+            assert_eq!(error.to_string(), super::agent_execution::PLANNING_DENIED_CONTEXT);
+        }
+        let safe =
+            preflight_validate_call(&registry, tool_names::EXEC_COMMAND, &json!({"cmd":"sort", "args":["README.md"]}))
+                .expect("safe appended operands remain readable in planning");
+        assert!(safe.readonly_classification);
+        assert!(safe.parallel_safe_after_preflight);
     }
 
     #[tokio::test]

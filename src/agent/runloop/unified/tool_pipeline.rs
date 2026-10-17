@@ -18,6 +18,15 @@ pub(super) struct CancellationTokens {
     pub notify: Arc<Notify>,
 }
 
+impl CancellationTokens {
+    pub(super) fn new(state: &Arc<CtrlCState>, notify: &Arc<Notify>) -> Self {
+        Self {
+            state: Arc::clone(state),
+            notify: Arc::clone(notify),
+        }
+    }
+}
+
 mod execution;
 pub(crate) mod execution_attempts;
 mod execution_events;
@@ -35,7 +44,9 @@ mod timeout;
 pub(crate) mod validation;
 
 pub(crate) use execution::{run_tool_call, run_tool_call_with_args};
-pub(crate) use execution_events::emit_tool_outcome_observation;
+pub(crate) use execution_events::{
+    emit_tool_completion_for_status, emit_tool_outcome_observation, emit_tool_start_if_needed,
+};
 pub(crate) use execution_run::exec_settlement_mode_for_tool_call;
 pub(crate) use execution_run::resolve_harness_item_identity;
 pub(crate) use execution_runtime::execute_prevalidated_read_only_with_cache;

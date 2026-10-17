@@ -34,6 +34,43 @@ pub struct FileChange {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum BridgeRequest {
+    /// Query canonical retained execution facts after authentication.
+    #[serde(rename = "explanation.get")]
+    ExplanationGet {
+        /// Response correlation identifier.
+        request_id: String,
+        /// In-memory pairing token.
+        token: String,
+        /// Latest task or retained session.
+        #[serde(default)]
+        scope: vtcode_memory::explanation::ExplanationScope,
+        /// Collection page index.
+        #[serde(default)]
+        offset: usize,
+    },
+    /// Resolve one content-addressed, paged canonical source.
+    #[serde(rename = "explanation.evidence")]
+    ExplanationEvidence {
+        /// Response correlation identifier.
+        request_id: String,
+        /// In-memory pairing token.
+        token: String,
+        /// Content-addressed canonical source.
+        reference: vtcode_memory::explanation::EvidenceRef,
+        /// UTF-8 evidence page offset.
+        #[serde(default)]
+        offset: usize,
+    },
+    /// Focus evidence in the terminal review surface without runtime execution.
+    #[serde(rename = "explanation.navigate")]
+    ExplanationNavigate {
+        /// Response correlation identifier.
+        request_id: String,
+        /// In-memory pairing token.
+        token: String,
+        /// Content-addressed canonical source.
+        reference: vtcode_memory::explanation::EvidenceRef,
+    },
     /// Consume the one-time pairing code.
     #[serde(rename = "pair")]
     Pair {
@@ -147,6 +184,9 @@ impl BridgeRequest {
     /// Returns the request correlation identifier.
     pub fn request_id(&self) -> &str {
         match self {
+            Self::ExplanationGet { request_id, .. }
+            | Self::ExplanationEvidence { request_id, .. }
+            | Self::ExplanationNavigate { request_id, .. } => request_id,
             Self::Pair { request_id, .. }
             | Self::Status { request_id, .. }
             | Self::ListFiles { request_id, .. }
@@ -163,6 +203,9 @@ impl BridgeRequest {
     /// Returns the session token for authenticated requests.
     pub fn token(&self) -> Option<&str> {
         match self {
+            Self::ExplanationGet { token, .. }
+            | Self::ExplanationEvidence { token, .. }
+            | Self::ExplanationNavigate { token, .. } => Some(token),
             Self::Pair { .. } => None,
             Self::Status { token, .. }
             | Self::ListFiles { token, .. }

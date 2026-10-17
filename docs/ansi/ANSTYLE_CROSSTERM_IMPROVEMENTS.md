@@ -2,9 +2,10 @@
 
 ## Overview
 
-This document outlines improvements made to VT Code's use of `anstyle-crossterm`, a bridge library that adapts generic `anstyle` styling to `crossterm` (and thus `ratatui` TUI) compatibility.
+This document outlines improvements made to VT Code's use of `anstyle-crossterm`, a bridge library that adapts generic
+`anstyle` styling to `crossterm` (and thus `ratatui` TUI) compatibility.
 
-**Documentation**: https://docs.rs/anstyle-crossterm/latest/anstyle_crossterm/
+**Documentation**: <https://docs.rs/anstyle-crossterm/latest/anstyle_crossterm/>
 
 ## Key Improvements
 
@@ -57,18 +58,18 @@ let style = full_style(
 
 ### 2. Improved Documentation
 
--   Added comprehensive module-level documentation explaining the anstyle-crossterm adapter pattern
--   Clarified the conversion flow: `anstyle` → `anstyle-crossterm` → `crossterm` → `ratatui`
--   Added examples showing how anstyle-crossterm maps standard colors to indexed variants
--   Documented attribute mapping limitations (some crossterm attributes have no ratatui equivalent)
+- Added comprehensive module-level documentation explaining the anstyle-crossterm adapter pattern
+- Clarified the conversion flow: `anstyle` → `anstyle-crossterm` → `crossterm` → `ratatui`
+- Added examples showing how anstyle-crossterm maps standard colors to indexed variants
+- Documented attribute mapping limitations (some crossterm attributes have no ratatui equivalent)
 
 ### 3. Enhanced Attribute Handling
 
 Improved `apply_attributes()` function with:
 
--   Better inline documentation explaining the mapping
--   Explicit note about unmapped attributes (Hidden, OverLined)
--   Clearer comments on attribute support across the library stack
+- Better inline documentation explaining the mapping
+- Explicit note about unmapped attributes (Hidden, OverLined)
+- Clearer comments on attribute support across the library stack
 
 ### 4. Comprehensive Test Coverage
 
@@ -93,9 +94,9 @@ fn test_helper_full_style_no_effects() { /* ... */ }
 
 All tests validate:
 
--   Correct color mapping through anstyle-crossterm
--   Proper effect application
--   Edge cases (partial styles, no effects, etc.)
+- Correct color mapping through anstyle-crossterm
+- Proper effect application
+- Edge cases (partial styles, no effects, etc.)
 
 ## Color Mapping Behavior
 
@@ -116,7 +117,7 @@ This ensures consistent rendering across different terminal color schemes.
 
 ## Architecture Flow
 
-```
+```text
 
    anstyle Style       Generic styling (CLI-agnostic)
   (Color + Effects)
@@ -195,15 +196,15 @@ cargo test -p vtcode-core --lib utils::ratatui_styles
 
 **Result**: 20 tests passed
 
--   14 original tests (color conversions, effects, combinations)
--   6 new tests (new helper functions, edge cases)
+- 14 original tests (color conversions, effects, combinations)
+- 6 new tests (new helper functions, edge cases)
 
 ## Performance Considerations
 
--   No runtime overhead: All conversions are synchronous
--   anstyle-crossterm is stateless: No caching or allocation needed
--   Lazy evaluation: Styles are only converted when needed
--   Zero-copy for most operations (except RGB color components)
+- No runtime overhead: All conversions are synchronous
+- anstyle-crossterm is stateless: No caching or allocation needed
+- Lazy evaluation: Styles are only converted when needed
+- Zero-copy for most operations (except RGB color components)
 
 ## Future Improvements
 
@@ -214,13 +215,13 @@ cargo test -p vtcode-core --lib utils::ratatui_styles
 
 ## Related Files
 
--   **Main integration**: `crates/codegen/vtcode-core/src/utils/ratatui_styles.rs`
--   **CLI rendering**: `crates/codegen/vtcode-core/src/utils/ansi.rs` (uses `AnsiRenderer`)
--   **Documentation**: `docs/styling_integration.md`
+- **Main integration**: `crates/codegen/vtcode-core/src/utils/ratatui_styles.rs`
+- **CLI rendering**: `crates/codegen/vtcode-core/src/utils/ansi.rs` (uses `AnsiRenderer`)
+- **Documentation**: `docs/styling_integration.md`
 
 ## References
 
--   [anstyle crate](https://docs.rs/anstyle/)
--   [anstyle-crossterm crate](https://docs.rs/anstyle-crossterm/)
--   [crossterm crate](https://docs.rs/crossterm/)
--   [ratatui crate](https://docs.rs/ratatui/)
+- [anstyle crate](https://docs.rs/anstyle/)
+- [anstyle-crossterm crate](https://docs.rs/anstyle-crossterm/)
+- [crossterm crate](https://docs.rs/crossterm/)
+- [ratatui crate](https://docs.rs/ratatui/)

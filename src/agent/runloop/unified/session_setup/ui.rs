@@ -20,7 +20,6 @@ use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::unified::context_manager;
 use crate::agent::runloop::unified::reasoning::{model_supports_reasoning, resolve_reasoning_visibility};
-use crate::agent::runloop::unified::session_setup::ide_context::IdeContextBridge;
 use crate::agent::runloop::unified::session_setup::spawn_editor_open_coordinator;
 use crate::agent::runloop::unified::turn::utils::{append_additional_context, render_hook_messages};
 use anyhow::Result;
@@ -45,9 +44,10 @@ use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
 use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, SlashCommandItem};
 
-pub(crate) use self::header_context::apply_ide_context_snapshot;
 use self::header_context::{HeaderContextInit, initialize_header_context, maybe_render_system_prompt_budget_warning};
 pub(crate) use self::local_agents::refresh_local_agents;
+#[cfg(test)]
+pub(crate) use self::local_agents::summarize_thread_event_preview;
 use self::resume_render::render_resume_state_if_present;
 pub(crate) use self::resume_render::{build_structured_resume_lines, render_resume_lines};
 
@@ -103,8 +103,9 @@ pub(crate) async fn initialize_session_ui(
     session_trigger: SessionStartTrigger,
     resume_state: Option<&ResumeSession>,
     shell: SessionShell,
+    exit_context: crate::agent::runloop::unified::stop_requests::InitializationExitContext<'_>,
     options: SessionUiLaunchOptions,
-) -> Result<SessionUISetup> {
+) -> Result<Option<SessionUISetup>> {
     let SessionUiLaunchOptions {
         session_archive,
         full_auto,
@@ -127,11 +128,35 @@ pub(crate) async fn initialize_session_ui(
         skip_confirmations,
         legacy_key_bindings,
     } = shell;
+    macro_rules! ui_wait {
+        ($future:expr) => {{
+            match crate::agent::runloop::unified::stop_requests::await_initialization(
+                &ctrl_c_state,
+                &ctrl_c_notify,
+                $future,
+            )
+            .await
+            {
+                Some(value) => value,
+                None => {
+                    crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
+                        &handle,
+                        &mut session,
+                        &ctrl_c_state,
+                        exit_context,
+                    )
+                    .await;
+                    return Ok(None);
+                }
+            }
+        }};
+    }
+    let initialization_progress = handle.begin_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     session_state.session_bootstrap.legacy_key_bindings = legacy_key_bindings;
     // Embedded callers without the CLI bootstrap snapshot: load dot-config
     // after the shell is painted so first paint never waits on disk I/O.
     if session_state.session_bootstrap.legacy_key_bindings.is_empty()
-        && let Some(dot) = vtcode_core::utils::dot_config::load_user_config().await.ok()
+        && let Some(dot) = ui_wait!(vtcode_core::utils::dot_config::load_user_config()).ok()
     {
         session_state.session_bootstrap.legacy_key_bindings = dot
             .preferences
@@ -193,7 +218,7 @@ pub(crate) async fn initialize_session_ui(
     // exec manager and continue wiring session state into the live session.
     // Drain the palette probe after spawn so a silent terminal cannot delay
     // the first frame. Theme/palette settle here before the first model turn.
-    crate::agent::probe::await_terminal_palette_probe().await;
+    ui_wait!(crate::agent::probe::await_terminal_palette_probe());
 
     set_global_terminal_focused(true);
     if skip_confirmations {
@@ -244,13 +269,15 @@ pub(crate) async fn initialize_session_ui(
         })
         .unwrap_or(true);
     session.set_color_scheme_auto(color_scheme_auto);
+    handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
+        enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_status.enabled),
+    });
     let (editor_open_sender, editor_open_coordinator_task_guard) =
         spawn_editor_open_coordinator(config.workspace.clone(), &handle);
     editor_open_dispatcher.set_sender(editor_open_sender.clone());
     let highlight_config = vt_cfg.as_ref().map(|cfg| cfg.syntax_highlighting.clone()).unwrap_or_default();
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
-    let mut ide_context_bridge = Some(IdeContextBridge::new(config.workspace.clone()));
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
     let supports_reasoning = model_supports_reasoning(&*session_state.provider_client, &config.model);
     renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
@@ -268,8 +295,21 @@ pub(crate) async fn initialize_session_ui(
     handle_for_palette.configure_file_palette(
         workspace_for_palette.clone(),
         vtcode_ui::tui::core_tui::app::session::file_palette::DirLister::new({
-            let ws = workspace_for_palette.clone();
-            move |dir| vtcode_core::SimpleIndexer::new(ws.clone()).discover_dir_entries(dir)
+            // Build the indexer once: it is stateless for `discover_dir_entries`,
+            // and constructing it per directory would rebuild the excluded-dir
+            // config on every palette navigation.
+            let indexer = vtcode_core::SimpleIndexer::new(workspace_for_palette.clone());
+            move |dir| {
+                // Symlink target and kind metadata are captured once per child
+                // here, so the render path never touches the filesystem.
+                indexer
+                    .discover_dir_entries(dir)
+                    .into_iter()
+                    .map(|(path, is_dir)| {
+                        vtcode_ui::tui::core_tui::app::session::file_palette::DirEntryInfo::from_path(path, is_dir)
+                    })
+                    .collect()
+            }
         }),
     );
     let workspace_for_search = config.workspace.clone();
@@ -281,11 +321,12 @@ pub(crate) async fn initialize_session_ui(
         .await
         {
             Ok(files) => {
-                if !files.is_empty() {
-                    handle_for_search.set_file_palette_search_index(files);
-                } else {
+                if files.is_empty() {
                     tracing::debug!("No files found in workspace for file palette");
                 }
+                // Deliver even an empty result so the picker can distinguish a
+                // finished (empty/fully-ignored) workspace from still indexing.
+                handle_for_search.set_file_palette_search_index(files);
             }
             Err(err) => {
                 tracing::warn!("Failed to load workspace files for file palette: {}", err);
@@ -316,16 +357,22 @@ pub(crate) async fn initialize_session_ui(
     checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
     checkpoint_config.max_snapshots = config.checkpointing_max_snapshots;
     checkpoint_config.max_age_days = config.checkpointing_max_age_days;
-    let checkpoint_manager = match vtcode_core::core::agent::snapshots::SnapshotManager::new(checkpoint_config) {
-        Ok(manager) => Some(manager),
-        Err(err) => {
+    let checkpoint_manager = match ui_wait!(tokio::task::spawn_blocking(move || {
+        vtcode_core::core::agent::snapshots::SnapshotManager::new(checkpoint_config)
+    })) {
+        Ok(Ok(manager)) => Some(manager),
+        Ok(Err(err)) => {
             warn!("Failed to initialize checkpoint manager: {}", err);
+            None
+        }
+        Err(error) => {
+            warn!(%error, "Checkpoint initialization worker failed");
             None
         }
     };
 
     if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
-        hooks.update_transcript_path(Some(archive.path().to_path_buf())).await;
+        ui_wait!(hooks.update_transcript_path(Some(archive.path().to_path_buf())));
     }
 
     // Workspace-controlled lifecycle hooks never execute without explicit
@@ -337,14 +384,14 @@ pub(crate) async fn initialize_session_ui(
         // Approval / skip notices stay on the first-frame path. Executing
         // session-start hooks waits until after hydration so they observe the
         // fully initialized tool registry (`run_session_start_hooks`).
-        if hooks.workspace_hooks_need_approval().await {
+        if ui_wait!(hooks.workspace_hooks_need_approval()) {
             let digest = hooks.command_digest().to_string();
             let pre_approved = matches!(
-                vtcode_core::load_lifecycle_hook_approval(&config.workspace).await,
+                ui_wait!(vtcode_core::load_lifecycle_hook_approval(&config.workspace)),
                 Ok(Some(record)) if record.config_digest == digest
             );
             if pre_approved {
-                hooks.approve_workspace_hooks().await;
+                ui_wait!(hooks.approve_workspace_hooks());
             } else if full_auto || skip_confirmations {
                 renderer.line(
                     MessageStyle::Warning,
@@ -363,13 +410,15 @@ pub(crate) async fn initialize_session_ui(
                 .await
                 {
                     Ok(hook_approval::HookApprovalDecision::Approved) => {
-                        if let Err(err) = vtcode_core::update_lifecycle_hook_approval(&config.workspace, digest).await {
+                        if let Err(err) =
+                            ui_wait!(vtcode_core::update_lifecycle_hook_approval(&config.workspace, digest))
+                        {
                             tracing::warn!(
                                 error = %err,
                                 "Failed to persist workspace lifecycle hook approval; approval applies to this session only"
                             );
                         }
-                        hooks.approve_workspace_hooks().await;
+                        ui_wait!(hooks.approve_workspace_hooks());
                     }
                     Ok(hook_approval::HookApprovalDecision::Denied) => {
                         renderer.line(
@@ -392,11 +441,9 @@ pub(crate) async fn initialize_session_ui(
 
     handle.set_placeholder(default_placeholder.clone());
 
-    let mut header_context = initialize_header_context(
+    let mut header_context = ui_wait!(initialize_header_context(
         &mut renderer,
         &handle,
-        &mut context_manager,
-        &mut ide_context_bridge,
         HeaderContextInit {
             config,
             vt_cfg,
@@ -404,8 +451,7 @@ pub(crate) async fn initialize_session_ui(
             provider_client: &*session_state.provider_client,
             header_provider_label,
         },
-    )
-    .await?;
+    ))?;
     let primary_agent_name = session_state.active_primary_agent.active().display_name.clone();
     let primary_agent_color = session_state
         .active_primary_agent
@@ -457,18 +503,31 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    let next_checkpoint_turn = checkpoint_manager
-        .as_ref()
-        .and_then(|manager| manager.next_turn_number().ok())
-        .unwrap_or(1);
+    let next_checkpoint_turn = if let Some(manager) = checkpoint_manager.as_ref() {
+        let manager = manager.clone();
+        match ui_wait!(tokio::task::spawn_blocking(move || manager.next_turn_number())) {
+            Ok(Ok(turn)) => turn,
+            Ok(Err(error)) => {
+                warn!(%error, "Failed to inspect checkpoint turn numbers");
+                1
+            }
+            Err(error) => {
+                warn!(%error, "Checkpoint enumeration worker failed");
+                1
+            }
+        }
+    } else {
+        1
+    };
 
-    Ok(SessionUISetup {
+    ui_wait!(async {});
+    initialization_progress.transfer();
+    Ok(Some(SessionUISetup {
         settings_task_guard,
         renderer,
         session,
         handle,
         header_context,
-        ide_context_bridge,
         ctrl_c_state,
         ctrl_c_notify,
         input_activity_counter,
@@ -490,7 +549,7 @@ pub(crate) async fn initialize_session_ui(
         editor_open_coordinator_task_guard,
         exec_sessions: Some(exec_sessions),
         pty_counter: Some(pty_counter),
-    })
+    }))
 }
 
 /// Shared agent-palette + background-refresh wiring used both when a

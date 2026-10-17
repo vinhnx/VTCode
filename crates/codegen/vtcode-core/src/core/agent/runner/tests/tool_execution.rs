@@ -131,6 +131,26 @@ async fn duplicate_parallel_tool_names_are_split_into_safe_batches() {
         }),
         "unexpected tool outputs: {tool_outputs:?}"
     );
+    let events = recorder.into_events();
+    for (call_id, expected_output) in [("call-echo-a", "hello"), ("call-echo-b", "world")] {
+        let call_item_id = completed_tool_invocation_item_id(&events, call_id).expect("completed invocation");
+        assert_eq!(completed_tool_output_count(&events, call_id, ToolCallStatus::Completed, &call_item_id), 1);
+        let output = events
+            .iter()
+            .find_map(|event| match event {
+                ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
+                    ThreadItemDetails::ToolOutput(output) if output.tool_call_id.as_deref() == Some(call_id) => {
+                        Some(output)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .expect("canonical output");
+        assert_eq!(output.output.lines().next(), Some(expected_output));
+        assert!(output.output.contains("Structured output:"));
+        assert_eq!(output.exit_code, Some(0));
+    }
 }
 
 #[tokio::test]

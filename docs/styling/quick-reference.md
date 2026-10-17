@@ -7,21 +7,25 @@ Fast lookup for `anstyle-git` and `anstyle-ls` syntax and usage.
 Parse Git color configuration strings.
 
 ### Supported Keywords
-```
+
+```text
 bold, dim, italic, underline, reverse, strikethrough
 ```
 
 ### Supported Colors (Named)
-```
+
+```text
 black, red, green, yellow, blue, magenta, cyan, white
 ```
 
 ### Supported Colors (Hex)
-```
+
+```text
 #RRGGBB (e.g., #0000ee for blue)
 ```
 
 ### Syntax Rules
+
 - Whitespace-separated words
 - First color = foreground, second color = background
 - Effects can appear anywhere
@@ -58,7 +62,7 @@ Parse LS_COLORS environment variable format.
 
 ### ANSI Code Sequences (Semicolon-Separated)
 
-```
+```text
 01 = bold
 02 = dim (faint)
 03 = italic
@@ -75,7 +79,7 @@ Parse LS_COLORS environment variable format.
 
 ### File Type Keys (from LS_COLORS env var)
 
-```
+```text
 di = directory
 ln = symlink
 so = socket
@@ -93,7 +97,7 @@ st = sticky dir
 
 ### LS_COLORS Format
 
-```
+```text
 KEY=CODE:KEY=CODE:...
 ```
 
@@ -135,7 +139,7 @@ From `.git/config`:
 
 [color "diff"]
     meta = bold yellow
-    
+
 [color "branch"]
     current = green bold
     local = green
@@ -143,6 +147,7 @@ From `.git/config`:
 ```
 
 Supported style values:
+
 - `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough` (modifiers)
 - `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white` (colors)
 - `bright` prefix for bright colors
@@ -305,11 +310,13 @@ match anstyle_git::parse(test_input) {
 ## Compatibility Notes
 
 ### Platforms
+
 - **Linux/macOS**: Full LS_COLORS support
 - **Windows**: LS_COLORS support optional (may not be set)
 - **Git**: Color config available on all platforms
 
 ### Terminal Support
+
 - **Bold**: Universal
 - **Italic**: Varies (TTY-dependent)
 - **Underline**: Most terminals
@@ -318,6 +325,7 @@ match anstyle_git::parse(test_input) {
 - **Dim**: Varies (may show as bright on some terminals)
 
 ### Graceful Degradation
+
 If a terminal doesn't support an effect, ratatui will safely ignore it (no error).
 
 ---

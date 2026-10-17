@@ -7,7 +7,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use tokio::fs::File;
 use tokio::io::BufReader;
-use vtcode_commons::diff_paths::looks_like_diff_content;
 
 use crate::tools::file_ops::read_bounded_line;
 use crate::tools::file_ops::read_byte_range;
@@ -17,8 +16,10 @@ use crate::tools::traits::Tool;
 use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
 
 mod batch;
+mod lines;
 
 pub use batch::{BatchProgress, BatchReadArgs, BatchReadRequest, BatchReadResult, RangeResult};
+use lines::{condense_collected_lines, format_line, range_result_from_lines, trim_empty_lines};
 
 pub struct ReadFileHandler;
 
@@ -73,6 +74,17 @@ pub struct ReadFileArgs {
     /// Number of bytes to read. Accepts alias `length`. When present with `offset_bytes`, enables byte-range read mode.
     #[serde(default, alias = "length", deserialize_with = "deserialize_opt_maybe_quoted")]
     pub page_size_bytes: Option<usize>,
+}
+
+impl ReadFileArgs {
+    /// Effective line request before the absolute cap is applied.
+    pub(crate) fn effective_line_limit(&self) -> usize {
+        if matches!(self.mode, ReadMode::Slice) && self.max_tokens.is_none() {
+            self.limit.max(MIN_BATCH_LIMIT)
+        } else {
+            self.limit
+        }
+    }
 }
 
 /// A range specification for reading.
@@ -235,13 +247,14 @@ impl ReadFileHandler {
     }
 
     pub(crate) async fn handle_detailed(&self, args: ReadFileArgs) -> Result<ReadFileOutcome> {
+        let effective_limit = args.effective_line_limit();
         let ReadFileArgs {
             file_path,
             offset,
             limit,
             mode,
             indentation,
-            max_tokens,
+            max_tokens: _,
             condense,
             offset_bytes,
             page_size_bytes,
@@ -262,12 +275,6 @@ impl ReadFileHandler {
         anyhow::ensure!(limit > 0, "limit must be greater than zero");
 
         let absolute_max = crate::tools::read_limits::absolute_line_cap();
-
-        let effective_limit = if matches!(mode, ReadMode::Slice) && max_tokens.is_none() && limit < MIN_BATCH_LIMIT {
-            MIN_BATCH_LIMIT
-        } else {
-            limit
-        };
 
         // Absolute hard cap: no single line-based read may return more than
         // `absolute_max` lines, even when the caller requests a larger `limit`.
@@ -549,7 +556,9 @@ mod slice {
             collected.push(line);
         }
 
-        if seen < offset {
+        // A successful empty read is necessary to inspect an existing empty
+        // file before its first edit. Higher offsets remain out of bounds.
+        if seen < offset && !(seen == 0 && offset == 1) {
             anyhow::bail!("offset exceeds file length");
         }
 
@@ -616,7 +625,7 @@ mod slice {
             .into_iter()
             .zip(collected)
             .map(|((offset, end), lines)| {
-                if line_number < offset {
+                if line_number < offset && !(line_number == 0 && offset == 1) {
                     scan_error
                         .is_none()
                         .then_some(Err(anyhow::anyhow!("offset exceeds file length")))
@@ -647,25 +656,6 @@ mod slice {
         }
 
         Ok(Some((format_line(buffer), truncated)))
-    }
-}
-
-fn range_result_from_lines(offset: usize, mut collected: Vec<String>, line_truncated: bool) -> RangeResult {
-    let original_len = collected.len();
-    let is_paginated = offset > 1;
-    let (condensed, omitted) = if is_paginated {
-        (false, 0)
-    } else {
-        condense_for_batch(&mut collected)
-    };
-
-    RangeResult {
-        offset,
-        lines_read: original_len,
-        condensed,
-        omitted_lines: (omitted > 0).then_some(omitted),
-        line_truncated,
-        content: collected.join("\n"),
     }
 }
 
@@ -865,112 +855,6 @@ mod indentation {
     }
 }
 
-fn format_line(bytes: &[u8]) -> String {
-    let decoded = String::from_utf8_lossy(bytes);
-    if decoded.len() > MAX_LINE_LENGTH {
-        take_bytes_at_char_boundary(&decoded, MAX_LINE_LENGTH).to_string()
-    } else {
-        decoded.into_owned()
-    }
-}
-
-fn take_bytes_at_char_boundary(s: &str, limit: usize) -> &str {
-    if limit >= s.len() {
-        return s;
-    }
-    let mut i = limit;
-    while i > 0 && !s.is_char_boundary(i) {
-        i -= 1;
-    }
-    &s[..i]
-}
-
-fn trim_empty_lines(out: &mut VecDeque<&LineRecord>) {
-    while matches!(out.front(), Some(line) if line.raw.trim().is_empty()) {
-        out.pop_front();
-    }
-    while matches!(out.back(), Some(line) if line.raw.trim().is_empty()) {
-        out.pop_back();
-    }
-}
-
-fn condense_collected_lines(lines: &mut Vec<String>) {
-    if looks_like_diff_lines(lines) {
-        return;
-    }
-    const CONDENSED_THRESHOLD: usize = 200;
-    const HEAD_LINES: usize = 80;
-    const TAIL_LINES: usize = 40;
-
-    // If under threshold, return as-is
-    if lines.len() <= CONDENSED_THRESHOLD {
-        return;
-    }
-
-    // Build condensed output: head + omission indicator + tail
-    let head_count = HEAD_LINES.min(lines.len());
-    let tail_count = TAIL_LINES.min(lines.len() - head_count);
-    let omitted_count = lines.len() - head_count - tail_count;
-    let total_lines = lines.len();
-
-    // Take head lines
-    let mut condensed: Vec<String> = lines[..head_count].to_vec();
-
-    // Add omission indicator with actionable guidance
-    condensed.push(format!(
-        "… [+{} lines omitted ({} total). To read omitted ranges: file_operation offset={} limit={}]",
-        omitted_count,
-        total_lines,
-        head_count + 1,
-        omitted_count
-    ));
-
-    // Add tail lines
-    let tail_start = lines.len() - tail_count;
-    condensed.extend_from_slice(&lines[tail_start..]);
-
-    // Replace original with condensed
-    *lines = condensed;
-}
-
-/// Condense lines for batch mode with stricter threshold.
-/// Returns (was_condensed, omitted_count).
-fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
-    if looks_like_diff_lines(lines) {
-        return (false, 0);
-    }
-    const HEAD_LINES: usize = 15;
-    const TAIL_LINES: usize = 5;
-
-    if lines.len() <= BATCH_CONDENSED_THRESHOLD {
-        return (false, 0);
-    }
-
-    let head_count = HEAD_LINES.min(lines.len());
-    let tail_count = TAIL_LINES.min(lines.len() - head_count);
-    let omitted_count = lines.len() - head_count - tail_count;
-
-    let mut condensed: Vec<String> = lines[..head_count].to_vec();
-    condensed.push(format!(
-        "… [+{} lines omitted ({} total). To read omitted ranges: file_operation offset={} limit={}]",
-        omitted_count,
-        lines.len(),
-        head_count + 1,
-        omitted_count
-    ));
-
-    let tail_start = lines.len() - tail_count;
-    condensed.extend_from_slice(&lines[tail_start..]);
-
-    *lines = condensed;
-    (true, omitted_count)
-}
-
-fn looks_like_diff_lines(lines: &[String]) -> bool {
-    let joined = lines.join("\n");
-    looks_like_diff_content(&joined)
-}
-
 mod defaults {
     pub fn offset() -> usize {
         1
@@ -1016,6 +900,7 @@ mod tests {
         reason = "Intentional compatibility, platform, test, or API-shape suppression."
     )]
     use super::indentation::*;
+    use super::lines::condense_for_batch;
     use super::slice::*;
     use super::*;
     use std::io::Write;
@@ -1161,6 +1046,33 @@ mod tests {
             "default overview read must condense large output; got {} lines",
             content.lines().count()
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn empty_file_read_succeeds_at_start_and_rejects_higher_offsets() -> Result<()> {
+        let temp = NamedTempFile::new()?;
+        let result = read(temp.path(), 1, 2).await?;
+        assert!(result.lines.is_empty());
+        assert!(!result.has_more);
+        assert!(read(temp.path(), 2, 2).await.is_err());
+        let ranges = vec![
+            ReadRange {
+                offset: 1,
+                limit: 2,
+                mode: ReadMode::Slice,
+                indentation: None,
+            },
+            ReadRange {
+                offset: 2,
+                limit: 2,
+                mode: ReadMode::Slice,
+                indentation: None,
+            },
+        ];
+        let result = read_ranges(temp.path(), &ranges).await?;
+        assert!(result.results[0].as_ref().unwrap().as_ref().unwrap().lines.is_empty());
+        assert!(result.results[1].as_ref().unwrap().is_err());
         Ok(())
     }
 

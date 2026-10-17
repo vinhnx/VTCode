@@ -149,6 +149,7 @@ mod tests {
         assert!(inventory.has_tool(tools::CODE_SEARCH), "CODE_SEARCH should be registered");
         assert!(inventory.has_tool(tools::EXEC_COMMAND), "EXEC_COMMAND should be registered");
         assert!(inventory.has_tool(tools::SEARCH_TOOLS), "SEARCH_TOOLS should be registered");
+        assert!(inventory.has_tool(tools::RECORD_DECISION), "RECORD_DECISION should be registered");
     }
 
     #[tokio::test]

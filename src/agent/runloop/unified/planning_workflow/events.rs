@@ -55,6 +55,7 @@ pub(crate) async fn emit_plan_ready_events(
     ));
 
     let start_item = ThreadItem {
+        context: None,
         id: item_id.clone(),
         details: ThreadItemDetails::Plan(PlanItem { text: String::new() }),
     };
@@ -68,6 +69,7 @@ pub(crate) async fn emit_plan_ready_events(
     })));
 
     let completed_item = ThreadItem {
+        context: None,
         id: item_id,
         details: ThreadItemDetails::Plan(PlanItem { text: plan_text.to_owned() }),
     };

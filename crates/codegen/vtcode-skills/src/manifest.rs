@@ -424,11 +424,50 @@ Summarize the workflow, expected inputs, and the artifact or outcome this skill 
 **Input:** [Describe the request or files]
 **Output/Artifact:** [Describe the result this skill should produce]
 
+## Gotchas
+
+- List non-obvious facts the agent will get wrong without being told.
+- Example: soft-delete filters, ID aliases across systems, health-check quirks.
+
+## Output Format
+
+Use this shape for the final artifact; adapt sections as needed:
+
+```markdown
+# [Title]
+
+## Summary
+[One-paragraph overview]
+
+## Findings
+- Finding with supporting data
+
+## Next Steps
+1. Specific actionable step
+```
+
+For longer templates, store them under `assets/` and reference them here.
+
+## Checklist
+
+- [ ] Confirm trigger matches `description` routing
+- [ ] Load only needed `references/` files
+- [ ] Run bundled `scripts/` instead of retyping logic
+- [ ] Validate output before finishing
+
+## Validation
+
+1. Make the change or produce the artifact.
+2. Run validation: `python3 scripts/validate.py --help` (or skill-specific validator).
+3. If validation fails, fix and re-run. Only finish when validation passes.
+
 ## Notes
 
 - Keep SKILL.md concise; move deep detail into `references/` files.
 - If output needs a fixed shape, store a starter template or asset alongside the skill.
-"#
+- Prefer one default tool path with a brief escape hatch over a menu of options.
+- Describe reusable procedures, not single-instance answers.
+""#
     )
 }
 
@@ -586,6 +625,10 @@ description: Use this skill when: the user asks about PDFs
         assert!(template.contains("license: Apache-2.0"));
         assert!(template.contains("## Workflow"));
         assert!(template.contains("assets/`: reusable output skeletons"));
+        assert!(template.contains("## Gotchas"));
+        assert!(template.contains("## Output Format"));
+        assert!(template.contains("## Checklist"));
+        assert!(template.contains("## Validation"));
     }
 
     #[test]

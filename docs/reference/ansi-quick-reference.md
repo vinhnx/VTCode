@@ -4,7 +4,7 @@
 
 ### Colors (Foreground)
 
-```
+```text
 \x1b[30m  Black
 \x1b[31m  Red       ← Errors
 \x1b[32m  Green     ← Success
@@ -18,7 +18,7 @@
 
 ### Bright Colors (90-97)
 
-```
+```text
 \x1b[91m  Bright Red
 \x1b[92m  Bright Green
 \x1b[93m  Bright Yellow
@@ -30,7 +30,7 @@
 
 ### Text Styles
 
-```
+```text
 \x1b[0m   Reset all
 \x1b[1m   Bold
 \x1b[2m   Dim
@@ -45,7 +45,7 @@
 
 ### Cursor Control
 
-```
+```text
 \x1b[H      Home (0,0)
 \x1b[{n}A   Up n lines
 \x1b[{n}B   Down n lines
@@ -58,7 +58,7 @@
 
 ### Erase Functions
 
-```
+```text
 \x1b[2J   Clear entire screen
 \x1b[K    Clear from cursor to end of line
 \x1b[2K   Clear entire line
@@ -68,7 +68,7 @@
 
 ### Screen Modes
 
-```
+```text
 \x1b[?1049h  Enable alternative buffer
 \x1b[?1049l  Disable alternative buffer
 \x1b[?47h    Save screen
@@ -109,7 +109,7 @@ fn has_ansi(text: &str) -> bool {
 
 #### Cargo Output
 
-```
+```text
 \x1b[0m\x1b[1m\x1b[32m   Compiling\x1b[0m vtcode v0.45.6
      ^^^^^^^^^^^^^^ Bold Green "Compiling"
 
@@ -122,7 +122,7 @@ fn has_ansi(text: &str) -> bool {
 
 #### Git Output
 
-```
+```text
 \x1b[32m+\x1b[0m Added line
      ^^^^ Green "+"
 
@@ -160,6 +160,14 @@ r"\x1b\[38;5;(\d+)m"
 // Match RGB: ESC[38;2;{r};{g};{b}m
 r"\x1b\[38;2;(\d+);(\d+);(\d+)m"
 ```
+
+## Program Status Protocol
+
+Enable `[ui.program_status] enabled = true` to emit bounded OSC 7501 reports on the interactive TUI terminal.
+The sequence is `ESC ] 7501 ; state=working:id=<owned-id>:app=vtcode:title=<base64>:msg=<base64> ESC \`.
+Reports use complete replacements, generic labels, and session-owned opaque IDs. `clear` removes an owned record
+and its descendants; VT Code never clears the terminal root. See the
+[lifecycle and privacy guide](../development/terminal-program-status.md).
 
 ## Testing Helpers
 
@@ -286,7 +294,7 @@ for line in clean_output.lines() {
 
 ## Quick Reference Card
 
-```
+```text
 
  ANSI Quick Reference
 
@@ -306,6 +314,6 @@ for line in clean_output.lines() {
 
 ## See Also
 
--   `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
--   `docs/reference/ansi-in-vtcode.md` - VT Code-specific usage
--   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Implementation
+- `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
+- `docs/reference/ansi-in-vtcode.md` - VT Code-specific usage
+- `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Implementation

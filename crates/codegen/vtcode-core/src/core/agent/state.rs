@@ -208,7 +208,6 @@ const REQUEST_HISTORY_CANCELLATION_RESULT: &str =
 #[derive(Debug)]
 struct RequestToolBatch {
     assistant_index: usize,
-    call_ids: Vec<String>,
     matched_calls: Vec<bool>,
     result_indices: Vec<usize>,
 }
@@ -240,7 +239,7 @@ impl RequestHistoryAnalysis {
 
 fn analyze_request_history(messages: &[Message]) -> RequestHistoryAnalysis {
     let mut analysis = RequestHistoryAnalysis::default();
-    let mut calls_by_id: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+    let mut calls_by_id: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
 
     for (message_index, message) in messages.iter().enumerate() {
         if message.role != crate::llm::provider::MessageRole::Assistant {
@@ -252,18 +251,16 @@ fn analyze_request_history(messages: &[Message]) -> RequestHistoryAnalysis {
         };
 
         let batch_index = analysis.batches.len();
-        let call_ids = tool_calls.iter().map(|call| call.id.clone()).collect::<Vec<_>>();
-        let matched_calls = vec![false; call_ids.len()];
+        let matched_calls = vec![false; tool_calls.len()];
         analysis.batch_by_assistant_index.insert(message_index, batch_index);
         analysis.batches.push(RequestToolBatch {
             assistant_index: message_index,
-            call_ids,
             matched_calls,
             result_indices: Vec::new(),
         });
 
         for (call_index, call) in tool_calls.iter().enumerate() {
-            calls_by_id.entry(call.id.clone()).or_default().push((batch_index, call_index));
+            calls_by_id.entry(call.id.as_str()).or_default().push((batch_index, call_index));
         }
     }
 
@@ -329,7 +326,6 @@ pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<
         return messages;
     }
 
-    let messages = Arc::unwrap_or_clone(messages);
     let mut normalized = Vec::with_capacity(messages.len());
     for (message_index, message) in messages.iter().enumerate() {
         if analysis.invalid_result_indices.contains(&message_index)
@@ -348,10 +344,10 @@ pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<
         for &result_index in &batch.result_indices {
             normalized.push(messages[result_index].clone());
         }
-        for (call_id, matched) in batch.call_ids.iter().zip(&batch.matched_calls) {
+        for (call, matched) in message.tool_calls.iter().flatten().zip(&batch.matched_calls) {
             if !matched {
                 normalized
-                    .push(Message::tool_response(call_id.clone(), REQUEST_HISTORY_CANCELLATION_RESULT.to_owned()));
+                    .push(Message::tool_response(call.id.clone(), REQUEST_HISTORY_CANCELLATION_RESULT.to_owned()));
             }
         }
     }
@@ -360,8 +356,8 @@ pub fn normalize_history_for_request_shared(messages: Arc<Vec<Message>>) -> Arc<
 }
 
 /// Compatibility wrapper for callers that own a slice rather than shared
-/// request history. The shared implementation keeps the production Arc path
-/// allocation-free for clean histories; this wrapper retains the historical
+/// request history. The shared implementation avoids cloning clean message
+/// histories; this wrapper retains the historical
 /// owned return type for small slice-based callers and tests.
 pub fn normalize_history_for_request(messages: &[Message]) -> Vec<Message> {
     Arc::unwrap_or_clone(normalize_history_for_request_shared(Arc::new(messages.to_vec())))
@@ -372,14 +368,47 @@ pub fn normalize_history_for_request(messages: &[Message]) -> Vec<Message> {
 /// and `ThreadEvent` log keep the original payload.
 const CLEARED_TOOL_RESULT_NOTE: &str = "Older tool result cleared to bound context growth. Full output remains in session logs; re-run the tool if raw bytes are needed.";
 
+/// Cap local clearing at 60% of the history capacity left after the request
+/// prefix and output reserve. Zero capacity is unknown; zero trigger or an
+/// explicit opt-out keeps clearing disabled.
+#[must_use]
+pub fn resolve_tool_result_clearing_trigger(
+    config: &crate::config::VTCodeConfig,
+    provider: &dyn crate::llm::provider::LLMProvider,
+    model: &str,
+    prompt_overhead_tokens: usize,
+    reserved_output_tokens: usize,
+) -> u64 {
+    let clearing = &config.agent.harness.tool_result_clearing;
+    if !clearing.enabled || clearing.trigger_tokens == 0 {
+        return 0;
+    }
+    let capacity = crate::compaction::effective_context_budget(Some(config), provider, model);
+    if capacity == 0 {
+        return clearing.trigger_tokens;
+    }
+    let history_budget = capacity
+        .saturating_sub(reserved_output_tokens)
+        .saturating_sub(prompt_overhead_tokens) as u64;
+    // Divide before multiplying, retaining the remainder to avoid overflow
+    // even at the largest representable context budget.
+    let cap = (history_budget / 5)
+        .saturating_mul(3)
+        .saturating_add((history_budget % 5) * 3 / 5)
+        .max(1);
+    clearing.trigger_tokens.min(cap)
+}
+
 /// Request-only local stand-in for Anthropic `clear_tool_uses_20250919`.
 ///
 /// Providers without `context_management.edits` never get native tool-result
 /// clearing, so long histories keep paying full price for every old tool body
 /// on each request. Once estimated history tokens exceed `trigger_tokens`, this
-/// rewrites every tool-result *request* message except the newest
-/// `keep_tool_uses` to a bounded stub. `clear_at_least_tokens` is a floor on
-/// reclaimed tokens (not a ceiling): clearing must stub all non-kept results so
+/// rewrites old tool-result *request* messages outside a bounded recent
+/// evidence window and the newest `keep_tool_uses` originating batches to a
+/// bounded stub. Small results stay intact when a stub would not save tokens.
+/// `clear_at_least_tokens` is a floor on reclaimed tokens (not a ceiling):
+/// clearing must stub all eligible non-retained results so
 /// re-running on full durable history cannot leave a permanently growing tail.
 ///
 /// Contract (same as [`normalize_history_for_request`]):
@@ -390,12 +419,33 @@ const CLEARED_TOOL_RESULT_NOTE: &str = "Older tool result cleared to bound conte
 ///   trigger and cannot re-clear stubs usefully.
 ///
 /// When `clear_tool_inputs` is set, assistant `tool_calls[].function.arguments`
-/// and freeform `text` for cleared results are replaced with a JSON placeholder
-/// (never prose — providers send those fields verbatim on the wire).
+/// and freeform `text` larger than 1 KiB for cleared results are replaced with
+/// a JSON placeholder. Small arguments retain usable command/path identity.
 pub fn clear_old_tool_results(
     messages: &[Message],
     trigger_tokens: u64,
     keep_tool_uses: u32,
+    clear_at_least_tokens: u64,
+    clear_tool_inputs: bool,
+) -> Vec<Message> {
+    clear_old_tool_results_with_recent_batches(
+        messages,
+        trigger_tokens,
+        keep_tool_uses,
+        0,
+        clear_at_least_tokens,
+        clear_tool_inputs,
+    )
+}
+
+/// Request-only clearing that also protects the newest assistant tool-call
+/// batches by originating message order. Count-based protection is additive;
+/// unmatched results retain the compatibility wrapper's count-based fallback.
+pub fn clear_old_tool_results_with_recent_batches(
+    messages: &[Message],
+    trigger_tokens: u64,
+    keep_tool_uses: u32,
+    keep_recent_tool_batches: u32,
     clear_at_least_tokens: u64,
     clear_tool_inputs: bool,
 ) -> Vec<Message> {
@@ -423,26 +473,74 @@ pub fn clear_old_tool_results(
     }
 
     let mut cleared_tokens = 0u64;
-    let mut cleared_call_ids: HashSet<String> = HashSet::new();
-    // Stub every non-kept tool result (oldest-first). `clear_at_least_tokens`
+    let analysis = analyze_request_history(messages);
+    let mut retained_batches: HashSet<usize> = tool_indices
+        .iter()
+        .rev()
+        .take(keep)
+        .filter_map(|index| analysis.result_batch_by_index.get(index).copied())
+        .collect();
+    // Analysis records assistant messages in source order, independently of
+    // completion order and reused call IDs.
+    retained_batches.extend((0..analysis.batches.len()).rev().take(keep_recent_tool_batches as usize));
+    // Two batches can be only two short searches. Clearing everything before
+    // them discards the source needed for the pending edit, provoking rereads
+    // that the navigation guards correctly bound. Reserve half of the
+    // already capacity-capped trigger for recent complete evidence batches.
+    // This window stays bounded when rebuilding from full durable history.
+    let evidence_budget = trigger_tokens / 2;
+    let mut batch_tokens: Vec<u64> = analysis
+        .batches
+        .iter()
+        .map(|batch| messages[batch.assistant_index].estimate_tokens() as u64)
+        .collect();
+    for (&result_index, &batch_index) in &analysis.result_batch_by_index {
+        batch_tokens[batch_index] =
+            batch_tokens[batch_index].saturating_add(messages[result_index].estimate_tokens() as u64);
+    }
+    let mut retained_tokens = 0u64;
+    for (batch_index, &tokens) in batch_tokens.iter().enumerate().rev() {
+        let next_tokens = retained_tokens.saturating_add(tokens);
+        if next_tokens > evidence_budget {
+            break;
+        }
+        retained_tokens = next_tokens;
+        retained_batches.insert(batch_index);
+    }
+    let mut cleared_result_count = 0usize;
+    let mut cleared_calls_by_assistant: HashMap<usize, HashSet<&str>> = HashMap::new();
+    // Stub every eligible non-kept tool result (oldest-first). `clear_at_least_tokens`
     // is a floor on reclaimed tokens; stopping early would leave a permanently
     // growing tail on the next request that re-shapes full durable history.
     let mut out = messages.to_vec();
     for &tool_index in &tool_indices[..tool_indices.len() - keep] {
+        let batch_index = analysis.result_batch_by_index.get(&tool_index);
+        if batch_index.is_some_and(|index| retained_batches.contains(index)) {
+            continue;
+        }
         let original = &messages[tool_index];
         let original_tokens = original.estimate_tokens() as u64;
         let stub = build_cleared_tool_result_stub(original);
         let stub_tokens = stub.estimate_tokens() as u64;
-        if let Some(call_id) = original.tool_call_id.clone() {
-            cleared_call_ids.insert(call_id);
+        if stub_tokens >= original_tokens {
+            continue;
+        }
+        if let Some(&batch_index) = batch_index
+            && let Some(call_id) = original.tool_call_id.as_deref()
+        {
+            cleared_calls_by_assistant
+                .entry(analysis.batches[batch_index].assistant_index)
+                .or_default()
+                .insert(call_id);
         }
         out[tool_index] = stub;
+        cleared_result_count += 1;
         cleared_tokens = cleared_tokens.saturating_add(original_tokens.saturating_sub(stub_tokens));
     }
 
-    // Floor is advisory: all non-kept results are already stubbed, so the
-    // floor is met whenever anything was reclaimable. Surface a miss only if
-    // the keep window left less than the configured floor (tiny histories).
+    // The floor is advisory: every eligible result is already stubbed. A
+    // protected batch or small results can leave less reclaimable than the
+    // configured floor.
     if cleared_tokens < clear_at_least_tokens {
         tracing::debug!(
             cleared_tokens,
@@ -451,37 +549,61 @@ pub fn clear_old_tool_results(
         );
     }
 
-    if clear_tool_inputs && !cleared_call_ids.is_empty() {
-        for message in &mut out {
-            if message.role != crate::llm::provider::MessageRole::Assistant {
+    if clear_tool_inputs {
+        for (assistant_index, original_message) in out.iter_mut().enumerate() {
+            let Some(cleared_call_ids) = cleared_calls_by_assistant.remove(&assistant_index) else {
                 continue;
-            }
+            };
+            let mut message = original_message.clone();
             let Some(tool_calls) = message.tool_calls.as_mut() else {
                 continue;
             };
             for call in tool_calls.iter_mut() {
-                if cleared_call_ids.contains(&call.id) {
-                    if let Some(function) = call.function.as_mut() {
+                if cleared_call_ids.contains(call.id.as_str()) {
+                    if let Some(function) = call.function.as_mut()
+                        && function.arguments.len() > RETAINED_TOOL_INPUT_BYTES
+                    {
                         // Valid JSON placeholder: providers send `arguments`
                         // verbatim; prose would break OpenAI tool-call parsing.
                         function.arguments = CLEARED_TOOL_INPUT_PLACEHOLDER.to_string();
                     }
                     // Freeform custom tool payloads ride in `text`, not
                     // `function.arguments` (see ToolCall::custom).
-                    if call.text.is_some() {
+                    if call.text.as_ref().is_some_and(|text| text.len() > RETAINED_TOOL_INPUT_BYTES) {
                         call.text = Some(CLEARED_TOOL_INPUT_PLACEHOLDER.to_string());
                     }
                     call.thought_signature = None;
                 }
             }
+            // Tiny arguments can be cheaper than the JSON placeholder. Do
+            // not spend more tokens on inputs than the results reclaimed.
+            let input_growth =
+                (message.estimate_tokens() as u64).saturating_sub(original_message.estimate_tokens() as u64);
+            if input_growth <= cleared_tokens {
+                *original_message = message;
+                cleared_tokens = cleared_tokens.saturating_sub(input_growth);
+            }
         }
     }
 
+    tracing::debug!(
+        original_tokens = estimated_tokens,
+        projected_tokens = out
+            .iter()
+            .map(|message| message.estimate_tokens() as u64)
+            .fold(0u64, u64::saturating_add),
+        cleared_result_count,
+        protected_batch_count = retained_batches.len(),
+        "local tool-result clearing projection"
+    );
     out
 }
 
 /// JSON placeholder for cleared tool-call inputs (must stay valid JSON).
 const CLEARED_TOOL_INPUT_PLACEHOLDER: &str = "{\"cleared\":\"tool_input\"}";
+// Keep ordinary command/path arguments intact instead of teaching providers
+// to emit synthetic arguments that cannot pass the tool's declared schema.
+const RETAINED_TOOL_INPUT_BYTES: usize = 1024;
 
 /// Whether request assembly should apply local [`clear_old_tool_results`].
 ///
@@ -794,6 +916,74 @@ mod tests {
     }
 
     #[test]
+    fn request_normalization_reused_ids_match_causally_preceding_batches() {
+        let messages = Arc::new(vec![
+            make_tool_response("reused", "early result"),
+            make_tool_call("reused", "read_file"),
+            make_tool_response("reused", "first result"),
+            make_tool_call("reused", "write_file"),
+            Message::user("interleaved".to_string()),
+            make_tool_response("reused", "second result"),
+            make_tool_response("reused", "duplicate result"),
+        ]);
+        let normalized = normalize_history_for_request_shared(Arc::clone(&messages));
+        assert_eq!(
+            normalized.as_ref(),
+            &vec![
+                make_tool_call("reused", "read_file"),
+                make_tool_response("reused", "first result"),
+                make_tool_call("reused", "write_file"),
+                make_tool_response("reused", "second result"),
+                Message::user("interleaved".to_string()),
+            ]
+        );
+        assert_eq!(messages.len(), 7);
+        assert_eq!(messages[0].content.as_text(), "early result");
+    }
+
+    #[test]
+    fn request_normalization_shared_repairs_asymmetric_batch_without_mutating_source() {
+        let messages = Arc::new(vec![
+            Message::assistant_with_tools(
+                "three calls".to_string(),
+                ["call_a", "call_b", "call_c"]
+                    .into_iter()
+                    .map(|id| {
+                        crate::llm::provider::ToolCall::function(
+                            id.to_string(),
+                            "read_file".to_string(),
+                            "{}".to_string(),
+                        )
+                    })
+                    .collect(),
+            ),
+            Message::user("interleaved request".to_string()),
+            make_tool_response("call_b", "result B"),
+            make_tool_response("call_a", "result A"),
+            make_tool_response("call_b", "duplicate B"),
+        ]);
+        let source_before = messages.as_ref().clone();
+
+        let normalized = normalize_history_for_request_shared(Arc::clone(&messages));
+
+        assert!(!Arc::ptr_eq(&messages, &normalized));
+        assert_eq!(normalized.len(), 5);
+        assert_eq!(normalized[0], source_before[0]);
+        assert_eq!(normalized[1], make_tool_response("call_b", "result B"));
+        assert_eq!(normalized[2], make_tool_response("call_a", "result A"));
+        assert_eq!(normalized[3].role, MessageRole::Tool);
+        assert_eq!(normalized[3].tool_call_id.as_deref(), Some("call_c"));
+        assert_eq!(
+            normalized[3].content.as_text(),
+            "canceled: no tool result was recorded; this bounded placeholder preserves the tool-call protocol."
+        );
+        assert_eq!(normalized[4], Message::user("interleaved request".to_string()));
+        assert_eq!(messages.as_ref(), &source_before);
+        let repeated = normalize_history_for_request_shared(Arc::clone(&normalized));
+        assert!(Arc::ptr_eq(&normalized, &repeated));
+    }
+
+    #[test]
     fn request_normalization_groups_split_results_after_intervening_messages() {
         let messages = vec![
             Message::assistant_with_tools(
@@ -1062,7 +1252,7 @@ mod tests {
             .and_then(|calls| calls.first_mut())
             .and_then(|call| call.function.as_mut())
         {
-            call.arguments = "{\"path\":\"secret-path\"}".to_string();
+            call.arguments = serde_json::json!({"path": "secret-path", "padding": "x".repeat(1024)}).to_string();
         }
 
         let cleared = clear_old_tool_results(&messages, 1, 1, 1, true);
@@ -1091,6 +1281,51 @@ mod tests {
             .map(|function| function.arguments.as_str())
             .unwrap_or_default();
         assert_eq!(last_call_args, "{}");
+    }
+
+    #[test]
+    fn clear_old_tool_results_default_config_clears_paired_inputs() {
+        // Regression: `clear_tool_inputs` now defaults to true, so the common
+        // request-shaping path must drop stale apply_patch/write_file bodies
+        // together with the stubbed results.
+        let default_clear_tool_inputs =
+            vtcode_config::core::agent::ToolResultClearingConfig::default().clear_tool_inputs;
+        assert!(default_clear_tool_inputs, "config default must clear tool inputs");
+
+        let mut messages = bulky_tool_history(3, 3_000);
+        if let Some(call) = messages
+            .get_mut(1)
+            .and_then(|m| m.tool_calls.as_mut())
+            .and_then(|calls| calls.first_mut())
+            .and_then(|call| call.function.as_mut())
+        {
+            call.arguments =
+                serde_json::json!({"input": format!("*** Begin Patch\n{}\n*** End Patch", "x".repeat(1024))})
+                    .to_string();
+        }
+
+        let cleared = clear_old_tool_results(&messages, 1, 1, 1, default_clear_tool_inputs);
+        let cleared_args = cleared
+            .get(1)
+            .and_then(|m| m.tool_calls.as_ref())
+            .and_then(|calls| calls.first())
+            .and_then(|call| call.function.as_ref())
+            .map(|function| function.arguments.as_str())
+            .unwrap_or_default();
+        assert!(
+            !cleared_args.contains("Begin Patch"),
+            "default-on clearing must drop patch bodies, got {cleared_args:?}"
+        );
+        assert_eq!(cleared_args, CLEARED_TOOL_INPUT_PLACEHOLDER);
+
+        let kept_args = cleared
+            .get(5)
+            .and_then(|m| m.tool_calls.as_ref())
+            .and_then(|calls| calls.first())
+            .and_then(|call| call.function.as_ref())
+            .map(|function| function.arguments.as_str())
+            .unwrap_or_default();
+        assert_eq!(kept_args, "{}", "kept call arguments must stay intact");
     }
 
     #[test]
@@ -1156,7 +1391,7 @@ mod tests {
             .and_then(|m| m.tool_calls.as_mut())
             .and_then(|calls| calls.first_mut())
         {
-            call.text = Some("raw freeform payload".to_string());
+            call.text = Some("raw freeform payload".repeat(100));
             call.thought_signature = Some("sig".to_string());
         }
         let cleared = clear_old_tool_results(&messages, 1, 1, 1, true);
@@ -1169,3 +1404,6 @@ mod tests {
         assert!(call.thought_signature.is_none());
     }
 }
+
+#[cfg(test)]
+mod tool_result_clearing_tests;

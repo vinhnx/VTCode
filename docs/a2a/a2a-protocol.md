@@ -1,6 +1,7 @@
 # A2A Protocol Support for VT Code
 
-VT Code now implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), an open standard enabling communication and interoperability between AI agents.
+VT Code now implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), an open standard enabling
+communication and interoperability between AI agents.
 
 ## Overview
 
@@ -17,7 +18,7 @@ The A2A Protocol enables:
 
 VT Code's A2A implementation spans across modules:
 
-```
+```text
 crates/codegen/vtcode-core/src/a2a/
 ├── mod.rs                  # Module organization & re-exports
 ├── types.rs                # Core data structures (Task, Message, Part, Artifact)
@@ -172,9 +173,8 @@ Returns the agent's capability card:
 POST /a2a
 ```
 
-RPC and streaming requests require an `Authorization: Bearer <token>` header.
-The agent card is public for discovery, but no browser origin is trusted by
-default. `A2aServerState::new` generates the token, while
+RPC and streaming requests require an `Authorization: Bearer <token>` header. The agent card is public for discovery,
+but no browser origin is trusted by default. `A2aServerState::new` generates the token, while
 `A2aServerState::new_with_auth_token` accepts an explicitly managed token.
 
 Send JSON-RPC requests for task management:
@@ -271,7 +271,7 @@ Establish Server-Sent Events stream for real-time updates:
 
 Response stream:
 
-```
+```text
 data: {"event":{"message":{"role":"agent","parts":[...]},...}}
 data: {"event":{"taskStatus":{...},"state":"completed",...}}
 ...
@@ -447,7 +447,7 @@ cargo nextest run -p vtcode-a2a --features a2a-server
 - v **Phase 1**: Core types, task manager, server
 - v **Phase 2**: Integration tests, streaming, webhooks
 - v **Phase 3**: Authenticated client requests
--  **Phase 4**: Extended documentation, examples
+- **Phase 4**: Extended documentation, examples
 
 ## Dependencies
 

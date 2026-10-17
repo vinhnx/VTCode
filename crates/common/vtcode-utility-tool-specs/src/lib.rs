@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 mod collaboration;
 mod json_schema;
+mod matrix;
 #[cfg(feature = "mcp")]
 mod mcp_tool;
 mod responses_api;
@@ -23,6 +24,7 @@ pub use collaboration::{
     spawn_agent_parameters, spawn_background_subprocess_parameters, wait_agent_parameters,
 };
 pub use json_schema::{AdditionalProperties, JsonSchema, parse_tool_input_schema};
+pub use matrix::{MATRIX_DESCRIPTION, matrix_parameters};
 #[cfg(feature = "mcp")]
 pub use mcp_tool::{ParsedMcpTool, parse_mcp_tool};
 pub use responses_api::{FreeformTool, FreeformToolFormat, ResponsesApiTool};
@@ -45,10 +47,20 @@ pub const DEFAULT_APPLY_PATCH_INPUT_DESCRIPTION: &str = "Patch in VT Code format
 /// and states the unified-diff rejection and path rules as plain facts
 /// instead of shouted warnings. Registration sites append
 /// [`SEMANTIC_ANCHOR_GUIDANCE`] via [`with_semantic_anchor_guidance`].
-pub const APPLY_PATCH_TOOL_DESCRIPTION: &str = "Apply a patch in VT Code format (*** Begin Patch / *** Update File: path / @@ hunks with -/+ lines / *** End Patch); standard unified diffs (---/+++ format) are rejected. *** Add File: path, *** Delete File: path, and *** Move to: path (after *** Update File) are also supported. Every patch path must be workspace-relative; absolute paths, `..`, and traversal-like forms are rejected. Changes are applied after permission checks.";
+pub const APPLY_PATCH_TOOL_DESCRIPTION: &str = "Apply a patch in VT Code format (*** Begin Patch / *** Update File: path / @@ hunks with -/+ lines / *** End Patch); standard unified diffs (---/+++ format) are rejected. Inspect relevant hunks and anchors, including docs; edit a bounded region, refresh after mismatch, then verify. Strict inspection requires retained source; warn mode is advisory. *** Add File: path, *** Delete File: path, and *** Move to: path (after *** Update File) are also supported. Every patch path must be workspace-relative; absolute paths, `..`, and traversal-like forms are rejected. Changes require permission checks. Call this tool directly instead of through a shell; JSON calls use input (patch is an alias). Use complete current context/deletion lines, preserving internal whitespace; boundary whitespace and Unicode punctuation normalization are supported, but partial lines are rejected. A typed context mismatch permits one fresh bounded file read range per affected path per turn; other limits remain authoritative.";
 
 /// Default model-visible preview budget for function-tool results.
 pub const DEFAULT_MAX_OUTPUT_TOKENS: usize = 10_000;
+
+/// Wire schema for optional public decision recording.
+pub fn record_decision_parameters() -> Value {
+    serde_json::json!({"type":"object","additionalProperties":false,"required":["summary","rationale"],"properties":{
+        "summary":{"type":"string","minLength":1,"maxLength":240},
+        "rationale":{"type":"string","minLength":1,"maxLength":1000},
+        "alternatives":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":1000}},
+        "evidence_ids":{"type":"array","maxItems":8,"items":{"type":"string","minLength":1,"maxLength":240}}
+    }})
+}
 /// Smallest valid model-visible preview budget for a function-tool result.
 pub const MIN_MAX_OUTPUT_TOKENS: usize = 1;
 /// Largest valid model-visible preview budget for a function-tool result.
@@ -149,8 +161,10 @@ pub fn cron_parameters() -> Value {
     })
 }
 
-/// Model-visible description of the `mcp` tool.
-pub const MCP_DESCRIPTION: &str = "Discover and manage Model Context Protocol capabilities. Use action=search_tools to find tools, action=get_tool_details to fetch one schema, action=list_servers to inspect configured servers, or action=connect and action=disconnect to manage a named server. action=search_tools searches only tools exposed by configured MCP servers; the separate search_tools tool searches the whole session catalog, including deferred built-in tools. Do not disconnect a server while one of its tool calls is active.";
+/// Model-visible description of the `mcp` tool. The `action` field description
+/// owns the per-action enumeration; this description keeps only the purpose,
+/// the server-search-vs-catalog-search distinction, and the disconnect guard.
+pub const MCP_DESCRIPTION: &str = "Discover and manage Model Context Protocol capabilities. Use the `action` field to find tools, fetch one tool schema, list configured servers, and connect or disconnect by name. action=search_tools searches only tools exposed by configured MCP servers; the separate search_tools tool searches the whole session catalog, including deferred built-in tools. Do not disconnect a server while one of its tool calls is active.";
 
 #[must_use]
 pub fn mcp_parameters() -> Value {
@@ -211,8 +225,9 @@ pub fn cron_delete_parameters() -> Value {
     })
 }
 
-/// Model-visible description of the `exec_command` tool.
-pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. Expanded sandbox_permissions modes trigger an approval check before the command runs; `require_escalated` and `bypass_sandbox` also need a non-empty justification.";
+/// Model-visible description of the `exec_command` tool. The escalation
+/// justification requirement is stated once, on the `justification` field.
+pub const EXEC_COMMAND_DESCRIPTION: &str = "Run a shell command through the active sandbox policy and permission checks. Put normal shell tools such as ls, rg, find, cat, sed, awk, build tools, and test tools in cmd. Returns output, exit status, and a reusable session id when the command is still running. Inspect current target source before edits, then verify the bounded change. For file edits, use apply_patch instead of shell redirection or in-place editors such as `sed -i`. Expanded sandbox_permissions modes trigger an approval check before the command runs.";
 
 #[must_use]
 pub fn exec_command_parameters() -> Value {
@@ -222,8 +237,9 @@ pub fn exec_command_parameters() -> Value {
         "properties": {
             "cmd": {"type": "string", "description": "Shell command to execute, subject to command policy. The tool description lists covered tools."},
             "yield_time_ms": {"type": "integer", "description": "Wait before returning output (ms). If the command is still running, the response includes a session_id for write_stdin. Values above 10000 turn this into a single-call long run: no outer timeout applies and the response returns after the yield window or command exit, whichever is first.", "default": 10000},
-            "background": {"type": "boolean", "description": "Start a retained background process and return after a bounded initial output window. At most three live background processes are allowed per VT Code runtime; use the returned session_id with write_stdin to wait, poll, write, inspect, terminate, or close.", "default": false},
-            "max_output_tokens": {"type": "integer", "minimum": 1, "maximum": 50000, "default": 10000, "description": "Output token cap. Large or truncated output can return a spool_path; an active session may set spool_complete=false for a readable partial snapshot, while an exited pending spool is withheld until a later wait."},
+            "background": {"type": "boolean", "description": "Start a retained background process and return after a bounded initial output window. At most three live background processes are allowed per VT Code runtime; use the returned session_id with `write_stdin` for the session lifecycle.", "default": false},
+            "stdin": {"type": "boolean", "description": "Keep pipe stdin open for later write_stdin input. Defaults to false (EOF); enable only for commands that need input. PTY input is always available.", "default": false},
+            "max_output_tokens": {"type": "integer", "minimum": MIN_MAX_OUTPUT_TOKENS, "maximum": MAX_MAX_OUTPUT_TOKENS, "default": DEFAULT_MAX_OUTPUT_TOKENS, "description": "Output token cap. Large or truncated output can return a spool_path; an active session may set spool_complete=false for a readable partial snapshot, while an exited pending spool is withheld until a later wait."},
             "workdir": {"type": "string", "description": "Working directory."},
             "tty": {"type": "boolean", "description": "Run the command in PTY mode for interactive or terminal-sensitive commands.", "default": false},
             "sandbox_permissions": {
@@ -247,22 +263,25 @@ pub fn exec_command_parameters() -> Value {
     })
 }
 
+/// Shared model-facing description for execution session controls.
+pub const WRITE_STDIN_DESCRIPTION: &str = "Control an owned exec session using its exact session_id (copy verbatim from next_wait_args/next_continue_args; never guess): action=\"write\" sends stdin (pipe runs require stdin:true at launch), action=\"wait\" blocks until exit or wait_timeout_seconds (preferred over polling for long runs; never kills), action=\"poll\" returns the latest output immediately, action=\"inspect\" reads a bounded snapshot, action=\"terminate\" kills the process group, action=\"close\" releases the session.";
+
 #[must_use]
 pub fn write_stdin_parameters() -> Value {
     json!({
         "type": "object",
         "required": ["session_id"],
         "properties": {
-            "session_id": {"type": "string", "description": "Active execution session id."},
-            "action": {"type": "string", "enum": ["write", "poll", "wait"], "description": "Use wait to block until the command exits or wait_timeout_seconds expires; wait never kills the session."},
-            "chars": {"type": "string", "description": "Bytes to write to stdin. Pass an empty string to poll without sending input."},
+            "session_id": {"type": "string", "description": "Active execution session id copied verbatim from the run response."},
+            "action": {"type": "string", "enum": ["write", "poll", "wait", "inspect", "terminate", "close"], "description": "write sends chars to stdin; wait blocks until exit or wait_timeout_seconds without killing (preferred for long runs); poll returns latest output immediately and sends no input; inspect reads a bounded snapshot; terminate kills the process group and captures output; close cancels and releases the session."},
+            "chars": {"type": "string", "description": "Bytes to write to stdin; only for action=\"write\". Omit only when action is wait/poll/inspect/terminate/close; an empty string sends no input (polls)."},
             "yield_time_ms": {"type": "integer", "description": "Wait before returning fresh session output (ms).", "default": 1000},
-            "wait_timeout_seconds": {"type": "integer", "minimum": 1, "description": "Explicit wait deadline in seconds. A deadline returns an in-progress session that can be waited on again."},
-            "max_output_tokens": {"type": "integer", "minimum": 1, "maximum": 50000, "default": 10000, "description": "Output token cap for the continuation response. Large or truncated output can return a spool_path; the response reports whether an active session has finished writing it."}
+            "wait_timeout_seconds": {"type": "integer", "minimum": 1, "description": "Deadline for action=\"wait\" in seconds. A deadline-expired wait returns an in-progress session; call wait again with the same session_id. wait/inspect are exempt from the per-turn tool-call budget."},
+            "max_output_tokens": {"type": "integer", "minimum": MIN_MAX_OUTPUT_TOKENS, "maximum": MAX_MAX_OUTPUT_TOKENS, "default": DEFAULT_MAX_OUTPUT_TOKENS, "description": "Output token cap for the continuation response. Large or truncated output can return a spool_path; the response reports whether an active session has finished writing it."}
         },
         "anyOf": [
             {"required": ["chars"]},
-            {"required": ["action"], "properties": {"action": {"const": "wait"}}}
+            {"required": ["action"], "properties": {"action": {"enum": ["poll", "wait", "inspect", "terminate", "close"]}}}
         ],
         "additionalProperties": false
     })
@@ -432,6 +451,9 @@ mod tests {
         assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("unified diffs"));
         assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("workspace-relative"));
         assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("permission checks"));
+        assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("JSON calls use input (patch is an alias)"));
+        assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("preserving internal whitespace"));
+        assert!(APPLY_PATCH_TOOL_DESCRIPTION.contains("one fresh bounded file read range"));
         for description in [
             APPLY_PATCH_TOOL_DESCRIPTION,
             APPLY_PATCH_ALIAS_DESCRIPTION,
@@ -549,14 +571,21 @@ mod tests {
         assert_eq!(stdin_params["required"], json!(["session_id"]));
         assert!(stdin_params["properties"]["session_id"].is_object());
         assert_eq!(stdin_params["properties"]["chars"]["type"], "string");
-        assert_eq!(stdin_params["properties"]["action"]["enum"], json!(["write", "poll", "wait"]));
+        assert_eq!(
+            stdin_params["properties"]["action"]["enum"],
+            json!(["write", "poll", "wait", "inspect", "terminate", "close"])
+        );
+        assert_eq!(exec_params["properties"]["stdin"]["default"], false);
         assert!(stdin_params["properties"]["wait_timeout_seconds"].is_object());
         assert!(
             stdin_params["properties"].get("timeout_seconds").is_none(),
             "write_stdin schema advertises only wait_timeout_seconds"
         );
         assert_eq!(stdin_params["anyOf"][1]["required"], json!(["action"]));
-        assert_eq!(stdin_params["anyOf"][1]["properties"]["action"]["const"], "wait");
+        assert_eq!(
+            stdin_params["anyOf"][1]["properties"]["action"]["enum"],
+            json!(["poll", "wait", "inspect", "terminate", "close"])
+        );
         assert!(
             stdin_params["properties"]["chars"]["description"]
                 .as_str()
@@ -602,9 +631,14 @@ mod tests {
         assert!(EXEC_COMMAND_DESCRIPTION.starts_with("Run a shell command through the active sandbox policy"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("For file edits, use apply_patch"));
         assert!(EXEC_COMMAND_DESCRIPTION.contains("approval check"));
-        assert!(EXEC_COMMAND_DESCRIPTION.contains("non-empty justification"));
+        // The justification requirement is stated once, on the `justification`
+        // field description; the tool description keeps only the approval-check
+        // routing rule instead of repeating the requirement on every request.
+        assert!(
+            !EXEC_COMMAND_DESCRIPTION.contains("non-empty justification"),
+            "justification requirement belongs to the field description"
+        );
         for mode in ["require_escalated", "bypass_sandbox"] {
-            assert!(EXEC_COMMAND_DESCRIPTION.contains(mode), "{mode}");
             assert!(
                 exec_command_parameters()["properties"]["sandbox_permissions"]["enum"]
                     .as_array()

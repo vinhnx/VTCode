@@ -167,19 +167,11 @@ fn build_denial_reason_from_output(output: Option<&str>) -> String {
     }
 }
 
-/// Truncate output for display
+/// Truncate output for display, rounded down to the nearest UTF-8 char
+/// boundary so non-ASCII output (e.g. command stderr) never panics.
 fn truncate_output(output: &str) -> &str {
     const MAX_LEN: usize = 500;
-    if output.len() <= MAX_LEN {
-        return output;
-    }
-    // Round down to the nearest UTF-8 char boundary so non-ASCII output
-    // (e.g. command stderr) never panics on a mid-codepoint byte slice.
-    let mut end = MAX_LEN;
-    while !output.is_char_boundary(end) {
-        end -= 1;
-    }
-    &output[..end]
+    vtcode_commons::formatting::truncate_utf8_prefix(output, MAX_LEN)
 }
 
 #[cfg(test)]

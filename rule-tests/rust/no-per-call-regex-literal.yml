@@ -1,0 +1,65 @@
+id: no-per-call-regex-literal
+valid:
+  - |
+      use regex::Regex;
+      use std::sync::LazyLock;
+      static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+$").unwrap());
+  - |
+      use once_cell::sync::Lazy;
+      use regex::Regex;
+      static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d+$").unwrap());
+  - |
+      use regex::Regex;
+      use std::sync::OnceLock;
+      fn check(line: &str) -> bool {
+          static RE: OnceLock<Regex> = OnceLock::new();
+          RE.get_or_init(|| Regex::new(r"^\d+$").unwrap()).is_match(line)
+      }
+  - |
+      use regex::Regex;
+      fn check(pattern: &str, line: &str) -> bool {
+          Regex::new(pattern).unwrap().is_match(line)
+      }
+  - |
+      use regex::Regex;
+      fn check(pattern: &str, line: &str) -> bool {
+          Regex::new(&format!("^(?:{pattern})$")).unwrap().is_match(line)
+      }
+  - |
+      use regex::Regex;
+      use std::sync::OnceLock;
+      fn check(line: &str) -> Result<bool, regex::Error> {
+          static RE: OnceLock<Regex> = OnceLock::new();
+          Ok(RE.get_or_try_init(|| Regex::new(r"^\d+$"))?.is_match(line))
+      }
+invalid:
+  - |
+      use regex::Regex;
+      fn check(line: &str) -> bool {
+          let re = Regex::new(r"^\d+$").unwrap();
+          re.is_match(line)
+      }
+  - |
+      use regex::Regex;
+      fn check(line: &str) -> bool {
+          Regex::new(r"^\d+$").unwrap().is_match(line)
+      }
+  - |
+      use regex::Regex;
+      fn check(line: &str) -> bool {
+          regex::Regex::new(r"^\d+$").unwrap().is_match(line)
+      }
+  - |
+      use regex::Regex;
+      fn check(html: &str) -> bool {
+          let re = Regex::new(
+              r"(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>",
+          )
+          .unwrap();
+          re.is_match(html)
+      }
+  - |
+      use regex::Regex;
+      fn check(text: &str) -> bool {
+          Regex::new("plain").unwrap().is_match(text)
+      }

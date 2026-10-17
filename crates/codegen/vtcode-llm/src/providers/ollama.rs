@@ -278,11 +278,18 @@ impl OllamaProvider {
     /// Verify the server is up and the model is available before generating.
     /// Returns the (possibly substituted) model id or a structured error with a
     /// recovery command (`ollama pull <model>` / `/local start ollama`).
+    ///
+    /// `VTCODE_LOCAL_AUTOPULL` is deliberately strict (`1`/`true`, no
+    /// whitespace/casing slack) because enabling it side-effects: a missing
+    /// model triggers a network `ollama pull` at generate time. Widening to
+    /// the canonical tri-state set (canonical parser, `parse_bool_env_value`)
+    /// would silently enable downloads for casual values (`yes`/`on`). Keep a
+    /// minimal literal comparison; the canonical parser governs the non-wire,
+    /// non-side-effecting flags.
     async fn ensure_ready(&self, requested: &str) -> Result<String, LLMError> {
         let autopull = std::env::var("VTCODE_LOCAL_AUTOPULL")
             .ok()
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
 
         match resolve_local_model(LocalProvider::Ollama, requested, Some(&self.base_url)).await {
             Ok(model) => Ok(model),
@@ -479,24 +486,21 @@ impl OllamaProvider {
             None
         };
 
-        let tools = match request.tool_choice {
-            Some(ToolChoice::None) => None,
-            _ => request.tools.as_ref().map(|tools| {
-                tools
-                    .iter()
-                    .filter_map(|tool| {
-                        // Normalize all tools to function type for Ollama compatibility
-                        tool.function.as_ref().map(|func| {
-                            ToolDefinition::function(
-                                func.name.clone(),
-                                func.description.clone(),
-                                func.parameters.clone(),
-                            )
-                        })
+        // Keep tool definitions on the wire even when tools are disabled so the
+        // rendered prefix stays cache-stable across recovery turns (OpenAI
+        // guidance: disable tool use with `tool_choice: "none"` rather than
+        // removing definitions).
+        let tools = request.tools.as_ref().map(|tools| {
+            tools
+                .iter()
+                .filter_map(|tool| {
+                    // Normalize all tools to function type for Ollama compatibility
+                    tool.function.as_ref().map(|func| {
+                        ToolDefinition::function(func.name.clone(), func.description.clone(), func.parameters.clone())
                     })
-                    .collect()
-            }),
-        };
+                })
+                .collect()
+        });
 
         Ok(OllamaChatRequest {
             model: request.model.clone(),
@@ -1253,6 +1257,28 @@ mod tests {
         let message = &payload.messages[0];
         assert_eq!(message.content.as_deref(), Some("no images"));
         assert!(message.images.is_none());
+    }
+
+    #[test]
+    fn build_payload_keeps_tools_for_tool_choice_none() {
+        let provider = test_provider();
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            tools: Some(std::sync::Arc::new(vec![ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get the weather".to_string(),
+                json!({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}),
+            )])),
+            tool_choice: Some(ToolChoice::None),
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert!(
+            payload.tools.as_ref().is_some_and(|tools| !tools.is_empty()),
+            "tool definitions stay on the wire for prompt-cache stability"
+        );
     }
 
     #[test]

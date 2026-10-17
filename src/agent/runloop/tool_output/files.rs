@@ -2,8 +2,8 @@ use anyhow::Result;
 use serde_json::Value;
 use vtcode_commons::diff_paths::language_hint_from_path;
 use vtcode_commons::preview;
+use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
-use vtcode_core::config::{ToolDisplayMode, ToolOutputMode};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::render_tree_detail;
@@ -31,7 +31,7 @@ fn get_u64(val: &Value, key: &str) -> Option<u64> {
 }
 
 fn compact_file_glance_enabled(renderer: &AnsiRenderer) -> bool {
-    renderer.supports_inline_ui() && renderer.tool_display_mode() == ToolDisplayMode::Compact
+    renderer.supports_inline_ui() && renderer.is_compact_display()
 }
 
 fn render_file_heading(renderer: &mut AnsiRenderer, heading: &str) -> Result<()> {

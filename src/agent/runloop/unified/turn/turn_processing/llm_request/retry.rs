@@ -6,10 +6,9 @@ pub(super) fn is_retryable_llm_error(message: &str) -> bool {
     vtcode_commons::is_retryable_llm_error_message(message)
 }
 
-/// Classify an LLM error message into an [`vtcode_commons::ErrorCategory`] for
-/// structured logging and user-facing hints.
-pub(super) fn classify_llm_error(message: &str) -> vtcode_commons::ErrorCategory {
-    vtcode_commons::classify_error_message(message)
+/// Preserve typed HTTP metadata through context wrappers when classifying retries.
+pub(super) fn classify_llm_error(error: &anyhow::Error) -> vtcode_commons::ErrorCategory {
+    vtcode_commons::classify_anyhow_error(error)
 }
 
 const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;

@@ -1,8 +1,7 @@
 # vtcode-safety
 
-Command safety detection, execution policies, and sandboxing for VT Code.
-Extracted from `vtcode-core` to isolate the safety subsystem into an
-independently testable crate.
+Command safety detection, execution policies, and sandboxing for VT Code. Extracted from `vtcode-core` to isolate the
+safety subsystem into an independently testable crate.
 
 <!-- cargo-rdme start -->
 
@@ -18,11 +17,11 @@ This crate provides the safety subsystem extracted from `vtcode-core`:
 
 ## Modules
 
-| Module | Purpose |
-|---|---|
-| `command_safety` | Dangerous command detection, shell parsing, safety evaluation |
-| `exec_policy` | Execution policy management, approval workflows, command validation |
-| `sandboxing` | Sandbox policy, permissions, execution environments |
+| Module           | Purpose                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `command_safety` | Dangerous command detection, shell parsing, safety evaluation       |
+| `exec_policy`    | Execution policy management, approval workflows, command validation |
+| `sandboxing`     | Sandbox policy, permissions, execution environments                 |
 
 ## Public entrypoints
 

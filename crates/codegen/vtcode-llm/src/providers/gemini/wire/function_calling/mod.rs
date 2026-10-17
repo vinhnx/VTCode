@@ -24,10 +24,13 @@ pub struct FunctionCallingConfig {
     pub(crate) allowed_function_names: Option<Vec<String>>,
 }
 
+/// Wire mode the API assumes when `functionCallingConfig` is omitted.
+const MODE_AUTO: &str = "AUTO";
+
 impl FunctionCallingConfig {
     pub(crate) fn auto() -> Self {
         Self {
-            mode: "AUTO".to_owned(),
+            mode: MODE_AUTO.to_owned(),
             allowed_function_names: None,
         }
     }
@@ -51,5 +54,11 @@ impl FunctionCallingConfig {
             mode: "ANY".to_owned(),
             allowed_function_names: None,
         }
+    }
+
+    /// Whether this is the wire default (`AUTO` with no allowed-name filter),
+    /// which a request may omit without changing provider behaviour.
+    pub(crate) fn is_default_auto(&self) -> bool {
+        self.mode == MODE_AUTO && self.allowed_function_names.is_none()
     }
 }

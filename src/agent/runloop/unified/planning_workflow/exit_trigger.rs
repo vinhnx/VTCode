@@ -19,11 +19,12 @@ use crate::agent::runloop::unified::planning_workflow_state::{
     PLANNING_WORKFLOW_NO_APPROVAL_READY_PLAN_HINT, PlanningWorkflowSessionState, short_confirmation_hint,
 };
 use crate::agent::runloop::unified::state::CtrlCState;
+use crate::agent::runloop::unified::turn::context::last_user_message;
 use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnLoopResult};
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::PLAN_MODE_AUTO_CONTINUE_MARKER;
 
 const PLANNING_WORKFLOW_EXIT_TRIGGER_STATUS: &str = "Planning workflow: implementation intent detected from your message. Exiting planning mode and proceeding with execution.";
-pub(crate) const PLANNING_WORKFLOW_MISSING_PLAN_SYNTHESIS_DIRECTIVE: &str = "Planning recovery: implementation was requested, but no completed plan draft exists yet, and implementation starts only after a plan is approved. Synthesize one compact `<proposed_plan>` from the repository evidence already gathered, with Summary, numbered steps in the form `Action -> files: [path] -> verify: [command]`, Validation, and short Assumptions. The approval prompt appears once the plan is emitted, so there is no need to ask for approval. Valid `verify:` examples include `cargo nextest run -p vtcode`, `cargo check --locked`, `rg -n 'symbol' src/file.rs`, `sed -n '1,40p' docs/file.md`, and `grep -n 'symbol' src/file.rs`; `run checks` and `git diff --check` are invalid. This pass only synthesizes from gathered evidence, so reply with the plan and no tool calls.";
+pub(crate) const PLANNING_WORKFLOW_MISSING_PLAN_SYNTHESIS_DIRECTIVE: &str = "Planning recovery: implementation was requested, but no completed plan draft exists yet, and implementation starts only after a plan is approved. Synthesize one compact `<proposed_plan>` from the repository evidence already gathered, with Summary, numbered steps in the form `Action -> files: [path] -> verify: [command]`, Validation, and short Assumptions. The approval prompt appears once the plan is emitted, so there is no need to ask for approval. Valid `verify:` examples include `cargo nextest run -p vtcode`, `cargo check --locked`, `rg -n 'symbol' src/file.rs`, `sed -n '1,40p' docs/file.md`, and `grep -n 'symbol' src/file.rs`; `run checks` and `git diff --check` are invalid. Every `verify:` command must exit 0 when the step succeeds; absence checks that expect `grep`/`rg` exit 1 (no matches) never satisfy completion and must instead use a linter/verifier that exits 0 (e.g. `npx markdownlint-cli2 README.md`). This pass only synthesizes from gathered evidence, so reply with the plan and no tool calls.";
 
 /// Whether the last user message is a harness-generated plan-mode auto-continue
 /// directive rather than a genuine user submission.
@@ -112,7 +113,7 @@ pub(crate) async fn maybe_handle_planning_exit_trigger(
         return Ok(PlanningTransition::None);
     }
 
-    let Some(last_user_msg) = working_history.iter().rev().find(|msg| msg.role == uni::MessageRole::User) else {
+    let Some(last_user_msg) = last_user_message(working_history) else {
         return Ok(PlanningTransition::None);
     };
 
@@ -314,6 +315,10 @@ mod tests {
         let text = PLANNING_WORKFLOW_MISSING_PLAN_SYNTHESIS_DIRECTIVE;
         assert!(text.contains("sed -n") && text.contains("grep -n"), "missing inspection examples: {text}");
         assert!(text.contains("git diff --check"), "missing invalid VCS example: {text}");
+        assert!(
+            text.contains("must exit 0") && text.contains("npx markdownlint-cli2"),
+            "verify must require exit 0 with linter fallback: {text}"
+        );
     }
 
     #[test]

@@ -1,5 +1,6 @@
 #![allow(
     missing_docs,
+    clippy::expect_used,
     dead_code,
     unused_imports,
     reason = "Intentional compatibility, platform, or test-only suppression."

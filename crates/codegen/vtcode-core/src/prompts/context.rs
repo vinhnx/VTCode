@@ -1,6 +1,5 @@
 use crate::config::ConfigManager;
 use crate::config::types::CapabilityLevel;
-use crate::ide_context::EditorContextSnapshot;
 use crate::skills::command_skills::is_model_catalog_eligible;
 use crate::skills::manager::SkillsManager;
 use crate::skills::model::SkillMetadata;
@@ -29,8 +28,6 @@ pub struct PromptContext {
     pub capability_level: Option<CapabilityLevel>,
     /// Current working directory (different from workspace root)
     pub current_directory: Option<PathBuf>,
-    /// Active IDE/editor context snapshot when available.
-    pub editor_context: Option<EditorContextSnapshot>,
 }
 
 /// User preferences for prompt customization
@@ -111,10 +108,6 @@ impl PromptContext {
     /// Set current working directory
     pub fn set_current_directory(&mut self, dir: PathBuf) {
         self.current_directory = Some(dir);
-    }
-
-    pub fn set_editor_context(&mut self, snapshot: Option<EditorContextSnapshot>) {
-        self.editor_context = snapshot;
     }
 
     pub fn load_available_skills(&mut self) {
@@ -209,10 +202,6 @@ impl PromptContext {
 
         if let Ok(cwd) = std::env::current_dir() {
             context.set_current_directory(cwd);
-        }
-
-        if let Ok(snapshot) = EditorContextSnapshot::read_from_env() {
-            context.set_editor_context(snapshot);
         }
 
         for language in snapshot_for_workspace(workspace.as_ref()).workspace_languages {

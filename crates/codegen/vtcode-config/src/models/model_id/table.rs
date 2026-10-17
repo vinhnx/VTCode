@@ -91,6 +91,13 @@ model_id_table! {
         display: "Gemini 3.8 Flash",
         description: "Most intelligent Flash for long-horizon SWE, autonomous agents, and complex enterprise workflows with 1M context and tunable thinking (low, medium, high)",
     },
+    Gemini4Argon {
+        provider: Gemini,
+        id: models::GEMINI_4_ARGON,
+        parse: [models::GEMINI_4_ARGON],
+        display: "Gemini 4 Argon",
+        description: "Flagship reasoning model for the hardest coding, agentic, math, and science problems with a unified 1M context window, long decode up to 1M output tokens, and tunable thinking (low, medium, high)",
+    },
     // OpenAI models
     GPT6Astra {
         provider: OpenAI,
@@ -105,6 +112,13 @@ model_id_table! {
         parse: [models::openai::GPT_6_SOL],
         display: "GPT-6 Sol",
         description: "Cost-efficient high-end model in the GPT-6 series for demanding professional work",
+    },
+    GPT61Sol {
+        provider: OpenAI,
+        id: models::openai::GPT_6_1_SOL,
+        parse: [models::openai::GPT_6_1_SOL],
+        display: "GPT-6.1 Sol",
+        description: "Near-Astra performance for complex coding, computer use, and professional work at a lower cost",
     },
     GPT6Luna {
         provider: OpenAI,
@@ -155,6 +169,20 @@ model_id_table! {
         parse: [models::CLAUDE_SONNET_5],
         display: "Claude Sonnet 5",
         description: "Anthropic's best combination of speed and intelligence with adaptive thinking on by default, 1M context, and new tokenizer",
+    },
+    ClaudeSonnet55 {
+        provider: Anthropic,
+        id: models::CLAUDE_SONNET_5_5,
+        parse: [models::CLAUDE_SONNET_5_5],
+        display: "Claude Sonnet 5.5",
+        description: "Latest Anthropic Sonnet with the best combination of speed and intelligence, adaptive thinking on by default, 1M context, 128K output, and `between_tools` as the lowest thinking setting",
+    },
+    ClaudeHaiku55 {
+        provider: Anthropic,
+        id: models::CLAUDE_HAIKU_5_5,
+        parse: [models::CLAUDE_HAIKU_5_5],
+        display: "Claude Haiku 5.5",
+        description: "High-volume latency-sensitive work for classification, routing, extraction, and subagents with adaptive thinking, 1M context, 128K output, and default effort medium",
     },
     ClaudeFable5 {
         provider: Anthropic,
@@ -250,6 +278,20 @@ model_id_table! {
         display: "Muse Spark 1.3 Contributor (Meta AI)",
         description: "Official Meta AI Muse Spark 1.3 Contributor-tier variant with always-on reasoning and long context",
     },
+    MetaMuseWonder10 {
+        provider: Meta,
+        id: models::meta::MUSE_WONDER_1_0,
+        parse: [models::meta::MUSE_WONDER_1_0],
+        display: "Muse Wonder 1.0 (Meta AI)",
+        description: "Meta Muse Wonder frontier model for coding, long-running agents, and advanced computer use with Active Memory and Active Focus",
+    },
+    MetaMuseWonderFull10 {
+        provider: Meta,
+        id: models::meta::MUSE_WONDER_FULL_1_0,
+        parse: [models::meta::MUSE_WONDER_FULL_1_0],
+        display: "Muse Wonder Full 1.0 (Meta AI)",
+        description: "Meta's most advanced Muse Wonder Full model for critical workflows with SOTA agentic and coding performance",
+    },
     // NVIDIA NIM models
     NvidiaNemotron3Ultra550bA55b {
         provider: NVIDIA,
@@ -301,6 +343,13 @@ model_id_table! {
         display: "Claude Sonnet 5 (Merge Gateway)",
         description: "Anthropic Claude Sonnet 5 accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayAnthropicClaudeSonnet55 {
+        provider: MergeGateway,
+        id: models::merge_gateway::ANTHROPIC_CLAUDE_SONNET_5_5,
+        parse: [models::merge_gateway::ANTHROPIC_CLAUDE_SONNET_5_5],
+        display: "Claude Sonnet 5.5 (Merge Gateway)",
+        description: "Anthropic Claude Sonnet 5.5 accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
     MergeGatewayDeepseekFlash {
         provider: MergeGateway,
         id: models::merge_gateway::DEEPSEEK_FLASH,
@@ -342,20 +391,6 @@ model_id_table! {
         parse: [models::merge_gateway::THINKINGMACHINES_INKLING],
         display: "Inkling (Merge Gateway)",
         description: "Thinking Machines Inkling accessed through Merge Gateway's OpenAI-compatible endpoint",
-    },
-    MergeGatewayMetaMuseSpark11 {
-        provider: MergeGateway,
-        id: models::merge_gateway::META_MUSE_SPARK_1_1,
-        parse: [models::merge_gateway::META_MUSE_SPARK_1_1],
-        display: "Muse Spark 1.1 (Merge Gateway)",
-        description: "Meta Muse Spark 1.1 accessed through Merge Gateway's OpenAI-compatible endpoint",
-    },
-    MergeGatewayMetaMuseSpark13 {
-        provider: MergeGateway,
-        id: models::merge_gateway::META_MUSE_SPARK_1_3,
-        parse: [models::merge_gateway::META_MUSE_SPARK_1_3],
-        display: "Muse Spark 1.3 (Merge Gateway)",
-        description: "Meta Muse Spark 1.3 accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
     MergeGatewayZaiGlm53Flash {
         provider: MergeGateway,
@@ -406,6 +441,13 @@ model_id_table! {
         display: "GPT-6 Sol (Merge Gateway)",
         description: "OpenAI GPT-6 Sol accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayOpenAIGpt61Sol {
+        provider: MergeGateway,
+        id: models::merge_gateway::OPENAI_GPT_6_1_SOL,
+        parse: [models::merge_gateway::OPENAI_GPT_6_1_SOL],
+        display: "GPT-6.1 Sol (Merge Gateway)",
+        description: "OpenAI GPT-6.1 Sol accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
     MergeGatewayOpenAIGpt6Luna {
         provider: MergeGateway,
         id: models::merge_gateway::OPENAI_GPT_6_LUNA,
@@ -420,12 +462,26 @@ model_id_table! {
         display: "Gemini 3.8 Flash (Merge Gateway)",
         description: "Google Gemini 3.8 Flash accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayGoogleGemini4Argon {
+        provider: MergeGateway,
+        id: models::merge_gateway::GOOGLE_GEMINI_4_ARGON,
+        parse: [models::merge_gateway::GOOGLE_GEMINI_4_ARGON],
+        display: "Gemini 4 Argon (Merge Gateway)",
+        description: "Google Gemini 4 Argon flagship reasoning model accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
     MergeGatewayAnthropicClaudeHaiku4520251001 {
         provider: MergeGateway,
         id: models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_4_5_20251001,
         parse: [models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_4_5_20251001],
         display: "Claude Haiku 4.5 (Merge Gateway)",
         description: "Anthropic Claude Haiku 4.5 fast, cost-efficient model accessed through Merge Gateway",
+    },
+    MergeGatewayAnthropicClaudeHaiku55 {
+        provider: MergeGateway,
+        id: models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5,
+        parse: [models::merge_gateway::ANTHROPIC_CLAUDE_HAIKU_5_5],
+        display: "Claude Haiku 5.5 (Merge Gateway)",
+        description: "Anthropic Claude Haiku 5.5 fast, cost-efficient model accessed through Merge Gateway (reasoning not forwarded: no joint reasoning+tools vendor yet)",
     },
     MergeGatewayAnthropicClaudeFable51 {
         provider: MergeGateway,
@@ -434,6 +490,34 @@ model_id_table! {
         display: "Claude Fable 5.1 (Merge Gateway)",
         description: "Anthropic Claude Fable 5.1 accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayXiaomimimoMimoV26Pro {
+        provider: MergeGateway,
+        id: models::merge_gateway::XIAOMIMIMO_MIMO_V2_6_PRO,
+        parse: [models::merge_gateway::XIAOMIMIMO_MIMO_V2_6_PRO],
+        display: "MiMo V2.6 Pro (Merge Gateway)",
+        description: "Xiaomi MiMo V2.6 Pro flagship reasoning model accessed through Merge Gateway",
+    },
+    MergeGatewayXiaomimimoMimoV26Flash {
+        provider: MergeGateway,
+        id: models::merge_gateway::XIAOMIMIMO_MIMO_V2_6_FLASH,
+        parse: [models::merge_gateway::XIAOMIMIMO_MIMO_V2_6_FLASH],
+        display: "MiMo V2.6 Flash (Merge Gateway)",
+        description: "Xiaomi MiMo V2.6 Flash efficient reasoning model accessed through Merge Gateway",
+    },
+    MergeGatewayMistralLarge4 {
+        provider: MergeGateway,
+        id: models::merge_gateway::MISTRAL_LARGE_4,
+        parse: [models::merge_gateway::MISTRAL_LARGE_4],
+        display: "Mistral Large 4 (Merge Gateway)",
+        description: "Mistral Large 4 open-weight MoE flagship with 1M context accessed through Merge Gateway",
+    },
+    MergeGatewayMetaMuseSparkOpen {
+        provider: MergeGateway,
+        id: models::merge_gateway::META_MUSE_SPARK_OPEN,
+        parse: [models::merge_gateway::META_MUSE_SPARK_OPEN],
+        display: "Muse Spark Open (Merge Gateway)",
+        description: "Meta Muse Spark Open 816B-A42B open-weight flagship for coding and agentic work with 1M context accessed through Merge Gateway",
+    },
     // Mistral models
     MistralLarge3 {
         provider: Mistral,
@@ -441,6 +525,13 @@ model_id_table! {
         parse: [models::mistral::MISTRAL_LARGE_3],
         display: "Mistral Large 3",
         description: "State-of-the-art open-weight general-purpose multimodal model with Mixture-of-Experts architecture",
+    },
+    MistralLarge4 {
+        provider: Mistral,
+        id: models::mistral::MISTRAL_LARGE_4,
+        parse: [models::mistral::MISTRAL_LARGE_4, "mistral-large-2610", "mistral-large-4-0"],
+        display: "Mistral Large 4",
+        description: "Open-weight MoE flagship (49B active / 1.05T total) with 1M context and multimodal support",
     },
     // Hugging Face models
     HuggingFaceOpenAIGptOss20b {
@@ -484,6 +575,16 @@ model_id_table! {
         parse: [models::huggingface::MINIMAX_M3_NOVITA],
         display: "MiniMax-M3 (Novita)",
         description: "MiniMax-M3 model via Novita inference provider on HuggingFace router. Frontier multimodal coding model with 1M context window.",
+    },
+    HuggingFaceMuseSparkOpenBaseten {
+        provider: HuggingFace,
+        id: models::huggingface::META_MUSE_SPARK_OPEN_BASETEN,
+        parse: [
+            models::huggingface::META_MUSE_SPARK_OPEN_BASETEN,
+            "meta-models/Muse-Spark-Open-816B-A42B",
+        ],
+        display: "Muse Spark Open (HF/Baseten)",
+        description: "Meta Muse Spark Open 816B-A42B open-weight flagship for coding and agentic work with 1M context via Baseten on HuggingFace router.",
     },
     // StepFun models
     StepFun37Flash {
@@ -639,6 +740,34 @@ model_id_table! {
         parse: [models::ollama::GLM_5_3_CLOUD],
         display: "GLM-5.3 (cloud)",
         description: "Cloud-hosted GLM-5.3 flagship model for long-horizon tasks with 1M context via Ollama Cloud",
+    },
+    OllamaGlm53FlashCloud {
+        provider: OllamaCloud,
+        id: models::ollama::GLM_5_3_FLASH_CLOUD,
+        parse: [models::ollama::GLM_5_3_FLASH_CLOUD],
+        display: "GLM-5.3 Flash (cloud)",
+        description: "Cloud-hosted multimodal GLM-5.3 Flash model for coding and agentic workflows with 1M context via Ollama Cloud",
+    },
+    OllamaMistralLarge4Cloud {
+        provider: OllamaCloud,
+        id: models::ollama::MISTRAL_LARGE_4_CLOUD,
+        parse: [models::ollama::MISTRAL_LARGE_4_CLOUD],
+        display: "Mistral Large 4 (cloud)",
+        description: "Cloud-hosted multimodal Mistral Large 4 model for coding and agentic workflows with 1M context via Ollama Cloud",
+    },
+    OllamaMuseSparkOpenCloud {
+        provider: OllamaCloud,
+        id: models::ollama::MUSE_SPARK_OPEN_CLOUD,
+        parse: [models::ollama::MUSE_SPARK_OPEN_CLOUD],
+        display: "Muse Spark Open (cloud)",
+        description: "Cloud-hosted multimodal Muse Spark Open model for coding, agentic workflows, and long-context reasoning via Ollama Cloud",
+    },
+    OllamaDeepSeekV41FlashCloud {
+        provider: OllamaCloud,
+        id: models::ollama::DEEPSEEK_V4_1_FLASH_CLOUD,
+        parse: [models::ollama::DEEPSEEK_V4_1_FLASH_CLOUD],
+        display: "DeepSeek V4.1 Flash (cloud)",
+        description: "Cloud-hosted multimodal DeepSeek V4.1 Flash model with 1M context via Ollama Cloud",
     },
     OllamaKimiK3Cloud {
         provider: OllamaCloud,
@@ -807,12 +936,14 @@ mod tests {
                 ModelId::MergeGatewayAnthropicClaudeOpus5
                     | ModelId::MergeGatewayAnthropicClaudeOpus55
                     | ModelId::MergeGatewayAnthropicClaudeSonnet5
+                    | ModelId::MergeGatewayAnthropicClaudeSonnet55
                     | ModelId::MergeGatewayGoogleGemini38Flash
-                    | ModelId::MergeGatewayMetaMuseSpark13
                     | ModelId::MergeGatewayOpenAIGpt6Astra
                     | ModelId::MergeGatewayOpenAIGpt6Sol
+                    | ModelId::MergeGatewayOpenAIGpt61Sol
                     | ModelId::MergeGatewayOpenAIGpt6Luna
                     | ModelId::MergeGatewayDeepseekFlash
+                    | ModelId::MergeGatewayMetaMuseSparkOpen
             )
             || matches!(
                 model,
@@ -857,6 +988,9 @@ mod tests {
             (models::GPT, ModelId::GPT56Sol),
             (models::openai::GPT_5_6_SOL, ModelId::GPT56Sol),
             (models::CLAUDE_SONNET_5, ModelId::ClaudeSonnet5),
+            (models::mistral::MISTRAL_LARGE_4, ModelId::MistralLarge4),
+            ("mistral-large-2610", ModelId::MistralLarge4),
+            ("mistral-large-4-0", ModelId::MistralLarge4),
         ];
         for (alias, expected) in cases {
             let parsed = ModelId::from_str(alias).unwrap_or_else(|err| panic!("alias {alias} failed to parse: {err}"));

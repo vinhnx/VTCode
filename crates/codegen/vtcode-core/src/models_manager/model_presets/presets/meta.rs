@@ -23,6 +23,18 @@ fn reasoning_efforts() -> Vec<ReasoningEffortPreset> {
 pub(crate) fn meta_presets() -> Vec<ModelPreset> {
     [
         (
+            models::meta::MUSE_WONDER_FULL_1_0,
+            "Muse Wonder Full 1.0 (Meta AI)",
+            "Meta's most advanced model for critical workflows with SOTA agentic and coding performance and a 1M-token context window (Muse Code subscription)",
+            false,
+        ),
+        (
+            models::meta::MUSE_WONDER_1_0,
+            "Muse Wonder 1.0 (Meta AI)",
+            "Frontier Meta AI model for coding, long-running agents, and advanced computer use with always-on reasoning and a 1M-token context window",
+            false,
+        ),
+        (
             models::meta::MUSE_SPARK_1_3,
             "Muse Spark 1.3 (Meta AI)",
             "Official Meta AI Standard-tier flagship tuned for agentic workflows with always-on reasoning and a 1M-token context window",

@@ -3,7 +3,7 @@ use crate::config::constants::tools;
 use crate::core::agent::harness_kernel::PreparedToolCall;
 use crate::core::agent::session::AgentSessionState;
 use crate::permissions::{
-    ResolvedPermissionDecision, build_advertised_permission_requests, build_permission_request,
+    PermissionRequest, ResolvedPermissionDecision, build_advertised_permission_requests, build_permission_request,
     evaluate_effective_permissions, evaluate_permissions,
 };
 use crate::primary_agent::primary_agent_allows_tool;
@@ -69,21 +69,19 @@ impl AgentRunner {
         session_state: &mut AgentSessionState,
     ) -> Result<PreparedToolCall> {
         let normalized_args = self.normalize_tool_args(tool_name, args, session_state);
-        self.ensure_active_primary_agent_allows_tool_call(tool_name, &normalized_args)?;
+        self.ensure_tool_call_permissions(tool_name, &normalized_args)?;
         self.tool_registry.admit_public_tool_call(tool_name, &normalized_args)
     }
 
-    fn ensure_active_primary_agent_allows_tool_call(&self, tool_name: &str, args: &Value) -> Result<()> {
-        let Some(active_primary_agent) = self.active_primary_agent.as_ref() else {
-            return Ok(());
-        };
-
+    fn ensure_tool_call_permissions(&self, tool_name: &str, args: &Value) -> Result<()> {
         let normalized_tool_name = self
             .tool_registry
             .resolve_public_tool_name(tool_name)
             .unwrap_or_else(|_| tool_name.to_string());
 
-        if !primary_agent_allows_tool(active_primary_agent, &normalized_tool_name) {
+        if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
+            && !primary_agent_allows_tool(active_primary_agent, &normalized_tool_name)
+        {
             bail!(
                 "Tool '{}' is not permitted by active primary agent '{}'",
                 normalized_tool_name,
@@ -94,23 +92,38 @@ impl AgentRunner {
         let current_dir = std::env::current_dir().unwrap_or_else(|_| self._workspace.clone());
         let permission_request =
             build_permission_request(&self._workspace, &current_dir, &normalized_tool_name, Some(args));
-        let decision = evaluate_effective_permissions(
-            &self.config().permissions,
-            &active_primary_agent.permissions,
-            &self._workspace,
-            &current_dir,
-            &permission_request,
-        );
-
-        if decision == ResolvedPermissionDecision::Deny {
-            bail!(
-                "Tool '{}' is denied by active primary agent '{}'",
-                normalized_tool_name,
-                active_primary_agent.identity.name
-            );
+        if self.permission_request_is_denied(&current_dir, &permission_request) {
+            if let Some(active_primary_agent) = self.active_primary_agent.as_ref() {
+                bail!(
+                    "Tool '{}' is denied by active primary agent '{}'",
+                    normalized_tool_name,
+                    active_primary_agent.identity.name
+                );
+            }
+            bail!("Tool '{}' is denied by effective permissions", normalized_tool_name);
         }
 
         Ok(())
+    }
+
+    fn permission_request_is_denied(&self, current_dir: &std::path::Path, request: &PermissionRequest) -> bool {
+        if let Some(active_primary_agent) = self.active_primary_agent.as_ref() {
+            evaluate_effective_permissions(
+                &self.config().permissions,
+                &active_primary_agent.permissions,
+                &self._workspace,
+                current_dir,
+                request,
+            ) == ResolvedPermissionDecision::Deny
+        } else {
+            evaluate_permissions(&self.config().permissions, &self._workspace, current_dir, request).deny
+        }
+    }
+
+    /// Scheduler-issued calls share runner permissions and registry admission.
+    pub(crate) async fn execute_scheduled_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
+        self.ensure_tool_call_permissions(tool_name, &args)?;
+        self.tool_registry.execute_tool(tool_name, args).await
     }
 
     /// Check if a tool is allowed for this agent
@@ -149,18 +162,7 @@ impl AgentRunner {
             let bash_probe_args = serde_json::json!({ "cmd": "true" });
             let bash_probe =
                 build_permission_request(&self._workspace, &current_dir, tool_name, Some(&bash_probe_args));
-            if evaluate_permissions(&self.config().permissions, &self._workspace, &current_dir, &bash_probe).deny {
-                return false;
-            }
-            if let Some(active_primary_agent) = self.active_primary_agent.as_ref()
-                && evaluate_effective_permissions(
-                    &self.config().permissions,
-                    &active_primary_agent.permissions,
-                    &self._workspace,
-                    &current_dir,
-                    &bash_probe,
-                ) == ResolvedPermissionDecision::Deny
-            {
+            if self.permission_request_is_denied(&current_dir, &bash_probe) {
                 return false;
             }
         }
@@ -169,25 +171,11 @@ impl AgentRunner {
         } else {
             build_advertised_permission_requests(&self._workspace, &current_dir, tool_name)
         };
-        if advertised_requests.iter().any(|request| {
-            evaluate_permissions(&self.config().permissions, &self._workspace, &current_dir, request).deny
-        }) {
+        if advertised_requests
+            .iter()
+            .any(|request| self.permission_request_is_denied(&current_dir, request))
+        {
             return false;
-        }
-
-        if let Some(active_primary_agent) = self.active_primary_agent.as_ref() {
-            let permission_denied = advertised_requests.iter().any(|permission_request| {
-                evaluate_effective_permissions(
-                    &self.config().permissions,
-                    &active_primary_agent.permissions,
-                    &self._workspace,
-                    &current_dir,
-                    permission_request,
-                ) == ResolvedPermissionDecision::Deny
-            });
-            if permission_denied {
-                return false;
-            }
         }
 
         if self.tool_registry.is_denied_in_full_auto(tool_name).await {

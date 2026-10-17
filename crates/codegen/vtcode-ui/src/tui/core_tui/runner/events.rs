@@ -194,7 +194,10 @@ impl ScrollAccumulator {
 
 // Spawn the async event loop with proper cancellation token support
 // Uses crossterm::event::EventStream for async-native event handling
-// Implements adaptive tick rate: 60Hz when active, 10Hz when idle
+// Implements on-demand ticking: 60Hz while interacting or animating
+// (`needs_animation_tick`), 4Hz upkeep when idle. Input, commands (new
+// messages), and crossterm events render immediately without waiting for a
+// tick; ticks only drive animations and transient expiry cleanup.
 pub(super) async fn spawn_event_loop(
     event_tx: EventSender,
     cancellation_token: CancellationToken,

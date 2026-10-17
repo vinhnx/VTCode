@@ -4,11 +4,13 @@ Guide for using `cargo-unmaintained` to detect unmaintained dependencies in VT C
 
 ## Overview
 
-[`cargo-unmaintained`](https://github.com/trailofbits/cargo-unmaintained) is a Rust tool that automatically finds unmaintained packages in Rust projects. It uses heuristics to detect unmaintained packages by checking:
+[`cargo-unmaintained`](https://github.com/trailofbits/cargo-unmaintained) is a Rust tool that automatically finds
+unmaintained packages in Rust projects. It uses heuristics to detect unmaintained packages by checking:
 
 1. **Archived repository** - The package's repository is archived
 2. **Not a repository member** - The package is not a member of its named repository
-3. **Stale dependencies** - The package depends on a package whose latest version is incompatible and was released over a year ago, and the package either has no repository or its last commit was over a year ago
+3. **Stale dependencies** - The package depends on a package whose latest version is incompatible and was released over
+   a year ago, and the package either has no repository or its last commit was over a year ago
 
 ## Installation
 
@@ -98,19 +100,19 @@ cargo unmaintained --save-token
 
 ## Common Options
 
-| Option | Description |
-|--------|-------------|
-| `--color <WHEN>` | Color output: `always`, `auto`, or `never` (default: `auto`) |
-| `--fail-fast` | Exit as soon as an unmaintained package is found |
-| `--json` | Output JSON (experimental) |
-| `--max-age <DAYS>` | Max age for repository commits (default: 365) |
-| `--no-cache` | Disable disk caching |
-| `--no-exit-code` | Don't set exit code on unmaintained packages |
-| `--no-warnings` | Suppress warnings |
-| `-p, --package <NAME>` | Check only a specific package |
-| `--purge` | Remove cached data and exit |
-| `--tree` | Show dependency paths to unmaintained packages |
-| `--verbose` | Show detailed progress information |
+| Option                 | Description                                                  |
+| ---------------------- | ------------------------------------------------------------ |
+| `--color <WHEN>`       | Color output: `always`, `auto`, or `never` (default: `auto`) |
+| `--fail-fast`          | Exit as soon as an unmaintained package is found             |
+| `--json`               | Output JSON (experimental)                                   |
+| `--max-age <DAYS>`     | Max age for repository commits (default: 365)                |
+| `--no-cache`           | Disable disk caching                                         |
+| `--no-exit-code`       | Don't set exit code on unmaintained packages                 |
+| `--no-warnings`        | Suppress warnings                                            |
+| `-p, --package <NAME>` | Check only a specific package                                |
+| `--purge`              | Remove cached data and exit                                  |
+| `--tree`               | Show dependency paths to unmaintained packages               |
+| `--verbose`            | Show detailed progress information                           |
 
 ## Integration with VT Code Development
 
@@ -174,7 +176,7 @@ Some packages may be flagged incorrectly. If a package is stable but flagged:
 
 ## Example Output
 
-```
+```text
 Scanning 632 packages and their dependencies
 archival status of `some-crate` using GitHub API...ok (unarchived)
 membership of `some-crate` using shallow clone...ok (member)

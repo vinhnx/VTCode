@@ -36,7 +36,7 @@ pub enum PatchError {
     ContextNotFound { path: String, context: String },
 
     #[error(
-        "failed to locate expected lines in '{path}':\n{snippet}\n\nFix: The patch context/deletion lines must match file content exactly. Use read_file first, then use those exact lines in your patch."
+        "failed to locate expected lines in '{path}':\n{snippet}\n\nFix: Use complete current context/deletion lines; internal whitespace and full-line content must match. Use read_file first, then use those exact lines in your patch."
     )]
     SegmentNotFound { path: String, snippet: String },
 
@@ -85,4 +85,17 @@ pub enum PatchError {
         #[source]
         original: Box<PatchError>,
     },
+}
+
+impl PatchError {
+    /// Only exact text/context failures qualify for a fresh recovery read.
+    pub fn context_mismatch(&self) -> Option<(&str, &str)> {
+        match self {
+            Self::ContextNotFound { path, context } => Some((path, context)),
+            Self::SegmentNotFound { path, snippet } => Some((path, snippet)),
+            Self::RolledBack { original } => original.context_mismatch(),
+            // A failed rollback requires resolving partial state first.
+            _ => None,
+        }
+    }
 }

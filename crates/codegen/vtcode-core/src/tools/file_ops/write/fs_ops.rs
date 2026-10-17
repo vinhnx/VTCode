@@ -29,6 +29,9 @@ impl FileOpsTool {
             return Err(anyhow!("Error: Destination '{destination}' is excluded by .vtcodegitignore."));
         }
 
+        if from_path == to_path || to_path.starts_with(&from_path) || from_path.starts_with(&to_path) {
+            return Err(anyhow!("Source and destination must have distinct, non-overlapping identities"));
+        }
         if !tokio::fs::try_exists(&from_path).await? {
             return Err(anyhow!("Source path '{path}' does not exist"));
         }
@@ -38,6 +41,47 @@ impl FileOpsTool {
         }
 
         Ok((from_path, to_path))
+    }
+
+    async fn require_existing_tree(&self, root: &std::path::Path) -> Result<()> {
+        match self.inspect_existing_tree(root).await {
+            Err(error)
+                if self.edited_file_monitor.source_inspection().mode()
+                    == vtcode_config::core::agent::InspectionMode::Warn =>
+            {
+                tracing::warn!(path = %root.display(), %error, "Source tree inspection unavailable");
+                Ok(())
+            }
+            result => result,
+        }
+    }
+
+    async fn inspect_existing_tree(&self, root: &std::path::Path) -> Result<()> {
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(path) = pending.pop() {
+            let metadata = tokio::fs::symlink_metadata(&path).await?;
+            if metadata.is_symlink() {
+                return Err(anyhow!("Use explicit file operations for symlink targets"));
+            }
+            if metadata.is_dir() {
+                let mut entries = tokio::fs::read_dir(&path).await?;
+                while let Some(entry) = entries.next_entry().await? {
+                    pending.push(entry.path());
+                }
+            } else {
+                self.edited_file_monitor
+                    .source_inspection()
+                    .require_existing_file(&path)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn refresh_agent_write(&self, path: &std::path::Path) {
+        if let Err(error) = self.edited_file_monitor.record_agent_write(path).await {
+            tracing::warn!(path = %path.display(), %error, "Failed to refresh edited-file snapshot after filesystem operation");
+        }
     }
 
     /// Execute basic directory listing
@@ -127,6 +171,10 @@ impl FileOpsTool {
             return Err(anyhow!("Error: Path '{path}' is excluded by .vtcodegitignore and cannot be deleted."));
         }
 
+        let _lease = self.edited_file_monitor.acquire_mutation(&canonical).await;
+        if self.edited_file_monitor.source_inspection().mode() != vtcode_config::core::agent::InspectionMode::Off {
+            self.require_existing_tree(&canonical).await?;
+        }
         let metadata = with_path_context(tokio::fs::metadata(&canonical).await, "read metadata for", &path)?;
 
         let deleted_kind = if metadata.is_dir() {
@@ -141,6 +189,7 @@ impl FileOpsTool {
             "file"
         };
 
+        self.refresh_agent_write(&canonical).await;
         Ok(json!({
             "success": true,
             "deleted": true,
@@ -156,6 +205,18 @@ impl FileOpsTool {
         let MoveInput { path, destination, force } = input;
 
         let (from_path, to_path) = self.validate_move_copy_args(&path, &destination, "moved").await?;
+        let mut paths = vec![from_path.clone(), to_path.clone()];
+        paths.sort();
+        paths.dedup();
+        let mut leases = Vec::new();
+        for path in paths {
+            leases.push(self.edited_file_monitor.acquire_mutation(&path).await);
+        }
+        if tokio::fs::try_exists(&to_path).await?
+            && self.edited_file_monitor.source_inspection().mode() != vtcode_config::core::agent::InspectionMode::Off
+        {
+            self.require_existing_tree(&to_path).await?;
+        }
 
         if tokio::fs::try_exists(&to_path).await? && !force {
             return Err(anyhow!("Destination path '{destination}' already exists. Use force=true to overwrite."));
@@ -165,6 +226,18 @@ impl FileOpsTool {
             .await
             .with_context(|| format!("Failed to move '{path}' to '{destination}'"))?;
 
+        if let Err(error) = self.edited_file_monitor.record_agent_move(&from_path, &to_path).await {
+            tracing::warn!(source = %from_path.display(), destination = %to_path.display(), %error, "Failed to refresh edited-file snapshots after move");
+        }
+        if let Ok(content) = tokio::fs::read_to_string(&to_path).await {
+            self.edited_file_monitor.source_inspection().record_transfer(
+                &from_path,
+                &to_path,
+                &content,
+                crate::tools::source_inspection::call_key(crate::config::constants::tools::MOVE_FILE, &args),
+                true,
+            );
+        }
         info!(from = %path, to = %destination, "Moved successfully");
 
         Ok(json!({
@@ -181,6 +254,18 @@ impl FileOpsTool {
         let CopyInput { path, destination, recursive } = input;
 
         let (from_path, to_path) = self.validate_move_copy_args(&path, &destination, "copied").await?;
+        let mut paths = vec![from_path.clone(), to_path.clone()];
+        paths.sort();
+        paths.dedup();
+        let mut leases = Vec::new();
+        for path in paths {
+            leases.push(self.edited_file_monitor.acquire_mutation(&path).await);
+        }
+        if tokio::fs::try_exists(&to_path).await?
+            && self.edited_file_monitor.source_inspection().mode() != vtcode_config::core::agent::InspectionMode::Off
+        {
+            self.require_existing_tree(&to_path).await?;
+        }
 
         let metadata = tokio::fs::metadata(&from_path).await?;
         if metadata.is_dir() {
@@ -192,22 +277,44 @@ impl FileOpsTool {
             for entry in build_walker_single_threaded(&from_path).build().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
                 let relative = entry_path.strip_prefix(&from_path).unwrap_or(entry_path);
-                let target = to_path.join(relative);
+                let target = vtcode_commons::paths::ensure_path_within_workspace_resolved(
+                    &to_path.join(relative),
+                    self.canonical_workspace_root(),
+                )
+                .await?;
+                let source = vtcode_commons::paths::ensure_path_within_workspace_resolved(
+                    entry_path,
+                    self.canonical_workspace_root(),
+                )
+                .await?;
 
                 if entry.file_type().is_some_and(|ft| ft.is_dir()) {
                     ensure_dir_exists(&target).await?;
                 } else {
-                    with_file_context(tokio::fs::copy(entry_path, &target).await, "copy", entry_path)?;
+                    with_file_context(tokio::fs::copy(&source, &target).await, "copy", entry_path)?;
+                    self.refresh_agent_write(&target).await;
                 }
             }
         } else {
             tokio::fs::copy(&from_path, &to_path)
                 .await
                 .with_context(|| format!("Failed to copy '{path}' to '{destination}'"))?;
+            self.refresh_agent_write(&to_path).await;
         }
 
         info!(from = %path, to = %destination, "Copied successfully");
 
+        if metadata.is_file()
+            && let Ok(content) = tokio::fs::read_to_string(&to_path).await
+        {
+            self.edited_file_monitor.source_inspection().record_transfer(
+                &from_path,
+                &to_path,
+                &content,
+                crate::tools::source_inspection::call_key(crate::config::constants::tools::COPY_FILE, &args),
+                false,
+            );
+        }
         Ok(json!({
             "success": true,
             "from": self.workspace_relative_display(&from_path),

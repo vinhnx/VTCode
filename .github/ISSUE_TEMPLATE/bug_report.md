@@ -39,7 +39,8 @@ If applicable, add screenshots to help explain your problem.
 
 ## Configuration
 
-If applicable, share relevant parts of your `vtcode.toml` configuration file (be sure to remove any sensitive information like API keys):
+If applicable, share relevant parts of your `vtcode.toml` configuration file (be sure to remove any sensitive
+information like API keys):
 
 ```toml
 # Paste your relevant configuration here
@@ -49,7 +50,7 @@ If applicable, share relevant parts of your `vtcode.toml` configuration file (be
 
 If applicable, add terminal output or logs that show the error:
 
-```
+```text
 Paste error output here
 ```
 

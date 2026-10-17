@@ -70,6 +70,14 @@ pub(super) fn parse_command_parts(
         }
     }
 
+    let collision_command = raw_command.as_deref().or_else(|| parts.first().map(String::as_str));
+    if collision_command.is_some_and(crate::tools::names::is_apply_patch_shell_collision_command) {
+        return Err(anyhow!(
+            "apply_patch is a tool, not a shell executable. {}",
+            crate::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION
+        ));
+    }
+
     if parts.is_empty() {
         return Err(anyhow!("{empty_error}"));
     }
@@ -311,4 +319,28 @@ pub(super) fn resolve_exec_run_session_id(payload: &serde_json::Map<String, Valu
         .transpose()?
         .map(str::to_string)
         .map_or_else(|| Ok(generate_session_id("run")), Ok)
+}
+
+#[cfg(test)]
+mod patch_shell_rejection_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn patch_shell_parser_rejects_direct_and_quoted_names_before_launch() {
+        for command in [
+            "apply_patch <<'PATCH'\n*** Begin Patch\n*** End Patch\nPATCH",
+            "'applypatch' foo",
+            "/tmp/apply_patch foo",
+        ] {
+            let args = json!({"command":command});
+            let error =
+                parse_command_parts(args.as_object().unwrap(), "missing", "empty").expect_err("reject before launch");
+            assert!(error.to_string().contains("apply_patch is a tool"));
+        }
+        assert!(
+            parse_command_parts(json!({"command":"printf '%s' apply_patch"}).as_object().unwrap(), "missing", "empty")
+                .is_ok()
+        );
+    }
 }

@@ -73,6 +73,10 @@ impl TerminalModeGuard {
         let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
         if self.alternate_screen {
+            // Purge the alternate viewport before leaving so the picker frame
+            // cannot leak into the main scrollback (mirrors the canonical
+            // `panic_hook::restore_tui` ordering).
+            let _ = execute!(terminal.backend_mut(), Clear(ClearType::All));
             execute!(terminal.backend_mut(), LeaveAlternateScreen)
                 .with_context(|| format!("Failed to leave alternate screen after {} selector", self.label))?;
             self.alternate_screen = false;
@@ -120,6 +124,9 @@ impl Drop for TerminalModeGuard {
 
         if self.alternate_screen {
             let mut stderr = io::stderr();
+            // Best-effort purge before leaving (mirrors the canonical
+            // `panic_hook::restore_tui` ordering).
+            let _ = execute!(stderr, Clear(ClearType::All));
             let _ = execute!(stderr, LeaveAlternateScreen);
             self.alternate_screen = false;
         }

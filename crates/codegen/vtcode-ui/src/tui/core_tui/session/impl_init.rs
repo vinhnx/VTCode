@@ -95,15 +95,20 @@ impl Session {
             placeholder,
             placeholder_style: None,
             input_status_left: None,
+            footer_context_status: None,
+            footer_context_right: None,
+            footer_context_configured: false,
             input_status_right: None,
             copy_notification_until: None,
             copy_notification_failed: false,
+            copy_notification_chars: 0,
             drag_auto_scroll: None,
             input_compact_mode: false,
 
             // --- UI State ---
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
+            program_status: super::super::program_status::ProgramStatus::default(),
             activity_state: ActivityState::Idle,
             image_input_enabled: false,
             cursor_visible: true,
@@ -123,6 +128,9 @@ impl Session {
             transcript_width: 0,
             transcript_view_top: 0,
             areas: SessionAreas::default(),
+            sticky_prompt_target: None,
+            sticky_prompt_preview_cache: None,
+            leading_user_prompt_truncated: false,
             transcript_file_link_targets: Vec::new(),
             modal_link_targets: Vec::new(),
             hovered_transcript_file_link: None,
@@ -165,6 +173,7 @@ impl Session {
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
             shimmer_state: ShimmerState::new(),
+            progress: progress::TransientProgress::default(),
 
             // --- Reverse Search ---
             reverse_search_state: reverse_search::ReverseSearchState::new(),
@@ -191,9 +200,11 @@ impl Session {
 
             // --- Performance Caching ---
             header_lines_cache: None,
+            header_block_title_cache: None,
             header_height_cache: hashbrown::HashMap::new(),
             queued_inputs_preview_cache: None,
             subprocess_entries_preview_cache: None,
+            input_render_cache: None,
 
             // --- Terminal Title ---
             app_name,

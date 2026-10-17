@@ -1,0 +1,37 @@
+## Proposed plan: refine README.md
+
+### Summary
+Refine `README.md` for wording, structure, and consistency while preserving all facts, links, and the auto-generated contributors block. Evidence gathered: all 40 referenced docs/scripts exist, `Cargo.toml` confirms version `0.177.0` and `rust-version = "1.98.1"` (matching README claims), `.markdownlint-cli2.jsonc` sets MD013 line_length=120 and allows the HTML elements README uses, and the `CONTRIBUTORS:START/END` markers (README.md:328-373) must remain untouched.
+
+### Scope
+
+**In**
+- `README.md` only — wording, transitions, heading consistency, prose tightening.
+
+**Out**
+- `docs/**`, `scripts/**`, `Cargo.toml`, `.markdownlint-cli2.jsonc` — no changes.
+- Auto-generated contributors block (`<!-- CONTRIBUTORS:START -->` … `<!-- CONTRIBUTORS:END -->`) — must not be edited.
+- Badge URLs, install commands, code blocks, and link targets — content-preserving edits only.
+
+### Implementation Steps
+1. Read `README.md` in full (425 lines) to establish the baseline before editing -> files: [README.md] -> verify: [`wc -l README.md`]
+2. Tighten Overview and Quick Start prose: remove filler ("The rest of this page covers…"), fix awkward line breaks, keep all commands and notes intact -> files: [README.md] -> verify: [`rg -n "The rest of this page" README.md` expect no match]
+3. Fix Usage section wording: tighten `/explain` bullet list, `exec` note, Sessions intro transitions -> files: [README.md] -> verify: [`rg -n "guided tour" README.md` expect no match]
+4. Consistency pass on Integrations/Documentation/Development/Contributing/Security/Community headings and lead sentences -> files: [README.md] -> verify: [`rg -n "## " README.md` count headings unchanged]
+5. Confirm no edits inside `CONTRIBUTORS:START/END` block -> files: [README.md] -> verify: [`rg -c "CONTRIBUTORS" README.md` = 2 matches]
+6. Run markdownlint to confirm zero errors -> files: [README.md] -> verify: [`npx markdownlint-cli2 README.md` exit 0]
+
+### Test Cases and Validation
+- All referenced doc/script paths verified to exist (done during planning; re-verify post-edit with the `ls` command from step 1).
+- `npx markdownlint-cli2 README.md` exits 0.
+- `wc -l README.md` count stays within ±10 lines of 425 (no structural expansion).
+- Visual spot-check of the diff: only prose lines changed, no link/badge/code-block edits.
+
+### Assumptions and Defaults
+- "Refine" means prose/structure polish, not a rewrite or content additions.
+- Keep the mermaid diagrams, badges, and HTML `<details>` blocks as-is.
+- No new sections (e.g., adding a changelog link) unless trivially implied by existing text.
+- Auto-generated contributor list is immutable.
+
+### Open question
+None — all factual claims verified against the repo; no blocking decisions.

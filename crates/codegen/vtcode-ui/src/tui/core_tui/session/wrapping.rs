@@ -3,6 +3,7 @@
 //! Wraps text while keeping URLs and file paths as atomic units to preserve
 //! terminal link detection and transcript file hit-testing.
 
+use super::text_utils::trim_trailing_wrap_whitespace;
 use ratatui::prelude::*;
 use ratatui::widgets::Paragraph;
 use regex::Regex;
@@ -91,15 +92,28 @@ pub(crate) fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -
         return vec![Line::default()];
     }
 
+    // Hotpath: the regex below is ~10% of TUI reflow — fast-reject plain
+    // prose with the cheap link-candidate check first (no regex engine).
+    // Consistent with link-projection gating: no candidate => no links to
+    // preserve, so standard wrapping is safe.
+    if !line
+        .spans
+        .iter()
+        .any(|span| super::transcript_links::may_contain_link_candidate_text(span.content.as_ref()))
+    {
+        return super::text_utils::wrap_line(line, max_width);
+    }
+
+    // Fast path: check spans without joining text (hotpath: the join was a
+    // per-row String alloc on every reflow).
+    if !line.spans.iter().any(|span| contains_preserved_token(span.content.as_ref())) {
+        return super::text_utils::wrap_line(line, max_width);
+    }
+
     let text: Cow<'_, str> = match line.spans.as_slice() {
         [span] => span.content.clone(),
         _ => Cow::Owned(line.spans.iter().map(|s| s.content.as_ref()).collect()),
     };
-
-    // No URLs - use standard wrapping (delegates to text_utils)
-    if !contains_preserved_token(&text) {
-        return super::text_utils::wrap_line(line, max_width);
-    }
 
     // Find all preserved tokens in the text
     let urls: Vec<_> = PRESERVED_TOKEN_PATTERN
@@ -167,21 +181,6 @@ fn wrap_mixed_content(
     } else {
         fallback_style
     };
-
-    fn trim_trailing_wrap_whitespace(spans: &mut Vec<Span<'static>>) {
-        while let Some(last) = spans.last_mut() {
-            let trimmed_len = last.content.trim_end_matches(char::is_whitespace).len();
-            if trimmed_len == last.content.len() {
-                break;
-            }
-            if trimmed_len == 0 {
-                spans.pop();
-                continue;
-            }
-            last.content.to_mut().truncate(trimmed_len);
-            break;
-        }
-    }
 
     let ensure_prefix = |current_line: &mut Vec<Span<'static>>, current_width: &mut usize, result: &[Line<'static>]| {
         if use_continuation_prefix && current_line.is_empty() && !result.is_empty() {

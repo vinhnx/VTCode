@@ -20,6 +20,7 @@ pub mod state;
 // Preserved external surface. Do not remove without updating the consumers in
 // `handlers/mod.rs`, `task_tracker.rs`, `planning_task_tracker.rs`,
 // `continuation.rs`, `turn/context.rs`, and `turn/.../plan_seed.rs`.
+pub(in crate::tools::handlers) use artifacts::render_plan_with_tracker;
 pub use artifacts::{
     CANONICAL_STEP_FORMAT, PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES, PlanValidationReport,
     generate_tracker_markdown_from_plan, merge_plan_content, plan_file_for_tracker_file, split_bracket_items,
@@ -42,6 +43,101 @@ mod tests {
     use super::persistence::detect_validation_command_hints;
     use crate::tools::traits::Tool;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn start_planning_blank_paths_use_default_destination() {
+        for blank in ["", "  ", "\n\t"] {
+            let workspace = TempDir::new().unwrap();
+            let state = PlanningWorkflowState::new(workspace.path().to_path_buf());
+            let tool = StartPlanningTool::new(state.clone());
+            tool.execute(json!({"plan_name":"blank-path", "plan_path":blank}))
+                .await
+                .unwrap();
+            assert!(state.is_active());
+            assert_eq!(state.get_plan_file().await.unwrap(), workspace.path().join(".vtcode/plans/blank-path.md"));
+        }
+    }
+
+    #[tokio::test]
+    async fn start_planning_failed_destination_preserves_inactive_or_active_state() {
+        for active in [false, true] {
+            for destination_is_directory in [false, true] {
+                let workspace = TempDir::new().unwrap();
+                let state = PlanningWorkflowState::new(workspace.path().to_path_buf());
+                let preceding = workspace.path().join("old-plan.md");
+                std::fs::write(&preceding, "existing plan").unwrap();
+                state.set_plan_file(Some(preceding.clone())).await;
+                let baseline = std::time::SystemTime::UNIX_EPOCH;
+                state.set_plan_baseline(Some(baseline)).await;
+                if active {
+                    state.enable();
+                }
+                let blocked = workspace.path().join("blocked");
+                let target = if destination_is_directory {
+                    std::fs::create_dir(&blocked).unwrap();
+                    blocked.clone()
+                } else {
+                    std::fs::write(&blocked, "not a directory").unwrap();
+                    blocked.join("plan.md")
+                };
+                let tool = StartPlanningTool::new(state.clone());
+                let error = tool.execute(json!({"plan_path":target})).await.unwrap_err();
+                assert!(format!("{error:#}").contains(&target.display().to_string()));
+                assert_eq!(state.is_active(), active);
+                assert_eq!(state.get_plan_file().await, Some(preceding.clone()));
+                assert_eq!(state.plan_baseline().await, Some(baseline));
+                assert_eq!(std::fs::read_to_string(preceding).unwrap(), "existing plan");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn start_planning_explicit_destination_initializes_before_activation() {
+        let workspace = TempDir::new().unwrap();
+        let state = PlanningWorkflowState::new(workspace.path().to_path_buf());
+        let tool = StartPlanningTool::new(state.clone());
+        tool.execute(json!({"plan_path":"docs/design/repair.md", "description":"repair tracker"}))
+            .await
+            .unwrap();
+        let target = workspace.path().join("docs/design/repair.md");
+        assert_eq!(state.get_plan_file().await, Some(target.clone()));
+        assert!(state.is_active());
+        assert!(std::fs::read_to_string(target).unwrap().contains("repair tracker"));
+        assert!(state.plan_baseline().await.is_some());
+    }
+
+    #[tokio::test]
+    async fn start_planning_replacement_does_not_inspect_unusable_old_destination() {
+        let workspace = TempDir::new().unwrap();
+        let state = PlanningWorkflowState::new(workspace.path().to_path_buf());
+        let previous_parent = workspace.path().join("previous");
+        std::fs::create_dir(&previous_parent).unwrap();
+        let previous = previous_parent.join("plan.md");
+        std::fs::write(&previous, "preceding plan").unwrap();
+        state.set_plan_file(Some(previous.clone())).await;
+        let baseline = std::time::SystemTime::UNIX_EPOCH;
+        state.set_plan_baseline(Some(baseline)).await;
+        state.enable();
+        std::fs::rename(&previous_parent, workspace.path().join("displaced")).unwrap();
+        std::fs::write(&previous_parent, "now a regular file").unwrap();
+        let tool = StartPlanningTool::new(state.clone());
+
+        for arguments in [json!({}), json!({"plan_path":" \t"})] {
+            let error = tool.execute(arguments).await.unwrap_err();
+            assert!(format!("{error:#}").contains(&previous.display().to_string()));
+            assert!(state.is_active());
+            assert_eq!(state.get_plan_file().await, Some(previous.clone()));
+            assert_eq!(state.plan_baseline().await, Some(baseline));
+        }
+
+        tool.execute(json!({"plan_path":"replacement/plan.md"})).await.unwrap();
+        let replacement = workspace.path().join("replacement/plan.md");
+        assert!(state.is_active());
+        assert_eq!(state.get_plan_file().await, Some(replacement.clone()));
+        assert_ne!(state.plan_baseline().await, Some(baseline));
+        assert!(std::fs::read_to_string(replacement).unwrap().contains("Status: drafting"));
+        assert_eq!(std::fs::read_to_string(workspace.path().join("displaced/plan.md")).unwrap(), "preceding plan");
+    }
 
     #[tokio::test]
     async fn test_start_planning() {

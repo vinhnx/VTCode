@@ -21,10 +21,10 @@ chrono = { workspace = true }
 futures = { workspace = true }
 hashbrown = { workspace = true }
 iana-time-zone = "0.1"
-jsonschema = "0.52"
+jsonschema = "0.58"
 lru = "0.18"
 parking_lot = "0.12"
-rmcp = { version = "3.4.0", features = [
+rmcp = { workspace = true, features = [
     "client",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",

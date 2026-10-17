@@ -1,0 +1,11 @@
+# Opt-in anonymous Parallel Search MCP over Streamable HTTP.
+# Merge these settings into your existing vtcode.toml; retain other providers.
+[mcp]
+enabled = true
+experimental_use_rmcp_client = true
+
+[[mcp.providers]]
+name = "parallel-search"
+enabled = true
+endpoint = "https://search.parallel.ai/mcp"
+http_headers = { "User-Agent" = "VTCode/parallel-search-mcp" }

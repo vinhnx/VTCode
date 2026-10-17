@@ -136,7 +136,7 @@ pub(super) fn capture_turn_request_snapshot(
         planning_active,
         full_auto,
         tool_free_recovery,
-        recovery_reason: ctx.recovery_reason().map(str::to_string),
+        recovery_reason: ctx.recovery_prompt_reason().map(str::to_string),
         request_user_input_enabled,
         context_window_size,
         turn_timeout_secs,
@@ -159,7 +159,9 @@ pub(super) fn resolve_effective_reasoning_effort(
     cfg: Option<&vtcode_core::config::loader::VTCodeConfig>,
     turn_snapshot: &TurnRequestSnapshot,
 ) -> Option<vtcode_core::config::types::ReasoningEffortLevel> {
-    if !turn_snapshot.capabilities.reasoning_effort || turn_snapshot.tool_free_recovery {
+    // Recovery keeps the configured effort so the provider prefix stays
+    // cache-stable (changing `reasoning.effort` rewrites model instructions).
+    if !turn_snapshot.capabilities.reasoning_effort {
         return None;
     }
 

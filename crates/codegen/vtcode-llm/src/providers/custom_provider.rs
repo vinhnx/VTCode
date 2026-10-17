@@ -333,6 +333,10 @@ impl LLMProvider for CustomProviderBackendRouter {
         self.backend_for_model(&request.model).generate(request).await
     }
 
+    async fn generate_auxiliary(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.backend_for_model(&request.model).generate_auxiliary(request).await
+    }
+
     fn supported_models(&self) -> Vec<String> {
         self.supported_models.clone()
     }
@@ -410,6 +414,54 @@ mod tests {
             None,
             None,
         )
+    }
+
+    #[tokio::test]
+    async fn auxiliary_generation_forwards_isolation_to_custom_openai_backend() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "id": "resp_custom_auxiliary",
+                "output": [{"type": "message", "content": [{"type": "output_text", "text": "SAFE"}]}]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let router = CustomProviderBackendRouter::from_config(
+            CustomProviderConfig {
+                name: "auxiliary-test".into(),
+                display_name: "Auxiliary Test".into(),
+                model: "gpt-6-luna".into(),
+                models: vec!["gpt-6-luna".into()],
+                api_format: CustomProviderApiFormat::OpenAIResponses,
+                ..Default::default()
+            },
+            Some("fixture-key".into()),
+            None,
+            server.uri(),
+            None,
+            None,
+            Some(vtcode_config::OpenAIConfig { websocket_mode: true, ..Default::default() }),
+            None,
+            None,
+            None,
+        );
+        let response = router
+            .generate_auxiliary(LLMRequest {
+                model: "gpt-6-luna".into(),
+                messages: vec![Message::user("independent custom probe".into())].into(),
+                ..Default::default()
+            })
+            .await
+            .expect("HTTP auxiliary response");
+        assert_eq!(response.content.as_deref(), Some("SAFE"));
+        let requests = server.received_requests().await.expect("recorded requests");
+        assert_eq!(requests.len(), 1, "auxiliary must not attempt a WebSocket upgrade or warmup");
+        assert_eq!(requests[0].method.as_str(), "POST");
+        assert_eq!(requests[0].url.path(), "/responses");
+        let payload: serde_json::Value = requests[0].body_json().expect("request payload");
+        assert_eq!(payload["model"], "gpt-6-luna");
     }
 
     #[test]

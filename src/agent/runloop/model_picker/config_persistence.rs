@@ -8,9 +8,7 @@ use vtcode_core::utils::dot_config::update_model_preference;
 use super::ModelSelectionResult;
 
 fn synced_openai_service_tier(selection: &ModelSelectionResult) -> Option<vtcode_config::OpenAIServiceTier> {
-    (selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported)
-        .then_some(selection.service_tier)
-        .flatten()
+    selection.service_tier_supported.then_some(selection.service_tier).flatten()
 }
 
 pub(super) async fn persist_selection(
@@ -28,12 +26,16 @@ pub(super) async fn persist_selection(
         anyhow::bail!("Cannot persist selection: provider '{}' is not in providers_whitelist", selection.provider);
     }
 
+    selection.validate_speed(config)?;
     let mut config = config.clone();
     config.agent.provider = selection.provider.clone();
     apply_api_key_state(&mut config, selection)?;
     config.agent.default_model = selection.model.clone();
     config.agent.reasoning_effort = selection.reasoning;
-    config.provider.openai.service_tier = synced_openai_service_tier(selection);
+    apply_provider_preferences(&mut config, selection);
+    if let Some(enabled) = selection.decisions_probe {
+        config.permissions.auto_permission.use_decisions_probe = enabled;
+    }
 
     // Store MiMo auth method when provider is MiMo
     if selection.provider_enum == Some(Provider::MiMo) {
@@ -43,6 +45,15 @@ pub(super) async fn persist_selection(
     manager.save_config(&config)?;
     update_model_preference(&selection.provider, &selection.model).await.ok();
     Ok(config)
+}
+
+fn apply_provider_preferences(config: &mut VTCodeConfig, selection: &ModelSelectionResult) {
+    if selection.service_tier_supported {
+        config.provider.openai.service_tier = synced_openai_service_tier(selection);
+    }
+    if let Some(speed) = selection.anthropic_speed {
+        config.provider.anthropic.speed = Some(speed);
+    }
 }
 
 fn apply_api_key_state(config: &mut VTCodeConfig, selection: &ModelSelectionResult) -> Result<()> {
@@ -133,6 +144,9 @@ mod tests {
             service_tier_supported: false,
             service_tier: None,
             service_tier_changed: false,
+            anthropic_speed: None,
+            decisions_probe: None,
+            decisions_probe_changed: false,
             api_key: None,
             credential_source: None,
             env_key: "TEST_API_KEY".to_string(),
@@ -140,6 +154,30 @@ mod tests {
             uses_chatgpt_auth: false,
             mimo_auth_method: None,
         }
+    }
+
+    #[test]
+    fn provider_preferences_remain_independent_across_switches_and_restart() {
+        let mut config = vtcode_config::VTCodeConfig::default();
+        config.provider.openai.service_tier = Some(OpenAIServiceTier::Ultrafast);
+        config.provider.anthropic.speed = Some(vtcode_config::AnthropicSpeed::Fast);
+        let mut claude = selection(Some(Provider::Anthropic), "anthropic", "claude-opus-5-5");
+        claude.anthropic_speed = Some(vtcode_config::AnthropicSpeed::Standard);
+        super::apply_provider_preferences(&mut config, &claude);
+        assert_eq!(config.provider.openai.service_tier, Some(OpenAIServiceTier::Ultrafast));
+        assert_eq!(config.provider.anthropic.speed, Some(vtcode_config::AnthropicSpeed::Standard));
+        let unsupported = selection(Some(Provider::Anthropic), "anthropic", "claude-sonnet-5-5");
+        super::apply_provider_preferences(&mut config, &unsupported);
+        let mut openai = selection(Some(Provider::OpenAI), "openai", "gpt-6.1-sol");
+        openai.service_tier_supported = true;
+        openai.service_tier = None;
+        super::apply_provider_preferences(&mut config, &openai);
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("vtcode.toml");
+        vtcode_config::ConfigManager::save_config_to_path(&path, &config).unwrap();
+        let reloaded = vtcode_config::ConfigManager::load_from_file(&path).unwrap();
+        assert_eq!(reloaded.config().provider.anthropic.speed, Some(vtcode_config::AnthropicSpeed::Standard));
+        assert_eq!(reloaded.config().provider.openai.service_tier, None);
     }
 
     #[test]
@@ -186,16 +224,24 @@ mod tests {
 
     #[test]
     fn synced_openai_service_tier_clears_stale_values_outside_supported_openai() {
-        let mut selected = selection(Some(Provider::Ollama), "ollama", "qwen3-coder");
-        selected.service_tier_supported = true;
-        selected.service_tier = Some(OpenAIServiceTier::Priority);
+        // Compat providers now share the canonical `provider.openai.service_tier`
+        // store: any selection whose picker flagged tier support persists it.
+        let mut compat = selection(Some(Provider::Ollama), "ollama", "qwen3-coder");
+        compat.service_tier_supported = true;
+        compat.service_tier = Some(OpenAIServiceTier::Priority);
 
-        assert_eq!(synced_openai_service_tier(&selected), None);
+        assert_eq!(synced_openai_service_tier(&compat), Some(OpenAIServiceTier::Priority));
 
         let mut unsupported_openai = selection(Some(Provider::OpenAI), "openai", "gpt-oss-20b");
         unsupported_openai.service_tier_supported = false;
         unsupported_openai.service_tier = Some(OpenAIServiceTier::Priority);
 
         assert_eq!(synced_openai_service_tier(&unsupported_openai), None);
+
+        let mut unsupported_native = selection(Some(Provider::Anthropic), "anthropic", "claude-sonnet-5");
+        unsupported_native.service_tier_supported = false;
+        unsupported_native.service_tier = Some(OpenAIServiceTier::Priority);
+
+        assert_eq!(synced_openai_service_tier(&unsupported_native), None);
     }
 }

@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use super::{Session, message::TranscriptLine};
+use crate::tui::ui::tui::types::InlineMessageKind;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct TranscriptScrollAnchor {
@@ -51,6 +52,20 @@ impl TranscriptReflowCache {
             message.lines.clear(); // Clear cached lines
             message.valid = false;
         }
+    }
+
+    /// Drop only the first `count` cached messages after a front-eviction of
+    /// the live transcript. Surviving entries keep their reflowed lines (their
+    /// content and revisions are unchanged); only row offsets rebuild.
+    pub(crate) fn evict_prefix(&mut self, count: usize) {
+        let remove = count.min(self.messages.len());
+        if remove == 0 {
+            return;
+        }
+        self.messages.drain(..remove);
+        self.row_offsets.clear();
+        self.total_rows = 0;
+        self.update_row_offsets_from(0);
     }
 
     /// Checks if a specific message needs reflow based on revision and content hash
@@ -211,6 +226,7 @@ impl Session {
     }
 
     /// Ensures the reflow cache is up to date for the given width
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(super) fn ensure_reflow_cache(&mut self, width: u16) -> &mut TranscriptReflowCache {
         let mut cache = self
             .transcript_cache
@@ -230,11 +246,11 @@ impl Session {
             cache.messages.push(CachedMessage::default());
         }
 
-        // Process any dirty messages (those that need reflow). A message's
-        // trailing spacing and a Tool/Pty block's boundary also depend on its
-        // immediate successor, so include one cached predecessor when a
-        // mutation has a dirty hint. This keeps incremental reflow targeted
-        // while preventing a stale gap when a block grows or is replaced.
+        // Process any dirty messages (those that need reflow). Include one
+        // predecessor only when a block/group edge is involved (Tool/Pty
+        // boundaries, Info/Warning/Error group heads). Plain Agent↔Agent
+        // streaming must not force a predecessor reflow (hotpath: that doubled
+        // reflow cost under load).
         let dirty_hint = self.first_dirty_line.map(|index| index.min(self.lines.len()));
         let mut first_dirty = if width_changed {
             0
@@ -243,8 +259,24 @@ impl Session {
         };
         if !width_changed && let Some(first_dirty_hint) = dirty_hint.filter(|&index| index > 0) {
             let predecessor = first_dirty_hint - 1;
-            cache.invalidate_message(predecessor);
-            first_dirty = predecessor;
+            let dirty_is_block = self
+                .lines
+                .get(first_dirty_hint)
+                .is_some_and(|line| matches!(line.kind, InlineMessageKind::Tool | InlineMessageKind::Pty));
+            let pred_is_edge = self.lines.get(predecessor).is_some_and(|line| {
+                matches!(
+                    line.kind,
+                    InlineMessageKind::Tool
+                        | InlineMessageKind::Pty
+                        | InlineMessageKind::Info
+                        | InlineMessageKind::Warning
+                        | InlineMessageKind::Error
+                )
+            });
+            if dirty_is_block || pred_is_edge {
+                cache.invalidate_message(predecessor);
+                first_dirty = predecessor;
+            }
         }
 
         // Verify and find the actual first dirty message
@@ -296,6 +328,7 @@ impl Session {
     }
 
     /// Collects a window of visible lines with caching
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn collect_transcript_window_cached(
         &mut self,
         width: u16,

@@ -23,12 +23,13 @@ pub mod agent_execution {
     pub fn planning_workflow_denial_message(tool_name: &str) -> String {
         format!(
             "Tool '{tool_name}' execution failed: tool denied by planning workflow\n\n\
-             This tool can modify the workspace, so it is blocked during planning.\n\n\
+             This call is not a recognized read-only planning action, so it is blocked during planning.\n\n\
              Available during planning:\n\
              - Read files: exec_command with readonly shell inspection commands such as sed, rg, ls, find, and git show\n\
-             - Run readonly commands: cargo check, cargo test, git status, ls, grep, find, diff\n\
+             - Run recognized commands: cargo check, cargo nextest run, git status, command -v, ls, grep, find, diff\n\
              - Search code: exec_command with rg or other readonly search commands\n\
              - Use task_tracker\n\n\
+             Planning shell shapes: use `&&` chains or separate calls; `;`, `||`, redirections (`>`, `2>`), and `*` globs are not recognized. Prefer `rg --files src | rg '\\.md$'` over `ls */*.md`.\n\n\
              To start implementation:\n\
              1. Wait for the user to review and approve the plan in the UI\n\
              2. After approval, use apply_patch for file edits\n\n\
@@ -77,6 +78,22 @@ pub mod agent_execution {
     pub fn is_planning_active_denial(error: &str) -> bool {
         error.contains(PLANNING_DENIED_CONTEXT)
     }
+
+    /// Recovery guidance for policy rejection, distinct from malformed JSON.
+    pub fn preflight_policy_correction(error: &str) -> Option<&'static str> {
+        if is_planning_active_denial(error) {
+            return Some(
+                "Planning permits only recognized read-only command shapes. Do not retry the same denied command. Use sed, rg, git show, or command -v for inspection; defer unknown scripts until plan approval. This denial does not establish that the script itself mutates files.",
+            );
+        }
+        let lowered = error.to_ascii_lowercase();
+        if lowered.contains("command security check failed") || lowered.contains("command injection pattern detected") {
+            return Some(
+                "The shell command was rejected by security policy, not JSON validation. Do not retry it unchanged or bypass the policy. Use a simpler literal command without dynamic expansion, or an approved dedicated tool; report the blocker if no permitted form satisfies the task.",
+            );
+        }
+        None
+    }
 }
 
 /// Skill management error messages
@@ -109,6 +126,8 @@ mod tests {
         assert!(planning_msg.contains("cargo check"));
         assert!(planning_msg.contains("exec_command"));
         assert!(planning_msg.contains("apply_patch"));
+        assert!(planning_msg.contains("Planning shell shapes"));
+        assert!(planning_msg.contains("rg --files"));
         assert!(!planning_msg.contains(&internal_unified_tool_name("file")));
         assert!(!planning_msg.contains(&internal_unified_tool_name("exec")));
         assert!(!planning_msg.contains(&internal_unified_tool_name("search")));

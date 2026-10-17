@@ -14,6 +14,7 @@ use crate::agent::runloop::unified::turn::compaction::{
     CompactionContext, CompactionOutcome, CompactionState, SessionMemoryEnvelopeUpdate,
     compact_history_for_recovery_in_place,
 };
+use crate::agent::runloop::unified::turn::context::last_user_message_index;
 
 pub(super) struct RecoveryCompactionRequest<'a> {
     pub(super) history: &'a mut Vec<uni::Message>,
@@ -70,8 +71,5 @@ pub(super) async fn compact_before_tool_enabled_retry(
 /// that the retry still needs verbatim.
 pub(super) fn current_turn_preserve_index(history: &[uni::Message], turn_history_start_len: usize) -> usize {
     let turn_start = turn_history_start_len.min(history.len());
-    history[..turn_start]
-        .iter()
-        .rposition(|message| message.role == uni::MessageRole::User)
-        .unwrap_or(turn_start)
+    last_user_message_index(&history[..turn_start]).unwrap_or(turn_start)
 }

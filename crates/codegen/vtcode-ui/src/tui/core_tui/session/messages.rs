@@ -145,7 +145,9 @@ impl Session {
         let index = self.lines.len();
         self.lines
             .push(MessageLine { kind, segments, link_ranges: Vec::new(), revision });
-        self.mark_line_dirty(index);
+        // Transcript-only content change: do not drop header/sidebar caches on
+        // every streamed or appended line (see `mark_transcript_line_dirty`).
+        self.mark_transcript_line_dirty(index);
         self.invalidate_scroll_metrics();
         self.evict_old_messages_if_needed();
 
@@ -199,7 +201,16 @@ impl Session {
         }
 
         let remove_count = excess.max(ui::TUI_TRANSCRIPT_EVICT_CHUNK);
-        let previous_max_offset = self.current_max_scroll_offset();
+        // Avoid forcing a full transcript reflow mid-append (hotpath: that was
+        // ~80% of TUI runtime under streaming). Bottom-follow (offset == 0)
+        // needs no view-stability adjust. Scrolled-up views must recompute.
+        let previous_max_offset = if self.scroll_manager.offset() == 0 {
+            None
+        } else if self.scroll_manager.metrics_valid() {
+            Some(self.scroll_manager.max_offset())
+        } else {
+            Some(self.current_max_scroll_offset())
+        };
 
         // Lines are evicted from the front (drain(..remove_count)), so pastes
         // pointing into the evicted prefix are dropped and surviving pastes
@@ -211,13 +222,35 @@ impl Session {
         }
         self.thinking_runs.clear();
 
+        self.leading_user_prompt_truncated = self
+            .lines
+            .get(remove_count - 1)
+            .is_some_and(|line| line.kind == InlineMessageKind::User)
+            && self
+                .lines
+                .get(remove_count)
+                .is_some_and(|line| line.kind == InlineMessageKind::User);
         self.lines.drain(..remove_count);
         self.evicted_message_count += remove_count;
         self.shift_tracked_change_after_eviction(remove_count);
 
-        self.invalidate_transcript_cache();
+        // Partial cache eviction: surviving reflow entries stay valid; only the
+        // dropped prefix and row-offset table change. Full
+        // `invalidate_transcript_cache` would reflow up to TUI_TRANSCRIPT_MAX_MSGS.
+        if let Some(cache) = self.transcript_cache.as_mut() {
+            cache.evict_prefix(remove_count);
+        }
+        self.invalidate_transcript_viewport();
+        self.request_transcript_clear();
+        // Shift a pending dirty hint; do NOT invent dirty state when none was
+        // pending — surviving cache entries stay valid after `evict_prefix`.
+        if let Some(first) = self.first_dirty_line.as_mut() {
+            *first = first.saturating_sub(remove_count);
+        }
         self.invalidate_scroll_metrics();
-        self.adjust_scroll_after_change(previous_max_offset);
+        if let Some(previous_max_offset) = previous_max_offset {
+            self.adjust_scroll_after_change(previous_max_offset);
+        }
     }
 
     /// Append a large pasted message as a collapsible placeholder.
@@ -244,7 +277,18 @@ impl Session {
                     style: Arc::new(InlineTextStyle::default()),
                 }],
             );
-            self.collapsed_pastes.push(CollapsedPaste { line_index, full_text: text });
+            // Bound the expand payload so paste floods cannot grow without limit.
+            let max_bytes = ui::TUI_COLLAPSED_PASTE_MAX_BYTES;
+            let full_text = if text.len() > max_bytes {
+                let mut start = text.len() - max_bytes;
+                while start < text.len() && !text.is_char_boundary(start) {
+                    start += 1;
+                }
+                text[start..].to_string()
+            } else {
+                text
+            };
+            self.collapsed_pastes.push(CollapsedPaste { line_index, full_text });
             return;
         }
 
@@ -330,6 +374,9 @@ impl Session {
         self.collapsed_pastes.retain(|paste| paste.line_index < first_removed);
         let first_dirty = self.lines.len().saturating_sub(remove_count);
         self.lines.truncate(self.lines.len().saturating_sub(remove_count));
+        if self.lines.is_empty() {
+            self.leading_user_prompt_truncated = false;
+        }
         let mut link_ranges = link_ranges.unwrap_or_default().into_iter();
         for segments in lines {
             let revision = self.next_revision();
@@ -552,7 +599,8 @@ impl Session {
         }
 
         if appended {
-            self.mark_line_dirty(self.lines.len() - 1);
+            // Streaming chunk into an existing line: keep header/sidebar caches.
+            self.mark_transcript_line_dirty(self.lines.len() - 1);
             self.invalidate_scroll_metrics();
             return;
         }
@@ -572,7 +620,7 @@ impl Session {
                 });
                 line.revision = revision;
             }
-            self.mark_line_dirty(index);
+            self.mark_transcript_line_dirty(index);
             self.invalidate_scroll_metrics();
             return;
         }
@@ -642,7 +690,7 @@ impl Session {
             {
                 line.revision = revision;
             }
-            self.mark_line_dirty(index);
+            self.mark_transcript_line_dirty(index);
             self.invalidate_scroll_metrics();
             return;
         }
@@ -685,7 +733,7 @@ impl Session {
         if should_remove {
             let index = self.lines.len() - 1;
             self.lines.pop();
-            self.mark_line_dirty(index);
+            self.mark_transcript_line_dirty(index);
         }
     }
 }

@@ -2,7 +2,9 @@
 
 ## Overview
 
-On macOS, the Alt key (also labeled as Option) may not send proper key events to VT Code or other terminal applications due to terminal emulator configuration. This guide provides solutions for common issues where Alt shortcuts don't work as expected.
+On macOS, the Alt key (also labeled as Option) may not send proper key events to VT Code or other terminal applications
+due to terminal emulator configuration. This guide provides solutions for common issues where Alt shortcuts don't work
+as expected.
 
 ## Common Symptoms
 
@@ -17,11 +19,13 @@ There are three primary reasons Alt shortcuts fail on macOS:
 
 ### 1. Terminal Emulator Not Configured to Send Alt Codes
 
-Most macOS terminal emulators intercept the Alt key for special characters (accented letters, symbols) rather than passing it as a modifier to the application. This is the most common cause.
+Most macOS terminal emulators intercept the Alt key for special characters (accented letters, symbols) rather than
+passing it as a modifier to the application. This is the most common cause.
 
 ### 2. Shell Configuration Interfering
 
-Certain shell configurations (bash, zsh) may have key bindings that consume Alt key events before they reach the TUI application.
+Certain shell configurations (bash, zsh) may have key bindings that consume Alt key events before they reach the TUI
+application.
 
 ### 3. Incompatible Terminal Emulator
 
@@ -37,25 +41,26 @@ Upgrade to a terminal emulator with proper Alt key support:
 
 1. **iTerm2** (Free, widely used)
    - Works out-of-box with proper Alt key support
-   - Download: https://iterm2.com/
+   - Download: <https://iterm2.com/>
 
 2. **Warp** (Free, modern, feature-rich)
    - Built-in support for Alt keys and modern terminal protocols
-   - Download: https://www.warp.dev/
+   - Download: <https://www.warp.dev/>
 
 3. **Ghostty** (MIT licensed, modern)
-    - Excellent Alt key support and terminal protocol support
-    - Download: https://ghostty.org/
+   - Excellent Alt key support and terminal protocol support
+   - Download: <https://ghostty.org/>
 
 4. **Alacritty** (Free, minimal, cross-platform)
-    - Modern keyboard handling with full Alt key support
-    - Install: `brew install alacritty`
+   - Modern keyboard handling with full Alt key support
+   - Install: `brew install alacritty`
 
 5. **WezTerm** (Free, Lua-configurable)
-    - Full keyboard protocol support
-    - Install: `brew install wezterm`
+   - Full keyboard protocol support
+   - Install: `brew install wezterm`
 
-After installing any of these emulators, Alt shortcuts in VT Code should work immediately without additional configuration.
+After installing any of these emulators, Alt shortcuts in VT Code should work immediately without additional
+configuration.
 
 ### Solution 2: Enable Alt Key Passthrough in iTerm2
 
@@ -93,6 +98,7 @@ bindkey -r '\M-d'    # Alt+d
 ```
 
 Reload your shell:
+
 ```bash
 exec zsh
 ```
@@ -108,6 +114,7 @@ bind -r '\M-'
 ```
 
 Reload your shell:
+
 ```bash
 exec bash
 ```
@@ -136,13 +143,12 @@ chmod +x /tmp/test_alt.sh
 ```
 
 When you press Alt+a, you should see output like:
-```
+
+```text
 \033 a
 ```
 
 This indicates the terminal is properly sending an escape sequence for the Alt key.
-
-
 
 ## Platform-Specific Guidance
 
@@ -157,6 +163,7 @@ open -a iTerm "$(which vtcode)"
 ```
 
 Or create an alias in your shell configuration:
+
 ```bash
 # In ~/.zshrc or ~/.bashrc
 alias vtcode-iterm='open -a iTerm "$(which vtcode)"'
@@ -175,11 +182,13 @@ If you're using the built-in Terminal.app:
 ### Step 1: Identify Your Terminal Emulator
 
 Run this in your terminal:
+
 ```bash
 echo $TERM_PROGRAM
 ```
 
 This will output:
+
 - `iTerm.app` → iTerm2
 - `WarpTerminal` → Warp
 - `Apple_Terminal` → Terminal.app (limited support)
@@ -188,6 +197,7 @@ This will output:
 ### Step 2: Check VT Code's Terminal Detection
 
 Run VT Code and check the status line for detected terminal type:
+
 ```bash
 vtcode
 ```
@@ -203,6 +213,7 @@ Look at the bottom status line—it should show your terminal type (e.g., "Ghost
 ### Step 4: Verify It's Not a Binding Conflict
 
 Check your shell's key bindings:
+
 ```bash
 # For zsh
 bindkey | grep -E '(\[|\M)'
@@ -225,18 +236,19 @@ On newer macOS versions, verify terminal emulator has accessibility permissions:
 
 Once Alt keys are working, these shortcuts should be available:
 
-| Shortcut | Action |
-|----------|--------|
-| Alt+h | Help/hint (context-dependent) |
-| Alt+a | Alternative action |
-| Alt+j | Jump/navigation down |
-| Alt+k | Jump/navigation up |
-| Alt+v | Paste clipboard image through VT Code (image-enabled sessions only) |
-| Alt+↑ | Scroll up (if applicable) |
-| Alt+↓ | Scroll down (if applicable) |
-| Ctrl+c | Interrupt/cancel (always works) |
+| Shortcut | Action                                                              |
+| -------- | ------------------------------------------------------------------- |
+| Alt+h    | Help/hint (context-dependent)                                       |
+| Alt+a    | Alternative action                                                  |
+| Alt+j    | Jump/navigation down                                                |
+| Alt+k    | Jump/navigation up                                                  |
+| Alt+v    | Paste clipboard image through VT Code (image-enabled sessions only) |
+| Alt+↑    | Scroll up (if applicable)                                           |
+| Alt+↓    | Scroll down (if applicable)                                         |
+| Ctrl+c   | Interrupt/cancel (always works)                                     |
 
-Note: Exact shortcuts depend on your VT Code version and context. Use Alt+h or check help text in the UI for the most current list.
+Note: Exact shortcuts depend on your VT Code version and context. Use Alt+h or check help text in the UI for the most
+current list.
 
 ## Testing Your Configuration
 
@@ -244,9 +256,11 @@ After making changes, test with this sequence:
 
 1. **Restart your terminal emulator** (important!)
 2. **Launch VT Code:**
+
    ```bash
    vtcode
    ```
+
 3. **Try Alt+h** to trigger help
 4. **Check the status line** for terminal type detection
 5. **Verify Alt modifiers work** in the UI
@@ -256,6 +270,7 @@ After making changes, test with this sequence:
 If you've tried all solutions and Alt keys still don't work:
 
 1. **Update VT Code:**
+
    ```bash
    cargo install --force vtcode
    # or
@@ -276,7 +291,8 @@ If you've tried all solutions and Alt keys still don't work:
 
 - [TUI Event Handling Guide](./tui-event-handling.md) - Technical details on how VT Code handles keyboard input
 - [Terminal Rendering Best Practices](./terminal-rendering-best-practices.md) - Terminal emulator compatibility details
-- [ANSI Escape Sequences Reference](../reference/ansi-escape-sequences.md) - Terminal control sequences including Alt key codes
+- [ANSI Escape Sequences Reference](../reference/ansi-escape-sequences.md) - Terminal control sequences including Alt
+  key codes
 
 ## Quick Checklist
 

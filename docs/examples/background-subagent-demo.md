@@ -9,9 +9,13 @@ maxTurns: 2
 initialPrompt: Run `./scripts/demo-background-subagent.sh` in the workspace root, report one readiness line, then stop.
 ---
 
+# Background Subagent Demo
+
 Use this demo when you need a stable background subprocess for documentation or testing.
 
-This file is a subagent definition example, not a shell command. Use the discoverable workspace copy at `.vtcode/agents/background-demo.md`, or copy this file there before asking VT Code to launch `@agent-background-demo` with `spawn_background_subprocess`.
+This file is a subagent definition example, not a shell command. Use the discoverable workspace copy at
+`.vtcode/agents/background-demo.md`, or copy this file there before asking VT Code to launch `@agent-background-demo`
+with `spawn_background_subprocess`.
 
 Suggested task:
 

@@ -1,43 +1,42 @@
-> **Note:** `vtcode-llm` has been re-extracted as a standalone crate from `vtcode-core`.
-> The `ProviderConfig` trait and adapter remain in `vtcode_core::llm::config_adapter`.
-> The mock client is at `vtcode_core::llm::mock_client` (behind the `mock` feature flag).
+# LLM Environment
 
-# `vtcode-llm` Environment Configuration Guide
+> **Note:** `vtcode-llm` has been re-extracted as a standalone crate from `vtcode-core`. The `ProviderConfig` trait and
+> adapter remain in `vtcode_core::llm::config_adapter`. The mock client is at `vtcode_core::llm::mock_client` (behind
+> the `mock` feature flag).
 
-This guide explains how the `vtcode-llm` crate discovers provider credentials, maps
-feature flags to environment variables, and offers lightweight mocks for downstream
-integration tests. It is intended for consumers who want to adopt the crate without
-bringing in VT Code's full configuration system.
+## `vtcode-llm` Environment Configuration Guide
 
-## Provider environment variables
+This guide explains how the `vtcode-llm` crate discovers provider credentials, maps feature flags to environment
+variables, and offers lightweight mocks for downstream integration tests. It is intended for consumers who want to adopt
+the crate without bringing in VT Code's full configuration system.
 
-Each provider feature corresponds to one or more environment variables. Keys should
-be populated before constructing a client so the `ProviderConfig` trait can surface
-the secret values.
+### Provider environment variables
 
-| Feature flag | Primary variable     | Aliases          | Notes                                                                                                             |
-| ------------ | -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `google`     | `GEMINI_API_KEY`     | `GOOGLE_API_KEY` | Gemini clients accept either variable; the first non-empty value wins.                                            |
-| `openai`     | `OPENAI_API_KEY`     | –                | Required for GPT models served by OpenAI.                                                                         |
-| `anthropic`  | `ANTHROPIC_API_KEY`  | –                | Required for Claude models.                                                                                       |
-| `deepseek`   | `DEEPSEEK_API_KEY`   | –                | Required for DeepSeek models.                                                                                     |
-| `meta`       | `META_API_KEY`       | `MODEL_API_KEY`   | Required for official Meta AI Muse models; both variable names are accepted.                                      |
-| `openrouter` | `OPENROUTER_API_KEY` | –                | Required for OpenRouter routing.                                                                                  |
+Each provider feature corresponds to one or more environment variables. Keys should be populated before constructing a
+client so the `ProviderConfig` trait can surface the secret values.
+
+| Feature flag    | Primary variable        | Aliases          | Notes                                                                                                                                       |
+| --------------- | ----------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `google`        | `GEMINI_API_KEY`        | `GOOGLE_API_KEY` | Gemini clients accept either variable; the first non-empty value wins.                                                                      |
+| `openai`        | `OPENAI_API_KEY`        | –                | Required for GPT models served by OpenAI.                                                                                                   |
+| `anthropic`     | `ANTHROPIC_API_KEY`     | –                | Required for Claude models.                                                                                                                 |
+| `deepseek`      | `DEEPSEEK_API_KEY`      | –                | Required for DeepSeek models.                                                                                                               |
+| `meta`          | `META_API_KEY`          | `MODEL_API_KEY`  | Required for official Meta AI Muse models; both variable names are accepted.                                                                |
+| `openrouter`    | `OPENROUTER_API_KEY`    | –                | Required for OpenRouter routing.                                                                                                            |
 | `merge-gateway` | `MERGE_GATEWAY_API_KEY` | –                | Required for native Merge Responses/catalog access; set `MERGE_GATEWAY_BASE_URL` for a proxy or explicit `/v1/openai` legacy compatibility. |
-| `zai`        | `ZAI_API_KEY`        | –                | Required for Zhipu AI (Z.AI) models.                                                                              |
-| `moonshot`   | `MOONSHOT_API_KEY`   | –                | Required for Moonshot AI models.                                                                                  |
-| `lmstudio`   | `LMSTUDIO_API_KEY`   | –                | Optional; provide when the LM Studio developer server enforces auth. Override host/port with `LMSTUDIO_BASE_URL`. |
-| `ollama`     | _N/A_                | –                | Ollama uses a local runtime and does not require an API key.                                                      |
+| `zai`           | `ZAI_API_KEY`           | –                | Required for Zhipu AI (Z.AI) models.                                                                                                        |
+| `moonshot`      | `MOONSHOT_API_KEY`      | –                | Required for Moonshot AI models.                                                                                                            |
+| `lmstudio`      | `LMSTUDIO_API_KEY`      | –                | Optional; provide when the LM Studio developer server enforces auth. Override host/port with `LMSTUDIO_BASE_URL`.                           |
+| `ollama`        | _N/A_                   | –                | Ollama uses a local runtime and does not require an API key.                                                                                |
 
-When multiple providers are enabled, populate the variables you plan to use. Downstream
-applications can surface their own configuration UX but should forward the resolved
-secrets to the `ProviderConfig` implementor.
+When multiple providers are enabled, populate the variables you plan to use. Downstream applications can surface their
+own configuration UX but should forward the resolved secrets to the `ProviderConfig` implementor.
 
-## Loading keys with `ProviderConfig`
+### Loading keys with `ProviderConfig`
 
 Implementors of [`config::ProviderConfig`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) decide where
-credentials originate. A common pattern is to read from environment variables and then
-pass the owned values to `OwnedProviderConfig` before building a client:
+credentials originate. A common pattern is to read from environment variables and then pass the owned values to
+`OwnedProviderConfig` before building a client:
 
 ```rust
 use std::env;
@@ -56,20 +55,18 @@ fn gemini_from_env() -> anyhow::Result<vtcode_core::llm::factory::ProviderConfig
 }
 ```
 
-Because the trait only exposes borrowed data, callers can also point to secrets stored
-in files, KMS-backed fetchers, or other secret managers.
+Because the trait only exposes borrowed data, callers can also point to secrets stored in files, KMS-backed fetchers, or
+other secret managers.
 
-Internally, `vtcode_core::llm::config_adapter::ProviderConfig` is the canonical external
-surface. Both [`config::as_factory_config`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) and
-[`config::as_factory_config_with_hooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) now flow
-through the same projection layer, so plain and hook-enriched conversions stay
-behaviorally aligned.
+Internally, `vtcode_core::llm::config_adapter::ProviderConfig` is the canonical external surface. Both
+[`config::as_factory_config`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) and
+[`config::as_factory_config_with_hooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) now flow through
+the same projection layer, so plain and hook-enriched conversions stay behaviorally aligned.
 
-## Wiring workspace paths and telemetry
+### Wiring workspace paths and telemetry
 
-When prompt caching is enabled, use
-[`config::AdapterHooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs) to resolve relative directories
-against your workspace implementation and surface telemetry or error information using
+When prompt caching is enabled, use [`config::AdapterHooks`](../../crates/codegen/vtcode-core/src/llm/config_adapter.rs)
+to resolve relative directories against your workspace implementation and surface telemetry or error information using
 `vtcode-commons` traits:
 
 ```rust
@@ -98,14 +95,13 @@ let provider_config = OwnedProviderConfig::new().with_prompt_cache(Default::defa
 let core_config = as_factory_config_with_hooks(&provider_config, &hooks);
 ```
 
-The adapter records prompt-cache resolution events, normalizes cache directories to
-absolute paths, and reports hook failures through the supplied telemetry and error
-reporting implementations.
+The adapter records prompt-cache resolution events, normalizes cache directories to absolute paths, and reports hook
+failures through the supplied telemetry and error reporting implementations.
 
-## Using the optional mock client
+### Using the optional mock client
 
-Enable the `mock` feature to access `mock::StaticResponseClient`, a lightweight
-implementation of the `LLMClient` trait designed for deterministic tests:
+Enable the `mock` feature to access `mock::StaticResponseClient`, a lightweight implementation of the `LLMClient` trait
+designed for deterministic tests:
 
 ```toml
 # Cargo.toml
@@ -128,11 +124,11 @@ let response = futures::executor::block_on(client.generate("ignored prompt"))?;
 assert_eq!(response.content, "Hello from a test");
 ```
 
-Queue as many responses (or errors) as needed. When the queue runs dry, the client
-returns an `LLMError::InvalidRequest`, helping tests detect unexpected extra calls.
+Queue as many responses (or errors) as needed. When the queue runs dry, the client returns an
+`LLMError::InvalidRequest`, helping tests detect unexpected extra calls.
 
-## Next steps
+### Next steps
 
--   Add additional provider-specific environment documentation as new integrations land.
--   Share runnable examples that combine `ProviderConfig` implementors with the mock
-    client to showcase end-to-end integration tests.
+- Add additional provider-specific environment documentation as new integrations land.
+- Share runnable examples that combine `ProviderConfig` implementors with the mock client to showcase end-to-end
+  integration tests.

@@ -147,9 +147,15 @@ pub(crate) async fn initialize_session_shell(
         Some(_) => Ok(()),
     });
 
-    // Never await the palette probe here: a silent terminal must not delay
-    // the typeable shell. `note_crossterm_raw_mode` makes a late RawModeGuard
-    // restore a no-op once crossterm owns the TTY.
+    // Await the palette probe before the TUI owns the TTY. The probe is
+    // bounded (~50 ms read + 40 ms settle + 100 ms drain on failure), and it
+    // already overlapped with startup-context resolution, so this usually
+    // returns immediately. Spawning the event loop concurrently lets late
+    // `OSC 10/11/4` replies win the `/dev/tty` read race and leak as
+    // `10;rgb:...` keystrokes; the vendored `parse_osc` backstop swallows
+    // stragglers from slow terminals. `note_crossterm_raw_mode` stays as a
+    // guard so a late `RawModeGuard` restore cannot undo crossterm raw mode.
+    crate::agent::probe::await_terminal_palette_probe().await;
     vtcode_core::utils::terminal_color_probe::note_crossterm_raw_mode();
 
     let mut session = spawn_session_with_options(
@@ -194,6 +200,9 @@ pub(crate) async fn initialize_session_shell(
         .map(|cfg| matches!(cfg.ui.color_scheme_mode, ColorSchemeMode::Auto | ColorSchemeMode::Unknown))
         .unwrap_or(true);
     session.set_color_scheme_auto(color_scheme_auto);
+    handle.program_status(vtcode_commons::program_status::ProgramStatusUpdate::Configure {
+        enabled: vt_cfg.is_some_and(|cfg| cfg.ui.program_status.enabled),
+    });
 
     vtcode_commons::startup_trace::record_phase("session_setup_shell", shell_phase);
 
@@ -230,6 +239,13 @@ pub(crate) fn build_session_event_callback(
         InlineEvent::Interrupt => {
             crate::agent::runloop::unified::stop_requests::request_local_cancel(&state, &notify);
         }
+        InlineEvent::Exit => {
+            crate::agent::runloop::unified::stop_requests::request_local_exit(&state, &notify);
+        }
+        InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) if state.is_cancel_handled() => {
+            state.reset();
+            notify.notify_one();
+        }
         InlineEvent::BackgroundOperation => {
             // Registry-backed manager is attached after critical init; until
             // then the shell is typeable but tools are not live yet.
@@ -248,14 +264,20 @@ pub(crate) fn build_session_event_callback(
             }
         }
         InlineEvent::Steer(input) => {
-            if matches!(input.text.split_whitespace().next(), Some("/model" | "/effort")) {
+            if matches!(input.text.split_whitespace().next(), Some("/model")) {
                 let _ = settings_events.send(event.clone());
                 return;
             }
+            // Hand text-only steers to the live steering channel for mid-turn
+            // injection. When the channel is unavailable (no sender yet, or
+            // closed) leave the delivery latch clear so the runloop Steer
+            // handler queues the message for the next ready boundary instead
+            // of dropping it.
             if !input.has_attachments()
                 && let Some(sender) = steering_sender.as_ref()
+                && sender.send(SteeringMessage::FollowUpInput(input.text.clone())).is_ok()
             {
-                let _ = sender.send(SteeringMessage::FollowUpInput(input.text.clone()));
+                state.mark_steer_delivered();
             }
         }
         InlineEvent::Transient(

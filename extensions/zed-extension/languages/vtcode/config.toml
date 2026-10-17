@@ -1,4 +1,0 @@
-# VT Code configuration file language support for Zed
-name = "VT Code Config"
-scope = "source.toml"
-first_line_pattern = '^\s*(# VT Code|id\s*=|name\s*=)'

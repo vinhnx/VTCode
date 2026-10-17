@@ -376,6 +376,11 @@ impl TerminalAppLauncher {
         };
 
         if was_raw_mode {
+            // Purge the alternate viewport before leaving so the external
+            // app never reveals the last TUI frame in the main scrollback
+            // (mirrors the canonical `panic_hook::restore_tui` ordering).
+            // Best-effort: a failed clear must not block leaving.
+            let _ = io::stdout().execute(Clear(ClearType::All));
             // Leave alternate screen
             io::stdout()
                 .execute(LeaveAlternateScreen)

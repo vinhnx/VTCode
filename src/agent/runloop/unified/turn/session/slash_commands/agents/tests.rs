@@ -42,6 +42,8 @@ fn test_subagent_entry(id: &str, status: SubagentStatus) -> SubagentStatusEntry 
 
 fn test_background_entry() -> BackgroundSubprocessEntry {
     BackgroundSubprocessEntry {
+        exit_code: None,
+        termination_requested: false,
         id: "background-rust-engineer".to_string(),
         session_id: "session-123".to_string(),
         exec_session_id: "exec-session-123".to_string(),
@@ -119,24 +121,27 @@ fn summarize_thread_event_preview_uses_latest_live_updates() {
     let preview = summarize_thread_event_preview(&[
         ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {
+                context: None,
                 id: "reasoning-1".to_string(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: "Inspecting the diff".to_string(),
                     stage: None,
-                }),
+                })),
             },
         }),
         ThreadEvent::ItemUpdated(ItemUpdatedEvent {
             item: ThreadItem {
+                context: None,
                 id: "reasoning-1".to_string(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: "Inspecting the diff carefully".to_string(),
                     stage: None,
-                }),
+                })),
             },
         }),
         ThreadEvent::ItemUpdated(ItemUpdatedEvent {
             item: ThreadItem {
+                context: None,
                 id: "tool-output-1".to_string(),
                 details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
                     call_id: "call-1".to_string(),

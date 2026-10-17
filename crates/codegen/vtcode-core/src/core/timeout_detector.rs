@@ -4,10 +4,10 @@
 //! retry mechanisms to ensure the agent can continue operations without manual intervention.
 
 use hashbrown::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use tokio::time;
 
 /// Represents different types of operations that can timeout
@@ -141,18 +141,20 @@ pub struct TimeoutStats {
     pub total_retry_attempts: usize,
 }
 
+/// Operation IDs with their end instants, awaiting removal from the active set.
+type PendingEnds = Mutex<Vec<(String, Instant)>>;
+
 /// Main timeout detector and retry manager
 ///
-/// Manages operation timeouts as an actor: a background cleanup task processes
-/// end-operation requests sent via a channel, so `TimeoutHandle::drop` never
-/// needs to call `tokio::spawn`.
+/// Owns no executor task: `TimeoutHandle::drop` pushes onto a synchronous queue
+/// that async methods drain, so construction and drop work from any thread and
+/// the detector never binds to the runtime that first touched it.
 pub struct TimeoutDetector {
     configs: Arc<RwLock<HashMap<OperationType, TimeoutConfig>>>,
     active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>>,
     stats: Arc<RwLock<TimeoutStats>>,
-    /// Sender for the background cleanup task. Every `TimeoutHandle` clones this
-    /// so it can report completion without blocking or spawning.
-    cleanup_tx: mpsc::Sender<String>,
+    /// Operations whose handles ended or dropped but are not yet removed, with the end instant.
+    pending_ends: Arc<PendingEnds>,
 }
 
 impl Default for TimeoutDetector {
@@ -164,8 +166,7 @@ impl Default for TimeoutDetector {
 impl TimeoutDetector {
     /// Create a new timeout detector with default configurations for each operation type.
     ///
-    /// Spawns a background cleanup task that receives end-operation requests from
-    /// `TimeoutHandle` instances, avoiding the need for `tokio::spawn` in `Drop`.
+    /// Does not require a Tokio runtime.
     pub fn new() -> Self {
         // Build default configs outside the Arc so we don't need blocking_write.
         let mut configs_map = HashMap::new();
@@ -179,43 +180,29 @@ impl TimeoutDetector {
         let configs = Arc::new(RwLock::new(configs_map));
         let active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>> = Arc::new(RwLock::new(HashMap::new()));
         let stats = Arc::new(RwLock::new(TimeoutStats::default()));
-        let (cleanup_tx, cleanup_rx) = mpsc::channel(1024);
+        let pending_ends = Arc::new(Mutex::new(Vec::new()));
 
-        // Spawn a background cleanup actor that processes end-operation requests.
-        // This avoids the tokio::spawn-in-Drop anti-pattern: handles send on the
-        // channel synchronously, and the background task does the async work.
-        let cleanup_active = Arc::clone(&active_operations);
-        let cleanup_stats = Arc::clone(&stats);
-        tokio::spawn(async move {
-            Self::run_cleanup_loop(cleanup_rx, cleanup_active, cleanup_stats).await;
-        });
-
-        Self { configs, active_operations, stats, cleanup_tx }
+        Self { configs, active_operations, stats, pending_ends }
     }
 
-    /// Background task that processes end-operation requests from dropped handles.
-    ///
-    /// Runs until the channel is closed (all senders dropped), which happens
-    /// when the `TimeoutDetector` is dropped.
-    async fn run_cleanup_loop(
-        mut cleanup_rx: mpsc::Receiver<String>,
-        active_operations: Arc<RwLock<HashMap<String, TimeoutEvent>>>,
-        stats: Arc<RwLock<TimeoutStats>>,
-    ) {
-        while let Some(operation_id) = cleanup_rx.recv().await {
-            let mut active_ops = active_operations.write().await;
-            if let Some(event) = active_ops.remove(&operation_id) {
-                let duration = event.start_time.elapsed();
-                let mut stats_guard = stats.write().await;
-                if stats_guard.total_operations > 0 {
-                    let total_duration =
-                        stats_guard.average_timeout_duration * (stats_guard.total_operations - 1) as u32;
-                    stats_guard.average_timeout_duration =
-                        (total_duration + duration) / stats_guard.total_operations as u32;
-                }
+    /// Remove operations whose handles ended or were dropped since the last drain.
+    async fn drain_pending_ends(&self) {
+        let ended = std::mem::take(&mut *self.pending_ends.lock().unwrap_or_else(PoisonError::into_inner));
+        for (operation_id, ended_at) in ended {
+            self.end_operation_inner(&operation_id, ended_at).await;
+        }
+    }
+
+    async fn end_operation_inner(&self, operation_id: &str, ended_at: Instant) {
+        let mut active_ops = self.active_operations.write().await;
+        if let Some(event) = active_ops.remove(operation_id) {
+            let duration = ended_at.saturating_duration_since(event.start_time);
+            let mut stats = self.stats.write().await;
+            if stats.total_operations > 0 {
+                let total_duration = stats.average_timeout_duration * (stats.total_operations - 1) as u32;
+                stats.average_timeout_duration = (total_duration + duration) / stats.total_operations as u32;
             }
         }
-        tracing::trace!("timeout detector cleanup loop exited");
     }
 
     /// Set configuration for a specific operation type
@@ -232,6 +219,7 @@ impl TimeoutDetector {
 
     /// Start monitoring an operation
     pub async fn start_operation(&self, operation_id: String, operation_type: OperationType) -> TimeoutHandle {
+        self.drain_pending_ends().await;
         let config = self.get_config(&operation_type).await;
 
         let event = TimeoutEvent {
@@ -251,12 +239,13 @@ impl TimeoutDetector {
 
         TimeoutHandle {
             operation_id,
-            end_tx: Some(self.cleanup_tx.clone()),
+            pending_ends: Some(Arc::clone(&self.pending_ends)),
         }
     }
 
     /// Check if an operation has timed out
     pub async fn check_timeout(&self, operation_id: &str) -> Option<TimeoutEvent> {
+        self.drain_pending_ends().await;
         let active_ops = self.active_operations.read().await;
         active_ops
             .get(operation_id)
@@ -291,20 +280,13 @@ impl TimeoutDetector {
 
     /// End monitoring an operation
     pub async fn end_operation(&self, operation_id: &str) {
-        let mut active_ops = self.active_operations.write().await;
-        if let Some(event) = active_ops.remove(operation_id) {
-            let duration = event.start_time.elapsed();
-            let mut stats = self.stats.write().await;
-            // Update average timeout duration
-            if stats.total_operations > 0 {
-                let total_duration = stats.average_timeout_duration * (stats.total_operations - 1) as u32;
-                stats.average_timeout_duration = (total_duration + duration) / stats.total_operations as u32;
-            }
-        }
+        self.drain_pending_ends().await;
+        self.end_operation_inner(operation_id, Instant::now()).await;
     }
 
     /// Get current timeout statistics
     pub async fn get_stats(&self) -> TimeoutStats {
+        self.drain_pending_ends().await;
         self.stats.read().await.clone()
     }
 
@@ -451,30 +433,36 @@ impl Clone for TimeoutDetector {
             configs: Arc::clone(&self.configs),
             active_operations: Arc::clone(&self.active_operations),
             stats: Arc::clone(&self.stats),
-            cleanup_tx: self.cleanup_tx.clone(),
+            pending_ends: Arc::clone(&self.pending_ends),
         }
     }
 }
 
 /// Handle for tracking an operation's lifecycle.
 ///
-/// Uses a channel-based actor pattern to report completion: sending on the
-/// channel is synchronous, so `Drop` never needs to call `tokio::spawn`.
+/// Completion is reported through a synchronous queue, so `Drop` never needs
+/// an ambient Tokio runtime.
 pub struct TimeoutHandle {
     operation_id: String,
-    /// Channel sender for cleanup notification. `None` after `end()` has been
-    /// called, which prevents duplicate cleanup in `Drop`.
-    end_tx: Option<mpsc::Sender<String>>,
+    /// Queue shared with the detector. `None` after `end()` has been called,
+    /// which prevents duplicate cleanup in `Drop`.
+    pending_ends: Option<Arc<PendingEnds>>,
 }
 
 impl TimeoutHandle {
     /// End monitoring for this operation.
     ///
-    /// Sends the operation ID to the background cleanup task. Takes `self` by
-    /// value so that `Drop` will not also send a duplicate.
+    /// Takes `self` by value so that `Drop` will not also enqueue a duplicate.
     pub async fn end(mut self) {
-        if let Some(tx) = self.end_tx.take() {
-            let _ = tx.send(self.operation_id.clone()).await;
+        self.enqueue_end();
+    }
+
+    fn enqueue_end(&mut self) {
+        if let Some(queue) = self.pending_ends.take() {
+            queue
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push((std::mem::take(&mut self.operation_id), Instant::now()));
         }
     }
 
@@ -486,9 +474,7 @@ impl TimeoutHandle {
 
 impl Drop for TimeoutHandle {
     fn drop(&mut self) {
-        if let Some(tx) = self.end_tx.take() {
-            let _ = tx.try_send(self.operation_id.clone());
-        }
+        self.enqueue_end();
     }
 }
 
@@ -568,6 +554,50 @@ mod tests {
         let stats = detector.get_stats().await;
         assert_eq!(stats.successful_retries, 1);
         assert_eq!(stats.total_retry_attempts, 2);
+    }
+
+    #[test]
+    fn detector_constructs_and_cleans_up_across_runtimes_without_ambient_runtime() {
+        // Constructed on a plain thread: would panic if it spawned onto an ambient runtime.
+        let detector = TimeoutDetector::new();
+
+        let first = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let handle = first.block_on(detector.start_operation("op-a".to_owned(), OperationType::ApiCall));
+        drop(first);
+        // Dropped after the originating runtime is gone and outside any runtime.
+        drop(handle);
+
+        let second = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        second.block_on(async {
+            let kept = detector.start_operation("op-b".to_owned(), OperationType::ApiCall).await;
+            let stats = detector.get_stats().await;
+            assert_eq!(stats.total_operations, 2);
+            let active = detector.active_operations.read().await;
+            assert!(!active.contains_key("op-a"));
+            assert!(active.contains_key("op-b"));
+            drop(active);
+            kept.end().await;
+            detector.get_stats().await;
+            assert!(detector.active_operations.read().await.is_empty());
+        });
+    }
+
+    #[tokio::test]
+    async fn queued_end_records_duration_at_end_not_at_drain() {
+        let detector = TimeoutDetector::new();
+        let handle = detector.start_operation("op".to_owned(), OperationType::ApiCall).await;
+        handle.end().await;
+        sleep(Duration::from_millis(200)).await;
+
+        let stats = detector.get_stats().await;
+
+        assert!(stats.average_timeout_duration < Duration::from_millis(100));
     }
 
     #[tokio::test]

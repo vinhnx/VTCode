@@ -1,20 +1,14 @@
 use crossterm_winapi::{ControlKeyState, EventFlags, KeyEventRecord, ScreenBuffer};
 use winapi::um::{
-    wincon::{
-        CAPSLOCK_ON, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED,
-        SHIFT_PRESSED,
-    },
+    wincon::{CAPSLOCK_ON, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED, SHIFT_PRESSED},
     winuser::{
-        GetForegroundWindow, GetKeyboardLayout, GetWindowThreadProcessId, ToUnicodeEx, VK_BACK,
-        VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F24, VK_HOME, VK_INSERT,
-        VK_LEFT, VK_MENU, VK_NEXT, VK_NUMPAD0, VK_NUMPAD9, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SHIFT,
-        VK_TAB, VK_UP,
+        GetForegroundWindow, GetKeyboardLayout, GetWindowThreadProcessId, ToUnicodeEx, VK_BACK, VK_CONTROL, VK_DELETE,
+        VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F24, VK_HOME, VK_INSERT, VK_LEFT, VK_MENU, VK_NEXT, VK_NUMPAD0,
+        VK_NUMPAD9, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_TAB, VK_UP,
     },
 };
 
-use crate::event::{
-    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use crate::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 #[derive(Default)]
 pub struct MouseButtonsPressed {
@@ -39,10 +33,7 @@ enum WindowsKeyEvent {
     Surrogate(u16),
 }
 
-pub(crate) fn handle_key_event(
-    key_event: KeyEventRecord,
-    surrogate_buffer: &mut Option<u16>,
-) -> Option<Event> {
+pub(crate) fn handle_key_event(key_event: KeyEventRecord, surrogate_buffer: &mut Option<u16>) -> Option<Event> {
     let windows_key_event = parse_key_event_record(&key_event)?;
     match windows_key_event {
         WindowsKeyEvent::KeyEvent(key_event) => {
@@ -109,21 +100,13 @@ fn try_ensure_char_case(ch: char, desired_case: CharCase) -> char {
             let mut iter = ch.to_lowercase();
             // Unwrap is safe; iterator yields one or more chars.
             let ch_lower = iter.next().unwrap();
-            if iter.next().is_none() {
-                ch_lower
-            } else {
-                ch
-            }
+            if iter.next().is_none() { ch_lower } else { ch }
         }
         CharCase::UpperCase if ch.is_lowercase() => {
             let mut iter = ch.to_uppercase();
             // Unwrap is safe; iterator yields one or more chars.
             let ch_upper = iter.next().unwrap();
-            if iter.next().is_none() {
-                ch_upper
-            } else {
-                ch
-            }
+            if iter.next().is_none() { ch_upper } else { ch }
         }
         _ => ch,
     }
@@ -233,8 +216,8 @@ fn parse_key_event_record(key_event: &KeyEventRecord) -> Option<WindowsKeyEvent>
 
     // Don't generate events for numpad key presses when they're producing Alt codes.
     let is_numpad_numeric_key = (VK_NUMPAD0..=VK_NUMPAD9).contains(&virtual_key_code);
-    let is_only_alt_modifier = modifiers.contains(KeyModifiers::ALT)
-        && !modifiers.contains(KeyModifiers::SHIFT | KeyModifiers::CONTROL);
+    let is_only_alt_modifier =
+        modifiers.contains(KeyModifiers::ALT) && !modifiers.contains(KeyModifiers::SHIFT | KeyModifiers::CONTROL);
     if is_only_alt_modifier && is_numpad_numeric_key {
         return None;
     }
@@ -369,10 +352,5 @@ fn parse_mouse_event_record(
         _ => None,
     };
 
-    Ok(kind.map(|kind| MouseEvent {
-        kind,
-        column: xpos,
-        row: ypos,
-        modifiers,
-    }))
+    Ok(kind.map(|kind| MouseEvent { kind, column: xpos, row: ypos, modifiers }))
 }

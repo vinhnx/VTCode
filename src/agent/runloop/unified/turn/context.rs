@@ -1,6 +1,7 @@
 //! Agent Legibility:
 //! - Entrypoint: `PreparedAssistantToolCall`, `TurnLoopResult`, and the turn-context builders in this root control tool-call preparation and history shaping.
 //! - Common changes:
+//!   - Pre-execution rejection and cache-reuse item completion live in `context/tool_response_events.rs`.
 //!   - Interim progress suppression and continuation heuristics live in `context/continuation.rs`.
 //!   - Turn-processing state and response handling live in `context/runtime_context.rs` and `context/response_handling.rs`.
 //! - Constraints: TD-005 is active for this hotspot; prefer extracting focused support modules over growing this root further.
@@ -10,6 +11,7 @@ mod continuation;
 mod message_history;
 mod response_handling;
 mod runtime_context;
+mod tool_response_events;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,6 +27,8 @@ use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::InlineHandle;
 
+pub(crate) use self::continuation::tracker_continuation_adoption_allowed;
+pub(crate) use self::continuation::tracker_request_explicitly_adopts;
 use self::continuation::{
     AUTONOMOUS_CONTINUE_DIRECTIVE, InterimTextContinuationDecision, apply_tracker_continuation_override,
     continuation_telemetry_outcome, evaluate_interim_text_continuation, push_system_directive_once,
@@ -33,13 +37,14 @@ use self::message_history::{
     build_combined_reasoning, parse_reasoning_detail_value, push_assistant_message, reasoning_duplicates_content,
     should_suppress_redundant_diff_recap,
 };
-#[cfg(test)]
-use self::response_handling::looks_like_clarifying_question;
+pub(crate) use self::message_history::{last_user_message, last_user_message_index};
 pub(crate) use self::runtime_context::{
     LLMContext, ToolContext, TurnHandlerOutcome, TurnOutcomeContext, TurnProcessingContext, TurnProcessingContextParts,
     TurnProcessingResult, TurnProcessingState, UIContext,
 };
 use crate::agent::runloop::mcp_events;
+#[cfg(test)]
+use crate::agent::runloop::unified::plan_blocks::looks_like_clarifying_question;
 use crate::agent::runloop::unified::run_loop_context::{RecoveryMode, RunLoopContext};
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
@@ -215,8 +220,13 @@ impl<'a> TurnProcessingContext<'a> {
         self.harness_state.is_recovery_active()
     }
 
+    #[cfg(test)]
     pub(crate) fn recovery_reason(&self) -> Option<&str> {
         self.harness_state.recovery_reason()
+    }
+
+    pub(crate) fn recovery_prompt_reason(&self) -> Option<&str> {
+        self.harness_state.recovery_prompt_reason()
     }
 
     pub(crate) fn recovery_pass_used(&self) -> bool {
@@ -298,57 +308,6 @@ impl<'a> TurnProcessingContext<'a> {
                     .replace_model_visible_output_bytes(previous_text_len, visible_output_bytes);
             }
         }
-    }
-
-    /// Emit the harness item events that make a rejected/blocked tool call
-    /// visible in the session log as a completed `tool_output` item carrying
-    /// the rejection text.
-    ///
-    /// Rejections decided before the pipeline (safety/policy guards, the
-    /// anti-blind-editing gate, the blocked-call fuse) never execute, so
-    /// without this the log shows either a dangling `item.started` (when the
-    /// LLM runtime streamed the call) or no item at all. Mirrors the
-    /// pipeline's item identity: complete the streamed item when one exists,
-    /// otherwise replay the started pair with the pipeline's fallback item id.
-    pub(crate) fn emit_rejected_tool_call_item(
-        &mut self,
-        tool_call_id: &str,
-        tool_name: Option<&str>,
-        args: Option<&serde_json::Value>,
-        rejection_text: &str,
-    ) {
-        use vtcode_core::core::agent::events::{
-            tool_invocation_completed_event, tool_output_completed_event, tool_output_started_event, tool_started_event,
-        };
-        use vtcode_core::exec::events::{ToolCallStatus, tool_outcome_from_status};
-
-        let Some(emitter) = self.harness_emitter else {
-            return;
-        };
-        let streamed = self.harness_state.take_streamed_tool_call_item_id(tool_call_id);
-        let streamed_item_id = streamed.as_ref().map(|item| item.item_id.clone());
-        let item_id = streamed_item_id.clone().unwrap_or_else(|| {
-            crate::agent::runloop::unified::tool_pipeline::resolve_harness_item_identity(tool_call_id).1
-        });
-        let raw_id = (!tool_call_id.trim().is_empty()).then_some(tool_call_id);
-        let failed = ToolCallStatus::Failed;
-        let tool_label = tool_name
-            .map(str::to_string)
-            .or_else(|| streamed.map(|item| item.tool_name))
-            .unwrap_or_default();
-        if streamed_item_id.is_none() {
-            let _ = emitter.emit(tool_started_event(item_id.clone(), &tool_label, args, raw_id));
-            let _ = emitter.emit(tool_output_started_event(item_id.clone(), raw_id));
-        }
-        let _ = emitter.emit(tool_invocation_completed_event(
-            item_id.clone(),
-            &tool_label,
-            args,
-            raw_id,
-            failed.clone(),
-            tool_outcome_from_status(&failed),
-        ));
-        let _ = emitter.emit(tool_output_completed_event(item_id, raw_id, failed, None, None, rejection_text));
     }
 
     /// Push a model-facing rejection response AND close the call's harness

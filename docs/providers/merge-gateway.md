@@ -57,8 +57,10 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `anthropic/claude-opus-5` | 1M | Yes | Anthropic route |
 | `anthropic/claude-opus-5-5` | 1M | Yes | Anthropic route |
 | `anthropic/claude-sonnet-5` | 1M | Yes | Anthropic route |
+| `anthropic/claude-sonnet-5-5` | 1M | Yes | Anthropic route, adaptive thinking on by default, forced `tool_choice` rejected |
 | `google/gemini-3.6-flash` | 1M | Yes | Google route |
 | `google/gemini-3.7-flash` | 1M | Yes | Google route |
+| `google/gemini-4-argon` | 1.05M | Yes | Google route, flagship reasoning model |
 | `deepseek/deepseek-v4-pro-0813` | 1M | No | DeepSeek route |
 | `deepseek/deepseek-v4-flash-0731` | 1M | No | DeepSeek route |
 | `xai/grok-4.6` | 500k | No | xAI route |
@@ -66,7 +68,6 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `minimax/minimax-h3` | 131k | No | MiniMax route |
 | `moonshot/kimi-k3` | 1M | Yes | Moonshot route |
 | `thinkingmachines/inkling` | 1M | No | Thinking Machines route |
-| `meta/muse-spark-1.1` | 1M | Yes | Meta route |
 | `zai/glm-5.3-flash` | 1.31M | Yes | Z.AI route (320B/18B hybrid attention, native vision) |
 | `zai/glm-5.3-flashx` | 1M | Yes | Z.AI high-speed route (Flash stack, up to 200 tok/s, native vision) |
 | `openai/gpt-5.6-luna` | 1.1M | Yes | OpenAI route |
@@ -74,7 +75,12 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `openai/gpt-5.6-terra` | 1.1M | Yes | OpenAI route |
 | `openai/gpt-6-astra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-sol` | 1.05M | Yes | OpenAI route |
+| `openai/gpt-6.1-sol` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-luna` | 1.05M | Yes | OpenAI route |
+| `xiaomimimo/mimo-v2.6-pro` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |
+| `xiaomimimo/mimo-v2.6-flash` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |
+| `mistral/mistral-large-4-0` | 1M | Yes | Mistral route (Public Preview); reasoning controls omitted pending catalog confirmation |
+| `meta/muse-spark-open` | 1M | Yes | Meta route (open-weight 816B-A42B flagship for coding/agentic work; `reasoning_effort` low/medium/high/xhigh) |
 
 These are the models shown in VT Code's picker. Merge model IDs are not a
 closed local allowlist: any valid explicit `provider/model` route can be used
@@ -159,6 +165,32 @@ through its existing response contract.
 - A model is rejected by Merge: confirm the exact vendor-prefixed route ID in
   Merge's catalog. VT Code deliberately does not reject unknown Merge IDs
   locally.
+- `capability_unavailable` (no vendor supports `streaming_tools`/`tools`):
+  brand-new routes may have no vendor serving streaming tool use yet. VT Code
+  retries streaming tool requests once without streaming; if the route has no
+  tool vendor at all the request fails closed — use `default_routing` or
+  another model until the route gains tool vendors. A proven no-tool-vendor
+  verdict is cached per session so later turns fail fast without burning
+  calls; tool-free requests always bypass the cache. A rejection naming
+  `reasoning` alongside `tools` blames that combination rather than tools
+  alone, so it is never cached as a no-tool-vendor verdict.
+- `capability_unavailable` naming `reasoning` (e.g. `(['reasoning', 'tools'])`
+  on `xiaomimimo/mimo-v2.6-*`): no vendor serves reasoning jointly with tools
+  for the route. VT Code omits reasoning controls for such routes
+  (`xiaomimimo/` is unclassified); explicitly configuring an effort for them
+  blocks the turn up front ("Choose a supported reasoning effort...") instead
+  of sending a doomed request.
+- `service_tier` `422`/`400`: Merge only accepts `standard`/`flex`/`priority`,
+  and serves `flex` solely on routes priced for it (GPT-5.4/5.5/5.6 and Gemini
+  flash routes); `priority` is priced nowhere and always fails closed. VT Code
+  maps OpenAI tiers onto this vocabulary, drops unmapped ones (e.g.
+  `ultrafast`) with a warning, and retries a priced-out tier once without it
+  (serving standard) instead of failing.
+- No explicit `prompt_cache_breakpoint` markers: Merge's Responses-compatible
+  routes reject the field with 400 `invalid_parameter`, so VT Code sends
+  explicit cache breakpoints only to the native api.openai.com backend and
+  never through Merge Gateway. Caching still applies via session-key routing
+  and the upstream implicit latest-message breakpoint.
 - Reasoning output is absent: Merge reasoning controls are route-specific and
   are not projected into the generic VT Code reasoning fields; the reasoning
   effort is still honored on reasoning-capable routes.

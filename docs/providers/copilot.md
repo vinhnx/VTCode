@@ -1,6 +1,7 @@
 # GitHub Copilot Managed Auth
 
-VT Code uses the official `copilot` CLI for GitHub Copilot login and logout. VT Code does not run a separate native GitHub OAuth flow for this provider.
+VT Code uses the official `copilot` CLI for GitHub Copilot login and logout. VT Code does not run a separate native
+GitHub OAuth flow for this provider.
 
 ## What You Need
 
@@ -8,11 +9,13 @@ VT Code uses the official `copilot` CLI for GitHub Copilot login and logout. VT 
 - An active GitHub Copilot subscription
 - Optional: `gh` in `PATH` if you want VT Code to detect an existing GitHub CLI auth session as a fallback
 
-`gh` is not required for Copilot login/logout. VT Code only uses `gh auth status` as an optional fallback when probing existing GitHub authentication.
+`gh` is not required for Copilot login/logout. VT Code only uses `gh auth status` as an optional fallback when probing
+existing GitHub authentication.
 
 ## If `copilot` Is Missing
 
-VT Code will show a help note in the TUI transcript and in CLI auth output when the configured Copilot command is not runnable.
+VT Code will show a help note in the TUI transcript and in CLI auth output when the configured Copilot command is not
+runnable.
 
 Use one of these fixes:
 
@@ -49,4 +52,5 @@ You only need `gh` if you want VT Code to reuse an existing GitHub CLI auth sess
 
 - If `copilot` is installed but VT Code still cannot find it, check your shell `PATH`
 - If VT Code uses the wrong binary, set `VTCODE_COPILOT_COMMAND` or `[auth.copilot].command`
-- If login succeeds in the standalone `copilot` CLI but VT Code still reports no auth, run `vtcode auth status copilot` to inspect the detected auth source
+- If login succeeds in the standalone `copilot` CLI but VT Code still reports no auth, run `vtcode auth status copilot`
+  to inspect the detected auth source

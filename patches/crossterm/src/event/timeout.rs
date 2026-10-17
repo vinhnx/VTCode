@@ -10,19 +10,14 @@ pub struct PollTimeout {
 impl PollTimeout {
     /// Constructs a new `PollTimeout` with the given optional `Duration`.
     pub fn new(timeout: Option<Duration>) -> PollTimeout {
-        PollTimeout {
-            timeout,
-            start: Instant::now(),
-        }
+        PollTimeout { timeout, start: Instant::now() }
     }
 
     /// Returns whether the timeout has elapsed.
     ///
     /// It always returns `false` if the initial timeout was set to `None`.
     pub fn elapsed(&self) -> bool {
-        self.timeout
-            .map(|timeout| self.start.elapsed() >= timeout)
-            .unwrap_or(false)
+        self.timeout.map(|timeout| self.start.elapsed() >= timeout).unwrap_or(false)
     }
 
     /// Returns the timeout leftover (initial timeout duration - elapsed duration).

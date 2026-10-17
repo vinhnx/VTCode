@@ -77,7 +77,12 @@ const REDACTED_VALUE = "[redacted]";
 
 const SENSITIVE_KEY = /(?:secret|token|password|passwd|credential|authorization|cookie|pairing|session|private[_-]?key|api[_-]?key|access[_-]?key)/i;
 const CONTENT_KEY = /^(?:content|find|replace|unified[_-]?diff|diff|stdout|stderr|text|body|prompt|raw|source)$/i;
-const SECRET_VALUE = /(?:bearer\s+|basic\s+|(?:sk|ghp|github_pat|xox[baprs])-|AIza[0-9A-Za-z_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.)[A-Za-z0-9._~+\-/=]+/gi;
+// GitHub App installation tokens (`ghs_...`) use the recommended `ghs_[A-Za-z0-9.\-_]{36,}`
+// pattern so both legacy opaque (~40 chars) and stateless JWT (~520 chars, two dots)
+// formats are redacted even without a Bearer prefix. See
+// https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/
+// and https://github.blog/changelog/2026-10-02-stateless-github-app-installation-tokens-rolled-out
+const SECRET_VALUE = /(?:ghs_[A-Za-z0-9.\-_]{36,}|(?:bearer\s+|basic\s+|(?:sk|ghp|github_pat|xox[baprs])-|AIza[0-9A-Za-z_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.)[A-Za-z0-9._~+\-/=]+)/gi;
 
 function boundedString(value: string, maxLength = MAX_STRING_LENGTH): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength)}…`;

@@ -22,3 +22,4 @@ pub(crate) use context::TurnOutcomeContext;
 pub(crate) use session_loop::run_single_agent_loop_unified;
 pub(crate) use tool_outcomes::apply_turn_outcome;
 pub(crate) use turn_loop::{TurnLoopContext, run_turn_loop};
+pub(crate) use turn_loop_helpers::is_internal_harness_follow_up;

@@ -497,6 +497,7 @@ where
     fn execute(&self, invocation: &CommandInvocation) -> Result<CommandOutput> {
         let item_id = self.next_id();
         let starting_item = ThreadItem {
+            context: None,
             id: item_id.clone(),
             details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
                 invocation,
@@ -516,6 +517,7 @@ where
                 };
 
                 let completed_item = ThreadItem {
+                    context: None,
                     id: item_id,
                     details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
                         invocation,
@@ -529,6 +531,7 @@ where
             }
             Err(err) => {
                 let failure = ThreadItem {
+                    context: None,
                     id: item_id,
                     details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
                         invocation,

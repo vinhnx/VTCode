@@ -50,6 +50,7 @@ use fallbacks::{
 pub(crate) use guards::BlockedToolCallLimits;
 #[cfg(test)]
 pub(crate) use guards::blocked_tool_guard::BlockedToolCallFuseTrip;
+
 pub(crate) use guards::{
     blocked_tool_call_fuse_trip, blocked_tool_call_limits, blocked_tool_call_limits_for_tool,
     blocked_tool_call_messages_detailed, max_consecutive_blocked_tool_calls_per_turn,
@@ -62,6 +63,16 @@ pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_b
 use rate_limit::acquire_adaptive_rate_limit_slot;
 use recovery::try_interactive_circuit_recovery;
 pub(crate) use types::{PreparedToolCall, ToolOutcomeContext, ValidationResult};
+
+/// Whether model-emitted arguments echo the request-only history stub
+/// `{"cleared":"tool_input"}` from `clear_old_tool_results` in vtcode-core.
+/// The stub is valid JSON for the wire but carries no operation; executing it
+/// always fails preflight with `Missing required argument`. Session
+/// `session-vtcode-20261015T083154Z_961005-54191` burned 3 loops echoing it
+/// for `exec_command`/`task_tracker` before the circuit tripped.
+pub(crate) fn is_cleared_tool_input_echo(arguments: Option<&serde_json::Value>) -> bool {
+    arguments.is_some_and(|args| args.get("cleared").and_then(serde_json::Value::as_str) == Some("tool_input"))
+}
 
 /// Whether a preflight reject is a tool-name/identity mistake rather than a
 /// policy block or a repeated argument-schema failure.
@@ -128,9 +139,16 @@ pub(crate) fn handle_preflight_failure(
     tool_call_id: &str,
     tool_name: &str,
     error: &str,
+    arguments: Option<&serde_json::Value>,
     fallback: Option<(String, serde_json::Value)>,
 ) -> Option<TurnHandlerOutcome> {
-    let is_llm_mistake = preflight_failure_is_llm_mistake(error);
+    if let Some(stop) = crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state) {
+        ctx.push_rejected_tool_response(tool_call_id, Some(tool_name), arguments,
+            serde_json::json!({"error":"Tool call cancelled before validation", "not_executed":true, "interrupted":true}).to_string());
+        return Some(TurnHandlerOutcome::Break(stop));
+    }
+    let is_cleared_echo = is_cleared_tool_input_echo(arguments);
+    let is_llm_mistake = !is_cleared_echo && preflight_failure_is_llm_mistake(error);
     let failure_count = if is_llm_mistake {
         // Report the current streak without advancing it so the model still
         // sees failure_count telemetry, but a prose blob cannot poison the
@@ -142,14 +160,46 @@ pub(crate) fn handle_preflight_failure(
     let max_failures = max_consecutive_blocked_tool_calls_per_turn(ctx);
     // LLM mistakes never trip the circuit, even if a prior policy streak is
     // already at the cap: one prose blob must not skip valid sibling calls.
-    let circuit_tripped = !is_llm_mistake && failure_count >= max_failures;
-    let schema_correction = preflight_schema_correction(tool_name, error);
-    let next_action = if circuit_tripped && ctx.is_planning_active() {
+    let recoverable_validation = !is_llm_mistake
+        && vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error).is_none();
+    let repeated = recoverable_validation
+        && ctx.session_stats.preflight_recovery.reject(
+            &ctx.tool_registry.resolve_tool_name_with_display(tool_name).canonical,
+            if arguments.is_some() {
+                crate::agent::runloop::unified::state::ValidationCategory::Arguments
+            } else {
+                crate::agent::runloop::unified::state::ValidationCategory::MalformedJson
+            },
+            arguments,
+            max_failures,
+            ctx.is_planning_active(),
+        );
+    let exhausted = ctx.session_stats.preflight_recovery.exhausted();
+    let circuit_tripped = !is_llm_mistake && (failure_count >= max_failures || exhausted);
+    let schema_correction = if is_cleared_echo
+        && vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error).is_none()
+    {
+        if matches!(tool_name, tool_names::EXEC_COMMAND | tool_names::UNIFIED_EXEC | "command_session") {
+            format!(
+                "Do not echo the history stub '{{\"cleared\":\"tool_input\"}}'. Provide real arguments matching the declared schema for '{tool_name}' (exec_command requires \"cmd\"; \"command\" is accepted as an alias)."
+            )
+        } else {
+            format!(
+                "Do not echo the history stub '{{\"cleared\":\"tool_input\"}}'. Provide real arguments matching the declared schema for '{tool_name}'."
+            )
+        }
+    } else {
+        preflight_schema_correction(tool_name, error)
+    };
+    let next_action = if exhausted {
+        "Automatic validation recovery stopped. Resume with corrected arguments on fresh user input."
+    } else if circuit_tripped && ctx.is_planning_active() {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize exactly one complete <proposed_plan> from the evidence already gathered."
     } else if circuit_tripped {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize a plain-text response reporting the failure to the user."
     } else {
-        "Correct the arguments using schema_correction, then retry this tool once."
+        vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error)
+            .unwrap_or("Correct the arguments using schema_correction, then retry this tool once.")
     };
     let failure_kind = if circuit_tripped {
         "preflight_circuit_breaker"
@@ -157,7 +207,11 @@ pub(crate) fn handle_preflight_failure(
         "preflight_validation"
     };
     let mut payload = serde_json::json!({
-        "error": format!("Tool preflight validation failed for '{tool_name}': {error}"),
+        "error": if repeated {
+            format!("Repeated preflight rejection for '{tool_name}'; use schema_correction.")
+        } else {
+            format!("Tool preflight validation failed for '{tool_name}': {}", error.strip_prefix("Tool preflight validation failed: ").unwrap_or(error))
+        },
         "failure_kind": failure_kind,
         "tool_name": tool_name,
         "failure_count": failure_count,
@@ -171,17 +225,29 @@ pub(crate) fn handle_preflight_failure(
             object.insert("fallback_tool_args".to_string(), fallback_args);
         }
     }
-    let diagnosis = super::execution_result::deterministic_preflight_diagnosis(tool_name, error, circuit_tripped);
+    let diagnosis = super::execution_result::deterministic_preflight_diagnosis(
+        tool_name,
+        if repeated { "Repeated invalid arguments" } else { error },
+        circuit_tripped,
+    );
     if let Some(object) = payload.as_object_mut() {
         object.insert("diagnosis".to_string(), diagnosis.to_value());
     }
-    ctx.push_rejected_tool_response(tool_call_id, Some(tool_name), None, payload.to_string());
+    ctx.push_rejected_tool_response(tool_call_id, Some(tool_name), arguments, payload.to_string());
     super::execution_result::render_and_emit(ctx, tool_name, &diagnosis);
 
+    if exhausted {
+        return Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+            reason: Some("Preflight corrective turn repeated an unchanged rejected call; automatic validation recovery stopped. Type continue to resume with corrected arguments.".to_string()),
+        }));
+    }
+    if circuit_tripped && recoverable_validation {
+        ctx.session_stats.preflight_recovery.synthesis();
+    }
     circuit_tripped.then(|| {
         // Arm a tool-free recovery pass instead of hard-blocking. The flush
-        // (called by the tool batch after all responses land) pushes the
-        // synthesis directive and strips tools at the API level. Returning
+        // (called by the tool batch after all responses land) arms the
+        // request-only synthesis directive and disables tool choice. Returning
         // `Continue` lets the turn loop proceed to that pass rather than
         // terminating as `Blocked`.
         ctx.harness_state.arm_preflight_circuit_recovery();
@@ -197,10 +263,24 @@ pub(crate) fn handle_preflight_failure(
 }
 
 fn preflight_schema_correction(tool_name: &str, error: &str) -> String {
+    if let Some(correction) = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error) {
+        return correction.to_owned();
+    }
+    if tool_name == tool_names::TASK_TRACKER {
+        return vtcode_core::tools::handlers::task_tracker::TASK_TRACKER_ARGUMENT_CORRECTION.to_string();
+    }
+    if tool_name == tool_names::APPLY_PATCH || error.contains("apply_patch is a tool") {
+        return vtcode_core::tools::apply_patch::APPLY_PATCH_ARGUMENT_CORRECTION.to_string();
+    }
     if matches!(tool_name, tool_names::EXEC_COMMAND | tool_names::UNIFIED_EXEC | "command_session")
         && error.contains("dynamic shell expansion in find commands")
     {
         return "Do not retry the rejected dynamic find command. Use a literal path and quoted pattern, for example `find src -name '*.rs'`, or use `rg --files src | rg '\\.rs$'`. Do not use `$()`, backticks, variable/brace expansion, or dynamically spliced find options.".to_string();
+    }
+    if matches!(tool_name, tool_names::EXEC_COMMAND | tool_names::UNIFIED_EXEC | "command_session")
+        && error.contains("Missing required argument: command")
+    {
+        return "Provide `{\"cmd\": \"<shell command>\"}` for exec_command (`command` is accepted as an alias). Parse the arguments as JSON before retrying.".to_string();
     }
 
     format!(
@@ -218,6 +298,11 @@ pub(crate) fn drain_preflight_circuit_responses(
     let failure_count = ctx.harness_state.consecutive_preflight_failures;
     for tool_call in remaining_tool_calls {
         let tool_name = tool_call.tool_name();
+        if crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state).is_some() {
+            ctx.push_rejected_tool_response(tool_call.call_id(), Some(tool_name), tool_call.args(),
+                serde_json::json!({"error":"Tool call cancelled before execution", "not_executed":true, "interrupted":true}).to_string());
+            continue;
+        }
         let error = tool_call.args_error().unwrap_or(
             "Tool call skipped because another call in this assistant batch tripped the preflight circuit breaker.",
         );
@@ -248,10 +333,18 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
+fn build_turn_budget_error_content(error: String) -> String {
+    let mut payload = super::execution_result::build_error_content(error, None, None, "policy");
+    if let Some(next_action) = payload.get_mut("next_action") {
+        *next_action = crate::agent::runloop::unified::run_loop_context::BUDGET_EXHAUSTED_SYNTHESIS_NOTE.into();
+    }
+    payload.to_string()
+}
+
 const INTERVIEW_DENIAL_RECOVERY_DIRECTIVE: &str = "Planning recovery: the interactive interview is unavailable in this runtime. Tools are disabled for the next pass. If you have a clarifying question, present it to the user in plain text and end your turn — the user's next message will answer it and you can continue planning. Otherwise, synthesize exactly one completed `<proposed_plan>` from the research already gathered. Do not emit tool calls or request approval until the plan is present.";
 
-const PREFLIGHT_CIRCUIT_RECOVERY_DIRECTIVE: &str = "Recovery: repeated tool preflight validation failures tripped the circuit breaker, so tools are disabled for this pass. Do not emit tool calls. Summarize what you were trying to do and the validation errors above, then tell the user in plain text what you need to proceed (e.g. re-state the request so the next turn retries with correct arguments). End your turn after this response.";
-const PLANNING_TOOL_FREE_RECOVERY_DIRECTIVE: &str = "Planning recovery: tools are disabled for this pass. Emit exactly one complete `<proposed_plan>` from the repository evidence already gathered. Include `## Summary`, `## Implementation Steps`, `## Test Cases and Validation`, and `## Assumptions and Defaults`; every numbered step must use `Action -> files: [concrete/path] -> verify: [command or observable check]`. Do not emit tool calls or approval language.";
+pub(crate) const PREFLIGHT_CIRCUIT_RECOVERY_DIRECTIVE: &str = "Recovery: repeated tool preflight validation failures tripped the circuit breaker, so tools are disabled for this pass. Do not emit tool calls. Summarize what you were trying to do and the validation errors above, then tell the user in plain text what you need to proceed (e.g. re-state the request so the next turn retries with correct arguments). End your turn after this response.";
+pub(crate) const PLANNING_TOOL_FREE_RECOVERY_DIRECTIVE: &str = "Planning recovery: tools are disabled for this pass. Emit exactly one complete `<proposed_plan>` from the repository evidence already gathered. Include `## Summary`, `## Implementation Steps`, `## Test Cases and Validation`, and `## Assumptions and Defaults`; every numbered step must use `Action -> files: [concrete/path] -> verify: [command or observable check]`. Do not emit tool calls or approval language.";
 
 const BLOCKED_TOOL_RECOVERY_DIRECTIVE: &str = "Recovery: repeated tool calls were blocked by the active safety or permission policy, so tools are disabled for one bounded pass. Do not retry or re-emit blocked commands. Synthesize a plain-text response from the tool responses above, explain the blocked action and the safe next step, and end your turn.";
 
@@ -281,16 +374,12 @@ pub(crate) fn flush_interview_denial_recovery(ctx: &mut TurnProcessingContext<'_
 /// responses. Without this, the breaker hard-blocked the turn as `Blocked`,
 /// silently dropping approved-plan builds that the user had already approved.
 pub(crate) fn flush_preflight_circuit_recovery(ctx: &mut TurnProcessingContext<'_>) {
-    if !ctx.harness_state.take_preflight_circuit_recovery() {
+    if !ctx.harness_state.take_preflight_circuit_recovery()
+        || crate::agent::runloop::unified::stop_requests::stop_outcome(ctx.ctrl_c_state).is_some()
+    {
         return;
     }
 
-    let directive = if ctx.is_planning_active() {
-        PLANNING_TOOL_FREE_RECOVERY_DIRECTIVE
-    } else {
-        PREFLIGHT_CIRCUIT_RECOVERY_DIRECTIVE
-    };
-    ctx.push_system_message(directive);
     if ctx.harness_state.recovery_reason.is_none() {
         ctx.harness_state.recovery_reason = Some("preflight validation circuit breaker".to_string());
     }
@@ -305,20 +394,7 @@ pub(crate) fn flush_preflight_circuit_recovery(ctx: &mut TurnProcessingContext<'
 /// This is flushed after all responses from the current assistant batch so a
 /// recovery directive is never interleaved with tool responses.
 pub(crate) fn flush_blocked_tool_recovery(ctx: &mut TurnProcessingContext<'_>) {
-    let preview_gate_retried = ctx.harness_state.finish_preview_gate_batch();
     if !ctx.harness_state.take_blocked_tool_recovery() {
-        if preview_gate_retried {
-            let directive = if ctx.is_planning_active() {
-                PLANNING_TOOL_FREE_RECOVERY_DIRECTIVE
-            } else {
-                "Recovery: two assistant batches attempted inspection after the tool preview budget was exhausted without an admitted tool between them. Tools are disabled for this pass. Report the evidence already visible and what remains unverified. Do not claim that all tool access was revoked; spool paging, edits, and verification were still available."
-            };
-            ctx.push_system_message(directive);
-            if ctx.harness_state.recovery_reason.is_none() {
-                ctx.harness_state.recovery_reason = Some("repeated inspection after preview exhaustion".to_string());
-            }
-            ctx.harness_state.switch_to_tool_free_recovery();
-        }
         return;
     }
 
@@ -503,11 +579,6 @@ pub(super) fn finalize_validation_result(
         ValidationResult::Outcome(outcome) => ValidationTransition::Return(Some(outcome)),
         ValidationResult::Handled => {
             ctx.reset_blocked_tool_call_streak();
-            ctx.harness_state.reset_preview_gate_batches();
-            ValidationTransition::Return(None)
-        }
-        ValidationResult::PreviewExhausted => {
-            ctx.harness_state.record_preview_gate_rejection();
             ValidationTransition::Return(None)
         }
         ValidationResult::Blocked => {
@@ -521,9 +592,16 @@ pub(super) fn finalize_validation_result(
                 ValidationTransition::Return(outcome)
             }
         }
+        ValidationResult::ReadCapBlocked => {
+            ValidationTransition::Return(guards::blocked_tool_guard::enforce_read_cap_blocked_tool_call_guard(
+                ctx,
+                tool_call_id,
+                tool_name,
+                args_val,
+            ))
+        }
         ValidationResult::Proceed(prepared) => {
             ctx.reset_blocked_tool_call_streak();
-            ctx.harness_state.reset_preview_gate_batches();
             ValidationTransition::Proceed(prepared)
         }
     }
@@ -770,7 +848,9 @@ pub(crate) fn block_mutation_until_verification(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<MutationVerificationResult> {
-    if !mutation_blocked_until_verification(repeated_tool_attempts, tool_name, args_val) {
+    if ctx.tool_registry.is_completion_verifier_call(tool_name, args_val)
+        || !mutation_blocked_until_verification(repeated_tool_attempts, tool_name, args_val)
+    {
         return Ok(MutationVerificationResult::Allowed);
     }
 
@@ -866,6 +946,8 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
+    ctx.handle
+        .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::CheckingPermissions);
     // Early guard: reject empty tool names with a clear error message.
     // This handles malformed LLM responses where tool name is missing.
     // The "empty tool name" phrase is matched by `preflight_failure_is_llm_mistake`.
@@ -875,6 +957,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tool_call_id,
             "<empty tool name>",
             "Tool call has an empty tool name. Provide a valid tool name.",
+            Some(args_val),
             None,
         );
         return Ok(outcome.map_or(ValidationResult::Handled, ValidationResult::Outcome));
@@ -904,7 +987,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tool_call_id,
             Some(tool_name),
             Some(args_val),
-            build_failure_error_content(error_msg, "policy"),
+            build_turn_budget_error_content(error_msg),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -924,7 +1007,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tool_call_id,
             Some(tool_name),
             Some(args_val),
-            build_failure_error_content(error_msg, "policy"),
+            build_turn_budget_error_content(error_msg),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -945,11 +1028,12 @@ pub(crate) async fn validate_tool_call<'a>(
                     .as_ref()
                     .map(|(tool, args)| (Some(tool.clone()), Some(args.clone())))
                     .unwrap_or((None, None));
-                let error_text = err.to_string();
+                let error_text = format!("{err:#}");
                 if check_is_argument_error(&error_text)
                     || error_text.to_ascii_lowercase().contains("tool preflight validation failed")
                 {
-                    let outcome = handle_preflight_failure(ctx, tool_call_id, tool_name, &error_text, fallback);
+                    let outcome =
+                        handle_preflight_failure(ctx, tool_call_id, tool_name, &error_text, Some(args_val), fallback);
                     return Ok(outcome.map_or(ValidationResult::Handled, ValidationResult::Outcome));
                 }
                 ctx.push_rejected_tool_response(
@@ -957,7 +1041,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     Some(tool_name),
                     Some(args_val),
                     build_validation_error_content_with_fallback(
-                        format!("Tool preflight validation failed: {err}"),
+                        format!("Tool preflight validation failed: {err:#}"),
                         "preflight",
                         fallback_tool,
                         fallback_tool_args,
@@ -968,10 +1052,22 @@ pub(crate) async fn validate_tool_call<'a>(
         }
     };
 
-    // Admission succeeded, so a previous malformed/schema-invalid streak has
-    // been corrected. Do this before later policy/loop guards, which have their
-    // own recovery fuse and should not inherit stale preflight failures.
-    ctx.reset_preflight_failure_streak();
+    // Check correction only after admission against the live schema. Unrelated
+    // operations retain the validation episode and its independent failure cap.
+    if ctx.session_stats.preflight_recovery.exhausted() {
+        ctx.push_rejected_tool_response(
+            tool_call_id,
+            Some(tool_name),
+            Some(args_val),
+            build_failure_error_content(
+                "Automatic preflight recovery is exhausted; resume with corrected arguments.".to_string(),
+                "preflight_circuit_breaker",
+            ),
+        );
+        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+            reason: Some("Automatic preflight recovery is exhausted; type continue to resume.".to_string()),
+        })));
+    }
 
     let canonical_tool_name = prepared.canonical_name.clone();
     if !primary_agent_allows_tool(ctx.active_primary_agent.active(), &canonical_tool_name) {

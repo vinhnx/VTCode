@@ -444,7 +444,12 @@ impl StreamingSkillExecutor {
             let mut brace_count = 0;
             let mut end_pos = None;
 
-            for (i, ch) in json_buffer[brace_start..].chars().enumerate() {
+            // `char_indices` yields byte offsets, matching the byte-based
+            // slicing/draining below. `chars().enumerate()` would yield char
+            // indices, so any multi-byte character before the closing brace
+            // would mis-slice (`brace_start + i + 1` past a non-ASCII char) or
+            // silently drop the object.
+            for (i, ch) in json_buffer[brace_start..].char_indices() {
                 match ch {
                     '{' => brace_count += 1,
                     '}' => {
@@ -679,6 +684,28 @@ mod tests {
             StreamEvent::JsonObject { value, .. } => {
                 assert_eq!(value["key"], "value");
             }
+            _ => panic!("Expected JsonObject event"),
+        }
+    }
+
+    #[test]
+    fn test_json_extraction_with_multibyte_chars() {
+        // A multi-byte character before the closing brace must not shift the
+        // byte offset used to slice the object. Regression for mixing
+        // `chars().enumerate()` (char index) with byte-based slicing.
+        let mut buffer = String::new();
+        let data = r#"{"key": "café"} trailing {"emoji": "🚀"}"#;
+
+        let events = StreamingSkillExecutor::extract_json_objects(&mut buffer, data)
+            .expect("both JSON objects should be extracted");
+
+        assert_eq!(events.len(), 2);
+        match &events[0] {
+            StreamEvent::JsonObject { value, .. } => assert_eq!(value["key"], "café"),
+            _ => panic!("Expected JsonObject event"),
+        }
+        match &events[1] {
+            StreamEvent::JsonObject { value, .. } => assert_eq!(value["emoji"], "🚀"),
             _ => panic!("Expected JsonObject event"),
         }
     }

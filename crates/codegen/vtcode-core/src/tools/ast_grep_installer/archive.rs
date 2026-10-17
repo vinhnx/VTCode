@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::tools::ast_grep_binary::{alias_ast_grep_binary_name, canonical_ast_grep_binary_name};
+use crate::tools::install_support::run_version_probe;
 use anyhow::{Context, Result, anyhow, bail};
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -41,14 +42,14 @@ pub(super) fn install_archive(paths: &InstallPaths, archive_name: &str, archive_
 }
 
 pub(super) fn ast_grep_version(binary: &Path) -> Result<String> {
-    let output = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .arg("--version")
         .arg("--color")
         .arg("never")
         .env("NO_COLOR", "1")
-        .env("CLICOLOR", "0")
-        .output()
-        .with_context(|| format!("Failed to run {}", binary.display()))?;
+        .env("CLICOLOR", "0");
+    let output = run_version_probe(command).with_context(|| format!("Failed to run {}", binary.display()))?;
     if !output.status.success() {
         bail!("{} --version exited with status {}", binary.display(), output.status);
     }

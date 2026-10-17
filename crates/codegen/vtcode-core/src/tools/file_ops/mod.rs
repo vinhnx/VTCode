@@ -7,6 +7,7 @@ mod diff_preview;
 mod list;
 mod path_policy;
 mod read;
+pub(crate) use read::{PATCH_READ_CACHE_NONCE, bounded_line_read_path, source_line_offset};
 mod tool;
 mod write;
 

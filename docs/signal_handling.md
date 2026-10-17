@@ -1,23 +1,29 @@
 # Signal Handling Architecture
 
-This document describes the signal handling architecture in vtcode, with emphasis on the priority guarantees for Ctrl+C (SIGINT) and /exit commands.
+This document describes the signal handling architecture in vtcode, with emphasis on the priority guarantees for Ctrl+C
+(SIGINT) and /exit commands.
 
 ## Priority Guarantees
 
-**Ctrl+C and /exit are always the highest priority and cannot be blocked by any other process.** This is a critical user safety guarantee - users must always be able to exit the program without being trapped in an unresponsive state.
+**Ctrl+C and /exit are always the highest priority and cannot be blocked by any other process.** This is a critical user
+safety guarantee - users must always be able to exit the program without being trapped in an unresponsive state.
 
 ### Ctrl+C Priority Guarantees
 
 1. **First Ctrl+C**: Immediately cancels the current operation (Cancel signal)
 2. **Second Ctrl+C (within 1 second)**: Immediately exits the program (Exit signal)
-3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)` which bypasses all other operations and cleanup routines
+3. **Emergency exit path**: On double Ctrl+C, the program calls `std::process::exit(130)` which bypasses all other
+   operations and cleanup routines
 4. **No signal masking**: SIGINT is never blocked or masked anywhere in the codebase
-5. **Atomic operations**: All state transitions use lock-free atomic operations, ensuring no mutex contention can block signal handling
+5. **Atomic operations**: All state transitions use lock-free atomic operations, ensuring no mutex contention can block
+   signal handling
 
 ### /exit Command Priority Guarantees
 
-1. **Immediate processing**: `/exit`, `/quit`, `exit`, and `quit` are processed immediately and cannot be blocked by any other operation
-2. **No waiting**: These commands return `InteractionOutcome::Exit { reason: SessionEndReason::Exit }` which is checked at the top of every interaction loop iteration
+1. **Immediate processing**: `/exit`, `/quit`, `exit`, and `quit` are processed immediately and cannot be blocked by any
+   other operation
+2. **No waiting**: These commands return `InteractionOutcome::Exit { reason: SessionEndReason::Exit }` which is checked
+   at the top of every interaction loop iteration
 3. **No cleanup delays**: The exit path skips non-essential cleanup operations to ensure immediate termination
 
 ## Signal Handling Components
@@ -26,7 +32,8 @@ This document describes the signal handling architecture in vtcode, with emphasi
 
 **Location:** `src/agent/runloop/unified/state.rs`
 
-The `CtrlCState` struct implements a lock-free state machine using atomic operations. It tracks the current phase of Ctrl+C handling and ensures that signals are always processed immediately.
+The `CtrlCState` struct implements a lock-free state machine using atomic operations. It tracks the current phase of
+Ctrl+C handling and ensures that signals are always processed immediately.
 
 #### State Machine Phases
 
@@ -37,7 +44,7 @@ The `CtrlCState` struct implements a lock-free state machine using atomic operat
 
 #### State Transitions
 
-```
+```text
 Idle → CancelRequested (first Ctrl+C)
 CancelRequested → ExitArmed (after cancel is handled)
 CancelRequested → ExitRequested (second Ctrl+C within 1s)
@@ -56,7 +63,8 @@ ExitRequested → ExitRequested (any subsequent Ctrl+C)
 
 **Location:** `src/agent/runloop/unified/session_setup/signal.rs`
 
-The signal handler is a Tokio task that listens for SIGINT and SIGTERM signals. It runs on its own task and cannot be blocked by other operations.
+The signal handler is a Tokio task that listens for SIGINT and SIGTERM signals. It runs on its own task and cannot be
+blocked by other operations.
 
 #### Signal Flow
 
@@ -77,6 +85,7 @@ When a double Ctrl+C is detected, the signal handler:
    - Calls `std::process::exit(130)` to immediately terminate the process
 
 The `std::process::exit(130)` call bypasses:
+
 - Rust's drop logic
 - Async runtime shutdown
 - Any pending background tasks
@@ -88,14 +97,20 @@ This ensures the program exits immediately, even if other tasks are blocked.
 
 **Location:** `crates/codegen/vtcode-ui/src/tui/core_tui/runner/signal.rs`
 
-A dedicated thread handles SIGTERM as an emergency fallback. This is necessary because the process may not have a running Tokio reactor to observe SIGTERM through the async path.
+A dedicated thread handles SIGTERM as an emergency fallback. This is necessary because the process may not have a
+running Tokio reactor to observe SIGTERM through the async path.
 
 #### Design Note
 
 SIGINT is deliberately NOT handled in this thread because:
+
 - The TUI runs in raw mode where Ctrl+C is delivered as a key event, not a Unix signal
 - The async signal handler in `session_setup/signal.rs` owns the Ctrl+C state machine
-- Handling SIGINT in both places caused a "split-brain race" where the thread would call `restore_tui()` + `process::exit(130)` while the async handler hadn't finished shutting down
+- Handling SIGINT in both places caused a "split-brain race" where the thread would call `restore_tui()` +
+  `process::exit` while the async handler hadn't finished shutting down
+
+It restores the terminal, prints a one-line notice, and exits with status 143 (128 + SIGTERM, the standard
+supervisor-kill code).
 
 ### 4. Exit Command Handling
 
@@ -106,11 +121,13 @@ Exit commands are recognized and processed immediately:
 - `exit` / `quit` (bare input)
 - `/exit` / `/quit` (slash commands)
 
-These commands return `InteractionOutcome::Exit { reason: SessionEndReason::Exit }` which is checked at the top of every interaction loop iteration.
+These commands return `InteractionOutcome::Exit { reason: SessionEndReason::Exit }` which is checked at the top of every
+interaction loop iteration.
 
 #### Priority Guarantee
 
 Exit commands cannot be blocked by:
+
 - LLM streaming operations
 - Tool execution
 - MCP operations
@@ -133,6 +150,7 @@ if ctx.ctrl_c_state.is_exit_requested() {
 ```
 
 This ensures that:
+
 1. Exit requests are always processed
 2. No long-running operation can prevent exit
 3. The program can always be terminated by the user
@@ -160,6 +178,7 @@ The `restore_tui()` function ensures the terminal is left in a usable state even
 5. Pops keyboard enhancement flags
 
 This is called from both:
+
 - The SIGTERM emergency handler
 - The Ctrl+C exit path
 

@@ -16,14 +16,17 @@ use ratatui::{
     Terminal,
     backend::TestBackend,
     buffer::Buffer,
-    crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers},
+    crossterm::event::{
+        Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    },
     layout::Rect,
     widgets::Widget,
 };
 use tokio::sync::mpsc;
 use vtcode_ui::tui::{
     app::{
-        InlineCommand as AppInlineCommand, InlineEvent, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+        FullscreenInteractionSettings, InlineCommand as AppInlineCommand, InlineEvent, InlineMessageKind,
+        InlineSegment, InlineTextStyle, InlineTheme,
     },
     core_tui::{
         InlineCommand as CoreInlineCommand, app::AppSession, session::Session as CoreSession, widgets::TranscriptWidget,
@@ -246,5 +249,110 @@ fn transcript_review_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, transcript_widget_benchmark, transcript_reflow_benchmark, transcript_review_benchmark);
+#[derive(Clone, Copy)]
+enum TranscriptInteraction {
+    Idle,
+    Streaming,
+    Scroll,
+    Selection,
+}
+
+struct InteractionFixture {
+    session: AppSession,
+    terminal: Terminal<TestBackend>,
+    tx: mpsc::UnboundedSender<InlineEvent>,
+    rx: mpsc::UnboundedReceiver<InlineEvent>,
+    before: Buffer,
+}
+
+fn transcript_interaction_benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transcript_interaction");
+    for action in [
+        TranscriptInteraction::Idle,
+        TranscriptInteraction::Streaming,
+        TranscriptInteraction::Scroll,
+        TranscriptInteraction::Selection,
+    ] {
+        let name = match action {
+            TranscriptInteraction::Idle => "idle_frame",
+            TranscriptInteraction::Streaming => "streaming_frame",
+            TranscriptInteraction::Scroll => "scroll_frame",
+            TranscriptInteraction::Selection => "selection_frame",
+        };
+        group.bench_function(name, |b| {
+            b.iter_batched(
+                || {
+                    let (tx, rx) = mpsc::unbounded_channel();
+                    let mut session = build_app_session(MESSAGE_COUNT, false);
+                    // Bench hygiene: auto-copy spawns a real clipboard subprocess
+                    // per finished selection (`pbcopy` ≈ 15–19 ms on macOS, timed
+                    // locally), which would measure process spawn — and overwrite
+                    // the developer's clipboard every iteration — instead of
+                    // selection rendering. Disable via the product's own public
+                    // fullscreen-interaction command (same surface as the
+                    // `ui.fullscreen.copy_on_select` settings toggle); explicit
+                    // Ctrl+C copying is unaffected.
+                    session.handle_command(AppInlineCommand::SetFullscreenInteraction {
+                        interaction: FullscreenInteractionSettings {
+                            copy_on_select: false,
+                            ..FullscreenInteractionSettings::default()
+                        },
+                    });
+                    let mut terminal = Terminal::new(TestBackend::new(APP_WIDTH, APP_HEIGHT)).expect("test backend");
+                    draw_app_session(&mut session, &mut terminal);
+                    let before = terminal.backend().buffer().clone();
+                    InteractionFixture { session, terminal, tx, rx, before }
+                },
+                |InteractionFixture { mut session, mut terminal, tx, mut rx, before }| {
+                    match action {
+                        TranscriptInteraction::Idle => {}
+                        TranscriptInteraction::Streaming => session.handle_command(AppInlineCommand::AppendLine {
+                            kind: InlineMessageKind::Agent,
+                            segments: vec![segment("asymmetric fresh streaming output")],
+                        }),
+                        TranscriptInteraction::Scroll | TranscriptInteraction::Selection => {
+                            let events = if matches!(action, TranscriptInteraction::Scroll) {
+                                vec![(MouseEventKind::ScrollUp, 5, 5)]
+                            } else {
+                                vec![
+                                    (MouseEventKind::Down(MouseButton::Left), 5, 5),
+                                    (MouseEventKind::Drag(MouseButton::Left), 20, 7),
+                                    (MouseEventKind::Up(MouseButton::Left), 20, 7),
+                                ]
+                            };
+                            for (kind, column, row) in events {
+                                session.handle_event(
+                                    CrosstermEvent::Mouse(MouseEvent {
+                                        kind,
+                                        column,
+                                        row,
+                                        modifiers: KeyModifiers::NONE,
+                                    }),
+                                    &tx,
+                                    None,
+                                );
+                            }
+                        }
+                    }
+                    draw_app_session(&mut session, &mut terminal);
+                    if !matches!(action, TranscriptInteraction::Idle) {
+                        assert_ne!(terminal.backend().buffer(), &before, "{name} must change the rendered frame");
+                    }
+                    assert!(rx.try_recv().is_err(), "local interaction must not emit an external action");
+                    black_box((&session, &terminal));
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    transcript_widget_benchmark,
+    transcript_reflow_benchmark,
+    transcript_review_benchmark,
+    transcript_interaction_benchmark
+);
 criterion_main!(benches);

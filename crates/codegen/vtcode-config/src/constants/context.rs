@@ -23,9 +23,13 @@ pub const ENTERPRISE_CONTEXT_WINDOW: usize = 500_000;
 // Compaction Trigger Ratios
 // =========================================================================
 
-/// Legacy auto-compaction ratio retained for compatibility with older strategy
-/// configuration. Runtime threshold resolution is capacity- and reserve-driven.
-pub const DEFAULT_COMPACTION_TRIGGER_RATIO: f64 = 0.90;
+/// Fraction of the prompt budget that triggers auto-compaction when
+/// `auto_compaction_threshold_tokens` is unset. Applied in
+/// `resolve_compaction_threshold_with_reserve` (capacity − output reserve).
+/// 0.75 keeps long research turns from sitting in the expensive near-full
+/// zone (session data 2026-09-28: ~1M input tokens/turn) until 90% of the
+/// window is gone.
+pub const DEFAULT_COMPACTION_TRIGGER_RATIO: f64 = 0.75;
 
 // =========================================================================
 // Extended Thinking Token Management
@@ -59,6 +63,7 @@ pub const BETA_CONTEXT_1M: &str = "context-1m-2025-08-07";
 /// Models eligible for 1M context window (beta)
 /// Requires usage tier 4 or custom rate limits
 pub const EXTENDED_CONTEXT_ELIGIBLE_MODELS: &[&str] = &[
+    crate::constants::models::anthropic::CLAUDE_SONNET_5_5,
     crate::constants::models::anthropic::CLAUDE_SONNET_5,
     crate::constants::models::anthropic::CLAUDE_OPUS_5,
     crate::constants::models::anthropic::CLAUDE_OPUS_5_5,

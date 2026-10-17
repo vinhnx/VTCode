@@ -7,8 +7,10 @@
 
 pub mod reconciler;
 pub mod verify;
+mod workspace_diff;
 pub mod worktree;
 
 pub use reconciler::{ReconcileResult, WorktreeReconciler};
 pub use verify::{DiffVerifier, HeuristicDiffVerifier, VerifyVerdict};
+pub use workspace_diff::capture_workspace_diff;
 pub use worktree::{WorktreeInfo, WorktreeManager};

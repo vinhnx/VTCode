@@ -80,6 +80,8 @@ struct PromptCacheChurnStats {
     stable_prefix_changes: usize,
     tool_catalog_changes: usize,
     combined_changes: usize,
+    tools_omitted: usize,
+    recovery_reason_changes: usize,
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -170,6 +172,8 @@ fn summarize_trajectory<R: BufRead>(reader: R) -> Result<TrajectorySummary> {
                         "stable_prefix" => stats.stable_prefix_changes += 1,
                         "tool_catalog" => stats.tool_catalog_changes += 1,
                         "stable_prefix+tool_catalog" => stats.combined_changes += 1,
+                        "tools_omitted" => stats.tools_omitted += 1,
+                        "recovery_reason" => stats.recovery_reason_changes += 1,
                         _ => {}
                     }
                     if let Some(ordered_wire_tool_names) = ordered_wire_tool_names {
@@ -328,16 +332,24 @@ pub async fn handle_trajectory_command(_cfg: &CoreAgentConfig, file: Option<Path
         println!("\n{}", style("Cache Churn").bold());
         let mut churn_models: Vec<_> = summary.prompt_cache_churn.into_iter().collect();
         churn_models.sort_by_key(|(_, stats)| {
-            Reverse(stats.stable_prefix_changes + stats.tool_catalog_changes + stats.combined_changes)
+            Reverse(
+                stats.stable_prefix_changes
+                    + stats.tool_catalog_changes
+                    + stats.combined_changes
+                    + stats.tools_omitted
+                    + stats.recovery_reason_changes,
+            )
         });
         for (i, (model, stats)) in churn_models.into_iter().take(top).enumerate() {
             println!(
-                "{:>2}. {:<25} stable_prefix: {:<4} tool_catalog: {:<4} both: {:<4} unchanged: {:<4} model: {}",
+                "{:>2}. {:<25} stable_prefix: {:<4} tool_catalog: {:<4} both: {:<4} tools_omitted: {:<4} recovery_reason: {:<4} unchanged: {:<4} model: {}",
                 i + 1,
                 model,
                 stats.stable_prefix_changes,
                 stats.tool_catalog_changes,
                 stats.combined_changes,
+                stats.tools_omitted,
+                stats.recovery_reason_changes,
                 stats.unchanged,
                 stats.model_changes,
             );
@@ -428,6 +440,8 @@ mod tests {
                 stable_prefix_changes: 1,
                 tool_catalog_changes: 1,
                 combined_changes: 1,
+                tools_omitted: 0,
+                recovery_reason_changes: 0,
             })
         );
     }

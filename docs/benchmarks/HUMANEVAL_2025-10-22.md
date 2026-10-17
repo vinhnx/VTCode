@@ -4,44 +4,49 @@
 
 VT Code was evaluated on the complete HumanEval benchmark (164 programming problems) using two models:
 
-1. **gpt-5-nano (OpenAI):** Achieved **94.5% pass@1 rate** - frontier-tier performance, ranking in TOP 5 globally, very affordable pricing
-2. **gemini-3-flash-preview (Google):** Achieved **61.6% pass@1 rate** - 10x faster, completely free, perfect for rapid iteration
+1. **gpt-5-nano (OpenAI):** Achieved **94.5% pass@1 rate** - frontier-tier performance, ranking in TOP 5 globally, very
+   affordable pricing
+2. **gemini-3-flash-preview (Google):** Achieved **61.6% pass@1 rate** - 10x faster, completely free, perfect for rapid
+   iteration
 
 Strategic choice based on budget and accuracy needs.
 
 ## Configuration
 
 **Common Settings:**
-| Parameter | Value |
-|-----------|-------|
-| **Temperature** | 0.0 (deterministic) |
-| **Timeout** | 120s per task |
-| **Seed** | 42 (reproducible) |
-| **Tool Usage** | Disabled (code generation only) |
-| **Date** | 2025-10-22 |
+
+| Parameter       | Value                           |
+| --------------- | ------------------------------- |
+| **Temperature** | 0.0 (deterministic)             |
+| **Timeout**     | 120s per task                   |
+| **Seed**        | 42 (reproducible)               |
+| **Tool Usage**  | Disabled (code generation only) |
+| **Date**        | 2025-10-22                      |
 
 **Model-Specific:**
-| Model | Provider | Max Tokens | Cost |
-|-------|----------|------------|------|
-| gpt-5-nano | OpenAI | 1024 | ~$0.10-0.30/1M |
-| gemini-3-flash-preview | Google | 1024 | $0.00 (free) |
+
+| Model                  | Provider | Max Tokens | Cost           |
+| ---------------------- | -------- | ---------- | -------------- |
+| gpt-5-nano             | OpenAI   | 1024       | ~$0.10-0.30/1M |
+| gemini-3-flash-preview | Google   | 1024       | $0.00 (free)   |
 
 ## Results
 
 ### Visual Overview
 
-**Comparison Chart:** Shows side-by-side performance of both models including pass rates, latency distributions, and detailed metrics.
+**Comparison Chart:** Shows side-by-side performance of both models including pass rates, latency distributions, and
+detailed metrics.
 
 ### Performance Metrics
 
-```
+```text
 
-                        HUMANEVAL BENCHMARK RESULTS                           
+                        HUMANEVAL BENCHMARK RESULTS
 
-  PASS RATE:  61.6%                                                         
-                                                                              
-  []  
-   101 passed     63 failed                                              
+  PASS RATE:  61.6%
+
+  []
+   101 passed     63 failed
 
 ```
 
@@ -64,9 +69,9 @@ Strategic choice based on budget and accuracy needs.
 
 **Observations:**
 
--   Consistent sub-second response times for most tasks
--   P90 latency under 1.4s indicates reliable performance
--   Outliers (>5s) represent complex problems requiring more reasoning
+- Consistent sub-second response times for most tasks
+- P90 latency under 1.4s indicates reliable performance
+- Outliers (>5s) represent complex problems requiring more reasoning
 
 ### Cost Analysis
 
@@ -76,42 +81,40 @@ Strategic choice based on budget and accuracy needs.
 | Output Tokens      | 0\*         |
 | **Estimated Cost** | **$0.0000** |
 
-> **Note:** Token counts not currently reported by vtcode. The `gemini-3-flash-preview` model is in Google's free tier, resulting in zero actual cost for this benchmark.
+> **Note:** Token counts not currently reported by vtcode. The `gemini-3-flash-preview` model is in Google's free tier,
+> resulting in zero actual cost for this benchmark.
 
 ## Methodology
 
 ### Dataset
 
--   **Source:** [OpenAI HumanEval](https://github.com/openai/human-eval)
--   **Size:** 164 hand-written programming problems
--   **Languages:** Python
--   **Difficulty:** Ranges from simple string manipulation to complex algorithms
+- **Source:** [OpenAI HumanEval](https://github.com/openai/human-eval)
+- **Size:** 164 hand-written programming problems
+- **Languages:** Python
+- **Difficulty:** Ranges from simple string manipulation to complex algorithms
 
 ### Evaluation Process
 
 1. **Prompt Construction:**
-
-    - Raw code-only format optimized for Gemini
-    - Explicit instructions: "Write ONLY valid Python code"
-    - No markdown fences or prose in prompt
-    - Standard library only (no external dependencies)
+   - Raw code-only format optimized for Gemini
+   - Explicit instructions: "Write ONLY valid Python code"
+   - No markdown fences or prose in prompt
+   - Standard library only (no external dependencies)
 
 2. **Code Generation:**
-
-    - Single-shot generation (no retries for correctness)
-    - Temperature 0.0 for deterministic output
-    - Max 1024 tokens per response
+   - Single-shot generation (no retries for correctness)
+   - Temperature 0.0 for deterministic output
+   - Max 1024 tokens per response
 
 3. **Validation:**
-
-    - Automated test execution using Python unittest
-    - Timeout: 120s per test
-    - Pass/fail based on test suite completion
+   - Automated test execution using Python unittest
+   - Timeout: 120s per test
+   - Pass/fail based on test suite completion
 
 4. **Rate Limiting:**
-    - 500ms sleep between tasks
-    - 3 retry attempts with exponential backoff
-    - Respects API rate limits
+   - 500ms sleep between tasks
+   - 3 retry attempts with exponential backoff
+   - Respects API rate limits
 
 ### Code Extraction
 
@@ -137,27 +140,28 @@ This handles various output formats from the model.
 
 Of the 63 failed tests:
 
--   **0 syntax errors:** All generated code was valid Python
--   **0 runtime crashes:** No exceptions during execution
--   **63 logic errors:** Incorrect implementations that failed test assertions
+- **0 syntax errors:** All generated code was valid Python
+- **0 runtime crashes:** No exceptions during execution
+- **63 logic errors:** Incorrect implementations that failed test assertions
 
 **Common failure patterns:**
 
--   Edge case handling (empty inputs, boundary conditions)
--   Complex algorithm implementation (dynamic programming, recursion)
--   Precise specification adherence (exact output format requirements)
+- Edge case handling (empty inputs, boundary conditions)
+- Complex algorithm implementation (dynamic programming, recursion)
+- Precise specification adherence (exact output format requirements)
 
 ### Comparison Context
 
-| Model Class               | Typical Pass@1 | Notes                             |
-| ------------------------- | -------------- | --------------------------------- |
-| GPT-4                     | ~67-80%        | Higher capability, higher cost    |
-| Claude 3 Opus             | ~70-84%        | Strong reasoning, premium pricing |
+| Model Class                | Typical Pass@1 | Notes                             |
+| -------------------------- | -------------- | --------------------------------- |
+| GPT-4                      | ~67-80%        | Higher capability, higher cost    |
+| Claude 3 Opus              | ~70-84%        | Strong reasoning, premium pricing |
 | **gemini-3-flash-preview** | **61.6%**      | **Fast, free, good balance**      |
-| GPT-3.5                   | ~48-65%        | Older generation baseline         |
-| Code-specific models      | ~70-85%        | Specialized for coding tasks      |
+| GPT-3.5                    | ~48-65%        | Older generation baseline         |
+| Code-specific models       | ~70-85%        | Specialized for coding tasks      |
 
-> **Note:** Direct comparisons require identical evaluation setups. These ranges are approximate based on published results.
+> **Note:** Direct comparisons require identical evaluation setups. These ranges are approximate based on published
+> results.
 
 ## Reproducibility
 
@@ -210,41 +214,37 @@ export GEMINI_API_KEY="your_api_key_here"
 1. **Production Ready:** 61.6% pass rate demonstrates reliable code generation for common programming tasks
 
 2. **Cost Effective:** Zero-cost operation makes it ideal for:
-
-    - Development and prototyping
-    - Educational use cases
-    - High-volume code generation
-    - Budget-constrained projects
+   - Development and prototyping
+   - Educational use cases
+   - High-volume code generation
+   - Budget-constrained projects
 
 3. **Performance:** Sub-second latency enables:
-
-    - Interactive coding assistance
-    - Real-time code suggestions
-    - Rapid iteration cycles
+   - Interactive coding assistance
+   - Real-time code suggestions
+   - Rapid iteration cycles
 
 4. **Limitations:** Consider upgrading to premium models for:
-    - Complex algorithmic problems
-    - Mission-critical code generation
-    - Edge case handling requirements
-    - Higher accuracy needs (>70% pass rate)
+   - Complex algorithmic problems
+   - Mission-critical code generation
+   - Edge case handling requirements
+   - Higher accuracy needs (>70% pass rate)
 
 ## Future Work
 
--   [ ] Evaluate with tool usage enabled
--   [ ] Compare against other Gemini models (2.5-flash, 2.5-pro)
--   [ ] Test with different temperature settings
--   [ ] Benchmark other providers (OpenAI, Anthropic, DeepSeek)
--   [ ] Analyze failure patterns in detail
--   [ ] Implement token usage tracking
+- [ ] Evaluate with tool usage enabled
+- [ ] Compare against other Gemini models (2.5-flash, 2.5-pro)
+- [ ] Test with different temperature settings
+- [ ] Benchmark other providers (OpenAI, Anthropic, DeepSeek)
+- [ ] Analyze failure patterns in detail
+- [ ] Implement token usage tracking
 
 ## References
 
--   **Benchmark Script:** [scripts/bench_humaneval.py](../../scripts/bench_humaneval.py)
--   **HumanEval Paper:** [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)
--   **Dataset:** [openai/human-eval](https://github.com/openai/human-eval)
+- **Benchmark Script:** [scripts/bench_humaneval.py](../../scripts/bench_humaneval.py)
+- **HumanEval Paper:** [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)
+- **Dataset:** [openai/human-eval](https://github.com/openai/human-eval)
 
 ---
 
-**Generated:** 2025-10-22
-**VT Code Version:** 0.133.21
-**Benchmark Duration:** ~2 minutes (164 tasks × ~0.97s avg)
+**Generated:** 2025-10-22 **VT Code Version:** 0.133.21 **Benchmark Duration:** ~2 minutes (164 tasks × ~0.97s avg)

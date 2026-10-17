@@ -127,6 +127,20 @@ pub async fn intercept_apply_patch(
     // registry's `apply_patch` tool uses, but with the safety checks above applied.
     // The result is funneled through the turn diff tracker so the diff is recorded
     // the same way as a model-originated `apply_patch` call.
+    let fallback = crate::tools::source_inspection::SourceInspection::default();
+    let inspection = session.source_inspection().unwrap_or(&fallback);
+    let parsed = Patch::parse(&req.patch).map_err(|error| ApplyPatchError::ParseError(error.to_string()))?;
+    let _leases = if let Some(monitor) = session.edited_file_monitor() {
+        crate::tools::source_inspection::SourceInspection::acquire_patch_leases(monitor, &parsed, &req.cwd)
+            .await
+            .map_err(|error| ApplyPatchError::PatchFailed(error.to_string()))?
+    } else {
+        Vec::new()
+    };
+    let inspection_plan = inspection
+        .prepare_patch(&parsed, &req.cwd)
+        .await
+        .map_err(|error| ApplyPatchError::PatchFailed(error.to_string()))?;
     let result = execute_patch(&req).await;
 
     // Emit patch end event
@@ -136,7 +150,13 @@ pub async fn intercept_apply_patch(
     }
 
     match result {
-        Ok(output) => Ok(Some(ToolOutput::simple(output))),
+        Ok(output) => {
+            inspection.commit_patch(
+                inspection_plan,
+                crate::tools::source_inspection::call_key(crate::config::constants::tools::APPLY_PATCH, &args),
+            );
+            Ok(Some(ToolOutput::simple(output)))
+        }
         Err(e) => Ok(Some(ToolOutput::error(format!("{e} (call_id={call_id}, tool_name={tool_name})")))),
     }
 }

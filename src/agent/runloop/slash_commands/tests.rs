@@ -1,4 +1,4 @@
-use super::builtins::{CheckupCommand, parse_checkup_args, parse_effort_args, parse_update_args};
+use super::builtins::{CheckupCommand, parse_checkup_args, parse_update_args};
 use super::{
     AgentManagerAction, CompactConversationCommand, SecretCommandAction, SessionLogExportFormat, SlashCommandOutcome,
     SubprocessManagerAction, handle_slash_command,
@@ -50,27 +50,6 @@ fn parse_update_rejects_conflicting_modes() {
     assert!(err.contains("either 'check' or 'install'"));
 }
 
-#[test]
-fn parse_effort_defaults_to_picker_mode() {
-    let parsed = parse_effort_args("").expect("should parse");
-    assert_eq!(parsed, (None, false));
-}
-
-#[test]
-fn parse_effort_supports_persist_flag_and_level() {
-    let parsed = parse_effort_args("--persist xhigh").expect("should parse");
-    assert_eq!(parsed, (Some(ReasoningEffortLevel::XHigh), true));
-
-    let parsed = parse_effort_args("high persist").expect("should parse");
-    assert_eq!(parsed, (Some(ReasoningEffortLevel::High), true));
-}
-
-#[test]
-fn parse_effort_rejects_multiple_levels() {
-    let err = parse_effort_args("low high").expect_err("must reject");
-    assert!(err.contains("at most one effort level"));
-}
-
 #[tokio::test]
 async fn checkpoint_navigation_commands_dispatch_locally() {
     let workspace = tempfile::tempdir().expect("workspace");
@@ -83,10 +62,13 @@ async fn checkpoint_navigation_commands_dispatch_locally() {
 
     let outcome = handle_slash_command("rewind-recover", &mut renderer, workspace.path())
         .await
-        .expect("checkpoint command should parse");
+        .expect("removed rewind-recover should parse");
     assert!(
-        matches!(outcome, SlashCommandOutcome::RewindRecover),
-        "rewind-recover must use a pending-only outcome, not Redo"
+        matches!(
+            outcome,
+            SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/rewind-recover"
+        ),
+        "removed rewind-recover must fall through; /rewind auto-recovers instead"
     );
 
     let outcome = handle_slash_command("rewind", &mut renderer, workspace.path())
@@ -200,19 +182,7 @@ async fn subprocess_alias_matches_plural_command() {
 }
 
 #[tokio::test]
-async fn ide_command_returns_toggle_outcome() {
-    let workspace = std::env::current_dir().expect("workspace");
-    let mut renderer = renderer_for_tests();
-
-    let outcome = handle_slash_command("ide", &mut renderer, &workspace)
-        .await
-        .expect("ide command should parse");
-
-    assert!(matches!(outcome, SlashCommandOutcome::ToggleIdeContext));
-}
-
-#[tokio::test]
-async fn effort_command_returns_set_effort_outcome() {
+async fn removed_effort_command_falls_through_to_prompt() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
@@ -222,15 +192,12 @@ async fn effort_command_returns_set_effort_outcome() {
 
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::SetEffort {
-            level: Some(ReasoningEffortLevel::High),
-            persist: true,
-        }
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/effort --persist high"
     ));
 }
 
 #[tokio::test]
-async fn memory_command_returns_memory_outcome() {
+async fn removed_memory_command_falls_through_to_prompt() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
@@ -238,7 +205,10 @@ async fn memory_command_returns_memory_outcome() {
         .await
         .expect("memory command should parse");
 
-    assert!(matches!(outcome, SlashCommandOutcome::ShowMemory));
+    assert!(matches!(
+        outcome,
+        SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == "/memory"
+    ));
 }
 
 #[tokio::test]
@@ -246,14 +216,14 @@ async fn notify_command_uses_default_message() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command("notify", &mut renderer, &workspace)
+    let outcome = handle_slash_command("config notify", &mut renderer, &workspace)
         .await
         .expect("notify command should parse");
 
     assert!(matches!(
         outcome,
         SlashCommandOutcome::Notify { ref message }
-        if message == "Manual notification from /notify"
+        if message == "Manual notification from /config notify"
     ));
 }
 
@@ -262,7 +232,7 @@ async fn notify_command_preserves_custom_message() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command("notify build finished", &mut renderer, &workspace)
+    let outcome = handle_slash_command("config notify build finished", &mut renderer, &workspace)
         .await
         .expect("notify command should parse");
 
@@ -337,11 +307,11 @@ async fn config_reset_rejects_extra_arguments() {
 }
 
 #[tokio::test]
-async fn ide_command_rejects_arguments() {
+async fn config_ide_rejects_arguments() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command("ide extra", &mut renderer, &workspace)
+    let outcome = handle_slash_command("config ide extra", &mut renderer, &workspace)
         .await
         .expect("ide command should parse");
 
@@ -470,7 +440,7 @@ async fn subprocesses_command_supports_toggle_and_refresh() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let toggle = handle_slash_command("subprocesses toggle", &mut renderer, &workspace)
+    let toggle = handle_slash_command("config subprocess toggle", &mut renderer, &workspace)
         .await
         .expect("toggle command should parse");
     assert!(matches!(
@@ -478,7 +448,7 @@ async fn subprocesses_command_supports_toggle_and_refresh() {
         SlashCommandOutcome::ManageSubprocesses { action: SubprocessManagerAction::ToggleDefault }
     ));
 
-    let refresh = handle_slash_command("subprocesses refresh", &mut renderer, &workspace)
+    let refresh = handle_slash_command("config subprocess refresh", &mut renderer, &workspace)
         .await
         .expect("refresh command should parse");
     assert!(matches!(
@@ -492,7 +462,7 @@ async fn subprocesses_command_supports_direct_actions() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let inspect = handle_slash_command("subprocesses inspect bg-1", &mut renderer, &workspace)
+    let inspect = handle_slash_command("config subprocess inspect bg-1", &mut renderer, &workspace)
         .await
         .expect("inspect command should parse");
     assert!(matches!(
@@ -502,7 +472,7 @@ async fn subprocesses_command_supports_direct_actions() {
         } if id == "bg-1"
     ));
 
-    let stop = handle_slash_command("subprocesses stop bg-1", &mut renderer, &workspace)
+    let stop = handle_slash_command("config subprocess stop bg-1", &mut renderer, &workspace)
         .await
         .expect("stop command should parse");
     assert!(matches!(
@@ -512,7 +482,7 @@ async fn subprocesses_command_supports_direct_actions() {
         } if id == "bg-1"
     ));
 
-    let cancel = handle_slash_command("subprocesses cancel bg-1", &mut renderer, &workspace)
+    let cancel = handle_slash_command("config subprocess cancel bg-1", &mut renderer, &workspace)
         .await
         .expect("cancel command should parse");
     assert!(matches!(
@@ -557,12 +527,12 @@ async fn interactive_mode_commands_parse_to_expected_outcomes() {
     let workspace = std::env::current_dir().expect("workspace");
     let mut renderer = renderer_for_tests();
 
-    let tasks = handle_slash_command("tasks", &mut renderer, &workspace)
+    let tasks = handle_slash_command("config tasks", &mut renderer, &workspace)
         .await
         .expect("tasks should parse");
     assert!(matches!(tasks, SlashCommandOutcome::ToggleTasksPanel));
 
-    let jobs = handle_slash_command("jobs", &mut renderer, &workspace)
+    let jobs = handle_slash_command("config jobs", &mut renderer, &workspace)
         .await
         .expect("jobs should parse");
     assert!(matches!(jobs, SlashCommandOutcome::ShowJobsPanel));
@@ -827,32 +797,30 @@ async fn review_slash_routes_natural_language_through_cmd_review_skill() {
 }
 
 #[tokio::test]
-async fn analyze_slash_routes_normalized_scope_through_cmd_analyze_skill() {
+async fn removed_continue_edit_analyze_fall_through_to_prompt() {
     let workspace = tempfile::TempDir::new().expect("workspace");
-    let mut renderer = renderer_for_tests();
 
-    let outcome = handle_slash_command("analyze SECURITY", &mut renderer, workspace.path())
-        .await
-        .expect("analyze should parse");
+    for removed in [
+        "continue",
+        "continue --all",
+        "edit",
+        "edit src/main.rs",
+        "analyze",
+        "analyze security",
+    ] {
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command(removed, &mut renderer, workspace.path())
+            .await
+            .unwrap_or_else(|error| panic!("/{removed} should parse: {error}"));
 
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::ManageSkills {
-            action: crate::agent::runloop::SkillCommandAction::Use { ref name, ref input }
-        } if name == "cmd-analyze" && input == "security"
-    ));
-}
-
-#[tokio::test]
-async fn invalid_analyze_scope_is_handled_locally() {
-    let workspace = tempfile::TempDir::new().expect("workspace");
-    let mut renderer = renderer_for_tests();
-
-    let outcome = handle_slash_command("analyze nope", &mut renderer, workspace.path())
-        .await
-        .expect("analyze should parse");
-
-    assert!(matches!(outcome, SlashCommandOutcome::Handled));
+        assert!(
+            matches!(
+                outcome,
+                SlashCommandOutcome::SubmitPrompt { ref prompt } if prompt == &format!("/{removed}")
+            ),
+            "/{removed} must fall through to plain prompt submission",
+        );
+    }
 }
 
 #[tokio::test]
@@ -872,15 +840,16 @@ async fn unknown_slash_command_falls_back_to_normal_prompt_submission() {
 }
 
 #[tokio::test]
-async fn permissions_slash_command_opens_permissions_view() {
+async fn config_permissions_opens_permissions_view() {
     let workspace = tempfile::TempDir::new().expect("workspace");
-    let mut renderer = renderer_for_tests();
+    for command in ["config permissions", "permissions"] {
+        let mut renderer = renderer_for_tests();
+        let outcome = handle_slash_command(command, &mut renderer, workspace.path())
+            .await
+            .unwrap_or_else(|error| panic!("{command} should parse: {error}"));
 
-    let outcome = handle_slash_command("permissions", &mut renderer, workspace.path())
-        .await
-        .expect("permissions should parse");
-
-    assert!(matches!(outcome, SlashCommandOutcome::ShowPermissions));
+        assert!(matches!(outcome, SlashCommandOutcome::ShowPermissions), "{command} must open permissions");
+    }
 }
 
 #[tokio::test]
@@ -917,7 +886,21 @@ async fn every_registered_slash_command_resolves_without_prompt_fallback() {
 async fn slash_command_aliases_resolve_to_canonical_backends() {
     let workspace = tempfile::TempDir::new().expect("workspace");
 
-    for alias in ["settings", "setttings", "context", "subprocesses", "models", "doctor"] {
+    for alias in [
+        "settings",
+        "setttings",
+        "context",
+        "subprocess",
+        "subprocesses",
+        "models",
+        "doctor",
+        "permissions",
+        "tasks",
+        "jobs",
+        "log",
+        "notify",
+        "checkup",
+    ] {
         let mut renderer = renderer_for_tests();
         let outcome = handle_slash_command(alias, &mut renderer, workspace.path())
             .await
@@ -926,6 +909,37 @@ async fn slash_command_aliases_resolve_to_canonical_backends() {
         assert!(
             !matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. }),
             "/{alias} fell through to plain prompt submission",
+        );
+    }
+}
+
+#[tokio::test]
+async fn config_consolidated_sections_match_hidden_aliases() {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+
+    for (canonical, alias) in [
+        ("config permissions", "permissions"),
+        ("config tasks", "tasks"),
+        ("config jobs", "jobs"),
+        ("config log", "log"),
+        ("config subprocess", "subprocess"),
+        ("config notify hello", "notify hello"),
+        ("config checkup --quick", "checkup --quick"),
+        ("config checkup", "doctor"),
+    ] {
+        let mut canonical_renderer = renderer_for_tests();
+        let canonical_outcome = handle_slash_command(canonical, &mut canonical_renderer, workspace.path())
+            .await
+            .unwrap_or_else(|error| panic!("{canonical} should parse: {error}"));
+        let mut alias_renderer = renderer_for_tests();
+        let alias_outcome = handle_slash_command(alias, &mut alias_renderer, workspace.path())
+            .await
+            .unwrap_or_else(|error| panic!("/{alias} should parse: {error}"));
+
+        assert_eq!(
+            std::mem::discriminant(&canonical_outcome),
+            std::mem::discriminant(&alias_outcome),
+            "/{alias} must match /{canonical}"
         );
     }
 }
@@ -1265,4 +1279,39 @@ async fn vim_command_toggles_and_sets_mode() {
     let mut renderer = renderer_for_tests();
     let outcome = handle_slash_command("vim bogus", &mut renderer, &workspace).await.unwrap();
     assert!(matches!(outcome, SlashCommandOutcome::Handled));
+}
+
+#[tokio::test]
+async fn fast_command_catalog_and_parser() {
+    let spec = command_skill_specs()
+        .iter()
+        .find(|spec| spec.slash_name == "fast")
+        .expect("fast catalog entry");
+    assert_eq!(spec.usage, "/fast [on|off]");
+    let workspace = tempfile::tempdir().unwrap();
+    let mut renderer = renderer_for_tests();
+    for (input, expected) in [
+        ("fast", None),
+        ("  FAST  ", None),
+        ("fast on", Some(true)),
+        ("fast OFF", Some(false)),
+        ("fast \t On \n", Some(true)),
+    ] {
+        let outcome = handle_slash_command(input, &mut renderer, workspace.path()).await.unwrap();
+        assert!(matches!(outcome, SlashCommandOutcome::ToggleFastMode { enable } if enable == expected), "{input}");
+    }
+    for input in [
+        "fast true",
+        "fast toggle",
+        "fast on off",
+        "fast on extra",
+        "fast --help",
+    ] {
+        let outcome = handle_slash_command(input, &mut renderer, workspace.path()).await.unwrap();
+        assert!(matches!(outcome, SlashCommandOutcome::Handled), "{input}");
+    }
+    let outcome = super::dispatch::execute_command_skill_by_name("fast", "on", &mut renderer, workspace.path())
+        .await
+        .unwrap();
+    assert!(matches!(outcome, SlashCommandOutcome::ToggleFastMode { enable: Some(true) }));
 }

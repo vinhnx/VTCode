@@ -12,8 +12,9 @@ use anyhow::Error;
 use vtcode_commons::cgp::HasComponent;
 use vtcode_commons::{ErrorFormatter, ErrorReporter, PathScope, TelemetrySink, WorkspacePaths};
 use vtcode_config::TimeoutsConfig;
-use vtcode_config::core::{AnthropicConfig, OpenAIConfig};
-use vtcode_config::core::{ModelConfig, PromptCachingConfig};
+use vtcode_config::core::{
+    AnthropicConfig, ModelConfig, OpenAIConfig, OpenRouterAttributionConfig, OpenRouterConfig, PromptCachingConfig,
+};
 
 /// Trait describing the configuration required to instantiate an LLM provider.
 ///
@@ -54,6 +55,11 @@ pub trait ProviderConfig {
 
     /// Optional Anthropic-specific configuration forwarded to the provider factory.
     fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
+        None
+    }
+
+    /// Optional OpenRouter-specific configuration forwarded to the provider factory.
+    fn openrouter(&self) -> Option<Cow<'_, OpenRouterConfig>> {
         None
     }
 
@@ -250,6 +256,7 @@ fn project_provider_config(source: &dyn ProviderConfig) -> crate::factory_types:
         timeouts: source.timeouts().map(Cow::into_owned),
         openai: source.openai().map(Cow::into_owned),
         anthropic: source.anthropic().map(Cow::into_owned),
+        openrouter: source.openrouter().map(Cow::into_owned),
         model_behavior: source.model_behavior().map(Cow::into_owned),
         workspace_root: None,
     }
@@ -496,6 +503,7 @@ mod tests {
             timeouts: Some(TimeoutsConfig::default()),
             openai: Some(OpenAIConfig::default()),
             anthropic: Some(AnthropicConfig::default()),
+            openrouter: None,
             model_behavior: Some(ModelConfig::default()),
             workspace_root: None,
         };
@@ -553,6 +561,9 @@ mod tests {
                 count_tokens_enabled: true,
                 ..AnthropicConfig::default()
             }),
+            openrouter: Some(OpenRouterConfig {
+                attribution: OpenRouterAttributionConfig { enabled: true, referer: None, title: None },
+            }),
             model_behavior: Some(ModelConfig::default()),
             workspace_root: None,
         };
@@ -566,6 +577,7 @@ mod tests {
         assert_eq!(adapted.timeouts.as_ref().unwrap().pty_ceiling_seconds, 300);
         assert!(adapted.openai.as_ref().unwrap().websocket_mode);
         assert!(adapted.anthropic.as_ref().unwrap().count_tokens_enabled);
+        assert!(adapted.openrouter.as_ref().unwrap().attribution.enabled);
         assert!(adapted.model_behavior.is_some());
     }
 
@@ -577,6 +589,9 @@ mod tests {
             .with_anthropic(AnthropicConfig {
                 count_tokens_enabled: true,
                 ..AnthropicConfig::default()
+            })
+            .with_openrouter(OpenRouterConfig {
+                attribution: OpenRouterAttributionConfig { enabled: true, referer: None, title: None },
             });
 
         let adapted = as_factory_config(&config);
@@ -584,6 +599,7 @@ mod tests {
         assert_eq!(adapted.timeouts.as_ref().unwrap().streaming_ceiling_seconds, 600);
         assert!(adapted.openai.as_ref().unwrap().websocket_mode);
         assert!(adapted.anthropic.as_ref().unwrap().count_tokens_enabled);
+        assert!(adapted.openrouter.as_ref().unwrap().attribution.enabled);
     }
 }
 
@@ -617,6 +633,10 @@ impl ProviderConfig for crate::factory_types::ProviderConfig {
         borrowed_optional(&self.anthropic)
     }
 
+    fn openrouter(&self) -> Option<Cow<'_, OpenRouterConfig>> {
+        borrowed_optional(&self.openrouter)
+    }
+
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
         borrowed_optional(&self.model_behavior)
     }
@@ -633,6 +653,7 @@ pub struct OwnedProviderConfig {
     timeouts: Option<TimeoutsConfig>,
     openai: Option<OpenAIConfig>,
     anthropic: Option<AnthropicConfig>,
+    openrouter: Option<OpenRouterConfig>,
     model_behavior: Option<ModelConfig>,
 }
 
@@ -676,6 +697,11 @@ impl OwnedProviderConfig {
         self
     }
 
+    fn with_openrouter(mut self, value: OpenRouterConfig) -> Self {
+        self.openrouter = Some(value);
+        self
+    }
+
     fn with_model_behavior(mut self, value: ModelConfig) -> Self {
         self.model_behavior = Some(value);
         self
@@ -709,6 +735,10 @@ impl ProviderConfig for OwnedProviderConfig {
 
     fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
         borrowed_optional(&self.anthropic)
+    }
+
+    fn openrouter(&self) -> Option<Cow<'_, OpenRouterConfig>> {
+        borrowed_optional(&self.openrouter)
     }
 
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {

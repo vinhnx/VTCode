@@ -374,6 +374,18 @@ pub(super) fn build_structured_error_content(
         }
     }
 
+    // Typed patch evidence is already bounded. Keep a single model-facing
+    // message and next action; canonical execution events retain the full error.
+    if error.patch_context_mismatch_path().is_some()
+        && let Some(obj) = payload.as_object_mut()
+    {
+        obj.remove("error_summary");
+        obj.remove("recovery_suggestions");
+        if let Some(details) = obj.get_mut("error").and_then(serde_json::Value::as_object_mut) {
+            details.remove("original_error");
+            details.remove("recovery_suggestions");
+        }
+    }
     push_error_truncation_flag(&mut payload, error_truncated);
     compact_model_tool_payload(payload)
 }
@@ -498,6 +510,26 @@ fn extract_background_subagent_name_from_error(error_msg: &str) -> Option<String
 #[cfg(test)]
 mod tests {
     use super::{ToolExecutionError, build_structured_error_content, tool_denial_diagnostic};
+
+    #[test]
+    fn patch_recovery_message_is_compact_and_retains_typed_evidence() {
+        let source = anyhow::Error::new(vtcode_core::tools::editing::patch::PatchError::SegmentNotFound {
+            path: "notes.md".to_string(),
+            snippet: "X   Y".to_string(),
+        });
+        let error = ToolExecutionError::from_anyhow("apply_patch", &source, 0, false, false, None);
+        let payload = build_structured_error_content(&error, None, None, "execution");
+        assert!(payload["error"]["message"].as_str().unwrap().contains("notes.md"));
+        assert_eq!(payload["error"]["patch_failure"]["ContextMismatch"]["evidence"], "X   Y");
+        assert!(payload["next_action"].as_str().unwrap().contains("Read the affected path once"));
+        assert!(payload.get("error_summary").is_none());
+        assert!(payload.get("recovery_suggestions").is_none());
+        assert!(payload["error"].get("original_error").is_none());
+        assert!(
+            error.to_json_value()["error"]["original_error"].is_string(),
+            "canonical diagnostics must retain the full error"
+        );
+    }
 
     #[test]
     fn request_user_input_denial_directive_tells_model_to_stop() {

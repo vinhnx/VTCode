@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import textwrap
 from pathlib import Path
 
 # Mapping of directory names to category titles
@@ -43,7 +44,6 @@ EXCLUDE_FILES = [
 EXCLUDE_DIRS = [
     "docs/mcp/archive",
     "docs/async",
-    "docs/vscode-extension-improve-docs",
     "docs/bugs",
     "docs/experimental",
     "docs/research", # Some research is ok but some might be too much, I'll keep it for now but let's see
@@ -275,8 +275,8 @@ def main():
         "## Additional Resources",
         "",
         "### External Documentation",
-        "- **Repository**: https://github.com/vinhnx/vtcode",
-        "- **Crate**: https://crates.io/crates/vtcode",
+        "- **Repository**: <https://github.com/vinhnx/vtcode>",
+        "- **Crate**: <https://crates.io/crates/vtcode>",
         "- **VS Code Extension**: Open VSX and VS Code Marketplace",
         "",
         "---",
@@ -285,9 +285,31 @@ def main():
     ])
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(content) + '\n')
+        f.write(format_markdown(content))
 
     print(f"Generated {output_file}")
+
+def format_markdown(lines):
+    """Keep generated headings, nested lists, and prose lint-clean."""
+    formatted = []
+    for line in lines:
+        if line.startswith('#'):
+            if formatted and formatted[-1]:
+                formatted.append('')
+            formatted.extend([line, ''])
+        elif not line:
+            if formatted and formatted[-1]:
+                formatted.append('')
+        else:
+            prefix = re.match(r'^(\s*- )', line)
+            indent = prefix.group() if prefix else ''
+            formatted.append(textwrap.fill(
+                line[len(indent):], width=120, initial_indent=indent,
+                subsequent_indent=' ' * len(indent), break_long_words=False,
+                break_on_hyphens=False,
+            ))
+    return '\n'.join(formatted).rstrip() + '\n'
+
 
 if __name__ == "__main__":
     main()

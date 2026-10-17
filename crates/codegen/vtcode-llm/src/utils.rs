@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use serde_json::Value;
+use vtcode_commons::validation::NonEmptySlice;
 
 use crate::provider::{LLMRequest, LLMResponse, LLMStreamEvent, ToolCall};
 
@@ -27,11 +28,9 @@ pub(crate) fn parse_response_openai_format(
         .as_array()
         .context("Choices must be an array")?;
 
-    if choices.is_empty() {
-        anyhow::bail!("No choices in response");
-    }
+    let parsed_choices = NonEmptySlice::from_slice(choices).ok_or_else(|| anyhow::anyhow!("No choices in response"))?;
 
-    let first_choice = &choices[0];
+    let first_choice = parsed_choices.first();
     let message = first_choice.get("message").context("Missing message in choice")?;
 
     let content = message.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
@@ -99,11 +98,9 @@ pub(crate) fn parse_response_openai_format(
 /// Parse stream event from OpenAI-compatible format
 pub fn parse_stream_event_openai_format(json: Value, _provider_name: &str) -> Option<LLMStreamEvent> {
     let choices = json.get("choices")?.as_array()?;
-    if choices.is_empty() {
-        return None;
-    }
+    let parsed_choices = NonEmptySlice::from_slice(choices)?;
 
-    let delta = choices[0].get("delta")?;
+    let delta = parsed_choices.first().get("delta")?;
     let content = delta.get("content").and_then(|c| c.as_str())?;
 
     Some(LLMStreamEvent::Token { delta: content.to_string() })
@@ -325,6 +322,61 @@ mod tests {
         let usage = result.usage.expect("usage should be present");
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);
+    }
+
+    #[test]
+    fn parse_response_rejects_empty_and_uses_first_in_order() {
+        let empty = serde_json::json!({"choices": []});
+        let err = parse_response_openai_format(empty, "test", "gpt-5".to_string(), false, None).unwrap_err();
+        assert!(err.to_string().contains("No choices in response"));
+
+        let forward = serde_json::json!({
+            "choices": [
+                {"message": {"content": "first", "role": "assistant"}},
+                {"message": {"content": "second", "role": "assistant"}}
+            ]
+        });
+        let backward = serde_json::json!({
+            "choices": [
+                {"message": {"content": "second", "role": "assistant"}},
+                {"message": {"content": "first", "role": "assistant"}}
+            ]
+        });
+        let parsed_forward = parse_response_openai_format(forward, "test", "gpt-5".to_string(), false, None).unwrap();
+        let parsed_backward = parse_response_openai_format(backward, "test", "gpt-5".to_string(), false, None).unwrap();
+        assert_eq!(parsed_forward.content_text(), "first");
+        assert_eq!(parsed_backward.content_text(), "second");
+        assert_ne!(parsed_forward.content_text(), parsed_backward.content_text());
+    }
+
+    #[test]
+    fn parse_stream_event_empty_vs_first_choice() {
+        let empty = serde_json::json!({"choices": []});
+        assert!(parse_stream_event_openai_format(empty, "test").is_none());
+
+        let forward = serde_json::json!({
+            "choices": [
+                {"delta": {"content": "alpha"}},
+                {"delta": {"content": "beta"}}
+            ]
+        });
+        let backward = serde_json::json!({
+            "choices": [
+                {"delta": {"content": "beta"}},
+                {"delta": {"content": "alpha"}}
+            ]
+        });
+        let forward_delta = match parse_stream_event_openai_format(forward, "test") {
+            Some(LLMStreamEvent::Token { delta }) => delta,
+            other => panic!("expected token event, got {other:?}"),
+        };
+        let backward_delta = match parse_stream_event_openai_format(backward, "test") {
+            Some(LLMStreamEvent::Token { delta }) => delta,
+            other => panic!("expected token event, got {other:?}"),
+        };
+        assert_eq!(forward_delta, "alpha");
+        assert_eq!(backward_delta, "beta");
+        assert_ne!(forward_delta, backward_delta);
     }
 
     #[test]

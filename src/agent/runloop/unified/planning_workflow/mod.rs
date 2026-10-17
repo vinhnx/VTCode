@@ -313,6 +313,7 @@ pub(crate) fn build_plan_repair_directive(feedback: &str) -> String {
          ## Implementation Steps\n\
          {canonical}\n\
          Valid verify examples: {valid}. Invalid: {invalid}.\n\
+         Every verify command must exit 0 on success; grep/rg no-match exit 1 cannot satisfy completion.\n\
          ## Test Cases and Validation\n\
          - concrete command or observable check\n\
          ## Assumptions and Defaults\n\
@@ -552,6 +553,8 @@ Improve launch time.
             report: Box::new(report),
         };
         let directive = plan_repair_directive_for_error(&error);
+        assert!(directive.contains("must exit 0 on success"));
+        assert!(directive.contains("no-match exit 1 cannot satisfy completion"));
         assert!(
             directive.contains("2 of 2 implementation step(s)"),
             "invalid-error directive must include report-specific step count: {directive}"
@@ -577,6 +580,8 @@ Improve launch time.
         // the canonical format and policy prose — never empty or unbounded.
         let error = PlanArtifactError::Missing;
         let directive = plan_repair_directive_for_error(&error);
+        assert!(directive.contains("must exit 0 on success"));
+        assert!(directive.contains("no-match exit 1 cannot satisfy completion"));
         assert!(
             directive.contains("Action -> files: [path/to/file.rs] -> verify: [cargo check]"),
             "generic fallback must still include the canonical step format: {directive}"

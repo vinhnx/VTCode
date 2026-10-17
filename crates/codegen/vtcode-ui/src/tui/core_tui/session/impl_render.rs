@@ -1,6 +1,7 @@
 use super::*;
 
 impl Session {
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn render(&mut self, frame: &mut Frame<'_>) {
         let Some(layout) = self.prepare_frame_layout(frame, 0) else {
             return;
@@ -17,6 +18,7 @@ impl Session {
             render::render_modal(self, frame, layout.viewport);
         }
         self.finalize_mouse_selection(frame, layout.viewport);
+        self.observe_progress_feedback();
     }
 
     pub(crate) fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {

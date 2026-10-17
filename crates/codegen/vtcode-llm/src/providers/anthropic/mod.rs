@@ -24,6 +24,7 @@ mod prompt_cache;
 mod provider;
 pub(crate) mod request_builder;
 mod response_parser;
+mod speed;
 mod stream_decoder;
 pub(crate) mod validation;
 

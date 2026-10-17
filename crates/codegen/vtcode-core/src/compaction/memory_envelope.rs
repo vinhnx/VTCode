@@ -1069,62 +1069,19 @@ pub fn inject_latest_memory_envelope(workspace_root: &Path, session_id: &str, hi
 }
 
 pub fn write_memory_envelope_to_path(path: &Path, envelope: &SessionMemoryEnvelope) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create memory envelope directory {}", parent.display()))?;
-    }
-    let serialized = serde_json::to_string_pretty(envelope)?;
-    let temporary_path = memory_envelope_temporary_path(path);
-    fs::write(&temporary_path, serialized).with_context(|| format!("write memory envelope {}", path.display()))?;
-    replace_memory_envelope_file(&temporary_path, path)
-        .with_context(|| format!("replace memory envelope {}", path.display()))?;
-    Ok(())
+    let serialized = serde_json::to_vec_pretty(envelope).context("serialize memory envelope")?;
+    vtcode_commons::VtCodePaths::write_private_file_atomic(path, &serialized)
+        .with_context(|| format!("write memory envelope {}", path.display()))
 }
 
-/// Atomically replace an envelope from an async context. The temporary file is
-/// created beside the destination so rename remains atomic on the same volume.
+/// Write an envelope through the shared private-file policy on a blocking worker.
+/// The synced, exclusive temporary file is created beside the destination and
+/// renamed over it without first removing the last committed envelope.
 pub async fn write_memory_envelope_to_path_async(path: &Path, envelope: &SessionMemoryEnvelope) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        async_fs::create_dir_all(parent)
-            .await
-            .with_context(|| format!("create memory envelope directory {}", parent.display()))?;
-    }
-    let serialized = serde_json::to_string_pretty(envelope)?;
-    let temporary_path = memory_envelope_temporary_path(path);
-    async_fs::write(&temporary_path, serialized)
+    let serialized = serde_json::to_vec_pretty(envelope).context("serialize memory envelope")?;
+    vtcode_commons::fs::write_private_file_atomic(path, &serialized)
         .await
-        .with_context(|| format!("write memory envelope {}", path.display()))?;
-    replace_memory_envelope_file_async(&temporary_path, path)
-        .await
-        .with_context(|| format!("replace memory envelope {}", path.display()))?;
-    Ok(())
-}
-
-fn memory_envelope_temporary_path(path: &Path) -> PathBuf {
-    let suffix = format!("{}.tmp-{}", std::process::id(), Utc::now().timestamp_nanos_opt().unwrap_or_default());
-    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("session.memory.json");
-    path.with_file_name(format!("{file_name}.{suffix}"))
-}
-
-fn replace_memory_envelope_file(temporary_path: &Path, destination: &Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    match fs::remove_file(destination) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
-
-    fs::rename(temporary_path, destination)
-}
-
-async fn replace_memory_envelope_file_async(temporary_path: &Path, destination: &Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    match async_fs::remove_file(destination).await {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
-
-    async_fs::rename(temporary_path, destination).await
+        .with_context(|| format!("write memory envelope {}", path.display()))
 }
 
 pub fn has_latest_memory_envelope(workspace_root: &Path, session_id: &str) -> bool {
@@ -1407,7 +1364,16 @@ pub fn resolve_compaction_threshold_with_reserve(
         return configured;
     }
     let prompt_budget = context_size.saturating_sub(reserved_output_tokens).max(1) as u64;
-    Some(configured.map_or(prompt_budget, |value| value.min(prompt_budget)))
+    // Default trigger is a ratio of the prompt budget so long runs compact
+    // before the expensive near-full zone (HarnessTax / session-efficiency).
+    // An explicit `auto_compaction_threshold_tokens` still wins, capped at the
+    // prompt budget so compaction never exceeds the usable window.
+    // Integer percent avoids f64→u64 cast lint; `default_compaction_trigger_uses_ratio_of_prompt_budget`
+    // pins this to `DEFAULT_COMPACTION_TRIGGER_RATIO`.
+    const TRIGGER_RATIO_PERCENT: u64 = 75;
+    let default_trigger = prompt_budget.saturating_mul(TRIGGER_RATIO_PERCENT) / 100;
+    let default_trigger = default_trigger.clamp(1, prompt_budget);
+    Some(configured.map_or(default_trigger, |value| value.min(prompt_budget)))
 }
 
 /// Explicit trigger overrides can reduce, but never bypass, the session ceiling.
@@ -1492,13 +1458,33 @@ pub fn effective_compaction_threshold(
 }
 
 #[cfg(test)]
+mod persistence_tests;
+
+#[cfg(test)]
 mod tests {
     use super::extract_compaction_summary;
     use super::{
         SessionMemoryEnvelope, TaskTrackerSnapshot, build_session_memory_envelope, parse_task_tracker_snapshot,
+        resolve_compaction_threshold_with_reserve,
     };
     use crate::llm::provider::Message;
     use std::path::Path;
+
+    #[test]
+    fn default_compaction_trigger_uses_ratio_of_prompt_budget() {
+        // 100_000 context, 4_096 reserve → prompt budget 95_904.
+        // Default trigger is 75% of the prompt budget, not the full budget.
+        let threshold = resolve_compaction_threshold_with_reserve(None, 100_000, 4_096).expect("threshold");
+        let prompt_budget = 100_000u64 - 4_096;
+        let expected = prompt_budget * 75 / 100;
+        assert_eq!(threshold, expected);
+        // Keep the integer percent in sync with the shared ratio constant.
+        assert!((vtcode_config::constants::context::DEFAULT_COMPACTION_TRIGGER_RATIO - 0.75).abs() < f64::EPSILON);
+        assert!(threshold < prompt_budget, "default trigger must fire before the full prompt budget");
+        // Explicit config still wins and is capped at the prompt budget.
+        assert_eq!(resolve_compaction_threshold_with_reserve(Some(10_000), 100_000, 4_096), Some(10_000));
+        assert_eq!(resolve_compaction_threshold_with_reserve(Some(200_000), 100_000, 4_096), Some(prompt_budget));
+    }
 
     fn tracker_snapshot(summary: &str, objective: &str, todo: &[&str]) -> TaskTrackerSnapshot {
         let markdown = format!("# {objective}\n\n- [ ] {}\n", todo.join("\n- [ ] "));

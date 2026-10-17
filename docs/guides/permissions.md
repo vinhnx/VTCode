@@ -1,10 +1,12 @@
 # Granular Permissions
 
-VT Code uses explicit permission decisions instead of session permission states. Primary agents and subagents carry their own local policy, and global `[permissions]` rules can still provide workspace-wide ceilings and prompts.
+VT Code uses explicit permission decisions instead of session permission states. Primary agents and subagents carry
+their own local policy, and global `[permissions]` rules can still provide workspace-wide ceilings and prompts.
 
 ## Agent Permission Schema
 
-Every VT Code-native agent spec must provide `permissions.default`. Optional rule buckets are evaluated in this order: `deny`, `ask`, `auto`, `allow`, then `default`.
+Every VT Code-native agent spec must provide `permissions.default`. Optional rule buckets are evaluated in this order:
+`deny`, `ask`, `auto`, `allow`, then `default`.
 
 ```yaml
 permissions:
@@ -22,7 +24,8 @@ permissions:
 
 Allowed default decisions are `ask`, `allow`, `auto`, and `deny`.
 
-`permissions.auto` means classifier-backed review. Matching tool calls are reviewed by VT Code's permission reviewer; they are not treated as unrestricted execution.
+`permissions.auto` means classifier-backed review. Matching tool calls are reviewed by VT Code's permission reviewer;
+they are not treated as unrestricted execution.
 
 ## Global Rules
 
@@ -35,7 +38,8 @@ allow = ["exec_command", "code_search", "mcp__context7__*"]
 deny = ["exec_command(rm -rf *)", "apply_patch(/.git/**)"]
 ```
 
-Global rules do not define a default decision. The active primary agent or active subagent supplies `permissions.default` after global deny and ask checks.
+Global rules do not define a default decision. The active primary agent or active subagent supplies
+`permissions.default` after global deny and ask checks.
 
 ## Classifier Review Settings
 
@@ -45,6 +49,7 @@ The classifier used by `permissions.auto` can be tuned from the permission revie
 [permissions.auto]
 model = ""
 probe_model = ""
+use_decisions_probe = false # Experimental; direct OpenAI API-key tool-output probe only
 max_consecutive_denials = 3
 max_total_denials = 20
 drop_broad_allow_rules = true
@@ -60,6 +65,20 @@ trusted_services = []
 ```
 
 After repeated classifier denials, VT Code falls back to manual prompts where an interactive prompt is possible.
+
+The experimental, default-off `use_decisions_probe` option is also available in `/settings` → **Approvals & Security**
+for ordinary TUI sessions with either Build or Auto selected, plus an OpenAI-only `/model` follow-up when you pick a
+direct OpenAI API-key model at the standard endpoint while disabled. It requires the built-in direct OpenAI API-key provider
+at the standard endpoint, but no full-auto flag or acknowledgement profile. It classifies tool output after execution
+and queues an advisory warning for `SUSPECT`; manual approvals and explicit deny rules continue to apply before execution.
+Subscription access, gateways, custom endpoints, other providers, planning, and headless sessions outside full-auto
+make no additional probe requests. The toggle persists across provider changes and settings reloads.
+
+This uses your OpenAI API billing. Decisions gets four seconds and may use one configured generation fallback within
+the shared eight-second deadline; absent usage leaves cost unknown. The TUI shows **Checking tool output...** during
+both attempts and clears it on cancellation. See the [probe guide](../development/decisions-probe.md) for evidence
+bounds, accounting, and experimental limitations, and the [usage guide](./decisions-probe.md) for flowcharts and
+enablement.
 
 ## Rule Grammar
 

@@ -1,6 +1,7 @@
 # Adding New Models to VT Code
 
-This guide documents the complete workflow for adding a new LLM model to VT Code. Follow these steps to ensure all systems are properly configured.
+This guide documents the complete workflow for adding a new LLM model to VT Code. Follow these steps to ensure all
+systems are properly configured.
 
 ## Overview
 
@@ -10,26 +11,22 @@ Adding a model requires updates in **three layers**:
 2. **Configuration Layer** - Model palette configuration
 3. **Core Layer** - Runtime model resolution & capabilities
 
-For a new first-class provider, extend this workflow with provider enum,
-configuration, factory registration, resolver, startup defaults, picker
-presets, and a provider guide. NVIDIA is an OpenAI-compatible provider, but
-its curated constants are intentionally separate from the OpenAI constants;
-explicit NVIDIA model IDs remain valid even when they are not in the picker.
-Gateway providers such as Merge Gateway use the same shared Chat Completions
-transport while keeping curated picker entries separate from arbitrary valid
-provider/model route IDs. Gateway integrations must document which native
-features are intentionally not projected into the compatibility layer.
-For marketplace entries such as Meta Muse on OpenRouter, add generated metadata
-to both `docs/models.json` and the embedded
-`crates/codegen/vtcode-config/build_data/openrouter_models.json`; keep the
-official Meta provider's bare model IDs separate from OpenRouter's `meta/...`
-namespace.
+For a new first-class provider, extend this workflow with provider enum, configuration, factory registration, resolver,
+startup defaults, picker presets, and a provider guide. NVIDIA is an OpenAI-compatible provider, but its curated
+constants are intentionally separate from the OpenAI constants; explicit NVIDIA model IDs remain valid even when they
+are not in the picker. Gateway providers such as Merge Gateway use the same shared Chat Completions transport while
+keeping curated picker entries separate from arbitrary valid provider/model route IDs. Gateway integrations must
+document which native features are intentionally not projected into the compatibility layer. For marketplace entries
+such as Meta Muse on OpenRouter, add generated metadata to both `docs/models.json` and the embedded
+`crates/codegen/vtcode-config/build_data/openrouter_models.json`; keep the official Meta provider's bare model IDs
+separate from OpenRouter's `meta/...` namespace.
 
 ## Quick Checklist
 
 - [ ] Add to the provider constants module (for example, NVIDIA uses `constants/models/nvidia.rs`)
 - [ ] Add to model metadata (`docs/models.json`)
-- [ ] For a gateway provider, document the default endpoint, API-key variable, curated picker routes, and pass-through rules for arbitrary provider/model IDs
+- [ ] For a gateway provider, document the default endpoint, API-key variable, curated picker routes, and pass-through
+      rules for arbitrary provider/model IDs
 - [ ] If the model is OpenRouter-only, mirror its metadata in `build_data/openrouter_models.json`
 - [ ] Add enum variant (`crates/codegen/vtcode-config/src/models/model_id.rs`)
 - [ ] Add one row to `model_id_table!` in `table.rs` (single source for as_str/parse/display/description/provider)
@@ -116,11 +113,9 @@ GPT56Luna,
 
 **File:** `crates/codegen/vtcode-config/src/models/model_id/table.rs`
 
-`model_id_table!` is the single source for the per-model ID, parsing,
-display name, description, and provider assignment. Add exactly one row
-for the new variant — never add per-model match arms to the wrapper
-files (`as_str.rs`, `display.rs`, `description.rs`, `parse.rs`,
-`provider.rs`); those keep only OpenRouter/`Custom` special cases and
+`model_id_table!` is the single source for the per-model ID, parsing, display name, description, and provider
+assignment. Add exactly one row for the new variant — never add per-model match arms to the wrapper files (`as_str.rs`,
+`display.rs`, `description.rs`, `parse.rs`, `provider.rs`); those keep only OpenRouter/`Custom` special cases and
 delegate everything else to the table:
 
 ```rust
@@ -192,7 +187,7 @@ cargo run -- ask --model gpt-5.4-nano "test"
 
 When adding a new model, use this template:
 
-```
+```text
 Model Name: gpt-5.4-nano
 Enum Name: GPT56Luna
 Provider: OpenAI
@@ -246,7 +241,8 @@ x **Don't:**
 
 - Add model only to JSON without enum
 - Use hyphens in enum names (`GPT-5-4-Nano`)
-- Add per-model match arms in `as_str.rs`/`display.rs`/`description.rs`/`parse.rs`/`provider.rs` instead of one `table.rs` row
+- Add per-model match arms in `as_str.rs`/`display.rs`/`description.rs`/`parse.rs`/`provider.rs` instead of one
+  `table.rs` row
 - Forget to update `collection.rs` all_models list
 - Inconsistent naming across files
 

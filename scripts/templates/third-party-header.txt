@@ -17,6 +17,10 @@ OpenAI Codex
   - Ollama provider integration (vtcode-llm/src/providers/ollama/)
   - LM Studio provider integration (vtcode-llm/src/providers/lmstudio/)
   - Tool handler patterns (vtcode-core/src/tools/handlers/)
+  - Sticky prompt navigation (vtcode-ui/src/tui/core_tui/session/sticky_prompt.rs)
+    Reference: codex-rs/tui/src/transcript_view.rs
+    Commit: 7219fd735bef2f9cfd0363fecdbbb212e3df5255
+    Copyright 2025 OpenAI
 
   vtcode's implementations are original works that follow Codex
   architectural patterns; they are not direct copies of Codex source.

@@ -174,17 +174,22 @@ pub(crate) fn build_structured_resume_lines(
     lines
 }
 
-/// Runtime-injected request context (few-shot examples, editor snapshots) is
-/// persisted in history for prompt-prefix stability, but it is not part of
-/// the conversation the user had, so the resume transcript omits it.
+/// Runtime-injected request context (few-shot examples, and editor snapshots
+/// from pre-removal sessions) is persisted in history for prompt-prefix
+/// stability, but it is not part of the conversation the user had, so the
+/// resume transcript omits it.
 fn is_persisted_request_context(message: &uni::Message) -> bool {
     if message.role != uni::MessageRole::System {
         return false;
     }
     let text = message.content.as_text();
     text.starts_with(vtcode_core::prompts::FEW_SHOT_SECTION_HEADER)
-        || text.starts_with(vtcode_core::EDITOR_CONTEXT_PROMPT_HEADER)
+        || text.starts_with(LEGACY_EDITOR_CONTEXT_PROMPT_HEADER)
 }
+
+/// Header of the pre-removal `## Active Editor Context` block. Kept as a
+/// literal so old histories still filter out of resume transcripts.
+const LEGACY_EDITOR_CONTEXT_PROMPT_HEADER: &str = "## Active Editor Context";
 
 fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
     match tool_call_id {

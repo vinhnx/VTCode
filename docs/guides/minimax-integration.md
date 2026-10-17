@@ -2,13 +2,15 @@
 
 VT Code supports MiniMax models through the Anthropic-compatible API. You can use it in two ways:
 
--   Use provider `anthropic` with model `MiniMax-M2.5` (recommended) or `MiniMax-M2`
--   Or use the new provider `minimax` (convenience alias that defaults to the correct base URL and model)
+- Use provider `anthropic` with model `MiniMax-M2.5` (recommended) or `MiniMax-M2`
+- Or use the new provider `minimax` (convenience alias that defaults to the correct base URL and model)
 
 ## Overview
 
-MiniMax provides an Anthropic API-compatible endpoint that allows seamless integration with tools built for Anthropic's API. VT Code automatically detects when you're using MiniMax models and routes requests to the appropriate endpoint.
-When using the `minimax` provider alias, VT Code sends requests through the Anthropic Messages API (`/v1/messages`) rather than OpenAI-style `/chat/completions`.
+MiniMax provides an Anthropic API-compatible endpoint that allows seamless integration with tools built for Anthropic's
+API. VT Code automatically detects when you're using MiniMax models and routes requests to the appropriate endpoint.
+When using the `minimax` provider alias, VT Code sends requests through the Anthropic Messages API (`/v1/messages`)
+rather than OpenAI-style `/chat/completions`.
 
 ## Quick Start
 
@@ -47,7 +49,8 @@ api_key_env = "ANTHROPIC_API_KEY"
 
 ### 4. Start Using MiniMax
 
-Run VT Code and it will automatically use the MiniMax-M2.5 model (the latest MiniMax model) through the Anthropic-compatible API:
+Run VT Code and it will automatically use the MiniMax-M2.5 model (the latest MiniMax model) through the
+Anthropic-compatible API:
 
 ```bash
 vtcode
@@ -78,21 +81,21 @@ Or set it directly in your configuration if your setup supports it.
 
 The MiniMax-M2.5 model through the Anthropic-compatible API supports:
 
--   Text generation
--   Streaming responses
--   Tool calling (function calling)
--   System prompts
--   Temperature control
--   Max tokens configuration
--   Reasoning content (thinking blocks)
+- Text generation
+- Streaming responses
+- Tool calling (function calling)
+- System prompts
+- Temperature control
+- Max tokens configuration
+- Reasoning content (thinking blocks)
 
 ## Limitations
 
 According to MiniMax's documentation, the following features are not currently supported:
 
--   Image input (`type="image"`)
--   Document input (`type="document"`)
--   Some Anthropic-specific parameters may be ignored (e.g., `top_k`, `stop_sequences`, `service_tier`)
+- Image input (`type="image"`)
+- Document input (`type="document"`)
+- Some Anthropic-specific parameters may be ignored (e.g., `top_k`, `stop_sequences`, `service_tier`)
 
 ## Example Usage
 
@@ -104,7 +107,8 @@ vtcode ask "Explain machine learning in simple terms"
 
 ### With Tool Calling
 
-The MiniMax-M2.5 model supports function calling just like Claude models. VT Code's built-in tools (file operations, terminal commands, etc.) work seamlessly.
+The MiniMax-M2.5 model supports function calling just like Claude models. VT Code's built-in tools (file operations,
+terminal commands, etc.) work seamlessly.
 
 ### Streaming Mode
 
@@ -112,25 +116,26 @@ Streaming is fully supported and works automatically when enabled in your config
 
 ## Temperature Range
 
-Note that MiniMax requires temperature values in the range (0.0, 1.0]. Values outside this range will return an error. The recommended value is 1.0.
+Note that MiniMax requires temperature values in the range (0.0, 1.0]. Values outside this range will return an error.
+The recommended value is 1.0.
 
 ## API Endpoint
 
 VT Code automatically routes MiniMax-M2.5 requests to:
 
-```
+```text
 https://api.minimax.io/anthropic/v1/messages
 ```
 
 The base URL is `https://api.minimax.io/anthropic/v1`, and VT Code appends `/messages` automatically.
 
-This is handled transparently - you don't need to configure anything special unless you want to override the base URL via environment variable.
+This is handled transparently - you don't need to configure anything special unless you want to override the base URL
+via environment variable.
 
 ### Droid-style custom model example
 
-You can mirror Droid's custom model config using VT Code's user config
-(`vtcode.toml` in the canonical platform config directory). Add a `minimax`
-provider entry with base URL and API key:
+You can mirror Droid's custom model config using VT Code's user config (`vtcode.toml` in the canonical platform config
+directory). Add a `minimax` provider entry with base URL and API key:
 
 ```toml
 [providers]
@@ -143,8 +148,8 @@ provider entry with base URL and API key:
 
 Notes:
 
--   The `minimax` provider is a convenience wrapper over Anthropic compatibility.
--   If you prefer, configure under `anthropic` instead with the same base URL and model.
+- The `minimax` provider is a convenience wrapper over Anthropic compatibility.
+- If you prefer, configure under `anthropic` instead with the same base URL and model.
 
 ## Troubleshooting
 
@@ -186,11 +191,11 @@ If you see temperature-related errors:
 
 ## Related Documentation
 
--   [Provider Guides](../providers/PROVIDER_GUIDES.md)
--   [Configuration Guide](../config/config.md)
+- [Provider Guides](../providers/PROVIDER_GUIDES.md)
+- [Configuration Guide](../config/config.md)
 
 ## Additional Resources
 
--   [MiniMax Official Documentation](https://www.minimax.chat/docs)
--   [MiniMax Anthropic API Compatibility Guide](https://www.minimax.chat/docs/guides/anthropic-api)
--   [MiniMax-M2.5 Function Calling Guide](https://www.minimax.chat/docs/guides/function-call)
+- [MiniMax Official Documentation](https://www.minimax.chat/docs)
+- [MiniMax Anthropic API Compatibility Guide](https://www.minimax.chat/docs/guides/anthropic-api)
+- [MiniMax-M2.5 Function Calling Guide](https://www.minimax.chat/docs/guides/function-call)

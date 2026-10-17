@@ -272,29 +272,13 @@ impl SkillDiscovery {
             if path.is_file() {
                 stats.files_checked += 1;
 
-                // Check if it's an executable
-                if self.is_executable(&entry)? {
-                    // Look for accompanying documentation
-                    let readme_path = self.find_tool_readme(&path);
-                    let schema_path = self.find_tool_schema(&path);
-
-                    let tool_name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown").to_string();
-
-                    let config = CliToolConfig {
-                        name: tool_name.clone(),
-                        description: format!("CLI tool: {tool_name}"),
-                        executable_path: path.clone(),
-                        readme_path,
-                        schema_path,
-                        timeout_seconds: Some(30),
-                        supports_json: false,
-                        environment: None,
-                        working_dir: Some(dir.to_path_buf()),
-                    };
-
+                // Single shared predicate lives in `cli_bridge` so the
+                // "executable + explicit docs" rule cannot drift between
+                // scanners.
+                if let Some(config) = crate::skills::cli_bridge::cli_tool_config_from_executable(dir, &path) {
+                    debug!("Discovered CLI tool: {} from {}", config.name, path.display());
                     tools.push(config);
                     stats.tools_found += 1;
-                    debug!("Discovered CLI tool: {} from {}", tool_name, path.display());
                 }
             }
         }
@@ -316,60 +300,6 @@ impl SkillDiscovery {
                 stats.errors_encountered += 1;
                 Ok(vec![])
             }
-        }
-    }
-
-    /// Check if file is executable
-    fn is_executable(&self, entry: &std::fs::DirEntry) -> Result<bool> {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = entry.metadata()?;
-            let permissions = metadata.permissions();
-            Ok(permissions.mode() & 0o111 != 0)
-        }
-
-        #[cfg(windows)]
-        {
-            if let Some(ext) = entry.path().extension() {
-                Ok(ext == "exe" || ext == "bat" || ext == "cmd")
-            } else {
-                Ok(false)
-            }
-        }
-    }
-
-    /// Find README file for tool
-    fn find_tool_readme(&self, tool_path: &Path) -> Option<PathBuf> {
-        let tool_name = tool_path.file_stem()?;
-        let readme_name = format!("{}.md", tool_name.to_str()?);
-        let readme_path = tool_path.with_file_name(&readme_name);
-
-        if readme_path.exists() {
-            Some(readme_path)
-        } else {
-            // Try generic README.md
-            let generic_readme = tool_path.parent()?.join("README.md");
-            if generic_readme.exists() {
-                Some(generic_readme)
-            } else {
-                None
-            }
-        }
-    }
-
-    /// Find JSON schema file for tool
-    fn find_tool_schema(&self, tool_path: &Path) -> Option<PathBuf> {
-        let tool_name = tool_path.file_stem()?;
-        let schema_name = format!("{}.json", tool_name.to_str()?);
-        let schema_path = tool_path.with_file_name(&schema_name);
-
-        if schema_path.exists() {
-            Some(schema_path)
-        } else {
-            // Try tool.json
-            let tool_json = tool_path.parent()?.join("tool.json");
-            if tool_json.exists() { Some(tool_json) } else { None }
         }
     }
 
@@ -577,5 +507,31 @@ mod tests {
         // Should handle empty directory gracefully
         let result = loader.discovery.discover_all(temp_dir.path()).await;
         result.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_for_tools_shares_the_documented_executable_rule() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let write_executable = |name: &str| {
+            let path = temp_dir.path().join(name);
+            std::fs::write(&path, "#!/bin/sh\necho hi\n").unwrap();
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&path, perms).unwrap();
+        };
+        // Asymmetric pair: same executable bit, docs present vs absent.
+        write_executable("kept-tool");
+        std::fs::write(temp_dir.path().join("kept-tool.md"), "# kept\n").unwrap();
+        write_executable("dropped-tool");
+
+        let worker = SkillDiscovery::new();
+        let mut stats = DiscoveryStats::default();
+        let tools = worker.scan_for_tools(temp_dir.path(), &mut stats).unwrap();
+        let names: Vec<&str> = tools.iter().map(|tool| tool.name.as_str()).collect();
+        assert_eq!(names, vec!["kept-tool"], "only the documented executable is a skill");
+        assert_eq!(stats.tools_found, 1);
     }
 }

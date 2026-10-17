@@ -12,7 +12,6 @@ pub mod context;
 pub mod core;
 pub mod defaults;
 pub mod hooks;
-pub mod ide_context;
 pub mod loader;
 pub mod mcp;
 pub mod models;
@@ -49,10 +48,6 @@ pub use defaults::{
 pub use hooks::{
     HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig, WorkspaceHookCommand,
     WorkspaceLifecycleHooks,
-};
-pub use ide_context::{
-    IdeContextConfig, IdeContextProviderConfig, IdeContextProviderFamily, IdeContextProviderMode,
-    IdeContextProvidersConfig,
 };
 pub use loader::{ConfigManager, SyntaxHighlightingConfig, VTCodeConfig};
 pub use mcp::{

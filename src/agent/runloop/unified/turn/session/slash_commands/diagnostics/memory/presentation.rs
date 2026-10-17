@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use vtcode_core::llm::{
     LightweightFeature, LightweightRouteSource, auto_lightweight_model, lightweight_model_choices,
     resolve_lightweight_route,
@@ -78,7 +80,7 @@ pub(super) fn render_common_memory_status(
     ctx.renderer.line(
         MessageStyle::Info,
         &format!(
-            "Open/edit targets: `/edit {}`, `/edit {}`, or `/edit {}`",
+            "Memory files: `{}`, `{}`, or `{}`",
             memory_status.summary_file.display(),
             memory_status.memory_file.display(),
             memory_status.directory.display()
@@ -175,6 +177,7 @@ pub(super) fn show_memory_actions_modal(
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_enabled"))),
         search_value: Some("memory enabled disable toggle".to_string()),
+        ..Default::default()
     });
     items.push(InlineListItem {
         title: toggle_title("Auto-write", memory_status.auto_write),
@@ -183,6 +186,7 @@ pub(super) fn show_memory_actions_modal(
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_auto_write"))),
         search_value: Some("memory auto write toggle".to_string()),
+        ..Default::default()
     });
     items.push(InlineListItem {
         title: toggle_title("Lightweight Model For Memory", agent_config.small_model.use_for_memory),
@@ -194,6 +198,7 @@ pub(super) fn show_memory_actions_modal(
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{MEMORY_ACTION_PREFIX}toggle_small_model"))),
         search_value: Some("memory lightweight model toggle".to_string()),
+        ..Default::default()
     });
     items.push(InlineListItem {
         title: format!("Memory Triage Model ({})", lightweight_route.configured_label),
@@ -214,52 +219,57 @@ pub(super) fn show_memory_actions_modal(
             "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}auto"
         ))),
         search_value: Some("memory triage lightweight model pick".to_string()),
+        ..Default::default()
     });
-    items.push(InlineListItem {
-        title: "Automatic".to_string(),
-        subtitle: Some(format!(
+    // Only the configured route is `Current`; others keep their advice badges.
+    let mut automatic = ui_list::choice(
+        "Automatic",
+        Some(format!(
             "Use {} and fall back to {}.",
             auto_lightweight_model(&ctx.config.provider, &ctx.config.model),
             ctx.config.model
         )),
-        badge: Some(if lightweight_route.configured_label == "Automatic" {
-            "Current".to_string()
-        } else {
-            "Recommended".to_string()
-        }),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
+        Some(InlineListSelection::ConfigAction(format!(
             "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}auto"
         ))),
-        search_value: Some("memory lightweight model automatic".to_string()),
-    });
-    items.push(InlineListItem {
-        title: "Use main model".to_string(),
-        subtitle: Some(format!("Keep memory extraction on {}.", lightweight_route.main_model)),
-        badge: Some(if lightweight_route.configured_label == "Use main model" {
-            "Current".to_string()
-        } else {
-            "Accuracy".to_string()
-        }),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
+    )
+    .with_search_value("memory lightweight model automatic".to_string());
+    let auto_is_current = lightweight_route.configured_label == "Automatic";
+    automatic = if auto_is_current {
+        automatic.with_badge("Current", vtcode_commons::ui_protocol::InlineTone::Current)
+    } else {
+        automatic.with_badge("Recommended", vtcode_commons::ui_protocol::InlineTone::Accent)
+    };
+    items.push(automatic);
+
+    let mut main = ui_list::choice(
+        "Use main model",
+        Some(format!("Keep memory extraction on {}.", lightweight_route.main_model)),
+        Some(InlineListSelection::ConfigAction(format!(
             "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}main"
         ))),
-        search_value: Some("memory lightweight model main".to_string()),
-    });
-    items.extend(lightweight_route.choices.iter().map(|model| InlineListItem {
-        title: model.clone(),
-        subtitle: Some("Explicit same-provider lightweight model.".to_string()),
-        badge: Some(if lightweight_route.configured_label.eq_ignore_ascii_case(model.as_str()) {
-            "Current".to_string()
-        } else {
-            "Model".to_string()
-        }),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!(
-            "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}{model}"
-        ))),
-        search_value: Some(format!("memory lightweight triage {model}")),
+    )
+    .with_search_value("memory lightweight model main".to_string());
+    main = if lightweight_route.configured_label == "Use main model" {
+        main.with_badge("Current", vtcode_commons::ui_protocol::InlineTone::Current)
+    } else {
+        main.with_badge("Accuracy", vtcode_commons::ui_protocol::InlineTone::Accent)
+    };
+    items.push(main);
+
+    items.extend(lightweight_route.choices.iter().map(|model| {
+        let mut row = ui_list::choice(
+            model.clone(),
+            Some("Explicit same-provider lightweight model.".to_string()),
+            Some(InlineListSelection::ConfigAction(format!(
+                "{MEMORY_ACTION_PREFIX}{MEMORY_LIGHTWEIGHT_MODEL_PREFIX}{model}"
+            ))),
+        )
+        .with_search_value(format!("memory lightweight triage {model}"));
+        if lightweight_route.configured_label.eq_ignore_ascii_case(model.as_str()) {
+            row = row.with_badge("Current", vtcode_commons::ui_protocol::InlineTone::Current);
+        }
+        row
     }));
     items.extend([
         InlineListItem {
@@ -274,7 +284,8 @@ pub(super) fn show_memory_actions_modal(
                 "{MEMORY_ACTION_PREFIX}set_lines"
             ))),
             search_value: Some("memory startup line limit".to_string()),
-        },
+    ..Default::default()
+},
         InlineListItem {
             title: format!(
                 "Startup Byte Limit ({})",
@@ -287,7 +298,8 @@ pub(super) fn show_memory_actions_modal(
                 "{MEMORY_ACTION_PREFIX}set_bytes"
             ))),
             search_value: Some("memory startup byte limit".to_string()),
-        },
+    ..Default::default()
+},
         InlineListItem {
             title: format!(
                 "Instruction Import Depth ({})",
@@ -302,157 +314,74 @@ pub(super) fn show_memory_actions_modal(
                 "{MEMORY_ACTION_PREFIX}set_import_depth"
             ))),
             search_value: Some("memory instruction import depth".to_string()),
-        },
-        InlineListItem {
-            title: "Set Directory Override".to_string(),
-            subtitle: Some(
+    ..Default::default()
+},
+        ui_list::action("Set Directory Override",
                 match agent_config.persistent_memory.directory_override.as_deref() {
                     Some(value) if !value.trim().is_empty() => format!("Current: {value}"),
                     _ => {
                         "Write a user-level override for the memory storage directory.".to_string()
                     }
                 },
-            ),
-            badge: Some("Prompt".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+                Some("Prompt".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}set_directory_override"
-            ))),
-            search_value: Some("memory directory override set".to_string()),
-        },
-        InlineListItem {
-            title: "Clear Directory Override".to_string(),
-            subtitle: Some("Remove the user-level memory directory override.".to_string()),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            )))).with_search_value("memory directory override set".to_string()),
+        ui_list::action("Clear Directory Override", "Remove the user-level memory directory override.".to_string(), Some("Action".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}clear_directory_override"
-            ))),
-            search_value: Some("memory directory override clear".to_string()),
-        },
-        InlineListItem {
-            title: "Add Instruction Exclude".to_string(),
-            subtitle: Some(format!(
+            )))).with_search_value("memory directory override clear".to_string()),
+        ui_list::action("Add Instruction Exclude", format!(
                 "Current excludes: {}",
                 agent_config.instruction_excludes.len()
-            )),
-            badge: Some("Prompt".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            ), Some("Prompt".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}add_instruction_exclude"
-            ))),
-            search_value: Some("memory instruction excludes add".to_string()),
-        },
-        InlineListItem {
-            title: "Remove Instruction Exclude".to_string(),
-            subtitle: Some("Remove one exclude entry by exact match.".to_string()),
-            badge: Some("Prompt".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            )))).with_search_value("memory instruction excludes add".to_string()),
+        ui_list::action("Remove Instruction Exclude", "Remove one exclude entry by exact match.".to_string(), Some("Prompt".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}remove_instruction_exclude"
-            ))),
-            search_value: Some("memory instruction excludes remove".to_string()),
-        },
-        InlineListItem {
-            title: if memory_status.cleanup_status.needed {
+            )))).with_search_value("memory instruction excludes remove".to_string()),
+        ui_list::action(if memory_status.cleanup_status.needed {
                 "Run Legacy Memory Cleanup".to_string()
             } else {
                 "Run Memory Cleanup".to_string()
-            },
-            subtitle: Some(format!(
+            }, format!(
                 "Rewrite durable memory through the LLM-assisted path and clear consumed rollout summaries (facts: {}, summary lines: {}).",
                 memory_status.cleanup_status.suspicious_facts,
                 memory_status.cleanup_status.suspicious_summary_lines,
-            )),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            ), Some("Action".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}cleanup"
-            ))),
-            search_value: Some("memory cleanup legacy normalize".to_string()),
-        },
-        InlineListItem {
-            title: "Scaffold Missing Memory Files".to_string(),
-            subtitle: Some(
+            )))).with_search_value("memory cleanup legacy normalize".to_string()),
+        ui_list::action("Scaffold Missing Memory Files", 
                 "Create `memory_summary.md`, `MEMORY.md`, topic files, and the rollout directory."
                     .to_string(),
-            ),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+                Some("Action".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}scaffold"
-            ))),
-            search_value: Some("memory scaffold files".to_string()),
-        },
-        InlineListItem {
-            title: "Rebuild Memory Summary Now".to_string(),
-            subtitle: Some(
+            )))).with_search_value("memory scaffold files".to_string()),
+        ui_list::action("Rebuild Memory Summary Now", 
                 "Recompute `memory_summary.md` and `MEMORY.md` from current memory state."
                     .to_string(),
-            ),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+                Some("Action".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}rebuild"
-            ))),
-            search_value: Some("memory rebuild summary".to_string()),
-        },
-        InlineListItem {
-            title: "Batch Extract Memory From Past Sessions".to_string(),
-            subtitle: Some(
+            )))).with_search_value("memory rebuild summary".to_string()),
+        ui_list::action("Batch Extract Memory From Past Sessions", 
                 "Read grounded facts from recent sessions and consolidate them into memory."
                     .to_string(),
-            ),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+                Some("Action".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}rebuild_batch"
-            ))),
-            search_value: Some("memory batch extract sessions".to_string()),
-        },
-        InlineListItem {
-            title: "Open Raw Settings Section".to_string(),
-            subtitle: Some(
+            )))).with_search_value("memory batch extract sessions".to_string()),
+        ui_list::action("Open Raw Settings Section", 
                 "Jump to `/config agent.persistent_memory` for the raw settings palette."
                     .to_string(),
-            ),
-            badge: Some("Nav".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+                Some("Nav".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}open_settings_section"
-            ))),
-            search_value: Some("memory open config section".to_string()),
-        },
-        InlineListItem {
-            title: "Open Memory Summary".to_string(),
-            subtitle: Some(memory_status.summary_file.display().to_string()),
-            badge: Some("Edit".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            )))).with_search_value("memory open config section".to_string()),
+        ui_list::action("Open Memory Summary", memory_status.summary_file.display().to_string(), Some("Edit".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}open_summary"
-            ))),
-            search_value: Some("memory open summary file".to_string()),
-        },
-        InlineListItem {
-            title: "Open Memory Directory".to_string(),
-            subtitle: Some(memory_status.directory.display().to_string()),
-            badge: Some("Edit".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!(
+            )))).with_search_value("memory open summary file".to_string()),
+        ui_list::action("Open Memory Directory", memory_status.directory.display().to_string(), Some("Edit".to_string()), Tone::Accent, Some(InlineListSelection::ConfigAction(format!(
                 "{MEMORY_ACTION_PREFIX}open_directory"
-            ))),
-            search_value: Some("memory open directory".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Close memory controls.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(
+            )))).with_search_value("memory open directory".to_string()),
+        ui_list::action("Back", "Close memory controls.".to_string(), None, Tone::Neutral, Some(InlineListSelection::ConfigAction(
                 MEMORY_ACTION_BACK.to_string(),
-            )),
-            search_value: Some("back close cancel".to_string()),
-        },
+            ))).with_search_value("back close cancel".to_string()),
     ]);
 
     ctx.renderer.show_list_modal(
@@ -466,12 +395,4 @@ pub(super) fn show_memory_actions_modal(
 
 fn toggle_title(label: &str, enabled: bool) -> String {
     format!("{label}: {}", if enabled { "On" } else { "Off" })
-}
-
-pub(super) fn format_path_list(paths: &[String]) -> String {
-    if paths.is_empty() {
-        "none".to_string()
-    } else {
-        paths.join(", ")
-    }
 }

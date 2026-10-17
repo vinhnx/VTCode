@@ -244,6 +244,60 @@ mod tests {
     }
 
     #[test]
+    fn timeline_labels_unexecuted_closures_without_hiding_real_exits() {
+        use vtcode_core::exec::events::{ToolOutcome, ToolOutputItem};
+        for (exit_code, text, expected) in [
+            (
+                None,
+                crate::agent::runloop::unified::turn::turn_loop::UNDISPATCHED_TOOL_CALL_CLOSURE_TEXT,
+                "not_executed",
+            ),
+            (
+                Some(2),
+                crate::agent::runloop::unified::turn::turn_loop::UNDISPATCHED_TOOL_CALL_CLOSURE_TEXT,
+                "failed",
+            ),
+            (None, "Tool execution cancelled", "failed"),
+        ] {
+            let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "call:output".into(),
+                    context: None,
+                    details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                        call_id: "call".into(),
+                        tool_call_id: Some("raw-call".into()),
+                        output: text.into(),
+                        exit_code,
+                        spool_path: None,
+                        status: ToolCallStatus::Failed,
+                    })),
+                },
+            });
+            let rows = timeline_rows_from_thread_events(&[sample_event_record(1, event)]);
+            assert_eq!(rows[0].status.as_deref(), Some(expected));
+            assert!(rows[0].body.contains(text));
+            assert!(rows[0].detail_json.as_ref().unwrap().contains("\"failed\""));
+        }
+        for (outcome, expected) in [(ToolOutcome::Cancelled, "cancelled"), (ToolOutcome::Error, "failed")] {
+            let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "call".into(),
+                    context: None,
+                    details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
+                        tool_name: "exec_command".into(),
+                        arguments: None,
+                        tool_call_id: Some("raw-call".into()),
+                        status: ToolCallStatus::Failed,
+                        outcome: Some(outcome),
+                    })),
+                },
+            });
+            let rows = timeline_rows_from_thread_events(&[sample_event_record(1, event)]);
+            assert_eq!(rows[0].status.as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
     fn timeline_export_prefers_thread_events() {
         let records = vec![
             sample_event_record(
@@ -254,6 +308,7 @@ mod tests {
                 2,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: ThreadItem {
+                        context: None,
                         id: "msg-1".to_string(),
                         details: ThreadItemDetails::AgentMessage(AgentMessageItem {
                             text: "assistant reply".to_string(),
@@ -320,6 +375,7 @@ mod tests {
                 1,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: ThreadItem {
+                        context: None,
                         id: "msg-1".to_string(),
                         details: ThreadItemDetails::AgentMessage(AgentMessageItem {
                             text: "<script>alert('xss')</script>".to_string(),
@@ -331,6 +387,7 @@ mod tests {
                 2,
                 ThreadEvent::ItemStarted(ItemStartedEvent {
                     item: ThreadItem {
+                        context: None,
                         id: "tool-1".to_string(),
                         details: ThreadItemDetails::ToolInvocation(Box::new(ToolInvocationItem {
                             tool_name: "exec_command".to_string(),
@@ -345,6 +402,7 @@ mod tests {
             sample_event_record(
                 3,
                 ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    completed_at: None,
                     usage: Usage {
                         input_tokens: 10,
                         cached_input_tokens: 2,
@@ -555,6 +613,7 @@ mod tests {
                 7,
                 ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: ThreadItem {
+                        context: None,
                         id: "cmd-1".to_string(),
                         details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                             command: "cargo check".to_string(),
@@ -569,6 +628,7 @@ mod tests {
             "item.completed",
             "completed",
             &ThreadItem {
+                context: None,
                 id: "cmd-1".to_string(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "cargo check".to_string(),

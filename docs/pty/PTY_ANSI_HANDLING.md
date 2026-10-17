@@ -2,7 +2,8 @@
 
 ## Overview
 
-VT Code implements comprehensive ANSI code stripping for PTY command output to ensure clean, machine-readable output for agent processing.
+VT Code implements comprehensive ANSI code stripping for PTY command output to ensure clean, machine-readable output for
+agent processing.
 
 ## Architecture
 
@@ -43,11 +44,11 @@ fn push_text(&mut self, text: &str) {
 
 Multiple locations under `crates/codegen/vtcode-core/src/tools/registry/executors/`:
 
-| Function                          | Location                  | Output Field |
-| --------------------------------- | ------------------------- | ------------ |
-| `build_exec_filtered_response`    | `exec_output.rs:111`      | `output`     |
-| `build_exec_passthrough_response` | `exec_output.rs:152`      | `output`     |
-| `execute_command_session_inspect` | `exec_sessions.rs:294`    | `output`     |
+| Function                          | Location               | Output Field |
+| --------------------------------- | ---------------------- | ------------ |
+| `build_exec_filtered_response`    | `exec_output.rs:111`   | `output`     |
+| `build_exec_passthrough_response` | `exec_output.rs:152`   | `output`     |
+| `execute_command_session_inspect` | `exec_sessions.rs:294` | `output`     |
 
 PTY snapshots (`screen_contents`, `scrollback`) are produced in `crates/codegen/vtcode-core/src/tools/pty/session.rs`.
 
@@ -75,31 +76,31 @@ Two complementary parsers handle edge cases:
 
 Handles:
 
--   **CSI sequences**: `ESC[...letter` (colors, styles, cursor movement)
--   **OSC sequences**: `ESC]...BEL` or `ESC]...ST` (hyperlinks, titles)
--   **DCS/PM/APC**: `ESC P/^/_...ST` (device control strings)
--   **2-char escapes**: `ESC[`, `ESC]`, etc.
--   **Incomplete sequences**: Gracefully handles partial ANSI at EOF
+- **CSI sequences**: `ESC[...letter` (colors, styles, cursor movement)
+- **OSC sequences**: `ESC]...BEL` or `ESC]...ST` (hyperlinks, titles)
+- **DCS/PM/APC**: `ESC P/^/_...ST` (device control strings)
+- **2-char escapes**: `ESC[`, `ESC]`, etc.
+- **Incomplete sequences**: Gracefully handles partial ANSI at EOF
 
 Tests in `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` verify:
 
--   Basic colors: `\x1b[31mRed\x1b[0m` → `Red`
--   Bold: `\x1b[1;32mbold\x1b[0m` → `bold`
--   Cargo output with warnings/errors
--   OSC with ST terminator: `\x1b]8;;file://\x1b\\` (hyperlinks)
+- Basic colors: `\x1b[31mRed\x1b[0m` → `Red`
+- Bold: `\x1b[1;32mbold\x1b[0m` → `bold`
+- Cargo output with warnings/errors
+- OSC with ST terminator: `\x1b]8;;file://\x1b\\` (hyperlinks)
 
 ### `streams.rs::strip_ansi_codes()` (Secondary)
 
 Character-by-character parsing with:
 
--   Peekable iterator for lookahead
--   Proper ST (`ESC\` / `\u{0007}`) termination
--   Character set selection (`ESC(0`, `ESC)B`)
--   Single-char sequences (cursor save, reset, etc.)
+- Peekable iterator for lookahead
+- Proper ST (`ESC\` / `\u{0007}`) termination
+- Character set selection (`ESC(0`, `ESC)B`)
+- Single-char sequences (cursor save, reset, etc.)
 
 ## Data Flow
 
-```
+```text
 Raw PTY Output (with potential ANSI codes)
     ↓
 [1] Environment vars prevent ANSI generation
@@ -121,9 +122,9 @@ Clean, machine-readable output to agent
 
 ### Existing Tests
 
--   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
--   `crates/codegen/vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
--   Implicit: Every `strip_ansi()` call prevents malformed output
+- `crates/codegen/vtcode-core/src/utils/ansi_parser.rs`: 10+ tests covering CSI, OSC, edge cases
+- `crates/codegen/vtcode-core/src/tools/pty.rs`: Scrollback size, overflow, metrics tests
+- Implicit: Every `strip_ansi()` call prevents malformed output
 
 ### Manual Verification
 
@@ -136,9 +137,9 @@ Both commands should produce **zero matches** after these changes.
 
 ## Performance Impact
 
--   **Minimal**: Single-pass linear scan over output text
--   **Token-aware truncation** already processes all output for token counting
--   **Environment variables**: No runtime cost (set once at spawn)
+- **Minimal**: Single-pass linear scan over output text
+- **Token-aware truncation** already processes all output for token counting
+- **Environment variables**: No runtime cost (set once at spawn)
 
 ## Edge Cases Handled
 
@@ -154,19 +155,19 @@ Both commands should produce **zero matches** after these changes.
 
 ## Related Files
 
--   `crates/codegen/vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
--   `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
--   `crates/codegen/vtcode-core/src/tools/registry/executors/` - Return-path stripping
--   `src/agent/runloop/tool_output/streams.rs` - Render-time stripping
--   `src/acp/zed.rs` - ACP integration with stripping
+- `crates/codegen/vtcode-core/src/tools/pty.rs` - PTY management and ANSI prevention
+- `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Core stripping logic
+- `crates/codegen/vtcode-core/src/tools/registry/executors/` - Return-path stripping
+- `src/agent/runloop/tool_output/streams.rs` - Render-time stripping
+- `src/acp/zed.rs` - ACP integration with stripping
 
 ## Configuration
 
 PTY output ANSI handling is **automatic and not user-configurable**. The system always:
 
-1.  Prevents ANSI generation at command spawn
-2.  Strips any escaped sequences at capture
-3.  Strips again at output return
-4.  Provides clean text to agent
+1. Prevents ANSI generation at command spawn
+2. Strips any escaped sequences at capture
+3. Strips again at output return
+4. Provides clean text to agent
 
 This ensures consistency and reliability across all PTY commands.

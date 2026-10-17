@@ -25,12 +25,16 @@ pub enum ModelId {
     /// Gemini 3.7 Flash - Flash model with 1M context and tunable thinking levels
     /// Gemini 3.8 Flash - Most intelligent Flash for long-horizon SWE, agents, and enterprise workflows (1M context, 64k output, low/medium/high thinking)
     Gemini38Flash,
+    /// Gemini 4 Argon - Flagship reasoning model for the hardest coding, agentic, math, and science problems (unified 1M context window, 64K sync output, long decode, low/medium/high thinking)
+    Gemini4Argon,
 
     // OpenAI models
     /// GPT-6 Astra - Most capable model for hardest end-to-end work with complex reasoning, coding, computer use, and research
     GPT6Astra,
     /// GPT-6 Sol - Cost-efficient high-end model in the GPT-6 series for demanding professional work
     GPT6Sol,
+    /// GPT-6.1 Sol - Near-Astra performance for complex coding, computer use, and professional work at a lower cost
+    GPT61Sol,
     /// GPT-6 Luna - Fast cost-efficient model in the GPT-6 series for high-volume latency-sensitive workloads
     GPT6Luna,
     /// GPT-5.6 Sol - Frontier model for complex professional work in the GPT-5.6 family
@@ -48,6 +52,10 @@ pub enum ModelId {
     /// Claude Sonnet 5 - The best combination of speed and intelligence with adaptive thinking on by default
     #[default]
     ClaudeSonnet5,
+    /// Claude Sonnet 5.5 - Latest Sonnet: best speed/intelligence balance, 1M context, 128K output, `between_tools` as the lowest thinking setting, default effort high
+    ClaudeSonnet55,
+    /// Claude Haiku 5.5 - High-volume latency-sensitive work: classification, routing, extraction, subagents; adaptive thinking, 1M context, 128K output, default effort medium
+    ClaudeHaiku55,
     /// Claude Fable 5 - Anthropic's most capable widely released model for demanding reasoning and long-horizon agentic work
     ClaudeFable5,
     /// Claude Fable 5.1 - successor to Fable 5 for demanding reasoning and long-horizon agentic work, 1M context, adaptive thinking always on, cache reads at 1/4 cost
@@ -78,6 +86,10 @@ pub enum ModelId {
     MetaMuseSpark13,
     /// Meta Muse Spark 1.3 Contributor tier - opt-in variant with Meta's discounted data-contribution terms
     MetaMuseSpark13Contributor,
+    /// Meta Muse Wonder 1.0 - Frontier coding, long-running agents, and advanced computer use
+    MetaMuseWonder10,
+    /// Meta Muse Wonder Full 1.0 - Most advanced Meta model for critical workflows (Muse Code subscription)
+    MetaMuseWonderFull10,
 
     // NVIDIA NIM models
     /// NVIDIA Nemotron 3 Ultra - NVIDIA's flagship agentic reasoning model via NIM
@@ -96,6 +108,8 @@ pub enum ModelId {
     MergeGatewayAnthropicClaudeOpus55,
     /// Anthropic Claude Sonnet 5 through Merge Gateway
     MergeGatewayAnthropicClaudeSonnet5,
+    /// Anthropic Claude Sonnet 5.5 through Merge Gateway
+    MergeGatewayAnthropicClaudeSonnet55,
     /// Google Gemini 3.6 Flash through Merge Gateway
     /// Google Gemini 3.7 Flash through Merge Gateway
     /// DeepSeek V4.1 Flash through Merge Gateway
@@ -110,10 +124,6 @@ pub enum ModelId {
     MergeGatewayMoonshotKimiK3,
     /// Thinking Machines Inkling through Merge Gateway
     MergeGatewayThinkingMachinesInkling,
-    /// Meta Muse Spark 1.1 through Merge Gateway
-    MergeGatewayMetaMuseSpark11,
-    /// Meta Muse Spark 1.3 through Merge Gateway
-    MergeGatewayMetaMuseSpark13,
     /// Z.AI GLM-5.3 Flash through Merge Gateway
     MergeGatewayZaiGlm53Flash,
     /// Z.AI GLM-5.3 FlashX through Merge Gateway
@@ -126,20 +136,36 @@ pub enum ModelId {
     MergeGatewayOpenAIGpt56Terra,
     /// Google Gemini 3.8 Flash through Merge Gateway
     MergeGatewayGoogleGemini38Flash,
+    /// Google Gemini 4 Argon through Merge Gateway
+    MergeGatewayGoogleGemini4Argon,
     /// Anthropic Claude Haiku 4.5 through Merge Gateway
     MergeGatewayAnthropicClaudeHaiku4520251001,
+    /// Anthropic Claude Haiku 5.5 through Merge Gateway
+    MergeGatewayAnthropicClaudeHaiku55,
     /// Anthropic Claude Fable 5.1 through Merge Gateway
     MergeGatewayAnthropicClaudeFable51,
     /// OpenAI GPT-6 Astra through Merge Gateway
     MergeGatewayOpenAIGpt6Astra,
     /// OpenAI GPT-6 Sol through Merge Gateway
     MergeGatewayOpenAIGpt6Sol,
+    /// OpenAI GPT-6.1 Sol through Merge Gateway
+    MergeGatewayOpenAIGpt61Sol,
     /// OpenAI GPT-6 Luna through Merge Gateway
     MergeGatewayOpenAIGpt6Luna,
+    /// Xiaomi MiMo V2.6 Pro through Merge Gateway
+    MergeGatewayXiaomimimoMimoV26Pro,
+    /// Xiaomi MiMo V2.6 Flash through Merge Gateway
+    MergeGatewayXiaomimimoMimoV26Flash,
+    /// Mistral Large 4 through Merge Gateway
+    MergeGatewayMistralLarge4,
+    /// Meta Muse Spark Open (816B/42B) through Merge Gateway
+    MergeGatewayMetaMuseSparkOpen,
 
     // Mistral AI models
     /// Mistral Large 3 - State-of-the-art open-weight general-purpose multimodal model
     MistralLarge3,
+    /// Mistral Large 4 - Open-weight MoE flagship (49B active / 1.05T total) with 1M context (Public Preview)
+    MistralLarge4,
     // Hugging Face models
     /// OpenAI GPT-OSS 20B via Hugging Face router
     HuggingFaceOpenAIGptOss20b,
@@ -154,6 +180,8 @@ pub enum ModelId {
     HuggingFaceKimiK3Together,
     /// MiniMax M3 via Novita on Hugging Face router
     HuggingFaceMinimaxM3Novita,
+    /// Meta Muse Spark Open 816B-A42B via Baseten on Hugging Face router
+    HuggingFaceMuseSparkOpenBaseten,
 
     // StepFun models
     /// Step 3.7 Flash - StepFun's flagship multimodal reasoning model with tool calling
@@ -219,6 +247,14 @@ pub enum ModelId {
     /// GLM-5.2 Cloud - Cloud-hosted GLM-5.2 flagship model served via Ollama Cloud
     /// GLM-5.3 Cloud - Cloud-hosted GLM-5.3 flagship model served via Ollama Cloud
     OllamaGlm53Cloud,
+    /// GLM-5.3 Flash Cloud - Multimodal GLM-5.3 Flash served via Ollama Cloud
+    OllamaGlm53FlashCloud,
+    /// Mistral Large 4 Cloud - Multimodal Mistral Large 4 served via Ollama Cloud
+    OllamaMistralLarge4Cloud,
+    /// Muse Spark Open Cloud - Multimodal Muse Spark Open served via Ollama Cloud
+    OllamaMuseSparkOpenCloud,
+    /// DeepSeek V4.1 Flash Cloud - Multimodal DeepSeek V4.1 Flash served via Ollama Cloud
+    OllamaDeepSeekV41FlashCloud,
     /// Kimi K3 Cloud - Moonshot Kimi K3 via Ollama Cloud
     OllamaKimiK3Cloud,
     /// Gemma 4 - Google Gemma 4 model served via Ollama
@@ -258,6 +294,8 @@ pub enum ModelId {
     /// Meta Muse Spark 1.2 via OpenRouter
     /// Meta Muse Spark 1.3 via OpenRouter
     OpenRouterMetaMuseSpark13,
+    /// Meta Muse Spark Open 816B-A42B via OpenRouter
+    OpenRouterMetaMuseSparkOpen,
     /// Gemini 3.7 Flash - Flash model with 1M context and tunable thinking levels via OpenRouter
     /// Gemini 3.8 Flash - Most intelligent Flash for long-horizon SWE/agents with 1M context via OpenRouter
     OpenRouterGoogleGemini38Flash,
@@ -285,6 +323,8 @@ pub enum ModelId {
     OpenRouterXiaomiMimoV26Flash,
     /// MiMo-V2.6-Pro-UltraSpeed - Xiaomi's fastest flagship variant via OpenRouter
     OpenRouterXiaomiMimoV26ProUltraspeed,
+    /// Step 5 Preview - StepFun's flagship agentic model via OpenRouter
+    OpenRouterStepfunStep5Preview,
 
     // Vercel AI Gateway models (namespaced as `vendor/model` on the gateway)
     /// Claude Sonnet 5 served through the Vercel AI Gateway

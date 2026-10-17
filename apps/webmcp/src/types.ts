@@ -68,6 +68,7 @@ export interface TurnResult {
 }
 
 export interface RuntimeStatus {
+  readonly explanations_available?: boolean;
   readonly workspace_root: string;
   readonly connected: boolean;
   readonly turns_available: boolean;

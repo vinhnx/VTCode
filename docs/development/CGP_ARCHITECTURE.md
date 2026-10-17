@@ -3,24 +3,20 @@
 ## Overview
 
 VT Code applies the **Context-Generic Programming** pattern from the
-[RustLab 2025 talk](https://contextgeneric.dev/blog/rustlab-2025-coherence/) to
-its tool runtime system and LLM provider construction path. The pattern solves
-two concrete architectural problems:
+[RustLab 2025 talk](https://contextgeneric.dev/blog/rustlab-2025-coherence/) to its tool runtime system and LLM provider
+construction path. The pattern solves two concrete architectural problems:
 
-- The same tool implementation needs to behave differently (approval policy,
-  sandbox enforcement, logging, caching, retry) depending on the execution
-  context (interactive session, CI pipeline, benchmarks) without adapter
-  explosion.
-- The same LLM provider metadata and construction rules were duplicated across
-  factory registration, zero-sized provider config types, and the
-  `vtcode-core::llm::config_adapter` layer.
+- The same tool implementation needs to behave differently (approval policy, sandbox enforcement, logging, caching,
+  retry) depending on the execution context (interactive session, CI pipeline, benchmarks) without adapter explosion.
+- The same LLM provider metadata and construction rules were duplicated across factory registration, zero-sized provider
+  config types, and the `vtcode-core::llm::config_adapter` layer.
 
 ## Core Concepts
 
 ### 1. Provider Traits (explicit `Ctx` parameter)
 
-Traditional Rust traits bind behavior to `Self`. CGP moves `Self` to an explicit
-generic `Ctx` parameter, allowing multiple overlapping implementations:
+Traditional Rust traits bind behavior to `Self`. CGP moves `Self` to an explicit generic `Ctx` parameter, allowing
+multiple overlapping implementations:
 
 ```rust
 // Traditional — one impl per type
@@ -71,9 +67,8 @@ delegate_components!(InteractiveCtx {
 
 ### 5. Consumer Traits (blanket impls)
 
-The RustLab pattern does not stop at provider traits. VT Code restores an
-ergonomic API through blanket consumer traits implemented for any context with
-the required component wiring:
+The RustLab pattern does not stop at provider traits. VT Code restores an ergonomic API through blanket consumer traits
+implemented for any context with the required component wiring:
 
 ```rust
 #[async_trait]
@@ -100,18 +95,16 @@ pub trait CanProvideToolMetadata {
 }
 ```
 
-This keeps `ToolFacade`, `HandlerFacade`, and `ComposableRuntime` dependent on
-context capabilities instead of raw component lookups. `ToolFacade` also uses
-`CanProvideToolMetadata` so direct CGP registrations preserve schema and policy
-metadata instead of falling back to `Tool` defaults.
+This keeps `ToolFacade`, `HandlerFacade`, and `ComposableRuntime` dependent on context capabilities instead of raw
+component lookups. `ToolFacade` also uses `CanProvideToolMetadata` so direct CGP registrations preserve schema and
+policy metadata instead of falling back to `Tool` defaults.
 
-Ownership-first rule: prefer `wrap_native_tool_interactive()` /
-`wrap_native_tool_ci()` when you still own the concrete tool. Use the
-`Arc<dyn Tool>` bridge only when a tool instance is already shared elsewhere.
+Ownership-first rule: prefer `wrap_native_tool_interactive()` / `wrap_native_tool_ci()` when you still own the concrete
+tool. Use the `Arc<dyn Tool>` bridge only when a tool instance is already shared elsewhere.
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │               Existing Tools                     │
 │  GrepTool, FileOpsTool, CommandTool, ...         │
@@ -152,54 +145,54 @@ Ownership-first rule: prefer `wrap_native_tool_interactive()` /
 ## Runtime Contexts
 
 | Context          | Approval         | Sandbox                  | Logging          | Cache     | Retry     |
-|------------------|------------------|--------------------------|------------------|-----------|-----------|
+| ---------------- | ---------------- | ------------------------ | ---------------- | --------- | --------- |
 | `InteractiveCtx` | `PromptApproval` | `WorkspaceSandbox`       | `TracingLogging` | `NoCache` | `NoRetry` |
 | `CiCtx`          | `AutoApproval`   | `StrictWorkspaceSandbox` | `NoLogging`      | `NoCache` | `NoRetry` |
 | `BenchCtx`       | `AutoApproval`   | `NoSandbox`              | `NoLogging`      | `NoCache` | `NoRetry` |
 
 ## Provider Traits
 
-| Trait                    | Purpose                              |
-|--------------------------|--------------------------------------|
-| `ApprovalProvider<Ctx>`  | Permission checks before execution   |
-| `SandboxProvider<Ctx>`   | Sandbox policy resolution            |
-| `ExecuteProvider<Ctx>`   | Core tool execution (single + dual)  |
+| Trait                    | Purpose                                     |
+| ------------------------ | ------------------------------------------- |
+| `ApprovalProvider<Ctx>`  | Permission checks before execution          |
+| `SandboxProvider<Ctx>`   | Sandbox policy resolution                   |
+| `ExecuteProvider<Ctx>`   | Core tool execution (single + dual)         |
 | `MetadataProvider<Ctx>`  | Name, description, schema, and policy hints |
-| `LoggingProvider<Ctx>`   | Execution lifecycle logging          |
-| `CacheProvider<Ctx>`     | JSON and dual-result caching         |
-| `RetryProvider<Ctx>`     | Retry/backoff policy                 |
-| `OutputMapProvider<Ctx>` | Output format conversion             |
+| `LoggingProvider<Ctx>`   | Execution lifecycle logging                 |
+| `CacheProvider<Ctx>`     | JSON and dual-result caching                |
+| `RetryProvider<Ctx>`     | Retry/backoff policy                        |
+| `OutputMapProvider<Ctx>` | Output format conversion                    |
 
 ## Consumer Traits
 
-| Trait               | Purpose                                      |
-|---------------------|----------------------------------------------|
-| `CanApproveTool`         | Blanket approval API over `ApprovalProvider`      |
-| `CanResolveSandbox`      | Blanket sandbox API over `SandboxProvider`        |
+| Trait                    | Purpose                                            |
+| ------------------------ | -------------------------------------------------- |
+| `CanApproveTool`         | Blanket approval API over `ApprovalProvider`       |
+| `CanResolveSandbox`      | Blanket sandbox API over `SandboxProvider`         |
 | `CanExecuteTool`         | Full runtime pipeline over execute/log/cache/retry |
-| `CanProvideToolMetadata` | Blanket metadata API over `MetadataProvider`      |
+| `CanProvideToolMetadata` | Blanket metadata API over `MetadataProvider`       |
 
 ## Named Providers
 
-| Provider                  | Implements         | Behavior                    |
-|---------------------------|--------------------|-----------------------------|
-| `AutoApproval`            | `ApprovalProvider` | Always approves             |
-| `DenyAllApproval`         | `ApprovalProvider` | Always denies               |
-| `PromptApproval`          | `ApprovalProvider` | Delegates to ToolPolicyGateway |
-| `NoSandbox`               | `SandboxProvider`  | No sandbox enforcement      |
-| `WorkspaceSandbox`        | `SandboxProvider`  | Workspace-scoped sandbox    |
-| `StrictWorkspaceSandbox`  | `SandboxProvider`  | Strict workspace boundaries |
-| `PassthroughExecutor`     | `ExecuteProvider`  | Delegates to inner `Tool`   |
-| `PassthroughMetadata`     | `MetadataProvider` | Delegates schema/policy/kind to inner `Tool` |
-| `TypedToolExecutor<T>`    | `ExecuteProvider`  | Static dispatch to concrete `T: Tool` |
-| `TypedToolMetadata<T>`    | `MetadataProvider` | Static metadata projection from concrete `T: Tool` |
+| Provider                  | Implements         | Behavior                                                        |
+| ------------------------- | ------------------ | --------------------------------------------------------------- |
+| `AutoApproval`            | `ApprovalProvider` | Always approves                                                 |
+| `DenyAllApproval`         | `ApprovalProvider` | Always denies                                                   |
+| `PromptApproval`          | `ApprovalProvider` | Delegates to ToolPolicyGateway                                  |
+| `NoSandbox`               | `SandboxProvider`  | No sandbox enforcement                                          |
+| `WorkspaceSandbox`        | `SandboxProvider`  | Workspace-scoped sandbox                                        |
+| `StrictWorkspaceSandbox`  | `SandboxProvider`  | Strict workspace boundaries                                     |
+| `PassthroughExecutor`     | `ExecuteProvider`  | Delegates to inner `Tool`                                       |
+| `PassthroughMetadata`     | `MetadataProvider` | Delegates schema/policy/kind to inner `Tool`                    |
+| `TypedToolExecutor<T>`    | `ExecuteProvider`  | Static dispatch to concrete `T: Tool`                           |
+| `TypedToolMetadata<T>`    | `MetadataProvider` | Static metadata projection from concrete `T: Tool`              |
 | `RegistryFnTool`          | `Tool` wrapper     | Projects `ToolExecutorFn` registrations into native CGP facades |
-| `NoLogging`               | `LoggingProvider`  | No-op logging               |
-| `TracingLogging`          | `LoggingProvider`  | `tracing` start/success/failure |
-| `NoCache`                 | `CacheProvider`    | No cached results           |
-| `CachedResults`           | `CacheProvider`    | `UnifiedCache`-backed results |
-| `NoRetry`                 | `RetryProvider`    | Fail-fast execution         |
-| `ExponentialBackoffRetry` | `RetryProvider`    | Static exponential backoff  |
+| `NoLogging`               | `LoggingProvider`  | No-op logging                                                   |
+| `TracingLogging`          | `LoggingProvider`  | `tracing` start/success/failure                                 |
+| `NoCache`                 | `CacheProvider`    | No cached results                                               |
+| `CachedResults`           | `CacheProvider`    | `UnifiedCache`-backed results                                   |
+| `NoRetry`                 | `RetryProvider`    | Fail-fast execution                                             |
+| `ExponentialBackoffRetry` | `RetryProvider`    | Static exponential backoff                                      |
 
 ## Usage
 
@@ -254,45 +247,40 @@ let reg = ToolRegistration::from_cgp_tool("my_tool", CapabilityLevel::Basic, fac
 registry.register_tool(reg).await?;
 ```
 
-This avoids the `Arc<dyn Tool>` bridge entirely. The tool still implements the
-public `Tool` trait, but CGP execution and metadata flow through
-`TypedToolExecutor<T>` / `TypedToolMetadata<T>` with static dispatch.
+This avoids the `Arc<dyn Tool>` bridge entirely. The tool still implements the public `Tool` trait, but CGP execution
+and metadata flow through `TypedToolExecutor<T>` / `TypedToolMetadata<T>` with static dispatch.
 
 ## Application Bootstrap Integration (Phase 5)
 
 The CGP pipeline is automatically enabled during session initialization in
-`src/agent/runloop/unified/session_setup/init.rs`. After all builtin tools
-are registered and config is applied, `enable_cgp_pipeline()` prefers any
-registration-provided native CGP factory and otherwise wraps `TraitObject`
-tools through the CGP approval → sandbox → logging/cache/retry pipeline.
+`src/agent/runloop/unified/session_setup/init.rs`. After all builtin tools are registered and config is applied,
+`enable_cgp_pipeline()` prefers any registration-provided native CGP factory and otherwise wraps `TraitObject` tools
+through the CGP approval → sandbox → logging/cache/retry pipeline.
 
-Wrapping is idempotent: registrations created via `from_cgp_tool()` /
-`register_cgp_tool()` are marked as already CGP-wrapped, and
-`enable_cgp_pipeline()` skips them instead of nesting another facade layer.
+Wrapping is idempotent: registrations created via `from_cgp_tool()` / `register_cgp_tool()` are marked as already
+CGP-wrapped, and `enable_cgp_pipeline()` skips them instead of nesting another facade layer.
 
 ## LLM Provider Construction (Phase 8)
 
-Phase 8 applies the same CGP pattern to provider construction without changing
-the runtime string-keyed lookup model.
+Phase 8 applies the same CGP pattern to provider construction without changing the runtime string-keyed lookup model.
 
 ### LLM components
 
-| Component                    | Purpose                              |
-|-----------------------------|--------------------------------------|
+| Component                   | Purpose                              |
+| --------------------------- | ------------------------------------ |
 | `ProviderMetadataComponent` | Provider key, display name, defaults |
 | `ProviderBuildComponent`    | Build `Box<dyn LLMProvider>`         |
 
 ### LLM consumer traits
 
 | Trait                 | Purpose                                       |
-|-----------------------|-----------------------------------------------|
+| --------------------- | --------------------------------------------- |
 | `CanDescribeProvider` | Blanket metadata API for provider contexts    |
 | `CanBuildProvider`    | Blanket factory API for provider construction |
 
 ### LLM contexts
 
-The zero-sized provider config types in
-`crates/codegen/vtcode-core/src/llm/provider_config.rs` are the CGP contexts:
+The zero-sized provider config types in `crates/codegen/vtcode-core/src/llm/provider_config.rs` are the CGP contexts:
 
 - `GeminiProviderConfig`
 - `OpenAIProviderConfig`
@@ -309,91 +297,72 @@ The zero-sized provider config types in
 
 Each context is wired once in `crates/codegen/vtcode-core/src/llm/cgp.rs`, then consumed by:
 
-- `register_builtin_cgp_providers(...)` and `LLMFactory::register_cgp_provider::<Ctx>()`
-  for built-in and custom registration
-- `ProviderBuilder<T>` and the legacy core `ProviderConfig` trait as metadata
-  shims over `CanDescribeProvider`
-- `create_provider_unified(...)` as a compatibility shim over the canonical
-  factory path
+- `register_builtin_cgp_providers(...)` and `LLMFactory::register_cgp_provider::<Ctx>()` for built-in and custom
+  registration
+- `ProviderBuilder<T>` and the legacy core `ProviderConfig` trait as metadata shims over `CanDescribeProvider`
+- `create_provider_unified(...)` as a compatibility shim over the canonical factory path
 
-This keeps public entrypoints stable while removing the old
-`BuiltinProvider`/`impl_builtin_provider!` registration split.
-The zero-sized provider config types now serve directly as the metadata
-providers too, so there is no extra descriptor-to-metadata adapter layer.
+This keeps public entrypoints stable while removing the old `BuiltinProvider`/`impl_builtin_provider!` registration
+split. The zero-sized provider config types now serve directly as the metadata providers too, so there is no extra
+descriptor-to-metadata adapter layer.
 
-`vtcode-core::llm::config_adapter` uses the same `HasComponent` substrate for its
-`FactoryConfigProjectionComponent`, so the external config adapter does not
-carry a second parallel lookup trait.
+`vtcode-core::llm::config_adapter` uses the same `HasComponent` substrate for its `FactoryConfigProjectionComponent`, so
+the external config adapter does not carry a second parallel lookup trait.
 
-The active CGP mode now persists in `ToolRegistry`. Any later
-`register_tool()` call, including post-startup skill activation, is wrapped
-through the same mode automatically. This closes the earlier gap where
-dynamic registrations added after startup bypassed the CGP runtime entirely.
+The active CGP mode now persists in `ToolRegistry`. Any later `register_tool()` call, including post-startup skill
+activation, is wrapped through the same mode automatically. This closes the earlier gap where dynamic registrations
+added after startup bypassed the CGP runtime entirely.
 
-Builtin `Tool`-backed registrations such as `request_user_input`,
-`start_planning`, `finish_planning`, and `task_tracker` now attach a native CGP factory. Before CGP activation
-they behave exactly like normal tool registrations; once the pipeline is
-enabled they switch to a typed CGP facade instead of `PassthroughExecutor`.
-The native factory now receives the final `ToolRegistration`, so the wrapped
-tool preserves registration metadata such as canonical name, description,
-schemas, prompt path, and default permission even when the inner `Tool`
-implementation uses placeholder identifiers.
+Builtin `Tool`-backed registrations such as `request_user_input`, `start_planning`, `finish_planning`, and
+`task_tracker` now attach a native CGP factory. Before CGP activation they behave exactly like normal tool
+registrations; once the pipeline is enabled they switch to a typed CGP facade instead of `PassthroughExecutor`. The
+native factory now receives the final `ToolRegistration`, so the wrapped tool preserves registration metadata such as
+canonical name, description, schemas, prompt path, and default permission even when the inner `Tool` implementation uses
+placeholder identifiers.
 
-The same metadata preservation now applies to the fallback `TraitObject`
-path. When a registration only carries an `Arc<dyn Tool>`, CGP wraps that
-tool in a registration-backed metadata shim before entering the bridge
-runtime. This fallback is for registrations that already need shared
-ownership. Native wrappers remain the preferred path when the caller still
-owns the concrete tool instance. This keeps dynamic registrations such as MCP
-proxy tools aligned with the public registration name and schemas after CGP
-activation.
+The same metadata preservation now applies to the fallback `TraitObject` path. When a registration only carries an
+`Arc<dyn Tool>`, CGP wraps that tool in a registration-backed metadata shim before entering the bridge runtime. This
+fallback is for registrations that already need shared ownership. Native wrappers remain the preferred path when the
+caller still owns the concrete tool instance. This keeps dynamic registrations such as MCP proxy tools aligned with the
+public registration name and schemas after CGP activation.
 
 Dynamic skill registrations follow the same model:
 
-- session skill control tools (`list_skills`, `load_skill`, `load_skill_resource`)
-  now attach native CGP factories when they are registered
-- activated traditional skill tools attach a native CGP factory through
-  `build_traditional_skill_tool_registration()`
-- MCP proxy tool registrations now attach a native CGP factory through
-  `build_mcp_registration()`
-- if a later registration does not expose a native factory, the registry still
-  applies the active CGP mode and falls back to the passthrough bridge
+- session skill control tools (`list_skills`, `load_skill`, `load_skill_resource`) now attach native CGP factories when
+  they are registered
+- activated traditional skill tools attach a native CGP factory through `build_traditional_skill_tool_registration()`
+- MCP proxy tool registrations now attach a native CGP factory through `build_mcp_registration()`
+- if a later registration does not expose a native factory, the registry still applies the active CGP mode and falls
+  back to the passthrough bridge
 
-`RegistryFn` registrations now also participate in CGP. The registry bridges a
-function-pointer registration into a concrete `RegistryFnTool`, then wraps that
-typed tool through the same interactive/CI CGP runtime. That covers the current
-public built-ins (`exec_command`, `write_stdin`, `apply_patch`, and advanced
-`code_search`) plus internal registry-function helpers.
+`RegistryFn` registrations now also participate in CGP. The registry bridges a function-pointer registration into a
+concrete `RegistryFnTool`, then wraps that typed tool through the same interactive/CI CGP runtime. That covers the
+current public built-ins (`exec_command`, `write_stdin`, `apply_patch`, and advanced `code_search`) plus internal
+registry-function helpers.
 
 ## Native Tool Migration (Phase 7)
 
-Phase 7 starts by replacing the most direct `Arc<dyn Tool>` bridges with
-typed CGP contexts so ownership stays concrete by default and shared handles
-remain the fallback path:
+Phase 7 starts by replacing the most direct `Arc<dyn Tool>` bridges with typed CGP contexts so ownership stays concrete
+by default and shared handles remain the fallback path:
 
 - `TypedToolCtx<Runtime, T>` stores a concrete tool instance plus runtime policy
 - `TypedToolExecutor<T>` calls `T::execute` / `T::execute_dual` without trait-object indirection
 - `TypedToolMetadata<T>` projects the same tool's schemas, policy, and hints
-- `ToolRegistration` can now carry a native CGP factory so `enable_cgp_pipeline()`
-  can pick the native facade when runtime mode becomes known
-- native CGP factories are wrapped with registration-backed metadata so dynamic
-  registrations keep their public tool identity even when the concrete adapter
-  type has a generic internal name
-- the trait-object fallback path also applies a registration-backed metadata
-  shim before entering `ToolBridgeCtx`, so metadata fidelity no longer depends
-  on the inner `Tool` implementation exposing the public registration name
-- `native_cgp_tool_factory()` now centralizes the repeated closure wiring for
-  concrete tool registrations so builtins, skills, MCP proxies, and session
-  setup tools use the same factory shape
+- `ToolRegistration` can now carry a native CGP factory so `enable_cgp_pipeline()` can pick the native facade when
+  runtime mode becomes known
+- native CGP factories are wrapped with registration-backed metadata so dynamic registrations keep their public tool
+  identity even when the concrete adapter type has a generic internal name
+- the trait-object fallback path also applies a registration-backed metadata shim before entering `ToolBridgeCtx`, so
+  metadata fidelity no longer depends on the inner `Tool` implementation exposing the public registration name
+- `native_cgp_tool_factory()` now centralizes the repeated closure wiring for concrete tool registrations so builtins,
+  skills, MCP proxies, and session setup tools use the same factory shape
 
-This keeps the migration incremental: existing pre-CGP registry behavior stays
-unchanged, while runtime activation can progressively stop depending on
-`PassthroughExecutor` for selected tools.
+This keeps the migration incremental: existing pre-CGP registry behavior stays unchanged, while runtime activation can
+progressively stop depending on `PassthroughExecutor` for selected tools.
 
 ## Static Runtime Providers (Phase 6)
 
-Phase 6 replaces the Phase 5 hook-only middleware slot with three explicit CGP
-provider traits:
+Phase 6 replaces the Phase 5 hook-only middleware slot with three explicit CGP provider traits:
 
 - `LoggingProvider<Ctx>` for tracing and lifecycle events
 - `CacheProvider<Ctx>` for `UnifiedCache`-backed JSON and dual-output caching
@@ -408,10 +377,10 @@ The production runtime wiring stays conservative for now:
 
 ### Runtime Mode Selection
 
-| Condition     | CGP Mode      | Effect                                                       |
-|---------------|---------------|--------------------------------------------------------------|
-| `full_auto`   | `Ci`          | AutoApproval + StrictSandbox + no logging/cache/retry        |
-| Normal TUI    | `Interactive` | PromptApproval + WorkspaceSandbox + tracing logging only     |
+| Condition   | CGP Mode      | Effect                                                   |
+| ----------- | ------------- | -------------------------------------------------------- |
+| `full_auto` | `Ci`          | AutoApproval + StrictSandbox + no logging/cache/retry    |
+| Normal TUI  | `Interactive` | PromptApproval + WorkspaceSandbox + tracing logging only |
 
 ### Key APIs
 

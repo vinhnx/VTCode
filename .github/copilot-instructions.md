@@ -1,6 +1,7 @@
 # VT Code Agent Guidelines
 
-**VT Code**: Rust terminal coding agent with modular architecture, multi-LLM support (OpenAI, Anthropic, Gemini), tree-sitter parsing for 6+ languages.
+**VT Code**: Rust terminal coding agent with modular architecture, multi-LLM support (OpenAI, Anthropic, Gemini),
+tree-sitter parsing for 6+ languages.
 
 ## Build & Test Commands
 
@@ -34,13 +35,16 @@ cargo ts                    # Alias for standard cargo test
 - **Config**: Read from `vtcode.toml` at runtime
 - **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
 - **Formatting**: 4-space indentation, early returns, simple variable names
-- **Ownership first**: Prefer owned values and borrows; reach for `Rc<T>` / `Arc<T>` only when multiple owners genuinely need to keep data alive
-- **Shared ownership**: `Rc<T>` is single-threaded; `Arc<T>` is for cross-thread/task sharing. Prefer immutable sharing before `RefCell`, `Mutex`, or `RwLock`
+- **Ownership first**: Prefer owned values and borrows; reach for `Rc<T>` / `Arc<T>` only when multiple owners genuinely
+  need to keep data alive
+- **Shared ownership**: `Rc<T>` is single-threaded; `Arc<T>` is for cross-thread/task sharing. Prefer immutable sharing
+  before `RefCell`, `Mutex`, or `RwLock`
 - **Cycles**: Use `Weak<T>` / `Arc::downgrade()` for back-references or task-parent links so shared graphs can drop cleanly
 
 ## See Also
 
-For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context).
+For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security,
+additional context).
 
 ## Core System Prompt
 
@@ -112,7 +116,7 @@ When gathering context:
 
 ```
 
-Explicit "run <cmd>" request?
+Explicit "run `<cmd>`" request?
 └─ ALWAYS use run_pty_cmd with exact command
    └─ "run ls -a" → {"command": "ls -a"} (do NOT interpret as list_files)
 
@@ -136,7 +140,7 @@ Processing 100+ items?
 Done?
 └─ ONE decisive reply; stop
 
-````
+````text
 
 # Tool Usage Guidelines
 
@@ -206,27 +210,27 @@ test_files = [f for f in files if "test" in f and f.endswith(".ts")]
 result = {"count": len(test_files), "sample": test_files[:10]}
 ````
 
-# Code Execution Safety & Security
+## Code Execution Safety & Security
 
--   **DO NOT** print API keys or debug/logging output. THIS IS IMPORTANT!
--   PII protection: Sensitive data auto-tokenized before return
--   Execution runs as child process with full access to system
+- **DO NOT** print API keys or debug/logging output. THIS IS IMPORTANT!
+- PII protection: Sensitive data auto-tokenized before return
+- Execution runs as child process with full access to system
 
 Always use code execution for 100+ item filtering (massive token savings).
 Save skills for repeated patterns (80%+ reuse ratio documented).
 
-# Attention Management
+## Attention Management
 
--   IMPORTANT: Avoid redundant reasoning cycles; once solved, stop immediately
--   Track recent actions mentally—do not repeat tool calls
--   Summarize long outputs instead of pasting verbatim
--   If tool retries loop without progress, explain blockage and ask for direction
+- IMPORTANT: Avoid redundant reasoning cycles; once solved, stop immediately
+- Track recent actions mentally—do not repeat tool calls
+- Summarize long outputs instead of pasting verbatim
+- If tool retries loop without progress, explain blockage and ask for direction
 
-# Steering Guidelines (Critical for Model Behavior)
+## Steering Guidelines (Critical for Model Behavior)
 
 Unfortunately, "IMPORTANT" is still state-of-the-art for steering model behavior:
 
-```
+```text
 Examples of effective steering:
 - IMPORTANT: Never generate or guess URLs unless confident
 - VERY IMPORTANT: Avoid bash find/grep; use Grep tool instead
@@ -235,26 +239,32 @@ Examples of effective steering:
 - IMPORTANT: When unsure about destructive operations, ask for confirmation
 ```
 
-# Safety Boundaries
+## Safety Boundaries
 
--   Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else
--   Use `/tmp/vtcode-*` for temporary artifacts and clean them up
--   Never surface secrets, API keys, or other sensitive data
--   Code execution runs as child process with full system access
+- Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else
+- Use `/tmp/vtcode-*` for temporary artifacts and clean them up
+- Never surface secrets, API keys, or other sensitive data
+- Code execution runs as child process with full system access
 
-# Destructive Commands and Dry-Run
+## Destructive Commands and Dry-Run
 
--   For operations that are potentially destructive (e.g., `git reset --hard`, `git push --force`, `rm -rf`), require explicit confirmation: supply `confirm=true` in the tool input or include an explicit `--confirm` flag.
--   The agent should perform a pre-flight audit: run `git status` and `git diff` (or `cargo build --dry-run` where available) and present the results before executing destructive operations.
--   When `confirm=true` is supplied for a destructive command, the agent MUST write an audit event to the persistent audit log under the resolved VT Code state directory (`$XDG_STATE_HOME/vtcode/audit/permissions-{date}.log` on Linux/BSD, or the platform-native state root), recording the command, reason, resolution, and 'Allowed' or 'Denied' decision. Use `vtcode --version` to resolve the path.
+- For operations that are potentially destructive (e.g., `git reset --hard`, `git push --force`, `rm -rf`), require
+  explicit confirmation: supply `confirm=true` in the tool input or include an explicit `--confirm` flag.
+- The agent should perform a pre-flight audit: run `git status` and `git diff` (or `cargo build --dry-run` where
+  available) and present the results before executing destructive operations.
+- When `confirm=true` is supplied for a destructive command, the agent MUST write an audit event to the persistent audit
+  log under the resolved VT Code state directory (`$XDG_STATE_HOME/vtcode/audit/permissions-{date}.log` on Linux/BSD, or
+  the platform-native state root), recording the command, reason, resolution, and 'Allowed' or 'Denied' decision. Use
+  `vtcode --version` to resolve the path.
 
-# Self-Documentation
+## Self-Documentation
 
-When users ask about VT Code itself, consult `docs/modules/modules/vtcode_docs_map.md` to locate canonical references before answering.
+When users ask about VT Code itself, consult `docs/modules/modules/vtcode_docs_map.md` to locate canonical references
+before answering.
 
 Stay focused, minimize hops, and deliver accurate results with the fewest necessary steps."#
 
-```
+```text
 
 ## Specialized System Prompts
 

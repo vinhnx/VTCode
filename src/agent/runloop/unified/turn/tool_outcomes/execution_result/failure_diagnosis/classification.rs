@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 use vtcode_commons::ErrorCategory;
+use vtcode_core::core::agent::hypothesis::{MismatchEvidence, MismatchKind, classify_mismatch};
 use vtcode_core::tools::names::is_apply_patch_shell_collision_command;
 use vtcode_core::tools::registry::ToolExecutionError;
 
@@ -9,21 +10,47 @@ use super::ToolFailureDiagnosis;
 use super::evidence::bounded_field;
 use crate::agent::runloop::unified::turn::tool_outcomes::is_grep_style_no_match;
 
+pub(super) fn output_mismatch(tool_name: &str, args: &Value, output: &Value) -> Option<MismatchKind> {
+    use vtcode_core::tools::tool_intent::{ShellActivity, classify_shell_activity, shell_args_as_executed};
+
+    let exit_code = output.get("exit_code").and_then(Value::as_i64);
+    let executed = shell_args_as_executed(tool_name, args);
+    classify_mismatch(&MismatchEvidence {
+        exit_code,
+        empty_search_no_match: is_grep_style_no_match(tool_name, args, output),
+        verifier_failed: exit_code.is_some_and(|code| code != 0)
+            && matches!(classify_shell_activity(tool_name, &executed), ShellActivity::Verification),
+        ..Default::default()
+    })
+}
+
+pub(super) fn error_mismatch(error: &ToolExecutionError) -> Option<MismatchKind> {
+    classify_mismatch(&MismatchEvidence {
+        patch_mismatch: error.patch_context_mismatch_path().is_some(),
+        ..Default::default()
+    })
+}
+
 pub(crate) fn deterministic_preflight_diagnosis(
     tool_name: &str,
     error: &str,
     circuit_tripped: bool,
 ) -> ToolFailureDiagnosis {
+    let policy_correction = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error);
     let tool_name = bounded_field(tool_name);
     let error = bounded_field(error);
     let next_action = if circuit_tripped {
         "Stop retrying this malformed call; tools are disabled for the next pass."
     } else {
-        "Correct the arguments using the declared schema, then retry once."
+        policy_correction.unwrap_or("Correct the arguments using the declared schema, then retry once.")
     };
     ToolFailureDiagnosis::new(
         format!("Tool preflight validation failed for '{tool_name}': {error}"),
-        "The call was rejected before execution because its arguments or safety preflight were invalid.",
+        if policy_correction.is_some() {
+            "The call was rejected before execution by the active planning or command security policy."
+        } else {
+            "The call was rejected before execution because its arguments or safety preflight were invalid."
+        },
         next_action,
     )
 }
@@ -48,6 +75,7 @@ pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, outp
     let command = args
         .get("command")
         .and_then(Value::as_str)
+        .or_else(|| args.get("cmd").and_then(Value::as_str))
         .or_else(|| output.get("command").and_then(Value::as_str))
         .map(bounded_field);
 
@@ -58,6 +86,8 @@ pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, outp
 
     let apply_patch_collision = command.as_deref().is_some_and(is_apply_patch_shell_collision_command)
         && (exit_code == Some(127) || command_not_found);
+
+    let mismatch_kind = output_mismatch(&tool_name, args, output);
 
     let mut observed = match exit_code {
         Some(code) => format!("'{tool_name}' returned exit code {code}."),
@@ -88,18 +118,25 @@ pub(crate) fn deterministic_output_diagnosis(tool_name: &str, args: &Value, outp
         "The tool returned a failure-like result; the available evidence does not establish a more specific cause."
     };
     let next_action = if grep_no_match {
-        "Treat this as an empty search result and refine the query only if a match is still needed."
+        "Treat this as an empty search result within the queried scope. Search again only for a new scope or question; otherwise continue the task."
     } else if apply_patch_collision {
         "Call the `apply_patch` tool with `input` containing the patch (run `search_tools` first if it is deferred); do not run `apply_patch` via `exec_command`."
     } else if exit_code == Some(127) || command_not_found {
         "Check the command name and PATH, then retry."
     } else if exit_code.is_some() {
-        "Inspect the reported error and retry with corrected arguments or a narrower scope."
+        if is_aborted_grep_chain(command.as_deref(), output) {
+            "A `grep` no-match (exit 1) aborts `&&` chains; later checks did not run and this does not establish they passed. Rerun remaining checks with `;` or append `|| true` to no-match searches."
+        } else {
+            "Inspect the reported error and retry with corrected arguments or a narrower scope."
+        }
     } else {
         "Review the returned error and retry with corrected arguments."
     };
 
-    ToolFailureDiagnosis::new(observed, likely_cause, next_action)
+    let mut diagnosis =
+        ToolFailureDiagnosis::new(observed, likely_cause, next_action).with_revision_guidance(mismatch_kind);
+    diagnosis.no_matches = grep_no_match;
+    diagnosis
 }
 
 pub(crate) fn deterministic_error_diagnosis(error: &ToolExecutionError, failure_kind: &str) -> ToolFailureDiagnosis {
@@ -112,6 +149,45 @@ pub(crate) fn deterministic_error_diagnosis(error: &ToolExecutionError, failure_
         error.category.user_label(),
         error_message
     );
+    let mismatch_kind = error_mismatch(error);
+    if error.edit_failure.is_some() {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "The literal source was absent or ambiguous at the selected matching level.",
+            "Use edit_failure read/search arguments to locate current source, then correct the bounded edit or use anchored apply_patch. Do not retry unchanged input.",
+        ).with_revision_guidance(mismatch_kind);
+    }
+    if error.patch_context_mismatch_path().is_some() {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "The patch context or deletion lines do not match the current file exactly.",
+            "Use one fresh file read (1-200 lines) or single sed -n range of the affected path, then retry apply_patch with exact current context.",
+        ).with_revision_guidance(mismatch_kind);
+    }
+    if error.is_exec_session_not_found() {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "The supplied exec session ID is absent from this runtime; this does not establish the command's outcome.",
+            "Recover the exact session ID from the original response. If completion is recorded, reuse its output. Rerun only if fresh execution is still needed.",
+        ).with_revision_guidance(mismatch_kind);
+    }
+    if let Some(correction) =
+        vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(&error_message)
+    {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "The requested action was rejected by planning or command security policy.",
+            correction,
+        );
+    }
+    if error_message.contains("all requested code_search result categories are unavailable") {
+        return ToolFailureDiagnosis::new(
+            observed,
+            "All requested code_search backends failed for this query/path combination.",
+            "Do not retry the identical query/path. Drop file_types, broaden path, or use exec_command rg for literal text. Revise the hypothesis from the bounded evidence before retrying.",
+        )
+        .with_revision_guidance(mismatch_kind);
+    }
     let likely_cause = match error.category {
         ErrorCategory::Authentication => "The provider rejected the configured credentials or authentication state.",
         ErrorCategory::PermissionDenied | ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation => {
@@ -162,7 +238,12 @@ pub(crate) fn deterministic_error_diagnosis(error: &ToolExecutionError, failure_
         ErrorCategory::Cancelled => "Wait for a new turn and retry only if the requested operation is still needed.",
         ErrorCategory::ExecutionError => "Inspect the bounded error evidence and retry with corrected arguments.",
     };
-    ToolFailureDiagnosis::new(observed, likely_cause, next_action)
+    let diagnosis = ToolFailureDiagnosis::new(observed, likely_cause, next_action);
+    if is_safeguard_failure(error) || error.category == ErrorCategory::Cancelled {
+        diagnosis
+    } else {
+        diagnosis.with_revision_guidance(mismatch_kind)
+    }
 }
 
 pub(super) fn is_policy_sensitive(category: ErrorCategory) -> bool {
@@ -179,7 +260,10 @@ pub(super) fn is_policy_sensitive(category: ErrorCategory) -> bool {
 }
 
 pub(super) fn is_deterministic_only_error(error: &ToolExecutionError) -> bool {
-    is_safeguard_failure(error)
+    error.patch_failure.is_some()
+        || error.category == ErrorCategory::Cancelled
+        || error.is_exec_session_not_found()
+        || is_safeguard_failure(error)
         || matches!(error.category, ErrorCategory::InvalidParameters | ErrorCategory::ToolNotFound)
 }
 
@@ -216,6 +300,24 @@ fn first_text_field<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
         .filter_map(|key| value.get(*key).and_then(Value::as_str))
         .map(str::trim)
         .find(|text| !text.is_empty())
+}
+
+/// Session-891943 (events 618-619): a `grep` no-match (exit 1) as the first
+/// segment of an `&&` chain aborts the chain, so later checks never run.
+/// Diagnosis-only hint: the verdict stays failure-like; only the next action
+/// changes. Deliberately narrow (exit 1, `&&`, grep/rg token, no stderr) so
+/// real compound failures keep generic guidance.
+fn is_aborted_grep_chain(command: Option<&str>, output: &Value) -> bool {
+    let Some(cmd) = command else {
+        return false;
+    };
+    if output.get("exit_code").and_then(Value::as_i64) != Some(1) {
+        return false;
+    }
+    if !(cmd.contains("&&") && (cmd.contains("grep") || cmd.contains("rg "))) {
+        return false;
+    }
+    first_text_field(output, &["stderr", "stderr_preview", "error", "message"]).is_none()
 }
 
 fn diagnostic_fields(value: &Value) -> impl Iterator<Item = &str> {

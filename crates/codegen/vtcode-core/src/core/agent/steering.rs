@@ -2,10 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;
 
-/// Maximum number of follow-up intents held by a runtime before they are
-/// consumed. Rejecting overflow preserves every accepted instruction and
-/// makes back-pressure visible to the caller.
-pub const MAX_QUEUED_FOLLOW_UP_INTENTS: usize = 16;
+/// Maximum number of follow-up intents held by a runtime before new intents
+/// park in the overflow buffer. The overflow buffer keeps rapid influx from
+/// silently dropping user messages; once both buffers are full the caller
+/// receives `FollowUpQueueFull` so back-pressure stays visible.
+pub const MAX_QUEUED_FOLLOW_UP_INTENTS: usize = 64;
+/// Overflow park capacity after the primary FIFO is full. Combined with the
+/// primary cap this bounds total retained follow-ups while still absorbing
+/// a burst instead of discarding it.
+pub const MAX_OVERFLOW_FOLLOW_UP_INTENTS: usize = 64;
 /// Maximum number of applied follow-up IDs retained for restart recovery.
 pub const MAX_APPLIED_FOLLOW_UP_INTENT_IDS: usize = 64;
 

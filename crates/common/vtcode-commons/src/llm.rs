@@ -732,6 +732,10 @@ pub struct LLMErrorMetadata {
 }
 
 impl fmt::Debug for LLMErrorMetadata {
+    // Derived `Debug` implies `#[inline]`; this metadata is nested inside every
+    // `LLMError` and formatted on failure paths, so keep it outlined rather than
+    // letting it inline into each `?err` call site.
+    #[inline(never)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("LLMErrorMetadata")
@@ -824,6 +828,9 @@ pub enum LLMError {
 }
 
 impl fmt::Debug for LLMError {
+    // See `LLMErrorMetadata::fmt`: keep the nested error `Debug` outlined so it
+    // does not inline into every `{:?}` / `?err` call site.
+    #[inline(never)]
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Authentication { message, metadata } => formatter
@@ -872,6 +879,27 @@ impl fmt::Display for LLMError {
 }
 
 impl std::error::Error for LLMError {}
+
+impl LLMError {
+    /// Borrow the provider metadata carried by this error, if any.
+    ///
+    /// Every variant stores an `Option<Box<LLMErrorMetadata>>`. This is the
+    /// single accessor so callers that only need the metadata (retry-after,
+    /// provider code, raw body, misconfiguration detection) never re-spell the
+    /// five-variant match — a match that is easy to drift when a variant is
+    /// added.
+    #[inline]
+    #[must_use]
+    pub fn metadata(&self) -> Option<&LLMErrorMetadata> {
+        match self {
+            Self::Authentication { metadata, .. }
+            | Self::RateLimit { metadata }
+            | Self::InvalidRequest { metadata, .. }
+            | Self::Network { metadata, .. }
+            | Self::Provider { metadata, .. } => metadata.as_deref(),
+        }
+    }
+}
 
 impl Serialize for LLMError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1053,5 +1081,59 @@ mod tests {
         assert_eq!(call.raw_input(), Some(patch.as_str()));
         assert_eq!(call.execution_arguments().expect("custom arguments"), json!(patch));
         assert!(call.parsed_arguments().is_err(), "custom tool payload should stay freeform rather than JSON");
+    }
+
+    #[test]
+    fn metadata_accessor_covers_every_variant() {
+        // Every `LLMError` variant exposes its metadata through one accessor so
+        // callers never re-spell the five-variant match.
+        let meta = LLMErrorMetadata::new(
+            "OpenAI",
+            Some(429),
+            Some("rate_limit_error".to_string()),
+            None,
+            None,
+            Some("3".to_string()),
+            Some("too many requests".to_string()),
+        );
+
+        assert!(
+            LLMError::Authentication {
+                message: "a".to_string(),
+                metadata: Some(meta.clone())
+            }
+            .metadata()
+            .is_some()
+        );
+        assert!(LLMError::RateLimit { metadata: Some(meta.clone()) }.metadata().is_some());
+        assert!(
+            LLMError::InvalidRequest {
+                message: "b".to_string(),
+                metadata: Some(meta.clone())
+            }
+            .metadata()
+            .is_some()
+        );
+        assert!(
+            LLMError::Network {
+                message: "c".to_string(),
+                metadata: Some(meta.clone())
+            }
+            .metadata()
+            .is_some()
+        );
+        assert!(
+            LLMError::Provider { message: "d".to_string(), metadata: Some(meta) }
+                .metadata()
+                .is_some()
+        );
+
+        // Absent metadata returns `None` rather than panicking.
+        assert!(LLMError::RateLimit { metadata: None }.metadata().is_none());
+        assert!(
+            LLMError::Network { message: "no meta".to_string(), metadata: None }
+                .metadata()
+                .is_none()
+        );
     }
 }

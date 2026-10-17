@@ -1,10 +1,12 @@
 # External Editor Configuration
 
-The `/edit` command uses the [`editor-command`](https://docs.rs/editor-command/latest/editor_command/) crate to automatically detect and launch your preferred text editor.
+The external editor (Ctrl+G) uses the [`editor-command`](https://docs.rs/editor-command/latest/editor_command/) crate to
+automatically detect and launch your preferred text editor.
 
 ## Overview
 
-The `editor-command` crate handles editor detection and invocation across all major platforms (macOS, Linux, Windows) and integrates seamlessly with VT Code's TUI environment.
+The `editor-command` crate handles editor detection and invocation across all major platforms (macOS, Linux, Windows)
+and integrates seamlessly with VT Code's TUI environment.
 
 ## Configuration
 
@@ -12,7 +14,7 @@ The guided setup is available from the TUI:
 
 - Run `/config`, select **Tools & Integrations**, then choose `External Editor`.
 - Run `/config tools.editor` to jump straight into the same wizard.
-- The wizard configures `/edit`, `Ctrl+E` when the prompt is empty, and single-click file links in the TUI.
+- The wizard configures the external editor, `Ctrl+E` when the prompt is empty, and single-click file links in the TUI.
 - After saving editor settings, the flow can also take you to `/config file_opener` for ANSI hyperlink URI behavior.
 - In the custom-command step, pressing `Enter` on an empty inline input keeps the displayed default command.
 
@@ -20,7 +22,7 @@ Editor settings are configured in the `[tools.editor]` section of `vtcode.toml`:
 
 ```toml
 [tools.editor]
-# Enable external editor support for /edit command
+# Enable external editor support
 enabled = true
 
 # Leave empty to use automatic detection based on environment variables
@@ -47,48 +49,58 @@ If neither environment variable is set, VT Code tries common editors in PATH:
 
 **Unix/Linux/macOS:**
 
--   `nvim` (Neovim - preferred)
--   `vim`
--   `vi`
--   `nano`
--   `emacs`
+- `nvim` (Neovim - preferred)
+- `vim`
+- `vi`
+- `nano`
+- `emacs`
 
 **Windows:**
 
--   `code` (Visual Studio Code)
--   `notepad++`
--   `notepad`
+- `code` (Visual Studio Code)
+- `notepad++`
+- `notepad`
 
 ## Usage Examples
 
 ### Launch interactive editor (no file)
 
-```
-/edit
+```text
+Ctrl+G
 ```
 
-This opens your default editor with a temporary file. The file contents are returned and inserted into your input when you save and close the editor.
+This opens your default editor with a temporary file. The file contents are returned and inserted into your input when
+you save and close the editor.
 
 ### Edit specific file
 
-```
-/edit src/main.rs
+```text
+Ctrl+G (with `src/main.rs` linked from the transcript)
 ```
 
 Opens `src/main.rs` in your preferred editor.
 
-For real file opens, VT Code launches GUI editors immediately and returns without waiting, even while an agent turn is active. Single-click transcript and modal links use a bounded out-of-band request queue, so they do not become `/edit` prompts. VS Code opens use `--reuse-window` and preserve supported line/column targets. Duplicate clicks for the same target are coalesced while a launch is pending.
+For real file opens, VT Code launches GUI editors immediately and returns without waiting, even while an agent turn is
+active. Single-click transcript and modal links use a bounded out-of-band request queue, so they do not become editor
+prompts. VS Code opens use `--reuse-window` and preserve supported line/column targets. Duplicate clicks for the same
+target are coalesced while a launch is pending.
 
-If your selected editor is terminal-based (for example `vim`/`nvim`) and `suspend_tui = true`, VT Code uses the serialized suspend-and-wait path and resumes the TUI after the editor closes. Temporary-file `/edit` flows still wait because VT Code has to read edited content back into the composer.
+If your selected editor is terminal-based (for example `vim`/`nvim`) and `suspend_tui = true`, VT Code uses the
+serialized suspend-and-wait path and resumes the TUI after the editor closes. Temporary-file editor flows still wait
+because VT Code has to read edited content back into the composer.
 
-When a launch must wait for the edited content (temporary-file and plan-file flows), VT Code injects the editor's wait flag if your configured command omitted it — `code` becomes `code --wait`, `zed`/`subl`/`mate` become `--wait`, and `open -a …` becomes `open -W`. This keeps read-back accurate even when `preferred_editor` does not include `--wait`. Non-waiting real-file opens strip those flags so they return immediately.
+When a launch must wait for the edited content (temporary-file and plan-file flows), VT Code injects the editor's wait
+flag if your configured command omitted it — `code` becomes `code --wait`, `zed`/`subl`/`mate` become `--wait`, and
+`open -a …` becomes `open -W`. This keeps read-back accurate even when `preferred_editor` does not include `--wait`.
+Non-waiting real-file opens strip those flags so they return immediately.
 
-Single-clicking a file path in the transcript or a modal uses the same editor workflow and respects configured line and column targets when the selected editor supports them.
+Single-clicking a file path in the transcript or a modal uses the same editor workflow and respects configured line and
+column targets when the selected editor supports them.
 
 ### Edit relative paths
 
-```
-/edit path/to/file.txt
+```text
+external editor with `path/to/file.txt`
 ```
 
 Paths are resolved relative to the workspace root.
@@ -126,23 +138,23 @@ The crate automatically detects these editors:
 
 **CLI Editors:**
 
--   `vim`, `vi`
--   `nvim` (Neovim)
--   `nano`
--   `emacs`
--   `pico`
+- `vim`, `vi`
+- `nvim` (Neovim)
+- `nano`
+- `emacs`
+- `pico`
 
 **GUI Editors:**
 
--   `code` (Visual Studio Code)
--   `zed`
--   `gedit` (GNOME)
--   `geany`
--   `code-oss`
--   `subl` (Sublime Text)
--   `atom`
--   `mate` (TextMate)
--   `open -a TextEdit` (macOS)
+- `code` (Visual Studio Code)
+- `zed`
+- `gedit` (GNOME)
+- `geany`
+- `code-oss`
+- `subl` (Sublime Text)
+- `atom`
+- `mate` (TextMate)
+- `open -a TextEdit` (macOS)
 
 ## Terminal State Management
 
@@ -167,30 +179,31 @@ This error means no editor was found. VT Code checks both environment variables 
 
 1. **Set EDITOR environment variable** (recommended):
 
-    ```bash
-    export EDITOR=vim
-    # or
-    export VISUAL=nvim
-    ```
+   ```bash
+   export EDITOR=vim
+   # or
+   export VISUAL=nvim
+   ```
 
 2. **Install a common editor**:
 
-    ```bash
-    # macOS
-    brew install neovim
+   ```bash
+   # macOS
+   brew install neovim
 
-    # Ubuntu/Debian
-    sudo apt install neovim
+   # Ubuntu/Debian
+   sudo apt install neovim
 
-    # or use nano (usually pre-installed)
-    which nano
-    ```
+   # or use nano (usually pre-installed)
+   which nano
+   ```
 
 3. **Explicitly configure in vtcode.toml**:
-    ```toml
-    [tools.editor]
-    preferred_editor = "vim"
-    ```
+
+   ```toml
+   [tools.editor]
+   preferred_editor = "vim"
+   ```
 
 ### Editor is in PATH but not detected
 
@@ -210,13 +223,13 @@ export EDITOR=/usr/bin/nvim
 
 ### Editor behavior is unusual
 
--   Ensure `suspend_tui = true` to prevent terminal state issues
--   Check if your editor has special terminal requirements
--   Consider using a different editor if problems persist
+- Ensure `suspend_tui = true` to prevent terminal state issues
+- Check if your editor has special terminal requirements
+- Consider using a different editor if problems persist
 
 ### Changes not saved in temporary files
 
-When using `/edit` without a file argument:
+When using the external editor without a file argument:
 
 1. A temporary file is created
 2. Your editor is launched
@@ -227,14 +240,14 @@ Ensure you actually save the file in your editor (e.g., `:w` in vim) before clos
 
 ## Integration with VT Code Features
 
-The `/edit` command works with:
+The external editor works with:
 
--   **File browser** - Select files to edit using `@` symbol or `/files`
--   **Workspace context** - Editors open with workspace root as working directory
--   **Tool policies** - Controlled via `[tools.policies]` section (default: `"allow"`)
+- **File browser** - Select files to edit using `@` symbol or `/files`
+- **Workspace context** - Editors open with workspace root as working directory
+- **Tool policies** - Controlled via `[tools.policies]` section (default: `"allow"`)
 
 ## See Also
 
--   [editor-command crate documentation](https://docs.rs/editor-command/latest/editor_command/)
--   [VT Code configuration guide](../config/CONFIGURATION_PRECEDENCE.md)
--   [Tools overview](./TOOL_SPECS.md)
+- [editor-command crate documentation](https://docs.rs/editor-command/latest/editor_command/)
+- [VT Code configuration guide](../config/CONFIGURATION_PRECEDENCE.md)
+- [Tools overview](./TOOL_SPECS.md)

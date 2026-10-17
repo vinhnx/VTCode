@@ -31,6 +31,7 @@ fn service_tier_message_label(service_tier: Option<vtcode_config::OpenAIServiceT
     match service_tier {
         Some(vtcode_config::OpenAIServiceTier::Flex) => "flex",
         Some(vtcode_config::OpenAIServiceTier::Priority) => "priority",
+        Some(vtcode_config::OpenAIServiceTier::Ultrafast) => "ultrafast",
         None => "project default",
     }
 }
@@ -60,6 +61,7 @@ pub(crate) async fn finalize_model_selection(
     let prev_model = config.model.clone();
     let workspace = config.workspace.clone();
     let auth_cfg = vt_cfg.as_ref().cloned().unwrap_or_default();
+    selection.validate_speed(&auth_cfg)?;
     let (api_key, openai_chatgpt_auth) = resolve_runtime_api_key(&workspace, Some(&auth_cfg), &selection).await?;
     let using_chatgpt_auth = selection.provider_enum == Some(Provider::OpenAI) && openai_chatgpt_auth.is_some();
     let custom_provider_enabled = auth_cfg.custom_provider(&selection.provider).is_some();
@@ -133,7 +135,13 @@ pub(crate) async fn finalize_model_selection(
 
     // Persist to disk only after provider creation succeeds, so a failure
     // cannot leave vtcode.toml with a partially-updated provider config.
-    let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
+    let updated_cfg = match picker.persist_selection(&workspace, &selection).await {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            renderer.line(MessageStyle::Error, &format!("Could not save model selection: {err:#}"))?;
+            return Err(err);
+        }
+    };
     *vt_cfg = Some(updated_cfg);
 
     if let Some(new_client) = new_client {
@@ -179,10 +187,17 @@ pub(crate) async fn finalize_model_selection(
     header_context.clone_from(&next_header_context);
     handle.set_header_context(next_header_context);
 
-    renderer.line(
-        MessageStyle::Info,
-        &format!("Model set to {} ({}) via {}.", selection.model_display, selection.model, selection.provider_label),
-    )?;
+    let mut parts = vec![format!("{}/{}", selection.provider, selection.model)];
+    if selection.reasoning_supported {
+        parts.push(format!("reasoning {}", selection.reasoning));
+    }
+    if selection.service_tier_supported {
+        parts.push(format!("tier {}", service_tier_message_label(selection.service_tier)));
+    }
+    if selection.model_display != selection.model {
+        parts.push(selection.model_display.clone());
+    }
+    renderer.line(MessageStyle::Info, &format!("Model: {}", parts.join(" · ")))?;
 
     let compact_on_model_switch_enabled = vt_cfg
         .as_ref()
@@ -235,24 +250,21 @@ pub(crate) async fn finalize_model_selection(
                 outcome.mode.as_str(),
                 compact_elapsed,
             );
-            renderer.line(
-                MessageStyle::Info,
-                &format!("{label} Auto-resume injected; new model continues seamlessly with preserved context."),
-            )?;
+            renderer.line(MessageStyle::Info, &format!("{label} Resume note added for the selected model."))?;
         }
         ModelSwitchCompactionOutcome::AlreadyCompact => {
             renderer.line(
                 MessageStyle::Info,
-                "Model switched; conversation was already compact. Auto-resume injected for seamless continuation.",
+                "Model switched; conversation was already compact. History preserved and resume note added.",
             )?;
         }
         ModelSwitchCompactionOutcome::Failed(err) => {
+            tracing::warn!(error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err), "Model-switch context compaction failed");
+            let label =
+                crate::agent::runloop::unified::turn::compaction::format_compaction_failed(compact_elapsed, &err);
             renderer.line(
                 MessageStyle::Error,
-                &format!(
-                    "Model switched, but context compaction failed: {err:#}. \
-                    Continuing with full history plus auto-resume note."
-                ),
+                &format!("Model switched. {label} Continuing with full history and a resume note."),
             )?;
         }
     }
@@ -292,6 +304,13 @@ pub(crate) async fn finalize_model_selection(
             format!("Service tier remains '{}'.", service_tier_message_label(selection.service_tier))
         };
         renderer.line(MessageStyle::Info, &message)?;
+    }
+
+    if selection.decisions_probe_changed {
+        renderer.line(
+            MessageStyle::Info,
+            "Decisions probe enabled (permissions.auto.use_decisions_probe). See docs/guides/decisions-probe.md.",
+        )?;
     }
 
     if using_chatgpt_auth {
@@ -443,19 +462,33 @@ fn selected_provider_config(
     openai_chatgpt_auth: Option<vtcode_config::auth::OpenAIChatGptAuthHandle>,
 ) -> ProviderConfig {
     let mut openai = auth_cfg.provider.openai.clone();
-    if selection.provider_enum == Some(Provider::OpenAI) && selection.service_tier_supported {
+    if selection.service_tier_supported {
         openai.service_tier = selection.service_tier;
+    }
+    let mut anthropic = configured_anthropic_config(Some(auth_cfg));
+    if let Some(speed) = selection.anthropic_speed
+        && let Some(anthropic) = anthropic.as_mut()
+    {
+        anthropic.speed = Some(speed);
     }
     ProviderConfig {
         api_key: Some(api_key.to_string()),
         openai_chatgpt_auth,
         copilot_auth: Some(auth_cfg.auth.copilot.clone()),
-        base_url: None,
+        base_url: (selection.provider == "anthropic")
+            .then(|| {
+                auth_cfg
+                    .provider_overrides
+                    .get("anthropic")
+                    .and_then(|config| config.base_url.clone())
+            })
+            .flatten(),
         model: Some(selection.model.clone()),
         prompt_cache: Some(config.prompt_cache.clone()),
         timeouts: None,
         openai: Some(openai),
-        anthropic: configured_anthropic_config(Some(auth_cfg)),
+        anthropic,
+        openrouter: Some(auth_cfg.provider.openrouter.clone()),
         model_behavior: config.model_behavior.clone(),
         workspace_root: Some(config.workspace.clone()),
     }
@@ -578,6 +611,9 @@ mod tests {
             service_tier_supported: false,
             service_tier: None,
             service_tier_changed: false,
+            anthropic_speed: None,
+            decisions_probe: None,
+            decisions_probe_changed: false,
             api_key: api_key.map(ToString::to_string),
             credential_source: None,
             env_key: env_key.to_string(),
@@ -703,6 +739,21 @@ mod tests {
         assert_eq!(anthropic.task_budget_tokens, Some(64_000));
         assert_eq!(provider_config.model.as_deref(), Some("test-model"));
         assert_eq!(provider_config.api_key.as_deref(), Some("key"));
+    }
+
+    #[test]
+    fn selected_provider_config_applies_claude_speed_and_endpoint_without_changing_openai() {
+        let mut auth_cfg = VTCodeConfig::default();
+        auth_cfg.provider.openai.service_tier = Some(vtcode_config::OpenAIServiceTier::Ultrafast);
+        auth_cfg.provider.anthropic.speed = Some(vtcode_config::AnthropicSpeed::Fast);
+        auth_cfg.provider_overrides.entry("anthropic".to_owned()).or_default().base_url =
+            Some("https://gateway.example/v1".to_owned());
+        let mut selection = selection("anthropic", Some(Provider::Anthropic), "ANTHROPIC_API_KEY", None, true);
+        selection.anthropic_speed = Some(vtcode_config::AnthropicSpeed::Standard);
+        let provider_config = selected_provider_config(&selection, &auth_cfg, &runtime_config(), "key", None);
+        assert_eq!(provider_config.base_url.as_deref(), Some("https://gateway.example/v1"));
+        assert_eq!(provider_config.anthropic.unwrap().speed, Some(vtcode_config::AnthropicSpeed::Standard));
+        assert_eq!(provider_config.openai.unwrap().service_tier, Some(vtcode_config::OpenAIServiceTier::Ultrafast));
     }
 
     #[test]

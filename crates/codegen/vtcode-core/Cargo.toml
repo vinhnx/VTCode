@@ -24,7 +24,7 @@ include = [
     "templates/",
 ]
 [dependencies]
-filesnap = "=0.5.0"
+filesnap = "=0.5.1"
 anyhow = { workspace = true }
 hashbrown = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
@@ -55,7 +55,7 @@ thiserror = { workspace = true }
 dialoguer = { workspace = true }
 regex = { workspace = true }
 shell-words = { workspace = true }
-tree-sitter = "0.26"
+tree-sitter = "0.27"
 tree-sitter-bash = "0.25"
 tree-sitter-c = "0.24"
 tree-sitter-cpp = "0.23"
@@ -82,7 +82,7 @@ dirs = { workspace = true }
 # YAML support
 serde-saphyr = { workspace = true }
 # Zip support for skill packaging
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { workspace = true }
 flate2 = "1.1"
 tar = "0.4"
 tracing = { workspace = true }
@@ -107,12 +107,8 @@ ratatui = { workspace = true, features = [
     "unstable-widget-ref",
 ] }
 
-nucleo-matcher = "0.3"
-rig = { package = "rig-core", version = "0.40", default-features = false, features = [
-    "reqwest",
-    "rustls",
-] }
-portable-pty = "0.9.0"
+rig = { workspace = true }
+portable-pty = { workspace = true }
 ansi-to-tui = "8.0.1"
 vtcode-commons = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
@@ -138,10 +134,12 @@ schemars = { workspace = true, optional = true }
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
 url = { workspace = true }
-jsonschema = "0.52"
+jsonschema = "0.58"
 uuid = { workspace = true, features = ["v4", "serde"] }
 which = "8.0.2"
 textwrap = "0.16"
+# Phase 1 pilot: DDG HTML parsing in web_search only (pinned; revisit on 0.1+)
+astral-html = "=0.0.3"
 rustc-hash = { workspace = true }
 arc-swap = "1.9"
 linkme = { workspace = true }
@@ -152,10 +150,10 @@ notify-rust = { version = "4.17", optional = true }
 ring = { workspace = true }
 
 # A2A (Agent2Agent) Protocol HTTP server support
-axum = { version = "0.8", features = ["json", "macros"], optional = true }
-tower = { version = "0.5", optional = true }
+axum = { workspace = true, features = ["json", "macros"], optional = true }
+tower = { workspace = true, optional = true }
 strsim = { workspace = true }
-smallvec = "1.15.1"
+smallvec = { workspace = true }
 clap_mangen = "0.3.3"
 
 [dependencies.hotpath]
@@ -219,6 +217,11 @@ harness = false
 [[bench]]
 name = "agent_harness"
 harness = false
+
+[[bench]]
+name = "runtime_paths"
+harness = false
+required-features = ["a2a-server"]
 
 [lints]
 workspace = true

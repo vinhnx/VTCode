@@ -1,3 +1,5 @@
+<!-- Compact maintainer rules retain the repository instruction line budget. -->
+<!-- markdownlint-disable MD013 -->
 # vtcode-a2a
 
 [Root AGENTS.md](../../../AGENTS.md) | Agent2Agent (A2A) Protocol support. Layer 0 crate — zero internal vtcode dependencies.
@@ -5,7 +7,7 @@
 ## Module Groups
 
 | Area | Modules |
-|---|---|
+| --- | --- |
 | Agent Card | `agent_card` — agent discovery and capability advertisement |
 | Client | `client` — A2A protocol client |
 | CLI | `cli` — CLI interface for A2A commands |
@@ -18,12 +20,8 @@
 
 ## Rules
 
-- The `server` module is feature-gated behind `a2a-server` — never import unconditionally.
-- `shutdown_signal_logged()` is defined in lib.rs (not a separate module) — used by server.rs.
-- Re-export facade in vtcode-core (`a2a/mod.rs`) must stay in sync with feature gates.
+- The `server` module is feature-gated behind `a2a-server` — never import unconditionally. `shutdown_signal_logged()` is defined in lib.rs (not a separate module) — used by server.rs. Re-export facade in vtcode-core (`a2a/mod.rs`) must stay in sync with feature gates.
 
 ## Gotchas
 
-- `server.rs` uses `crate::shutdown_signal_logged` (not vtcode-core's shutdown) — local function.
-- Feature flag chain: vtcode binary `a2a-server` -> vtcode-core `a2a-server` -> vtcode-a2a `a2a-server`.
-- `WebhookNotifier` is always available (not feature-gated) — only the HTTP server is gated; protected server routes require bearer auth, and webhook URLs must be parsed/validated with redirects disabled.
+- `server.rs` uses `crate::shutdown_signal_logged` (not vtcode-core's shutdown) — local function. Feature flag chain: vtcode binary `a2a-server` -> vtcode-core `a2a-server` -> vtcode-a2a `a2a-server`. `WebhookNotifier` is always available (not feature-gated) — only the HTTP server is gated; protected server routes require bearer auth, and webhook URLs must be parsed/validated with redirects disabled. Bounded task queries use `Task::clone_for_query` to copy only the response history/artifacts; preserve metadata, kind, suffix order and the full stored task.

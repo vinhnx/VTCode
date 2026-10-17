@@ -1,26 +1,27 @@
 # VT Code TUI Snapshot Tests
 
-This directory contains snapshot tests for the VT Code terminal user interface (TUI), following Ratatui best practices for UI testing.
+This directory contains snapshot tests for the VT Code terminal user interface (TUI), following Ratatui best practices
+for UI testing.
 
 ## Test Categories
 
 ### 1. Component Tests (`tui_snapshot_tests.rs`)
 
--   Tests individual UI components like themes, message segments, and header contexts
--   Uses string representation snapshots for debugging
--   Ensures component structures remain consistent
+- Tests individual UI components like themes, message segments, and header contexts
+- Uses string representation snapshots for debugging
+- Ensures component structures remain consistent
 
 ### 2. Integration Tests (`ratatui_integration_tests.rs`)
 
--   Tests actual terminal rendering using `TestBackend`
--   Verifies that the Ratatui rendering system works correctly
--   Captures terminal output snapshots for visual regression testing
+- Tests actual terminal rendering using `TestBackend`
+- Verifies that the Ratatui rendering system works correctly
+- Captures terminal output snapshots for visual regression testing
 
 ### 3. Comprehensive Tests (`improved_tui_snapshot_tests.rs`)
 
--   Tests complete TUI functionality including session creation
--   Verifies that UI components work together properly
--   Includes actual rendering simulations with various content types
+- Tests complete TUI functionality including session creation
+- Verifies that UI components work together properly
+- Includes actual rendering simulations with various content types
 
 ## Running Tests
 
@@ -66,23 +67,23 @@ cargo insta test
 
 Each test file follows these principles:
 
--   Uses `insta` crate for snapshot management
--   Tests both individual components and integration scenarios
--   Includes descriptive test names and snapshot identifiers
--   Follows Ratatui testing patterns using `TestBackend`
+- Uses `insta` crate for snapshot management
+- Tests both individual components and integration scenarios
+- Includes descriptive test names and snapshot identifiers
+- Follows Ratatui testing patterns using `TestBackend`
 
 ## Dependencies
 
 The tests require:
 
--   `insta` for snapshot testing
--   `ratatui` with `TestBackend` for terminal simulation
--   Access to public TUI interfaces from `vtcode_core`
+- `insta` for snapshot testing
+- `ratatui` with `TestBackend` for terminal simulation
+- Access to public TUI interfaces from `vtcode_core`
 
 ## Best Practices
 
--   Each snapshot test should focus on a specific aspect of the UI
--   Use descriptive snapshot names for easy identification
--   Test both positive and edge cases
--   Ensure tests are deterministic and reproducible
--   Keep test inputs simple but representative
+- Each snapshot test should focus on a specific aspect of the UI
+- Use descriptive snapshot names for easy identification
+- Test both positive and edge cases
+- Ensure tests are deterministic and reproducible
+- Keep test inputs simple but representative

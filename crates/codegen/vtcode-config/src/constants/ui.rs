@@ -66,8 +66,8 @@ pub const INLINE_PTY_RUNNING_LABEL: &str = "running";
 pub const INLINE_PTY_STATUS_LIVE: &str = "LIVE";
 pub const INLINE_PTY_STATUS_DONE: &str = "DONE";
 pub const INLINE_PTY_PLACEHOLDER: &str = "Terminal output";
-pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "│";
-pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "│ ";
+pub const MODAL_LIST_HIGHLIGHT_SYMBOL: &str = "┃";
+pub const MODAL_LIST_HIGHLIGHT_FULL: &str = "┃ ";
 pub const MODAL_LIST_SUMMARY_FILTER_LABEL: &str = "Filter";
 pub const MODAL_LIST_SUMMARY_SEPARATOR: &str = " • ";
 pub const MODAL_LIST_SUMMARY_MATCHES_LABEL: &str = "Matches";
@@ -81,6 +81,7 @@ pub const HEADER_VERSION_LEFT_DELIMITER: &str = "(";
 pub const HEADER_VERSION_RIGHT_DELIMITER: &str = ")";
 pub const HEADER_PROVIDER_PREFIX: &str = "Provider: ";
 pub const HEADER_MODEL_PREFIX: &str = "Model: ";
+pub const HEADER_SERVICE_TIER_PREFIX: &str = "Tier: ";
 pub const HEADER_REASONING_PREFIX: &str = "";
 pub const HEADER_TRUST_PREFIX: &str = "Trust: ";
 pub const HEADER_TOOLS_PREFIX: &str = "Tools: ";
@@ -98,13 +99,13 @@ pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "Type a request… Tab switch agent • @files /commands • Enter run/steer • Ctrl+Enter queue";
+    "Type a request… Tab switch agent • @files /commands • Enter run/queue • Ctrl+Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Continue… Tab switch agent • @files /commands • Enter run/steer • Ctrl+Enter queue";
+    "Continue… Tab switch agent • @files /commands • Enter run/queue • Ctrl+Enter queue";
 pub const CHAT_INPUT_PLACEHOLDER_INTERRUPTED: &str =
     "Interrupted · What should VT Code do instead? • Esc cancel • Ctrl+C interrupt • Ctrl+D exit";
 pub const HEADER_SHORTCUT_HINT: &str =
-    "? help • / command • @ file • Tab agent • Enter run/steer • Ctrl+Enter queue • Esc cancel • Ctrl+C interrupt";
+    "? help • / command • @ file • Tab agent • Enter run/queue • Ctrl+Enter queue • Esc cancel • Ctrl+C interrupt";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";
@@ -139,20 +140,22 @@ pub(crate) const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
 
 // Agent/Mode color constants.
 //
-// Mode badges are identified by a **standard ANSI hue name** (red/green/blue/
-// magenta/...) rather than a hard-coded hex. The design system
-// (`vtcode-ui`) resolves each hue to a theme-appropriate variant at render
-// time: the brighter `Light*` ANSI variant on dark terminals, the base variant
-// on light terminals. This keeps a single, portable token readable on BOTH
-// dark and light terminals without per-theme hex tuning, and reuses the same
-// standard palette the rest of the UI already relies on (see `SAFE_ANSI_*`).
+// Mode badges resolve through one canonical token per mode. Most modes use a
+// **standard ANSI hue name** (green/blue/magenta/...), which the design system
+// (`vtcode-ui`) maps to a theme-appropriate variant at render time: the
+// brighter `Light*` ANSI variant on dark terminals, the base variant on light
+// terminals. This keeps a single, portable token readable on BOTH dark and
+// light terminals without per-theme hex tuning, and reuses the same standard
+// palette the rest of the UI already relies on (see `SAFE_ANSI_*`). Build is
+// the exception: it uses a fixed hex token that renders identically on both
+// appearances.
 //
 /// Standard ANSI hue names usable for agent/mode badges. Must stay in sync with
 /// the variant table in `vtcode-ui`'s design color resolver.
 const AGENT_HUE_NAMES: &[&str] = &["red", "green", "blue", "magenta", "yellow", "cyan"];
 
-/// Build agent hue - red (warm, implementation / go-signal).
-pub const AGENT_COLOR_BUILD: &str = "red";
+/// Build agent color - sage `#73a18e` (calm, implementation tone).
+pub const AGENT_COLOR_BUILD: &str = "#73a18e";
 /// Auto agent hue - green (autonomy and forward progress).
 pub const AGENT_COLOR_AUTO: &str = "green";
 /// Plan agent hue - blue (thoughtful, planning tone).
@@ -160,8 +163,8 @@ pub const AGENT_COLOR_PLAN: &str = "blue";
 /// Duck agent hue - magenta (soft, discussion-focused).
 pub const AGENT_COLOR_DUCK: &str = "magenta";
 
-/// Canonical primary-agent mode -> standard ANSI hue mapping (single source of
-/// truth). `subagents.rs` assigns the hue to each built-in spec from here.
+/// Canonical primary-agent mode -> color token mapping (single source of
+/// truth). `subagents.rs` assigns the color to each built-in spec from here.
 const AGENT_MODE_HUE: &[(&str, &str)] = &[
     ("build", AGENT_COLOR_BUILD),
     ("auto", AGENT_COLOR_AUTO),
@@ -169,18 +172,24 @@ const AGENT_MODE_HUE: &[(&str, &str)] = &[
     ("duck", AGENT_COLOR_DUCK),
 ];
 
-/// Resolve a primary-agent mode name to its standard ANSI hue
-/// (e.g. `"build"` -> `"red"`).
+/// Resolve a primary-agent mode name to its canonical color token
+/// (e.g. `"build"` -> `"#73a18e"`, `"plan"` -> `"blue"`).
 pub fn agent_mode_hue(mode: &str) -> Option<&'static str> {
     AGENT_MODE_HUE.iter().find(|(m, _)| *m == mode).map(|(_, h)| *h)
 }
 
-// TUI tick rate constants for smooth scrolling
-/// Tick rate (Hz) when user is actively interacting with the TUI
+// TUI tick rates are event-driven with on-demand animation ticks.
+// Input, commands (new messages), and crossterm events render immediately
+// without waiting for a tick; ticks exist only for animations (spinner 80ms,
+// shimmer 33ms, drag 50ms) and transient expiry cleanup (scroll-steady 250ms,
+// copy notification 2s). Keep in sync with
+// `vtcode-ui::tui::config::constants::ui` (the live TUI values).
+/// Tick rate (Hz) while interacting or animating — 60Hz matches display vsync.
 pub const TUI_ACTIVE_TICK_RATE_HZ: f64 = 60.0;
-/// Tick rate (Hz) when TUI is idle to save CPU
+/// Upkeep rate (Hz) when idle with nothing pending — safety net only.
 pub const TUI_IDLE_TICK_RATE_HZ: f64 = 4.0;
-/// Duration (ms) to remain in active mode after last input
+/// Duration (ms) to remain at the active rate after last input or animation
+/// need. Animations extend active mode independently via `needs_animation_tick`.
 pub const TUI_ACTIVE_TIMEOUT_MS: u64 = 500;
 /// Shimmer frame interval in milliseconds
 pub const TUI_SHIMMER_FRAME_INTERVAL_MS: u64 = 33;
@@ -313,10 +322,25 @@ mod tests {
     const DARK_BG: (u8, u8, u8) = (0x18, 0x18, 0x18);
     const LIGHT_BG: (u8, u8, u8) = (0xFD, 0xF6, 0xE3);
 
+    /// Parse a `#rrggbb` token to its RGB triple. Returns `None` for anything
+    /// else (hue names fall through to the variant table below).
+    fn hex_to_rgb(hex: &str) -> Option<(u8, u8, u8)> {
+        let hex = hex.strip_prefix('#')?;
+        if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+        Some((channel(0)?, channel(2)?, channel(4)?))
+    }
+
     /// Standard ANSI variant RGB values used by the design system for each hue
-    /// (base + bright). The mode badge picks the bright variant on dark and the
-    /// base variant on light, so both appearances stay readable.
+    /// (base + bright), plus the fixed Build hex. Hue badges pick the bright
+    /// variant on dark and the base variant on light, so both appearances stay
+    /// readable; the hex renders identically on both.
     fn hue_rgb_on(hue: &str, light: bool) -> Option<(u8, u8, u8)> {
+        if let Some(rgb) = hex_to_rgb(hue) {
+            return Some(rgb);
+        }
         let (d, l) = match hue {
             "red" => ((0xFF, 0x5F, 0x5F), (0xCD, 0x00, 0x00)),
             "green" => ((0x5F, 0xFF, 0x5F), (0x00, 0xCD, 0x00)),
@@ -349,12 +373,11 @@ mod tests {
         (hi + 0.05) / (lo + 0.05)
     }
 
-    /// Each mode hue must resolve to a standard ANSI variant that stays legible
-    /// on its matching background. Dark terminals clear the WCAG "large/bold
-    /// text" 3:1 bar comfortably. On light terminals three hues (red, magenta,
-    /// blue) also clear 3:1; the fourth (green) reaches ~2:1 — the best a
-    /// standard `Green` ANSI code can do against white, so the light threshold
-    /// is relaxed to 2:1 for the single weakest hue.
+    /// Each mode color must resolve to a variant that stays legible on its
+    /// matching background. Dark terminals clear the WCAG "large/bold text"
+    /// 3:1 bar comfortably. On light terminals the ANSI hues clear 3:1 except
+    /// green (~2:1 — the best a standard `Green` code can do against white),
+    /// and the Build hex clears 2.7:1, so the light threshold stays at 2:1.
     const MIN_CONTRAST_DARK: f32 = 3.0;
     const MIN_CONTRAST_LIGHT: f32 = 2.0;
 
@@ -371,9 +394,10 @@ mod tests {
     }
 
     #[test]
-    fn agent_mode_colors_are_standard_ansi_hues() {
+    fn agent_mode_color_tokens_are_supported() {
         for (_, hue) in AGENT_MODE_HUE {
-            assert!(AGENT_HUE_NAMES.contains(hue), "mode hue {hue} is not in the supported standard ANSI hue list");
+            let supported = AGENT_HUE_NAMES.contains(hue) || hex_to_rgb(hue).is_some();
+            assert!(supported, "mode token {hue} is neither a standard ANSI hue nor #rrggbb");
         }
     }
 
@@ -410,7 +434,7 @@ mod tests {
     #[test]
     fn agent_mode_colors_are_wired_into_builtin_primary_agents() {
         // Guards against the constants drifting from the specs that expose them.
-        assert_eq!(AGENT_COLOR_BUILD, "red");
+        assert_eq!(AGENT_COLOR_BUILD, "#73a18e");
         assert_eq!(AGENT_COLOR_AUTO, "green");
         assert_eq!(AGENT_COLOR_PLAN, "blue");
         assert_eq!(AGENT_COLOR_DUCK, "magenta");

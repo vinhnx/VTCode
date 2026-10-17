@@ -224,6 +224,35 @@ fn shell_run_signature_ignores_non_run_command_session_action() {
 }
 
 #[test]
+fn exhausted_turn_budget_errors_do_not_invite_another_tool_call() {
+    use crate::agent::runloop::unified::run_loop_context::ToolWallClockExhaustion;
+
+    let calls = ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 };
+    let wall_clock = ToolWallClockExhaustion { max_secs: 60 };
+    for error in [
+        calls.policy_violation_message(),
+        calls.skipped_call_message(),
+        wall_clock.policy_violation_message(),
+        wall_clock.skipped_call_message(),
+    ] {
+        let payload: serde_json::Value =
+            serde_json::from_str(&super::super::build_turn_budget_error_content(error.clone())).unwrap();
+        assert_eq!(payload["error"], error);
+        if error.contains("call skipped") {
+            let next_action = payload["next_action"].as_str().expect("compact stub recovery guidance");
+            assert!(next_action.contains("further tool calls are skipped"));
+            assert!(next_action.contains("Synthesize your final answer now"));
+        }
+        assert!(!payload.to_string().contains("alternative tool"));
+        assert!(!payload.to_string().contains("narrower scope"));
+    }
+
+    let ordinary: serde_json::Value =
+        serde_json::from_str(&super::super::build_failure_error_content("temporary failure".into(), "policy")).unwrap();
+    assert_eq!(ordinary["next_action"], "Try an alternative tool or narrower scope.");
+}
+
+#[test]
 fn tool_budget_exhausted_directive_demands_synthesis() {
     let exhaustion = ToolBudgetExhaustion { used: 32, max: 32, remaining: 0 };
     let directive = exhaustion.synthesis_directive_message();

@@ -92,6 +92,31 @@ fn test_all_themes_have_readable_foreground_and_accents() {
 
 #[test]
 #[serial_test::serial(theme_runtime)]
+fn style_contrast_ratio_reports_the_theme_minimum_for_banner_copy() {
+    let original_theme = active_theme_id();
+    for id in available_themes() {
+        set_active_theme(id).expect("built-in theme");
+        let minimum = get_minimum_contrast();
+        let styles = active_styles();
+
+        for (name, style) in [
+            ("banner", banner_style()),
+            ("info", styles.info),
+            ("tool_detail", styles.tool_detail),
+            ("primary", styles.primary),
+        ] {
+            let ratio = style_contrast_ratio(&style).unwrap_or_else(|| panic!("{id}/{name} needs an RGB fg"));
+            assert!(ratio >= minimum, "theme={id} token={name} contrast {ratio:.2} below {minimum:.1}");
+        }
+
+        // A style without an explicit foreground has no theme-relative ratio.
+        assert_eq!(style_contrast_ratio(&Style::new()), None);
+    }
+    set_active_theme(&original_theme).expect("restore the previously active theme");
+}
+
+#[test]
+#[serial_test::serial(theme_runtime)]
 fn committed_and_cancelled_theme_changes_do_not_leave_a_preview() {
     let original_theme = active_theme_id();
     let committed_theme = if original_theme == "ciapre" { "mono" } else { "ciapre" };
@@ -242,5 +267,101 @@ fn style_rgb(style: Style) -> Option<RgbColor> {
     match style.get_fg_color() {
         Some(Color::Rgb(rgb)) => Some(rgb),
         _ => None,
+    }
+}
+
+#[test]
+fn test_all_themes_sticky_prompt_meets_contrast() {
+    use crate::tui::core_tui::{
+        session::Session,
+        style::theme_from_styles,
+        types::{InlineMessageKind, InlineSegment, InlineTextStyle},
+        widgets::TranscriptWidget,
+    };
+    use ratatui::{buffer::Buffer, layout::Rect, style::Color as TuiColor, widgets::Widget};
+    use std::sync::Arc;
+
+    let accessibility = ColorAccessibilityConfig::default();
+    for definition in all_theme_definitions().values() {
+        let styles = definition.palette.build_styles_with_accessibility(&accessibility);
+        let mut session = Session::new(theme_from_styles(&styles), None, 16);
+        for index in 0..16 {
+            session.push_line(
+                if index == 0 {
+                    InlineMessageKind::User
+                } else {
+                    InlineMessageKind::Agent
+                },
+                vec![InlineSegment {
+                    text: "prompt or answer".into(),
+                    style: Arc::new(InlineTextStyle::default()),
+                }],
+            );
+        }
+        let area = Rect::new(0, 0, 40, 8);
+        let mut buffer = Buffer::empty(area);
+        TranscriptWidget::new(&mut session).render(area, &mut buffer);
+        assert_eq!(session.transcript_area().unwrap().y, 1, "header is visible for {}", definition.id);
+        let (TuiColor::Rgb(fr, fg, fb), TuiColor::Rgb(br, bg, bb)) = (buffer[(0, 0)].fg, buffer[(0, 0)].bg) else {
+            panic!("RGB theme {} must render RGB header colors", definition.id)
+        };
+        let ratio = contrast_ratio(RgbColor(fr, fg, fb), RgbColor(br, bg, bb));
+        assert!(ratio >= accessibility.minimum_contrast, "theme={} sticky prompt contrast {ratio:.2}", definition.id);
+    }
+}
+
+#[test]
+fn test_all_themes_ultrafast_header_badge_meets_contrast() {
+    use crate::tui::core_tui::{
+        session::Session,
+        types::{InlineCommand, InlineHeaderContext},
+    };
+    use ratatui::style::{Color as TerminalColor, Modifier};
+    use vtcode_commons::ui_protocol::theme_from_color_fields;
+    use vtcode_config::constants::ui;
+
+    for definition in all_theme_definitions().values() {
+        let styles = definition
+            .palette
+            .build_styles_with_accessibility(&ColorAccessibilityConfig::default());
+        let theme = theme_from_color_fields(
+            styles.foreground,
+            styles.background,
+            styles.primary,
+            styles.secondary,
+            styles.tool,
+            styles.tool_detail,
+            styles.pty_output,
+            styles.error,
+            styles.warning,
+        );
+        let mut session = Session::new(theme, None, 24);
+        session.handle_command(InlineCommand::SetHeaderContext {
+            context: Box::new(InlineHeaderContext {
+                service_tier: Some(format!("{}ultrafast", ui::HEADER_SERVICE_TIER_PREFIX)),
+                ..Default::default()
+            }),
+        });
+        let line = session.header_title_line();
+        let badge = line
+            .spans
+            .iter()
+            .find(|span| span.content == " ULTRAFAST ")
+            .expect("premium badge");
+        if vtcode_commons::color_policy::color_output_enabled() {
+            let rgb = |color| match color {
+                Some(TerminalColor::Rgb(r, g, b)) => RgbColor(r, g, b),
+                other => panic!("expected badge RGB colors, got {other:?}"),
+            };
+            let ratio = contrast_ratio(rgb(badge.style.bg), rgb(badge.style.fg));
+            assert!(ratio >= 7.0, "{} badge contrast {ratio:.2} is below WCAG AAA", definition.id);
+            assert_eq!(badge.style.bg, Some(TerminalColor::Rgb(0xD9, 0x9A, 0x4E)));
+            assert!(!badge.style.add_modifier.contains(Modifier::REVERSED));
+        } else {
+            assert_eq!(badge.style.fg, Some(TerminalColor::Reset));
+            assert_eq!(badge.style.bg, Some(TerminalColor::Reset));
+            assert!(badge.style.add_modifier.contains(Modifier::REVERSED));
+        }
+        assert!(badge.style.sub_modifier.contains(Modifier::DIM));
     }
 }

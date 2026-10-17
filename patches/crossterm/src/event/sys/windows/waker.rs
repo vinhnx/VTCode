@@ -16,9 +16,7 @@ impl Waker {
     pub(crate) fn new() -> std::io::Result<Self> {
         let inner = Semaphore::new()?;
 
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+        Ok(Self { inner: Arc::new(Mutex::new(inner)) })
     }
 
     /// Wakes the `WaitForMultipleObjects`.

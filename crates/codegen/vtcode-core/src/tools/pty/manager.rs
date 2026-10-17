@@ -59,11 +59,40 @@ fn get_command_lock(workspace_root: &Path) -> Arc<tokio::sync::Mutex<()>> {
 /// Grace period to wait for threads to exit after killing the process (ms)
 const THREAD_JOIN_GRACE_PERIOD_MS: u64 = 500;
 
+const PTY_OUTPUT_TRUNCATED_MARKER: &[u8] = b"\n[... output truncated: capture limit reached ...]";
+
+/// Reads to EOF but retains at most `max_bytes`; the surplus is still drained so the child never blocks on a full PTY.
+fn read_pty_output_capped(mut reader: impl Read, max_bytes: usize) -> Result<Vec<u8>> {
+    let mut buffer = [0u8; 4096];
+    let mut collected = Vec::new();
+    let mut truncated = false;
+
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(bytes_read) => {
+                let room = max_bytes.saturating_sub(collected.len());
+                if bytes_read > room {
+                    truncated = true;
+                }
+                collected.extend_from_slice(&buffer[..bytes_read.min(room)]);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error).context("failed to read PTY command output"),
+        }
+    }
+
+    if truncated {
+        collected.extend_from_slice(PTY_OUTPUT_TRUNCATED_MARKER);
+    }
+    Ok(collected)
+}
+
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::telemetry::perf;
 use crate::tools::exec_session::create_live_spool_file;
-use crate::tools::output_spooler::{SpoolIntegrity, encode_digest_hex};
+use crate::tools::output_spooler::{SpoolIntegrity, SpoolLineCounter, encode_digest_hex};
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
@@ -145,6 +174,7 @@ impl PtyManager {
         let workspace_root = self.workspace_root.clone();
         let extra_paths = self.extra_paths.read().clone();
         let max_tokens = request.max_tokens;
+        let max_capture_bytes = self.config.max_scrollback_bytes;
 
         // Determine if this command needs serialization to avoid contention
         let needs_lock = is_long_running_command(&program)
@@ -227,28 +257,7 @@ impl PtyManager {
                 status
             });
 
-            let reader_thread = thread::spawn(move || -> Result<Vec<u8>> {
-                let mut reader = reader;
-                let mut buffer = [0u8; 4096];
-                let mut collected = Vec::new();
-
-                loop {
-                    match reader.read(&mut buffer) {
-                        Ok(0) => break,
-                        Ok(bytes_read) => {
-                            collected.extend_from_slice(&buffer[..bytes_read]);
-                        }
-                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
-                            continue;
-                        }
-                        Err(error) => {
-                            return Err(error).context("failed to read PTY command output");
-                        }
-                    }
-                }
-
-                Ok(collected)
-            });
+            let reader_thread = thread::spawn(move || read_pty_output_capped(reader, max_capture_bytes));
 
             let wait_result = match wait_rx.recv_timeout(timeout_duration) {
                 Ok(()) => wait_thread
@@ -433,15 +442,24 @@ impl PtyManager {
         Ok(result)
     }
 
-    pub async fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
+    /// Lexical cwd shared by launch validation and recovery target lookup.
+    pub(crate) fn working_dir_candidate(&self, requested: Option<&str>) -> Result<PathBuf> {
         let requested = match requested {
             Some(dir) if !dir.trim().is_empty() => dir.trim(),
             _ => return Ok(self.workspace_root.clone()),
         };
 
         let candidate = self.workspace_root.join(requested);
-        let normalized = ensure_path_within_workspace(&candidate, &self.workspace_root)
-            .map_err(|e| anyhow!("Working directory '{}' escapes the workspace root: {e}", candidate.display()))?;
+        ensure_path_within_workspace(&candidate, &self.workspace_root)
+            .map_err(|e| anyhow!("Working directory '{}' escapes the workspace root: {e}", candidate.display()))
+    }
+
+    pub async fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
+        let normalized = self.working_dir_candidate(requested)?;
+        if requested.is_none_or(|dir| dir.trim().is_empty()) {
+            return Ok(normalized);
+        }
+        let candidate = &normalized;
         // Symlink-aware containment: a symlinked directory inside the
         // workspace must not move the command cwd outside it.
         vtcode_commons::paths::ensure_path_within_workspace_resolved(&normalized, &self.workspace_root)
@@ -609,6 +627,7 @@ impl PtyManager {
             let mut spool_redactor = vtcode_commons::sanitizer::StreamingSecretRedactor::default();
             let mut spool_hasher = Sha256::new();
             let mut spool_byte_count = 0_u64;
+            let mut spool_lines = SpoolLineCounter::default();
 
             while let Some(chunk) = output_spool_rx.recv().await {
                 let Some(file) = spool_file.as_mut() else {
@@ -622,6 +641,7 @@ impl PtyManager {
                         spool_file = None;
                     } else {
                         spool_hasher.update(sanitized.as_bytes());
+                        spool_lines.append(sanitized.as_bytes());
                         spool_byte_count = spool_byte_count.saturating_add(sanitized.len() as u64);
                     }
                 }
@@ -632,6 +652,7 @@ impl PtyManager {
                 let write_failed = !sanitized.is_empty() && file.write_all(sanitized.as_bytes()).await.is_err();
                 if !write_failed && !sanitized.is_empty() {
                     spool_hasher.update(sanitized.as_bytes());
+                    spool_lines.append(sanitized.as_bytes());
                     spool_byte_count = spool_byte_count.saturating_add(sanitized.len() as u64);
                 }
                 // Spool files are live-read while the session runs, so every
@@ -642,6 +663,7 @@ impl PtyManager {
                 } else {
                     *output_spool_integrity_for_task.lock() = Some(SpoolIntegrity {
                         byte_count: spool_byte_count,
+                        line_count: spool_lines.line_count(),
                         sha256: encode_digest_hex(spool_hasher.finalize()),
                     });
                 }
@@ -815,3 +837,6 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
         ensure_path_within_workspace(candidate, &self.workspace_root).map(|_| ())
     }
 }
+
+#[cfg(test)]
+mod tests;

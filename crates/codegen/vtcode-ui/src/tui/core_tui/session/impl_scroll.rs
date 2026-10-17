@@ -120,6 +120,7 @@ impl Session {
         self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         self.mouse_selection.update_selection(scroll.column, scroll.row);
         self.user_scrolled = true;
+        self.invalidate_transcript_viewport();
         self.mark_dirty();
     }
 
@@ -132,6 +133,7 @@ impl Session {
         let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
         self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         self.user_scrolled = true;
+        self.invalidate_transcript_viewport();
         self.mark_dirty();
     }
 
@@ -144,6 +146,7 @@ impl Session {
         let offset_delta = self.scroll_manager.offset() as i64 - previous_offset as i64;
         self.mouse_selection.adjust_for_scroll(offset_delta as i32);
         self.user_scrolled = false;
+        self.invalidate_transcript_viewport();
         self.mark_dirty();
     }
 

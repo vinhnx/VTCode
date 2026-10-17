@@ -7,6 +7,8 @@ pub const EXEC_COMMAND: &str = "exec_command";
 pub const WRITE_STDIN: &str = "write_stdin";
 /// Canonical patch application tool exposed to the model.
 pub const APPLY_PATCH: &str = "apply_patch";
+/// Optional public rationale recording within the canonical current task.
+pub const RECORD_DECISION: &str = "record_decision";
 /// Advanced bounded syntactic code search tool for VTCode-specific profiles.
 pub const CODE_SEARCH: &str = "code_search";
 
@@ -102,6 +104,8 @@ pub const MEMORY: &str = "memory";
 pub const ASK_QUESTIONS: &str = "ask_questions";
 /// Legacy alias routed to `request_user_input` (deprecated tabbed shape).
 pub const ASK_USER_QUESTION: &str = "ask_user_question";
+/// Durable scheduler control for coordinators and assignment-owned worker reports.
+pub const MATRIX: &str = "matrix";
 /// Unified subagent lifecycle tool (action: spawn | spawn_subprocess |
 /// send_input | resume | wait | close). `wait_agent`/`close_agent` are now
 /// aliases routed to `agent` (action='wait'/'close'); `LIFECYCLE_CLEANUP_TOOLS`
@@ -155,7 +159,7 @@ pub const LIFECYCLE_CLEANUP_TOOLS: &[&str] = &[WAIT_AGENT, CLOSE_AGENT];
 /// planning-workflow state, and `request_user_input` still resolves through
 /// the interactive-session gate at execution time. Callers must pass the
 /// canonical tool name (see `canonical_tool_name`); matching is exact.
-pub const ALWAYS_AVAILABLE_WORKFLOW_TOOLS: &[&str] = &[TASK_TRACKER, START_PLANNING, REQUEST_USER_INPUT];
+pub const ALWAYS_AVAILABLE_WORKFLOW_TOOLS: &[&str] = &[TASK_TRACKER, START_PLANNING, REQUEST_USER_INPUT, MATRIX];
 
 /// Returns `true` for workflow-coordination tools that bypass the full-auto
 /// allow-list (see [`ALWAYS_AVAILABLE_WORKFLOW_TOOLS`]).

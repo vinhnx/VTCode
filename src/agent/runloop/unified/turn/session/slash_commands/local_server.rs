@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::Result;
 use vtcode_core::llm::providers::local_server::{self, LocalProvider, LocalServerStatus};
 use vtcode_core::utils::ansi::MessageStyle;
@@ -174,30 +176,30 @@ fn show_local_providers_modal(ctx: &mut SlashCommandContext<'_>, statuses: &[Loc
                 let err = status.error.as_deref().unwrap_or("Not running");
                 ("Stopped".to_string(), format!("{} | {}", status.endpoint, err))
             };
-            InlineListItem {
-                title: status.provider.display_name().to_string(),
-                subtitle: Some(subtitle),
-                badge: Some(badge),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(provider_key(&status.provider))),
-                search_value: Some(format!(
-                    "{} {} {}",
-                    status.provider.display_name(),
-                    status.endpoint,
-                    if status.running { "running" } else { "stopped" }
-                )),
-            }
+            ui_list::action(
+                status.provider.display_name().to_string(),
+                subtitle,
+                Some(badge),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(provider_key(&status.provider))),
+            )
+            .with_search_value(format!(
+                "{} {} {}",
+                status.provider.display_name(),
+                status.endpoint,
+                if status.running { "running" } else { "stopped" }
+            ))
         })
         .collect();
 
-    let back_item = InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Close local server manager".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
-        search_value: Some("back close".to_string()),
-    };
+    let back_item = ui_list::action(
+        "Back",
+        "Close local server manager".to_string(),
+        None,
+        Tone::Neutral,
+        Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
+    )
+    .with_search_value("back close".to_string());
     let mut all_items = items;
     all_items.push(back_item);
 
@@ -232,54 +234,54 @@ fn show_local_actions_modal(ctx: &mut SlashCommandContext<'_>, provider: LocalPr
     };
 
     let items = vec![
-        InlineListItem {
-            title: "Status".to_string(),
-            subtitle: Some("Check server health and loaded models".to_string()),
-            badge: Some("Info".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key("status"))),
-            search_value: Some("status health check models".to_string()),
-        },
-        InlineListItem {
-            title: "Start server".to_string(),
-            subtitle: Some("Launch the inference server".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key("start"))),
-            search_value: Some("start launch run".to_string()),
-        },
-        InlineListItem {
-            title: "Stop server".to_string(),
-            subtitle: Some("Shut down the inference server".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key("stop"))),
-            search_value: Some("stop shutdown kill".to_string()),
-        },
-        InlineListItem {
-            title: "Configure".to_string(),
-            subtitle: Some("Show environment variables and settings".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key("configure"))),
-            search_value: Some("configure settings env variables".to_string()),
-        },
-        InlineListItem {
-            title: "Troubleshoot".to_string(),
-            subtitle: Some("Diagnose and fix connection issues".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(action_key("troubleshoot"))),
-            search_value: Some("troubleshoot diagnose fix debug".to_string()),
-        },
-        InlineListItem {
-            title: "Back".to_string(),
-            subtitle: Some("Return to provider list".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
-            search_value: Some("back return".to_string()),
-        },
+        ui_list::action(
+            "Status",
+            "Check server health and loaded models".to_string(),
+            Some("Info".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction(action_key("status"))),
+        )
+        .with_search_value("status health check models".to_string()),
+        ui_list::action(
+            "Start server",
+            "Launch the inference server".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(action_key("start"))),
+        )
+        .with_search_value("start launch run".to_string()),
+        ui_list::action(
+            "Stop server",
+            "Shut down the inference server".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(action_key("stop"))),
+        )
+        .with_search_value("stop shutdown kill".to_string()),
+        ui_list::action(
+            "Configure",
+            "Show environment variables and settings".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(action_key("configure"))),
+        )
+        .with_search_value("configure settings env variables".to_string()),
+        ui_list::action(
+            "Troubleshoot",
+            "Diagnose and fix connection issues".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(action_key("troubleshoot"))),
+        )
+        .with_search_value("troubleshoot diagnose fix debug".to_string()),
+        ui_list::action(
+            "Back",
+            "Return to provider list".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(LOCAL_ACTION_BACK.to_string())),
+        )
+        .with_search_value("back return".to_string()),
     ];
 
     ctx.renderer.show_list_modal(
@@ -292,14 +294,16 @@ fn show_local_actions_modal(ctx: &mut SlashCommandContext<'_>, provider: LocalPr
 }
 
 fn show_local_detail_modal(ctx: &mut SlashCommandContext<'_>, title: &str, lines: Vec<String>) {
-    let items = vec![InlineListItem {
-        title: "Back".to_string(),
-        subtitle: Some("Return to actions".to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(LOCAL_DETAIL_BACK.to_string())),
-        search_value: Some("back return".to_string()),
-    }];
+    let items = vec![
+        ui_list::action(
+            "Back",
+            "Return to actions".to_string(),
+            None,
+            Tone::Neutral,
+            Some(InlineListSelection::ConfigAction(LOCAL_DETAIL_BACK.to_string())),
+        )
+        .with_search_value("back return".to_string()),
+    ];
 
     ctx.renderer.show_list_modal(
         title,

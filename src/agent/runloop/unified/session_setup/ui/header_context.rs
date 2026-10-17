@@ -1,6 +1,5 @@
 use crate::agent::runloop::ui::build_inline_header_context;
-use crate::agent::runloop::unified::session_setup::ide_context::{IdeContextBridge, tui_header_summary};
-use crate::agent::runloop::unified::{context_manager, palettes};
+use crate::agent::runloop::unified::palettes;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use anyhow::Result;
 use tracing::warn;
@@ -24,8 +23,6 @@ pub(super) struct HeaderContextInit<'a> {
 pub(super) async fn initialize_header_context(
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
-    context_manager: &mut context_manager::ContextManager,
-    ide_context_bridge: &mut Option<IdeContextBridge>,
     init: HeaderContextInit<'_>,
 ) -> Result<InlineHeaderContext> {
     let HeaderContextInit {
@@ -79,25 +76,9 @@ pub(super) async fn initialize_header_context(
         apply_persistent_memory_header_guide(&mut header_context, memory_status);
     }
 
-    let initial_editor_snapshot = if let Some(bridge) = ide_context_bridge.as_mut() {
-        match bridge.refresh() {
-            Ok((snapshot, _)) => snapshot,
-            Err(err) => {
-                warn!("Failed to refresh IDE context snapshot: {}", err);
-                None
-            }
-        }
-    } else {
-        None
-    };
-    apply_ide_context_snapshot(
-        context_manager,
-        &mut header_context,
-        handle,
-        config.workspace.as_path(),
-        vt_cfg,
-        initial_editor_snapshot,
-    );
+    // Push initial context so the compact header shows provider/model on
+    // first paint. `SetHeaderContext` preserves the TUI primary agent.
+    handle.set_header_context(header_context.clone());
 
     Ok(header_context)
 }
@@ -157,20 +138,4 @@ pub(crate) fn maybe_render_system_prompt_budget_warning(
             report.token_estimate, max_tokens
         ),
     )
-}
-
-pub(crate) fn apply_ide_context_snapshot(
-    context_manager: &mut context_manager::ContextManager,
-    header_context: &mut InlineHeaderContext,
-    handle: &InlineHandle,
-    workspace: &std::path::Path,
-    vt_cfg: Option<&VTCodeConfig>,
-    snapshot: Option<vtcode_core::EditorContextSnapshot>,
-) {
-    let ide_context_config = vt_cfg.map(|cfg| &cfg.ide_context);
-    context_manager.set_editor_context_snapshot(snapshot.clone(), ide_context_config);
-    let effective_ide_context_config = context_manager.effective_ide_context_config_with_base(ide_context_config);
-    header_context.editor_context =
-        tui_header_summary(workspace, Some(&effective_ide_context_config), snapshot.as_ref());
-    handle.set_header_context(header_context.clone());
 }

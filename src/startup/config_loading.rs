@@ -58,9 +58,6 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     if let Some(ref model) = args.model {
         builder = builder.cli_override("agent.default_model".to_owned(), toml::Value::String(model.clone()));
     }
-    if let Some(ref provider) = args.provider {
-        builder = builder.cli_override("agent.provider".to_owned(), toml::Value::String(provider.clone()));
-    }
 
     let config_phase = std::time::Instant::now();
     let manager = match builder.build() {
@@ -108,7 +105,8 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     // single owned clone for this startup.
     let primary_agent_explicitly_configured = manager.has_explicit_top_level_key("default_primary_agent");
     let mut config = manager.config().clone();
-    apply_aux_dotconfig_provider_defaults(&mut config, &manager).await;
+    apply_cli_provider_selection(&mut config, args);
+    apply_aux_dotconfig_provider_defaults(&mut config, &manager, args.provider.is_some()).await;
 
     let (full_auto_requested, automation_prompt) = match args.full_auto.clone() {
         Some(value) if value.trim().is_empty() => (true, None),
@@ -132,6 +130,32 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
     })
 }
 
+/// Apply the CLI `--provider` override on top of the configured provider.
+///
+/// `agent.api_key_env` is a single agent-wide variable rather than a
+/// provider-scoped one, so it belongs to whichever provider `agent.provider`
+/// selected. Switching providers on the CLI must therefore **not** inherit the
+/// previous provider's variable: an explicit `--provider openai` with
+/// `OPENAI_API_KEY` set would otherwise keep resolving a stale merge-gateway
+/// variable and fail auth.
+///
+/// Provider-scoped overrides (`provider_overrides`, `custom_providers`) and an
+/// explicit `--api-key-env` still take precedence later in
+/// `resolve_runtime_model_selection`, so only the agent-wide fallback is reset.
+fn apply_cli_provider_selection(config: &mut VTCodeConfig, args: &Cli) {
+    let Some(ref provider) = args.provider else {
+        return;
+    };
+    let requested = provider.trim();
+    if requested.is_empty() {
+        return;
+    }
+    if !config.agent.provider.eq_ignore_ascii_case(requested) {
+        config.agent.api_key_env = vtcode_core::config::api_keys::api_key_env_var(requested);
+    }
+    config.agent.provider = requested.to_owned();
+}
+
 /// Honor the auxiliary global `config.toml` (`[preferences] default_provider` /
 /// `default_model`, including legacy bare top-level keys) when the canonical
 /// `vtcode.toml` layers do not explicitly configure `agent.provider` /
@@ -142,8 +166,12 @@ pub(super) async fn load_startup_config(args: &Cli) -> Result<LoadedStartupConfi
 /// `config.toml` expect those preferences to apply; previously they were
 /// silently ignored and the runtime kept the compiled-in openrouter default,
 /// failing with an openrouter auth error even after configuring e.g. ollama.
-async fn apply_aux_dotconfig_provider_defaults(config: &mut VTCodeConfig, manager: &ConfigManager) {
-    let provider_explicit = explicit_agent_key(manager, "provider");
+async fn apply_aux_dotconfig_provider_defaults(
+    config: &mut VTCodeConfig,
+    manager: &ConfigManager,
+    cli_provider_override: bool,
+) {
+    let provider_explicit = explicit_agent_key(manager, "provider") || cli_provider_override;
     let model_explicit = explicit_agent_key(manager, "default_model");
     if provider_explicit && model_explicit {
         return;
@@ -337,6 +365,52 @@ enable_tracing = true
         };
         apply_dot_preferences(&mut config, &preferences, true, false);
         assert_eq!(config.agent.provider, "openai");
+    }
+
+    #[test]
+    fn cli_provider_override_resets_stale_agent_api_key_env() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "merge-gateway".to_string();
+        config.agent.api_key_env = "MERGE_GATEWAY_API_KEY".to_string();
+
+        let args = Cli::parse_from(["vtcode", "--provider", "openai"]);
+        apply_cli_provider_selection(&mut config, &args);
+
+        assert_eq!(config.agent.provider, "openai");
+        assert_eq!(
+            config.agent.api_key_env,
+            vtcode_core::config::api_keys::api_key_env_var("openai"),
+            "switching providers must not inherit the previous provider's agent-wide key"
+        );
+    }
+
+    #[test]
+    fn cli_provider_override_keeps_agent_api_key_env_for_same_provider() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "openai".to_string();
+        config.agent.api_key_env = "CORP_OPENAI_SECRET".to_string();
+
+        let args = Cli::parse_from(["vtcode", "--provider", "openai"]);
+        apply_cli_provider_selection(&mut config, &args);
+
+        assert_eq!(config.agent.provider, "openai");
+        assert_eq!(
+            config.agent.api_key_env, "CORP_OPENAI_SECRET",
+            "re-selecting the configured provider keeps its persisted key"
+        );
+    }
+
+    #[test]
+    fn no_cli_provider_override_leaves_agent_api_key_env_untouched() {
+        let mut config = VTCodeConfig::default();
+        config.agent.provider = "merge-gateway".to_string();
+        config.agent.api_key_env = "MERGE_GATEWAY_API_KEY".to_string();
+
+        let args = Cli::parse_from(["vtcode"]);
+        apply_cli_provider_selection(&mut config, &args);
+
+        assert_eq!(config.agent.provider, "merge-gateway");
+        assert_eq!(config.agent.api_key_env, "MERGE_GATEWAY_API_KEY");
     }
 
     #[test]

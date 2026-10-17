@@ -175,10 +175,9 @@ fn is_inline_code_execution(command: &[String]) -> bool {
         }
         "php" | "php.exe" => arguments.iter().any(|argument| argument == "-r"),
         "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" => arguments.iter().any(|argument| {
-            matches!(
-                argument.to_ascii_lowercase().as_str(),
-                "-command" | "-c" | "-encodedcommand" | "-encoded" | "-enc" | "-e"
-            )
+            ["-command", "-c", "-encodedcommand", "-encoded", "-enc", "-e"]
+                .iter()
+                .any(|option| argument.eq_ignore_ascii_case(option))
         }),
         _ => false,
     }
@@ -194,7 +193,9 @@ fn is_encoded_powershell_invocation(command: &[String]) -> bool {
     }
 
     command.iter().skip(1).any(|argument| {
-        matches!(argument.to_ascii_lowercase().as_str(), "-encodedcommand" | "-encoded" | "-enc" | "-e")
+        ["-encodedcommand", "-encoded", "-enc", "-e"]
+            .iter()
+            .any(|option| argument.eq_ignore_ascii_case(option))
     })
 }
 
@@ -288,18 +289,6 @@ fn short_flag_group_contains(arg: &str, target: char) -> bool {
     arg.starts_with('-') && !arg.starts_with("--") && arg.chars().skip(1).any(|c| c == target)
 }
 
-/// Check if git branch command is a delete operation
-fn git_branch_is_delete(branch_args: &[String]) -> bool {
-    // Git allows stacking short flags (for example, `-dv` or `-vd`). Treat any
-    // short-flag group containing `d`/`D` as a delete flag.
-    branch_args.iter().map(String::as_str).any(|arg| {
-        matches!(arg, "-d" | "-D" | "--delete")
-            || arg.starts_with("--delete=")
-            || short_flag_group_contains(arg, 'd')
-            || short_flag_group_contains(arg, 'D')
-    })
-}
-
 /// Check if git push command is dangerous (force, delete, or dangerous refspec)
 fn git_push_is_dangerous(push_args: &[String]) -> bool {
     push_args.iter().map(String::as_str).any(|arg| {
@@ -326,41 +315,129 @@ fn git_clean_is_force(clean_args: &[String]) -> bool {
     })
 }
 
+/// Git subcommands whose destructive modes are hard-blocked at preflight.
+/// Recoverable invocations of these subcommands (`git reset --soft`,
+/// `git rm --cached`, `git branch -d`) pass preflight and proceed through
+/// normal policy/approval routing, matching `exec_policy`'s `validate_git_reset`.
+const GIT_GUARDED_SUBCOMMANDS: &[&str] = &["reset", "rm", "branch", "push", "clean"];
+
+/// Only the hard reset modes lose uncommitted changes. `--soft`/`--mixed`
+/// (and a bare reset) move HEAD or the index, which the reflog restores.
+fn git_reset_is_destructive(reset_args: &[String]) -> bool {
+    reset_args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "--hard" | "--merge" | "--keep"))
+}
+
+/// `git rm --cached` only unstages paths (the working tree is untouched);
+/// every other `git rm` deletes working-tree files.
+fn git_rm_is_destructive(rm_args: &[String]) -> bool {
+    !rm_args.iter().any(|arg| arg == "--cached")
+}
+
+/// `git branch -d`/`--delete` alone refuses unmerged branches; `-D` (or
+/// `--delete` combined with `-f`/`--force`, including stacked short flags
+/// like `-dD`) overrides that guard. Delete plus force is the destructive
+/// combination.
+fn git_branch_is_force_delete(branch_args: &[String]) -> bool {
+    let mut deletes = false;
+    let mut forces = false;
+    for arg in branch_args {
+        match arg.as_str() {
+            "-D" => {
+                deletes = true;
+                forces = true;
+            }
+            "-d" | "--delete" => deletes = true,
+            "-f" | "--force" => forces = true,
+            _ => {
+                if arg.starts_with("--delete=") {
+                    deletes = true;
+                }
+                if arg.starts_with("--force=") {
+                    forces = true;
+                }
+                if short_flag_group_contains(arg, 'd') {
+                    deletes = true;
+                }
+                if short_flag_group_contains(arg, 'D') {
+                    deletes = true;
+                    forces = true;
+                }
+                if short_flag_group_contains(arg, 'f') {
+                    forces = true;
+                }
+            }
+        }
+    }
+    deletes && forces
+}
+
+/// Single home for the guarded git subcommand decision. Returns the matched
+/// destructive pattern (for actionable preflight messages), or `None` when
+/// the invocation is recoverable and must proceed through normal policy and
+/// approval routing instead of dying at preflight.
+fn classify_git_subcommand(subcommand: &str, args: &[String]) -> Option<&'static str> {
+    // `--` ends option parsing: for the option-only subcommands every later
+    // token is a path or ref name, never a flag (`git rm -- --cached f`
+    // deletes working-tree files). Classify only the pre-`--` option
+    // arguments there; destructive flags before `--` still classify, and a
+    // post-`--` token can only turn a block into a pass when it is genuinely
+    // a name. `push` is excluded: its dangerous payloads are refspecs, which
+    // legitimately occupy the post-`--` positional slot
+    // (`git push origin -- :refs/heads/x` deletes a remote branch).
+    let scan_args = if subcommand == "push" {
+        args
+    } else {
+        match args.iter().position(|arg| arg == "--") {
+            Some(end) => &args[..end],
+            None => args,
+        }
+    };
+    match subcommand {
+        "reset" if git_reset_is_destructive(scan_args) => {
+            Some("git reset --hard/--merge/--keep discards uncommitted changes; use `git stash` or `git reset --soft`")
+        }
+        "rm" if git_rm_is_destructive(scan_args) => {
+            Some("git rm deletes working-tree files; unstage with `git rm --cached` instead")
+        }
+        "branch" if git_branch_is_force_delete(scan_args) => {
+            Some("git branch -D/--delete --force skips the unmerged-branch guard; use `-d` for merged branches")
+        }
+        "push" if git_push_is_dangerous(scan_args) => Some("git push force-updates or deletes remote refs"),
+        "clean" if git_clean_is_force(scan_args) => Some("git clean --force deletes untracked files"),
+        _ => None,
+    }
+}
+
+/// Reason a command tripped [`command_might_be_dangerous`], used for
+/// actionable preflight messages. Mirrors the git arm of
+/// `is_dangerous_to_call_with_exec` including env/sudo prefix unwrapping;
+/// non-git patterns keep the generic rejection text.
+pub fn dangerous_command_reason(command: &[String]) -> Option<&'static str> {
+    let command = unwrap_command_prefix(command)?;
+    let cmd0 = command.first().map(String::as_str);
+    let (idx, subcommand) = if extract_command_name(cmd0.unwrap_or("")) == "git" {
+        find_git_subcommand(command, GIT_GUARDED_SUBCOMMANDS)?
+    } else {
+        // Without the git executable in front, `rm` is ambiguous with the
+        // plain Unix command — `rm -f`/`sudo rm -rf` must not receive the
+        // `git rm --cached` remedy.
+        let (idx, subcommand) = find_git_subcommand_from_args(command, GIT_GUARDED_SUBCOMMANDS)?;
+        if subcommand == "rm" {
+            return None;
+        }
+        (idx, subcommand)
+    };
+    classify_git_subcommand(subcommand, &command[idx + 1..])
+}
+
 /// Check if a command is a dangerous git subcommand (without the "git" prefix)
 /// This handles commands parsed from shell scripts where the binary name may be omitted
 fn is_dangerous_git_subcommand(command: &[String]) -> bool {
-    if command.is_empty() {
-        return false;
-    }
-
-    let first_arg = command[0].as_str();
-
-    // Check if first arg is a git subcommand
-    match first_arg {
-        "reset" | "rm" => true,
-        "branch" => git_branch_is_delete(&command[1..]),
-        "push" => git_push_is_dangerous(&command[1..]),
-        "clean" => git_clean_is_force(&command[1..]),
-        // Handle global options that appear before subcommand (e.g., -C, -c)
-        // These would be from shell parser extracting partial commands
-        opt if opt.starts_with('-') => {
-            // Try to find the subcommand after global options
-            if let Some((idx, subcommand)) =
-                find_git_subcommand_from_args(command, &["reset", "rm", "branch", "push", "clean"])
-            {
-                match subcommand {
-                    "reset" | "rm" => true,
-                    "branch" => git_branch_is_delete(&command[idx + 1..]),
-                    "push" => git_push_is_dangerous(&command[idx + 1..]),
-                    "clean" => git_clean_is_force(&command[idx + 1..]),
-                    _ => false,
-                }
-            } else {
-                false
-            }
-        }
-        _ => false,
-    }
+    find_git_subcommand_from_args(command, GIT_GUARDED_SUBCOMMANDS)
+        .and_then(|(idx, subcommand)| classify_git_subcommand(subcommand, &command[idx + 1..]))
+        .is_some()
 }
 
 /// Find git subcommand from a list of args (without the "git" binary name)
@@ -410,22 +487,11 @@ fn is_dangerous_to_call_with_exec(command: &[String]) -> bool {
     match base_cmd {
         // ──── Git ────
         "git" => {
-            let Some((subcommand_idx, subcommand)) =
-                find_git_subcommand(command, &["reset", "rm", "branch", "push", "clean"])
-            else {
+            let Some((subcommand_idx, subcommand)) = find_git_subcommand(command, GIT_GUARDED_SUBCOMMANDS) else {
                 return false;
             };
 
-            match subcommand {
-                "reset" | "rm" => true,
-                "branch" => git_branch_is_delete(&command[subcommand_idx + 1..]),
-                "push" => git_push_is_dangerous(&command[subcommand_idx + 1..]),
-                "clean" => git_clean_is_force(&command[subcommand_idx + 1..]),
-                other => {
-                    debug_assert!(false, "unexpected git subcommand from matcher: {other}");
-                    false
-                }
-            }
+            classify_git_subcommand(subcommand, &command[subcommand_idx + 1..]).is_some()
         }
 
         // ──── Rm ────
@@ -469,15 +535,176 @@ mod tests {
     }
 
     #[test]
-    fn git_reset_is_dangerous() {
-        let cmd = vec!["git".to_string(), "reset".to_string()];
-        assert!(is_dangerous_to_call_with_exec(&cmd));
+    fn powershell_encoded_options_remain_hard_denials_in_any_ascii_case() {
+        for executable in ["powershell", "PowerShell.exe", "pwsh", "PWSH.EXE", "/usr/bin/pwsh"] {
+            for option in ["-encodedcommand", "-encoded", "-enc", "-e"] {
+                for variant in [option.to_string(), option.to_ascii_uppercase()] {
+                    let command = vec_str(&[executable, "-NoProfile", &variant, "ZQ=="]);
+                    assert!(command_might_be_dangerous(&command), "hard denial: {command:?}");
+                    assert!(command_requires_approval(&command), "approval classification: {command:?}");
+                }
+            }
+        }
+        let wrapped = vec_str(&["env", "MODE=test", "pwsh", "-EnCoDeDcOmMaNd", "ZQ=="]);
+        assert!(command_might_be_dangerous(&wrapped));
+        assert!(command_requires_approval(&wrapped));
     }
 
     #[test]
-    fn git_reset_hard_is_dangerous() {
-        let cmd = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
-        assert!(is_dangerous_to_call_with_exec(&cmd));
+    fn powershell_inline_options_require_approval_without_hard_denial() {
+        for executable in ["powershell", "powershell.exe", "pwsh", "pwsh.exe"] {
+            for option in ["-command", "-c", "-Command", "-COMMAND", "-C"] {
+                let command = vec_str(&[executable, "-NoProfile", option, "Write-Output ok"]);
+                assert!(!command_might_be_dangerous(&command), "inline code: {command:?}");
+                assert!(command_requires_approval(&command), "approval: {command:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn powershell_option_near_misses_and_non_powershell_programs_stay_distinct() {
+        for option in [
+            "-commands",
+            "-encodedcommandx",
+            "--enc",
+            "enc",
+            "-en",
+            "-e=ZQ==",
+            "-command ",
+            " -command",
+            "-commánd",
+            "-enç",
+        ] {
+            let command = vec_str(&["pwsh", option, "example.ps1"]);
+            assert!(!command_might_be_dangerous(&command), "near miss: {command:?}");
+            assert!(!command_requires_approval(&command), "near miss: {command:?}");
+        }
+        for command in [
+            vec_str(&["pwsh", "-File", "example.ps1"]),
+            vec_str(&["echo", "-ENCODEDCOMMAND", "ZQ=="]),
+        ] {
+            assert!(!command_might_be_dangerous(&command), "ordinary arguments: {command:?}");
+            assert!(!command_requires_approval(&command), "ordinary arguments: {command:?}");
+        }
+    }
+
+    #[test]
+    fn git_reset_recoverable_modes_pass_preflight() {
+        // Bare reset and --soft/--mixed only move HEAD or the index; the
+        // reflog restores them, matching exec_policy's validate_git_reset.
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "reset"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--soft", "HEAD~1"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--mixed", "HEAD~1"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "HEAD~1", "--", "file.txt"])));
+    }
+
+    #[test]
+    fn git_reset_destructive_modes_still_preflight_blocked() {
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--hard"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--merge"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--keep"])));
+        // Destructive mode hidden behind global options and sudo wrappers.
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "-C", "sub", "reset", "--hard"])));
+        assert!(command_might_be_dangerous(&vec_str(&["sudo", "git", "reset", "--hard"])));
+        assert!(
+            command_might_be_dangerous(&vec_str(&["FOO=bar", "env", "git", "reset", "--hard"])),
+            "env-prefixed destructive reset must stay blocked"
+        );
+    }
+
+    #[test]
+    fn git_rm_index_only_passes_preflight_and_working_tree_delete_stays_blocked() {
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "file.txt"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "-rf", "dir"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "--cached", "file.txt"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "-r", "--cached", "dir"])));
+        assert!(
+            is_dangerous_to_call_with_exec(&vec_str(&["sudo", "git", "rm", "file.txt"])),
+            "sudo-wrapped working-tree delete must stay blocked"
+        );
+    }
+
+    #[test]
+    fn git_branch_force_delete_is_blocked_but_merged_delete_passes() {
+        // -d/--delete refuse unmerged branches; only the force forms are blocked.
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "-d", "feature"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "--delete", "feature"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "-D", "feature"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "--delete", "--force", "feature"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "-d", "-f", "feature"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "-df", "feature"])));
+    }
+
+    #[test]
+    fn end_of_options_separator_cannot_hide_working_tree_git_rm() {
+        // After `--`, git treats `--cached` as a PATH, not the index-only
+        // flag: `git rm --ignore-unmatch -- --cached f` deletes working-tree
+        // files while carrying a literal `--cached` argument.
+        assert!(
+            is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "--", "--cached", "file.txt"])),
+            "`--cached` after `--` is a path; the invocation deletes working-tree files"
+        );
+        assert!(
+            is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "--ignore-unmatch", "--", "--cached", "file.txt"])),
+            "--ignore-unmatch must not let a missing `--cached` path mask the deletion"
+        );
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["sudo", "git", "rm", "--", "--cached", "file.txt"])));
+        // The flag itself before `--` keeps the index-only pass.
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "rm", "--cached", "--", "file.txt"])));
+        // The rejection must keep the pattern-specific remedy.
+        let reason = dangerous_command_reason(&vec_str(&["git", "rm", "--", "--cached", "file.txt"]))
+            .expect("end-of-options git rm carries a reason");
+        assert!(reason.contains("git rm"), "reason should name the pattern: {reason}");
+    }
+
+    #[test]
+    fn end_of_options_separator_stops_flag_classification_for_other_guarded_subcommands() {
+        // Post-`--` tokens are paths/refs for the option-only subcommands, so
+        // they can never carry flag semantics.
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--", "--hard"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "--", "-D", "feature"])));
+        assert!(!is_dangerous_to_call_with_exec(&vec_str(&["git", "clean", "--", "-fd"])));
+        // Flags before `--` still classify.
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "reset", "--hard", "--", "file.txt"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "branch", "-D", "--", "feature"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "clean", "-fd", "--", "dir"])));
+        // `push` scans all args: its dangerous payloads are refspecs, which
+        // legitimately occupy the post-`--` positional slot.
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "push", "origin", "--", "--force"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "push", "origin", "--", ":refs/heads/main"])));
+        assert!(is_dangerous_to_call_with_exec(&vec_str(&["git", "push", "--force", "--", "origin", "main"])));
+    }
+
+    #[test]
+    fn dangerous_command_reason_names_git_pattern_and_skips_safe_commands() {
+        let destructive = vec_str(&["git", "reset", "--hard"]);
+        let reason = dangerous_command_reason(&destructive).expect("git reset --hard carries a reason");
+        assert!(reason.contains("git reset"), "reason should name the pattern: {reason}");
+
+        let recoverable = vec_str(&["git", "reset", "--soft", "HEAD~1"]);
+        assert!(dangerous_command_reason(&recoverable).is_none());
+
+        let safe = vec_str(&["git", "status"]);
+        assert!(dangerous_command_reason(&safe).is_none());
+
+        let pushed = vec_str(&["sudo", "git", "rm", "file.txt"]);
+        let sudo_reason = dangerous_command_reason(&pushed).expect("sudo-wrapped git rm carries a reason");
+        assert!(sudo_reason.contains("git rm"), "sudo prefix must be unwrapped: {sudo_reason}");
+    }
+
+    #[test]
+    fn dangerous_command_reason_does_not_label_plain_rm_as_git_rm() {
+        // `rm -f` is dangerous via the plain-rm arm, not the git matcher, so
+        // it must keep the generic rejection instead of the `git rm --cached`
+        // remedy.
+        for cmd in [
+            vec_str(&["rm", "-f", "build.log"]),
+            vec_str(&["rm", "-rf", "dir"]),
+            vec_str(&["sudo", "rm", "-rf", "/tmp/x"]),
+        ] {
+            assert!(command_might_be_dangerous(&cmd), "plain rm must stay classified dangerous: {cmd:?}");
+            assert_eq!(dangerous_command_reason(&cmd), None, "plain rm must not receive the git rm remedy: {cmd:?}");
+        }
     }
 
     #[test]
@@ -552,9 +779,12 @@ mod tests {
     }
 
     #[test]
-    fn absolute_path_git_reset_is_dangerous() {
-        let cmd = vec!["/usr/bin/git".to_string(), "reset".to_string()];
+    fn absolute_path_git_reset_hard_is_dangerous() {
+        let cmd = vec!["/usr/bin/git".to_string(), "reset".to_string(), "--hard".to_string()];
         assert!(is_dangerous_to_call_with_exec(&cmd));
+        // A bare reset via an absolute path is mixed-mode and recoverable.
+        let bare = vec!["/usr/bin/git".to_string(), "reset".to_string()];
+        assert!(!is_dangerous_to_call_with_exec(&bare));
     }
 
     #[test]
@@ -564,9 +794,12 @@ mod tests {
     }
 
     #[test]
-    fn command_might_be_dangerous_detects_git_reset() {
-        let cmd = vec!["git".to_string(), "reset".to_string()];
+    fn command_might_be_dangerous_detects_git_reset_hard() {
+        let cmd = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
         assert!(command_might_be_dangerous(&cmd));
+        // Bare reset (mixed mode) is recoverable and passes preflight.
+        let bare = vec!["git".to_string(), "reset".to_string()];
+        assert!(!command_might_be_dangerous(&bare));
     }
 
     #[test]
@@ -620,11 +853,12 @@ mod tests {
     // ──── Git Branch Delete Tests ────
 
     #[test]
-    fn git_branch_delete_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-d", "feature",])));
+    fn git_branch_delete_is_dangerous_only_when_forced() {
+        // -d/--delete refuse unmerged branches, so they pass preflight.
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "branch", "-d", "feature",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-D", "feature",])));
         // Test shell script parsing separately
-        let script = "git branch --delete feature";
+        let script = "git branch --delete --force feature";
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
                 assert!(command_might_be_dangerous(&sub_cmd), "sub-command should be dangerous: {sub_cmd:?}");
@@ -633,19 +867,22 @@ mod tests {
     }
 
     #[test]
-    fn git_branch_delete_with_stacked_short_flags_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-dv", "feature",])));
-        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-vd", "feature",])));
+    fn git_branch_delete_with_stacked_short_flags_is_dangerous_only_when_forced() {
+        // Plain delete groups (-dv/-vd) keep the unmerged guard; groups
+        // containing D (or f) force it.
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "branch", "-dv", "feature",])));
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "branch", "-vd", "feature",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-vD", "feature",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-Dvv", "feature",])));
+        assert!(command_might_be_dangerous(&vec_str(&["git", "branch", "-df", "feature",])));
     }
 
     #[test]
-    fn git_branch_delete_with_global_options_is_dangerous() {
-        assert!(command_might_be_dangerous(&vec_str(&["git", "-C", ".", "branch", "-d", "feature",])));
+    fn git_branch_delete_with_global_options_is_dangerous_only_when_forced() {
+        assert!(!command_might_be_dangerous(&vec_str(&["git", "-C", ".", "branch", "-d", "feature",])));
         assert!(command_might_be_dangerous(&vec_str(&["git", "-c", "color.ui=false", "branch", "-D", "feature",])));
         // Test shell script parsing separately
-        let script = "git -C . branch -d feature";
+        let script = "git -C . branch -D feature";
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
                 assert!(command_might_be_dangerous(&sub_cmd), "sub-command should be dangerous: {sub_cmd:?}");

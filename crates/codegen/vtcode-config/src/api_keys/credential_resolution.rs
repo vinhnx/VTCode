@@ -251,6 +251,20 @@ pub fn resolve_credential_with_mode(
         }
     }
 
+    // Tests explicitly override an environment variable to model an unset
+    // variable. Do not let host credentials make those tests depend on the
+    // developer's keyring or home directory. This guard must run before the
+    // OAuth branches below: a real ChatGPT/OpenRouter session on the host
+    // would otherwise leak a credential into discovery even when the test
+    // explicitly set the key to None.
+    #[cfg(test)]
+    if candidates
+        .iter()
+        .any(|identity| super::test_storage_lookup_is_overridden(identity.key_name()))
+    {
+        return Ok(None);
+    }
+
     let uses_default_key = requested_identity.uses_default_key_name(&default_key_name);
     if uses_default_key {
         if normalized_provider == "openrouter"
@@ -273,17 +287,6 @@ pub fn resolve_credential_with_mode(
                 env_var: None,
             }));
         }
-    }
-
-    // Tests explicitly override an environment variable to model an unset
-    // variable. Do not let host credentials make those tests depend on the
-    // developer's keyring or home directory.
-    #[cfg(test)]
-    if candidates
-        .iter()
-        .any(|identity| super::test_storage_lookup_is_overridden(identity.key_name()))
-    {
-        return Ok(None);
     }
 
     let storage = CustomApiKeyStorage::for_identity(requested_identity.clone())?;

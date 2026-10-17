@@ -19,13 +19,76 @@
 //! **Phase 4 Implementation**: Uses tree-sitter for accurate bash AST parsing.
 //! Falls back to basic tokenization for minimal shell syntax.
 
+use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use anyhow::Result;
+use lru::LruCache;
 
 /// Lazy-initialized tree-sitter bash parser (wrapped in Mutex for mutation)
 static BASH_PARSER: OnceLock<Result<Mutex<tree_sitter::Parser>, String>> = OnceLock::new();
+
+/// Upper bound on cached parsed bash trees.
+const SHELL_TREE_CACHE_CAPACITY: usize = 256;
+
+/// Process-wide LRU of parsed bash trees keyed by source text.
+///
+/// Command classification parses the *same* static script several times per
+/// validation: `contains_dynamic_find_syntax` (command extraction),
+/// `validate_redirection_paths` (AST walk), and `parse_shell_commands`
+/// (command extraction again) each run the grammar independently. A single
+/// `tree_sitter::Tree` is a cheap refcounted handle (`Clone` bumps a refcount,
+/// not a re-parse), so parsing once and sharing the tree across every pass
+/// removes N-1 tree-sitter runs per command — the same "compute the
+/// representation once" shape that unblocked the symbol-interner storm in the
+/// clippy `nonstandard_macro_braces` fix. The tree is a pure function of the
+/// source text, so caching cannot change any safety verdict; the cache only
+/// ever returns the exact grammar output for the exact input.
+static SHELL_TREE_CACHE: OnceLock<Mutex<LruCache<String, tree_sitter::Tree, rustc_hash::FxBuildHasher>>> =
+    OnceLock::new();
+
+/// Returns the shared parsed-tree cache, initializing it on first use.
+///
+/// A poisoned lock is recovered rather than propagated: a stale cache entry is
+/// a pure performance concern and must never turn into a fail-open safety path
+/// or a hard error on an otherwise classifiable command.
+fn shell_tree_cache() -> &'static Mutex<LruCache<String, tree_sitter::Tree, rustc_hash::FxBuildHasher>> {
+    SHELL_TREE_CACHE.get_or_init(|| {
+        let capacity = NonZeroUsize::new(SHELL_TREE_CACHE_CAPACITY).unwrap_or(NonZeroUsize::MIN);
+        Mutex::new(LruCache::with_hasher(capacity, rustc_hash::FxBuildHasher))
+    })
+}
+
+/// Parses `script` into a tree-sitter bash tree, reusing the cached tree when
+/// the exact source text was parsed before.
+///
+/// Returns the tree together with whether the grammar reported a syntax error,
+/// so callers keep their original `has_error` semantics. Tree-sitter applies
+/// error recovery instead of returning `None`, so the split between "did not
+/// parse at all" (`Err`) and "parsed with errors" (`Ok((.., true))`) is
+/// preserved for callers that must fail closed on malformed input.
+fn parse_bash_tree(script: &str) -> Result<(tree_sitter::Tree, bool), String> {
+    if let Some(tree) = {
+        let mut cache = shell_tree_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        cache.get(script).cloned()
+    } {
+        let has_error = tree.root_node().has_error();
+        return Ok((tree, has_error));
+    }
+
+    let (tree, has_error) = {
+        let parser_guard = get_bash_parser()?;
+        let mut parser = parser_guard.lock().map_err(|e| format!("Failed to lock parser: {e}"))?;
+        let tree = parser.parse(script, None).ok_or_else(|| "Failed to parse script".to_string())?;
+        let has_error = tree.root_node().has_error();
+        (tree, has_error)
+    };
+
+    let mut cache = shell_tree_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    drop(cache.put(script.to_string(), tree.clone()));
+    Ok((tree, has_error))
+}
 
 /// Returns whether a shell command contains syntax whose meaning depends on
 /// shell expansion rather than the literal argument text.
@@ -166,16 +229,10 @@ pub fn has_only_output_redirections(script: &str) -> bool {
         return false;
     }
 
-    let Ok(parser) = get_bash_parser() else {
+    let Ok((tree, has_error)) = parse_bash_tree(script) else {
         return false;
     };
-    let Ok(mut parser) = parser.lock() else {
-        return false;
-    };
-    let Some(tree) = parser.parse(script, None) else {
-        return false;
-    };
-    if tree.root_node().has_error() {
+    if has_error {
         return false;
     }
 
@@ -193,10 +250,9 @@ pub(crate) fn validate_redirection_paths(script: &str) -> Result<()> {
     if !script.contains(['<', '>']) {
         return Ok(());
     }
-    let parser = get_bash_parser().map_err(anyhow::Error::msg)?;
-    let mut parser = parser.lock().map_err(|error| anyhow!("shell parser lock poisoned: {error}"))?;
-    let tree = parser.parse(script, None).context("failed to parse shell redirections")?;
-    ensure!(!tree.root_node().has_error(), "cannot validate malformed shell redirections");
+    let (tree, has_error) =
+        parse_bash_tree(script).map_err(|error| anyhow!("failed to parse shell redirections: {error}"))?;
+    ensure!(!has_error, "cannot validate malformed shell redirections");
     let mut pending = vec![tree.root_node()];
     while let Some(node) = pending.pop() {
         if node.kind() == "file_redirect" {
@@ -314,14 +370,11 @@ fn is_output_redirection(text: &str) -> bool {
 
 /// Parses shell script using tree-sitter bash grammar.
 fn parse_with_tree_sitter(script: &str, reject_syntax_errors: bool) -> Result<Vec<Vec<String>>, String> {
-    let parser_guard = get_bash_parser()?;
-    let mut parser = parser_guard.lock().map_err(|e| format!("Failed to lock parser: {e}"))?;
-
-    let tree = parser.parse(script, None).ok_or_else(|| "Failed to parse script".to_string())?;
+    let (tree, has_error) = parse_bash_tree(script)?;
 
     let mut commands = Vec::new();
     let root = tree.root_node();
-    if reject_syntax_errors && root.has_error() {
+    if reject_syntax_errors && has_error {
         return Err("Shell script contains syntax errors".to_string());
     }
 
@@ -708,6 +761,36 @@ mod tests {
         assert!(contains_dynamic_find_syntax("find src -maxdepth 0 -exe$''c touch /tmp/VT_BYPASS_POC {} +"));
         assert!(!contains_dynamic_find_syntax("find src -type f -name '*.rs'"));
     }
+
+    #[test]
+    fn cached_tree_hit_still_fails_closed_on_malformed_scripts() {
+        // The tree cache is keyed by exact source text. The second call takes a
+        // cache hit, so `has_error` must be preserved across the cache or a
+        // malformed script would pass on the second parse after failing the
+        // first — a fail-open regression.
+        let malformed = "cargo check && ";
+        assert!(parse_shell_commands_tree_sitter(malformed).is_err());
+        assert!(
+            parse_shell_commands_tree_sitter(malformed).is_err(),
+            "cached tree must keep rejecting malformed scripts"
+        );
+    }
+
+    #[test]
+    fn cached_tree_hit_preserves_extraction_across_repeated_and_mixed_calls() {
+        // Cache hits must return the same grammar output for the same source,
+        // across both strict and lenient entry points, so safety and approval
+        // classification cannot diverge between the first and later parses.
+        let script = "vtcode-cache-extraction-probe && grep -n pattern file | head -5";
+        let first = parse_shell_commands(script).expect("initial parse");
+        let second = parse_shell_commands(script).expect("cached parse");
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 3);
+        assert!(first.iter().any(|command| command.first().is_some_and(|name| name == "grep")));
+
+        let strict = parse_shell_commands_tree_sitter(script).expect("strict parse of cached tree");
+        assert_eq!(strict, first);
+    }
 }
 
 // === Injection detection (moved from tools::validation::commands) ===
@@ -877,7 +960,7 @@ pub(crate) fn split_shell_segments(command: &str) -> Result<Vec<String>> {
                             }
                         }
                         bail!(
-                            "multi-line shell commands are not allowed; use file tools (write_file/apply_patch) for multi-line content instead of heredocs"
+                            "multi-line shell commands are not allowed; write the content with `apply_patch` instead of a heredoc"
                         );
                     }
                     '|' | '&' => {

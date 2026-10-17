@@ -595,8 +595,12 @@ fn mark_archived_handoff_resolved(workspace: &Path, current_content: &str, sessi
         return Ok(());
     }
 
-    write!(archive, "\n# Resolution\n\n{resolution_marker}\nresolved_at: {}\n", Utc::now().to_rfc3339())
-        .with_context(|| format!("failed to append resolution to {}", canonical_archive.display()))?;
+    write!(
+        archive,
+        "\n# Resolution\n\n{resolution_marker}\nresolved_at: {}\nresolution_scope: blocked turn recovered; task may remain incomplete\n",
+        Utc::now().to_rfc3339()
+    )
+    .with_context(|| format!("failed to append resolution to {}", canonical_archive.display()))?;
     archive
         .sync_data()
         .with_context(|| format!("failed to sync {}", canonical_archive.display()))?;
@@ -1078,6 +1082,10 @@ mod tests {
         let archive = fs::read_to_string(artifacts.archive_path).expect("read resolved archive");
         assert!(archive.contains("# Resolution"));
         assert!(archive.contains("resolved_by_session: session-a"));
+        assert!(
+            archive.contains("resolution_scope: blocked turn recovered; task may remain incomplete"),
+            "resolution states turn scope, not task completion"
+        );
     }
 
     #[test]

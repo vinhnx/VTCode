@@ -98,6 +98,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
                         indent: 0,
                         selection: Some(InlineListSelection::SlashCommand("scope".to_string())),
                         search_value: Some("scope".to_string()),
+                        ..Default::default()
                     },
                     InlineListItem {
                         title: "Priority".to_string(),
@@ -106,6 +107,7 @@ fn wizard_search_paste_updates_filter_in_session_handle_event() {
                         indent: 0,
                         selection: Some(InlineListSelection::SlashCommand("priority".to_string())),
                         search_value: Some("priority".to_string()),
+                        ..Default::default()
                     },
                 ],
                 completed: false,
@@ -180,6 +182,7 @@ fn wizard_notes_paste_appends_to_custom_note_editor() {
                         other: Some(String::new()),
                     }),
                     search_value: Some("other".to_string()),
+                    ..Default::default()
                 }],
                 completed: false,
                 answer: None,

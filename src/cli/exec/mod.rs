@@ -99,6 +99,7 @@ mod tests {
 
         processor.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "msg-1".to_string(),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: "Final summary".to_string() }),
             },
@@ -111,6 +112,7 @@ mod tests {
         let mut processor = TestProcessor::new(false, true, Some(Vec::new()), None, Some(Vec::new()));
         processor.process_event(&ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {
+                context: None,
                 id: "cmd-1".to_string(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git status".to_string(),
@@ -123,6 +125,7 @@ mod tests {
         }));
         processor.process_event(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "warn-1".to_string(),
                 details: ThreadItemDetails::Error(ErrorItem { message: "watch out".to_string() }),
             },
@@ -172,11 +175,12 @@ mod tests {
     fn human_event_line_formats_diagnosis_reasoning() {
         let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "diagnosis-1".to_string(),
-                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
                     text: "Diagnosis: exec\nObserved: exit 1".to_string(),
                     stage: Some("diagnosis".to_string()),
-                }),
+                })),
             },
         }))
         .expect("diagnosis should render");
@@ -189,6 +193,7 @@ mod tests {
     fn human_event_line_formats_harness_verification_events() {
         let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "verify-1".to_string(),
                 details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                     event: HarnessEventKind::VerificationFailed,
@@ -218,6 +223,7 @@ mod tests {
     fn human_event_line_formats_blocked_handoff_events() {
         let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
+                context: None,
                 id: "handoff-1".to_string(),
                 details: ThreadItemDetails::Harness(Box::new(HarnessEventItem {
                     event: HarnessEventKind::BlockedHandoffWritten,
@@ -303,6 +309,7 @@ mod tests {
             total_cost_usd: None,
             warnings: Vec::new(),
             thread_events: vec![ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
                 usage: Usage::default(),
                 in_progress_exec_sessions: Vec::new(),
             })],

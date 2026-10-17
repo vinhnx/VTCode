@@ -14,6 +14,9 @@ pub(crate) enum WriteStdinDispatch {
     Write,
     Poll,
     Wait,
+    Inspect,
+    Terminate,
+    Close,
 }
 
 impl WriteStdinDispatch {
@@ -23,18 +26,41 @@ impl WriteStdinDispatch {
             Self::Write => "write",
             Self::Poll => "poll",
             Self::Wait => "wait",
+            Self::Inspect => "inspect",
+            Self::Terminate => "terminate",
+            Self::Close => "close",
         }
     }
 }
 
 pub(crate) fn write_stdin_dispatch(args: &Value) -> Result<WriteStdinDispatch, &'static str> {
     let payload = args.as_object().ok_or("write_stdin requires a JSON object")?;
-    if payload
-        .get("action")
-        .and_then(Value::as_str)
-        .is_some_and(|action| action.eq_ignore_ascii_case("wait"))
-    {
-        return Ok(WriteStdinDispatch::Wait);
+    if let Some(action) = payload.get("action") {
+        let action = action.as_str().ok_or("write_stdin action must be a string")?;
+        // Zero-alloc ASCII case-insensitive match: identical verdicts to the
+        // old `to_ascii_lowercase()` + `match` (both fold ASCII only), but
+        // without heap-allocating the lowered action on this hot path.
+        if action.eq_ignore_ascii_case("wait") {
+            return Ok(WriteStdinDispatch::Wait);
+        }
+        if action.eq_ignore_ascii_case("inspect") {
+            return Ok(WriteStdinDispatch::Inspect);
+        }
+        if action.eq_ignore_ascii_case("terminate") {
+            return Ok(WriteStdinDispatch::Terminate);
+        }
+        if action.eq_ignore_ascii_case("close") {
+            return Ok(WriteStdinDispatch::Close);
+        }
+        if action.eq_ignore_ascii_case("poll") {
+            if payload.get("chars").is_some_and(|chars| chars.as_str() != Some("")) {
+                return Err("write_stdin poll cannot send chars");
+            }
+            return Ok(WriteStdinDispatch::Poll);
+        }
+        if !action.eq_ignore_ascii_case("write") {
+            return Err("write_stdin action must be write, poll, wait, inspect, terminate, or close");
+        }
     }
     let chars = payload
         .get("chars")
@@ -308,6 +334,30 @@ pub fn raw_command_text(args: &Value) -> Option<String> {
     Some(shell_words::join(indexed.iter().map(String::as_str)))
 }
 
+/// Complete static-classification candidate, including the quoted argv suffix
+/// that execution appends to shell text. Conflicting raw overrides cannot prove
+/// one invocation, so callers must fail closed instead of treating it as a read
+/// or verifier. Dynamic syntax and command options still need normal validation.
+pub(crate) fn shell_command_text_with_args(args: &Value) -> Option<String> {
+    let mut command = raw_command_text(args)?;
+    if args
+        .get("raw_command")
+        .and_then(Value::as_str)
+        .is_some_and(|raw| raw != command)
+    {
+        return None;
+    }
+    if let Some(arguments) = args.get("args") {
+        let arguments = arguments.as_array()?;
+        let suffix_words = arguments.iter().map(Value::as_str).collect::<Option<Vec<_>>>()?;
+        if !suffix_words.is_empty() {
+            command.push(' ');
+            command.push_str(&shell_words::join(suffix_words));
+        }
+    }
+    Some(command)
+}
+
 /// Returns whether a shell command contains syntax whose meaning depends on
 /// shell expansion rather than the literal argument text.
 ///
@@ -319,13 +369,43 @@ pub fn contains_dynamic_shell_syntax(command: &str) -> bool {
     crate::command_safety::shell_parser::contains_dynamic_shell_syntax(command)
 }
 
-/// Skip an optional `env` prefix and leading shell environment assignments.
+/// Single-walk result for an `env` / leading-assignment prefix.
 ///
-/// The returned slice starts at the executable that will actually run. Keep
-/// this helper shared by intent and activity classification so both paths
-/// inspect the same command shape.
-pub fn command_words_after_environment_prefix(words: &[String]) -> &[String] {
+/// `stripped_start` is the index of the executable that will actually run;
+/// `has_injection` reports whether the skipped prefix sets a known
+/// config/loader-injection key or uses `env -S` (which re-parses at runtime
+/// and cannot be audited). One walk produces both so safety checks never
+/// re-scan the same prefix twice and the `env`-flag table cannot drift
+/// between the stripping and injection paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EnvPrefixScan {
+    stripped_start: usize,
+    has_injection: bool,
+}
+
+fn is_env_split_string_flag(word: &str) -> bool {
+    word == "-S" || word == "--split-string" || word.starts_with("-S") || word.starts_with("--split-string=")
+}
+
+fn env_flag_consumes_next(word: &str) -> bool {
+    matches!(word, "-u" | "--unset" | "-C" | "--chdir")
+}
+
+/// Walk an optional `env` prefix plus leading `KEY=value` assignments once.
+///
+/// Shared by [`command_words_after_environment_prefix`] (stripping) and
+/// [`environment_prefix_has_injection_keys`] (injection audit) so both paths
+/// inspect the same command shape. Fail-closed notes:
+///
+/// - `env -S`/`--split-string` re-parses the rest at runtime: reported as
+///   injection with an empty remainder, matching both historical paths.
+/// - Words with an empty key (`=foo`) are NOT assignments: scanning stops and
+///   they are kept as the program (unknown, therefore mutating). The old
+///   stripping path skipped them via a broad `contains('=')` test; stopping is
+///   strictly fail-closed and the injection path is unchanged.
+fn scan_environment_prefix(words: &[String]) -> EnvPrefixScan {
     let mut start = 0;
+    let mut has_injection = false;
     loop {
         if words.get(start).is_some_and(|word| word == "env") {
             start += 1;
@@ -334,22 +414,27 @@ pub fn command_words_after_environment_prefix(words: &[String]) -> &[String] {
                     start += 1;
                     break;
                 }
-                let is_split_string = word == "-S"
-                    || word == "--split-string"
-                    || word.starts_with("-S")
-                    || word.starts_with("--split-string=");
-                let consumes_next = matches!(word.as_str(), "-u" | "--unset" | "-C" | "--chdir");
-                start += 1;
-                if is_split_string {
-                    return &words[words.len()..];
+                if is_env_split_string_flag(word) {
+                    // Split-string re-parses the rest at runtime; cannot audit
+                    // assignments. Treat as unsafe with no auditable remainder.
+                    return EnvPrefixScan { stripped_start: words.len(), has_injection: true };
                 }
+                let consumes_next = env_flag_consumes_next(word);
+                start += 1;
                 if consumes_next {
+                    // `-u/--unset` removes a key; `-C/--chdir` takes a path.
                     if words.get(start).is_some() {
                         start += 1;
                     }
                     continue;
                 }
-                if word.starts_with('-') || word.contains('=') {
+                if let Some(key) = env_assignment_key(word) {
+                    if is_env_injection_key(key) {
+                        has_injection = true;
+                    }
+                    continue;
+                }
+                if word.starts_with('-') {
                     continue;
                 }
                 start -= 1;
@@ -357,16 +442,26 @@ pub fn command_words_after_environment_prefix(words: &[String]) -> &[String] {
             }
             continue;
         }
-        if words
-            .get(start)
-            .is_some_and(|word| !word.starts_with('-') && word.contains('='))
-        {
+        if let Some(key) = words.get(start).and_then(|word| env_assignment_key(word)) {
+            if is_env_injection_key(key) {
+                has_injection = true;
+            }
             start += 1;
             continue;
         }
         break;
     }
-    &words[start..]
+    EnvPrefixScan { stripped_start: start, has_injection }
+}
+
+/// Skip an optional `env` prefix and leading shell environment assignments.
+///
+/// The returned slice starts at the executable that will actually run. Keep
+/// this helper shared by intent and activity classification so both paths
+/// inspect the same command shape.
+pub fn command_words_after_environment_prefix(words: &[String]) -> &[String] {
+    let scan = scan_environment_prefix(words);
+    &words[scan.stripped_start..]
 }
 
 /// Exact environment keys that can inject config, load foreign code, or launch
@@ -430,57 +525,57 @@ fn is_env_injection_key(key: &str) -> bool {
 /// Unset (`env -u KEY`) is not an assignment. Unknown keys stay allowed so
 /// ordinary exploration (`LANG=C rg …`) keeps working.
 pub fn environment_prefix_has_injection_keys(words: &[String]) -> bool {
-    let mut start = 0;
-    loop {
-        if words.get(start).is_some_and(|word| word == "env") {
-            start += 1;
-            while let Some(word) = words.get(start) {
-                if word == "--" {
-                    start += 1;
-                    break;
-                }
-                let is_split_string = word == "-S"
-                    || word == "--split-string"
-                    || word.starts_with("-S")
-                    || word.starts_with("--split-string=");
-                let consumes_next = matches!(word.as_str(), "-u" | "--unset" | "-C" | "--chdir");
-                start += 1;
-                if is_split_string {
-                    // Split-string re-parses the rest at runtime; cannot audit
-                    // assignments. Treat as unsafe.
-                    return true;
-                }
-                if consumes_next {
-                    // `-u/--unset` removes a key; `-C/--chdir` takes a path.
-                    if words.get(start).is_some() {
-                        start += 1;
-                    }
-                    continue;
-                }
-                if let Some(key) = env_assignment_key(word) {
-                    if is_env_injection_key(key) {
-                        return true;
-                    }
-                    continue;
-                }
-                if word.starts_with('-') {
-                    continue;
-                }
-                start -= 1;
-                break;
-            }
-            continue;
-        }
-        if let Some(key) = words.get(start).and_then(|word| env_assignment_key(word)) {
-            if is_env_injection_key(key) {
-                return true;
-            }
-            start += 1;
-            continue;
-        }
-        break;
+    scan_environment_prefix(words).has_injection
+}
+
+/// Resolve the executable behind the supported flag-only `uv run` prefix.
+/// Unknown/value-taking wrapper options remain unclassified.
+pub(crate) fn uv_run_command_words(words: &[String]) -> Option<&[String]> {
+    if words.get(1).map(String::as_str) != Some("run") {
+        return None;
     }
-    false
+    let index = words
+        .iter()
+        .enumerate()
+        .skip(2)
+        .find(|(_, word)| {
+            !matches!(
+                word.as_str(),
+                "--frozen" | "--locked" | "--no-sync" | "--offline" | "--no-project" | "--quiet" | "-q"
+            )
+        })?
+        .0;
+    (!words.get(index)?.starts_with('-')).then(|| &words[index..])
+}
+
+/// Explicit source repair modes cannot serve as completion verifiers, even
+/// when declared by a tracker. Command admission remains policy-owned.
+pub(crate) fn command_uses_source_repair(words: &[String]) -> bool {
+    let words = command_words_after_environment_prefix(words);
+    let Some(program) = words
+        .first()
+        .and_then(|word| Path::new(word).file_name())
+        .and_then(|name| name.to_str())
+    else {
+        return false;
+    };
+    let program = program.to_ascii_lowercase();
+    match program.as_str() {
+        "cargo" => {
+            let mut arguments = words.iter().skip(1).take_while(|word| word.as_str() != "--");
+            arguments.clone().any(|word| word.split('=').next() == Some("--fix"))
+                || arguments
+                    .find(|word| !word.starts_with(['-', '+']))
+                    .is_some_and(|word| word == "fix")
+        }
+        "ruff" => {
+            words.iter().skip(1).take_while(|word| word.as_str() != "--").any(|word| {
+                matches!(word.split('=').next(), Some("--fix" | "--fix-only" | "--add-noqa" | "--add-ignore"))
+            })
+        }
+        "uv" => uv_run_command_words(words).is_some_and(command_uses_source_repair),
+        _ => false,
+    }
 }
 
 /// Return whether a parsed command uses an option or environment assignment
@@ -492,10 +587,18 @@ pub fn environment_prefix_has_injection_keys(words: &[String]) -> bool {
 /// rules here lets raw argument validation and activity classification share
 /// the same token-aware guard without searching quoted text.
 pub(crate) fn has_unsafe_readonly_options(words: &[String]) -> bool {
-    if environment_prefix_has_injection_keys(words) {
+    if command_uses_source_repair(words) {
         return true;
     }
-    let command_words = command_words_after_environment_prefix(words);
+    // Single prefix walk: the scan yields both the injection verdict and the
+    // stripped executable offset, replacing the historical two-walk sequence
+    // (`environment_prefix_has_injection_keys` then
+    // `command_words_after_environment_prefix`).
+    let scan = scan_environment_prefix(words);
+    if scan.has_injection {
+        return true;
+    }
+    let command_words = &words[scan.stripped_start..];
     let Some(program) = command_words
         .first()
         .and_then(|word| Path::new(word).file_name())
@@ -506,6 +609,28 @@ pub(crate) fn has_unsafe_readonly_options(words: &[String]) -> bool {
     let program = program.to_ascii_lowercase();
 
     match program.as_str() {
+        "rustc" => command_words.iter().enumerate().skip(1).any(|(index, word)| {
+            word.starts_with("-o")
+                || word.split('=').next() == Some("--out-dir")
+                || ["--print", "--emit"].iter().any(|option| {
+                    let value = if word == option {
+                        command_words.get(index + 1).map(String::as_str)
+                    } else {
+                        word.strip_prefix(option).and_then(|suffix| suffix.strip_prefix('='))
+                    };
+                    value.is_some_and(|value| value.contains('='))
+                })
+        }),
+        "pytest" | "python" | "python3" | "uv" => command_words.iter().skip(1).any(|word| {
+            matches!(
+                word.split('=').next(),
+                Some("--junitxml" | "--junit-xml" | "--log-file" | "--basetemp" | "--output-file")
+            )
+        }),
+        "ruff" => command_words
+            .iter()
+            .skip(1)
+            .any(|word| word.split('=').next() == Some("--output-file")),
         "git" => command_words.iter().skip(1).any(|word| {
             // `-C <dir>` (bare or inline `-C<dir>`) only redirects which
             // repository is read; the subcommand allow-list still gates every
@@ -796,43 +921,245 @@ fn has_unsafe_awk_options(arguments: &[String]) -> bool {
 }
 
 /// Return whether an `awk` program can write files, pipe into commands,
-/// execute them, or load external code. `>` (unless the `>=` comparison)
-/// and bare `|` (unless the `||` operator) are output redirection and
-/// command pipes; `system()` runs shell commands; `@` invokes gawk indirect
-/// calls (`@func()`) and directives (`@include`, `@load`), which can execute
-/// or load arbitrary code — including a `system` name smuggled via `-v`.
-/// String and regex literals are not distinguished from code: a literal
-/// containing `>`, `|`, or `@` fails closed as a possible write instead
-/// of risking a missed redirection. Bare `>` comparisons (`$3>100`) and `|`
-/// alternations (`/a|b/`) therefore stay mutating by design.
+/// execute them, or load external code. Single `>` (output redirection /
+/// append `>>`) and bare `|` (command pipe) are writes; `>=` and `||` are
+/// comparisons/operators. `system()` runs shell commands; `@` invokes gawk
+/// indirect calls (`@func()`) and directives (`@include`, `@load`), which can
+/// execute or load arbitrary code — including a `system` name smuggled via `-v`.
+///
+/// A single `>` is a comparison (not redirection) when it cannot be `print` /
+/// `printf` redirection: inside `(...)` / `[...]` parentheses (e.g.
+/// `if(p2==0 && i>1)`), or in a statement with no prior `print` / `printf`
+/// (e.g. pattern `$3>100`). `print > file`, `print x > file`, and `print >>`
+/// stay mutating. `|` stays conservative: only `||` and quoted `"|"` pass.
+///
+/// Double-quoted string literals are scanned as data: a quoted `"|"` passed to
+/// `index()` is a literal, not a command pipe, so the read-only shape
+/// `awk '... index(rest,"|") ...' file` is not misclassified. To keep this
+/// safe the scanner distinguishes string literals, regex literals (`/.../`),
+/// and division using awk's operand-vs-operator rule, so a quote *inside* a
+/// regex (`/"/`, `/a"b/`) can never desync string tracking and hide a pipe.
+/// `@` and `system()` fail closed everywhere — including inside string and
+/// regex literals — and `>`/`|`/`@` inside regex literals stay mutating, so the
+/// pinned `/a|b/` and `"a@b"` shapes remain conservative.
 fn awk_program_may_write(program: &str) -> bool {
     let chars = program.chars().collect::<Vec<_>>();
     let mut index = 0;
+    // Whether the previous significant token can end an operand. This decides
+    // whether `/` opens a regex literal or is a division operator.
+    let mut prev_operand = false;
+    // `print` / `printf` seen in the current statement (reset on `;`/`{`/`}`).
+    // A single `>` can only be output redirection inside such a statement;
+    // without it (pattern `$3>100`) or inside parens (e.g. `if(i>1)`) it is a
+    // numeric comparison. `>>` is always redirection.
+    let mut seen_print_in_statement = false;
+    let mut paren_depth: usize = 0;
+    let mut bracket_depth: usize = 0;
     while index < chars.len() {
         let character = chars[index];
+        if character.is_whitespace() {
+            index += 1;
+            continue;
+        }
+        if character == '#' {
+            // Comments are not AWK syntax. In particular, a commented `(`
+            // must not make a later print redirection look parenthesized.
+            while index < chars.len() && chars[index] != '\n' {
+                index += 1;
+            }
+            continue;
+        }
+        if character == '"' {
+            index += 1;
+            let mut terminated = false;
+            while index < chars.len() {
+                let inner = chars[index];
+                if inner == '\\' {
+                    index += 2;
+                    continue;
+                }
+                if inner == '"' {
+                    index += 1;
+                    terminated = true;
+                    break;
+                }
+                // `@`/`system()` fail closed even inside a literal; `>`/`|`
+                // are literal data here and are skipped.
+                if inner == '@' {
+                    return true;
+                }
+                if (inner == 's' || inner == 'S') && awk_calls_system(&chars, index) {
+                    return true;
+                }
+                index += 1;
+            }
+            if !terminated {
+                return true;
+            }
+            prev_operand = true;
+            continue;
+        }
+        if character == '/' && !prev_operand {
+            // Regex literal. Quotes are regex content, not string delimiters,
+            // so they cannot desync string parsing; `>`/`|`/`@` inside still
+            // fail closed, matching the pinned `/a|b/` policy.
+            index += 1;
+            let mut terminated = false;
+            while index < chars.len() {
+                let inner = chars[index];
+                if inner == '\\' {
+                    index += 2;
+                    continue;
+                }
+                if inner == '/' {
+                    index += 1;
+                    terminated = true;
+                    break;
+                }
+                if inner == '@' {
+                    return true;
+                }
+                if inner == '>' {
+                    if chars.get(index + 1) == Some(&'=') {
+                        index += 2;
+                        continue;
+                    }
+                    return true;
+                }
+                if inner == '|' {
+                    if chars.get(index + 1) == Some(&'|') {
+                        index += 2;
+                        continue;
+                    }
+                    return true;
+                }
+                index += 1;
+            }
+            if !terminated {
+                return true;
+            }
+            prev_operand = true;
+            continue;
+        }
         if character == '@' {
-            return true;
-        }
-        if character == '>' {
-            if chars.get(index + 1) == Some(&'=') {
-                index += 2;
-                continue;
-            }
-            return true;
-        }
-        if character == '|' {
-            if chars.get(index + 1) == Some(&'|') {
-                index += 2;
-                continue;
-            }
             return true;
         }
         if (character == 's' || character == 'S') && awk_calls_system(&chars, index) {
             return true;
         }
+        if character == '>' {
+            if chars.get(index + 1) == Some(&'=') {
+                index += 2;
+                prev_operand = false;
+                continue;
+            }
+            // `>>` is always append-redirection.
+            if chars.get(index + 1) == Some(&'>') {
+                return true;
+            }
+            // Single `>` is redirection only inside a `print`/`printf`
+            // statement at paren/bracket depth 0. Otherwise it is a numeric
+            // comparison (`if(p2==0 && i>1)`, pattern `$3>100`).
+            if paren_depth == 0 && bracket_depth == 0 && seen_print_in_statement {
+                return true;
+            }
+            index += 1;
+            prev_operand = false;
+            continue;
+        }
+        if character == '|' {
+            if chars.get(index + 1) == Some(&'|') {
+                index += 2;
+                prev_operand = false;
+                continue;
+            }
+            return true;
+        }
+        if character == '/' {
+            // Division: an operand precedes it.
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        if character.is_ascii_alphanumeric() || character == '_' {
+            let start = index;
+            while index < chars.len() && (chars[index].is_ascii_alphanumeric() || chars[index] == '_') {
+                index += 1;
+            }
+            let word: String = chars[start..index].iter().collect();
+            if word == "print" || word == "printf" {
+                seen_print_in_statement = true;
+            }
+            prev_operand = !is_awk_keyword(&word);
+            continue;
+        }
+        if character == '(' {
+            paren_depth = paren_depth.saturating_add(1);
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        if character == '[' {
+            bracket_depth = bracket_depth.saturating_add(1);
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        if character == ')' {
+            paren_depth = paren_depth.saturating_sub(1);
+            prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == ']' {
+            bracket_depth = bracket_depth.saturating_sub(1);
+            prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == '$' {
+            prev_operand = true;
+            index += 1;
+            continue;
+        }
+        if character == ';' || character == '{' || character == '}' {
+            // New statement: a later `>` needs its own `print`/`printf`.
+            seen_print_in_statement = false;
+            prev_operand = false;
+            index += 1;
+            continue;
+        }
+        prev_operand = false;
         index += 1;
     }
     false
+}
+
+/// Awk keywords that do not end an operand, so a following `/` opens a regex
+/// literal (`print /re/`) rather than being a division operator. Kept minimal
+/// and conservative: an unlisted keyword is treated as an operand, which at
+/// worst misreads a regex as division — still fail-closed, because regex
+/// contents are then scanned as top-level code and any `>`/`|`/`@` is caught.
+fn is_awk_keyword(word: &str) -> bool {
+    matches!(
+        word,
+        "if" | "else"
+            | "while"
+            | "for"
+            | "do"
+            | "break"
+            | "continue"
+            | "next"
+            | "nextfile"
+            | "exit"
+            | "return"
+            | "delete"
+            | "in"
+            | "getline"
+            | "print"
+            | "printf"
+            | "function"
+    )
 }
 
 /// Return whether `chars[start..]` invokes awk's `system()` builtin: the
@@ -861,212 +1188,6 @@ fn awk_calls_system(chars: &[char], start: usize) -> bool {
 
 fn is_awk_ident_char(character: char) -> bool {
     character.is_ascii_alphanumeric() || character == '_'
-}
-
-fn has_unsafe_readonly_options_in_command(command: &str) -> bool {
-    let Ok(commands) = crate::command_safety::shell_parser::parse_shell_commands_tree_sitter(command) else {
-        return true;
-    };
-    if commands.is_empty() {
-        return true;
-    }
-
-    commands.into_iter().any(|command| {
-        let mut words = Vec::new();
-        for word in command {
-            let Ok(tokens) = shell_words::split(&word) else {
-                return true;
-            };
-            words.extend(tokens);
-        }
-        has_unsafe_readonly_options(&words)
-    })
-}
-
-/// Returns true if the raw command string appears to be a safe read-only
-/// inspection command. It checks for shell write operators, process
-/// substitutions, and common destructive subcommands/flags.
-///
-/// This is intentionally conservative: a command that does anything suspicious
-/// is treated as mutating so it does not get silently cached or parallelized.
-pub fn is_readonly_command_string(args: &Value) -> bool {
-    let Some(command) = raw_command_text(args) else {
-        return false;
-    };
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-
-    if contains_dynamic_shell_syntax(trimmed) {
-        return false;
-    }
-
-    // Deny shell operators that produce side effects or hide them.
-    // Matches: >, >>, >|, <(, >(, ;, ||, $() backticks handled below.
-    // `&&` is allowed when every segment passes the same safety checks
-    // (no redirections, substitutions, or destructive commands) — see
-    // `is_readonly_chained_segments` in `readonly.rs` for the per-segment
-    // allow-list verification. This lets plan-mode run harmless exploration
-    // like `ls -la && echo '---' && ls -la crates/` (checkpoint turn_726:
-    // the `&&` rejection blocked all chained read-only inspection in plan
-    // mode, forcing the model to fall back to `request_user_input` which was
-    // also denied, dead-ending the turn).
-    // Pipelines are allowed here but validated segment-by-segment by the caller.
-    // `2>&1` merely merges stderr into stdout (no file is written), so it is
-    // stripped before scanning for write redirections — plan mode must not
-    // reject `cargo check 2>&1 | head -c 4000` style inspection.
-    let without_stderr_merge = trimmed.replace("2>&1", "");
-    if without_stderr_merge.contains('>')
-        || without_stderr_merge.contains("<(")
-        || without_stderr_merge.contains(';')
-        || without_stderr_merge.contains("||")
-    {
-        return false;
-    }
-
-    // Deny command substitution and process redirection that can run arbitrary code.
-    // Check each `&&`-separated segment individually so a substitution hidden in
-    // one segment is still caught.
-    let chain_segments: Vec<&str> = trimmed.split("&&").map(str::trim).collect();
-    for segment in &chain_segments {
-        if segment.contains("$(") || segment.contains('`') || segment.contains("$((") {
-            return false;
-        }
-    }
-
-    // Deny common destructive commands outright, regardless of flags.
-    // Check the full command (catches destructive commands in any segment) AND
-    // each segment individually (catches segment-starting destructive commands).
-    let lower = trimmed.to_ascii_lowercase();
-    if has_unsafe_readonly_options_in_command(trimmed) {
-        return false;
-    }
-    for destructive in [
-        " rm ",
-        "rm ",
-        " shred ",
-        "shred ",
-        " truncate ",
-        "truncate ",
-        " tee ",
-        "tee ",
-        " mv ",
-        "mv ",
-        " cp ",
-        "cp ",
-        " install ",
-        "install ",
-        " chmod ",
-        "chmod ",
-        " chown ",
-        "chown ",
-        " chattr ",
-        "chattr ",
-        " mkfs ",
-        "mkfs",
-        " dd ",
-        "dd ",
-        " wipe ",
-        "wipe ",
-        " srm ",
-        "srm ",
-        " rm\t",
-        "shred\t",
-        "truncate\t",
-        "tee\t",
-        "mv\t",
-        "cp\t",
-    ] {
-        if lower.contains(destructive) {
-            return false;
-        }
-    }
-    if lower.starts_with("rm ")
-        || lower.starts_with("shred ")
-        || lower.starts_with("truncate ")
-        || lower.starts_with("tee ")
-        || lower.starts_with("mv ")
-        || lower.starts_with("cp ")
-        || lower.starts_with("install ")
-        || lower.starts_with("chmod ")
-        || lower.starts_with("chown ")
-        || lower.starts_with("chattr ")
-        || lower.starts_with("mkfs")
-        || lower.starts_with("dd ")
-        || lower.starts_with("wipe ")
-        || lower.starts_with("srm ")
-    {
-        return false;
-    }
-
-    // Also check each `&&`-separated segment for destructive commands that
-    // start at the beginning of a segment (e.g. `ls -la && rm foo.txt`).
-    for segment in &chain_segments {
-        let seg_lower = segment.to_ascii_lowercase();
-        if seg_lower.starts_with("rm ")
-            || seg_lower.starts_with("shred ")
-            || seg_lower.starts_with("truncate ")
-            || seg_lower.starts_with("tee ")
-            || seg_lower.starts_with("mv ")
-            || seg_lower.starts_with("cp ")
-            || seg_lower.starts_with("install ")
-            || seg_lower.starts_with("chmod ")
-            || seg_lower.starts_with("chown ")
-            || seg_lower.starts_with("chattr ")
-            || seg_lower.starts_with("mkfs")
-            || seg_lower.starts_with("dd ")
-            || seg_lower.starts_with("wipe ")
-            || seg_lower.starts_with("srm ")
-        {
-            return false;
-        }
-    }
-
-    // Deny in-place editing commands (sed -i/--in-place, perl -i, ruby -i) which modify files
-    // despite being in the read-only allow-list.
-    if lower.contains("perl ") && lower.contains(" -i") {
-        return false;
-    }
-    if lower.contains("ruby ") && lower.contains(" -i") {
-        return false;
-    }
-
-    // Deny destructive `find` flags before we allow `find` as read-only.
-    if lower.contains("find ") {
-        for destructive_flag in [
-            " -delete",
-            "-delete ",
-            "\t-delete",
-            " -exec rm",
-            "-exec rm",
-            " -exec shred",
-            "-exec shred",
-            " -exec chmod",
-            "-exec chmod",
-            " -exec chown",
-            "-exec chown",
-            " -exec truncate",
-            "-exec truncate",
-            " -exec tee",
-            "-exec tee",
-            " -exec mv",
-            "-exec mv",
-            " -exec cp",
-            "-exec cp",
-            " -exec install",
-            "-exec install",
-            " -execdd",
-            " -exec bash",
-            "-exec bash",
-        ] {
-            if lower.contains(destructive_flag) {
-                return false;
-            }
-        }
-    }
-
-    true
 }
 
 pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
@@ -1120,11 +1241,12 @@ pub fn normalize_shell_args(args: &Value) -> Result<Value, &'static str> {
 mod tests {
     use super::{
         WriteStdinDispatch, command_session_missing_required_args, command_session_requires_command_safety,
-        command_text, command_words, contains_dynamic_shell_syntax, environment_prefix_has_injection_keys,
-        extract_command_text_with_key, has_indexed_command_parts, interactive_input_text, is_readonly_command_string,
-        normalize_indexed_command_args, normalize_shell_args, normalized_command_value, parse_indexed_command_parts,
-        raw_command_text, session_id_text, session_id_text_from_payload, working_dir_text,
-        working_dir_text_from_payload, write_stdin_dispatch,
+        command_text, command_words, command_words_after_environment_prefix, contains_dynamic_shell_syntax,
+        environment_prefix_has_injection_keys, extract_command_text_with_key, has_indexed_command_parts,
+        has_unsafe_readonly_options, interactive_input_text, normalize_indexed_command_args, normalize_shell_args,
+        normalized_command_value, parse_indexed_command_parts, raw_command_text, scan_environment_prefix,
+        session_id_text, session_id_text_from_payload, working_dir_text, working_dir_text_from_payload,
+        write_stdin_dispatch,
     };
     use serde_json::{Value, json};
 
@@ -1246,6 +1368,47 @@ mod tests {
     fn write_stdin_dispatch_requires_public_chars() {
         assert_eq!(write_stdin_dispatch(&json!({"input": "status\n"})), Err("write_stdin requires string chars"));
         assert_eq!(write_stdin_dispatch(&json!({"chars": 1})), Err("write_stdin requires string chars"));
+    }
+
+    #[test]
+    fn write_stdin_dispatch_validates_control_actions() {
+        for (action, expected) in [
+            ("inspect", WriteStdinDispatch::Inspect),
+            ("terminate", WriteStdinDispatch::Terminate),
+            ("close", WriteStdinDispatch::Close),
+            ("poll", WriteStdinDispatch::Poll),
+        ] {
+            assert_eq!(write_stdin_dispatch(&json!({"action": action})), Ok(expected));
+        }
+        assert!(write_stdin_dispatch(&json!({"action": "typo", "chars": "echo unsafe\n"})).is_err());
+        assert!(write_stdin_dispatch(&json!({"action": "poll", "chars": "echo unsafe\n"})).is_err());
+        assert!(write_stdin_dispatch(&json!({"action": 1, "chars": ""})).is_err());
+    }
+
+    #[test]
+    fn write_stdin_dispatch_matches_actions_case_insensitively() {
+        // Asymmetric: mixed-case spellings resolve like lowercase; non-ASCII
+        // lookalikes stay rejected (ASCII-only folding, as before).
+        for (action, expected) in [
+            ("WAIT", WriteStdinDispatch::Wait),
+            ("WaIt", WriteStdinDispatch::Wait),
+            ("INSPECT", WriteStdinDispatch::Inspect),
+            ("Terminate", WriteStdinDispatch::Terminate),
+            ("CLOSE", WriteStdinDispatch::Close),
+            ("Poll", WriteStdinDispatch::Poll),
+        ] {
+            assert_eq!(
+                write_stdin_dispatch(&json!({"action": action})),
+                Ok(expected),
+                "{action:?} must resolve like its lowercase form"
+            );
+        }
+        assert_eq!(
+            write_stdin_dispatch(&json!({"action": "WRITE", "chars": "status\n"})),
+            Ok(WriteStdinDispatch::Write)
+        );
+        assert!(write_stdin_dispatch(&json!({"action": "wäit"})).is_err());
+        assert!(write_stdin_dispatch(&json!({"action": "WAIT "})).is_err());
     }
 
     #[test]
@@ -1421,124 +1584,57 @@ mod tests {
     }
 
     #[test]
-    fn is_readonly_command_string_allows_inspection_commands() {
-        for cmd in [
-            "diff a.rs b.rs",
-            "find . -type f -name '*.rs'",
-            "wc -l src/main.rs",
-            "grep -rn 'todo' src",
-            "head -50 src/lib.rs",
-            "sort src/words.txt | uniq",
+    fn env_prefix_single_scan_agrees_with_both_public_helpers() {
+        let words = |command: &str| -> Vec<String> { shell_words::split(command).expect("split command") };
+        for command in [
+            "git status",
+            "env LANG=C.UTF-8 rg foo",
+            "FOO=bar LANG=C git status",
+            "env FOO=bar git status",
+            "env -- FOO=bar git status",
+            "env -u GIT_CONFIG_COUNT git status",
+            "env -C /tmp git status",
+            "env GIT_EXTERNAL_DIFF=evil git diff",
+            "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=k GIT_CONFIG_VALUE_0=v git status",
+            "env -S 'GIT_CONFIG_COUNT=1 git status'",
+            "env --split-string='x=1 ls'",
         ] {
-            assert!(is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be read-only");
+            let parsed = words(command);
+            let scan = scan_environment_prefix(&parsed);
+            assert_eq!(command_words_after_environment_prefix(&parsed), &parsed[scan.stripped_start..], "{command}");
+            assert_eq!(environment_prefix_has_injection_keys(&parsed), scan.has_injection, "{command}");
         }
     }
 
     #[test]
-    fn is_readonly_command_string_allows_pipelines() {
-        // Pipelines are allowed here; the caller is responsible for checking each
-        // segment against an allow-list of safe commands.
-        assert!(is_readonly_command_string(&json!({"command": "diff a b | wc -l"})));
-        assert!(is_readonly_command_string(&json!({"command": "grep x src | sort | uniq"})));
-    }
-
-    #[test]
-    fn is_readonly_command_string_allows_stderr_merge() {
-        // `2>&1` merges streams without writing a file; real redirections stay rejected.
-        assert!(is_readonly_command_string(&json!({"command": "cargo check 2>&1 | head -c 4000"})));
-        assert!(!is_readonly_command_string(&json!({"command": "cargo check 2>&1 > out.txt"})));
-        assert!(!is_readonly_command_string(&json!({"command": "ls 2> errors.txt"})));
-    }
-
-    #[test]
-    fn is_readonly_command_string_allows_and_chains() {
-        // `&&`-chained read-only commands are allowed when every segment is
-        // safe (no redirections, substitutions, or destructive commands).
-        // The per-segment allow-list check is handled by the caller via
-        // `is_readonly_chained_segments` (checkpoint turn_726).
-        assert!(is_readonly_command_string(&json!({"command": "ls -la && echo '---' && ls -la crates/"})));
-        assert!(is_readonly_command_string(&json!({"command": "pwd && ls src/"})));
-        assert!(is_readonly_command_string(&json!({"command": "true && cat foo.txt"})));
-    }
-
-    #[test]
-    fn is_readonly_command_string_rejects_destructive_and_chains() {
-        // Destructive commands in `&&` chains are still rejected.
-        assert!(!is_readonly_command_string(&json!({"command": "ls -la && rm foo.txt"})));
-        assert!(!is_readonly_command_string(&json!({"command": "true && mv a b"})));
-        assert!(!is_readonly_command_string(&json!({"command": "cat x && cp a b"})));
-        // Substitutions in any `&&` segment are still rejected.
-        assert!(!is_readonly_command_string(&json!({"command": "ls && echo $(date)"})));
-    }
-
-    #[test]
-    fn is_readonly_command_string_rejects_redirections_and_substitutions() {
-        for cmd in [
-            "cat a.txt > b.txt",
-            "grep x src >> out.txt",
-            "git diff --output=out.txt",
-            "git diff '--output=out.txt'",
-            "git diff -o out.txt",
-            "git diff -oout.txt",
-            "git log --output=out.txt",
-            "git -c diff.external=sh diff",
-            // `git -C <dir> <read-only sub>` is intentionally admitted now:
-            // the redirect only changes which repository is read, while the
-            // subcommand allow-list still gates the call. Config and helper
-            // redirects below stay rejected.
-            "git --git-dir=.evil-git diff",
-            "git --exec-path=.evil-git diff",
-            "find . -fprint output.txt",
-            "find . -fprintf output.txt '%p'",
-            "rg --hostname-bin sh pattern",
-            "rg --search-zip pattern",
-            "rg -z pattern",
-            "sed --in-place= README.md",
-            "sort -o out.txt README.md",
-            "sort --compress-program=sh README.md",
-            "date -s now",
-            "awk -i inplace '{print}' README.md",
-            "awk -v f=system 'BEGIN{@f(\"id\")}' README.md",
-            "awk '@include \"x.awk\"' README.md",
-            "sed -n 's/a/b/e' README.md",
-            "fd --exec sh -c 'touch out'",
-            "tree -o out.txt",
-            "ast-grep -r 'README.md'",
-            "sed -n -fmalicious.sed -e '1p' src/main.rs",
-            "sed -I '' 's/a/b/' src/main.rs",
-            "sed -n '1p\nw leaked.txt' src/main.rs",
-            "echo $(date)",
-            "echo `date`",
-            "cat <(echo hi)",
-            "cat >(echo hi)",
-            "true && rm a.txt",
-        ] {
-            assert!(!is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be rejected");
-        }
-
-        assert!(is_readonly_command_string(&json!({
-            "command": "echo 'git diff --output=out.txt'"
-        })));
-    }
-
-    #[test]
-    fn is_readonly_command_string_rejects_destructive_commands() {
-        for cmd in [
-            "rm a.txt",
-            "find . -type f -delete",
-            "find . -name '*.tmp' -exec rm {} \\;",
-            "shred a.txt",
-            "mv a.txt b.txt",
-        ] {
-            assert!(!is_readonly_command_string(&json!({"command": cmd})), "expected '{cmd}' to be rejected");
+    fn env_prefix_empty_key_stays_fail_closed() {
+        let words = |command: &str| -> Vec<String> { shell_words::split(command).expect("split command") };
+        // `=foo` is not a valid assignment: the executable stays `=foo`
+        // (unknown, therefore mutating downstream), never silently stripped.
+        for command in ["=foo rg foo", "env =foo rg foo"] {
+            let parsed = words(command);
+            let stripped = command_words_after_environment_prefix(&parsed);
+            assert_eq!(stripped.first().map(String::as_str), Some("=foo"), "{command}");
+            assert!(!environment_prefix_has_injection_keys(&parsed), "{command}");
         }
     }
 
     #[test]
-    fn is_readonly_command_string_rejects_spliced_find_exec() {
-        assert!(!is_readonly_command_string(&json!({
-            "command": "find src -maxdepth 0 -exe$''c touch /tmp/VT_BYPASS_POC {} +"
-        })));
+    fn env_prefix_split_string_reports_empty_remainder_and_unsafe() {
+        let words = |command: &str| -> Vec<String> { shell_words::split(command).expect("split command") };
+        let parsed = words("env -S 'GIT_CONFIG_COUNT=1 git status'");
+        assert!(command_words_after_environment_prefix(&parsed).is_empty());
+        assert!(environment_prefix_has_injection_keys(&parsed));
+        assert!(has_unsafe_readonly_options(&parsed));
+    }
+
+    #[test]
+    fn has_unsafe_readonly_options_flags_injection_without_second_walk() {
+        let words = |command: &str| -> Vec<String> { shell_words::split(command).expect("split command") };
+        assert!(has_unsafe_readonly_options(&words("env LD_PRELOAD=./evil.so ls")));
+        assert!(has_unsafe_readonly_options(&words("LD_PRELOAD=./evil.so ls")));
+        assert!(!has_unsafe_readonly_options(&words("env LANG=C.UTF-8 rg foo")));
+        assert!(!has_unsafe_readonly_options(&words("git status")));
     }
 
     #[test]

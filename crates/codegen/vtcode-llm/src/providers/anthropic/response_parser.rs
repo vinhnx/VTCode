@@ -188,6 +188,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         reasoning_details_vec.push(detail);
     }
 
+    super::speed::log_served_speed(&model, response_json.get("usage").and_then(super::speed::parse_served_speed));
     Ok(LLMResponse {
         content: if text_parts.is_empty() {
             None

@@ -6,6 +6,30 @@
 
 //! Unified formatting utilities for UI and logging
 
+/// Case-insensitive ASCII substring search that does not allocate a lowercased
+/// copy of either input.
+///
+/// Equivalent to
+/// `haystack.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())` for all
+/// inputs, because `[u8]::eq_ignore_ascii_case` is a length-preserving bytewise
+/// fold and byte comparison only matches at the same offset on both sides. Bytes
+/// `>= 0x80` are compared exactly (neither `to_ascii_lowercase` nor
+/// `eq_ignore_ascii_case` folds them), so non-ASCII haystacks and needles behave
+/// identically. An empty `needle` matches (as `str::contains` does).
+#[inline]
+pub fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    // `windows` yields nothing when the haystack is shorter than the needle, and
+    // the empty-needle `windows(0)` panic is guarded above.
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
+}
+
 /// Format file size in human-readable form (KB, MB, GB, etc.)
 pub fn format_size(size: u64) -> String {
     const KB: u64 = 1024;
@@ -20,6 +44,24 @@ pub fn format_size(size: u64) -> String {
         format!("{:.1}KB", size as f64 / KB as f64)
     } else {
         format!("{size}B")
+    }
+}
+
+/// Format a duration in seconds as a compact human-readable unit.
+///
+/// Returns `"42s"`, `"5m"`, `"3h"`, or `"2d"`. Callers add their own suffix
+/// (`" ago"`, `"expires in ..."`) so the same core serves past and future
+/// durations. Do not fork this ladder per crate.
+#[must_use]
+pub fn humanize_duration_compact(seconds: u64) -> String {
+    if seconds < 60 {
+        format!("{seconds}s")
+    } else if seconds < 3600 {
+        format!("{}m", seconds / 60)
+    } else if seconds < 86400 {
+        format!("{}h", seconds / 3600)
+    } else {
+        format!("{}d", seconds / 86400)
     }
 }
 
@@ -133,30 +175,19 @@ pub fn truncate_path_middle(path: &str, max_len: usize) -> String {
         return "…".to_string();
     }
 
-    // Try to find a good break point at a path separator
+    // Work in char offsets throughout: byte offsets from `rfind`/`find` would
+    // overshoot the budget on multi-byte paths.
+    let chars: Vec<char> = path.chars().collect();
     let head_budget = max_len / 2;
     let tail_budget = max_len.saturating_sub(head_budget + 1);
 
-    // Find the last '/' in the head portion
-    // Collect chars directly into a String — `String: FromIterator<char>`,
-    // so the intermediate `Vec<char>` of the prior two-step collect is redundant.
-    let head_str: String = path.chars().take(head_budget).collect();
-    let head_break = head_str.rfind('/').unwrap_or(head_budget);
+    let head_break = chars.iter().take(head_budget).rposition(|c| *c == '/').unwrap_or(head_budget);
 
-    // Find the first '/' in the tail portion (from the end)
-    let tail_chars: Vec<char> = path.chars().rev().take(tail_budget).collect();
-    let tail_str: String = tail_chars.iter().rev().collect();
-    let tail_break_from_end = tail_str.find('/').map(|pos| tail_str.len() - pos).unwrap_or(tail_budget);
+    let tail: Vec<char> = chars.iter().rev().take(tail_budget).rev().copied().collect();
+    let tail_len = tail.iter().position(|c| *c == '/').map_or(tail_budget, |pos| tail_budget - pos);
 
-    let head: String = path.chars().take(head_break).collect();
-    let tail: String = path
-        .chars()
-        .rev()
-        .take(tail_break_from_end)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
+    let head: String = chars.iter().take(head_break).collect();
+    let tail: String = tail.iter().skip(tail_budget - tail_len).collect();
 
     format!("{head}…{tail}")
 }
@@ -570,6 +601,71 @@ fn push_split_word(lines: &mut Vec<String>, word: &str, width: usize, continuati
     rest.to_string()
 }
 
+/// Format an `f64` float for display, collapsing decimal artifacts.
+///
+/// Config floats backed by `f32` (temperatures, thresholds) widen to long
+/// `f64` tails (`0.7` becomes `0.699999988079071`) once serialized to
+/// `toml::Value`, and `±0.1` stepper presses accumulate similar tails
+/// (`0.8` becomes `0.799999988079071`). When the value round-trips exactly
+/// through `f32`, the shorter `f32` form is displayed; otherwise a value
+/// within a tiny epsilon of a 1- or 2-decimal grid shows the grid form.
+/// Genuine precision is never rounded. Display-only: the stored value is
+/// untouched.
+///
+/// ```
+/// # use vtcode_commons::formatting::format_float_display;
+/// assert_eq!(format_float_display(0.699999988079071), "0.7");
+/// assert_eq!(format_float_display(0.799999988079071), "0.8");
+/// assert_eq!(format_float_display(0.3333333333333333), "0.3333333333333333");
+/// ```
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::float_cmp,
+    reason = "Narrowing `f64` to `f32` and comparing exactly is the detection mechanism: only exact round-trips collapse."
+)]
+pub fn format_float_display(value: f64) -> String {
+    if !value.is_finite() {
+        return value.to_string();
+    }
+    let narrowed = value as f32;
+    if (narrowed as f64) == value {
+        return narrowed.to_string();
+    }
+    // Stepper/grid artifacts differ from the grid form by ~1e-8 or less;
+    // anything at or beyond 1e-6 off-grid keeps full precision.
+    const GRID_EPSILON: f64 = 1e-7;
+    for precision in [1i32, 2i32] {
+        let factor = 10f64.powi(precision);
+        let snapped = (value * factor).round() / factor;
+        if (snapped - value).abs() < GRID_EPSILON {
+            return snapped.to_string();
+        }
+    }
+    value.to_string()
+}
+
+/// Borrow the longest prefix of `text` that is at most `max_bytes` bytes,
+/// rounded down to the nearest UTF-8 char boundary.
+///
+/// This is the canonical byte-bounded prefix used by provider previews, PTY
+/// capture limits, and bounded WebMCP prompts; do not fork the boundary loop.
+///
+/// ```
+/// # use vtcode_commons::formatting::truncate_utf8_prefix;
+/// assert_eq!(truncate_utf8_prefix("hello world", 5), "hello");
+/// assert_eq!(truncate_utf8_prefix("hi", 10), "hi");
+/// // Never splits a multi-byte char: 4 bytes lands mid-`日`, so only 2 survive.
+/// assert_eq!(truncate_utf8_prefix("AB日", 4), "AB");
+/// ```
+#[inline]
+pub fn truncate_utf8_prefix(text: &str, max_bytes: usize) -> &str {
+    let mut end = max_bytes.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// Truncate a string so that the retained prefix is at most `max_bytes` bytes,
 /// rounded down to the nearest UTF-8 char boundary.  Returns the truncated
 /// prefix with `suffix` appended, or the original string when it already fits.
@@ -577,11 +673,7 @@ pub fn truncate_byte_budget(text: &str, max_bytes: usize, suffix: &str) -> Strin
     if text.len() <= max_bytes {
         return text.to_string();
     }
-    let mut end = max_bytes.min(text.len());
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}{suffix}", &text[..end])
+    format!("{}{suffix}", truncate_utf8_prefix(text, max_bytes))
 }
 
 /// Whether `line` opens or closes a fenced markdown code block.
@@ -661,6 +753,60 @@ pub fn collapse_whitespace(text: &str) -> String {
     result
 }
 
+/// Strip an optional leading `word` (case-insensitive) that is separated from the
+/// rest by whitespace, returning the trimmed remainder, or `input` unchanged
+/// when the prefix is absent or not word-boundary separated.
+///
+/// Canonical home for shell/file operand prefixes such as `on`/`from`.
+///
+/// ```
+/// # use vtcode_commons::formatting::strip_optional_word_prefix;
+/// assert_eq!(strip_optional_word_prefix("on src/main.rs", "on"), "src/main.rs");
+/// assert_eq!(strip_optional_word_prefix("From here", "from"), "here");
+/// // No whitespace boundary: left untouched.
+/// assert_eq!(strip_optional_word_prefix("onto x", "on"), "onto x");
+/// ```
+#[inline]
+pub fn strip_optional_word_prefix<'a>(input: &'a str, word: &str) -> &'a str {
+    let Some(prefix) = input.get(..word.len()) else {
+        return input;
+    };
+    if !prefix.eq_ignore_ascii_case(word) {
+        return input;
+    }
+    let remainder = &input[word.len()..];
+    if remainder.chars().next().is_some_and(char::is_whitespace) {
+        remainder.trim_start()
+    } else {
+        input
+    }
+}
+
+/// Trim surrounding whitespace, matched wrapping quotes (`"`/`'`), and trailing
+/// sentence punctuation (`. , ; ! ?`), repeating until the value is stable.
+///
+/// ```
+/// # use vtcode_commons::formatting::trim_wrapping_quotes_and_punctuation;
+/// assert_eq!(trim_wrapping_quotes_and_punctuation("'src/main.rs',"), "src/main.rs");
+/// assert_eq!(trim_wrapping_quotes_and_punctuation("  plain  "), "plain");
+/// ```
+#[inline]
+pub fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
+    let mut normalized = target.trim();
+    loop {
+        let previous = normalized;
+        normalized = normalized.trim();
+        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
+        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
+        normalized = normalized.trim_end_matches(['.', ',', ';', '!', '?']).trim();
+        if normalized == previous {
+            return normalized;
+        }
+    }
+}
+
 /// Clean reasoning text by trimming trailing whitespace on each line and
 /// removing blank lines.
 ///
@@ -723,9 +869,87 @@ mod tests {
     use super::*;
 
     #[test]
+    fn humanize_duration_compact_ladder() {
+        assert_eq!(humanize_duration_compact(0), "0s");
+        assert_eq!(humanize_duration_compact(42), "42s");
+        assert_eq!(humanize_duration_compact(59), "59s");
+        assert_eq!(humanize_duration_compact(60), "1m");
+        assert_eq!(humanize_duration_compact(300), "5m");
+        assert_eq!(humanize_duration_compact(3599), "59m");
+        assert_eq!(humanize_duration_compact(3600), "1h");
+        assert_eq!(humanize_duration_compact(3 * 3600), "3h");
+        assert_eq!(humanize_duration_compact(86399), "23h");
+        assert_eq!(humanize_duration_compact(86400), "1d");
+        assert_eq!(humanize_duration_compact(2 * 86400), "2d");
+    }
+
+    #[test]
+    fn format_float_display_collapses_f32_widening() {
+        // `0.7f32` widened to `f64` is the exact artifact seen in the settings
+        // value column; asymmetric counterpart must keep full precision.
+        assert_eq!(format_float_display(f64::from(0.7f32)), "0.7");
+        assert_eq!(format_float_display(f64::from(0.3f32)), "0.3");
+        assert_eq!(format_float_display(f64::from(-0.7f32)), "-0.7");
+        assert_eq!(format_float_display(0.3333333333333333), "0.3333333333333333");
+    }
+
+    #[test]
+    fn format_float_display_snaps_stepper_artifacts_to_grid() {
+        // One `+0.1` press on the widened `0.7` default lands at
+        // `0.799999988079071`; the classic `0.1 + 0.2` sum snaps the same way.
+        // Asymmetric counterpart keeps genuine off-grid precision.
+        assert_eq!(format_float_display(f64::from(0.7f32) + 0.1), "0.8");
+        assert_eq!(format_float_display(0.799999988079071), "0.8");
+        assert_eq!(format_float_display(0.1 + 0.2), "0.3");
+        assert_eq!(format_float_display(-0.799999988079071), "-0.8");
+        assert_eq!(format_float_display(0.123456789), "0.123456789");
+    }
+
+    #[test]
+    fn format_float_display_keeps_plain_floats() {
+        assert_eq!(format_float_display(1.0), "1");
+        assert_eq!(format_float_display(0.0), "0");
+        assert_eq!(format_float_display(0.05), "0.05");
+        assert_eq!(format_float_display(0.75), "0.75");
+    }
+
+    #[test]
     fn truncate_byte_budget_ascii() {
         assert_eq!(truncate_byte_budget("hello world", 5, "..."), "hello...");
         assert_eq!(truncate_byte_budget("hi", 10, "..."), "hi");
+    }
+
+    #[test]
+    fn contains_ignore_ascii_case_matches_str_contains_semantics() {
+        // Mixed case on both sides.
+        assert!(contains_ignore_ascii_case("MiniMax-M2.5", "minimax-m2.5"));
+        assert!(contains_ignore_ascii_case("minimax-m2.5", "MINIMAX"));
+        // Uppercase needle only (no lowercase form provided).
+        assert!(contains_ignore_ascii_case("openai/gpt-5", "GPT-5"));
+        // Empty needle matches, as `str::contains("")` does.
+        assert!(contains_ignore_ascii_case("anything", ""));
+        // Needle longer than the haystack.
+        assert!(!contains_ignore_ascii_case("glm", "glm-4.5"));
+        // No match.
+        assert!(!contains_ignore_ascii_case("openai/gpt-5", "minimax"));
+    }
+
+    #[test]
+    fn contains_ignore_ascii_case_matches_lowercased_contains_for_unicode() {
+        // ASCII needle inside a non-ASCII haystack: `to_ascii_lowercase` leaves
+        // multi-byte bytes untouched, so results must agree exactly.
+        for (haystack, needle) in [
+            ("café GLM-5", "glm-5"),
+            ("日本語 <THINK", "<think"),
+            ("straße", "STRASSE"),
+            ("naïve", "naïve"),
+        ] {
+            assert_eq!(
+                contains_ignore_ascii_case(haystack, needle),
+                haystack.to_ascii_lowercase().contains(&needle.to_ascii_lowercase()),
+                "mismatch for haystack={haystack:?} needle={needle:?}"
+            );
+        }
     }
 
     #[test]
@@ -955,4 +1179,15 @@ mod tests {
         assert_eq!(truncate_path_middle("foo/bar/baz/qux", 12), "foo…/qux");
         assert_eq!(truncate_path_middle("abc", 0), "");
     }
+
+    #[test]
+    fn truncate_path_middle_counts_chars_not_bytes() {
+        // Found by generative_tests: byte offsets from rfind/find overshot the budget.
+        let out = truncate_path_middle("日本/日本語/日本語日本語/xyz", 6);
+        assert!(out.chars().count() <= 6, "{out:?}");
+        assert_eq!(truncate_path_middle("日本/日本語/xyz", 8), "日本…xyz");
+    }
 }
+
+#[cfg(test)]
+mod generative_tests;

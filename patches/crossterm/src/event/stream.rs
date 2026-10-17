@@ -2,9 +2,9 @@ use std::{
     io,
     pin::Pin,
     sync::{
+        Arc,
         atomic::{AtomicBool, Ordering},
         mpsc::{self, SyncSender},
-        Arc,
     },
     task::{Context, Poll},
     thread,
@@ -14,8 +14,7 @@ use std::{
 use futures_core::stream::Stream;
 
 use crate::event::{
-    filter::EventFilter, lock_internal_event_reader, poll_internal, read_internal, sys::Waker,
-    Event, InternalEvent,
+    Event, InternalEvent, filter::EventFilter, lock_internal_event_reader, poll_internal, read_internal, sys::Waker,
 };
 
 /// A stream of `Result<Event>`.
@@ -52,8 +51,7 @@ impl Default for EventStream {
                         break;
                     }
                 }
-                task.stream_wake_task_executed
-                    .store(false, Ordering::SeqCst);
+                task.stream_wake_task_executed.store(false, Ordering::SeqCst);
                 task.stream_waker.wake();
             }
         });
@@ -118,8 +116,7 @@ impl Stream for EventStream {
                 {
                     let stream_waker = cx.waker().clone();
                     let stream_wake_task_executed = self.stream_wake_task_executed.clone();
-                    let stream_wake_task_should_shutdown =
-                        self.stream_wake_task_should_shutdown.clone();
+                    let stream_wake_task_should_shutdown = self.stream_wake_task_should_shutdown.clone();
 
                     stream_wake_task_should_shutdown.store(false, Ordering::SeqCst);
 
@@ -139,8 +136,7 @@ impl Stream for EventStream {
 
 impl Drop for EventStream {
     fn drop(&mut self) {
-        self.stream_wake_task_should_shutdown
-            .store(true, Ordering::SeqCst);
+        self.stream_wake_task_should_shutdown.store(true, Ordering::SeqCst);
         let _ = self.poll_internal_waker.wake();
     }
 }

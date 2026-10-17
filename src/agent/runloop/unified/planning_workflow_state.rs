@@ -343,14 +343,25 @@ pub(crate) fn render_planning_workflow_next_step_hint(renderer: &mut AnsiRendere
     Ok(())
 }
 
+/// Promote to the Planning stage without emitting a transcript row.
+///
+/// Mid-turn `start_planning` entry uses this: the turn-loop Build→Plan
+/// auto-switch detector owns the single researching row (rendered after the
+/// `• Start planning` summary). Emitting here would duplicate it (❋, •, ❋).
+/// If the turn breaks before the detector runs, the footer shows `Planning…`
+/// with no row; the next planning turn re-renders at turn start (self-heals).
+pub(crate) fn promote_planning_stage(handle: &InlineHandle) {
+    handle.set_activity_state(ActivityState::Planning);
+    handle.force_redraw();
+}
+
 /// Promote to the Planning stage and render the researching transcript row.
 ///
 /// Called once per planning turn when work is live (turn start, mid-turn
-/// planning entry). Mode entry alone stays `Idle` so the footer never shows
-/// `Planning...` before the user has typed a request.
+/// planning entry via the turn-loop detector). Mode entry alone stays `Idle`
+/// so the footer never shows `Planning...` before the user has typed a request.
 pub(crate) fn mark_planning_turn_started(renderer: &mut AnsiRenderer, handle: &InlineHandle) {
-    handle.set_activity_state(ActivityState::Planning);
-    handle.force_redraw();
+    promote_planning_stage(handle);
     if let Err(err) = crate::agent::runloop::unified::tool_summary::render_planning_progress_indicator(
         renderer,
         crate::agent::runloop::unified::tool_summary::PLANNING_RESEARCHING_INDICATOR,
@@ -799,5 +810,59 @@ mod tests {
         state.exit();
         state.enter(PlanningEntrySource::UserRequest);
         assert!(!state.bounded_planning_follow_up_allowed());
+    }
+
+    fn drain_transcript_text(
+        receiver: &mut tokio::sync::mpsc::UnboundedReceiver<vtcode_ui::tui::app::InlineCommand>,
+    ) -> String {
+        use vtcode_ui::tui::app::InlineCommand;
+        std::iter::from_fn(|| receiver.try_recv().ok())
+            .filter_map(|command| match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    Some(segments.into_iter().map(|s| s.text).collect::<String>())
+                }
+                InlineCommand::Inline { segment, .. } => Some(segment.text),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn promote_planning_stage_emits_no_researching_row() {
+        // Mid-turn `start_planning` entry must not render the researching row:
+        // the turn-loop detector owns it (rendered after the `• Start planning`
+        // summary). Emitting here duplicates it (❋, •, ❋).
+        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_ui::tui::app::InlineHandle;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let _renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+
+        super::promote_planning_stage(&handle);
+
+        let text = drain_transcript_text(&mut receiver);
+        assert!(!text.contains("Drafting plan"), "stage promotion must not emit a transcript row, got: {text:?}");
+    }
+
+    #[test]
+    fn mark_planning_turn_started_emits_single_researching_row() {
+        // Turn start / detector path owns the single researching row.
+        use vtcode_core::utils::ansi::AnsiRenderer;
+        use vtcode_ui::tui::app::InlineHandle;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle::new_for_tests(sender);
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+
+        super::mark_planning_turn_started(&mut renderer, &handle);
+
+        let text = drain_transcript_text(&mut receiver);
+        assert_eq!(
+            text.matches("Drafting plan").count(),
+            1,
+            "exactly one researching row per planning turn, got: {text:?}"
+        );
     }
 }

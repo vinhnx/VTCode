@@ -79,6 +79,29 @@ pub struct AutoCompactionInput<'a> {
     pub parent_context: Option<CompactionParentContext>,
 }
 
+impl AutoCompactionInput<'_> {
+    /// Check shared gates before a caller requests copy-on-write history.
+    pub(crate) fn should_compact(&self) -> bool {
+        if !self.vt_cfg.is_some_and(|cfg| cfg.agent.harness.auto_compaction_enabled)
+            || *self.auto_compact_suppressed != SUPPRESS_NONE
+        {
+            return false;
+        }
+        let Some(threshold) = effective_compaction_threshold_with_reserve(
+            self.vt_cfg,
+            self.provider,
+            self.model,
+            self.reserved_output_tokens,
+        ) else {
+            return false;
+        };
+        let window = effective_context_budget(self.vt_cfg, self.provider, self.model);
+        let threshold = crate::compaction::CompactionRoutePolicy::resolve(self.provider.name(), self.model)
+            .apply_threshold_cap(threshold, window);
+        self.force_compaction || self.current_token_usage >= threshold
+    }
+}
+
 /// Compress `history` in place when automatic compaction should fire.
 ///
 /// Returns `None` when compaction is disabled, the history is below the trigger
@@ -90,14 +113,15 @@ pub async fn auto_compact_messages(
     input: AutoCompactionInput<'_>,
     history: &mut Vec<Message>,
 ) -> Result<Option<AutoCompactionOutcome>> {
+    if !input.should_compact() {
+        return Ok(None);
+    }
     let AutoCompactionInput {
         provider,
         model,
         session_id,
         workspace_root,
         vt_cfg,
-        current_token_usage,
-        reserved_output_tokens,
         touched_files,
         engine_cfg,
         manual_options,
@@ -107,16 +131,8 @@ pub async fn auto_compact_messages(
         force_compaction,
         steering_update,
         parent_context,
+        ..
     } = input;
-
-    if !vt_cfg.is_some_and(|cfg| cfg.agent.harness.auto_compaction_enabled) {
-        return Ok(None);
-    }
-
-    let Some(threshold) = effective_compaction_threshold_with_reserve(vt_cfg, provider, model, reserved_output_tokens)
-    else {
-        return Ok(None);
-    };
 
     // Use the same provider/session intersection as the trigger and preflight
     // paths. This bounds local input and output, while native output remains
@@ -125,19 +141,6 @@ pub async fn auto_compact_messages(
         0 => None,
         budget => Some(budget),
     };
-    // Per-route triggers can only fire *earlier* (fail-safe); the default
-    // ratio preserves the absolute-tokens trigger unchanged.
-    let window = context_budget.unwrap_or(0);
-    let threshold = crate::compaction::CompactionRoutePolicy::resolve(provider.name(), model)
-        .apply_threshold_cap(threshold, window);
-    if current_token_usage < threshold && !force_compaction {
-        return Ok(None);
-    }
-
-    if *auto_compact_suppressed != SUPPRESS_NONE {
-        return Ok(None);
-    }
-
     let mut compaction_input = history.clone();
     strip_existing_memory_envelope(&mut compaction_input);
     let original_history = compaction_input.clone();
@@ -513,6 +516,49 @@ mod tests {
         fn effective_context_size(&self, _model: &str) -> usize {
             4_096
         }
+    }
+
+    #[test]
+    fn readiness_preserves_threshold_boundary_and_force_gates() {
+        let provider = SuccessfulProvider;
+        let mut cfg = VTCodeConfig::default();
+        cfg.agent.harness.auto_compaction_enabled = true;
+        let mut disabled_cfg = cfg.clone();
+        disabled_cfg.agent.harness.auto_compaction_enabled = false;
+        let mut suppressed = SUPPRESS_NONE;
+        let mut input = AutoCompactionInput {
+            provider: &provider,
+            model: "successful-model",
+            session_id: "readiness",
+            workspace_root: Path::new("."),
+            vt_cfg: Some(&cfg),
+            current_token_usage: 2_999,
+            reserved_output_tokens: 96,
+            touched_files: &[],
+            engine_cfg: CompactionConfig::default(),
+            manual_options: ManualCompactionOptions::default(),
+            placement: MemoryEnvelopePlacement::BeforeLastUserOrSummary,
+            prefire: None,
+            auto_compact_suppressed: &mut suppressed,
+            force_compaction: false,
+            steering_update: None,
+            parent_context: None,
+        };
+        // The provider has a 4,096-token window; after the 96-token output
+        // reserve, the default 75% threshold is exactly 3,000 tokens.
+        assert!(!input.should_compact());
+        input.current_token_usage = 3_000;
+        assert!(input.should_compact());
+        input.current_token_usage = 2_999;
+        input.force_compaction = true;
+        assert!(input.should_compact(), "forced boundaries bypass pressure only");
+        input.vt_cfg = Some(&disabled_cfg);
+        assert!(!input.should_compact());
+        input.vt_cfg = None;
+        assert!(!input.should_compact());
+        input.vt_cfg = Some(&cfg);
+        *input.auto_compact_suppressed = SUPPRESS_STICKY;
+        assert!(!input.should_compact());
     }
 
     #[tokio::test]

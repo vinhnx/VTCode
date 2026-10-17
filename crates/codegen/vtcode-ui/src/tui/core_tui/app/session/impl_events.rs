@@ -26,6 +26,15 @@ impl Session {
         events::process_key_with_clipboard_image_reader(self, key, image_reader)
     }
 
+    #[cfg(test)]
+    pub(crate) fn process_key_with_clipboard_text_reader(
+        &mut self,
+        key: KeyEvent,
+        text_reader: impl FnMut() -> Result<String, crate::tui::core_tui::session::clipboard_image::ClipboardTextError>,
+    ) -> Option<InlineEvent> {
+        events::process_key_with_clipboard_text_reader(self, key, text_reader)
+    }
+
     fn input_area_contains(&self, column: u16, row: u16) -> bool {
         self.core.input_area().is_some_and(|area| {
             row >= area.y
@@ -163,6 +172,7 @@ impl Session {
                 area,
                 row,
                 wizard.numbered_shortcuts(),
+                false,
             );
         }
 
@@ -177,6 +187,7 @@ impl Session {
             area,
             row,
             modal.search.is_none(),
+            modal.status.is_some(),
         )
     }
 
@@ -334,11 +345,17 @@ impl Session {
         let row = mouse_event.row;
         if self.local_agents_visible() {
             let pos = Position { x: column, y: row };
-            let Some(window) = self.local_agents_state.window_area() else {
+            let Some(panel) = self.local_agents_state.panel_area() else {
                 return false;
             };
-            if !window.contains(pos) {
+            if !panel.contains(pos) {
                 return false;
+            }
+            // Header/title click toggles compact <-> 75% expanded.
+            if row <= panel.y.saturating_add(1) {
+                self.local_agents_state.toggle_expanded();
+                self.mark_dirty();
+                return true;
             }
             if let Some(list_area) = self.local_agents_state.list_area()
                 && list_area.contains(pos)
@@ -470,6 +487,7 @@ impl Session {
         true
     }
 
+    #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub fn handle_event(
         &mut self,
         event: CrosstermEvent,
@@ -507,7 +525,7 @@ impl Session {
                             self.update_transcript_file_link_hover(mouse_event.column, mouse_event.row)
                         };
                         if mode_hover_changed || close_hover_changed || link_hover_changed {
-                            self.mark_dirty();
+                            self.mark_visual_dirty();
                         }
                     }
                     MouseEventKind::ScrollDown => {
@@ -518,7 +536,7 @@ impl Session {
                             && !self.handle_bottom_panel_scroll(true)
                         {
                             self.scroll_line_down();
-                            self.mark_dirty();
+                            self.mark_visual_dirty();
                         }
                     }
                     MouseEventKind::ScrollUp => {
@@ -529,7 +547,7 @@ impl Session {
                             && !self.handle_bottom_panel_scroll(false)
                         {
                             self.scroll_line_up();
-                            self.mark_dirty();
+                            self.mark_visual_dirty();
                         }
                     }
                     MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
@@ -556,14 +574,39 @@ impl Session {
                         }
 
                         if self.tool_output_viewer_state().is_some() {
+                            if mouse_event.modifiers == crossterm::event::KeyModifiers::ALT
+                                && let Some(target) = self
+                                    .tool_output_viewer_state()
+                                    .and_then(|viewer| viewer.evidence_at(mouse_event.column, mouse_event.row))
+                                    .map(str::to_owned)
+                            {
+                                self.handle_link_click_action(
+                                    TranscriptLinkClickAction::Open(CoreInlineEvent::OpenUrl(target)),
+                                    true,
+                                    events,
+                                    callback,
+                                );
+                                return;
+                            }
                             if self
                                 .tool_output_viewer_state()
                                 .is_some_and(|viewer| viewer.body_contains(mouse_event.column, mouse_event.row))
                             {
                                 self.core.mouse_drag_target = MouseDragTarget::Transcript;
                                 self.core.cancel_drag_auto_scroll();
-                                self.core.mouse_selection.start_selection(mouse_event.column, mouse_event.row);
+                                self.core
+                                    .mouse_selection
+                                    .start_overlay_selection(mouse_event.column, mouse_event.row);
                             }
+                            self.mark_dirty();
+                            return;
+                        }
+
+                        if !self.has_active_overlay()
+                            && !self.local_agents_visible()
+                            && self.diff_preview_state().is_none()
+                            && self.core.handle_sticky_prompt_click(mouse_event)
+                        {
                             self.mark_dirty();
                             return;
                         }
@@ -623,7 +666,9 @@ impl Session {
                                 }
 
                                 self.core.mouse_drag_target = MouseDragTarget::ModalText;
-                                self.core.mouse_selection.start_selection(mouse_event.column, mouse_event.row);
+                                self.core
+                                    .mouse_selection
+                                    .start_overlay_selection(mouse_event.column, mouse_event.row);
                                 self.mark_dirty();
                                 return;
                             }

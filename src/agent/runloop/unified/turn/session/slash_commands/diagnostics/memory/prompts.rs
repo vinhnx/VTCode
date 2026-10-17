@@ -106,6 +106,7 @@ pub(super) fn build_diagnostics_prompt_step(
                 other: Some(String::new()),
             }),
             search_value: Some("submit memory input".to_string()),
+            ..Default::default()
         }],
         completed: false,
         answer: None,

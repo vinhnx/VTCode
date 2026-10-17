@@ -474,6 +474,27 @@ mod tests {
         // No observable state, but the call must not panic.
     }
 
+    /// `ToolAuditStatus` writes the same value to durable JSONL via serde and to
+    /// `tracing` log lines via `as_str()`. Forensic queries read both surfaces,
+    /// so a one-sided rename would desync them. Lock the two together.
+    #[test]
+    fn audit_status_as_str_matches_serde_wire_form() {
+        for status in [
+            ToolAuditStatus::Success,
+            ToolAuditStatus::Failure,
+            ToolAuditStatus::Timeout,
+            ToolAuditStatus::Cancelled,
+            ToolAuditStatus::Blocked,
+        ] {
+            let expected = status.as_str();
+            assert_eq!(
+                serde_json::to_value(status).expect("serializes"),
+                serde_json::json!(expected),
+                "serde wire form drifted from as_str() for {status:?}"
+            );
+        }
+    }
+
     #[test]
     fn jsonl_file_sink_appends_and_flushes_on_drop() {
         let dir = TempDir::new().expect("tempdir");

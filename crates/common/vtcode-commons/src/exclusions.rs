@@ -3,6 +3,13 @@
 //! All directory walkers, grep invocations, and file-operation tools should
 //! reference these constants instead of maintaining their own skip lists.
 
+/// Name of the workspace-local ignore file that mirrors `.gitignore` semantics
+/// but only affects VT Code's own file operations.
+///
+/// Registered as a custom ignore filename on every traversal walker so the
+/// same patterns prune the file picker, grep/list tools, and the indexer.
+pub const VTCODE_IGNORE_FILE: &str = ".vtcodegitignore";
+
 /// Directories skipped by default during workspace traversal.
 ///
 /// This covers build artifacts, dependency stores, VCS metadata, and IDE

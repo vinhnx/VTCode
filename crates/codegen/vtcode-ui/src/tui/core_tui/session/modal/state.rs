@@ -1,9 +1,9 @@
 use crate::tui::config::constants::ui;
 use crate::tui::ui::search::{FuzzyQuery, exact_terms_match, normalize_query};
 use crate::tui::ui::tui::types::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent, OverlayHotkey,
-    OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange, OverlaySubmission, SecurePromptConfig,
-    WizardModalMode, WizardStep,
+    InlineEvent, InlineItemKind, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineStatus, InlineTone,
+    OverlayEvent, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange, OverlaySubmission,
+    SecurePromptConfig, WizardModalMode, WizardStep,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
@@ -14,6 +14,8 @@ pub struct ModalState {
     pub(crate) title: String,
     pub(crate) lines: Vec<String>,
     pub(crate) footer_hint: Option<String>,
+    /// Latest apply/save/cancel feedback shown as a toned status strip.
+    pub(crate) status: Option<InlineStatus>,
     pub(crate) hotkeys: Vec<OverlayHotkey>,
     pub(crate) list: Option<ModalListState>,
     pub(crate) secure_prompt: Option<SecurePromptConfig>,
@@ -83,7 +85,6 @@ pub struct ModalListState {
     filter_terms: Vec<String>,
     filter_query: Option<String>,
     viewport_rows: Option<u16>,
-    compact_rows: bool,
     density_behavior: ModalListDensityBehavior,
 }
 
@@ -93,7 +94,9 @@ enum ModalListDensityBehavior {
     FixedComfortable,
 }
 
-const CONFIG_LIST_NAVIGATION_HINT: &str = "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close";
+fn config_list_navigation_hint() -> String {
+    crate::design::keys::list_hint()
+}
 
 #[derive(Clone)]
 pub struct ModalListItem {
@@ -104,6 +107,9 @@ pub struct ModalListItem {
     pub(crate) selection: Option<InlineListSelection>,
     search_value: Option<String>,
     pub(crate) is_divider: bool,
+    pub(crate) value: Option<String>,
+    pub(crate) badge_tone: InlineTone,
+    pub(crate) kind: InlineItemKind,
 }
 
 #[derive(Clone)]
@@ -230,7 +236,7 @@ impl ModalState {
 
         let previous_selection = list.current_selection();
         match key.code {
-            // Row density is fixed at construction (compact for subtitle lists);
+            // Row density is fixed at construction (comfortable for all lists);
             // swallow the legacy toggle chord so it never leaks into the
             // composer behind the modal.
             KeyCode::Char('d') | KeyCode::Char('D') if modifiers.alt => ModalListKeyResult::HandledNoRedraw,
@@ -511,18 +517,37 @@ fn map_config_selection_for_arrow(selection: &InlineListSelection, is_left: bool
 }
 
 impl ModalListItem {
+    /// Group-header rows get bold titles and a blank gap above. Explicit
+    /// `Hint` rows are dimmed notes and must not be treated as headers.
     pub(crate) fn is_header(&self) -> bool {
-        self.selection.is_none() && !self.is_divider
+        !self.is_divider && self.selection.is_none() && self.kind != InlineItemKind::Hint
+    }
+
+    /// Dimmed note row (non-selectable, not a group header).
+    pub(crate) fn is_hint(&self) -> bool {
+        !self.is_divider && self.kind == InlineItemKind::Hint
+    }
+
+    /// Lowercased match corpus: caller `search_value` when present, else
+    /// title + subtitle so labels and descriptions stay searchable.
+    fn search_haystack(&self) -> std::borrow::Cow<'_, str> {
+        if let Some(value) = self.search_value.as_deref() {
+            return std::borrow::Cow::Borrowed(value);
+        }
+        let mut parts = vec![self.title.as_str()];
+        if let Some(subtitle) = self.subtitle.as_deref() {
+            parts.push(subtitle);
+        }
+        std::borrow::Cow::Owned(normalize_query(&parts.join(" ")))
     }
 
     fn matches(&self, query: &str) -> bool {
         if query.is_empty() {
             return true;
         }
-        let Some(value) = self.search_value.as_ref() else {
-            return false;
-        };
-        exact_terms_match(query, value)
+        // `search_value` is already lowercased at construction; avoid
+        // re-normalizing a query or allocating a filter per row.
+        exact_terms_match(query, &self.search_haystack())
     }
 }
 
@@ -558,16 +583,13 @@ impl ModalListState {
                     selection: item.selection,
                     search_value,
                     is_divider,
+                    value: item.value,
+                    badge_tone: item.badge_tone,
+                    kind: item.kind,
                 }
             })
             .collect();
         let total_selectable = converted.iter().filter(|item| item.selection.is_some()).count();
-        // Compact single-spacing is the default for subtitle lists: title plus
-        // dimmed subtitle with no blank separator row. Single-line lists render
-        // identically either way.
-        let compact_rows = converted
-            .iter()
-            .any(|item| item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty()));
         let density_behavior = Self::density_behavior_for_items(&converted);
         let mut modal_state = Self {
             visible_indices: (0..converted.len()).collect(),
@@ -577,7 +599,6 @@ impl ModalListState {
             filter_terms: Vec::new(),
             filter_query: None,
             viewport_rows: None,
-            compact_rows,
             density_behavior,
         };
         modal_state.select_initial(selected);
@@ -979,7 +1000,8 @@ impl ModalListState {
                 continue;
             }
 
-            let score = item.search_value.as_deref().and_then(|value| query.score(value));
+            let haystack = item.search_haystack();
+            let score = query.score(&haystack);
 
             if item.is_header() {
                 if let Some(block) = open_block.take() {
@@ -1086,26 +1108,27 @@ impl ModalListState {
         self.total_selectable
     }
 
-    pub(crate) fn compact_rows(&self) -> bool {
-        self.compact_rows
-    }
-
     pub(super) fn non_filter_summary_text(&self, footer_hint: Option<&str>) -> Option<String> {
         if !self.has_non_filter_summary(footer_hint) {
             return None;
         }
         match self.density_behavior {
-            ModalListDensityBehavior::FixedComfortable => Some(CONFIG_LIST_NAVIGATION_HINT.to_owned()),
+            ModalListDensityBehavior::FixedComfortable => Some(config_list_navigation_hint()),
             ModalListDensityBehavior::Adjustable => footer_hint.filter(|hint| !hint.is_empty()).map(ToOwned::to_owned),
         }
     }
 
-    pub(crate) fn summary_line_rows(&self, footer_hint: Option<&str>) -> usize {
-        if self.filter_active() || self.has_non_filter_summary(footer_hint) {
-            1
-        } else {
-            0
+    /// Summary rows above the list: filter/keyboard hint, plus one extra row
+    /// when a status strip is shown (`has_status`).
+    pub(crate) fn summary_line_rows(&self, footer_hint: Option<&str>, has_status: bool) -> usize {
+        let mut rows = 0;
+        if has_status {
+            rows += 1;
         }
+        if self.filter_active() || self.has_non_filter_summary(footer_hint) {
+            rows += 1;
+        }
+        rows
     }
 
     fn has_non_filter_summary(&self, footer_hint: Option<&str>) -> bool {

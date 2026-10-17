@@ -5,6 +5,7 @@
 
 pub use shared::*;
 
+mod clearing;
 mod harness;
 mod runner_config;
 mod session_state;

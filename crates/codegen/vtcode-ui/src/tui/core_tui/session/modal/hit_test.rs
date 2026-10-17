@@ -34,12 +34,13 @@ pub(crate) fn visible_index_at_row(
     area: Rect,
     row: u16,
     show_numbers: bool,
+    has_status: bool,
 ) -> Option<usize> {
     if row < area.y || row >= area.y.saturating_add(area.height) {
         return None;
     }
     let content_width = area.width.saturating_sub(inline_list::selection_padding_width() as u16) as usize;
-    let info_rows = list.summary_line_rows(footer_hint);
+    let info_rows = list.summary_line_rows(footer_hint, has_status);
     let relative_row = usize::from(row.saturating_sub(area.y));
     if relative_row < info_rows {
         return None;
@@ -85,11 +86,16 @@ mod tests {
             search_match: Style::default(),
             title: Style::default(),
             divider: Style::default(),
+            background: Style::default(),
             instruction_border: Style::default(),
             instruction_title: Style::default(),
             instruction_bullet: Style::default(),
             instruction_body: Style::default(),
             hint: Style::default(),
+            success: Style::default(),
+            warning: Style::default(),
+            danger: Style::default(),
+            accent: Style::default(),
         }
     }
 
@@ -101,6 +107,7 @@ mod tests {
             indent: 0,
             selection: Some(InlineListSelection::SlashCommand(title.to_string())),
             search_value: Some(title.to_string()),
+            ..Default::default()
         }
     }
 
@@ -111,11 +118,11 @@ mod tests {
         // Adjustable density + footer hint renders one summary row above the items.
         let area = Rect::new(0, 10, 40, 6);
 
-        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 10, false), None);
-        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 11, false), Some(0));
-        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 13, false), Some(1));
+        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 10, false, false), None);
+        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 11, false, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, Some("hint"), None, &styles, area, 13, false, false), Some(1));
         // Without the hint there is no summary row, so the first item is at the top.
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 10, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 10, false, false), Some(0));
     }
 
     #[test]
@@ -139,11 +146,11 @@ mod tests {
 
         // The first item occupies title + editor + padding rows. Without the
         // editor the same rows would (wrongly) map one item lower.
-        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 10, false), Some(0));
-        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 11, false), Some(0));
-        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 12, false), Some(0));
-        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 13, false), Some(1));
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 12, false), Some(1));
+        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 10, false, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 11, false, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 12, false, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, None, Some(&editor), &styles, area, 13, false, false), Some(1));
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 12, false, false), Some(1));
     }
 
     #[test]
@@ -152,8 +159,8 @@ mod tests {
         let list = ModalListState::new(vec![selectable_item("a")], None);
         let area = Rect::new(0, 10, 40, 3);
 
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 9, false), None);
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 13, false), None);
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 9, false, false), None);
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 13, false, false), None);
     }
 
     #[test]
@@ -165,12 +172,25 @@ mod tests {
         let area = Rect::new(0, 10, 40, 6);
         for row in 10..16 {
             assert_eq!(
-                visible_index_at_row(&list, None, None, &styles, area, row, true),
-                visible_index_at_row(&list, None, None, &styles, area, row, false),
+                visible_index_at_row(&list, None, None, &styles, area, row, true, false),
+                visible_index_at_row(&list, None, None, &styles, area, row, false, false),
                 "row {row} must map identically"
             );
         }
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 10, true), Some(0));
-        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 12, true), Some(1));
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 10, true, false), Some(0));
+        assert_eq!(visible_index_at_row(&list, None, None, &styles, area, 12, true, false), Some(1));
+    }
+
+    #[test]
+    fn summary_line_rows_count_status_strip() {
+        let items = vec![InlineListItem {
+            title: "a".to_string(),
+            selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+            ..Default::default()
+        }];
+        let list = ModalListState::new(items, None);
+        assert_eq!(list.summary_line_rows(Some("hint"), false), 1);
+        assert_eq!(list.summary_line_rows(Some("hint"), true), 2);
+        assert_eq!(list.summary_line_rows(None, true), 1);
     }
 }

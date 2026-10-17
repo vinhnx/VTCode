@@ -221,6 +221,19 @@ pub fn condense_text_bytes(content: &str, head_bytes: usize, tail_bytes: usize) 
     format!("{}\n\n{}\n\n{}", &content[..head_end], format_hidden_bytes_summary(omitted), &content[tail_start..])
 }
 
+/// Bound model-facing error echoes of text the caller already sent
+/// (old_str, patch context, snippets). Threshold is deliberately high:
+/// typical edit mismatches are mid-string whitespace/indent issues, so most
+/// real payloads must stay intact. Only pathological multi-KB pastes are
+/// reduced to a head/tail.
+pub fn condense_error_echo(text: &str) -> String {
+    if text.len() > 2_000 {
+        condense_text_bytes(text, 800, 800)
+    } else {
+        text.to_string()
+    }
+}
+
 pub fn tail_preview_text(content: &str, tail_bytes: usize, max_lines: usize) -> String {
     if content.is_empty() {
         return String::new();

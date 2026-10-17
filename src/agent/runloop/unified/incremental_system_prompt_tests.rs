@@ -12,6 +12,128 @@ fn test_context() -> SystemPromptContext {
 }
 
 #[tokio::test]
+async fn interactive_planning_contract_survives_tool_density_replacements() {
+    use vtcode_core::config::types::{ResolvedShellPromptProfile, ShellPromptProfile, SystemPromptMode};
+    use vtcode_core::config::{
+        VTCodeConfig,
+        constants::{models, tools},
+    };
+    use vtcode_core::core::agent::harness_kernel::SessionToolCatalogSnapshot;
+    use vtcode_core::llm::{provider::ToolDefinition, providers::OpenAIProvider};
+    use vtcode_core::prompts::system::*;
+    use vtcode_core::prompts::{PromptContext, append_runtime_tool_prompt_sections_for_model};
+
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    let provider = OpenAIProvider::new("offline-fixture".into());
+    for mode in [
+        SystemPromptMode::Default,
+        SystemPromptMode::Minimal,
+        SystemPromptMode::Lightweight,
+        SystemPromptMode::Specialized,
+    ] {
+        for environment in [false, true] {
+            for request_user_input_enabled in [false, true] {
+                let mut names = vec![tools::EXEC_COMMAND, tools::CODE_SEARCH, tools::TASK_TRACKER];
+                if request_user_input_enabled {
+                    names.push(tools::REQUEST_USER_INPUT);
+                }
+                let snapshot = SessionToolCatalogSnapshot::new(
+                    7,
+                    9,
+                    true,
+                    request_user_input_enabled,
+                    Some(Arc::new(
+                        names
+                            .iter()
+                            .map(|name| {
+                                ToolDefinition::function(
+                                    (*name).to_string(),
+                                    "Fixture tool".to_string(),
+                                    serde_json::json!({"type": "object"}),
+                                )
+                            })
+                            .collect(),
+                    )),
+                    false,
+                );
+                let mut config = VTCodeConfig::default();
+                config.agent.system_prompt_mode = mode;
+                config.agent.include_temporal_context = false;
+                config.agent.include_working_directory = environment;
+                config.agent.instruction_max_bytes = 0;
+                config.agent.shell_prompt_profile = ShellPromptProfile::UnixLike;
+                let mut context = PromptContext {
+                    available_tools: names.iter().map(|name| (*name).to_string()).collect(),
+                    ..Default::default()
+                };
+                context.set_current_directory(PathBuf::from("/workspace"));
+                let base = compose_system_instruction_text(workspace.path(), Some(&config), Some(&context)).await;
+                let mut runtime_context = test_context();
+                runtime_context.planning_active = true;
+                runtime_context.request_user_input_enabled = request_user_input_enabled;
+                let builder = IncrementalSystemPrompt::new();
+                let initial = builder
+                    .get_system_prompt(
+                        &base,
+                        hash_base_system_prompt(&base),
+                        runtime_context.hash(),
+                        &runtime_context,
+                        None,
+                    )
+                    .await;
+                for budget in [100_000, 1] {
+                    config.agent.max_system_prompt_tokens = budget;
+                    let mut prompt = initial.clone();
+                    let replace = |prompt: &mut String| {
+                        append_runtime_tool_prompt_sections_for_model(
+                            prompt,
+                            &snapshot,
+                            true,
+                            ResolvedShellPromptProfile::UnixLike,
+                            &provider,
+                            models::openai::DEFAULT_MODEL,
+                            Some(&config),
+                        )
+                    };
+                    replace(&mut prompt);
+                    let once = prompt.clone();
+                    replace(&mut prompt);
+                    assert_eq!(
+                        prompt, once,
+                        "{mode:?}, environment={environment}, input={request_user_input_enabled}, budget={budget}"
+                    );
+                    for line in [
+                        PLANNING_WORKFLOW_PLAN_PERSISTENCE_POLICY_LINE,
+                        PLANNING_WORKFLOW_PLAN_QUALITY_LINE,
+                        PLANNING_WORKFLOW_RESEARCH_SCOPE_LINE,
+                        PLANNING_WORKFLOW_PLAN_POLICY_LINE,
+                    ] {
+                        assert_eq!(prompt.matches(line).count(), 1, "missing or repeated canonical planning line");
+                    }
+                    assert_eq!(prompt.matches("## Active Tools").count(), 1);
+                    assert_eq!(prompt.matches("## Environment").count(), usize::from(environment));
+                    assert_eq!(
+                        prompt.contains(PLANNING_WORKFLOW_NO_REQUEST_USER_INPUT_POLICY_LINE),
+                        !request_user_input_enabled
+                    );
+                    for duplicate in [
+                        "Monitor the available planning tool-loop budget",
+                        "Every implementation step in the final plan must",
+                        "emit only one `<proposed_plan>` block",
+                        "Stop research when the plan is specified or the budget is near",
+                    ] {
+                        assert!(!prompt.contains(duplicate), "repeated planning guidance: {duplicate}");
+                    }
+                    assert!(prompt.contains("index 0 is invalid while planning"));
+                    assert!(prompt.contains("omit unused filters"));
+                    assert_eq!(prompt.contains("- Planning is read-only."), budget == 1);
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_incremental_prompt_caching() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "Test system prompt";

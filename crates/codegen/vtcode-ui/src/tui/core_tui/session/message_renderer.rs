@@ -8,6 +8,7 @@ use crate::tui::config::constants::ui;
 // Note: format_tool_parameters and simplify_tool_display are available in super::text_utils
 // if needed for future use.
 
+#[cfg_attr(feature = "profiling", hotpath::measure)]
 pub(crate) fn render_message_spans(
     line: &MessageLine,
     theme: &InlineTheme,

@@ -1,0 +1,48 @@
+id: no-per-call-regex-literal
+language: Rust
+severity: warning
+message: Compile regex literals once — hoist into a `LazyLock`/`Lazy`/`OnceLock` static.
+note: |
+  `Regex::new("literal")` inside a function body recompiles the same pattern
+  on every call. When that function sits on a per-item path (per line, per
+  streamed chunk, per tool call, per rendered frame), compilation cost is paid
+  per unit and quickly dominates runtime. Clippy's `nonstandard_macro_braces`
+  lint lost 3133x to exactly this shape: an innocuous helper that locked
+  global compiler state for every expression in the codebase.
+
+  Hoist literal patterns into a static so compilation happens once:
+
+      static MY_RE: LazyLock<Regex> =
+          LazyLock::new(|| Regex::new(r"...").expect("valid my regex"));
+
+  or a function-local initializer for one-shot use:
+
+      static RE: OnceLock<Regex> = OnceLock::new();
+      let re = RE.get_or_init(|| Regex::new(r"...").expect("valid"));
+
+  Patterns built from runtime data (e.g. `Regex::new(pattern)` from config)
+  must stay at the call site, but memoize them behind a signature-keyed cache
+  (see `shell_policy.rs` and `tool_policy::manager.rs`). This rule only flags
+  string-literal patterns; it does not flag `Regex::new(pattern)` where the
+  pattern is data.
+
+  Source: blyxyas, "Optimizing a single Rust Clippy lint by 3133X" (2026).
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(regex::)?Regex::new$"
+    - regex: "^(regex::)?Regex::new\\(\\s*(r#*\"|\")"
+    - not:
+        inside:
+          any:
+            - pattern: LazyLock::new($$$)
+            - pattern: Lazy::new($$$)
+            - pattern: "$_.get_or_init($$$)"
+            - pattern: "$_.get_or_try_init($$$)"
+          stopBy: end
+metadata:
+  url: https://blog.goose.love/posts/making-a-clippy-lint-faster-by-3133x/
+files:
+  - "**/*.rs"

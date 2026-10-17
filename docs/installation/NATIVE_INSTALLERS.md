@@ -31,7 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 - Linux x86_64
 - WSL (use install.ps1 for native Windows)
 
-Linux `aarch64` hosts are detected by the installer, but native `aarch64` release artifacts are not published by default in current release workflow.
+Linux `aarch64` hosts are detected by the installer, but native `aarch64` release artifacts are not published by default
+in current release workflow.
 
 ---
 
@@ -44,6 +45,7 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 
 See `install.ps1` for details.
 
-Windows release builds are currently not guaranteed on every release because the Windows pipeline still depends on `cross`, Docker, and GitHub Actions minutes, which are costlier than the Linux path.
+Windows release builds are currently not guaranteed on every release because the Windows pipeline still depends on
+`cross`, Docker, and GitHub Actions minutes, which are costlier than the Linux path.
 
 The Windows installer currently ships only the VT Code binary.

@@ -121,8 +121,12 @@ impl TaskManager {
 
     /// Get a task while limiting the returned conversation history.
     pub(crate) async fn get_task_or_error_with_history(&self, task_id: &str, history_length: usize) -> A2aResult<Task> {
-        let task = self.get_task_or_error(task_id).await?;
-        Ok(Self::clone_task_for_history(task, history_length))
+        let state = self.state.read().await;
+        state
+            .tasks
+            .get(task_id)
+            .map(|task| task.clone_for_query(history_length, true))
+            .ok_or_else(|| A2aError::TaskNotFound(task_id.to_string()))
     }
 
     /// Update task status
@@ -209,25 +213,6 @@ impl TaskManager {
         true
     }
 
-    fn clone_task_for_history(mut task: Task, history_length: usize) -> Task {
-        if task.history.len() > history_length {
-            let trim_count = task.history.len() - history_length;
-            drop(task.history.drain(..trim_count));
-        }
-
-        task
-    }
-
-    fn clone_task_for_listing(task: &Task, include_artifacts: bool, history_length: Option<usize>) -> Task {
-        let mut task = Self::clone_task_for_history(task.clone(), history_length.unwrap_or(0));
-
-        if !include_artifacts {
-            task.artifacts.clear();
-        }
-
-        task
-    }
-
     /// List tasks with optional filtering
     pub(crate) async fn list_tasks(&self, params: ListTasksParams) -> ListTasksResult {
         let updated_after = params
@@ -292,7 +277,7 @@ impl TaskManager {
                     state
                         .tasks
                         .get(&task_id)
-                        .map(|task| Self::clone_task_for_listing(task, include_artifacts, history_length))
+                        .map(|task| task.clone_for_query(history_length.unwrap_or(0), include_artifacts))
                 })
                 .collect()
         };
@@ -392,6 +377,81 @@ mod tests {
 
         let missing = manager.get_task("nonexistent").await;
         assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn bounded_queries_preserve_task_fields_suffix_and_source() {
+        let manager = TaskManager::new();
+        let mut task = Task::with_id("projection-task");
+        task.context_id = Some("projection-context".to_string());
+        task.status = TaskStatus::with_message(TaskState::Working, Message::agent_text("status payload"));
+        task.history = vec![
+            Message::user_text("first"),
+            Message::agent_text("middle payload"),
+            Message::user_text("last"),
+        ];
+        task.artifacts = vec![
+            Artifact::text("artifact-a", "small"),
+            Artifact::text("artifact-b", "longer output"),
+        ];
+        let mut original = serde_json::to_value(&task).unwrap();
+        original["metadata"] = serde_json::json!({"nested": {"sequence": [2, 7, 3]}, "label": "preserved"});
+        original["kind"] = serde_json::json!("custom-task");
+        let task: Task = serde_json::from_value(original.clone()).unwrap();
+        {
+            let mut state = manager.state.write().await;
+            drop(state.tasks.insert(task.id.clone(), task));
+            drop(
+                state
+                    .contexts
+                    .insert("projection-context".into(), vec!["projection-task".into()]),
+            );
+        }
+        let first = original["history"][0].clone();
+        let middle = original["history"][1].clone();
+        let last = original["history"][2].clone();
+        for (limit, expected_history) in [
+            (0, vec![]),
+            (1, vec![last.clone()]),
+            (2, vec![middle.clone(), last.clone()]),
+            (3, vec![first.clone(), middle.clone(), last.clone()]),
+            (usize::MAX, vec![first, middle, last]),
+        ] {
+            let mut expected = original.clone();
+            if expected_history.is_empty() {
+                drop(expected.as_object_mut().unwrap().remove("history"));
+            } else {
+                expected["history"] = serde_json::json!(expected_history);
+            }
+            let queried = manager.get_task_or_error_with_history("projection-task", limit).await.unwrap();
+            assert_eq!(serde_json::to_value(queried).unwrap(), expected, "get limit {limit}");
+            for include_artifacts in [false, true] {
+                let mut listed_expected = expected.clone();
+                if !include_artifacts {
+                    drop(listed_expected.as_object_mut().unwrap().remove("artifacts"));
+                }
+                let params = ListTasksParams {
+                    context_id: Some("projection-context".into()),
+                    history_length: Some(u32::try_from(limit).unwrap_or(u32::MAX)),
+                    include_artifacts: Some(include_artifacts),
+                    ..Default::default()
+                };
+                let listed = manager.list_tasks(params).await;
+                assert_eq!(listed.total_size, Some(1));
+                assert_eq!(listed.tasks.len(), 1);
+                assert_eq!(
+                    serde_json::to_value(&listed.tasks[0]).unwrap(),
+                    listed_expected,
+                    "list limit {limit}, artifacts {include_artifacts}"
+                );
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(manager.get_task_or_error("projection-task").await.unwrap()).unwrap(),
+            original
+        );
+        assert!(matches!(manager.get_task_or_error_with_history("missing-task", 1).await,
+            Err(A2aError::TaskNotFound(id)) if id == "missing-task"));
     }
 
     #[tokio::test]

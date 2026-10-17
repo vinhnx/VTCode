@@ -214,6 +214,26 @@ fn inject_mid_turn_resume(
     true
 }
 
+/// Start a fresh request segment for the new model route, reset pending
+/// compaction pressure, and append the autonomous resume note without claiming
+/// a compaction happened. Shared by the already-compact and failed-compaction
+/// tails so the two non-compacting outcomes cannot drift (both must segment
+/// for prompt-cache safety and both must report history left intact).
+fn start_model_segment_and_resume(
+    history: &mut Vec<Message>,
+    session_stats: &mut SessionStats,
+    context_manager: &mut ContextManager,
+    prev_provider: &str,
+    prev_model: &str,
+    new_provider: &str,
+    new_model: &str,
+) {
+    session_stats.begin_request_segment(SegmentBoundaryReason::Model);
+    context_manager.take_compaction_pending();
+    context_manager.reset_token_pressure_after_compaction();
+    inject_mid_turn_resume(history, prev_provider, prev_model, new_provider, new_model, session_stats, false);
+}
+
 /// Decide whether a model/provider switch requires context compaction and, if
 /// so, perform it. Never fails the caller: compaction errors are surfaced via
 /// [`ModelSwitchCompactionOutcome::Failed`] so the model switch itself always
@@ -310,17 +330,14 @@ pub(crate) async fn compact_on_model_switch(
             // History was already compact but the route still changed: start a new
             // request segment and reset pressure so the new model does not reuse
             // the old model's cached prefix, then inject autonomous resume.
-            session_stats.begin_request_segment(SegmentBoundaryReason::Model);
-            context_manager.take_compaction_pending();
-            context_manager.reset_token_pressure_after_compaction();
-            inject_mid_turn_resume(
+            start_model_segment_and_resume(
                 history,
+                session_stats,
+                context_manager,
                 &prev_provider,
                 &prev_model,
                 &new_provider,
                 &new_model,
-                session_stats,
-                false,
             );
             Ok(ModelSwitchCompactionOutcome::AlreadyCompact)
         }
@@ -330,17 +347,14 @@ pub(crate) async fn compact_on_model_switch(
             // for the new route, and reset pending pressure so the next turn
             // records a fresh estimate instead of storming an immediate retry on
             // stale over-budget pressure.
-            session_stats.begin_request_segment(SegmentBoundaryReason::Model);
-            context_manager.take_compaction_pending();
-            context_manager.reset_token_pressure_after_compaction();
-            inject_mid_turn_resume(
+            start_model_segment_and_resume(
                 history,
+                session_stats,
+                context_manager,
                 &prev_provider,
                 &prev_model,
                 &new_provider,
                 &new_model,
-                session_stats,
-                false,
             );
             Ok(ModelSwitchCompactionOutcome::Failed(err))
         }

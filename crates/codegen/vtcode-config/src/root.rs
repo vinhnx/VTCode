@@ -418,6 +418,10 @@ pub struct UiConfig {
     #[serde(default = "default_color_scheme_mode")]
     pub color_scheme_mode: ColorSchemeMode,
 
+    /// Opt-in terminal program status reports for the interactive TUI.
+    #[serde(default)]
+    pub program_status: UiProgramStatusConfig,
+
     /// Notification preferences for attention events.
     #[serde(default)]
     pub notifications: UiNotificationsConfig,
@@ -426,8 +430,9 @@ pub struct UiConfig {
     #[serde(default)]
     pub fullscreen: UiFullscreenConfig,
 
-    /// Screen reader mode: disables animations, uses plain text indicators,
-    /// and optimizes output for assistive technology compatibility.
+    /// Screen reader mode: disables animations, uses plain text thinking indicators,
+    /// and opens Transcript Review in raw mode. Alternate-screen compatibility
+    /// depends on the terminal and assistive technology.
     /// Can also be enabled via VTCODE_SCREEN_READER=1 environment variable.
     #[serde(default = "default_screen_reader_mode")]
     pub screen_reader_mode: bool,
@@ -571,14 +576,7 @@ fn default_notifications_max_identical_in_window() -> u32 {
 }
 
 fn env_bool_var(name: &str) -> Option<bool> {
-    crate::env_helpers::read_env_var(name).and_then(|v| {
-        let normalized = v.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        }
-    })
+    crate::env_helpers::read_env_var(name).and_then(|v| vtcode_commons::utils::parse_bool_env_value(&v))
 }
 
 fn env_u8_var(name: &str) -> Option<u8> {
@@ -668,6 +666,7 @@ impl Default for UiConfig {
             bold_is_bright: default_bold_is_bright(),
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
+            program_status: UiProgramStatusConfig::default(),
             notifications: UiNotificationsConfig::default(),
             fullscreen: UiFullscreenConfig::default(),
             screen_reader_mode: default_screen_reader_mode(),
@@ -678,6 +677,15 @@ impl Default for UiConfig {
             transcript_review: UiTranscriptReviewConfig::default(),
         }
     }
+}
+
+/// Terminal Program Status Protocol preferences.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct UiProgramStatusConfig {
+    /// Emit OSC 7501 status reports on the interactive TUI terminal stream.
+    pub enabled: bool,
 }
 
 /// Chat configuration
@@ -709,6 +717,34 @@ mod tests {
     use super::*;
     use serial_test::serial;
     use vtcode_commons::ui_protocol::ThinkingBlockState;
+
+    #[test]
+    fn program_status_defaults_opt_in_and_round_trip() {
+        assert!(!UiConfig::default().program_status.enabled);
+        assert!(!toml::from_str::<UiConfig>("").unwrap().program_status.enabled);
+        assert!(!toml::from_str::<UiConfig>("[program_status]").unwrap().program_status.enabled);
+        let enabled: UiConfig = toml::from_str("[program_status]\nenabled = true").unwrap();
+        assert!(enabled.program_status.enabled);
+        let serialized = toml::to_string(&enabled).unwrap();
+        assert!(toml::from_str::<UiConfig>(&serialized).unwrap().program_status.enabled);
+        assert!(toml::from_str::<UiConfig>("[program_status]\nenabled = 'true'").is_err());
+    }
+
+    #[test]
+    fn program_status_layer_precedence_can_enable_and_disable() {
+        use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
+        for (lower, higher) in [(false, true), (true, false)] {
+            let layer = |enabled| {
+                ConfigLayerEntry::new(
+                    ConfigLayerSource::Runtime,
+                    toml::from_str(&format!("[ui.program_status]\nenabled = {enabled}")).unwrap(),
+                )
+            };
+            let stack = ConfigLayerStack::new(vec![layer(lower), layer(higher)]);
+            let merged: crate::loader::VTCodeConfig = stack.effective_config_without_origins().try_into().unwrap();
+            assert_eq!(merged.ui.program_status.enabled, higher);
+        }
+    }
 
     fn with_env_var<F>(key: &str, value: Option<&str>, f: F)
     where

@@ -98,6 +98,56 @@ pub fn extract_readme_excerpt(md: &str, max_len: usize) -> String {
     crate::formatting::truncate_byte_budget(&excerpt, max_len, "...\n")
 }
 
+/// Whether the environment variable `var_name` is set to an affirmative flag.
+///
+/// Accepts `1`, `true`, `yes`, `on`, or `debug` (case-insensitive, surrounding
+/// whitespace ignored). This is the canonical env-flag parser; do not fork the
+/// accepted-value set per crate.
+///
+/// ```
+/// # use vtcode_commons::utils::env_flag_enabled;
+/// // Unset variables are disabled.
+/// assert!(!env_flag_enabled("VTCODE_ENV_FLAG_DOCTEST_DEFINITELY_UNSET"));
+/// ```
+#[must_use]
+pub fn env_flag_enabled(var_name: &str) -> bool {
+    std::env::var(var_name).ok().is_some_and(|value| {
+        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on" | "debug")
+    })
+}
+
+/// Parse a boolean env-var value, returning `None` when unrecognized.
+///
+/// Accepted truthy values: `1`, `true`, `yes`, `on`. Accepted falsy values:
+/// `0`, `false`, `no`, `off`. Matching is case-insensitive after trimming
+/// whitespace. This is the canonical tri-state parser; do not fork the
+/// accepted-value set per crate.
+#[must_use]
+pub fn parse_bool_env_value(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+/// Read the environment variable `name` as a boolean, returning `default`
+/// when it is unset or unrecognized.
+///
+/// ```
+/// # use vtcode_commons::utils::parse_env_bool;
+/// // Unset variables fall back to the caller-supplied default.
+/// assert!(!parse_env_bool("VTCODE_ENV_BOOL_DOCTEST_DEFINITELY_UNSET", false));
+/// assert!(parse_env_bool("VTCODE_ENV_BOOL_DOCTEST_DEFINITELY_UNSET", true));
+/// ```
+#[must_use]
+pub fn parse_env_bool(name: &str, default: bool) -> bool {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| parse_bool_env_value(&value))
+        .unwrap_or(default)
+}
+
 /// Safe text replacement with validation
 pub fn safe_replace_text(content: &str, old_str: &str, new_str: &str) -> Result<String> {
     if old_str.is_empty() {
@@ -120,5 +170,30 @@ mod tests {
         let markdown = "你".repeat(700);
 
         assert_eq!(extract_readme_excerpt(&markdown, 1201), format!("{}...\n", "你".repeat(400)));
+    }
+
+    #[test]
+    fn parse_bool_env_value_accepts_canonical_sets() {
+        for truthy in ["1", "true", "YES", " On ", "on"] {
+            assert_eq!(parse_bool_env_value(truthy), Some(true), "{truthy}");
+        }
+        for falsy in ["0", "false", "NO", " Off ", "off"] {
+            assert_eq!(parse_bool_env_value(falsy), Some(false), "{falsy}");
+        }
+        for unrecognized in ["", "debug", "2", "maybe"] {
+            assert_eq!(parse_bool_env_value(unrecognized), None, "{unrecognized}");
+        }
+    }
+
+    #[test]
+    fn parse_env_bool_falls_back_to_default_when_unset_or_unrecognized() {
+        assert!(!parse_env_bool("VTCODE_ENV_BOOL_TEST_DEFINITELY_UNSET", false));
+        assert!(parse_env_bool("VTCODE_ENV_BOOL_TEST_DEFINITELY_UNSET", true));
+
+        let guard = crate::env_lock::lock();
+        guard.set_var("VTCODE_ENV_BOOL_TEST_VALUE", "yes");
+        assert!(parse_env_bool("VTCODE_ENV_BOOL_TEST_VALUE", false));
+        guard.set_var("VTCODE_ENV_BOOL_TEST_VALUE", "bogus");
+        assert!(!parse_env_bool("VTCODE_ENV_BOOL_TEST_VALUE", false));
     }
 }

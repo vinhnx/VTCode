@@ -78,6 +78,50 @@ pub enum Provider {
 }
 
 impl Provider {
+    /// Case-insensitive canonical name match against this provider's
+    /// accepted spellings. Single source of truth for string-matching call
+    /// sites; exhaustively matched so a new variant forces the alias list
+    /// to be written (a silent `false` would be drift).
+    pub fn name_matches(&self, candidate: &str) -> bool {
+        let normalized = candidate.to_lowercase();
+        self.aliases().contains(&normalized.as_str())
+    }
+
+    /// Accepted lowercase spellings of this provider. In lockstep with
+    /// `FromStr::from_str` and `AsRef::as_ref`; both must stay inside this
+    /// list so a parse alias is always also a match alias.
+    fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Provider::Gemini => &["gemini", "google"],
+            Provider::OpenAI => &["openai"],
+            Provider::Anthropic => &["anthropic"],
+            Provider::Copilot => &["copilot"],
+            Provider::DeepSeek => &["deepseek"],
+            Provider::Meta => &["meta", "meta-ai"],
+            Provider::OpenRouter => &["openrouter"],
+            Provider::Ollama => &["ollama"],
+            Provider::OllamaCloud => &["ollama-cloud", "ollamacloud", "ollama_cloud"],
+            Provider::LmStudio => &["lmstudio"],
+            Provider::LlamaCpp => &["llamacpp", "llama.cpp", "llama-cpp"],
+            Provider::Moonshot => &["moonshot"],
+            Provider::ZAI => &["zai"],
+            Provider::Minimax => &["minimax"],
+            Provider::MiMo => &["mimo"],
+            Provider::Mistral => &["mistral"],
+            Provider::HuggingFace => &["huggingface"],
+            Provider::OpenCodeZen => &["opencode-zen", "opencodezen"],
+            Provider::OpenCodeGo => &["opencode-go", "opencodego"],
+            Provider::Qwen => &["qwen"],
+            Provider::StepFun => &["stepfun"],
+            Provider::Evolink => &["evolink"],
+            Provider::Poolside => &["poolside"],
+            Provider::XAI => &["xai"],
+            Provider::NVIDIA => &["nvidia", "nvidia-nim"],
+            Provider::MergeGateway => &["merge-gateway", "merge_gateway", "mergegateway"],
+            Provider::Vercel => &["vercel", "vercel-ai-gateway", "ai-gateway"],
+        }
+    }
+
     /// Get the default API key environment variable for this provider
     pub fn default_api_key_env(&self) -> &'static str {
         match self {
@@ -339,5 +383,89 @@ impl FromStr for Provider {
             "vercel" | "vercel-ai-gateway" | "ai-gateway" => Ok(Provider::Vercel),
             _ => Err(ProviderParseError::InvalidProvider(s.to_string())),
         }
+    }
+}
+
+#[cfg(test)]
+mod name_match_tests {
+    use super::*;
+
+    /// Test-only alias table mirroring `FromStr::from_str`. Kept here (not in
+    /// production) so an edit on either side trips exactly one asymmetric
+    /// assertion instead of two dependent ones.
+    const PARSE_ALIASES: &[(&str, Provider)] = &[
+        ("gemini", Provider::Gemini),
+        ("google", Provider::Gemini),
+        ("openai", Provider::OpenAI),
+        ("anthropic", Provider::Anthropic),
+        ("copilot", Provider::Copilot),
+        ("deepseek", Provider::DeepSeek),
+        ("meta", Provider::Meta),
+        ("meta-ai", Provider::Meta),
+        ("openrouter", Provider::OpenRouter),
+        ("ollama", Provider::Ollama),
+        ("ollama-cloud", Provider::OllamaCloud),
+        ("ollamacloud", Provider::OllamaCloud),
+        ("ollama_cloud", Provider::OllamaCloud),
+        ("lmstudio", Provider::LmStudio),
+        ("llamacpp", Provider::LlamaCpp),
+        ("llama.cpp", Provider::LlamaCpp),
+        ("llama-cpp", Provider::LlamaCpp),
+        ("moonshot", Provider::Moonshot),
+        ("zai", Provider::ZAI),
+        ("minimax", Provider::Minimax),
+        ("mimo", Provider::MiMo),
+        ("mistral", Provider::Mistral),
+        ("huggingface", Provider::HuggingFace),
+        ("opencode-zen", Provider::OpenCodeZen),
+        ("opencodezen", Provider::OpenCodeZen),
+        ("opencode-go", Provider::OpenCodeGo),
+        ("opencodego", Provider::OpenCodeGo),
+        ("qwen", Provider::Qwen),
+        ("stepfun", Provider::StepFun),
+        ("evolink", Provider::Evolink),
+        ("poolside", Provider::Poolside),
+        ("xai", Provider::XAI),
+        ("nvidia", Provider::NVIDIA),
+        ("nvidia-nim", Provider::NVIDIA),
+        ("merge-gateway", Provider::MergeGateway),
+        ("merge_gateway", Provider::MergeGateway),
+        ("mergegateway", Provider::MergeGateway),
+        ("vercel", Provider::Vercel),
+        ("vercel-ai-gateway", Provider::Vercel),
+        ("ai-gateway", Provider::Vercel),
+    ];
+
+    /// Three-way lockstep drift guard: every parse alias must be accepted by
+    /// `name_matches`, and `name_matches` must never accept a spelling the
+    /// parser rejects. A one-sided edit on either hand-written table fails
+    /// here with the offending alias named.
+    #[test]
+    fn parse_aliases_and_name_matches_stay_in_lockstep() {
+        for (alias, provider) in PARSE_ALIASES {
+            assert!(provider.name_matches(alias), "{provider:?} does not match its parse alias {alias:?}");
+            assert_eq!(Provider::from_str(alias).ok(), Some(*provider), "test table drifted from from_str: {alias:?}");
+        }
+    }
+
+    /// Canonical `as_ref` identity must always match (the exact string this
+    /// crate itself emits must never be rejected by callers keyed on it).
+    #[test]
+    fn as_ref_identity_always_matches() {
+        for provider in Provider::all_providers() {
+            let canonical = provider.as_ref();
+            assert!(provider.name_matches(canonical), "{canonical} must match itself");
+        }
+    }
+
+    /// Asymmetric both directions: case-insensitivity works, and unknown
+    /// spellings never match — including cross-provider confusions.
+    #[test]
+    fn case_insensitive_matches_and_unknowns_reject() {
+        assert!(Provider::Anthropic.name_matches("Anthropic"));
+        assert!(Provider::MergeGateway.name_matches("MERGE-GATEWAY"));
+        assert!(!Provider::Anthropic.name_matches("openai"));
+        assert!(!Provider::OpenAI.name_matches("OpenAICompat"));
+        assert!(!Provider::Anthropic.name_matches(""));
     }
 }

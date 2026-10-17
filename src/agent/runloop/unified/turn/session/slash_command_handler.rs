@@ -65,7 +65,6 @@ pub(crate) async fn handle_input_commands(
                         handle: ctx.handle,
                         session: ctx.session,
                         header_context: ctx.header_context,
-                        ide_context_bridge: ctx.ide_context_bridge,
                         config: ctx.config,
                         vt_cfg: ctx.vt_cfg,
                         provider_client: ctx.provider_client,
@@ -129,18 +128,6 @@ pub(crate) async fn handle_input_commands(
                     SlashCommandControl::SelectAgent(name) => {
                         super::interaction_loop_runner::handle_select_primary_agent(ctx, state, Some(name)).await?;
                         return Ok(CommandProcessingResult::ContinueLoop);
-                    }
-                    SlashCommandControl::ResumeLatest { show_all } => {
-                        match super::interaction_loop_runner::try_resume_latest_session(
-                            ctx.renderer,
-                            &ctx.config.workspace,
-                            show_all,
-                        )
-                        .await?
-                        {
-                            Some(outcome) => return Ok(CommandProcessingResult::Outcome(outcome)),
-                            None => return Ok(CommandProcessingResult::ContinueLoop),
-                        }
                     }
                 }
             }

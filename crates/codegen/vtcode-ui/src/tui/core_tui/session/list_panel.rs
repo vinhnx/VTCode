@@ -111,7 +111,7 @@ impl ListPanelLayout {
         split_bottom_list_panel(area, self.fixed_rows, self.desired_list_rows)
     }
 
-    fn visible_list_rows(&self, panel_area: Rect) -> usize {
+    pub(crate) fn visible_list_rows(&self, panel_area: Rect) -> usize {
         panel_area.height.saturating_sub(self.fixed_rows).into()
     }
 
@@ -241,7 +241,11 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if chunks.is_empty() {
         return;
     }
-    let section_text_style = styles.text_style.add_modifier(Modifier::DIM);
+    // Section text keeps the caller's `text_style` verbatim: adding `DIM`
+    // here double-dims modal footers/hints (ratatui's `Cell::set_style`
+    // only inserts modifiers, so it also clings to any span patched on
+    // top). Muted receding is expressed as a color, not an intensity.
+    let section_text_style = styles.text_style;
 
     let mut idx = 0usize;
     if header_rows > 0 {

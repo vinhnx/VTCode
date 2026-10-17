@@ -84,6 +84,11 @@ fn default_timeout_secs() -> u64 {
 /// Derive a [`SandboxPolicy`] for a single MCP server from the parent policy
 /// and per-server overrides.
 ///
+/// Modular proof: the derivation itself establishes narrowing (writable set,
+/// network allow-list, conservative resource caps), so launchers can trust
+/// the derived policy instead of re-checking each restriction at every
+/// spawn site.
+///
 /// The derived policy:
 ///
 /// - inherits the parent's sensitive-path denials and write roots,
@@ -95,7 +100,7 @@ fn default_timeout_secs() -> u64 {
 /// `DangerFullAccess` parents are downgraded to `WorkspaceWrite` around the
 /// server's writable root; `ReadOnly` parents are left unchanged.
 #[must_use]
-fn derive_mcp_sandbox_policy(parent: &SandboxPolicy, overrides: &McpSandboxOverrides) -> SandboxPolicy {
+pub fn derive_mcp_sandbox_policy(parent: &SandboxPolicy, overrides: &McpSandboxOverrides) -> SandboxPolicy {
     let mut derived = parent.clone();
 
     if let Some(root) = &overrides.writable_root {

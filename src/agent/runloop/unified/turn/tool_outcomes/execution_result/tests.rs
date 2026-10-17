@@ -124,7 +124,7 @@ fn build_error_content_marks_policy_denials_non_recoverable() {
 
     assert_eq!(payload.get("error_class").and_then(|v| v.as_str()), Some("policy_blocked"));
     assert_eq!(payload.get("is_recoverable").and_then(|v| v.as_bool()), Some(false));
-    assert!(payload.get("next_action").is_none());
+    assert_eq!(payload.get("next_action").and_then(|v| v.as_str()), Some("Switch to an allowed tool or mode."));
 }
 
 #[test]

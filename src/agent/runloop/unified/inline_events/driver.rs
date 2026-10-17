@@ -53,6 +53,7 @@ struct InlineEventLoop<'a> {
     editor_open_sender: &'a EditorOpenRequestSender,
     editor_open_dispatcher: Arc<EditorOpenDispatcher>,
     exec_sessions: Option<vtcode_core::tools::exec_session::ExecSessionManager>,
+    tool_registry: Option<vtcode_core::tools::registry::ToolRegistry>,
     background_completion_notify: Option<Arc<Notify>>,
     exec_completion_notify: Option<Arc<Notify>>,
     webmcp_prompt_receiver: &'a mut Option<tokio::sync::mpsc::Receiver<String>>,
@@ -96,6 +97,7 @@ impl<'a> InlineEventLoop<'a> {
             editor_open_sender,
             editor_open_dispatcher,
             exec_sessions,
+            tool_registry,
             background_completion_notify,
             exec_completion_notify,
             webmcp_prompt_receiver,
@@ -131,6 +133,7 @@ impl<'a> InlineEventLoop<'a> {
             editor_open_sender,
             editor_open_dispatcher,
             exec_sessions,
+            tool_registry,
             background_completion_notify,
             exec_completion_notify,
             webmcp_prompt_receiver,
@@ -183,6 +186,10 @@ impl<'a> InlineEventLoop<'a> {
                 tokio::task::yield_now().await;
             }
         }
+        // Publish one consistent overlay snapshot after the drain batch so
+        // intermediate partial lists cannot wipe optimistic UI entries that
+        // are still sitting in the event channel.
+        self.queue.flush_sync();
         if let Some(err) = drain_error {
             return Err(err);
         }
@@ -301,23 +308,33 @@ impl<'a> InlineEventLoop<'a> {
         if let Some(exec_sessions) = self.exec_sessions.clone() {
             context.set_exec_session_manager(exec_sessions);
         }
+        if let Some(tool_registry) = self.tool_registry.clone() {
+            context.set_tool_registry(tool_registry);
+        }
         let action = context.process_event(event, &mut self.queue).await?;
+        self.queue.flush_sync();
         if let Some((source, image_count)) = interjection
             && matches!(&action, InlineLoopAction::Submit(_) | InlineLoopAction::SubmitPrompt(_))
         {
-            self.emit_interjected(source, image_count);
+            let text = match &action {
+                InlineLoopAction::Submit(input) | InlineLoopAction::SubmitPrompt(input) => Some(input.text.as_str()),
+                _ => None,
+            };
+            self.emit_interjected(source, image_count, text);
         }
         Ok(action)
     }
 
     fn ensure_interrupt_notice(&mut self) -> Result<Option<InlineLoopAction>> {
-        if self.interrupts.ensure_notice_displayed(
+        let handled = self.interrupts.ensure_notice_displayed(
             self.ctrl_c_notice_displayed,
             self.renderer,
             self.handle,
             self.default_placeholder,
             &mut self.queue,
-        )? {
+        )?;
+        self.queue.flush_sync();
+        if handled {
             return Ok(Some(InlineLoopAction::Continue));
         }
 
@@ -328,9 +345,10 @@ impl<'a> InlineEventLoop<'a> {
         input.attachments.iter().filter(|part| part.is_image()).count() as u32
     }
 
-    fn emit_interjected(&self, source: InterjectionSource, image_count: u32) {
+    fn emit_interjected(&self, source: InterjectionSource, image_count: u32, text: Option<&str>) {
         let Some(emitter) = self.harness_emitter else { return };
         let _ = emitter.emit(ThreadEvent::Interjected(InterjectedEvent {
+            text: text.map(|s| Box::new(s.to_owned())),
             source,
             image_count,
             redirect_kind: RedirectKind::Interjection,
@@ -338,11 +356,18 @@ impl<'a> InlineEventLoop<'a> {
     }
 
     fn take_queued_submission(&mut self) -> Option<InlineLoopAction> {
+        if self.ctrl_c_state.is_cancel_requested()
+            || self.ctrl_c_state.is_cancel_handled()
+            || self.ctrl_c_state.is_exit_requested()
+        {
+            return None;
+        }
         let queued = self.queue.take_batched_submission()?;
+        self.queue.flush_sync();
         if queued.input.is_empty() {
             return Some(InlineLoopAction::Continue);
         }
-        self.emit_interjected(InterjectionSource::Queue, Self::count_images(&queued.input));
+        self.emit_interjected(InterjectionSource::Queue, Self::count_images(&queued.input), Some(&queued.input.text));
         Some(InlineLoopAction::SubmitQueued(queued))
     }
 
@@ -400,6 +425,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub editor_open_sender: &'a EditorOpenRequestSender,
     pub editor_open_dispatcher: Arc<EditorOpenDispatcher>,
     pub exec_sessions: Option<vtcode_core::tools::exec_session::ExecSessionManager>,
+    pub tool_registry: Option<vtcode_core::tools::registry::ToolRegistry>,
     pub background_completion_notify: Option<Arc<Notify>>,
     pub exec_completion_notify: Option<Arc<Notify>>,
     pub webmcp_prompt_receiver: &'a mut Option<tokio::sync::mpsc::Receiver<String>>,
@@ -638,6 +664,7 @@ mod tests {
             editor_open_sender: &editor_open_sender,
             editor_open_dispatcher: Arc::new(EditorOpenDispatcher::new(true)),
             exec_sessions: None,
+            tool_registry: None,
             background_completion_notify: None,
             exec_completion_notify: None,
             webmcp_prompt_receiver: &mut webmcp_prompt_receiver,
@@ -717,6 +744,7 @@ mod tests {
             editor_open_sender: &editor_open_sender,
             editor_open_dispatcher: Arc::new(EditorOpenDispatcher::new(true)),
             exec_sessions: None,
+            tool_registry: None,
             background_completion_notify: None,
             exec_completion_notify: None,
             webmcp_prompt_receiver: &mut webmcp_prompt_receiver,

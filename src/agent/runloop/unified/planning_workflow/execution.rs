@@ -8,7 +8,8 @@ use vtcode_core::tools::registry::ExecSettlementMode;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::planning_workflow_state::{
-    apply_plan_agent_header, render_planning_workflow_next_step_hint, transition_to_planning_workflow,
+    apply_plan_agent_header, promote_planning_stage, render_planning_workflow_next_step_hint,
+    transition_to_planning_workflow,
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -144,9 +145,9 @@ async fn enter_planning_workflow_after_start(ctx: &mut RunLoopContext<'_>) {
             "failed to render planning workflow next-step hint"
         );
     }
-    // Mid-turn entry: the turn is already running, so promote to the Planning
-    // stage now. Idle-mode entries stay Idle until their first turn starts.
-    crate::agent::runloop::unified::planning_workflow_state::mark_planning_turn_started(ctx.renderer, ctx.handle);
+    // Mid-turn entry: the turn is already running, so promote the stage now.
+    // The turn-loop detector owns the researching row (see `promote_planning_stage`).
+    promote_planning_stage(ctx.handle);
     tracing::info!(
         target: "vtcode.planning_workflow",
         switch_path = "plan_entry",

@@ -146,6 +146,14 @@ mod tests {
 
     #[test]
     fn copilot_exception_preserves_only_its_auth_token() {
+        // The sanitizer re-reads allowed variables from the process environment,
+        // so seed them explicitly instead of assuming the invoking shell or CI
+        // provides GITHUB_TOKEN. nextest runs each test in its own process and
+        // the guard serializes env access, restoring originals on drop.
+        let guard = vtcode_commons::env_lock::lock();
+        guard.set_var("GITHUB_TOKEN", "github-secret");
+        guard.set_var("OPENAI_API_KEY", "openai-secret");
+
         let mut command = Command::new("copilot");
         let _ = command.env("GITHUB_TOKEN", "github-secret");
         let _ = command.env("OPENAI_API_KEY", "openai-secret");

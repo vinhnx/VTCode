@@ -71,14 +71,7 @@ impl LivePreviewDropState {
 }
 
 fn truncate_to_byte_limit(text: &str, limit: usize) -> String {
-    if text.len() <= limit {
-        return text.to_string();
-    }
-    let mut end = limit;
-    while end > 0 && !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    text[..end].to_string()
+    vtcode_commons::formatting::truncate_utf8_prefix(text, limit).to_string()
 }
 
 pub(crate) struct PtyStreamRuntime {

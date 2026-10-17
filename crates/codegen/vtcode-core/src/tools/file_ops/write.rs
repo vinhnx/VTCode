@@ -65,8 +65,7 @@ impl FileOpsTool {
         if content_size > MAX_WRITE_BYTES {
             return Err(anyhow!(
                 "Content exceeds safe write limit ({MAX_WRITE_BYTES} bytes, got {content_size} bytes). \
-                 Use exec_command with a shell heredoc to write large files, e.g. \
-                 exec_command(cmd=\"cat > '<path>' << '__VT_WRITE_EOF__'\\n<content>\\n__VT_WRITE_EOF__\")."
+                 Use bounded apply_patch operations to write large files."
             ));
         }
 
@@ -121,6 +120,21 @@ impl FileOpsTool {
                 "File '{}' exists. Use mode='overwrite' (or overwrite=true) to replace, or choose append/skip_if_exists.",
                 input.path
             ));
+        }
+
+        if acquire_mutation && let Some(content) = existing_content.as_deref() {
+            if effective_mode == "append" {
+                let line_count = content.lines().count();
+                self.edited_file_monitor.source_inspection().require(
+                    &file_path,
+                    content,
+                    std::slice::from_ref(&(line_count.saturating_sub(1)..line_count)),
+                )?;
+            } else {
+                self.edited_file_monitor.source_inspection().require_full(&file_path, content)?;
+            }
+        } else if file_exists && existing_content.is_none() {
+            return Err(anyhow!("Existing content must be readable before replacement"));
         }
 
         let intended_content = match effective_mode {
@@ -203,6 +217,39 @@ impl FileOpsTool {
                 return Err(anyhow!(
                     "Error: Unsupported write mode '{effective_mode}'. Allowed: overwrite, append, skip_if_exists, fail_if_exists."
                 ));
+            }
+        }
+
+        if acquire_mutation {
+            let support = crate::tools::source_inspection::call_key(tools::WRITE_FILE, &args);
+            if let Some(before) = &existing_content {
+                self.edited_file_monitor.source_inspection().record_edit(
+                    &file_path,
+                    before,
+                    &final_written_content,
+                    std::slice::from_ref(&if effective_mode == "append" {
+                        let removed = usize::from(!before.is_empty() && !before.ends_with('\n'));
+                        let start = before.lines().count().saturating_sub(removed);
+                        crate::tools::source_inspection::mutations::InspectedReplacement {
+                            start,
+                            removed,
+                            added: final_written_content.lines().count().saturating_sub(start),
+                        }
+                    } else {
+                        crate::tools::source_inspection::mutations::InspectedReplacement {
+                            start: 0,
+                            removed: before.lines().count(),
+                            added: final_written_content.lines().count(),
+                        }
+                    }),
+                    support,
+                );
+            } else {
+                self.edited_file_monitor.source_inspection().record_created(
+                    &file_path,
+                    &final_written_content,
+                    support,
+                );
             }
         }
 

@@ -1,6 +1,7 @@
 pub const DEFAULT_MODEL: &str = MISTRAL_LARGE_3;
 pub const SUPPORTED_MODELS: &[&str] = &[
     MISTRAL_LARGE_3,
+    MISTRAL_LARGE_4,
     MISTRAL_MEDIUM_3_5,
     MISTRAL_SMALL_4,
     MISTRAL_MEDIUM_3_1,
@@ -11,6 +12,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 pub const MISTRAL_LARGE_3: &str = "mistral-large-2512";
+pub const MISTRAL_LARGE_4: &str = "mistral-large-4";
 const MISTRAL_MEDIUM_3_5: &str = "mistral-medium-3-5";
 const MISTRAL_SMALL_4: &str = "mistral-small-2603";
 const MISTRAL_MEDIUM_3_1: &str = "mistral-medium-2508";

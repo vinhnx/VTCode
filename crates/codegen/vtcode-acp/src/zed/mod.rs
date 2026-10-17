@@ -434,9 +434,12 @@ Research primary prompt."#,
 
         assert_eq!(
             primary_agent_select_values(&config_options),
-            ["duck", "plan", "build", "auto", "research"].map(str::to_string).to_vec()
+            ["duck", "plan", "build", "auto", "coordinator", "research"]
+                .map(str::to_string)
+                .to_vec()
         );
         assert!(primary_agent_select_labels(&config_options).contains(&"Research primary".into()));
+        assert!(primary_agent_select_labels(&config_options).contains(&"Coordinator".into()));
         assert_eq!(primary_agent_current_value(&config_options), Some("research".to_string()));
     }
 

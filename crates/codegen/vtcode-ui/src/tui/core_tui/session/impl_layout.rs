@@ -44,6 +44,7 @@ impl Session {
             // redraw so the next frame recomputes it with the real width,
             // instead of waiting for an unrelated keypress to flush it.
             self.header_lines_cache = None;
+            self.header_block_title_cache = None;
             self.mark_visual_dirty();
         }
     }

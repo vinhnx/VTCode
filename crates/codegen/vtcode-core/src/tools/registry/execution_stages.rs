@@ -7,12 +7,32 @@
 //! # Pipeline Stages
 //!
 //! 1. **resolve_tool_name** — alias resolution and canonical name lookup
-//! 2. **check_planning_workflow** — enforce read-only during planning
-//! 3. **check_circuit_breaker** — reject calls when breaker is open
+//! 2. **prepare_execution_args** — normalization and handler preview metadata
+//! 3. **resolve_tool_route** — registered and canonical MCP route metadata
+//! 4. **resolve_execution_route** — awaited MCP discovery and lookup errors
+//! 5. **check_circuit_breaker** — reject calls when breaker is open
+//!
+//! Planning-workflow enforcement lives in `execution_facade.rs` /
+//! `execution_kernel.rs` on the already-classified intent, not here.
 
+use anyhow::Result;
 use serde_json::Value;
+use std::borrow::Cow;
+use tracing::{trace, warn};
 
-use super::ToolRegistry;
+use crate::mcp::McpToolExecutor;
+use crate::tools::mcp::legacy_mcp_tool_name;
+
+use crate::tools::{output_limits, tool_intent};
+
+use super::{ToolRegistry, execution_kernel};
+
+/// Normalized handler arguments and independently resolved preview metadata.
+pub(super) struct ExecutionArgs<'a> {
+    pub(super) handler_args: Cow<'a, Value>,
+    pub(super) max_output_tokens: usize,
+    pub(super) is_verification_command: bool,
+}
 
 /// Resolved tool name information.
 pub struct ResolvedToolName {
@@ -51,15 +71,35 @@ impl ToolRegistry {
         }
     }
 
-    /// Check if a tool call should be denied due to an active planning workflow.
-    ///
-    /// Returns `None` if the call is allowed, or `Some(denial_message)` if denied.
-    pub fn check_planning_workflow_for(&self, tool_name: &str, args: &Value, display_name: &str) -> Option<String> {
-        if self.is_planning_active() && !self.is_planning_active_allowed(tool_name, args) {
-            Some(crate::tools::error_messages::agent_execution::planning_workflow_denial_message(display_name))
+    /// Prepare arguments without granting preflight, policy, or safety admission.
+    pub(super) fn prepare_execution_args<'a>(&self, tool_name: &str, args: &'a Value) -> Result<ExecutionArgs<'a>> {
+        let parameter_schema = self
+            .inventory
+            .registration_for(tool_name)
+            .and_then(|registration| registration.parameter_schema().cloned());
+        let normalized_args = execution_kernel::normalize_tool_args(tool_name, args, parameter_schema.as_ref())?;
+        // Classify before stripping output metadata: verification calls retain
+        // full preview budgets and must remain exempt from result reuse.
+        let is_verification_command = self.is_completion_verifier_call(tool_name, normalized_args.as_ref())
+            || matches!(
+                tool_intent::classify_shell_activity(tool_name, normalized_args.as_ref()),
+                tool_intent::ShellActivity::Verification
+            );
+        let max_output_tokens = output_limits::resolve_max_output_tokens(
+            normalized_args.as_ref(),
+            self.is_planning_active(),
+            is_verification_command,
+        )?;
+        let handler_args = if output_limits::handler_accepts_output_metadata(parameter_schema.as_ref()) {
+            normalized_args
         } else {
-            None
-        }
+            Cow::Owned(output_limits::args_without_output_metadata(normalized_args.as_ref()))
+        };
+        Ok(ExecutionArgs {
+            handler_args,
+            max_output_tokens,
+            is_verification_command,
+        })
     }
 
     /// Check if a tool call should be rejected by the circuit breaker.
@@ -114,6 +154,52 @@ impl ToolRegistry {
         route
     }
 
+    /// Resolve discovery metadata after policy constraints, without recording or executing.
+    pub(super) async fn resolve_execution_route(&self, requested_name: &str, tool_name: &str) -> ExecutionRoute {
+        let mut route = self.resolve_tool_route(tool_name);
+        let mut mcp_lookup_error = None;
+
+        let mcp_client_opt = self.mcp_client.read().clone();
+        if !route.is_mcp
+            && let Some(mcp_client) = mcp_client_opt
+        {
+            let mut resolved_mcp_name = legacy_mcp_tool_name(requested_name)
+                .map(str::to_string)
+                .unwrap_or_else(|| tool_name.to_string());
+
+            if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await
+                && alias_target != resolved_mcp_name
+            {
+                trace!(
+                    requested = %resolved_mcp_name,
+                    resolved = %alias_target,
+                    "Resolved MCP tool alias"
+                );
+                resolved_mcp_name = alias_target;
+            }
+
+            match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
+                Ok(true) => {
+                    route.needs_pty = true;
+                    route.tool_exists = true;
+                    route.is_mcp = true;
+                    route.mcp_provider = self.find_mcp_provider(&resolved_mcp_name).await;
+                    route.mcp_tool_name = Some(resolved_mcp_name);
+                }
+                Ok(false) => {
+                    // Don't modify tool_exists here - keep the result from standard tool check.
+                    // Setting route.tool_exists = false would incorrectly override a valid standard tool.
+                }
+                Err(err) => {
+                    warn!("Error checking MCP tool '{}': {}", resolved_mcp_name, err);
+                    mcp_lookup_error = Some(err);
+                }
+            }
+        }
+
+        ExecutionRoute { route, mcp_lookup_error }
+    }
+
     /// Check if a full-auto policy denies this tool.
     ///
     /// Returns `None` if allowed, or `Some(error_message)` if denied.
@@ -140,30 +226,11 @@ pub struct ToolRoute {
     pub mcp_tool_name: Option<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn resolved_tool_name_is_alias_when_names_differ() {
-        let resolved = ResolvedToolName {
-            canonical: "read_file".to_string(),
-            display: "cat (alias for read_file)".to_string(),
-            is_alias: true,
-        };
-        assert!(resolved.is_alias);
-        assert_eq!(resolved.canonical, "read_file");
-        assert!(resolved.display.contains("alias"));
-    }
-
-    #[test]
-    fn resolved_tool_name_not_alias_when_names_match() {
-        let resolved = ResolvedToolName {
-            canonical: "read_file".to_string(),
-            display: "read_file".to_string(),
-            is_alias: false,
-        };
-        assert!(!resolved.is_alias);
-        assert_eq!(resolved.canonical, resolved.display);
-    }
+/// Discovery errors coexist with standard routes so remote lookup cannot erase them.
+pub(super) struct ExecutionRoute {
+    pub(super) route: ToolRoute,
+    pub(super) mcp_lookup_error: Option<anyhow::Error>,
 }
+
+#[cfg(test)]
+mod tests;

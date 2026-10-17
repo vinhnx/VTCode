@@ -4,7 +4,8 @@ mod recovery_preview;
 
 pub(crate) use self::memory_envelope::{refresh_session_memory_envelope, refresh_session_memory_envelope_async};
 pub(crate) use self::progress_ui::{
-    CompactionProgressGuard, format_already_compact, format_compacted_summary, format_compaction_failed,
+    CompactionProgressGuard, format_already_compact, format_compacted_summary, format_compaction_error_details,
+    format_compaction_failed,
 };
 pub(crate) use self::recovery_preview::build_recovery_context_previews_with_workspace;
 
@@ -357,13 +358,15 @@ async fn run_manual_compaction(
     } else {
         compaction_input.clone()
     };
-    let (compacted, compaction_mode) = vtcode_core::compaction::compact_history_manual_with_budget(
+    let parent_context = session_stats.compaction_parent_context(provider.name(), model);
+    let (compacted, compaction_mode) = vtcode_core::compaction::compact_history_manual_with_parent_context(
         provider,
         model,
         &compaction_history,
         &local_compaction_config(vt_cfg, true),
         &compaction_options,
         context_budget,
+        parent_context.as_ref(),
     )
     .await?;
     if compacted == compaction_history {
@@ -496,13 +499,15 @@ async fn compact_history_segment_in_place_with_boundary(
     if !config.always_summarize && compaction_history.len() <= config.keep_last_messages {
         return Ok(None);
     }
-    let (compacted, compaction_mode) = vtcode_core::compaction::compact_history_manual_with_budget(
+    let parent_context = session_stats.compaction_parent_context(provider.name(), model);
+    let (compacted, compaction_mode) = vtcode_core::compaction::compact_history_manual_with_parent_context(
         provider,
         model,
         &compaction_history,
         &config,
         &manual_options,
         context_budget,
+        parent_context.as_ref(),
     )
     .await?;
 
@@ -610,6 +615,9 @@ async fn apply_compacted_history(
     }
     let history_artifact_path = envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     let compacted_len = compacted.len();
+    // Recovery and model-switch compaction carry different segment reasons,
+    // but every committed compaction starts a fresh cache-health streak.
+    session_stats.record_compaction_boundary();
     let segment_transition = begin_segment.then(|| session_stats.begin_request_segment(plan.boundary_reason));
     *history = compacted;
     session_stats.clear_previous_response_chain_for(provider.name(), model);
@@ -867,6 +875,7 @@ pub(crate) async fn maybe_auto_compact_history(
     // It enforces the `auto_compaction_enabled` gate, the token threshold, and
     // the engine + memory-envelope + artifact compression in one place.
     let mut compacted_history = history.clone();
+    let parent_context = session_stats.compaction_parent_context(provider.name(), model);
     let manual_options = vtcode_core::compaction::ManualCompactionOptions {
         allow_reasoning_effort_downgrade: vt_cfg.is_some_and(|config| config.agent.allow_reasoning_effort_downgrade),
         ..Default::default()
@@ -893,10 +902,7 @@ pub(crate) async fn maybe_auto_compact_history(
             auto_compact_suppressed: &mut session_stats.auto_compact_suppressed,
             force_compaction,
             steering_update: steering_update.as_ref(),
-            // Binary runloop does not carry the live request envelope here;
-            // history-prefix forking still applies, full system/tools prefix
-            // reuse is a follow-up.
-            parent_context: None,
+            parent_context,
         },
         &mut compacted_history,
     )

@@ -1,3 +1,5 @@
+use crate::agent::runloop::ui_list;
+use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Result, anyhow, bail};
 use serde_json::Value as YamlValue;
 type YamlMapping = serde_json::Map<String, YamlValue>;
@@ -605,22 +607,22 @@ async fn prompt_scope(
     current: AgentDefinitionScope,
 ) -> Result<Option<AgentDefinitionScope>> {
     let items = vec![
-        InlineListItem {
-            title: "Project scope".to_string(),
-            subtitle: Some("Write to `.vtcode/agents/<name>.md` in this workspace.".to_string()),
-            badge: Some("Recommended".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("agents:author:scope:project".to_string())),
-            search_value: Some("project workspace .vtcode agents".to_string()),
-        },
-        InlineListItem {
-            title: "User scope".to_string(),
-            subtitle: Some("Write to the canonical user config directory for all workspaces.".to_string()),
-            badge: Some("User".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("agents:author:scope:user".to_string())),
-            search_value: Some("user home shared agent".to_string()),
-        },
+        ui_list::action(
+            "Project scope",
+            "Write to `.vtcode/agents/<name>.md` in this workspace.".to_string(),
+            Some("Recommended".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction("agents:author:scope:project".to_string())),
+        )
+        .with_search_value("project workspace .vtcode agents".to_string()),
+        ui_list::action(
+            "User scope",
+            "Write to the canonical user config directory for all workspaces.".to_string(),
+            Some("User".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction("agents:author:scope:user".to_string())),
+        )
+        .with_search_value("user home shared agent".to_string()),
     ];
     let selected = Some(InlineListSelection::ConfigAction(match current {
         AgentDefinitionScope::Project => "agents:author:scope:project".to_string(),
@@ -650,22 +652,22 @@ async fn prompt_scope(
 
 async fn prompt_background_mode(ctx: &mut SlashCommandContext<'_>, current: bool) -> Result<Option<bool>> {
     let items = vec![
-        InlineListItem {
-            title: "Disabled".to_string(),
-            subtitle: Some("This agent does not default to background execution.".to_string()),
-            badge: Some("Default".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("agents:author:background:false".to_string())),
-            search_value: Some("background disabled".to_string()),
-        },
-        InlineListItem {
-            title: "Enabled".to_string(),
-            subtitle: Some("Mark this agent as background-capable by default.".to_string()),
-            badge: Some("Background".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction("agents:author:background:true".to_string())),
-            search_value: Some("background enabled".to_string()),
-        },
+        ui_list::action(
+            "Disabled",
+            "This agent does not default to background execution.".to_string(),
+            Some("Default".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction("agents:author:background:false".to_string())),
+        )
+        .with_search_value("background disabled".to_string()),
+        ui_list::action(
+            "Enabled",
+            "Mark this agent as background-capable by default.".to_string(),
+            Some("Background".to_string()),
+            Tone::Accent,
+            Some(InlineListSelection::ConfigAction("agents:author:background:true".to_string())),
+        )
+        .with_search_value("background enabled".to_string()),
     ];
     let selected = Some(InlineListSelection::ConfigAction(format!("agents:author:background:{current}")));
     ctx.handle.show_list_modal(
@@ -766,37 +768,39 @@ async fn prompt_text_value(
         let mut items = Vec::new();
         let current_trimmed = current.trim();
         if !current_trimmed.is_empty() {
-            items.push(InlineListItem {
-                title: format!("Keep current ({current_trimmed})"),
-                subtitle: Some("Leave this field unchanged.".to_string()),
-                badge: Some("Current".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(KEEP_CURRENT_ACTION.to_string())),
-                search_value: Some(format!("keep {current_trimmed}")),
-            });
+            items.push(
+                ui_list::current_choice(
+                    format!("Keep current ({current_trimmed})"),
+                    Some("Leave this field unchanged.".to_string()),
+                    Some(InlineListSelection::ConfigAction(KEEP_CURRENT_ACTION.to_string())),
+                )
+                .with_search_value(format!("keep {current_trimmed}")),
+            );
         }
         if allow_clear {
-            items.push(InlineListItem {
-                title: "Clear value".to_string(),
-                subtitle: Some("Remove the current override.".to_string()),
-                badge: Some("Unset".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::ConfigAction(CLEAR_VALUE_ACTION.to_string())),
-                search_value: Some("clear unset remove".to_string()),
-            });
+            items.push(
+                ui_list::action(
+                    "Clear value",
+                    "Remove the current override.".to_string(),
+                    Some("Unset".to_string()),
+                    Tone::Accent,
+                    Some(InlineListSelection::ConfigAction(CLEAR_VALUE_ACTION.to_string())),
+                )
+                .with_search_value("clear unset remove".to_string()),
+            );
         }
-        items.push(InlineListItem {
-            title: "Enter a value".to_string(),
-            subtitle: Some("Press Tab to type inline, then Enter to submit.".to_string()),
-            badge: Some("Input".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: FIELD_PROMPT_ID.to_string(),
-                selected: vec![],
-                other: Some(String::new()),
-            }),
-            search_value: Some("custom value input".to_string()),
-        });
+        items.push(
+            ui_list::choice(
+                "Enter a value",
+                Some("Press Tab to type inline, then Enter to submit.".to_string()),
+                Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: FIELD_PROMPT_ID.to_string(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+            )
+            .with_search_value("custom value input".to_string()),
+        );
 
         let outcome = show_wizard_modal_and_wait(
             ctx.handle,
@@ -874,32 +878,39 @@ async fn edit_tools_checklist(
                 indent: 0,
                 selection: Some(InlineListSelection::ConfigAction(format!("{TOOL_TOGGLE_PREFIX}{tool_id}"))),
                 search_value: Some(format!("{tool_id} {subtitle} {badge}")),
+                ..Default::default()
             })
             .collect::<Vec<_>>();
-        items.push(InlineListItem {
-            title: "Add custom tool id".to_string(),
-            subtitle: Some("Append an exact VT Code tool id that is not in the default list.".to_string()),
-            badge: Some("Custom".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(TOOL_ADD_CUSTOM_ACTION.to_string())),
-            search_value: Some("add custom tool id".to_string()),
-        });
-        items.push(InlineListItem {
-            title: "Save selection".to_string(),
-            subtitle: Some("Use the currently checked tool list.".to_string()),
-            badge: Some("Action".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(TOOL_SAVE_ACTION.to_string())),
-            search_value: Some("save tools".to_string()),
-        });
-        items.push(InlineListItem {
-            title: "Cancel".to_string(),
-            subtitle: Some("Keep the previous tool selection.".to_string()),
-            badge: Some("Cancel".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(TOOL_CANCEL_ACTION.to_string())),
-            search_value: Some("cancel".to_string()),
-        });
+        items.push(
+            ui_list::action(
+                "Add custom tool id",
+                "Append an exact VT Code tool id that is not in the default list.".to_string(),
+                Some("Custom".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(TOOL_ADD_CUSTOM_ACTION.to_string())),
+            )
+            .with_search_value("add custom tool id".to_string()),
+        );
+        items.push(
+            ui_list::action(
+                "Save selection",
+                "Use the currently checked tool list.".to_string(),
+                Some("Action".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(TOOL_SAVE_ACTION.to_string())),
+            )
+            .with_search_value("save tools".to_string()),
+        );
+        items.push(
+            ui_list::action(
+                "Cancel",
+                "Keep the previous tool selection.".to_string(),
+                Some("Cancel".to_string()),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(TOOL_CANCEL_ACTION.to_string())),
+            )
+            .with_search_value("cancel".to_string()),
+        );
 
         let selected_item = items.first().and_then(|item| item.selection.clone());
         ctx.handle.show_list_modal(
@@ -994,13 +1005,15 @@ async fn select_native_agent_name(ctx: &mut SlashCommandContext<'_>) -> Result<O
 
     let items = specs
         .iter()
-        .map(|spec| InlineListItem {
-            title: spec.name.clone(),
-            subtitle: Some(super::agent_subtitle(spec, false)),
-            badge: Some(super::agent_badge(spec)),
-            indent: 0,
-            selection: Some(InlineListSelection::ConfigAction(format!("{}{}", AUTHOR_ACTION_PREFIX, spec.name))),
-            search_value: Some(format!("{} {} {}", spec.name, spec.description, spec.source.label())),
+        .map(|spec| {
+            ui_list::action(
+                spec.name.clone(),
+                super::agent_subtitle(spec, false),
+                Some(super::agent_badge(spec)),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction(format!("{}{}", AUTHOR_ACTION_PREFIX, spec.name))),
+            )
+            .with_search_value(format!("{} {} {}", spec.name, spec.description, spec.source.label()))
         })
         .collect::<Vec<_>>();
     let selected = items.first().and_then(|item| item.selection.clone());
@@ -1192,14 +1205,14 @@ fn memory_summary(scope: Option<&SubagentMemoryScope>) -> String {
 }
 
 fn memory_item(title: &str, subtitle: &str, scope: Option<SubagentMemoryScope>) -> InlineListItem {
-    InlineListItem {
-        title: title.to_string(),
-        subtitle: Some(subtitle.to_string()),
-        badge: None,
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(memory_action_key(scope.as_ref()))),
-        search_value: Some(format!("{title} {subtitle}")),
-    }
+    ui_list::action(
+        title.to_string(),
+        subtitle.to_string(),
+        None,
+        Tone::Neutral,
+        Some(InlineListSelection::ConfigAction(memory_action_key(scope.as_ref()))),
+    )
+    .with_search_value(format!("{title} {subtitle}"))
 }
 
 fn memory_action_key(scope: Option<&SubagentMemoryScope>) -> String {
@@ -1231,6 +1244,7 @@ fn author_action_item(title: &str, subtitle: &str, badge: Option<&str>, action: 
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{AUTHOR_ACTION_PREFIX}{action}"))),
         search_value: Some(format!("{title} {subtitle}")),
+        ..Default::default()
     }
 }
 

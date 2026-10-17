@@ -364,6 +364,7 @@ pub(crate) fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest
         .and_then(|config| config.task_budget.as_ref())
         .map(|budget| budget.total);
     let anthropic_request_overrides = Some(AnthropicRequestOverrides {
+        speed: None,
         thinking_mode: compatibility_thinking_mode(&request.model, request.thinking.as_ref()),
         thinking_display: compatibility_thinking_display(request.thinking.as_ref()),
         effort: effort
@@ -832,7 +833,11 @@ fn compatibility_thinking_mode(_model: &str, thinking: Option<&ThinkingConfig>) 
         Some(ThinkingConfig::Enabled { budget_tokens, .. }) => {
             AnthropicThinkingModeOverride::ManualBudget(*budget_tokens)
         }
-        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) => AnthropicThinkingModeOverride::Disabled,
+        // `between_tools` is the "thinking off" spelling for the models that
+        // reject `disabled`; the builder rewrites it back for such a model.
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::BetweenTools) | Some(ThinkingConfig::Unknown) => {
+            AnthropicThinkingModeOverride::Disabled
+        }
         None => AnthropicThinkingModeOverride::Disabled,
     }
 }
@@ -840,7 +845,9 @@ fn compatibility_thinking_mode(_model: &str, thinking: Option<&ThinkingConfig>) 
 fn compatibility_thinking_display(thinking: Option<&ThinkingConfig>) -> AnthropicThinkingDisplayOverride {
     let display = match thinking {
         Some(ThinkingConfig::Adaptive { display }) | Some(ThinkingConfig::Enabled { display, .. }) => *display,
-        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::Unknown) | None => None,
+        Some(ThinkingConfig::Disabled) | Some(ThinkingConfig::BetweenTools) | Some(ThinkingConfig::Unknown) | None => {
+            None
+        }
     };
 
     match display {

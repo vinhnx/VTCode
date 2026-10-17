@@ -5,9 +5,7 @@ use crate::agent::runloop::unified::config_section_headings::{heading_for_path, 
 
 use super::docs::FieldDoc;
 use super::path::path_with_key;
-use vtcode_commons::formatting::truncate_middle;
-
-const SETTINGS_SUBTITLE_MAX_LEN: usize = 90;
+use vtcode_commons::formatting::{format_float_display, truncate_middle};
 
 pub(super) fn display_title(label: &str, path: &str, value: &TomlValue) -> String {
     if label.starts_with('[') && !ends_with_quoted_map_key(path) {
@@ -25,38 +23,6 @@ fn ends_with_quoted_map_key(path: &str) -> bool {
     path.rfind("[\"").is_some_and(|start| path[start..].ends_with("\"]"))
 }
 
-pub(super) fn section_subtitle(path: &str, value: &TomlValue) -> String {
-    let heading = heading_for_path(path);
-    let count = count_leaf_entries(value);
-    let mut parts = Vec::new();
-    if !heading.summary.is_empty() {
-        parts.push(truncate_middle(heading.summary.as_ref(), SETTINGS_SUBTITLE_MAX_LEN));
-    }
-    parts.push(format!("{} setting{}", count, if count == 1 { "" } else { "s" }));
-    parts.join(" • ")
-}
-
-pub(super) fn setting_subtitle(summary: &str, description: &str, adjustable: bool) -> String {
-    let value_display = if adjustable {
-        format!("<- {summary} ->")
-    } else {
-        summary.to_string()
-    };
-    let mut parts = vec![value_display];
-    if !description.is_empty() {
-        parts.push(truncate_middle(description, SETTINGS_SUBTITLE_MAX_LEN));
-    }
-    parts.join(" • ")
-}
-
-pub(super) fn collection_subtitle(summary: String, description: &str) -> String {
-    let mut parts = vec![summary];
-    if !description.is_empty() {
-        parts.push(truncate_middle(description, SETTINGS_SUBTITLE_MAX_LEN));
-    }
-    parts.join(" • ")
-}
-
 pub(super) fn search_value_for_missing_doc(path: &str, label: &str, doc: Option<&FieldDoc>) -> String {
     let mut parts = vec![path.to_string(), label.to_string(), "unset".to_string()];
     if let Some(doc) = doc {
@@ -71,25 +37,34 @@ pub(super) fn search_value_for_missing_doc(path: &str, label: &str, doc: Option<
 }
 
 pub(super) fn section_item(label: &str) -> InlineListItem {
-    InlineListItem {
-        title: label.to_string(),
-        subtitle: None,
-        badge: None,
-        indent: 0,
-        selection: None,
-        search_value: None,
-    }
+    vtcode_ui::design::list::group_header(label)
 }
 
+/// Action row with default tone: badgeful rows get Accent, badgeless Neutral.
+/// Prefer [`action_item_with_tone`] when the tone is semantic (danger/current).
 pub(super) fn action_item(title: &str, subtitle: &str, badge: Option<&str>, action: &str) -> InlineListItem {
-    InlineListItem {
-        title: title.to_string(),
-        subtitle: Some(subtitle.to_string()),
-        badge: badge.map(str::to_string),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(action.to_string())),
-        search_value: Some(format!("{title} {subtitle}")),
-    }
+    let tone = if badge.is_some() {
+        vtcode_commons::ui_protocol::InlineTone::Accent
+    } else {
+        vtcode_commons::ui_protocol::InlineTone::Neutral
+    };
+    action_item_with_tone(title, subtitle, badge, action, tone)
+}
+
+pub(super) fn action_item_with_tone(
+    title: &str,
+    subtitle: &str,
+    badge: Option<&str>,
+    action: &str,
+    tone: vtcode_commons::ui_protocol::InlineTone,
+) -> InlineListItem {
+    vtcode_ui::design::list::action(
+        title,
+        subtitle,
+        badge.map(str::to_string),
+        tone,
+        Some(InlineListSelection::ConfigAction(action.to_string())),
+    )
 }
 
 pub(super) fn search_value_with_content(path: &str, label: &str, value: &TomlValue, doc: Option<&FieldDoc>) -> String {
@@ -119,7 +94,7 @@ fn collect_search_terms(path: &str, value: &TomlValue, parts: &mut Vec<String>) 
     match value {
         TomlValue::String(value) => parts.push(value.clone()),
         TomlValue::Integer(value) => parts.push(value.to_string()),
-        TomlValue::Float(value) => parts.push(value.to_string()),
+        TomlValue::Float(value) => parts.push(format_float_display(*value)),
         TomlValue::Boolean(value) => {
             parts.push(value.to_string());
             parts.push(if *value { "on" } else { "off" }.to_string());
@@ -162,9 +137,9 @@ pub(super) fn count_leaf_entries(value: &TomlValue) -> usize {
 
 pub(super) fn summarize_value(value: &TomlValue) -> String {
     match value {
-        TomlValue::String(text) => format!("\"{}\"", truncate_middle(text, 48)),
+        TomlValue::String(text) => truncate_middle(text, 48),
         TomlValue::Integer(number) => number.to_string(),
-        TomlValue::Float(number) => number.to_string(),
+        TomlValue::Float(number) => format_float_display(*number),
         TomlValue::Boolean(value) => {
             if *value {
                 "On".to_string()
@@ -186,6 +161,20 @@ pub(super) fn summarize_value(value: &TomlValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn summarize_value_collapses_f32_temperature_artifact() {
+        // Screenshot artifact: `temperature = 0.7` (`f32`) rendered as
+        // `0.699999988079071` after widening to `f64`, and one `+0.1` press
+        // lands on `0.799999988079071`; asymmetric counterparts keep genuine
+        // `f64` precision intact.
+        assert_eq!(summarize_value(&TomlValue::Float(f64::from(0.7f32))), "0.7");
+        assert_eq!(summarize_value(&TomlValue::Float(f64::from(0.3f32))), "0.3");
+        assert_eq!(summarize_value(&TomlValue::Float(f64::from(0.7f32) + 0.1)), "0.8");
+        assert_eq!(summarize_value(&TomlValue::Float(0.30000000000000004)), "0.3");
+        assert_eq!(summarize_value(&TomlValue::Float(0.3333333333333333)), "0.3333333333333333");
+        assert_eq!(summarize_value(&TomlValue::Float(1.0)), "1");
+    }
 
     #[test]
     fn display_title_preserves_quoted_map_key_for_table() {

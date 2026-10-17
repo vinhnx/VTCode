@@ -37,6 +37,13 @@ pub struct PromptCachingConfig {
     #[serde(default = "default_cache_friendly_prompt_shaping")]
     pub cache_friendly_prompt_shaping: bool,
 
+    /// Keep the wire tool catalog identical across planning and execution
+    /// turns (union of both modes' tools). Planning toggles then do not
+    /// rewrite the tool prefix. The fail-closed execution gate still blocks
+    /// mutations during planning.
+    #[serde(default = "default_true")]
+    pub stable_tool_catalog_across_modes: bool,
+
     /// Warn before a request when the pause since the previous request likely
     /// exceeded the provider prompt cache lifetime (advisory only).
     #[serde(default = "default_true")]
@@ -63,6 +70,7 @@ impl Default for PromptCachingConfig {
             enable_auto_cleanup: default_auto_cleanup(),
             min_quality_threshold: default_min_quality_threshold(),
             cache_friendly_prompt_shaping: default_cache_friendly_prompt_shaping(),
+            stable_tool_catalog_across_modes: true,
             gap_warning_enabled: default_true(),
             gap_warning_threshold_secs: None,
             providers: ProviderPromptCachingConfig::default(),
@@ -167,8 +175,12 @@ pub enum PromptCacheRetention {
     #[default]
     #[serde(rename = "24h")]
     H24,
-    /// Forward-compatible catch-all for unknown retention values
-    #[serde(other)]
+    /// Forward-compatible catch-all for unknown retention values.
+    ///
+    /// The explicit `rename` keeps the serialized form (`"unknown"`) aligned
+    /// with [`PromptCacheRetention::as_str`]; bare `#[serde(other)]` would
+    /// serialize the variant name as `"Unknown"`.
+    #[serde(other, rename = "unknown")]
     Unknown,
 }
 
@@ -394,6 +406,12 @@ pub struct AnthropicPromptCacheSettings {
     /// Set to >= 3600 for 1-hour cache on messages
     #[serde(default = "default_anthropic_extended_ttl")]
     pub extended_ttl_seconds: Option<u64>,
+
+    /// Prefer the 1h extended TTL for tools/system/messages even when the
+    /// per-breakpoint TTLs are 5m. Use when sessions idle past the 5m cache
+    /// window. Opt-in; 1h writes cost 2x base input.
+    #[serde(default)]
+    pub prefer_extended_ttl: bool,
 }
 
 impl Default for AnthropicPromptCacheSettings {
@@ -408,6 +426,7 @@ impl Default for AnthropicPromptCacheSettings {
             cache_tool_definitions: default_true(),
             min_message_length_for_cache: default_min_message_length(),
             extended_ttl_seconds: default_anthropic_extended_ttl(),
+            prefer_extended_ttl: false,
         }
     }
 }
@@ -747,6 +766,26 @@ mod tests {
         assert_eq!(cfg.prompt_cache_retention, Some(PromptCacheRetention::Unknown));
     }
 
+    /// `PromptCacheRetention` exposes the same value through `as_str()`/
+    /// `Display` and the serde wire form. Both the config table and the OpenAI
+    /// API wire format read this enum, so a one-sided change (e.g. a bare
+    /// `#[serde(other)]` that serializes `Unknown` as `"Unknown"`) would desync
+    /// them. Pin every variant.
+    #[test]
+    fn prompt_cache_retention_as_str_matches_serde() {
+        for retention in [
+            PromptCacheRetention::InMemory,
+            PromptCacheRetention::H24,
+            PromptCacheRetention::Unknown,
+        ] {
+            assert_eq!(
+                serde_json::to_value(retention).unwrap(),
+                serde_json::json!(retention.as_str()),
+                "serde wire form drifted from as_str() for {retention:?}"
+            );
+        }
+    }
+
     #[test]
     fn validate_prompt_cache_rejects_unknown_retention() {
         let mut cfg = PromptCachingConfig::default();
@@ -936,12 +975,12 @@ gap_warning_threshold_secs = 120
     #[test]
     fn bundled_config_templates_match_prompt_cache_defaults() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let loader_source =
-            fs::read_to_string(manifest_dir.join("src/loader/config.rs")).expect("loader config source");
-        assert!(loader_source.contains("[prompt_cache]"));
-        assert!(loader_source.contains("enabled = true"));
-        assert!(loader_source.contains("cache_friendly_prompt_shaping = true"));
-        assert!(loader_source.contains("# prompt_cache_retention = \"24h\""));
+        let bootstrap_template =
+            fs::read_to_string(manifest_dir.join("data/default_config.toml")).expect("bootstrap config template");
+        let config: crate::VTCodeConfig = toml::from_str(&bootstrap_template).expect("parse bootstrap template");
+        assert!(config.prompt_cache.enabled);
+        assert!(config.prompt_cache.cache_friendly_prompt_shaping);
+        assert!(bootstrap_template.contains("# prompt_cache_retention = \"24h\""));
 
         let workspace_root = find_workspace_root();
         let example_config =
@@ -954,14 +993,16 @@ gap_warning_threshold_secs = 120
 
         let prompt_cache_guide = fs::read_to_string(workspace_root.join("docs/tools/PROMPT_CACHING_GUIDE.md"))
             .expect("prompt caching guide");
+        // The guide is markdownlint-wrapped, so sentences may be reflowed across
+        // lines; match against whitespace-normalized text instead of raw lines.
+        let normalized_guide = vtcode_commons::formatting::collapse_whitespace(&prompt_cache_guide);
         assert!(
-            prompt_cache_guide
+            normalized_guide
                 .contains("VT Code enables `prompt_cache.cache_friendly_prompt_shaping = true` by default.")
         );
-        assert!(
-            prompt_cache_guide
-                .contains("Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default;")
-        );
+        // The retention doc block (guide lines 44-48) states `prompt_cache_retention` is
+        // opt-in for older supported Responses models; assert that intent survives doc rewrites.
+        assert!(normalized_guide.contains("`prompt_cache_retention` is opt-in for older supported Responses models"));
 
         let field_reference = fs::read_to_string(workspace_root.join("docs/config/CONFIG_FIELD_REFERENCE.md"))
             .expect("config field reference");

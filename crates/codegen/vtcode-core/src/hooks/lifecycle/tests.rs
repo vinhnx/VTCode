@@ -526,6 +526,57 @@ async fn test_session_end_payload_includes_turn_id() {
     assert_eq!(payload["reason"], "completed");
 }
 
+/// Drift guard for the hook enums whose `as_str()` feeds both the hook
+/// payload wire format and the thread-completion record.
+///
+/// `SessionEndReason` exposes the same canonical value through two hand-written
+/// paths: `as_str()` (the hook payload's `reason`) and `thread_completion_status()`
+/// (the runtime completion status). A variant added to one match but not the
+/// other, or a renamed literal, would silently desynchronize the hook payload
+/// from the runtime record. Assert every variant explicitly so the compiler
+/// forces both matches to stay complete.
+#[test]
+fn session_end_reason_strings_match_thread_completion_status() {
+    let cases = [
+        (SessionEndReason::Completed, "completed"),
+        (SessionEndReason::Exit, "exit"),
+        (SessionEndReason::Cancelled, "cancelled"),
+        (SessionEndReason::Error, "error"),
+        (SessionEndReason::NewSession, "new_session"),
+    ];
+    for (reason, expected) in cases {
+        assert_eq!(reason.as_str(), expected, "as_str mismatch for {reason:?}");
+        let (status, _subtype) = reason.thread_completion_status(false);
+        assert_eq!(status, expected, "thread_completion_status drift for {reason:?}");
+    }
+
+    // The budget-limit override is the one intentional divergence; keep it
+    // explicit so it is not mistaken for drift.
+    let (status, _) = SessionEndReason::Completed.thread_completion_status(true);
+    assert_eq!(status, "budget_limit_reached");
+}
+
+#[test]
+fn hook_enum_as_str_values_are_stable() {
+    let start_triggers = [
+        (SessionStartTrigger::Startup, "startup"),
+        (SessionStartTrigger::Resume, "resume"),
+        (SessionStartTrigger::NewSession, "new_session"),
+        (SessionStartTrigger::Compact, "compact"),
+    ];
+    for (trigger, expected) in start_triggers {
+        assert_eq!(trigger.as_str(), expected, "start trigger drift for {trigger:?}");
+    }
+
+    let notifications = [
+        (NotificationHookType::PermissionPrompt, "permission_prompt"),
+        (NotificationHookType::IdlePrompt, "idle_prompt"),
+    ];
+    for (notification, expected) in notifications {
+        assert_eq!(notification.as_str(), expected, "notification type drift for {notification:?}");
+    }
+}
+
 #[tokio::test]
 #[cfg_attr(not(target_os = "macos"), ignore = "Lifecycle hooks are for local development only")]
 async fn test_user_prompt_submit_hook_allows_prompt_by_default() {

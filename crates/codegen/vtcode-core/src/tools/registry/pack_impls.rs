@@ -35,9 +35,9 @@ use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_par
 use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
-    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, agent_parameters,
-    apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters, list_files_parameters,
-    mcp_parameters, search_tools_parameters, write_stdin_parameters,
+    AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
+    agent_parameters, apply_patch_parameters, code_search_parameters, cron_parameters, exec_command_parameters,
+    list_files_parameters, mcp_parameters, search_tools_parameters, write_stdin_parameters,
 };
 
 // ===========================================================================
@@ -60,6 +60,7 @@ impl ToolPack for HitlPack {
         _tool_config: &ToolConfigSnapshot,
     ) {
         let registrations = vec![
+            super::builtins::register_record_decision(None),
             ToolRegistration::from_tool_instance(
                 tools::REQUEST_USER_INPUT,
                 CapabilityLevel::Basic,
@@ -190,6 +191,9 @@ impl ToolPack for MultiAgentPack {
                     "wait_subagent",
                     "close_subagent",
                 ]),
+            ToolRegistration::new("matrix", CapabilityLevel::Basic, false, ToolRegistry::matrix_executor)
+                .with_description(vtcode_utility_tool_specs::MATRIX_DESCRIPTION)
+                .with_parameter_schema(vtcode_utility_tool_specs::matrix_parameters()),
         ];
         batch_register(inventory, registrations);
     }
@@ -391,7 +395,7 @@ impl ToolPack for ShellPack {
                 false,
                 ToolRegistry::write_stdin_executor,
             )
-            .with_description("Write characters to an active exec_command session, poll for fresh output, or use action=wait to block until it exits. Wait deadlines return a reusable in-progress session and never kill the process.")
+            .with_description(WRITE_STDIN_DESCRIPTION)
             .with_parameter_schema(write_stdin_parameters())
             .with_permission(ToolPolicy::Allow),
         ];

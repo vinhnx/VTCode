@@ -47,6 +47,7 @@ struct WorkspaceToolConfig {
     spooler: SpoolerConfig,
     persistent_memory: PersistentMemoryConfig,
     persistent_memory_enabled: bool,
+    inspection_mode: vtcode_config::core::agent::InspectionMode,
 }
 
 /// Load the config needed by tool registration in one parse. Falls back to
@@ -78,6 +79,7 @@ fn workspace_tool_config_from_loaded(config: &vtcode_config::loader::VTCodeConfi
         spooler: spooler_config_from_dynamic_context(&config.context.dynamic),
         persistent_memory,
         persistent_memory_enabled,
+        inspection_mode: config.agent.harness.inspection.mode,
     }
 }
 
@@ -178,8 +180,10 @@ impl ToolRegistry {
             spooler: spooler_config,
             persistent_memory: persistent_memory_config,
             persistent_memory_enabled,
+            inspection_mode,
         } = workspace_config;
         let edited_file_monitor = Arc::new(crate::tools::edited_file_monitor::EditedFileMonitor::new());
+        edited_file_monitor.source_inspection().set_mode(inspection_mode);
         let inventory = ToolInventory::new(workspace_root.clone(), Arc::clone(&edited_file_monitor));
         let planning_workflow_state = PlanningWorkflowState::new(workspace_root.clone());
 
@@ -229,6 +233,7 @@ impl ToolRegistry {
             mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(mcp_reverse_index)),
             timeout_policy: Arc::new(parking_lot::RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::with_workspace_root(100, workspace_root.clone()),
+            patch_recovery_reads: Arc::new(Mutex::new(super::patch_recovery::PatchRecoveryReads::default())),
             harness_context: HarnessContext::default(),
             resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
             mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::with_metrics(metrics.clone())),
@@ -236,8 +241,6 @@ impl ToolRegistry {
             initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            turn_preview_bytes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-            turn_tiny_preview_bytes: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             canonical_plans_dir: Arc::new(std::sync::OnceLock::new()),
             metrics,
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
@@ -262,6 +265,8 @@ impl ToolRegistry {
             tool_assembly: Arc::new(RwLock::new(ToolAssembly::empty())),
             tool_catalog_state: Arc::new(super::tool_catalog_facade::SessionToolCatalogState::new()),
             subagent_controller: Arc::new(RwLock::new(None)),
+            matrix_worker: Arc::new(parking_lot::RwLock::new(None)),
+            matrix_coordinator: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             session_scheduler: Arc::new(tokio::sync::Mutex::new(crate::scheduler::SessionScheduler::new())),
             session_model_tools: Arc::new(RwLock::new(None)),
             self_ref: Arc::new(RwLock::new(None)),

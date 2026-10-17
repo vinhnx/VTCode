@@ -11,7 +11,7 @@ use ring::rand::{SecureRandom, SystemRandom};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::credentials::{AuthCredentialsStoreMode, CredentialStorage};
+use crate::credentials::{AuthCredentialsStoreMode, CredentialStorage, ResolvedStoreMode};
 use crate::storage_paths::{legacy_auth_file_paths, read_legacy_compatible_file};
 
 use super::openai_chatgpt_oauth::OpenAIChatGptSession;
@@ -41,15 +41,14 @@ impl OpenAiSessionStorage {
     pub(crate) fn load(&self, mode: AuthCredentialsStoreMode) -> Result<Option<OpenAIChatGptSession>> {
         let effective_mode = mode.effective_mode();
         let session = match effective_mode {
-            AuthCredentialsStoreMode::Keyring => self
+            ResolvedStoreMode::Keyring => self
                 .backend
-                .load_json_exact_with_mode(AuthCredentialsStoreMode::Keyring)?
-                .or(self.backend.load_json_exact_with_mode(AuthCredentialsStoreMode::File)?),
-            AuthCredentialsStoreMode::File => self
+                .load_json_exact_with_mode(ResolvedStoreMode::Keyring)?
+                .or(self.backend.load_json_exact_with_mode(ResolvedStoreMode::File)?),
+            ResolvedStoreMode::File => self
                 .backend
-                .load_json_exact_with_mode(AuthCredentialsStoreMode::File)?
-                .or(self.backend.load_json_exact_with_mode(AuthCredentialsStoreMode::Keyring)?),
-            AuthCredentialsStoreMode::Auto => unreachable!("effective_mode() resolves Auto"),
+                .load_json_exact_with_mode(ResolvedStoreMode::File)?
+                .or(self.backend.load_json_exact_with_mode(ResolvedStoreMode::Keyring)?),
         };
 
         if let Some(session) = session {
@@ -70,7 +69,7 @@ impl OpenAiSessionStorage {
         if let Err(err) = self.backend.clear_exact_with_mode(effective_mode) {
             errors.push(err.to_string());
         }
-        if effective_mode == AuthCredentialsStoreMode::File {
+        if effective_mode == ResolvedStoreMode::File {
             if let Err(err) = clear_legacy_session_file() {
                 errors.push(err.to_string());
             }
@@ -87,7 +86,7 @@ impl OpenAiSessionStorage {
     /// configured default mode.
     pub(crate) fn clear_all(&self) -> Result<()> {
         let mut errors = Vec::new();
-        for mode in [AuthCredentialsStoreMode::Keyring, AuthCredentialsStoreMode::File] {
+        for mode in [ResolvedStoreMode::Keyring, ResolvedStoreMode::File] {
             if let Err(err) = self.backend.clear_exact_with_mode(mode) {
                 errors.push(err.to_string());
             }

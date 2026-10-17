@@ -1,0 +1,47 @@
+{
+  "typescript": {
+  },
+  "json": {
+  },
+  "markdown": {
+  },
+  "toml": {
+  },
+  "ruff": {
+  },
+  "yaml": {
+  },
+  "sh": {
+  },
+  "exec": {
+    "cwd": "${configDir}",
+    "commands": [
+      {
+        "command": "rustfmt",
+        "exts": ["rs"]
+      },
+      {
+        "command": "clang-format",
+        "exts": ["c", "cc", "cpp", "cxx", "h", "hpp", "hxx", "m", "mm"]
+      },
+      {
+        "command": "shfmt",
+        "exts": ["sh", "bash"]
+      }
+    ]
+  },
+  "excludes": [
+    "**/node_modules",
+    "**/*-lock.json"
+  ],
+  "plugins": [
+    "npm:@dprint/typescript@0.96.1",
+    "npm:@dprint/json@0.25.2",
+    "npm:@dprint/markdown@0.26.0",
+    "npm:@dprint/toml@0.9.0",
+    "npm:@dprint/ruff@0.9.1",
+    "npm:dprint-plugin-yaml@0.6.0",
+    "npm:@kachick/dprint-plugin-sh@0.1.2",
+    "npm:@dprint/exec@0.7.3/plugin.json@704701df449dd7e942a71144773778ac529d68c2e4657bfc236d393b898b9a67"
+  ]
+}

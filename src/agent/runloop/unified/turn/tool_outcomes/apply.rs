@@ -39,10 +39,12 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             ctx.renderer
                 .line(MessageStyle::Info, "Interrupted current task. Use /exit or Ctrl+D to quit.")?;
-            reset_inline_input(
-                ctx.handle,
-                Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()),
-            );
+            ctx.handle.set_activity_state(vtcode_commons::ui_protocol::ActivityState::Idle);
+            ctx.handle
+                .set_placeholder(Some(vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_INTERRUPTED.to_owned()));
+            if !ctx.ctrl_c_state.is_cancel_requested() && !ctx.ctrl_c_state.is_cancel_handled() {
+                ctx.ctrl_c_state.request_local_cancel();
+            }
             ctx.ctrl_c_state.mark_cancel_handled();
             *ctx.session_end_reason = vtcode_core::hooks::SessionEndReason::Cancelled;
             Ok(())
@@ -60,7 +62,6 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
                     _ => {}
                 }
             }
-            ctx.ctrl_c_state.reset();
             Ok(())
         }
         TurnLoopResult::Blocked { reason } => {
@@ -72,10 +73,12 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
                 let _ = ctx.renderer.line(MessageStyle::Info, reason);
             }
             reset_inline_input(ctx.handle, ctx.default_placeholder.clone());
-            ctx.ctrl_c_state.reset();
             Ok(())
         }
         TurnLoopResult::Completed { .. } => {
+            // Planning mode can remain selected while waiting for a new
+            // request, but its completed turn must stop advertising live work.
+            ctx.handle.set_activity_state(vtcode_commons::ui_protocol::ActivityState::Idle);
             if let Some(manager) = ctx.checkpoint_manager {
                 let conversation_snapshot: Vec<SessionMessage> =
                     ctx.conversation_history.iter().map(SessionMessage::from).collect();
@@ -126,7 +129,6 @@ pub(crate) async fn apply_turn_outcome(outcome: TurnLoopOutcome, ctx: TurnOutcom
                 ctx.renderer
                     .line(MessageStyle::Info, &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)))?;
             }
-            ctx.ctrl_c_state.reset();
             Ok(())
         }
     }
@@ -229,8 +231,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completed_turn_emits_worked_for_divider() {
+    async fn completed_planning_turn_clears_activity_and_emits_worked_for_divider() {
         let (handle, mut renderer, mut receiver) = renderer_with_channel();
+        handle.set_activity_state(vtcode_commons::ui_protocol::ActivityState::Planning);
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let default_placeholder = None;
         let mut session_end_reason = vtcode_core::hooks::SessionEndReason::Completed;
@@ -272,7 +275,24 @@ mod tests {
         .await
         .expect("apply completed outcome");
 
-        let lines = drain_appended_lines(&mut receiver);
+        let mut activities = Vec::new();
+        let mut lines = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::SetActivityState(state) => activities.push(state),
+                InlineCommand::AppendLine { segments, .. } => {
+                    lines.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(
+            activities,
+            vec![
+                vtcode_commons::ui_protocol::ActivityState::Planning,
+                vtcode_commons::ui_protocol::ActivityState::Idle,
+            ]
+        );
         assert!(lines.iter().any(|line| line == "Worked for 1m 30s"));
     }
 
@@ -280,6 +300,7 @@ mod tests {
     async fn cancelled_turn_does_not_emit_worked_for_divider() {
         let (handle, mut renderer, mut receiver) = renderer_with_channel();
         let ctrl_c_state = Arc::new(CtrlCState::new());
+        assert!(matches!(ctrl_c_state.register_signal(), crate::agent::runloop::unified::state::CtrlCSignal::Cancel));
         let default_placeholder = None;
         let mut session_end_reason = vtcode_core::hooks::SessionEndReason::Completed;
         let mut next_checkpoint_turn = 1usize;
@@ -320,6 +341,9 @@ mod tests {
         .await
         .expect("apply cancelled outcome");
 
+        assert!(ctrl_c_state.is_cancel_handled());
+        assert_eq!(conversation_history.len(), 1);
+        assert!(matches!(ctrl_c_state.register_signal(), crate::agent::runloop::unified::state::CtrlCSignal::Exit));
         let lines = drain_appended_lines(&mut receiver);
         assert!(!lines.iter().any(|line| line.contains("Worked for")));
     }

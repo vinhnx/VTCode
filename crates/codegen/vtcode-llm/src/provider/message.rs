@@ -933,7 +933,9 @@ impl MessageRole {
 
 #[cfg(test)]
 mod tests {
-    use super::{AssistantPhase, ContentPart, Message, MessageClearAt, MessageContent, MessageRole, ToolCall};
+    use super::{
+        AssistantPhase, ContentPart, ImageDetail, Message, MessageClearAt, MessageContent, MessageRole, ToolCall,
+    };
 
     #[test]
     fn message_content_parts_concatenate_without_extra_spaces() {
@@ -968,6 +970,42 @@ mod tests {
         assert_eq!(AssistantPhase::from_wire_str("commentary"), Some(AssistantPhase::Commentary));
         assert_eq!(AssistantPhase::from_wire_str("final_answer"), Some(AssistantPhase::FinalAnswer));
         assert_eq!(AssistantPhase::from_wire_str("other"), None);
+    }
+
+    /// `AssistantPhase` exposes the same value through the derived serde wire
+    /// form, `as_str()`, and `from_wire_str()`. Lock all three so a one-sided
+    /// edit cannot desync the persisted phase from the wire parser.
+    #[test]
+    fn assistant_phase_string_paths_stay_in_lockstep() {
+        for phase in [AssistantPhase::Commentary, AssistantPhase::FinalAnswer] {
+            let expected = phase.as_str();
+            assert_eq!(
+                serde_json::to_value(phase).expect("serializes"),
+                serde_json::json!(expected),
+                "serde form drifted for {phase:?}"
+            );
+            assert_eq!(AssistantPhase::from_wire_str(expected), Some(phase), "from_wire_str drift");
+        }
+    }
+
+    /// `ImageDetail` mirrors its `#[serde(rename)]` values in `as_str()` and
+    /// `from_str()`; lock them together.
+    #[test]
+    fn image_detail_string_paths_stay_in_lockstep() {
+        for detail in [
+            ImageDetail::Low,
+            ImageDetail::High,
+            ImageDetail::Original,
+            ImageDetail::Auto,
+        ] {
+            let expected = detail.as_str();
+            assert_eq!(
+                serde_json::to_value(&detail).expect("serializes"),
+                serde_json::json!(expected),
+                "serde form drifted for {detail:?}"
+            );
+            assert_eq!(ImageDetail::from_str(expected), Some(detail), "from_str drift");
+        }
     }
 
     #[test]

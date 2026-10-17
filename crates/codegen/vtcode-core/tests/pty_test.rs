@@ -477,6 +477,7 @@ async fn test_exec_command_write_preserves_whitespace() {
             "exec_command",
             json!({
                 "mode": "pty",
+                "stdin": true,
                 "command": ["bash", "-lc", "IFS= read -r line; printf '<%s>' \"$line\""],
                 "yield_time_ms": 0,
             }),
@@ -518,6 +519,7 @@ async fn test_exec_command_write_stdin_continues_session() {
             "exec_command",
             json!({
                 "cmd": "cat",
+                "stdin": true,
                 "yield_time_ms": 0,
             }),
         )
@@ -565,6 +567,7 @@ async fn test_write_stdin_empty_chars_polls_without_sending_input() {
             "exec_command",
             json!({
                 "cmd": "IFS= read -r line; printf '<%s>\\n' \"$line\"",
+                "stdin": true,
                 "yield_time_ms": 0,
             }),
         )
@@ -818,6 +821,50 @@ async fn test_write_stdin_wait_spools_high_volume_pipe_output() {
     assert!(spooled.starts_with("line-00000\n"), "first pipe output chunk was lost");
     assert!(spooled.contains("line-19999\n"), "last pipe output chunk was lost");
     assert_eq!(spooled.lines().count(), 20_000);
+    assert_eq!(completed["spool_line_count"], 20_000);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_spool_extent_matches_completed_output_for_pipe_and_pty() {
+    for tty in [false, true] {
+        let (temp, registry) = temp_registry().await;
+        let start = registry
+            .execute_tool(
+                "exec_command",
+                json!({
+                    "tty": tty,
+                    "cmd": "printf '%09000d\\nsecond\\nlast' 0",
+                    "yield_time_ms": 0,
+                }),
+            )
+            .await
+            .unwrap();
+        let completed = if start["is_exited"] == true {
+            start
+        } else {
+            let sid = exec_session_id(&start);
+            registry
+                .execute_tool(
+                    "write_stdin",
+                    json!({
+                        "action": "wait",
+                        "session_id": sid,
+                        "wait_timeout_seconds": 10,
+                        "max_output_tokens": 16,
+                    }),
+                )
+                .await
+                .unwrap()
+        };
+        assert_eq!(completed["exit_code"], 0, "tty={tty}: {completed}");
+        assert_eq!(completed["spool_line_count"], 3, "tty={tty}: {completed}");
+        assert!(completed["spool_note"].as_str().unwrap().contains("EOF at line 3"));
+        let path = completed["spool_path"].as_str().unwrap();
+        let content = fs::read_to_string(temp.path().join(path)).unwrap();
+        assert_eq!(content.lines().count(), 3);
+        assert!(content.ends_with("last"));
+    }
 }
 
 #[cfg(unix)]
@@ -890,6 +937,7 @@ async fn test_write_stdin_reports_missing_and_closed_session_ids() {
             "exec_command",
             json!({
                 "cmd": "cat",
+                "stdin": true,
                 "yield_time_ms": 0,
             }),
         )
@@ -940,6 +988,7 @@ spool_max_age_secs = 12
             "exec_command",
             json!({
                 "cmd": "cat",
+                "stdin": true,
                 "yield_time_ms": 0,
             }),
         )

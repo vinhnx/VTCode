@@ -5,6 +5,7 @@
 ### HeaderWidget
 
 **Current (struct initialization):**
+
 ```rust
 HeaderWidget {
     session: self.session,
@@ -13,6 +14,7 @@ HeaderWidget {
 ```
 
 **Improved (builder lite):**
+
 ```rust
 HeaderWidget::new(self.session)
     .lines(header_lines)
@@ -23,6 +25,7 @@ HeaderWidget::new(self.session)
 ### TranscriptWidget
 
 **Current:**
+
 ```rust
 TranscriptWidget {
     session: self.session,
@@ -30,6 +33,7 @@ TranscriptWidget {
 ```
 
 **Improved:**
+
 ```rust
 TranscriptWidget::new(self.session)
     .show_scrollbar(true)

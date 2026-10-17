@@ -32,7 +32,7 @@ use hashbrown::HashMap;
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout;
@@ -371,35 +371,14 @@ async fn read_bounded_line<R: AsyncBufRead + Unpin>(
     max_bytes: usize,
 ) -> std::io::Result<Option<BoundedLine>> {
     let mut line = Vec::with_capacity(max_bytes.min(256));
-    let mut truncated = false;
-
-    loop {
-        let buffer = reader.fill_buf().await?;
-        if buffer.is_empty() {
-            return Ok(if line.is_empty() && !truncated {
-                None
-            } else {
-                Some(BoundedLine { bytes: line, truncated })
-            });
-        }
-
-        let newline = buffer.iter().position(|byte| *byte == b'\n');
-        let consumed = newline.map_or(buffer.len(), |index| index + 1);
-        let content_len = consumed - usize::from(newline.is_some());
-        if line.len() < max_bytes {
-            let copy_len = content_len.min(max_bytes - line.len());
-            if let Some(content) = buffer.get(..copy_len) {
-                line.extend_from_slice(content);
-            }
-            truncated |= copy_len < content_len;
-        } else if content_len > 0 {
-            truncated = true;
-        }
-        reader.consume(consumed);
-        if newline.is_some() {
-            return Ok(Some(BoundedLine { bytes: line, truncated }));
-        }
-    }
+    let truncated = vtcode_commons::line_framing::read_bounded_line(
+        reader,
+        &mut line,
+        max_bytes,
+        vtcode_commons::line_framing::LineEnding::ExcludeLf,
+    )
+    .await?;
+    Ok(truncated.map(|truncated| BoundedLine { bytes: line, truncated }))
 }
 
 #[derive(Debug)]
@@ -678,6 +657,18 @@ mod tests {
         assert!(matches!(result, Err(AcpError::Timeout(_))));
         drop(rx.recv().await);
         assert!(transport.pending.lock().unwrap_or_else(|error| error.into_inner()).is_empty());
+    }
+
+    #[tokio::test]
+    async fn bounded_line_cap_excludes_lf_but_retains_cr() -> std::io::Result<()> {
+        let mut reader = BufReader::with_capacity(1, b"abc\nxy\r\n".as_slice());
+        let first = read_bounded_line(&mut reader, 3).await?.expect("first line");
+        assert_eq!(first.bytes, b"abc");
+        assert!(!first.truncated);
+        let second = read_bounded_line(&mut reader, 3).await?.expect("second line");
+        assert_eq!(second.bytes, b"xy\r");
+        assert!(!second.truncated);
+        Ok(())
     }
 
     #[tokio::test]

@@ -480,9 +480,11 @@ impl SimpleIndexer {
             })
             .collect();
 
-        entries.sort_by(|a, b| {
-            b.1.cmp(&a.1)
-                .then_with(|| a.0.to_string_lossy().to_lowercase().cmp(&b.0.to_string_lossy().to_lowercase()))
+        entries.sort_by_cached_key(|(path, is_dir)| {
+            // Cache the lowercased path once per entry: a plain `sort_by` would
+            // allocate two temporary strings on every one of the ~N·log N
+            // comparisons, and this runs on the interactive file-palette path.
+            (std::cmp::Reverse(*is_dir), path.to_string_lossy().to_lowercase())
         });
         entries
     }

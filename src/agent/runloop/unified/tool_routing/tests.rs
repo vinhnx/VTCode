@@ -1,8 +1,10 @@
 use super::{
-    AutoPermissionRuntimeContext, PreToolHookPhaseResult, SessionStats, ToolPermissionFlow, ToolPermissionsContext,
-    approval_learning_target, approval_persistence::shell_command_has_persisted_approval_prefix,
-    approval_policy_rejects_prompt, ensure_tool_permission, persist_segment_approval_cache_keys,
-    persist_shell_approval_prefix_rule, persisted_segment_approval_hit_key, tool_display_labels,
+    AutoPermissionRuntimeContext, HitlDecision, PreToolHookPhaseResult, SessionStats, ToolPermissionFlow,
+    ToolPermissionsContext, approval_learning_target,
+    approval_persistence::shell_command_has_persisted_approval_prefix, approval_policy_rejects_prompt,
+    ensure_tool_permission, exact_shell_approval_target, finalize_permission_decision,
+    persist_segment_approval_cache_keys, persist_shell_approval_prefix_rule, persisted_approval_hit_key,
+    persisted_segment_approval_hit_key, persistent_approval_target, tool_display_labels,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -1887,6 +1889,121 @@ async fn permanent_shell_approval_reuses_for_loop_body_commands() {
         persisted_segment_approval_hit_key(&registry, "exec_command", Some(&later_args))
             .await
             .is_some()
+    );
+}
+
+#[tokio::test]
+async fn learned_shell_family_approval_reuses_for_new_arguments() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    isolate_workspace_config(temp_dir.path());
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    // "Always approve" on a safe `awk` read now persists the learned family key
+    // (not just the exact line range that changes on every call).
+    let first = json!({
+        "action": "run",
+        "command": r#"awk 'NR>=208 && NR<=212 {n=index(rest,"| "); print n}' README.md"#,
+    });
+    let family_key = match persistent_approval_target("exec_command", Some(&first), "Run Command") {
+        super::shell_approval::PersistentApprovalTarget::LearnedPattern { key, .. } => key,
+        other => panic!("expected learned family target, got {other:?}"),
+    };
+    assert!(family_key.starts_with("shell-pattern:awk README.md|sandbox_permissions="));
+    registry
+        .persist_approval_cache_key(&family_key)
+        .await
+        .expect("persist learned family key");
+
+    // A new safe line range under the same family reuses the approval.
+    let later = json!({"action": "run", "command": "awk 'NR>=1 && NR<=5' README.md"});
+    let later_learning = approval_learning_target("exec_command", Some(&later), "Run Command");
+    let later_exact = exact_shell_approval_target("exec_command", Some(&later), "Run Command");
+    assert!(
+        persisted_approval_hit_key(&registry, &later_learning, later_exact.as_ref())
+            .await
+            .is_some(),
+        "a new safe awk range must reuse the learned family approval"
+    );
+
+    // A mutating `awk` shares the program name but is not safe, so it must not
+    // inherit the family approval.
+    let destructive = json!({"action": "run", "command": "awk '{print > \"out.txt\"}' README.md"});
+    let destructive_learning = approval_learning_target("exec_command", Some(&destructive), "Run Command");
+    let destructive_exact = exact_shell_approval_target("exec_command", Some(&destructive), "Run Command");
+    assert!(
+        persisted_approval_hit_key(&registry, &destructive_learning, destructive_exact.as_ref())
+            .await
+            .is_none(),
+        "a mutating awk must not inherit the learned family approval"
+    );
+
+    // A different workspace family is not covered by the README.md approval.
+    let other_family = json!({"action": "run", "command": "awk 'NR>=1 && NR<=5' src/lib.rs"});
+    let other_learning = approval_learning_target("exec_command", Some(&other_family), "Run Command");
+    let other_exact = exact_shell_approval_target("exec_command", Some(&other_family), "Run Command");
+    assert!(
+        persisted_approval_hit_key(&registry, &other_learning, other_exact.as_ref())
+            .await
+            .is_none(),
+        "a different family must not inherit the approval"
+    );
+}
+
+#[tokio::test]
+async fn permanent_decision_persists_learned_family_key() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    isolate_workspace_config(temp_dir.path());
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let args = json!({
+        "action": "run",
+        "command": r#"awk 'NR>=208 && NR<=212 {n=index(rest,"| "); print n}' README.md"#,
+    });
+    let learning = approval_learning_target("exec_command", Some(&args), "Run Command");
+    let exact = exact_shell_approval_target("exec_command", Some(&args), "Run Command");
+    let persistent = persistent_approval_target("exec_command", Some(&args), "Run Command");
+    let family_key = match &persistent {
+        super::shell_approval::PersistentApprovalTarget::LearnedPattern { key, .. } => key.clone(),
+        other => panic!("expected learned family target, got {other:?}"),
+    };
+
+    let flow = finalize_permission_decision(
+        &registry,
+        "exec_command",
+        "exec_command",
+        Some(&args),
+        "exec_command:awk",
+        None,
+        None,
+        &learning,
+        exact.as_ref(),
+        &persistent,
+        HitlDecision::ApprovedPermanent,
+        None,
+    )
+    .await
+    .expect("finalize permanent decision");
+
+    assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
+    assert!(
+        registry.has_persisted_approval(&family_key).await,
+        "permanent approval must persist the learned family key: {family_key}"
+    );
+}
+
+#[test]
+fn session_approval_keys_include_learned_family() {
+    let args = json!({
+        "action": "run",
+        "command": r#"awk 'NR>=208 && NR<=212 {n=index(rest,"| "); print n}' README.md"#,
+    });
+    let learning = approval_learning_target("exec_command", Some(&args), "Run Command");
+    let exact = exact_shell_approval_target("exec_command", Some(&args), "Run Command");
+    let pattern_key = learning.pattern.as_ref().expect("family pattern").key.clone();
+    let keys: Vec<&str> =
+        super::session_approval_cache_keys("exec_command", "exec_command:cmd", &learning, exact.as_ref()).collect();
+    assert!(
+        keys.contains(&pattern_key.as_str()),
+        "session approval keys must include the learned family: {keys:?}"
     );
 }
 

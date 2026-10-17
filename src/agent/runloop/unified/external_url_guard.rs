@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use tokio::task;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession, TransientSubmission};
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::url_guard::{
     UrlGuardDecision, UrlGuardPrompt, open_external_url, url_guard_decision,
@@ -54,7 +54,7 @@ pub(crate) async fn request_external_url_guard(
         return Ok(ExternalUrlGuardOutcome::Unsupported);
     };
 
-    let outcome = show_overlay_and_wait(
+    let outcome = show_permission_and_wait(
         ctx.handle,
         ctx.session,
         prompt.request(),
@@ -156,6 +156,13 @@ mod tests {
             }
         });
 
+        let wait_token = match command_rx.recv().await.expect("permission wait command") {
+            InlineCommand::ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate::Wait {
+                token,
+                kind: vtcode_commons::program_status::InteractionKind::Permission,
+            }) => token,
+            _ => panic!("expected permission wait"),
+        };
         let command = command_rx.recv().await.expect("show transient command");
         match command {
             InlineCommand::ShowTransient { request } => match *request {
@@ -173,6 +180,15 @@ mod tests {
 
         let outcome = task.await.expect("join guard task").expect("guard result");
         assert_eq!(outcome, ExternalUrlGuardOutcome::Approved);
+        let mut resumed_tokens = Vec::new();
+        while let Ok(command) = command_rx.try_recv() {
+            if let InlineCommand::ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate::Resume { token }) =
+                command
+            {
+                resumed_tokens.push(token);
+            }
+        }
+        assert_eq!(resumed_tokens, vec![wait_token]);
     }
 
     #[tokio::test]

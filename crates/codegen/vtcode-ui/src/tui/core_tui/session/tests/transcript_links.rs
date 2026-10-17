@@ -557,10 +557,12 @@ fn modifier_click_emits_open_file_event_for_standard_modal_file_link_with_locati
                 indent: 0,
                 selection: Some(InlineListSelection::SlashCommand("continue".to_string())),
                 search_value: None,
+                ..Default::default()
             }],
             selected: Some(InlineListSelection::SlashCommand("continue".to_string())),
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         })),
     });
 

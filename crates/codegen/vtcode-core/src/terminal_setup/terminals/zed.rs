@@ -1,19 +1,21 @@
 //! Zed terminal configuration generator.
 //!
-//! Generates JSON configuration for Zed editor's integrated terminal.
+//! Generates manual instructions for Zed editor's terminal keymap.
 
 use crate::terminal_setup::config_writer::{ConfigFormat, ConfigWriter};
 use crate::terminal_setup::detector::TerminalType;
 use crate::terminal_setup::features::multiline;
 use anyhow::Result;
 
-/// Generate complete Zed configuration with all features
+/// Generate manual Zed setup instructions for the requested features
 pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeature]) -> Result<String> {
-    let mut config_sections = Vec::new();
-
-    // Add header comment
-    config_sections.push("// VT Code Terminal Configuration for Zed".to_string());
-    config_sections.push(String::new());
+    let mut config_sections = vec![
+        "Zed Terminal Manual Setup:".to_string(),
+        "Open the command palette and run zed: open keymap.".to_string(),
+        "Add the object below to the existing keymap array, separating entries with a comma.".to_string(),
+        "Keep your existing bindings. VT Code does not write or back up Zed files.".to_string(),
+        String::new(),
+    ];
 
     // Generate feature-specific configurations
     for feature in features {
@@ -34,7 +36,7 @@ pub fn generate_config(features: &[crate::terminal_setup::detector::TerminalFeat
                 config_sections.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
-                config_sections.push("// Theme colors will be configured separately".to_string());
+                config_sections.push("// Theme: configure separately in Zed settings".to_string());
                 config_sections.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {

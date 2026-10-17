@@ -1,92 +1,85 @@
 # `vtcode-exec-events`
 
-The `vtcode-exec-events` crate packages the execution telemetry schema that powers VT Code's
-automation timeline. Downstream applications can depend on this crate to deserialize
-thread progress, command execution lifecycle updates, and tool activity without pulling in
-the rest of `vtcode-core`.
+The `vtcode-exec-events` crate packages the execution telemetry schema that powers VT Code's automation timeline.
+Downstream applications can depend on this crate to deserialize thread progress, command execution lifecycle updates,
+and tool activity without pulling in the rest of `vtcode-core`.
 
 ## Event taxonomy
 
-Events are serialized with `serde` using an externally tagged `ThreadEvent` enum. Each
-variant captures a specific moment in the lifecycle of an execution thread:
+Events are serialized with `serde` using an externally tagged `ThreadEvent` enum. Each variant captures a specific
+moment in the lifecycle of an execution thread:
 
--   **Thread lifecycle** – `thread.started`, `turn.started`, `turn.completed`, and
-    `turn.failed` events communicate coarse-grained scheduling milestones including token
-    accounting through the `Usage` struct.F:crates/common/vtcode-exec-events/src/lib.rs†L12-L63
--   **Timeline items** – item events wrap a `ThreadItem` snapshot with stable identifiers so
-    consumers can correlate incremental updates (`item.started`, `item.updated`) with their
-    eventual completion (`item.completed`).F:crates/common/vtcode-exec-events/src/lib.rs†L65-L120
--   **Command execution** – `CommandExecutionItem` reports the command string, aggregated
-    output, exit status, and a tri-state `CommandExecutionStatus` so dashboards can surface
-    long-running processes and failures.F:crates/common/vtcode-exec-events/src/lib.rs†L122-L160
--   **File changes** – `FileChangeItem` enumerates per-file updates with a
-    `PatchApplyStatus` outcome to indicate whether patches landed cleanly.F:crates/common/vtcode-exec-events/src/lib.rs†L162-L200
--   **Tooling and search** – `McpToolCallItem` and `WebSearchItem` track external tool
-    invocations and provider metadata, including optional arguments and raw result payloads
-    for audit trails.F:crates/common/vtcode-exec-events/src/lib.rs†L202-L240
--   **Plan approval lifecycle** – `plan.delta` and the completed plan item carry plan
-    content; `plan.approval.requested` marks the pending review gate and
-    `plan.approval.resolved` records the decision (`execute`, `fresh_context`,
-    `auto_accept`, `revise`, `cancel`, `switch_build`, or `switch_auto`) and whether
-    policy resolved it automatically. A `context.reset` event records the successful
-    fresh-thread handoff and its preserved-plan, context-usage, and tool-budget status.
--   **Harness lifecycle** – continuation, verification, snapshot, blocked-handoff, and
-    same-turn limit-grant events expose recovery state; `session_tool_limit_increased`
-    and `tool_loop_limit_increased` record the current agent and the approved
-    capacity change (manual approval, a full-auto grant when
-    `automation.full_auto.auto_grant_tool_limits` is on, or a session-preauthorized
-    auto-grant after the first successful interactive tool-loop grant in the
-    process session), while `blocked_handoff_resolved` confirms that the owning session
-    marked the archive resolved before removing its live pointer.
--   **Errors** – `ThreadErrorEvent` and `ErrorItem` record terminal failures alongside the
-    human-readable messages surfaced to operators.F:crates/common/vtcode-exec-events/src/lib.rs†L41-L44F:crates/common/vtcode-exec-events/src/lib.rs†L242-L248
+- **Thread lifecycle** – `thread.started`, `turn.started`, `turn.completed`, and `turn.failed` events communicate
+  coarse-grained scheduling milestones including token accounting through the `Usage`
+  struct.F:crates/common/vtcode-exec-events/src/lib.rs†L12-L63
+- **Timeline items** – item events wrap a `ThreadItem` snapshot with stable identifiers so consumers can correlate
+  incremental updates (`item.started`, `item.updated`) with their eventual completion
+  (`item.completed`).F:crates/common/vtcode-exec-events/src/lib.rs†L65-L120
+- **Command execution** – `CommandExecutionItem` reports the command string, aggregated output, exit status, and a
+  tri-state `CommandExecutionStatus` so dashboards can surface long-running processes and
+  failures.F:crates/common/vtcode-exec-events/src/lib.rs†L122-L160
+- **File changes** – `FileChangeItem` enumerates per-file updates with a `PatchApplyStatus` outcome to indicate whether
+  patches landed cleanly.F:crates/common/vtcode-exec-events/src/lib.rs†L162-L200
+- **Tooling and search** – `McpToolCallItem` and `WebSearchItem` track external tool invocations and provider metadata,
+  including optional arguments and raw result payloads for audit
+  trails.F:crates/common/vtcode-exec-events/src/lib.rs†L202-L240
+- **Plan approval lifecycle** – `plan.delta` and the completed plan item carry plan content; `plan.approval.requested`
+  marks the pending review gate and `plan.approval.resolved` records the decision (`execute`, `fresh_context`,
+  `auto_accept`, `revise`, `cancel`, `switch_build`, or `switch_auto`) and whether policy resolved it automatically. A
+  `context.reset` event records the successful fresh-thread handoff and its preserved-plan, context-usage, and
+  tool-budget status.
+- **Harness lifecycle** – continuation, verification, snapshot, blocked-handoff, and same-turn limit-grant events expose
+  recovery state; `session_tool_limit_increased` and `tool_loop_limit_increased` record the current agent and the
+  approved capacity change (manual approval, a full-auto grant when `automation.full_auto.auto_grant_tool_limits` is on,
+  or a session-preauthorized auto-grant after the first successful interactive tool-loop grant in the process session),
+  while `blocked_handoff_resolved` confirms that the owning session marked the archive resolved before removing its live
+  pointer.
+- **Errors** – `ThreadErrorEvent` and `ErrorItem` record terminal failures alongside the human-readable messages
+  surfaced to
+  operators.F:crates/common/vtcode-exec-events/src/lib.rs†L41-L44F:crates/common/vtcode-exec-events/src/lib.rs†L242-L248
 
-The schema favors additive evolution: new fields default via `Option` or `#[serde(default)]`
-so older consumers continue to deserialize previously known structures.
+The schema favors additive evolution: new fields default via `Option` or `#[serde(default)]` so older consumers continue
+to deserialize previously known structures.
 
-For an approved plan, `plan.approval.resolved` is emitted once at the validated
-plan/task-tracker boundary. The event identifies the approval decision; the
-runtime then refreshes the selected Build or Auto agent before exposing tools
-and schedules one implementation turn. A failed handoff remains resumable and
-does not pretend that execution started. Build and Auto produce the same
-`turn.blocked` safety telemetry for identical blocked calls; Auto's unattended
-confirmation policy does not expand runtime authority or safety limits.
+For an approved plan, `plan.approval.resolved` is emitted once at the validated plan/task-tracker boundary. The event
+identifies the approval decision; the runtime then refreshes the selected Build or Auto agent before exposing tools and
+schedules one implementation turn. A failed handoff remains resumable and does not pretend that execution started. Build
+and Auto produce the same `turn.blocked` safety telemetry for identical blocked calls; Auto's unattended confirmation
+policy does not expand runtime authority or safety limits.
 
 ## Versioning and compatibility
 
-The crate follows semantic versioning. Backwards-compatible additions (such as new event
-variants or optional fields) result in a minor version bump, while any breaking schema
-changes trigger a major release. The `ThreadEvent` enum is stringly tagged using
-snake-cased identifiers (for example, `item.updated`), which makes diffing JSON logs and
-indexing metrics straightforward. Consumers should pin to compatible minor versions when
-building dashboards to avoid accidental breakage.
+The crate follows semantic versioning. Backwards-compatible additions (such as new event variants or optional fields)
+result in a minor version bump, while any breaking schema changes trigger a major release. The `ThreadEvent` enum is
+stringly tagged using snake-cased identifiers (for example, `item.updated`), which makes diffing JSON logs and indexing
+metrics straightforward. Consumers should pin to compatible minor versions when building dashboards to avoid accidental
+breakage.
 
-Every serialized stream can opt into metadata that advertises the schema version through
-the `VersionedThreadEvent` wrapper and the `EVENT_SCHEMA_VERSION` constant. Downstream
-pipelines can gate deserialization or migrations using this metadata before materializing
-individual events.F:crates/common/vtcode-exec-events/src/lib.rs†L8-L44F:crates/common/vtcode-exec-events/src/lib.rs†L270-L308
+Every serialized stream can opt into metadata that advertises the schema version through the `VersionedThreadEvent`
+wrapper and the `EVENT_SCHEMA_VERSION` constant. Downstream pipelines can gate deserialization or migrations using this
+metadata before materializing individual
+events.F:crates/common/vtcode-exec-events/src/lib.rs†L8-L44F:crates/common/vtcode-exec-events/src/lib.rs†L270-L308
 
 ## Feature flags
 
-`vtcode-exec-events` ships with feature toggles so applications can pick the supporting
-infrastructure they need:
+`vtcode-exec-events` ships with feature toggles so applications can pick the supporting infrastructure they need:
 
--   `serde-json` (default) – enables helper functions for serializing/deserializing events
-    to JSON strings or values while preserving the existing ergonomic API.F:crates/common/vtcode-exec-events/src/lib.rs†L70-L92
--   `telemetry-log` – provides a ready-made `LogEmitter` that writes JSON payloads through
-    the `log` facade so adopters can reuse existing logging pipelines.F:crates/common/vtcode-exec-events/src/lib.rs†L94-L133
--   `telemetry-tracing` – exposes a `TracingEmitter` that emits structured events tagged
-    with the schema version, integrating directly with the `tracing` ecosystem.F:crates/common/vtcode-exec-events/src/lib.rs†L135-L187
--   `schema-export` – produces JSON Schema documents for both raw and versioned events so
-    downstream services can validate telemetry payloads offline.F:crates/common/vtcode-exec-events/src/lib.rs†L189-L200
+- `serde-json` (default) – enables helper functions for serializing/deserializing events to JSON strings or values while
+  preserving the existing ergonomic API.F:crates/common/vtcode-exec-events/src/lib.rs†L70-L92
+- `telemetry-log` – provides a ready-made `LogEmitter` that writes JSON payloads through the `log` facade so adopters
+  can reuse existing logging pipelines.F:crates/common/vtcode-exec-events/src/lib.rs†L94-L133
+- `telemetry-tracing` – exposes a `TracingEmitter` that emits structured events tagged with the schema version,
+  integrating directly with the `tracing` ecosystem.F:crates/common/vtcode-exec-events/src/lib.rs†L135-L187
+- `schema-export` – produces JSON Schema documents for both raw and versioned events so downstream services can validate
+  telemetry payloads offline.F:crates/common/vtcode-exec-events/src/lib.rs†L189-L200
 
 ## Integrating with VT Code runtimes
 
-`vtcode-core` re-exports the schema and emits events from the `ExecEventRecorder` inside the
-agent runner. You can attach an event sink by supplying a closure when constructing the
-runner, enabling streaming telemetry or custom logging pipelines.F:crates/codegen/vtcode-core/src/core/agent/runner.rs†L42-L87 The recorder
-invokes the sink for every serialized `ThreadEvent`, including streaming message deltas and
-command status transitions.F:crates/codegen/vtcode-core/src/core/agent/runner.rs†L89-L154
+`vtcode-core` re-exports the schema and emits events from the `ExecEventRecorder` inside the agent runner. You can
+attach an event sink by supplying a closure when constructing the runner, enabling streaming telemetry or custom logging
+pipelines.F:crates/codegen/vtcode-core/src/core/agent/runner.rs†L42-L87 The recorder invokes the sink for every
+serialized `ThreadEvent`, including streaming message deltas and command status
+transitions.F:crates/codegen/vtcode-core/src/core/agent/runner.rs†L89-L154
 
 A minimal consumer might look like the following:
 
@@ -106,11 +99,11 @@ let runner = AgentRunnerBuilder::default()
 runner.execute().await?;
 ```
 
-Downstream services can forward the JSON payloads to observability stacks, persist them for
-postmortems, or feed them into realtime dashboards.
+Downstream services can forward the JSON payloads to observability stacks, persist them for postmortems, or feed them
+into realtime dashboards.
 
-The crate also publishes reusable emitters so integrations can skip wiring boilerplate.
-For example, the logging emitter can be attached directly to the runner:
+The crate also publishes reusable emitters so integrations can skip wiring boilerplate. For example, the logging emitter
+can be attached directly to the runner:
 
 ```rust
 use vtcode_exec_events::LogEmitter;
@@ -119,17 +112,15 @@ let mut emitter = LogEmitter::default();
 runner.set_event_handler(move |event| emitter.emit(event));
 ```
 
-When using the tracing feature, substitute `TracingEmitter::default()` to forward the
-structured payloads into `tracing` subscribers with automatic schema-version tagging.
+When using the tracing feature, substitute `TracingEmitter::default()` to forward the structured payloads into `tracing`
+subscribers with automatic schema-version tagging.
 
 ### Bridging `vtcode-bash-runner`
 
-Enabling the `exec-events` feature in `vtcode-bash-runner` exposes an
-`EventfulExecutor` wrapper that converts each shell invocation into
-`ThreadEvent` updates. This lets downstream adopters reuse the same telemetry
-vocabulary when commands run outside VT Code's core runtime—for example, when
-shell actions are executed via the standalone runner in CI or automation
-pipelines. Wrap any executor and provide an emitter to mirror command activity:
+Enabling the `exec-events` feature in `vtcode-bash-runner` exposes an `EventfulExecutor` wrapper that converts each
+shell invocation into `ThreadEvent` updates. This lets downstream adopters reuse the same telemetry vocabulary when
+commands run outside VT Code's core runtime—for example, when shell actions are executed via the standalone runner in CI
+or automation pipelines. Wrap any executor and provide an emitter to mirror command activity:
 
 ```rust
 use vtcode_bash_runner::{BashRunner, EventfulExecutor, ProcessCommandExecutor};
@@ -141,27 +132,24 @@ let mut runner = BashRunner::new(workspace_root.clone(), executor, policy)?;
 runner.ls(None, false)?;
 ```
 
-Each invocation emits `item.started` and `item.completed` events with aggregated
-output and exit codes, so telemetry consumers receive the same stream whether
-commands originate from VT Code's agent loop or the extracted runner crate.F:crates/codegen/vtcode-bash-runner/src/executor.rs†L358-L470
+Each invocation emits `item.started` and `item.completed` events with aggregated output and exit codes, so telemetry
+consumers receive the same stream whether commands originate from VT Code's agent loop or the extracted runner
+crate.F:crates/codegen/vtcode-bash-runner/src/executor.rs†L358-L470
 
 ## Examples
 
-The repository ships with a runnable example that emits a short execution timeline and
-exports each `ThreadEvent` as JSON Lines. Running the example prints both the serialized
-events and a derived summary of completed commands:
+The repository ships with a runnable example that emits a short execution timeline and exports each `ThreadEvent` as
+JSON Lines. Running the example prints both the serialized events and a derived summary of completed commands:
 
 ```shell
 cargo run -p vtcode-exec-events --example event_timeline
 ```
 
-The source (`vtcode-exec-events/examples/event_timeline.rs`) demonstrates how to
-construct timeline events, serialize them with `serde_json`, and post-process the
-sequence to build command summaries outside of VT Code's runtime.
+The source (`vtcode-exec-events/examples/event_timeline.rs`) demonstrates how to construct timeline events, serialize
+them with `serde_json`, and post-process the sequence to build command summaries outside of VT Code's runtime.
 
 ## Next steps
 
-With schema metadata, feature-gated emitters, and documentation updates in place, the
-`vtcode-exec-events` extraction tasks are complete. The remaining work in the component
-extraction initiative is to execute the staged publishes outlined in the release plan and
-close out the dependency bump follow-ups.
+With schema metadata, feature-gated emitters, and documentation updates in place, the `vtcode-exec-events` extraction
+tasks are complete. The remaining work in the component extraction initiative is to execute the staged publishes
+outlined in the release plan and close out the dependency bump follow-ups.

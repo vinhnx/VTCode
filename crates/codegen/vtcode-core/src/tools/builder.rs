@@ -163,15 +163,21 @@ impl ToolResponseBuilder {
             obj.insert("has_more".to_string(), json!(true));
         }
 
+        // Build and merge metadata. Keys already surfaced as top-level custom
+        // fields stay top-level only: duplicating them inside `metadata.data`
+        // re-serializes the same values on every tool result (read_file paid
+        // that tax for `content_kind`/`encoding` on every call). Only explicit
+        // `.field()` twins dedup — a `.data()` entry sharing a name with a
+        // builder-structural key (success/status/message/...) must survive.
+        let mut meta = self.metadata.build();
+        meta.data.retain(|key, _| !self.custom_fields.contains_key(key));
+        if !meta.data.is_empty() || !meta.files.is_empty() || !meta.lines.is_empty() {
+            obj.insert("metadata".to_string(), json!(meta));
+        }
+
         // Add custom top-level fields
         for (k, v) in self.custom_fields {
             obj.insert(k, v);
-        }
-
-        // Build and merge metadata
-        let meta = self.metadata.build();
-        if !meta.data.is_empty() || !meta.files.is_empty() || !meta.lines.is_empty() {
-            obj.insert("metadata".to_string(), json!(meta));
         }
 
         res
@@ -201,6 +207,7 @@ impl ToolResponseBuilder {
 #[cfg(test)]
 mod tests {
     use super::ToolResponseBuilder;
+    use serde_json::json;
 
     #[test]
     fn build_json_omits_stdout_when_same_as_content() {
@@ -208,5 +215,51 @@ mod tests {
 
         assert_eq!(value.get("content").and_then(|v| v.as_str()), Some("same"));
         assert!(value.get("stdout").is_none());
+    }
+
+    #[test]
+    fn build_json_keeps_metadata_only_keys_and_deduplicates_field_keys() {
+        let value = ToolResponseBuilder::new("read_file")
+            .field("content_kind", json!("text"))
+            .field("encoding", json!("utf8"))
+            .data("content_kind", json!("text"))
+            .data("encoding", json!("utf8"))
+            .data("size_bytes", json!(1024))
+            .build_json();
+
+        // Duplicated keys stay top-level only; metadata-only keys survive.
+        assert_eq!(value["content_kind"], json!("text"));
+        assert_eq!(value["encoding"], json!("utf8"));
+        assert_eq!(value["metadata"]["data"]["size_bytes"], json!(1024));
+        assert!(value["metadata"]["data"].get("content_kind").is_none());
+        assert!(value["metadata"]["data"].get("encoding").is_none());
+    }
+
+    #[test]
+    fn build_json_omits_metadata_object_when_all_data_keys_are_duplicates() {
+        let value = ToolResponseBuilder::new("read_file")
+            .field("content_kind", json!("text"))
+            .data("content_kind", json!("text"))
+            .build_json();
+
+        assert_eq!(value["content_kind"], json!("text"));
+        assert!(value.get("metadata").is_none());
+    }
+
+    #[test]
+    fn build_json_keeps_data_keys_colliding_with_structural_names() {
+        // A `.data()` entry must not vanish because it shares a name with a
+        // builder-structural key; only explicit `.field()` twins dedup.
+        let value = ToolResponseBuilder::new("read_file")
+            .message("done")
+            .field("kind", json!("top"))
+            .data("message", json!("from data"))
+            .data("kind", json!("from data"))
+            .build_json();
+
+        assert_eq!(value["message"], json!("done"));
+        assert_eq!(value["kind"], json!("top"));
+        assert_eq!(value["metadata"]["data"]["message"], json!("from data"));
+        assert!(value["metadata"]["data"].get("kind").is_none());
     }
 }

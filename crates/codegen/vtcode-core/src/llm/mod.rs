@@ -22,7 +22,7 @@
 //! | Anthropic | ✓ | claude-4.1-opus, claude-4-sonnet |
 //! | xAI | ✓ | grok-4.6, grok-4.5, grok-build-0.1, grok-4.3 |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |
-//! | Meta AI | ✓ | muse-spark-1.1, muse-spark-1.2 |
+//! | Meta AI | ✓ | muse-wonder-1.0, muse-wonder-full-1.0, muse-spark-1.3, muse-spark-1.1 |
 //! | Z.AI | ✓ | glm-5 |
 //! | Ollama | ✓ | gpt-oss:20b (local) |
 //!

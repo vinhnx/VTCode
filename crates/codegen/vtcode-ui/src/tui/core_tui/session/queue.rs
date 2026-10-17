@@ -9,14 +9,30 @@ pub(crate) struct QueueOverlay {
     lines: Vec<Line<'static>>,
 }
 
+/// Soft cap mirroring the runloop's authoritative `MAX_QUEUED_INPUTS`: under
+/// a paste-storm the oldest optimistic entry is dropped once the cap is
+/// exceeded so the local overlay vec cannot grow without bound; the newest
+/// submissions are kept. Kept as a literal (not imported) because the
+/// authoritative cap lives in the binary crate, which this library crate
+/// cannot depend on; both are pinned to 256 and converge on `flush_sync`.
+const MAX_QUEUED_INPUTS: usize = 256;
+
 impl Session {
     pub(crate) fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
         self.queued_inputs = entries;
         self.invalidate_queue_overlay();
     }
 
+    /// Optimistic local push for immediate overlay feedback. Mirrors the
+    /// runloop's authoritative cap (`src/agent/runloop/unified/inline_events/queue.rs`)
+    /// so the overlay cannot grow without bound while the runloop is stalled
+    /// between drains: both sides keep the newest entries and converge on the
+    /// next `flush_sync` (which owns the visible drop warning).
     pub(crate) fn push_queued_input(&mut self, entry: String) {
         self.queued_inputs.push(entry);
+        while self.queued_inputs.len() > MAX_QUEUED_INPUTS {
+            self.queued_inputs.remove(0);
+        }
         self.invalidate_queue_overlay();
     }
 

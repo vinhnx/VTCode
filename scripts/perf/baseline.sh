@@ -9,6 +9,11 @@ LABEL="${1:-latest}"
 OUT_JSON="${OUT_DIR}/${LABEL}.json"
 RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vtcode-perf.XXXXXX")"
 RELEASE_BIN="${ROOT_DIR}/target/release/vtcode"
+# These metrics are assigned by measure_command through printf -v.
+warm_startup_ms=""
+warm_startup_src=""
+first_user_io_ms=""
+first_user_io_src=""
 
 cleanup() {
   rm -rf "${RUN_DIR}"
@@ -20,7 +25,7 @@ run_timed() {
   shift
   local log_file="${OUT_DIR}/${LABEL}-${name}.log"
   local time_file="${OUT_DIR}/${LABEL}-${name}.time"
-  (cd "${ROOT_DIR}" && /usr/bin/time -p -o "${time_file}" "$@" >"${log_file}" 2>&1)
+  (cd "${ROOT_DIR}" && /usr/bin/time -p -o "${time_file}" "$@" >"${log_file}" 2>&1) || return $?
   awk '/^real / { printf "%.0f\n", $2 * 1000.0 }' "${time_file}"
 }
 
@@ -35,16 +40,8 @@ run_cargo_timed() {
 }
 
 ensure_release_binary() {
-  if [[ -x "${RELEASE_BIN}" ]]; then
-    return 0
-  fi
-
-  echo "[perf] building target/release/vtcode for startup measurement"
-  if [[ "${PERF_KEEP_RUSTC_WRAPPER:-0}" == "1" ]]; then
-    (cd "${ROOT_DIR}" && cargo build --release --locked --quiet --bin vtcode)
-  else
-    (cd "${ROOT_DIR}" && env CARGO_BUILD_RUSTC_WRAPPER= RUSTC_WRAPPER= cargo build --release --locked --quiet --bin vtcode)
-  fi
+  echo "[perf] rebuilding target/release/vtcode for startup measurement"
+  release_build_ms="$(run_cargo_timed release_build build --release --locked --bin vtcode)" || return $?
 }
 
 # Measure a command's mean warm latency (2 warmups + 8 measured runs).
@@ -56,7 +53,7 @@ measure_command() {
   local log_path="${OUT_DIR}/${LABEL}-${name}.log"
   local ms
 
-  ms="$(python3 - "${json_path}" "${log_path}" "$@" <<'PY'
+  ms="$(python3 - "${ROOT_DIR}/scripts/perf" "${RUN_DIR}/${name}" "${json_path}" "${log_path}" "$@" <<'PY'
 import json
 import statistics
 import subprocess
@@ -64,20 +61,25 @@ import sys
 import time
 from pathlib import Path
 
-json_path = Path(sys.argv[1])
-log_path = Path(sys.argv[2])
-command = sys.argv[3:]
+sys.path.insert(0, sys.argv[1])
+from startup_env import isolated_environment
+
+fixture_root = Path(sys.argv[2]).resolve()
+environment = isolated_environment(fixture_root)
+json_path = Path(sys.argv[3])
+log_path = Path(sys.argv[4])
+command = sys.argv[5:]
 warmup_runs = []
 measured_runs = []
 
 for _ in range(2):
     started = time.perf_counter()
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(command, check=True, env=environment, cwd=fixture_root / "workspace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     warmup_runs.append((time.perf_counter() - started) * 1000.0)
 
 for _ in range(8):
     started = time.perf_counter()
-    subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(command, check=True, env=environment, cwd=fixture_root / "workspace", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     measured_runs.append((time.perf_counter() - started) * 1000.0)
 
 summary = {
@@ -114,26 +116,27 @@ measure_cold_startup() {
   local log_path="${OUT_DIR}/${LABEL}-cold_startup.log"
   local ms
 
-  ms="$(python3 - "${RELEASE_BIN}" "${RUN_DIR}" "${json_path}" "${log_path}" <<'PY'
+  ms="$(python3 - "${ROOT_DIR}/scripts/perf" "${RELEASE_BIN}" "${RUN_DIR}" "${json_path}" "${log_path}" <<'PY'
 import json
 import shutil
 import subprocess
 import sys
 import time
-import os
 from pathlib import Path
 
-binary = Path(sys.argv[1])
-run_dir = Path(sys.argv[2])
-json_path = Path(sys.argv[3])
-log_path = Path(sys.argv[4])
+sys.path.insert(0, sys.argv[1])
+from startup_env import isolated_environment
+
+binary = Path(sys.argv[2])
+run_dir = Path(sys.argv[3])
+json_path = Path(sys.argv[4])
+log_path = Path(sys.argv[5])
 runs = []
-environment = os.environ.copy()
-environment["VTCODE_STARTUP_TRACE"] = "0"
 
 for index in range(3):
     cold_dir = run_dir / f"cold-{index}"
     cold_dir.mkdir()
+    environment = isolated_environment(cold_dir / "environment")
     cold_binary = cold_dir / "vtcode"
     shutil.copy2(binary, cold_binary)
     cold_binary.chmod(0o755)
@@ -142,6 +145,7 @@ for index in range(3):
         [str(cold_binary), "--version"],
         check=True,
         env=environment,
+        cwd=cold_dir / "environment/workspace",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -168,7 +172,7 @@ measure_interactive_first_render() {
   local log_path="${OUT_DIR}/${LABEL}-interactive_first_render.log"
   local ms
 
-  ms="$(python3 - "${RELEASE_BIN}" "${ROOT_DIR}" "${RUN_DIR}" "${json_path}" "${log_path}" <<'PY'
+  ms="$(python3 - "${ROOT_DIR}/scripts/perf" "${RELEASE_BIN}" "${RUN_DIR}" "${json_path}" "${log_path}" <<'PY'
 import json
 import fcntl
 import os
@@ -181,11 +185,14 @@ import termios
 import time
 from pathlib import Path
 
-binary = sys.argv[1]
-workspace = sys.argv[2]
+sys.path.insert(0, sys.argv[1])
+from startup_env import isolated_environment
+
+binary = sys.argv[2]
 run_dir = Path(sys.argv[3])
 json_path = Path(sys.argv[4])
 log_path = Path(sys.argv[5])
+log_path.write_bytes(b"")
 
 
 def respond_to_terminal_queries(fd, output):
@@ -207,21 +214,9 @@ def respond_to_terminal_queries(fd, output):
 
 
 def run_sample(index):
-    home = run_dir / f"pty-home-{index}"
-    config_dir = run_dir / f"pty-config-{index}"
-    home.mkdir()
-    config_dir.mkdir()
-    environment = os.environ.copy()
-    environment.update(
-        {
-            "HOME": str(home),
-            "VTCODE_CONFIG": str(config_dir),
-            "VTCODE_DATA": str(run_dir / f"pty-data-{index}"),
-            "VTCODE_STARTUP_TRACE": "0",
-            "NO_COLOR": "1",
-            "TERM": "xterm-256color",
-        }
-    )
+    fixture_root = (run_dir / f"pty-{index}").resolve()
+    environment = isolated_environment(fixture_root)
+    workspace = fixture_root / "workspace"
 
     started = time.perf_counter()
     pid, fd = pty.fork()
@@ -237,23 +232,21 @@ def run_sample(index):
     child_reaped = False
 
     def terminate_child():
-        nonlocal child_reaped
+        nonlocal child_reaped, fd
         if child_reaped:
             return
         try:
             os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        for _ in range(20):
-            try:
-                waited_pid, _ = os.waitpid(pid, os.WNOHANG)
-            except ChildProcessError:
-                child_reaped = True
-                return
-            if waited_pid == pid:
-                child_reaped = True
-                return
-            time.sleep(0.05)
+        # Close the PTY before reaping: macOS can drain terminal output during exit.
+        os.close(fd)
+        fd = -1
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+        child_reaped = True
 
     deadline = started + 20.0
     try:
@@ -282,10 +275,12 @@ def run_sample(index):
     finally:
         if not child_reaped:
             terminate_child()
-        os.close(fd)
+        if fd != -1:
+            os.close(fd)
+        with log_path.open("ab") as log:
+            log.write(f"sample {index}\n".encode() + bytes(output) + b"\n")
 
     if first_render_ms is None:
-        log_path.write_bytes(bytes(output))
         raise RuntimeError("interactive UI did not render the request prompt")
     return first_render_ms
 
@@ -299,7 +294,6 @@ summary = {
     "max_ms": round(max(runs), 3),
 }
 json_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-log_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
 print(summary["mean_ms"])
 PY
   )"
@@ -323,19 +317,7 @@ fi
 measure_cold_startup
 measure_command warm_startup env VTCODE_STARTUP_TRACE=0 "${RELEASE_BIN}" --version
 
-credential_free_home="${RUN_DIR}/credential-free-home"
-credential_free_config_dir="${RUN_DIR}/credential-free-config"
-credential_free_config_file="${RUN_DIR}/credential-free.toml"
-mkdir -p "${credential_free_home}" "${credential_free_config_dir}"
-printf '%s\n' '# Deliberately empty: exercise startup without credentials or provider calls.' >"${credential_free_config_file}"
-measure_command first_user_io \
-  env HOME="${credential_free_home}" \
-  VTCODE_CONFIG="${credential_free_config_dir}" \
-  VTCODE_DATA="${RUN_DIR}/credential-free-data" \
-  VTCODE_CONFIG_PATH="${credential_free_config_file}" \
-  VTCODE_STARTUP_TRACE=0 \
-  NO_COLOR=1 \
-  "${RELEASE_BIN}" tool-policy status
+measure_command first_user_io "${RELEASE_BIN}" tool-policy status
 
 measure_interactive_first_render
 
@@ -353,6 +335,7 @@ out = {
     "label": r"${LABEL}",
     "binary": r"${RELEASE_BIN}",
     "metrics": {
+        "release_build_ms": int(r"${release_build_ms}"),
         "cargo_check_ms": int(r"${check_ms}"),
         "tool_pipeline_bench_ms": None if not r"${tool_pipeline_bench_ms}" else int(r"${tool_pipeline_bench_ms}"),
         "agent_harness_bench_ms": None if not r"${agent_harness_bench_ms}" else int(r"${agent_harness_bench_ms}"),
@@ -367,6 +350,12 @@ out = {
     "cold_startup_source": r"${cold_startup_src}",
     "first_user_io_source": r"${first_user_io_src}",
     "interactive_first_render_source": r"${interactive_first_render_src}",
+    "startup_environment": "isolated-workspace-v1",
+    "measurement_notes": {
+        "release_build_ms": "Cargo build command wall time; never an operation latency",
+        "tool_pipeline_bench_ms": "Cargo benchmark command wall time, including compilation and harness setup; operation estimates are in the Criterion log",
+        "agent_harness_bench_ms": "Cargo benchmark command wall time, including compilation and harness setup; operation estimates are in the Criterion log",
+    },
 }
 with open(r"${OUT_JSON}", "w", encoding="utf-8") as f:
     json.dump(out, f, indent=2, sort_keys=True)

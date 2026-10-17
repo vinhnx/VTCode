@@ -15,6 +15,19 @@ pub struct BashRunner<E, P> {
     shell_kind: ShellKind,
 }
 
+/// Named options for [`BashRunner::rm`].
+///
+/// Stable-Rust emulation of named/optional arguments: call sites use named
+/// fields (`RmOptions { recursive: true, ..Default::default() }`) instead
+/// of positional `rm(path, true, false)`, avoiding `recursive`/`force` swaps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RmOptions {
+    /// Pass `-r` / `Recurse` (directories).
+    pub recursive: bool,
+    /// Pass `-f` / `Force` (suppress missing-file errors).
+    pub force: bool,
+}
+
 impl<E, P> BashRunner<E, P>
 where
     E: CommandExecutor,
@@ -156,6 +169,11 @@ where
     }
 
     pub fn rm(&self, path: &str, recursive: bool, force: bool) -> Result<()> {
+        self.rm_with_options(path, RmOptions { recursive, force })
+    }
+
+    /// Remove a workspace path with named options.
+    pub fn rm_with_options(&self, path: &str, options: RmOptions) -> Result<()> {
         let target = self.resolve_path(path)?;
         // rm replaces its target itself, so the target must not be (or
         // resolve through a symlink to) the workspace root. The canonical
@@ -174,14 +192,14 @@ where
         let command = match self.shell_kind {
             ShellKind::Unix => ShellCommand::new(ShellKind::Unix)
                 .verb("rm")
-                .flag_if(recursive, "r")
-                .flag_if(force, "f")
+                .flag_if(options.recursive, "r")
+                .flag_if(options.force, "f")
                 .value(format_path(ShellKind::Unix, &target))
                 .build(),
             ShellKind::Windows => ShellCommand::new(ShellKind::Windows)
                 .verb("Remove-Item")
-                .flag_if(recursive, "Recurse")
-                .flag_if(force, "Force")
+                .flag_if(options.recursive, "Recurse")
+                .flag_if(options.force, "Force")
                 .named("Path", format_path(ShellKind::Windows, &target))
                 .build(),
         };
@@ -537,6 +555,35 @@ mod tests {
             executor.invocations.lock().expect("invocations lock").is_empty(),
             "no command must be built for empty paths"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn rm_with_options_matches_positional_rm() -> Result<()> {
+        let dir = TempDir::new()?;
+        let executor = RecordingExecutor::default();
+        let runner = BashRunner::new(dir.path().to_path_buf(), executor.clone(), AllowAllPolicy)?;
+        let target = dir.path().join("named.txt");
+        fs::write(&target, "named")?;
+        // Parity: positional wrapper must build the same command as named options.
+        runner.rm("named.txt", true, true)?;
+        runner.rm_with_options("named.txt", RmOptions { recursive: true, force: true })?;
+        runner.rm_with_options("named.txt", RmOptions::default())?;
+        let invocations = executor.invocations.lock().expect("invocations lock");
+        assert_eq!(invocations.len(), 3);
+        assert_eq!(invocations[0].command, invocations[1].command);
+        let (recursive_flag, force_flag) = match runner.shell_kind() {
+            ShellKind::Unix => ("-r", "-f"),
+            ShellKind::Windows => ("-Recurse", "-Force"),
+        };
+        assert!(
+            invocations[0].command.contains(recursive_flag),
+            "recursive flag missing: {}",
+            invocations[0].command
+        );
+        assert!(invocations[0].command.contains(force_flag), "force flag missing: {}", invocations[0].command);
+        assert!(!invocations[2].command.contains(recursive_flag));
+        assert!(!invocations[2].command.contains(force_flag));
         Ok(())
     }
 

@@ -139,25 +139,52 @@ pub(crate) fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bo
     let lower = body.to_ascii_lowercase();
 
     (status == StatusCode::NOT_FOUND && lower.trim().is_empty())
-        || lower.contains("not enabled for the responses api")
-        || lower.contains("responses api") && (lower.contains("unsupported") || lower.contains("not supported"))
-        || lower.contains("invalid api parameter")
-        || lower.contains("unsupported parameter")
-        || lower.contains("1210")
-        || lower.contains("invalid_request_error")
+        || [
+            "not enabled for the responses api",
+            "responses api is unsupported",
+            "responses api is not supported",
+            "responses api not supported",
+            "unsupported responses api",
+            "does not support the responses api",
+        ]
+        .iter()
+        .any(|message| lower.contains(message))
 }
 
-/// Detect if an OpenAI API error indicates `service_tier=flex` is unsupported.
+/// Detect if an OpenAI API error indicates the sent `service_tier` was
+/// rejected, so the caller can retry once without it. Covers model-scoped
+/// rejections ("Flex is not available for this model.", "Unsupported
+/// service_tier: flex"), account/model enablement gaps (ultrafast on models
+/// without access), and project policy ("Invalid service_tier argument: ...
+/// not allowed for this project", `error.param == "service_tier"`). The
+/// `flex_` name is historical: the retry-without-tier fallback was built for
+/// flex first and now serves every tier the payload gate admits.
 pub(crate) fn is_flex_service_tier_unsupported(status: StatusCode, body: &str) -> bool {
     if status != StatusCode::BAD_REQUEST {
         return false;
     }
 
     let lower = body.to_ascii_lowercase();
-    lower.contains("flex")
-        && (lower.contains("flex is not available for this model")
-            || (lower.contains("service tier") || lower.contains("service_tier"))
-                && (lower.contains("not available") || lower.contains("unsupported")))
+    // Model-scoped shapes name the tier value.
+    if (lower.contains("flex") || lower.contains("ultrafast") || lower.contains("priority"))
+        && (lower.contains("is not available for this model")
+            || lower.contains("is not available on this model")
+            || lower.contains("is not available")
+            || lower.contains("unsupported service_tier"))
+    {
+        return true;
+    }
+    // Field- and project-scoped shapes name the field and/or the policy:
+    // "Unsupported service_tier: flex" (openai/codex#15099) and "Invalid
+    // service_tier argument: ... not allowed for this project" (error-codes
+    // docs). Either is grounds for one tier-less retry; if the project
+    // default is also disallowed the retry surfaces that error honestly.
+    let mentions_field = lower.contains("service_tier") || lower.contains("service tier");
+    let rejected = lower.contains("unsupported")
+        || lower.contains("not available")
+        || lower.contains("not allowed")
+        || lower.contains("invalid service_tier");
+    mentions_field && rejected
 }
 
 #[cfg(test)]
@@ -184,6 +211,30 @@ mod tests {
             "This endpoint is not enabled for the Responses API"
         ));
         assert!(!is_responses_api_unsupported(StatusCode::NOT_FOUND, "model_not_found"));
+        assert!(!is_responses_api_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Unknown parameter: 'output_types'.","type":"invalid_request_error","code":"unknown_parameter","param":"output_types"}}"#,
+        ));
+    }
+
+    #[test]
+    fn responses_api_parameter_errors_do_not_disable_the_endpoint() {
+        for body in [
+            r#"{"error":{"message":"Unsupported parameter: 'max_output_tokens'.","type":"invalid_request_error","param":"max_output_tokens"}}"#,
+            "Invalid API parameter: reasoning.effort",
+            "Responses API rejected an unsupported parameter: reasoning.effort",
+            r#"{"error":{"code":"1210","message":"Invalid request parameter"}}"#,
+        ] {
+            assert!(!is_responses_api_unsupported(StatusCode::BAD_REQUEST, body), "body: {body}");
+        }
+        for body in [
+            "Responses API is unsupported",
+            "Responses API is not supported on this endpoint",
+            "Responses API not supported by this endpoint",
+            "Unsupported Responses API endpoint",
+        ] {
+            assert!(is_responses_api_unsupported(StatusCode::BAD_REQUEST, body));
+        }
     }
 
     #[test]
@@ -191,6 +242,21 @@ mod tests {
         assert!(is_flex_service_tier_unsupported(
             StatusCode::BAD_REQUEST,
             r#"{"error":{"message":"Flex is not available for this model.","type":"invalid_request_error"}}"#
+        ));
+        // openai/codex#15099: field-scoped shape names no model.
+        assert!(is_flex_service_tier_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"type":"invalid_request_error","message":"Unsupported service_tier: flex"}}"#
+        ));
+        // Error-codes docs: project policy names the field, never the value.
+        assert!(is_flex_service_tier_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Invalid service_tier argument: The requested service tier is not allowed for this project.","type":"invalid_request_error","param":"service_tier"}}"#
+        ));
+        // Account/model enablement gap for newer tiers.
+        assert!(is_flex_service_tier_unsupported(
+            StatusCode::BAD_REQUEST,
+            r#"{"error":{"message":"Ultrafast is not available for this model.","type":"invalid_request_error"}}"#
         ));
         assert!(!is_flex_service_tier_unsupported(
             StatusCode::BAD_REQUEST,

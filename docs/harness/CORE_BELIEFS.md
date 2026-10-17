@@ -1,17 +1,22 @@
 # Core Beliefs
 
-Agent-first operating principles for VT Code development. These beliefs guide every design decision, code review, and architectural trade-off.
+Agent-first operating principles for VT Code development. These beliefs guide every design decision, code review, and
+architectural trade-off.
 
 ## 1. Humans Steer, Agents Execute
 
-Humans define goals, set constraints, and review outcomes. Agents handle implementation, testing, iteration, and routine maintenance. In VT Code's context:
+Humans define goals, set constraints, and review outcomes. Agents handle implementation, testing, iteration, and routine
+maintenance. In VT Code's context:
 
 - **Humans** choose which provider to add, which tool abstraction to expose, which security boundary to enforce.
 - **Agents** write the provider adapter, implement the trait, add tests, update docs, and open the PR.
 
-Synergistic Collaboration: Instead of chasing "full autonomy" at the cost of safety, prioritize systems where humans provide strategic guidance and agents handle execution. High-fidelity feedback loops enable human intervention before context drift leads to regressions.
+Synergistic Collaboration: Instead of chasing "full autonomy" at the cost of safety, prioritize systems where humans
+provide strategic guidance and agents handle execution. High-fidelity feedback loops enable human intervention before
+context drift leads to regressions.
 
-Corollary: if an agent cannot complete a task autonomously from the information in this repository, the repository is missing context — fix the repo, not the agent prompt.
+Corollary: if an agent cannot complete a task autonomously from the information in this repository, the repository is
+missing context — fix the repo, not the agent prompt.
 
 ## 2. Repository as System of Record
 
@@ -28,16 +33,19 @@ If a decision isn't in the repo, it hasn't been made.
 
 `AGENTS.md` is the map. `docs/` is the territory.
 
-- AGENTS.md provides a table of contents: workspace structure, key commands, critical conventions, and pointers to deeper documentation.
+- AGENTS.md provides a table of contents: workspace structure, key commands, critical conventions, and pointers to
+  deeper documentation.
 - `docs/harness/` contains the operational knowledge base: beliefs, invariants, quality scores, execution plans.
 - `docs/ARCHITECTURE.md` describes the system design.
 - Domain-specific docs (MCP, providers, security) live in their respective `docs/` subdirectories.
 
-An agent should be able to orient itself from AGENTS.md alone, then drill into specific docs only when working in that domain.
+An agent should be able to orient itself from AGENTS.md alone, then drill into specific docs only when working in that
+domain.
 
 ## 4. Agent Legibility Over Human Aesthetics
 
-When there's tension between "looks nice to a human reader" and "an agent can reliably parse and act on this," choose legibility.
+When there's tension between "looks nice to a human reader" and "an agent can reliably parse and act on this," choose
+legibility.
 
 - Prefer structured formats (tables, YAML frontmatter, consistent headers) over prose.
 - Use mechanical patterns: consistent naming, predictable file locations, explicit cross-references.
@@ -48,12 +56,14 @@ When there's tension between "looks nice to a human reader" and "an agent can re
 
 Define what must be true. Let agents decide how to make it true.
 
-- **Parse at boundaries**: validate inputs where they enter the system (API boundaries, config loading, tool argument parsing), not deep inside business logic.
+- **Parse at boundaries**: validate inputs where they enter the system (API boundaries, config loading, tool argument
+  parsing), not deep inside business logic.
 - **Strict layer dependencies**: `types → config → core → tools → agent → TUI`. No reverse imports.
 - **No `unwrap()`**: use `anyhow::Result` with `.with_context()`. This is a mechanical rule, not a suggestion.
 - **No hardcoded model IDs**: use `docs/models.json`. Models change frequently.
 
-The invariants are documented in `docs/harness/ARCHITECTURAL_INVARIANTS.md` and should be enforced by CI, not by code review.
+The invariants are documented in `docs/harness/ARCHITECTURAL_INVARIANTS.md` and should be enforced by CI, not by code
+review.
 
 ## 6. Boring Technology
 
@@ -62,7 +72,8 @@ Prefer composable, stable, well-documented tools and libraries that are well-rep
 - `anyhow` for errors, `serde` for serialization, `tokio` for async, `clap` for CLI, `ratatui` for TUI.
 - New dependencies require justification: what problem does this solve that existing deps cannot?
 - Avoid clever abstractions. A straightforward `match` statement is better than a macro that saves 3 lines.
-- Stable APIs compose better than "flexible" ones. Prefer concrete types over trait objects when the set of implementations is known.
+- Stable APIs compose better than "flexible" ones. Prefer concrete types over trait objects when the set of
+  implementations is known.
 
 ## 7. Throughput-First Merge Philosophy
 
@@ -79,8 +90,10 @@ This does not mean lowering quality standards. It means: if the tests pass and t
 
 Codebases accumulate entropy. Fight it with golden principles and recurring cleanup.
 
-- **Golden principles** are the small set of rules that, if followed, prevent most categories of bugs: layer deps, no unwrap, parse at boundaries, workspace scoping.
-- **Recurring cleanup** is scheduled, not reactive. Documentation gardening, dead code removal, and dependency updates happen on a cadence, not when someone notices rot.
+- **Golden principles** are the small set of rules that, if followed, prevent most categories of bugs: layer deps, no
+  unwrap, parse at boundaries, workspace scoping.
+- **Recurring cleanup** is scheduled, not reactive. Documentation gardening, dead code removal, and dependency updates
+  happen on a cadence, not when someone notices rot.
 - The `docs/harness/TECH_DEBT_TRACKER.md` is the entropy ledger. Review it regularly.
 
 ## 9. Technical Debt as High-Interest Loan
@@ -98,38 +111,56 @@ When adding new features, budget 10–20% of effort for paying down debt in the 
 
 Agents should recognize when they are uncertain and surface it early.
 
-- **Clarification > Guessing**: Asking a clarifying question via `ask_user_question` is more valuable than a confidently wrong implementation.
-- **Assumptions as Flags**: If a task has multiple interpretations, state your assumption clearly and proceed—but keep it visible so a human can steer if the assumption holds.
-- **Fail Fast on Ambiguity**: Significant ambiguity in project requirements should trigger a pause for clarification rather than a deep dive into an incorrect logical branch.
+- **Clarification > Guessing**: Asking a clarifying question via `ask_user_question` is more valuable than a confidently
+  wrong implementation.
+- **Assumptions as Flags**: If a task has multiple interpretations, state your assumption clearly and proceed—but keep
+  it visible so a human can steer if the assumption holds.
+- **Fail Fast on Ambiguity**: Significant ambiguity in project requirements should trigger a pause for clarification
+  rather than a deep dive into an incorrect logical branch.
 
 ## 11. Post-Deployment Observability
 
-Pre-deployment evaluations are necessary but insufficient. Agent behavior is co-constructed by model capability, product design, and user trust.
+Pre-deployment evaluations are necessary but insufficient. Agent behavior is co-constructed by model capability, product
+design, and user trust.
 
-- **Systematic Monitoring**: Build privacy-preserving infrastructure to monitor how agents are actually deployed and used in the wild.
+- **Systematic Monitoring**: Build privacy-preserving infrastructure to monitor how agents are actually deployed and
+  used in the wild.
 - **Evidence-Based Design**: Use real-world usage patterns to iterate on tool abstractions and security boundaries.
-- **Agent Trace**: Maintain a high-fidelity system of record for all agent contributions to ensure accountability and provenance.
+- **Agent Trace**: Maintain a high-fidelity system of record for all agent contributions to ensure accountability and
+  provenance.
 
 ## 12. Evaluate Outcomes, Not Claims
 
-An agent saying "bug fixed" is meaningless; what matters is whether the tests pass. An agent saying "feature complete" is meaningless; what matters is whether the feature works in the environment.
+An agent saying "bug fixed" is meaningless; what matters is whether the tests pass. An agent saying "feature complete"
+is meaningless; what matters is whether the feature works in the environment.
 
-- **Verification Proof**: Every completion claim must be backed by actual command output (test results, build output, runtime behavior).
-- **Outcome Over Assertion**: The harness records what verification commands were run and what their actual output was, not what the agent claims happened.
-- **Sprint Contracts**: Before implementation begins, generator and evaluator negotiate "what counts as done" through a structured contract. Vague user stories become testable acceptance criteria.
+- **Verification Proof**: Every completion claim must be backed by actual command output (test results, build output,
+  runtime behavior).
+- **Outcome Over Assertion**: The harness records what verification commands were run and what their actual output was,
+  not what the agent claims happened.
+- **Sprint Contracts**: Before implementation begins, generator and evaluator negotiate "what counts as done" through a
+  structured contract. Vague user stories become testable acceptance criteria.
 
 ## 13. Orient Before Acting
 
-An agent that acts without orienting is likely to repeat work, miss context, or make wrong assumptions. Every session should begin by reading external artifacts to understand the current state.
+An agent that acts without orienting is likely to repeat work, miss context, or make wrong assumptions. Every session
+should begin by reading external artifacts to understand the current state.
 
-- **Read the Artifacts**: Progress ledger, harness artifacts, loop memory, git log, and handoff context exist so the agent can orient without re-exploring from scratch.
-- **Just-in-Time Context**: Load references (paths, commit hashes, summaries) rather than full content. The orient phase gathers what's needed; the agent drills deeper only when working in that area.
-- **Boundary Awareness**: Know what is done, what is in-progress, and what is not started. Never guess whether something is intentionally incomplete or a leftover mess.
+- **Read the Artifacts**: Progress ledger, harness artifacts, loop memory, git log, and handoff context exist so the
+  agent can orient without re-exploring from scratch.
+- **Just-in-Time Context**: Load references (paths, commit hashes, summaries) rather than full content. The orient phase
+  gathers what's needed; the agent drills deeper only when working in that area.
+- **Boundary Awareness**: Know what is done, what is in-progress, and what is not started. Never guess whether something
+  is intentionally incomplete or a leftover mess.
 
 ## 14. The Agent Harness Co-Evolves with the Model
 
-Every harness component encodes assumptions about model weaknesses. As models improve, these assumptions may become invalid.
+Every harness component encodes assumptions about model weaknesses. As models improve, these assumptions may become
+invalid.
 
-- **Start Simple**: Begin with the simplest workable system. Use evals to identify real failure modes, then add structure for those specific failures.
-- **Periodically Prune**: Components that were once necessary may become overhead. Remove them when they no longer carry load.
-- **Stable Abstractions**: Separate Session (append-only log), Harness (control layer), and Sandbox (execution environment) so implementations can change without breaking the product.
+- **Start Simple**: Begin with the simplest workable system. Use evals to identify real failure modes, then add
+  structure for those specific failures.
+- **Periodically Prune**: Components that were once necessary may become overhead. Remove them when they no longer carry
+  load.
+- **Stable Abstractions**: Separate Session (append-only log), Harness (control layer), and Sandbox (execution
+  environment) so implementations can change without breaking the product.

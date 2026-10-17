@@ -1,10 +1,13 @@
 # Shell Environment Snapshot
 
-The shell snapshot feature captures a fully-initialized shell environment (after login scripts run) and reuses it for subsequent command executions, significantly reducing command startup time.
+The shell snapshot feature captures a fully-initialized shell environment (after login scripts run) and reuses it for
+subsequent command executions, significantly reducing command startup time.
 
 ## Problem
 
-Every time VT Code executes a shell command, it traditionally runs the user's login shell (`$SHELL -lc "command"`) which sources all login scripts (`~/.bashrc`, `~/.zshrc`, `~/.bash_profile`, etc.). This can add 100-500ms of overhead per command, depending on the complexity of the user's shell configuration.
+Every time VT Code executes a shell command, it traditionally runs the user's login shell (`$SHELL -lc "command"`) which
+sources all login scripts (`~/.bashrc`, `~/.zshrc`, `~/.bash_profile`, etc.). This can add 100-500ms of overhead per
+command, depending on the complexity of the user's shell configuration.
 
 ## Solution
 
@@ -91,6 +94,7 @@ $SHELL -lc "printf '__VTCODE_ENV_BEGIN__\n'; env -0; printf '\n__VTCODE_ENV_END_
 ```
 
 This:
+
 1. Uses markers to delimit the environment dump (ignoring shell startup noise)
 2. Uses NUL-delimited output (`env -0`) for reliable parsing
 3. Filters out volatile variables (PWD, SHLVL, terminal-specific vars, etc.)
@@ -106,13 +110,16 @@ Snapshots are invalidated when:
 Monitored files depend on shell type:
 
 **Bash:**
+
 - `/etc/profile`, `~/.bash_profile`, `~/.bash_login`, `~/.profile`, `~/.bashrc`
 
 **Zsh:**
+
 - `/etc/zshenv`, `/etc/zprofile`, `/etc/zshrc`, `/etc/zlogin`
 - `~/.zshenv`, `~/.zprofile`, `~/.zshrc`, `~/.zlogin`
 
 **Fish:**
+
 - `/etc/fish/config.fish`, `~/.config/fish/config.fish`
 
 ## Excluded Environment Variables
@@ -129,17 +136,19 @@ The following variables are not captured to avoid stale or session-specific data
 
 Typical improvements:
 
-| Scenario | Without Snapshot | With Snapshot | Improvement |
-|----------|-----------------|---------------|-------------|
-| Simple command | 150-300ms | 10-50ms | 3-6x faster |
-| Complex shell config | 300-800ms | 10-50ms | 6-16x faster |
-| Multiple commands | N × startup time | Startup once | Linear savings |
+| Scenario             | Without Snapshot | With Snapshot | Improvement    |
+| -------------------- | ---------------- | ------------- | -------------- |
+| Simple command       | 150-300ms        | 10-50ms       | 3-6x faster    |
+| Complex shell config | 300-800ms        | 10-50ms       | 6-16x faster   |
+| Multiple commands    | N × startup time | Startup once  | Linear savings |
 
 ## Limitations
 
-1. **Aliases/Functions**: Shell aliases and functions are not captured (they are shell-internal state, not environment variables). Commands relying on aliases may need the full login shell.
+1. **Aliases/Functions**: Shell aliases and functions are not captured (they are shell-internal state, not environment
+   variables). Commands relying on aliases may need the full login shell.
 
-2. **Indirect Changes**: Changes to files that are `source`d by the monitored config files won't trigger invalidation. Use manual invalidation or restart VT Code.
+2. **Indirect Changes**: Changes to files that are `source`d by the monitored config files won't trigger invalidation.
+   Use manual invalidation or restart VT Code.
 
 3. **Interactive-only Config**: Some shell configurations only apply to interactive shells and may not be captured.
 

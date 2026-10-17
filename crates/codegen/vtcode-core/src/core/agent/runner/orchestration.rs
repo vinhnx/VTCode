@@ -10,7 +10,7 @@ use crate::exec::events::HarnessEventKind;
 use crate::llm::provider::{LLMRequest, Message, ToolDefinition};
 use crate::tools::handlers::TaskTrackerTool;
 use crate::tools::traits::Tool;
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 use serde::Deserialize;
 use serde_json::json;
 use std::fmt::Write;
@@ -586,26 +586,60 @@ fn format_generalization_notes(notes: &[GeneralizationNote]) -> String {
         .join("\n")
 }
 
+/// Hard byte cap on raw model output retained in parse-failure diagnostics.
+/// Keeps a full response from inflating a tracing record when the model
+/// ignores the JSON-only contract and emits prose.
+const PLANNER_PARSE_FAILURE_SAMPLE_BYTES: usize = 2_048;
+
+/// Bound a failure sample at the cap, stopping before a multi-byte UTF-8
+/// character boundary instead of panicking on a truncated one.
+fn bounded_failure_sample(text: &str) -> String {
+    let mut end = PLANNER_PARSE_FAILURE_SAMPLE_BYTES.min(text.len());
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let marker = if end < text.len() { "…" } else { "" };
+    format!("{}{marker}", &text[..end])
+}
+
+/// Record why a harness structured response failed to decode. Without a raw
+/// sample the stop reason is bare, so serializer drift or an unexpected prose
+/// wrapper cannot be diagnosed from `parse planner response` alone.
+fn log_parse_failure(text: &str, parse_error: &Error) {
+    tracing::warn!(sample = bounded_failure_sample(text.trim()), error = %parse_error, "structured harness response failed to parse");
+}
+
 fn parse_json_response<T>(text: &str) -> Result<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let parsed = parse_json_payload::<T>(text);
+    if let Err(error) = &parsed {
+        log_parse_failure(text, error);
+    }
+    parsed
+}
+
+fn parse_json_payload<T>(text: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        anyhow::bail!("empty model response")
+        return Err(Error::msg("empty model response"));
     }
 
     if let Ok(parsed) = serde_json::from_str::<T>(trimmed) {
         return Ok(parsed);
     }
 
-    let trimmed = trimmed
+    let stripped = trimmed
         .strip_prefix("```json")
         .or_else(|| trimmed.strip_prefix("```"))
         .map(str::trim)
         .unwrap_or(trimmed);
-    let trimmed = trimmed.strip_suffix("```").map(str::trim).unwrap_or(trimmed);
-    serde_json::from_str::<T>(trimmed).context("decode json payload")
+    let stripped = stripped.strip_suffix("```").map(str::trim).unwrap_or(stripped);
+    serde_json::from_str::<T>(stripped).context("decode json payload")
 }
 
 async fn load_changed_file_snapshots(workspace_root: &std::path::Path, files: &[String]) -> String {
@@ -685,4 +719,61 @@ fn format_verification_results(results: &[VerificationResult]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod parse_failure_tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Probe {
+        ok: bool,
+    }
+
+    /// Asymmetric both directions: a JSON-only response parses without any
+    /// warning-worthy detour, while the same payload wrapped in a fenced
+    /// block must still parse through the fence-strip fallback.
+    #[test]
+    fn direct_json_matches_fenced_json_result() {
+        let direct: Probe = parse_json_response(r#"{"ok":true}"#).expect("direct json parses");
+        let fenced: Probe = parse_json_response("```json\n{\"ok\":true}\n```").expect("fenced json parses");
+        assert_eq!(direct, fenced);
+        assert!(direct.ok);
+    }
+
+    /// The planner-response failure that terminated a harness thread
+    /// (session 20261016T033259Z) must remain an error, and the failure
+    /// path must not mutate the payload it reports.
+    #[test]
+    fn prose_payload_is_rejected_as_a_parse_error() {
+        let error = parse_json_response::<Probe>("Sure! Here is the plan:\n\n1. Do the task").unwrap_err();
+        assert!(error.to_string().contains("decode json payload"), "{error}");
+    }
+
+    /// Empty responses keep their dedicated message so callers can
+    /// distinguish an absent payload from a malformed one.
+    #[test]
+    fn empty_payload_error_differs_from_malformed_payload_error() {
+        assert_eq!(parse_json_response::<Probe>("   ").unwrap_err().to_string(), "empty model response");
+        let malformed = parse_json_response::<Probe>("{").unwrap_err().to_string();
+        assert_ne!(malformed, "empty model response", "{malformed}");
+    }
+
+    /// The diagnostic sample is bounded, keeps its full length when under
+    /// the cap, and stops before splitting a multi-byte character.
+    #[test]
+    fn bounded_failure_sample_respects_cap_and_char_boundaries() {
+        let short = "short";
+        assert_eq!(bounded_failure_sample(short), short);
+
+        let long = "a".repeat(PLANNER_PARSE_FAILURE_SAMPLE_BYTES + 500);
+        let sample = bounded_failure_sample(&long);
+        assert!(sample.ends_with('…'), "truncated samples carry a marker");
+        assert_eq!(sample.chars().count(), PLANNER_PARSE_FAILURE_SAMPLE_BYTES + 1);
+
+        let multibyte = "嗯".repeat(PLANNER_PARSE_FAILURE_SAMPLE_BYTES);
+        let sample = bounded_failure_sample(&multibyte);
+        assert!(sample.is_char_boundary(sample.len()), "sample never splits a character");
+        assert_eq!(sample.chars().position(|c| c != '嗯'), Some(sample.chars().count() - 1));
+    }
 }

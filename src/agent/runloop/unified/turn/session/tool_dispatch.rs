@@ -13,6 +13,7 @@ use crate::agent::runloop::unified::turn::session::direct_tool_completion::{
 };
 use crate::agent::runloop::unified::turn::session::interaction_loop::{InteractionLoopContext, InteractionOutcome};
 use crate::agent::runloop::unified::turn::tool_outcomes::handlers::{ToolOutcomeContext, handle_single_tool_call};
+use vtcode_commons::formatting::{strip_optional_word_prefix, trim_wrapping_quotes_and_punctuation};
 use vtcode_config::SubagentSpec;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::config::constants::tools;
@@ -42,13 +43,7 @@ enum DirectToolInput {
     },
 }
 
-fn begin_direct_tool_turn(
-    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
-    harness_config: &vtcode_config::core::agent::AgentHarnessConfig,
-) -> HarnessTurnState {
-    // Direct tool calls bypass `run_turn_loop`, so start their own preview window.
-    tool_registry.begin_turn_preview_window();
-
+fn begin_direct_tool_turn(harness_config: &vtcode_config::core::agent::AgentHarnessConfig) -> HarnessTurnState {
     let direct_turn_id = SessionId::generate();
     let direct_turn_id_str = direct_turn_id.as_str().to_string();
     HarnessTurnState::new(
@@ -107,8 +102,7 @@ pub(crate) async fn execute_direct_tool_call(
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
     // Construct HarnessTurnState (simplified for direct execution)
-    let mut harness_state =
-        begin_direct_tool_turn(ctx.interaction_ctx.tool_registry, &ctx.interaction_ctx.harness_config);
+    let mut harness_state = begin_direct_tool_turn(&ctx.interaction_ctx.harness_config);
 
     let mut auto_finish_planning_attempted = false;
 
@@ -163,6 +157,15 @@ pub(crate) async fn execute_direct_tool_call(
                 .working_history
                 .push(uni::Message::assistant_with_tools(String::new(), vec![tool_call]));
 
+            // Only this concrete user-input route can exempt a shell invocation.
+            // Approval of a later model-authored command cannot create this grant.
+            let _inspection_exemption = if !consumed_fallback
+                && vtcode_core::tools::tool_intent::is_command_run_tool_call(&current_tool_name, &current_args)
+            {
+                Some(t_ctx.ctx.tool_registry.trusted_user_command_exemption(&current_args)?)
+            } else {
+                None
+            };
             // 3. Execute through unified pipeline to ensure safety, metrics, and consistent output
             let outcome = handle_single_tool_call(&mut t_ctx, &tool_call_id, &current_tool_name, current_args).await?;
 
@@ -488,37 +491,6 @@ fn normalize_file_operation_path(input: &str) -> String {
     trim_wrapping_quotes_and_punctuation(normalized).to_string()
 }
 
-fn strip_optional_word_prefix<'a>(input: &'a str, word: &str) -> &'a str {
-    let Some(prefix) = input.get(..word.len()) else {
-        return input;
-    };
-    if !prefix.eq_ignore_ascii_case(word) {
-        return input;
-    }
-    let remainder = &input[word.len()..];
-    if remainder.chars().next().is_some_and(char::is_whitespace) {
-        remainder.trim_start()
-    } else {
-        input
-    }
-}
-
-fn trim_wrapping_quotes_and_punctuation(target: &str) -> &str {
-    let mut normalized = target.trim();
-    loop {
-        let previous = normalized;
-        normalized = normalized.trim();
-        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
-        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
-        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
-        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
-        normalized = normalized.trim_end_matches(['.', ',', ';', '!', '?']).trim();
-        if normalized == previous {
-            return normalized;
-        }
-    }
-}
-
 fn normalize_direct_tool_mentions(input: &str, workspace_root: &Path) -> String {
     let matches = vtcode_commons::at_pattern::find_at_patterns(input);
     if matches.is_empty() {
@@ -621,15 +593,15 @@ mod tests {
     use vtcode_core::tools::registry::ToolRegistry;
 
     #[tokio::test]
-    async fn direct_tool_turn_resets_tiny_preview_budget() {
+    async fn direct_tool_turn_keeps_repeated_previews_visible() {
         let temp_dir = TempDir::new().expect("temp dir");
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         let harness_config = AgentHarnessConfig::default();
-        let body = "v".repeat(vtcode_config::constants::output_limits::TINY_PREVIEW_BYPASS_BYTES / 4);
-        let previews_per_turn = vtcode_config::constants::output_limits::TURN_TINY_PREVIEW_BUDGET_BYTES / body.len();
+        let body = "v".repeat(256);
+        let previews_per_turn = 40;
 
         let mut next_file = 0;
-        let _first_turn = begin_direct_tool_turn(&registry, &harness_config);
+        let _first_turn = begin_direct_tool_turn(&harness_config);
         for _ in 0..previews_per_turn {
             let file_path = temp_dir.path().join(format!("preview-{next_file}.txt"));
             next_file += 1;
@@ -648,10 +620,10 @@ mod tests {
             .execute_tool_ref(tools::READ_FILE, &json!({ "path": exhausted_path.to_string_lossy() }))
             .await
             .expect("read exhausted preview file");
-        assert_eq!(exhausted["preview_budget_exhausted"], true);
-        assert!(exhausted.get("content").is_none());
+        assert!(exhausted.get("preview_budget_exhausted").is_none());
+        assert_eq!(exhausted["content"].as_str(), Some(body.as_str()));
 
-        let _second_turn = begin_direct_tool_turn(&registry, &harness_config);
+        let _second_turn = begin_direct_tool_turn(&harness_config);
         let fresh_path = temp_dir.path().join(format!("preview-{next_file}.txt"));
         fs::write(&fresh_path, &body).expect("write fresh preview file");
         let fresh = registry

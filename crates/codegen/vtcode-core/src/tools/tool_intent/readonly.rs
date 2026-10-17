@@ -1,5 +1,5 @@
 use crate::tools::command_args::{
-    command_words_after_environment_prefix, has_unsafe_readonly_options, raw_command_text,
+    command_words_after_environment_prefix, has_unsafe_readonly_options, shell_command_text_with_args,
 };
 use crate::tools::output_spooler::SpooledOutputReference;
 use serde_json::Value;
@@ -149,7 +149,7 @@ fn is_version_or_help_probe(command_words: &[String]) -> bool {
 /// becomes read-only merely because parsing succeeded.
 pub(crate) fn static_shell_command_words(command: &str) -> Option<Vec<Vec<String>>> {
     let sanitized = sanitize_static_shell_command(command)?;
-    parse_static_shell_command_words(&sanitized)
+    parse_shell_command_words(&sanitized)
 }
 
 /// Parse a command whose only shell operators outside quotes are output
@@ -161,10 +161,13 @@ pub(crate) fn static_shell_command_words_with_output_plumbing(command: &str) -> 
     if !crate::command_safety::shell_parser::has_only_output_redirections(command) {
         return None;
     }
-    parse_static_shell_command_words(command)
+    parse_shell_command_words(command)
 }
 
-fn parse_static_shell_command_words(command: &str) -> Option<Vec<Vec<String>>> {
+/// Tokenize shell invocations without proving static execution or safety.
+/// Permission and activity predicates must sanitize before using these words;
+/// diagnostic-only consumers may inspect dynamic shell text without grants.
+pub(super) fn parse_shell_command_words(command: &str) -> Option<Vec<Vec<String>>> {
     let commands = crate::command_safety::shell_parser::parse_shell_commands_tree_sitter(command).ok()?;
     if commands.is_empty() {
         return None;
@@ -183,22 +186,42 @@ fn parse_static_shell_command_words(command: &str) -> Option<Vec<Vec<String>>> {
         .collect()
 }
 
+/// Shared head of both read-only classifiers: strip environment prefixes,
+/// resolve the lowercased program name, and apply the option-level guard.
+/// Returns the stripped words plus the program name, or `None` when the
+/// command cannot be classified (fail closed). The parallel-safe classifier
+/// shares this head; its stricter tail (no builds/tests, git allow-list
+/// only) stays separate on purpose.
+///
+/// The guard reads the original `words` (not the stripped view) so
+/// environment-injected options stay visible; keep that argument as-is.
+fn readonly_command_head(words: &[String]) -> Option<(&[String], String)> {
+    let command_words = command_words_after_environment_prefix(words);
+    let first = command_words
+        .first()
+        .and_then(|word| Path::new(word).file_name())
+        .and_then(|name| name.to_str())
+        .map(str::to_ascii_lowercase)?;
+    if has_unsafe_readonly_options(words) {
+        return None;
+    }
+    Some((command_words, first))
+}
+
 /// Returns whether one parsed command is an allow-listed read-only command.
 /// Option-level guards are shared with raw argument validation so activity
 /// accounting cannot accidentally become less strict than tool intent.
 pub(crate) fn command_words_are_readonly(words: &[String]) -> bool {
-    let command_words = command_words_after_environment_prefix(words);
-    let Some(first) = command_words
-        .first()
-        .and_then(|word| Path::new(word).file_name())
-        .and_then(|name| name.to_str())
-        .map(str::to_ascii_lowercase)
-    else {
+    let Some((command_words, first)) = readonly_command_head(words) else {
         return false;
     };
-
-    if has_unsafe_readonly_options(words) {
-        return false;
+    if first == "command" {
+        return matches!(command_words.get(1).map(String::as_str), Some("-v" | "-V"))
+            && command_words.len() > 2
+            && command_words
+                .iter()
+                .skip(2)
+                .all(|word| !word.starts_with('-') && !word.is_empty());
     }
 
     if is_readonly_base_command(&first)
@@ -303,18 +326,9 @@ fn git_subcommand_and_operand(command_words: &[String]) -> Option<(usize, Option
 /// purposes, but are excluded here because they write caches, lockfiles, or
 /// build artifacts and contend on shared package-manager state.
 fn command_words_are_parallel_safe(words: &[String]) -> bool {
-    let command_words = command_words_after_environment_prefix(words);
-    let Some(first) = command_words
-        .first()
-        .and_then(|word| Path::new(word).file_name())
-        .and_then(|name| name.to_str())
-        .map(str::to_ascii_lowercase)
-    else {
+    let Some((command_words, first)) = readonly_command_head(words) else {
         return false;
     };
-    if has_unsafe_readonly_options(words) {
-        return false;
-    }
 
     if is_readonly_base_command(&first) {
         return true;
@@ -421,17 +435,32 @@ fn sanitize_static_shell_command(command: &str) -> Option<String> {
     (!sanitized.trim().is_empty()).then_some(sanitized)
 }
 
+/// Shared extract + static-parse prologue for command-session classifiers.
+///
+/// Extracts the full classification candidate (including the quoted argv
+/// suffix) and proves a static shape through the tree-sitter boundary.
+/// Returns `None` when the args cannot prove one invocation (conflicting raw
+/// alias, dynamic syntax, redirection) — every caller maps `None` to
+/// fail-closed `false`, in the same order as before.
+fn parsed_session_commands(args: &Value) -> Option<Vec<Vec<String>>> {
+    let raw = shell_command_text_with_args(args)?;
+    static_shell_command_words(&raw)
+}
+
+/// Shared read-only gate over already-parsed segments: a `&&` chain is
+/// accepted only when every segment independently passes the allow-list.
+/// (`sanitize_static_shell_command` already rejected `;`, `||`,
+/// redirections, and background `&` up front.)
+fn all_commands_readonly(commands: &[Vec<String>]) -> bool {
+    commands.iter().all(|words| command_words_are_readonly(words))
+}
+
 pub fn is_readonly_command_session_command(args: &Value) -> bool {
-    let Some(raw) = raw_command_text(args) else {
+    let Some(commands) = parsed_session_commands(args) else {
         return false;
     };
 
-    // `is_readonly_command_string` intentionally rejects compound separators
-    // for its conservative raw-string API. The static parser above is the
-    // stricter structured boundary for this allow-list and accepts a compound
-    // command only when every parsed command is independently safe.
-    static_shell_command_words(&raw)
-        .is_some_and(|commands| commands.iter().all(|words| command_words_are_readonly(words)))
+    all_commands_readonly(&commands)
 }
 
 /// A stricter read-only command shape that may run concurrently after hooks,
@@ -448,11 +477,10 @@ pub(crate) fn is_parallel_safe_command_session_command(args: &Value) -> bool {
     {
         return false;
     }
-    let Some(raw) = raw_command_text(args) else {
+    let Some(commands) = parsed_session_commands(args) else {
         return false;
     };
-    static_shell_command_words(&raw)
-        .is_some_and(|commands| commands.len() == 1 && command_words_are_parallel_safe(&commands[0]))
+    commands.len() == 1 && command_words_are_parallel_safe(&commands[0])
 }
 
 /// Returns `true` when a safe shell inspection command reads the internal tool
@@ -463,18 +491,20 @@ pub fn is_spool_file_read_command(tool_name: &str, args: &Value) -> bool {
         return false;
     }
 
-    if !is_readonly_command_session_command(args) {
+    // Parse once through the shared prologue: the same segments feed both
+    // the read-only gate below and the spool-path scan, so a completed
+    // command output (see `prepare_execution_output`) pays the extract +
+    // sanitize + tree-sitter pipeline a single time.
+    let Some(commands) = parsed_session_commands(args) else {
+        return false;
+    };
+    if !all_commands_readonly(&commands) {
         return false;
     }
-
-    raw_command_text(args)
-        .and_then(|command| static_shell_command_words(&command))
-        .is_some_and(|commands| {
-            commands
-                .iter()
-                .flatten()
-                .any(|word| SpooledOutputReference::recognizes_path(Path::new(word)))
-        })
+    commands
+        .iter()
+        .flatten()
+        .any(|word| SpooledOutputReference::recognizes_path(Path::new(word)))
 }
 
 #[cfg(test)]
@@ -484,6 +514,22 @@ mod tests {
 
     fn run_cmd(command: &str) -> Value {
         json!({"action": "run", "command": command})
+    }
+
+    #[test]
+    fn command_availability_probes_do_not_admit_execution() {
+        for command in ["command -v npx", "command -V python3 cargo", "command -v npx || true"] {
+            assert!(is_readonly_command_session_command(&run_cmd(command)), "{command}");
+        }
+        for command in [
+            "command rm file",
+            "command -p rm file",
+            "command -v",
+            "command -v -- rm",
+            "command -v $(touch file)",
+        ] {
+            assert!(!is_readonly_command_session_command(&run_cmd(command)), "{command}");
+        }
     }
 
     #[test]
@@ -566,6 +612,13 @@ mod tests {
             "awk 'BEGIN{print systime()}' README.md",
             "/usr/bin/awk 'NR>=1 && NR<=5' README.md",
             "awk 'NR>=1 && NR<=5' README.md | sort",
+            // Blocked-session regression: numeric `>` comparisons without
+            // `print` redirection are reads, not writes.
+            "awk '$3>100' README.md",
+            "awk '{if(p2==0 && i>1) print}' README.md",
+            "awk '{if(NR>1 && $2>10) print $1}' README.md",
+            "awk 'NR>=65 && NR<=71 {n=length($0); print n}' README.md",
+            "awk '{print (a>b)}' README.md",
         ] {
             assert!(is_readonly_command_session_command(&run_cmd(command)), "expected readonly command: {command}");
         }
@@ -576,6 +629,10 @@ mod tests {
         for command in [
             "awk '{print > \"out.txt\"}' README.md",
             "awk '{print >> \"out.txt\"}' README.md",
+            "awk '{print x > \"out.txt\"}' README.md",
+            "awk 'BEGIN { # (\n print \"written\" > \"out.txt\" }'",
+            "awk 'BEGIN { # [\n printf \"written\" > \"out.txt\" }'",
+            "awk 'BEGIN { # ( [ {\n print \"written\" > \"out.txt\" }'",
             "awk '{print | \"sort\"}' README.md",
             "awk '\"sort\" | getline line' README.md",
             "awk 'BEGIN{system(\"touch out\")}' README.md",
@@ -589,9 +646,8 @@ mod tests {
             "awk '@include \"x.awk\"' README.md",
             "awk '@load \"ext\"' README.md",
             "awk '{print \"a@b\"}' README.md",
-            // Bare `>` comparisons and `|` alternations are indistinguishable
-            // from redirection/pipes without a full parser — fail closed.
-            "awk '$3>100' README.md",
+            // `|` alternations inside regex stay conservative without a full
+            // parser; single `>` without `print` is now a comparison above.
             "awk '/error|warning/' README.md",
             "awk -i inplace '{print}' README.md",
             "awk -f program.awk README.md",
@@ -605,6 +661,44 @@ mod tests {
             "awk -v",
             // Shell-level redirection stays mutating even with a safe program.
             "awk 'NR>=1' README.md > out.txt",
+        ] {
+            assert!(!is_readonly_command_session_command(&run_cmd(command)), "expected mutating command: {command}");
+        }
+    }
+
+    #[test]
+    fn awk_string_literal_operators_are_readonly() {
+        // The reported false positive: a quoted `"|"` passed to `index()` is a
+        // string literal, not a command pipe, so the lexer must not reject it.
+        for command in [
+            r#"awk '{n=index(rest,"|"); print n}' README.md"#,
+            r#"awk 'index($0,">")' README.md"#,
+            // `>=` comparison and `||` boolean operators are not redirection
+            // or a pipe.
+            r#"awk '$3>=100 && $4||$5 {print $1}' README.md"#,
+            // Division must not be mistaken for a regex literal.
+            r#"awk '{print $1 / $2}' README.md"#,
+            "awk '{ # ( [ > system(\n if (NR>1) print $1 }' README.md",
+            // Exact reported shape: a multi-line program whose `index(rest,"|")`
+            // carries a quoted pipe and a `# ...` comment line.
+            r#"awk 'NR>=208 && NR<=212 {line=$0; body=substr(line,1,length(line)-1); n=0; while (body ~ / \$/) { body=substr(body,1,length(body)-1); n++ }} # find guide start after label cell
+rest=substr(line,3); g=index(rest,"|")+1; guide=substr(rest,g+2); gp=0; gg=guide; while (gg ~ / \$/) { gg=substr(gg,1,length(gg)-1); gp++ } print "%d: linelen=%d labelcell=%s pad_before_final_pipe=%d guide_pad=%d\n", NR, length(line), substr(line,3,20), n, gp }' README.md"#,
+        ] {
+            assert!(is_readonly_command_session_command(&run_cmd(command)), "expected readonly command: {command}");
+        }
+    }
+
+    #[test]
+    fn awk_regex_with_quote_cannot_hide_pipe() {
+        // Adversarial shape for a naive quote-toggling scanner: `/a"b/` opens
+        // a "string" that stays open, hiding the real `|`; the later `/c"d/`
+        // rebalances the quote count, so an unbalanced-quote guard never
+        // fires. The lexer treats quotes as regex content and still catches
+        // the pipe.
+        for command in [
+            r#"awk '/a"b/ {print | "sort"} /c"d/' README.md"#,
+            // Regex alternation stays mutating (pinned conservative policy).
+            r#"awk '/a|b/ {print}' README.md"#,
         ] {
             assert!(!is_readonly_command_session_command(&run_cmd(command)), "expected mutating command: {command}");
         }
@@ -821,6 +915,36 @@ mod tests {
     }
 
     #[test]
+    fn shared_command_head_fails_closed_on_env_only_words() {
+        // Asymmetric pair: env assignments alone leave no program to
+        // classify (fail closed), while the same prefix with a program
+        // classifies on both paths. Guards the shared helper's strip
+        // order: prefix strip first, program resolution second.
+        let env_only: Vec<String> = vec!["FOO=bar".to_string()];
+        assert!(!command_words_are_readonly(&env_only));
+        assert!(!command_words_are_parallel_safe(&env_only));
+        assert!(readonly_command_head(&env_only).is_none());
+
+        let env_ls: Vec<String> = vec!["FOO=bar".to_string(), "ls".to_string()];
+        assert!(command_words_are_readonly(&env_ls));
+        assert!(command_words_are_parallel_safe(&env_ls));
+        let (stripped, first) = readonly_command_head(&env_ls).expect("env-prefixed ls classifies");
+        assert_eq!(first, "ls");
+        assert_eq!(stripped, ["ls".to_string()].as_slice());
+    }
+
+    #[test]
+    fn parallel_safe_path_rejects_env_injection_like_readonly() {
+        // The shared head must pass the ORIGINAL words (env prefix
+        // included) to the option guard. Stripped `["ls"]` looks clean;
+        // only the unstripped view carries the injection.
+        let injected: Vec<String> = vec!["LD_PRELOAD=./evil.so".to_string(), "ls".to_string()];
+        assert!(!command_words_are_parallel_safe(&injected));
+        assert!(!command_words_are_readonly(&injected));
+        assert!(readonly_command_head(&injected).is_none());
+    }
+
+    #[test]
     fn stderr_merge_is_not_a_write_redirection() {
         assert!(is_readonly_command_session_command(&run_cmd("cargo check 2>&1 | head -c 4000")));
         // A real file redirection is still rejected.
@@ -861,5 +985,58 @@ mod tests {
 
         assert!(!is_spool_file_read_command("mcp_tool", &run_cmd("cat .vtcode/context/tool_outputs/run-1.txt")));
         assert!(is_spool_file_read_command("exec_command", &run_cmd("cat .vtcode/context/tool_outputs/run-1.txt")));
+    }
+
+    #[test]
+    fn spool_file_read_uses_one_parse_for_gate_and_scan() {
+        // Equivalence with the old parse-twice form: env prefixes and
+        // `&&` chains must resolve identically in the gate and the scan.
+        // A dropped `all(readonly)` gate would flip the mutating row to
+        // true (spooling a mutation); a reordered extract would flip the
+        // env-prefixed row to false.
+        assert!(is_spool_file_read_command(
+            "exec_command",
+            &run_cmd("FOO=bar cat .vtcode/context/tool_outputs/run-1.txt")
+        ));
+        assert!(is_spool_file_read_command(
+            "exec_command",
+            &run_cmd("cat .vtcode/context/tool_outputs/run-1.txt && echo done")
+        ));
+        assert!(!is_spool_file_read_command(
+            "exec_command",
+            &run_cmd("cat .vtcode/context/tool_outputs/run-1.txt && rm copied.txt")
+        ));
+    }
+
+    #[test]
+    fn shared_prologue_keeps_classifier_gates_distinct() {
+        // Same args through all three classifiers: outcomes must differ per
+        // gate, proving the shared extract+parse did not collapse predicates.
+        // Asymmetric by construction: each row flips a different gate.
+        let spool_read = run_cmd("cat .vtcode/context/tool_outputs/run-1.txt");
+        assert!(is_readonly_command_session_command(&spool_read));
+        assert!(is_spool_file_read_command("exec_command", &spool_read));
+        assert!(is_parallel_safe_command_session_command(&spool_read));
+
+        // Build commands are policy-readonly but touch shared package-manager
+        // state, so parallel safety stays denied while the spool gate (which
+        // needs a spool path) also stays denied.
+        let build = run_cmd("cargo check");
+        assert!(is_readonly_command_session_command(&build));
+        assert!(!is_parallel_safe_command_session_command(&build));
+        assert!(!is_spool_file_read_command("exec_command", &build));
+
+        // A mutating tail fails the shared read-only gate on both paths that
+        // use it; the spool scan must never admit a mutation.
+        let mutating_spool = run_cmd("cat .vtcode/context/tool_outputs/run-1.txt && rm copied.txt");
+        assert!(!is_readonly_command_session_command(&mutating_spool));
+        assert!(!is_spool_file_read_command("exec_command", &mutating_spool));
+
+        // Conflicting raw overrides prove no single invocation: fail closed
+        // on every classifier.
+        let conflicted = json!({"action": "run", "command": "ls", "raw_command": "rm -rf /"});
+        assert!(!is_readonly_command_session_command(&conflicted));
+        assert!(!is_parallel_safe_command_session_command(&conflicted));
+        assert!(!is_spool_file_read_command("exec_command", &conflicted));
     }
 }

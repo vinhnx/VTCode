@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::path::PathBuf;
+use vtcode_commons::validation::is_valid_origin;
 
 const MIN_FRAME_BYTES: usize = 1024;
 const DEFAULT_REMOTE_MCP_PROXY_TOKEN_ENV: &str = "VTCODE_WEBMCP_MCP_PROXY_TOKEN";
@@ -191,22 +192,6 @@ impl WebmcpConfig {
 
 fn default_host() -> String {
     "127.0.0.1".to_string()
-}
-
-fn is_valid_origin(origin: &str) -> bool {
-    let Ok(parsed) = url::Url::parse(origin) else {
-        return false;
-    };
-    origin == origin.trim()
-        && !origin.chars().any(char::is_whitespace)
-        && !origin.contains('*')
-        && matches!(parsed.scheme(), "http" | "https")
-        && parsed.host_str().is_some_and(|host| !host.is_empty())
-        && parsed.username().is_empty()
-        && parsed.password().is_none()
-        && (parsed.path().is_empty() || (parsed.path() == "/" && !origin.ends_with('/')))
-        && parsed.query().is_none()
-        && parsed.fragment().is_none()
 }
 
 fn is_valid_https_url(url: &str) -> bool {

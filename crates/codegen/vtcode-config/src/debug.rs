@@ -144,6 +144,24 @@ mod tests {
         assert_eq!(TraceLevel::parse("invalid"), None);
     }
 
+    /// `TraceLevel` keeps its `as_str()`/`parse()`/serde paths in lockstep; see
+    /// [`crate::test_support::assert_string_enum_lockstep`].
+    #[test]
+    fn trace_level_string_paths_stay_in_lockstep() {
+        use crate::test_support::assert_string_enum_lockstep;
+
+        assert_string_enum_lockstep!(
+            TraceLevel,
+            [
+                TraceLevel::Error,
+                TraceLevel::Warn,
+                TraceLevel::Info,
+                TraceLevel::Debug,
+                TraceLevel::Trace,
+            ]
+        );
+    }
+
     #[test]
     fn test_debug_config_default() {
         let cfg = DebugConfig::default();

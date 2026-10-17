@@ -1,15 +1,10 @@
 use std::io::{self, Write};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use ratatui::{
     Terminal,
     backend::{Backend, ClearType as BackendClearType},
-    crossterm::{
-        cursor::{MoveToColumn, SetCursorStyle},
-        execute,
-        terminal::{Clear, ClearType as CrosstermClearType},
-    },
 };
 
 /// Mouse pointer shape states, mirroring standard text editor cursors.
@@ -73,17 +68,19 @@ pub(super) fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>, use_alte
         return Ok(());
     }
 
-    execute!(io::stderr(), MoveToColumn(0), Clear(CrosstermClearType::CurrentLine))
-        .context("failed to clear the terminal line after session")?;
-    execute!(io::stderr(), SetCursorStyle::DefaultUserShape)
-        .context("failed to restore cursor style after inline session")?;
-    reset_mouse_pointer_shape();
+    // Minimal final paint: show the cursor and flush. All mode restores
+    // (line clear for `^C`, cursor style, mouse pointer, bracketed paste,
+    // focus/mouse, keyboard flags, raw mode, alternate leave) live in the
+    // canonical `restore_tui()` path so Ctrl+C exits emit each sequence once.
+    // Emitting them here too doubled escape traffic and caused flicker/noise.
     terminal
         .show_cursor()
         .map_err(|e| anyhow::anyhow!("failed to show cursor after inline session: {e}"))?;
     // Terminal::clear() snapshots the cursor via CPR (ESC[6n) to restore it afterward, which
     // blocks ~2s once the event stream is shut down at exit. Clear the backend viewport
-    // instead; restore_tui() restores the saved cursor position right after.
+    // instead; for alternate-screen sessions restore_tui() restores the saved
+    // cursor position right after (inline sessions keep the end-of-transcript
+    // cursor so the exit summary prints contiguously).
     // For inline sessions clearing All wipes the viewport and leaves a
     // full-screen white gap above the next prompt — the TUI already drew
     // inline and the transcript should remain as scrollback, so only
@@ -109,15 +106,35 @@ pub(super) fn finalize_terminal<B: Backend>(terminal: &mut Terminal<B>, use_alte
 /// delay. This eliminates the "5;1R" escape-code leak on TUI exit.
 pub(crate) fn drain_terminal_events() {
     use ratatui::crossterm::event;
-
-    // First poll: wait briefly for any in-flight terminal response.
-    if event::poll(Duration::from_millis(10)).unwrap_or(false) {
-        let _ = event::read();
+    #[cfg(vendored_crossterm)]
+    drain_events_with(|wait| event::read_timeout(wait).map(|event| event.is_some()));
+    #[cfg(not(vendored_crossterm))]
+    {
+        // Registry crossterm has no atomic timed read. Its bounded poll can
+        // collect terminal replies into the reader without an unbounded read
+        // or a detached reader that could steal input from the next session.
+        let _ = event::poll(Duration::from_millis(10));
     }
+}
 
-    // Subsequent polls: instant — drain whatever else is already buffered.
-    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
-        let _ = event::read();
+#[cfg(any(vendored_crossterm, test))]
+fn drain_events_with(mut read: impl FnMut(Duration) -> io::Result<bool>) {
+    let deadline = std::time::Instant::now() + Duration::from_millis(20);
+    // A continuously writing terminal must not keep restoration in raw mode.
+    for index in 0..128 {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let wait = if index == 0 {
+            remaining.min(Duration::from_millis(10))
+        } else {
+            Duration::ZERO
+        };
+        match read(wait) {
+            Ok(true) => {}
+            Ok(false) | Err(_) => break,
+        }
     }
 }
 
@@ -128,6 +145,30 @@ mod tests {
     use ratatui::layout::{Position, Size};
 
     use super::*;
+
+    #[test]
+    fn terminal_drain_stops_at_event_bound_and_empty_or_failed_reads() {
+        let mut reads = 0;
+        drain_events_with(|_| {
+            reads += 1;
+            Ok(true)
+        });
+        assert_eq!(reads, 128);
+        let mut waits = Vec::new();
+        drain_events_with(|wait| {
+            waits.push(wait);
+            Ok(waits.len() < 3)
+        });
+        assert_eq!(waits.len(), 3);
+        assert!(waits[0] <= Duration::from_millis(10));
+        assert_eq!(&waits[1..], &[Duration::ZERO, Duration::ZERO]);
+        let mut errors = 0;
+        drain_events_with(|_| {
+            errors += 1;
+            Err(io::Error::other("reader failed"))
+        });
+        assert_eq!(errors, 1);
+    }
 
     /// Backend that fails cursor-position reads, mimicking a live terminal after the
     /// crossterm event reader has been shut down (the exit path in run_tui).

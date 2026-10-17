@@ -72,7 +72,7 @@ pub use exec_env::{CommandSpec, ExecEnv, ExecExpiration, LinuxSandboxLauncher, S
 #[cfg(target_os = "linux")]
 pub use linux::{apply_sandbox_restrictions, landlock_supported};
 pub use manager::{SandboxManager, SandboxTransformError};
-pub use permissions::{AdditionalPermissions, SandboxPermissions};
+pub use permissions::{AdditionalPermissions, SandboxPermissions, ValidatedSandboxRequest};
 pub use policy::{
     BLOCKED_SYSCALLS, DEFAULT_SENSITIVE_PATHS, FILTERED_SYSCALLS, NetworkAllowlistEntry, ResourceLimits,
     SECCOMP_PROFILE_VERSION, SandboxPolicy, SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,

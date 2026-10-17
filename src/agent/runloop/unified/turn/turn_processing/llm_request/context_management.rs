@@ -70,7 +70,9 @@ fn build_anthropic_context_management(
 
     let mut edits = Vec::new();
     let clearing = &vt_cfg.agent.harness.tool_result_clearing;
-    if clearing.enabled {
+    if clearing.enabled
+        && vt_cfg.agent.harness.inspection.mode != vtcode_core::config::core::agent::InspectionMode::Enforce
+    {
         let mut edit = serde_json::Map::from_iter([
             ("type".to_string(), serde_json::Value::String("clear_tool_uses_20250919".to_string())),
             (
@@ -179,18 +181,24 @@ mod tests {
 
     #[test]
     fn server_supported_request_build_uses_session_safety_budget_by_default() {
+        // The session budget wins when it is below the provider capacity, and
+        // the compact threshold is the trigger ratio of the prompt budget.
+        let small_prompt_budget = 160_000 - DEFAULT_OUTPUT_RESERVE_TOKENS;
         assert_eq!(
             build_server_compaction_context_management(None, 500_000, 160_000),
             Some(json!([{
                 "type": "compaction",
-                "compact_threshold": 160_000 - DEFAULT_OUTPUT_RESERVE_TOKENS,
+                "compact_threshold": small_prompt_budget * 3 / 4,
             }]))
         );
+        // The provider capacity clamps a larger session budget, then the same
+        // ratio applies to the clamped prompt budget.
+        let clamped_prompt_budget = 100_000 - DEFAULT_OUTPUT_RESERVE_TOKENS;
         assert_eq!(
             build_server_compaction_context_management(None, 100_000, 160_000),
             Some(json!([{
                 "type": "compaction",
-                "compact_threshold": 100_000 - DEFAULT_OUTPUT_RESERVE_TOKENS,
+                "compact_threshold": clamped_prompt_budget * 3 / 4,
             }]))
         );
     }

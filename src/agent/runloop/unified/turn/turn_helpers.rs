@@ -38,14 +38,7 @@ pub(crate) fn display_error(renderer: &mut AnsiRenderer, category: &str, error: 
 
 /// Return the structured error code from an `LLMError`'s metadata, if present.
 fn local_readiness_code(error: &LLMError) -> Option<&str> {
-    let metadata = match error {
-        LLMError::Authentication { metadata, .. }
-        | LLMError::InvalidRequest { metadata, .. }
-        | LLMError::Network { metadata, .. }
-        | LLMError::Provider { metadata, .. }
-        | LLMError::RateLimit { metadata } => metadata.as_ref(),
-    };
-    metadata.and_then(|meta| meta.code.as_deref())
+    error.metadata().and_then(|meta| meta.code.as_deref())
 }
 
 pub(crate) fn error_message_for_user(error: &anyhow::Error) -> String {
@@ -62,50 +55,31 @@ pub(crate) fn error_message_for_user(error: &anyhow::Error) -> String {
 /// human-readable message from the JSON. For errors that already have a
 /// formatted `message` field, it returns that directly.
 fn llm_error_human_message(error: &LLMError) -> String {
+    let raw = error.metadata().and_then(|meta| meta.message.as_deref());
     match error {
-        LLMError::Authentication { metadata, .. }
-        | LLMError::InvalidRequest { metadata, .. }
-        | LLMError::Network { metadata, .. }
-        | LLMError::Provider { metadata, .. } => {
-            // Try to extract a clean message from the raw body stored in metadata
-            if let Some(meta) = metadata
-                && let Some(raw) = &meta.message
-            {
-                let human = vtcode_core::llm::providers::error_handling::extract_human_error_message(raw);
-                if human != *raw {
-                    return human;
-                }
-            }
-            // Fall back to the formatted message field
-            match error {
-                LLMError::Authentication { message, .. }
-                | LLMError::InvalidRequest { message, .. }
-                | LLMError::Network { message, .. }
-                | LLMError::Provider { message, .. } => message.clone(),
-                _ => error.to_string(),
-            }
-        }
-        LLMError::RateLimit { metadata } => metadata
-            .as_ref()
-            .and_then(|meta| {
-                meta.message
-                    .as_ref()
-                    .map(|raw| vtcode_core::llm::providers::error_handling::extract_human_error_message(raw))
-            })
+        // RateLimit keeps no formatted `message` field, so it always uses the
+        // metadata body (parsed) or the Display fallback.
+        LLMError::RateLimit { .. } => raw
+            .map(vtcode_core::llm::providers::error_handling::extract_human_error_message)
             .unwrap_or_else(|| error.to_string()),
+        // Other variants keep a formatted `message`; prefer the parsed body
+        // only when it differs from the raw text.
+        LLMError::Authentication { message, .. }
+        | LLMError::InvalidRequest { message, .. }
+        | LLMError::Network { message, .. }
+        | LLMError::Provider { message, .. } => match raw {
+            Some(raw) => {
+                let human = vtcode_core::llm::providers::error_handling::extract_human_error_message(raw);
+                if human != raw { human } else { message.clone() }
+            }
+            None => message.clone(),
+        },
     }
 }
 
 /// Extract the raw body string from LLMError metadata, if available.
 fn llm_error_raw_body(error: &LLMError) -> Option<String> {
-    let metadata = match error {
-        LLMError::Authentication { metadata, .. }
-        | LLMError::InvalidRequest { metadata, .. }
-        | LLMError::Network { metadata, .. }
-        | LLMError::Provider { metadata, .. }
-        | LLMError::RateLimit { metadata, .. } => metadata.as_ref(),
-    };
-    metadata.and_then(|meta| meta.message.clone())
+    error.metadata().and_then(|meta| meta.message.clone())
 }
 
 /// Centralized status message display

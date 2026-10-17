@@ -38,13 +38,7 @@ pub struct RuntimeSnapshot {
 /// `VTCODE_STARTUP_TRACE=1` (startup trace already implies diagnostics).
 #[must_use]
 pub fn runtime_diagnostics_enabled() -> bool {
-    env_flag_enabled(RUNTIME_METRICS_ENV) || startup_trace_enabled()
-}
-
-fn env_flag_enabled(var_name: &str) -> bool {
-    std::env::var(var_name).ok().is_some_and(|value| {
-        matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on" | "debug")
-    })
+    crate::utils::env_flag_enabled(RUNTIME_METRICS_ENV) || startup_trace_enabled()
 }
 
 fn startup_trace_enabled() -> bool {
@@ -164,7 +158,7 @@ mod tests {
     fn absent_env_flag_is_disabled() {
         // `VTCODE_RUNTIME_METRICS_TEST_ABSENT_XYZ` is never set, so the flag
         // parser must report disabled without mutating process env.
-        assert!(!env_flag_enabled("VTCODE_RUNTIME_METRICS_TEST_ABSENT_XYZ"));
+        assert!(!crate::utils::env_flag_enabled("VTCODE_RUNTIME_METRICS_TEST_ABSENT_XYZ"));
     }
 
     #[test]

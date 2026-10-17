@@ -1,10 +1,12 @@
 # VT Code Output Styles
 
-Output styles allow you to customize the behavior and response format of VT Code by modifying the system prompt. This feature enables different modes of operation, from concise responses to detailed explanations.
+Output styles allow you to customize the behavior and response format of VT Code by modifying the system prompt. This
+feature enables different modes of operation, from concise responses to detailed explanations.
 
 ## Overview
 
 Output styles work by modifying VT Code's system prompt. Each style can:
+
 - Add custom instructions to the base prompt (when `keep-coding-instructions: true`)
 - Replace the base prompt entirely (when `keep-coding-instructions: false`)
 
@@ -49,26 +51,31 @@ Add your custom instructions here. These will be added to the system prompt.
 VT Code ships with several built-in output styles:
 
 ### Default
+
 - Name: `default`
 - Description: Standard VT Code output style with concise responses and efficient tool handling
 - Keeps base instructions: Yes
 
 ### Explanatory
+
 - Name: `explanatory`
 - Description: Educational output style that provides insights and explanations
 - Keeps base instructions: Yes
 
 ### Learning
+
 - Name: `learning`
 - Description: Collaborative learning mode where VT Code guides users to contribute code themselves
 - Keeps base instructions: Yes
 
 ### Developer
+
 - Name: `developer`
 - Description: Developer-focused output style optimized for coding tasks and technical work
 - Keeps base instructions: Yes
 
 ### Architect
+
 - Name: `architect`
 - Description: Architecture-focused output style for system design and high-level planning
 - Keeps base instructions: Yes
@@ -105,7 +112,7 @@ keep-coding-instructions: true
 
 ## Pair Programming Mode
 
-You are a friendly pair programming partner. 
+You are a friendly pair programming partner.
 - Explain your thought process as you work
 - Ask questions to understand the user's goals
 - Suggest alternatives and discuss trade-offs

@@ -110,12 +110,15 @@ pub(super) fn verification_exhausted_handoff_reason(
     verifier: Option<&str>,
     attempt: u8,
     max: u8,
-    escalated_failure: Option<&VerificationFailureSummary>,
+    last_failure: Option<&VerificationFailureSummary>,
 ) -> String {
-    if let Some(failure) = escalated_failure {
+    if let Some(failure) = last_failure {
+        let exit = failure
+            .exit_code
+            .map_or_else(|| "unobserved".to_string(), |code| code.to_string());
         return format!(
             "{base} The harness auto-verification `{}` failed {} time(s) consecutively, so autonomous recovery stopped. \
-            Last output tail:\n{}\nFix the reported failure, then run `{}` {HANDOFF_VERIFIER_SHELL_FORM} and let it exit 0 \
+            Terminal exit: {exit}. Last output tail:\n{}\nFix the reported failure, then run `{}` {HANDOFF_VERIFIER_SHELL_FORM} and let it exit 0 \
             before typing `continue` to resume with the gate preserved.",
             failure.command, failure.consecutive_failures, failure.excerpt_tail, failure.command,
         );
@@ -611,6 +614,7 @@ mod tests {
     #[test]
     fn exhausted_handoff_after_escalation_carries_failure_tail() {
         let failure = VerificationFailureSummary {
+            exit_code: Some(1),
             command: "cargo nextest run".to_string(),
             excerpt_tail: "error[E0308]: mismatched types".to_string(),
             consecutive_failures: 3,

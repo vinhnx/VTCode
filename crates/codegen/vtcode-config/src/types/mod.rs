@@ -173,6 +173,11 @@ pub enum ShellPromptProfile {
     /// Use Unix-like shell syntax in prompt examples.
     UnixLike,
     /// Use native PowerShell syntax in prompt examples.
+    ///
+    /// The canonical wire value is `powershell` (matching `Self::as_str`,
+    /// [`Self::allowed_values`], and the docs); `snake_case` would otherwise
+    /// render it as the drifting `power_shell`.
+    #[serde(rename = "powershell")]
     PowerShell,
 }
 
@@ -278,6 +283,9 @@ impl ShellProfilePlatform {
 #[serde(rename_all = "snake_case")]
 pub enum ResolvedShellPromptProfile {
     UnixLike,
+    /// Canonical wire value is `powershell` (matching `Self::as_str`); the
+    /// derived `snake_case` form would otherwise be the drifting `power_shell`.
+    #[serde(rename = "powershell")]
     PowerShell,
 }
 
@@ -583,5 +591,88 @@ mod tests {
             ShellPromptProfile::PowerShell.resolve_for_platform(ShellProfilePlatform::Wsl),
             ResolvedShellPromptProfile::PowerShell
         );
+    }
+
+    /// Every `as_str()`/`parse()`/serde triangle in this module stays in
+    /// lockstep; see [`crate::test_support::assert_string_enum_lockstep`].
+    #[test]
+    fn string_enums_keep_as_str_and_serde_in_lockstep() {
+        use crate::test_support::assert_string_enum_lockstep;
+
+        assert_string_enum_lockstep!(
+            SystemPromptMode,
+            [
+                SystemPromptMode::Minimal,
+                SystemPromptMode::Lightweight,
+                SystemPromptMode::Default,
+                SystemPromptMode::Specialized,
+            ]
+        );
+        assert_string_enum_lockstep!(
+            ToolDocumentationMode,
+            [
+                ToolDocumentationMode::Minimal,
+                ToolDocumentationMode::Progressive,
+                ToolDocumentationMode::Full,
+            ]
+        );
+        assert_string_enum_lockstep!(
+            ShellPromptProfile,
+            [
+                ShellPromptProfile::Auto,
+                ShellPromptProfile::UnixLike,
+                ShellPromptProfile::PowerShell,
+            ]
+        );
+        assert_string_enum_lockstep!(
+            VerbosityLevel,
+            [VerbosityLevel::Low, VerbosityLevel::Medium, VerbosityLevel::High]
+        );
+        assert_string_enum_lockstep!(
+            UiSurfacePreference,
+            [
+                UiSurfacePreference::Auto,
+                UiSurfacePreference::Alternate,
+                UiSurfacePreference::Inline,
+            ]
+        );
+
+        // The shared `allowed_values()` lists are the model-facing validation
+        // surface; pin them against `parse()` so a rename cannot silently drop
+        // a value from the accepted set.
+        for value in SystemPromptMode::allowed_values() {
+            assert!(SystemPromptMode::parse(value).is_some(), "allowed value {value:?} must parse");
+        }
+        for value in ToolDocumentationMode::allowed_values() {
+            assert!(ToolDocumentationMode::parse(value).is_some(), "allowed value {value:?} must parse");
+        }
+        for value in ShellPromptProfile::allowed_values() {
+            assert!(ShellPromptProfile::parse(value).is_some(), "allowed value {value:?} must parse");
+        }
+        for value in VerbosityLevel::allowed_values() {
+            assert!(VerbosityLevel::parse(value).is_some(), "allowed value {value:?} must parse");
+        }
+        for value in UiSurfacePreference::allowed_values() {
+            assert!(UiSurfacePreference::parse(value).is_some(), "allowed value {value:?} must parse");
+        }
+    }
+
+    /// `ResolvedShellPromptProfile` has no `parse()`, so it is not covered by
+    /// [`crate::test_support::assert_string_enum_lockstep`]. It still exposes the
+    /// same value through `Display`/`as_str()` and the derived `snake_case`
+    /// serde form — and it carries a schema derive — so pin those together.
+    #[test]
+    fn resolved_shell_prompt_profile_matches_display_and_serde() {
+        for profile in [
+            ResolvedShellPromptProfile::UnixLike,
+            ResolvedShellPromptProfile::PowerShell,
+        ] {
+            let expected = profile.to_string();
+            assert_eq!(
+                serde_json::to_value(profile).expect("resolved profile serializes"),
+                serde_json::json!(expected),
+                "serde wire form drifted from Display for {profile:?}"
+            );
+        }
     }
 }

@@ -1,6 +1,7 @@
 # Security Policy
 
-We take the security of VT Code seriously. If you discover a security vulnerability, we appreciate your responsible disclosure and will work to address it promptly.
+We take the security of VT Code seriously. If you discover a security vulnerability, we appreciate your responsible
+disclosure and will work to address it promptly.
 
 ## Reporting a Vulnerability
 
@@ -8,8 +9,9 @@ We take the security of VT Code seriously. If you discover a security vulnerabil
 
 Instead, please report security vulnerabilities via one of the following channels:
 
-- Email: **security@vtcode.org** (replace with actual email if available)
-- [GitHub Private Vulnerability Reporting](https://github.com/vinhnx/vtcode/security/advisories/new) - This is the preferred method for reporting vulnerabilities, as it allows for secure, private communication.
+- Email: **<vinhnguyen2308@gmail.com>**
+- [GitHub Private Vulnerability Reporting](https://github.com/vinhnx/vtcode/security/advisories/new) - This is the
+  preferred method for reporting vulnerabilities, as it allows for secure, private communication.
 
 ### What to Include in Your Report
 
@@ -24,32 +26,36 @@ When reporting a security vulnerability, please provide us with the following in
 
 - **Acknowledgment**: We will acknowledge your report within 48 hours
 - **Updates**: We will provide regular updates on the status of the vulnerability and fix progress
-- **Resolution**: We will work to fix the vulnerability as quickly as possible and coordinate the release of the fix with you
+- **Resolution**: We will work to fix the vulnerability as quickly as possible and coordinate the release of the fix
+  with you
 - **Credit**: We will publicly acknowledge your responsible disclosure (unless you prefer to remain anonymous)
 
 ## Security Best Practices for Users
 
 ### API Keys and Credentials
+
 - Never commit API keys, tokens, or other sensitive credentials to version control
 - Use environment variables for storing API keys instead of hardcoding them
 - Consider using `.env` files with proper gitignore configuration
 - Rotate your API keys regularly
 
 ### Configuration Security
+
 - Keep your `vtcode.toml` configuration file secure and avoid sharing sensitive values
 - Regularly review your tool policies to ensure only necessary operations are allowed
 - Use secure connections when integrating with external services
 
 ### System Security
+
 - Only run VT Code in trusted environments
 - Be cautious when executing code or commands suggested by the AI agent
 - Regularly update VT Code to the latest version to ensure you have the latest security patches
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.133.x | Latest          |
+| Version | Supported           |
+| ------- | ------------------- |
+| 0.133.x | Latest              |
 | 0.132.x | Critical fixes only |
 | < 0.132 | No longer supported |
 
@@ -59,8 +65,12 @@ VT Code includes several built-in security features:
 
 - **Path Validation**: Prevents file system access outside the designated workspace
 - **Tool Policies**: Configurable allow/deny/prompt policies for different operations
-- **Shell approval hardening**: Learned read-only command families and command preflight reject dynamic shell syntax in `find` commands, so expansion cannot turn a reviewed shape into `-exec` or another destructive option
-- **Workspace lifecycle hook approval**: Shell commands defined in workspace-controlled configuration (`vtcode.toml` / `.vtcode` in the repository) never run at session start or during lifecycle events until you explicitly approve the exact command set for that workspace; any change to those commands invalidates the approval and is skipped until reviewed
+- **Shell approval hardening**: Learned read-only command families and command preflight reject dynamic shell syntax in
+  `find` commands, so expansion cannot turn a reviewed shape into `-exec` or another destructive option
+- **Workspace lifecycle hook approval**: Shell commands defined in workspace-controlled configuration (`vtcode.toml` /
+  `.vtcode` in the repository) never run at session start or during lifecycle events until you explicitly approve the
+  exact command set for that workspace; any change to those commands invalidates the approval and is skipped until
+  reviewed
 - **PII Protection**: Automatic tokenization of sensitive data in code execution
 - **Token Management**: Secure handling of API keys and authentication tokens
 
@@ -69,18 +79,24 @@ VT Code includes several built-in security features:
 VT Code enforces the following CI/CD security controls for GitHub Actions:
 
 - **Forbidden trigger policy**: `pull_request_target` and `workflow_run` are blocked by policy checks.
-- **Immutable action pinning**: every third-party and first-party action in workflows is pinned to a full 40-character commit SHA.
-- **Workflow policy check in CI**: `scripts/check_workflow_security.sh` runs in CI and can be run locally via `./scripts/check.sh workflow-security`.
-- **Least-privilege token permissions**: workflows default to `permissions: {}` and grant only job-level minimum permissions.
-- **Checkout credential hardening**: all `actions/checkout` usage sets `persist-credentials: false` unless explicitly required.
-- **Release credential isolation**: publishing runs in the dedicated `release` deployment environment (with reviewer gate), rather than broad repository-level credential exposure.
-- **No release-path cache**: release workflows do not use dependency/build cache restore to reduce cache-poisoning exposure on publish paths.
+- **Immutable action pinning**: every third-party and first-party action in workflows is pinned to a full 40-character
+  commit SHA.
+- **Workflow policy check in CI**: `scripts/check_workflow_security.sh` runs in CI and can be run locally via
+  `./scripts/check.sh workflow-security`.
+- **Least-privilege token permissions**: workflows default to `permissions: {}` and grant only job-level minimum
+  permissions.
+- **Checkout credential hardening**: all `actions/checkout` usage sets `persist-credentials: false` unless explicitly
+  required.
+- **Release credential isolation**: publishing runs in the dedicated `release` deployment environment (with reviewer
+  gate), rather than broad repository-level credential exposure.
+- **No release-path cache**: release workflows do not use dependency/build cache restore to reduce cache-poisoning
+  exposure on publish paths.
 
 ## Security Architecture
 
 For information about VT Code's security architecture, please see our documentation on:
 
-- [Security Posture](README.md#security-posture)
+- [Security Posture](README.md#overview)
 - [Tool Permission Policies](./config/TOOLS_CONFIG.md)
 
 ## Additional Resources
@@ -91,7 +107,8 @@ For information about VT Code's security architecture, please see our documentat
 
 ## Version Updates
 
-We regularly update dependencies and monitor for security vulnerabilities in our dependencies. To check for known vulnerabilities in Rust dependencies, you can run:
+We regularly update dependencies and monitor for security vulnerabilities in our dependencies. To check for known
+vulnerabilities in Rust dependencies, you can run:
 
 ```bash
 # Install cargo-audit if you haven't already

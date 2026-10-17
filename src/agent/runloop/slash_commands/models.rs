@@ -1,5 +1,3 @@
-use vtcode_core::config::types::ReasoningEffortLevel;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ThemePaletteMode {
     Select,
@@ -107,6 +105,9 @@ pub(crate) enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
     ShowTranscriptStats,
+    Explain {
+        args: String,
+    },
     ExportTranscript {
         path: Option<String>,
     },
@@ -120,22 +121,19 @@ pub(crate) enum SlashCommandOutcome {
     },
     ShowMemoryConfig,
     ShowPermissions,
-    ShowMemory,
     Exit,
     NewSession,
     OpenDocs,
     OpenFeedback,
     OpenDonateLinks,
     StartModelSelection,
+    ToggleFastMode {
+        enable: Option<bool>,
+    },
     StartModePalette,
     SelectPrimaryAgent {
         name: String,
     },
-    SetEffort {
-        level: Option<ReasoningEffortLevel>,
-        persist: bool,
-    },
-    ToggleIdeContext,
     ToggleVimMode {
         enable: Option<bool>,
     },
@@ -145,9 +143,6 @@ pub(crate) enum SlashCommandOutcome {
     StartSessionPalette {
         mode: SessionPaletteMode,
         limit: usize,
-        show_all: bool,
-    },
-    ContinueLatest {
         show_all: bool,
     },
     StartHistoryPicker,
@@ -193,9 +188,6 @@ pub(crate) enum SlashCommandOutcome {
     ManageLocalServer {
         action: LocalServerAction,
     },
-    LaunchEditor {
-        file: Option<String>,
-    },
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
     },
@@ -217,7 +209,6 @@ pub(crate) enum SlashCommandOutcome {
     StartTerminalSetup,
     OpenRewindPicker,
     Redo,
-    RewindRecover,
     RewindToTurn {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,

@@ -98,6 +98,8 @@ fn build_child_config_from_runtime(
     allow_nested_delegation: bool,
 ) -> VTCodeConfig {
     let mut child = parent.clone();
+    // A delegated role comes from its own spec, not the parent's primary role.
+    child.default_primary_agent = "build".to_owned();
     child.agent.default_model = model.to_string();
     child.runtime_agent_permissions = Some(runtime.permissions.clone());
     // Apply a lightweight default profile so a delegated child does not replay
@@ -428,7 +430,7 @@ fn merge_child_mcp_servers(
     }
 }
 
-fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
+pub(crate) fn inline_mcp_provider(name: &str, value: &serde_json::Value) -> Option<McpProviderConfig> {
     let object = value.as_object()?;
     let mut payload = serde_json::Map::with_capacity(object.len().saturating_add(1));
     payload.insert("name".to_string(), serde_json::Value::String(name.to_string()));
@@ -752,6 +754,35 @@ mod tests {
         let providers = resolve_child_mcp_providers(&parent, &runtime);
         assert_eq!(providers.len(), 1);
         assert_eq!(providers[0].name, "context7");
+    }
+
+    #[test]
+    fn child_mcp_inline_definition_replaces_named_parent_and_skips_malformed_entries() {
+        let mut parent = VTCodeConfig::default();
+        parent.mcp.providers.push(
+            serde_json::from_value(serde_json::json!({
+                "name": "context7", "command": "parent-mcp", "args": ["parent"]
+            }))
+            .expect("parent provider"),
+        );
+        let mut spec = test_subagent_spec();
+        spec.mcp_servers = vec![
+            SubagentMcpServer::Named("context7".to_string()),
+            SubagentMcpServer::Inline(BTreeMap::from([
+                ("context7".to_string(), serde_json::json!({"type": "stdio", "command": "child-mcp"})),
+                ("invalid".to_string(), serde_json::json!({"command": "bad", "args": 42})),
+                ("nonobject".to_string(), serde_json::json!("bad")),
+            ])),
+        ];
+        let child = build_child_config(&parent, &spec, models::openai::GPT_5_6_SOL, None, false);
+        let providers = serde_json::to_value(&child.mcp.providers).expect("serialize providers");
+        assert_eq!(providers.as_array().expect("providers array").len(), 1);
+        assert_eq!(providers[0]["name"], "context7");
+        assert_eq!(providers[0]["command"], "child-mcp");
+        assert_eq!(providers[0]["args"], serde_json::json!([]));
+        let original = serde_json::to_value(&parent.mcp.providers).expect("serialize parent");
+        assert_eq!(original[0]["command"], "parent-mcp");
+        assert_eq!(original[0]["args"], serde_json::json!(["parent"]));
     }
 
     /// Phase 4.3 guard-rail: a default subagent's composed system prompt must

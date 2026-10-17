@@ -205,11 +205,19 @@ pub(super) fn enable_terminal_modes(
     Ok(state)
 }
 
-/// Restore terminal modes using the canonical single-source-of-truth function.
+/// Restore terminal modes when the TUI task ends.
 ///
-/// Delegates to `restore_tui()` which handles all terminal restoration
-/// and is guarded by a `RESTORE_DONE` flag for idempotency.
+/// Delegates to the canonical restore but deliberately **keeps raw mode**: the
+/// TUI task ends as soon as the session does, while the runloop still has
+/// teardown to run (archive write, MCP shutdown, TUI join). A cooked tty during
+/// that window echoes late input — most visibly the kitty-protocol key-release
+/// report for the exiting Ctrl+C — onto the screen and into the shell's input.
+/// The exit postamble owns the final transition to cooked mode
+/// ([`finish_deferred_raw_mode_restore`]); every other restore path (panic hook,
+/// emergency exit, error report, host backstop) goes through `restore_tui()`,
+/// which forces the transition, so a non-graceful exit can never leave the tty
+/// in raw mode.
 pub(super) fn restore_terminal_modes(_state: &TerminalModeState) -> Result<()> {
-    crate::tui::ui::tui::panic_hook::restore_tui()?;
+    crate::tui::ui::tui::panic_hook::restore_tui_keep_raw_mode()?;
     Ok(())
 }

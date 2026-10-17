@@ -29,6 +29,7 @@ import {
 } from "./types.ts";
 
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
+import type { ExplanationScope, ExplanationPage, EvidenceRef, EvidencePage } from "./explanation.ts";
 const MAX_CHANGES = 32;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MIN_HEARTBEAT_INTERVAL_MS = 250;
@@ -397,6 +398,9 @@ function validateChanges(changes: readonly FileChangeInput[]): FileChange[] {
 }
 
 export class WorkspaceBackend {
+  explanation(_scope: ExplanationScope, _offset = 0): Promise<ExplanationPage> { return Promise.reject(new BackendError("Execution explanations require an active paired VT Code session", "unsupported")); }
+  explanationEvidence(_reference: EvidenceRef, _offset = 0): Promise<EvidencePage> { return Promise.reject(new BackendError("Execution evidence is unavailable", "unsupported")); }
+  explanationNavigate(_reference: EvidenceRef): Promise<{focused:boolean}> { return Promise.reject(new BackendError("Terminal navigation is unavailable", "unsupported")); }
   readonly kind: BackendKind = "fallback";
   connected = false;
   statusPayload: StatusPayload | null = null;
@@ -898,6 +902,10 @@ export class VtCodeBackend extends WorkspaceBackend {
     this.setStatusPayload(payload);
     return payload;
   }
+
+  override explanation(scope: ExplanationScope, offset = 0): Promise<ExplanationPage> { return this.send("explanation.get", {scope,offset}); }
+  override explanationEvidence(reference: EvidenceRef, offset = 0): Promise<EvidencePage> { return this.send("explanation.evidence", {reference,offset}); }
+  override explanationNavigate(reference: EvidenceRef): Promise<{focused:boolean}> { return this.send("explanation.navigate", {reference}); }
 
   override requestTurn(prompt: string, proposalId?: string): Promise<TurnResult> {
     const payload: RequestPayloads["turn.request"] = proposalId ? { prompt, proposal_id: proposalId } : { prompt };

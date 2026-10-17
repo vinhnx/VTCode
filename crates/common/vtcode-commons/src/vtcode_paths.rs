@@ -420,10 +420,8 @@ impl VtCodePaths {
             file.write_all(contents)?;
             file.sync_all()?;
             drop(file);
-            #[cfg(windows)]
-            if fs::symlink_metadata(destination).is_ok() {
-                fs::remove_file(destination)?;
-            }
+            // rename replaces existing files on Windows too. Removing the
+            // destination first would lose the last committed file on failure.
             fs::rename(&temporary, destination)
         })();
         if result.is_err() {
@@ -796,6 +794,11 @@ fn ensure_file_parent(path: &Path) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| anyhow!("file {} has no parent directory", path.display()))?;
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
     ensure_user_dir(parent).with_context(|| format!("could not create file parent {}", parent.display()))?;
     Ok(())
 }
@@ -1322,6 +1325,41 @@ mod tests {
         symlink(&destination, &linked).expect("final symlink");
         assert!(VtCodePaths::write_private_file_atomic(&linked, b"blocked").is_err());
         assert_eq!(fs::read_to_string(destination).expect("original data"), "original");
+    }
+
+    #[test]
+    fn private_file_writer_replaces_existing_file_without_temporary_leaks() {
+        let temp = tempdir().expect("tempdir");
+        let destination = temp.path().join("cache/data");
+
+        VtCodePaths::write_private_file_atomic(&destination, b"old committed state").expect("first write");
+        VtCodePaths::write_private_file_atomic(&destination, b"new").expect("replace existing file");
+
+        assert_eq!(fs::read(&destination).expect("read replacement"), b"new");
+        assert_eq!(fs::read_dir(destination.parent().expect("parent")).expect("directory").count(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn private_file_writer_failed_replacement_preserves_committed_file_and_cleans_temporary() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let temp = tempdir().expect("tempdir");
+        let destination = temp.path().join("data");
+        VtCodePaths::write_private_file_atomic(&destination, b"committed").expect("committed write");
+        let locked = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&destination)
+            .expect("lock destination against replacement");
+
+        let error = VtCodePaths::write_private_file_atomic(&destination, b"rejected replacement")
+            .expect_err("replacement must fail while destination is locked");
+        assert!(error.to_string().contains("could not atomically write"));
+        drop(locked);
+
+        assert_eq!(fs::read(&destination).expect("read committed state"), b"committed");
+        assert_eq!(fs::read_dir(temp.path()).expect("directory").count(), 1);
     }
 
     #[test]

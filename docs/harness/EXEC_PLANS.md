@@ -1,10 +1,12 @@
 # Execution Plans
 
-Execution plans are self-contained, living design documents for complex multi-step work in VT Code. They capture the goal, context, steps, decisions made during execution, and retrospective notes.
+Execution plans are self-contained, living design documents for complex multi-step work in VT Code. They capture the
+goal, context, steps, decisions made during execution, and retrospective notes.
 
 ## Why Exec Plans?
 
-- **Agent continuity**: an agent picking up mid-task can read the exec plan and resume without the original conversation context.
+- **Agent continuity**: an agent picking up mid-task can read the exec plan and resume without the original conversation
+  context.
 - **Decision logging**: captures why choices were made, not just what was done.
 - **Retrospectives**: completed plans become learning artifacts for future work.
 
@@ -12,15 +14,17 @@ Execution plans are self-contained, living design documents for complex multi-st
 
 These are distinct concepts:
 
-- **Exec Plans** are persistent design documents stored in `docs/harness/exec-plans/`. They capture goals, decisions, and retrospectives for complex work. They survive across sessions.
-- The **planning workflow** is driven by the `plan` primary agent and `/plan`. It is for repository exploration and proposal drafting before implementation.
+- **Exec Plans** are persistent design documents stored in `docs/harness/exec-plans/`. They capture goals, decisions,
+  and retrospectives for complex work. They survive across sessions.
+- The **planning workflow** is driven by the `plan` primary agent and `/plan`. It is for repository exploration and
+  proposal drafting before implementation.
 
-Exec Plans are written to `docs/harness/exec-plans/active/` and are part of the repository's knowledge base.
-Planning workflow artefacts may be written to `.vtcode/plans/` when the active agent permission policy allows them.
+Exec Plans are written to `docs/harness/exec-plans/active/` and are part of the repository's knowledge base. Planning
+workflow artefacts may be written to `.vtcode/plans/` when the active agent permission policy allows them.
 
 ## Directory Structure
 
-```
+```text
 docs/harness/exec-plans/
 ├── active/           # Plans currently being worked on
 │   ├── 001-mcp-oauth-coverage.md
@@ -67,7 +71,7 @@ Preferred step pattern:
 
 Timestamped entries for non-obvious choices made during execution:
 
-```
+```text
 - 2026-02-13: Chose X over Y because Z.
 - 2026-02-14: Discovered constraint W, adjusted step 3.
 ```

@@ -311,27 +311,14 @@ impl AuthStatus {
         match self {
             AuthStatus::Authenticated { label, age_seconds, expires_in } => {
                 let label_str = label.as_ref().map(|l| format!(" ({l})")).unwrap_or_default();
-                let age_str = humanize_duration(*age_seconds);
+                let age_str = format!("{} ago", vtcode_commons::formatting::humanize_duration_compact(*age_seconds));
                 let expiry_str = expires_in
-                    .map(|e| format!(", expires in {}", humanize_duration(e)))
+                    .map(|e| format!(", expires in {}", vtcode_commons::formatting::humanize_duration_compact(e)))
                     .unwrap_or_default();
                 format!("Authenticated{label_str}, obtained {age_str}{expiry_str}")
             }
             AuthStatus::NotAuthenticated => "Not authenticated".to_string(),
         }
-    }
-}
-
-/// Convert seconds to human-readable duration.
-fn humanize_duration(seconds: u64) -> String {
-    if seconds < 60 {
-        format!("{seconds}s ago")
-    } else if seconds < 3600 {
-        format!("{}m ago", seconds / 60)
-    } else if seconds < 86400 {
-        format!("{}h ago", seconds / 3600)
-    } else {
-        format!("{}d ago", seconds / 86400)
     }
 }
 

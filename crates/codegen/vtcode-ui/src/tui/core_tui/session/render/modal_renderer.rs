@@ -74,7 +74,7 @@ fn estimated_modal_instruction_rows(lines: &[String], content_width: usize) -> u
     rows.clamp(1, MAX_INLINE_INSTRUCTION_ROWS)
 }
 
-fn list_has_two_line_items(list: &ModalListState) -> bool {
+fn list_has_multiline_items(list: &ModalListState) -> bool {
     list.visible_indices.iter().any(|&index| {
         list.items
             .get(index)
@@ -83,7 +83,7 @@ fn list_has_two_line_items(list: &ModalListState) -> bool {
 }
 
 fn list_row_cap(list: &ModalListState) -> usize {
-    if list_has_two_line_items(list) {
+    if list_has_multiline_items(list) {
         ui::INLINE_LIST_MAX_ROWS_MULTILINE
     } else {
         ui::INLINE_LIST_MAX_ROWS
@@ -92,8 +92,8 @@ fn list_row_cap(list: &ModalListState) -> usize {
 
 fn list_desired_rows(list: &ModalListState) -> usize {
     // Count rendered rows, not items: each title costs one row, each subtitle
-    // costs a second row, headers reserve a blank separator above, and
-    // non-compact selectable rows reserve a trailing blank. Capped so large
+    // costs a second row, headers reserve a blank separator above, and every
+    // selectable row reserves a trailing blank. Capped so large
     // pickers still scroll instead of claiming the full viewport.
     let mut rows = 0usize;
     for (visible_index, &item_index) in list.visible_indices.iter().enumerate() {
@@ -111,7 +111,7 @@ fn list_desired_rows(list: &ModalListState) -> usize {
         if item.subtitle.as_ref().is_some_and(|subtitle| !subtitle.trim().is_empty()) {
             rows = rows.saturating_add(1);
         }
-        if !list.compact_rows() && item.selection.is_some() {
+        if item.selection.is_some() {
             rows = rows.saturating_add(1);
         }
     }
@@ -184,9 +184,9 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         wizard
             .steps
             .get(wizard.current_step)
-            .is_some_and(|step| list_has_two_line_items(&step.list))
+            .is_some_and(|step| list_has_multiline_items(&step.list))
     } else if let Some(modal) = session.modal_state() {
-        modal.list.as_ref().is_some_and(list_has_two_line_items)
+        modal.list.as_ref().is_some_and(list_has_multiline_items)
     } else {
         false
     };
@@ -204,7 +204,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         let (list_rows, summary_rows) = wizard
             .steps
             .get(wizard.current_step)
-            .map(|step| (list_desired_rows(&step.list), step.list.summary_line_rows(None)))
+            .map(|step| (list_desired_rows(&step.list), step.list.summary_line_rows(None, false)))
             .unwrap_or((1, 0));
         lines = lines.saturating_add(list_rows);
         lines = lines.saturating_add(summary_rows);
@@ -243,7 +243,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         }
         if let Some(list) = modal.list.as_ref() {
             lines = lines.saturating_add(list_desired_rows(list));
-            lines = lines.saturating_add(list.summary_line_rows(modal.footer_hint.as_deref()));
+            lines = lines.saturating_add(list.summary_line_rows(modal.footer_hint.as_deref(), modal.status.is_some()));
         } else {
             lines = lines.saturating_add(1);
         }
@@ -310,7 +310,7 @@ pub(crate) fn clip_transcript_area(transcript_area: Rect, modal_area: Rect) -> R
 }
 
 pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if area.width == 0 || area.height == 0 {
+    if !session.has_active_overlay() || area.width == 0 || area.height == 0 {
         session.set_modal_list_area(None);
         session.set_modal_text_areas(Vec::new());
         session.set_modal_link_targets(Vec::new());
@@ -319,7 +319,8 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 
     let styles = modal_render_styles(session);
     let input_styles = input_styles_from_theme(&session.theme);
-    render_modal_background(frame, area, styles.selectable);
+    session.occlude_progress_feedback(area);
+    render_modal_background(frame, area, styles.background);
     let link_style = session.styles.transcript_link_style().add_modifier(Modifier::UNDERLINED);
     let hovered_link_style = link_style.add_modifier(Modifier::BOLD);
     let workspace_root = session.workspace_root.clone();
@@ -350,7 +351,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             hovered_link_style,
         );
         title_link_targets = link_targets;
-        render_modal_background(frame, title_area, styles.selectable);
+        render_modal_background(frame, title_area, styles.background);
         frame.render_widget(Paragraph::new(decorated_title).style(styles.title).wrap(Wrap { trim: true }), title_area);
         render_modal_divider(frame, top_divider_area, styles.border);
         render_modal_divider(frame, bottom_divider_area, styles.border);
@@ -358,7 +359,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     };
 
     if let Some(wizard) = session.wizard_overlay_mut() {
-        render_modal_background(frame, body_area, styles.selectable);
+        render_modal_background(frame, body_area, styles.background);
         if body_area.width == 0 || body_area.height == 0 {
             session.set_modal_list_area(None);
             session.set_modal_text_areas(Vec::new());
@@ -395,7 +396,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         return;
     };
 
-    render_modal_background(frame, body_area, styles.selectable);
+    render_modal_background(frame, body_area, styles.background);
     if body_area.width == 0 || body_area.height == 0 {
         session.set_modal_list_area(None);
         session.set_modal_text_areas(Vec::new());
@@ -420,7 +421,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
                 vec![
                     Binding::new("!cmd", "shell mode"),
                     Binding::new("@path", "file reference"),
-                    Binding::new("Enter", "run / steer busy turn"),
+                    Binding::new("Enter", "run / queue busy turn"),
                     Binding::new("Ctrl+Enter", "queue for next turn"),
                     Binding::new("Tab", "queue for next turn"),
                     Binding::new("Shift+Enter", "new line"),
@@ -474,6 +475,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         ModalBodyContext {
             instructions: &modal.lines,
             footer_hint: modal.footer_hint.as_deref(),
+            status: modal.status.as_ref(),
             list: modal.list.as_mut(),
             styles: &styles,
             secure_prompt: modal.secure_prompt.as_ref(),
@@ -500,27 +502,46 @@ pub(crate) fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     let default_style = modal_base_style(session);
     let header_style = modal_heading_style(session);
     let chrome_style = modal_chrome_style(session);
+    let muted_style = session.styles.muted_text_style();
     let chrome_border_style = session
         .styles
         .border_style()
         .fg(ratatui_color_from_ansi(resolve_modal_chrome_ansi_color(session)))
         .remove_modifier(Modifier::DIM)
         .add_modifier(Modifier::BOLD);
+    // Secondary text (labels, subtitles, hints, dividers, badges) recedes via
+    // an explicit muted color — never `Modifier::DIM`: ratatui's
+    // `Cell::set_style` only inserts modifiers, so any DIM painted as an area
+    // background clings to every glyph drawn on top (the whole popup used to
+    // render dimmed). Option titles stay at full foreground so every choice
+    // reads; the selected row pops through `highlight` (accent + bold).
     ModalRenderStyles {
         border: chrome_border_style,
         highlight: modal_list_highlight_style(session),
-        badge: default_style.add_modifier(Modifier::DIM | Modifier::BOLD),
+        badge: muted_style.add_modifier(Modifier::BOLD),
         header: header_style,
-        selectable: default_style.add_modifier(Modifier::DIM),
-        detail: default_style.add_modifier(Modifier::DIM),
+        selectable: default_style,
+        detail: muted_style,
         search_match: header_style.add_modifier(Modifier::UNDERLINED),
         title: chrome_style,
-        divider: default_style.add_modifier(Modifier::DIM),
+        divider: muted_style,
+        background: default_style,
         instruction_border: chrome_border_style,
         instruction_title: header_style,
         instruction_bullet: header_style,
         instruction_body: default_style,
-        hint: default_style.add_modifier(Modifier::DIM | Modifier::ITALIC),
+        hint: muted_style.add_modifier(Modifier::ITALIC),
+        success: session.styles.accent_style().add_modifier(Modifier::BOLD),
+        warning: session.styles.warning_style().add_modifier(Modifier::BOLD),
+        danger: {
+            let color = session.styles.text_fallback(InlineMessageKind::Error);
+            let mut style = session.styles.default_style();
+            if let Some(color) = color {
+                style = style.fg(ratatui_color_from_ansi(color));
+            }
+            style.add_modifier(Modifier::BOLD)
+        },
+        accent: session.styles.modal_list_highlight_style(),
     }
 }
 
@@ -559,124 +580,4 @@ fn remove_trailing_empty_tool_line(session: &mut Session) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tui::ui::tui::InlineTheme;
-    use ratatui::style::Color;
-
-    #[test]
-    fn modal_title_text_uses_modal_title_and_empty_default() {
-        let mut session = Session::new(InlineTheme::default(), None, 20);
-        assert_eq!(modal_title_text(&session), "");
-
-        session.show_modal("Config".to_owned(), vec![], None);
-        assert_eq!(modal_title_text(&session), "Config");
-    }
-
-    #[test]
-    fn modal_title_style_uses_explicit_chrome_color() {
-        let session = Session::new(InlineTheme::default(), None, 20);
-        let styles = modal_render_styles(&session);
-
-        assert_eq!(styles.title.fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
-        assert!(styles.title.bg.is_none());
-        assert_eq!(styles.border.fg, Some(Color::Indexed(ui::SAFE_ANSI_BRIGHT_CYAN)));
-        assert!(styles.title.add_modifier.contains(Modifier::BOLD));
-    }
-
-    #[test]
-    fn modal_section_headers_use_chrome_color_on_base_background() {
-        let theme = InlineTheme {
-            foreground: Some(AnsiColorEnum::Ansi256(Ansi256Color(16))),
-            background: Some(AnsiColorEnum::Ansi256(Ansi256Color(231))),
-            primary: Some(AnsiColorEnum::Ansi256(Ansi256Color(117))),
-            ..InlineTheme::default()
-        };
-        let session = Session::new(theme, None, 20);
-        let styles = modal_render_styles(&session);
-
-        assert_eq!(styles.header.fg, Some(Color::Indexed(117)));
-        assert_eq!(styles.header.bg, Some(Color::Indexed(231)));
-        assert_eq!(styles.instruction_title.fg, Some(Color::Indexed(117)));
-        assert_eq!(styles.instruction_title.bg, Some(Color::Indexed(231)));
-        assert!(styles.header.add_modifier.contains(Modifier::BOLD));
-    }
-
-    #[test]
-    fn floating_modal_area_uses_bottom_half_of_viewport() {
-        let area = floating_modal_area(Rect::new(3, 5, 80, 31));
-
-        assert_eq!(area, Rect::new(3, 21, 80, 15));
-    }
-
-    #[test]
-    fn floating_modal_area_uses_exact_half_for_even_height() {
-        let area = floating_modal_area(Rect::new(0, 0, 80, 30));
-
-        assert_eq!(area, Rect::new(0, 15, 80, 15));
-    }
-
-    #[test]
-    fn floating_modal_area_preserves_single_row_viewport() {
-        let area = floating_modal_area(Rect::new(0, 0, 80, 1));
-
-        assert_eq!(area, Rect::new(0, 0, 80, 1));
-    }
-
-    #[test]
-    fn clip_transcript_area_stops_at_overlapping_modal_top() {
-        let transcript = Rect::new(2, 5, 76, 18);
-        let modal = Rect::new(0, 14, 80, 10);
-
-        assert_eq!(clip_transcript_area(transcript, modal), Rect::new(2, 5, 76, 9));
-    }
-
-    #[test]
-    fn clip_transcript_area_preserves_non_overlapping_transcript() {
-        let transcript = Rect::new(2, 5, 76, 8);
-        let modal = Rect::new(0, 14, 80, 10);
-
-        assert_eq!(clip_transcript_area(transcript, modal), transcript);
-    }
-
-    #[test]
-    fn clip_transcript_area_handles_horizontal_non_overlap() {
-        let transcript = Rect::new(2, 5, 20, 18);
-        let modal = Rect::new(30, 14, 20, 10);
-
-        assert_eq!(clip_transcript_area(transcript, modal), transcript);
-    }
-
-    #[test]
-    fn estimated_instruction_rows_counts_short_lines_verbatim() {
-        let lines = vec!["Choose an option".to_string(), "Second line".to_string()];
-        assert_eq!(estimated_modal_instruction_rows(&lines, 78), 2);
-    }
-
-    #[test]
-    fn estimated_instruction_rows_wraps_long_summary() {
-        let long = format!("Summary: {}", "word ".repeat(30));
-        let rows = estimated_modal_instruction_rows(&[long], 78);
-        assert!(rows >= 2, "long summary must claim wrapped rows, got {rows}");
-    }
-
-    #[test]
-    fn estimated_instruction_rows_treats_empty_as_single_row() {
-        assert_eq!(estimated_modal_instruction_rows(&[], 78), 1);
-        assert_eq!(estimated_modal_instruction_rows(&["   ".to_string()], 78), 1);
-    }
-
-    #[test]
-    fn estimated_instruction_rows_clamps_to_viewport() {
-        let lines = vec!["word ".repeat(60); 10];
-        assert_eq!(estimated_modal_instruction_rows(&lines, 78), MAX_INLINE_INSTRUCTION_ROWS);
-    }
-
-    #[test]
-    fn clip_transcript_area_handles_zero_and_constrained_rectangles() {
-        assert_eq!(clip_transcript_area(Rect::new(0, 0, 0, 10), Rect::new(0, 0, 10, 10)), Rect::new(0, 0, 0, 10));
-        assert_eq!(clip_transcript_area(Rect::new(0, 0, 10, 0), Rect::new(0, 0, 10, 1)), Rect::new(0, 0, 10, 0));
-        assert_eq!(clip_transcript_area(Rect::new(0, 0, 10, 1), Rect::new(0, 0, 10, 1)), Rect::new(0, 0, 10, 0));
-        assert_eq!(clip_transcript_area(Rect::new(0, 0, 10, 1), Rect::new(0, 1, 10, 1)), Rect::new(0, 0, 10, 1));
-    }
-}
+mod tests;

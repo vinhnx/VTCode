@@ -22,7 +22,7 @@ use vtcode_ui::tui::app::{
     InlineHandle, InlineListItem, InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission,
 };
 
-use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_permission_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(crate) enum HookApprovalDecision {
@@ -68,6 +68,7 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(true)),
             search_value: Some("approve allow yes run 1".to_string()),
+            ..Default::default()
         },
         InlineListItem {
             title: "Deny".to_string(),
@@ -76,10 +77,12 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(false)),
             search_value: Some("deny no skip block 2".to_string()),
+            ..Default::default()
         },
     ];
 
-    let outcome = show_overlay_and_wait(
+    handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::WaitingForApproval);
+    let outcome = show_permission_and_wait(
         handle,
         session,
         TransientRequest::List(ListOverlayRequest {
@@ -90,6 +93,7 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
             selected: Some(InlineListSelection::ToolApproval(false)),
             search: None,
             hotkeys: Vec::new(),
+            status: None,
         }),
         ctrl_c_state,
         ctrl_c_notify,
@@ -105,6 +109,7 @@ pub(crate) async fn prompt_workspace_hook_approval<S: UiSession + ?Sized>(
     )
     .await?;
 
+    handle.set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     Ok(match outcome {
         OverlayWaitOutcome::Submitted(decision) => decision,
         OverlayWaitOutcome::Cancelled

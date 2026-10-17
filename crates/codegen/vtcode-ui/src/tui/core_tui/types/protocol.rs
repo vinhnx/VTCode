@@ -1,3 +1,6 @@
+use crate::tui::core_tui::types::{
+    define_inline_message_commands, impl_inline_control_methods, impl_inline_message_methods,
+};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -6,7 +9,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::ContentPart;
 use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
 use super::selection::{InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig};
-use super::style::{InlineHeaderContext, InlineLinkRange, InlineSegment, InlineTextStyle, InlineTheme};
+use super::style::{InlineHeaderContext, InlineTextStyle, InlineTheme};
 use crate::tui::core_tui::session::config::AppearanceConfig;
 use crate::tui::options::FullscreenInteractionSettings;
 
@@ -18,9 +21,10 @@ pub struct SubmittedInput {
     pub text: String,
     pub attachments: Vec<ContentPart>,
     /// Whether this submission may be merged with other queued text-only
-    /// submissions of the same agent into a single model turn. Ctrl+Enter sets
-    /// this when it queues while busy; steered inputs bypass the queue
-    /// entirely and plain-Enter slash commands stay a one-per-turn dispatch.
+    /// submissions of the same agent into a single model turn. Ctrl+Enter and
+    /// Tab set this when they queue plain text while busy; busy plain-Enter
+    /// queues as its own non-batchable turn and slash commands stay a
+    /// one-per-turn dispatch.
     pub batchable: bool,
 }
 
@@ -100,115 +104,107 @@ impl PartialEq<&String> for SubmittedInput {
     }
 }
 
-pub enum InlineCommand {
-    AppendLine {
-        kind: InlineMessageKind,
-        segments: Vec<InlineSegment>,
-    },
-    AppendPastedMessage {
-        kind: InlineMessageKind,
-        text: String,
-        line_count: usize,
-    },
-    Inline {
-        kind: InlineMessageKind,
-        segment: InlineSegment,
-    },
-    ReplaceLast {
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-        link_ranges: Option<Vec<Vec<InlineLinkRange>>>,
-    },
-    SetPrompt {
-        prefix: String,
-        style: InlineTextStyle,
-    },
-    SetPlaceholder {
-        hint: Option<String>,
-        style: Option<InlineTextStyle>,
-    },
-    SetMessageLabels {
-        agent: Option<String>,
-        user: Option<String>,
-    },
-    SetHeaderContext {
-        context: Box<InlineHeaderContext>,
-    },
-    SetInputStatus {
-        left: Option<String>,
-        right: Option<String>,
-    },
-    SetActivityState(ActivityState),
-    SetTerminalTitleItems {
-        items: Option<Vec<String>>,
-    },
-    SetTerminalTitleThreadLabel {
-        label: Option<String>,
-    },
-    SetTerminalTitleGitBranch {
-        branch: Option<String>,
-    },
-    SetTheme {
-        theme: InlineTheme,
-    },
-    SetColorSchemeAuto {
-        enabled: bool,
-    },
-    SetAppearance {
-        appearance: AppearanceConfig,
-    },
-    SetFullscreenInteraction {
-        interaction: FullscreenInteractionSettings,
-    },
-    SetVimModeEnabled(bool),
-    SetQueuedInputs {
-        entries: Vec<String>,
-    },
-    SetSubprocessEntries {
-        entries: Vec<String>,
-    },
-    SetSubagentPreview {
-        text: Option<String>,
-    },
-    SetPrimaryAgent {
-        name: Option<String>,
-        color: Option<String>,
-    },
-    SetCursorVisible(bool),
-    SetInputEnabled(bool),
-    SetImageInputEnabled(bool),
-    SetInput(String),
-    RestoreInputDraft(SubmittedInput),
-    ApplySuggestedPrompt(String),
-    SetInlinePromptSuggestion {
-        suggestion: String,
-        llm_generated: bool,
-    },
-    ClearInlinePromptSuggestion,
-    ClearInput,
-    ForceRedraw,
-    ShowOverlay {
-        request: Box<OverlayRequest>,
-    },
-    CloseOverlay,
-    // App-only palette/history commands are defined in the app protocol layer.
-    ClearScreen,
-    SuspendEventLoop,
-    ResumeEventLoop,
-    ClearInputQueue,
-    StopEventStream,
-    StartEventStream,
-    SetSkipConfirmations(bool),
-    Shutdown,
-    /// Update reasoning stage in header context
-    SetReasoningStage(Option<String>),
+define_inline_message_commands! {
+    pub enum InlineCommand {
+        SetPrompt {
+            prefix: String,
+            style: InlineTextStyle,
+        },
+        SetPlaceholder {
+            hint: Option<String>,
+            style: Option<InlineTextStyle>,
+        },
+        SetMessageLabels {
+            agent: Option<String>,
+            user: Option<String>,
+        },
+        SetHeaderContext {
+            context: Box<InlineHeaderContext>,
+        },
+        SetInputStatus {
+            left: Option<String>,
+            right: Option<String>,
+        },
+        SetConfiguredInputStatus {
+            left: Option<String>,
+            right: Option<String>,
+        },
+        ProgramStatus(vtcode_commons::program_status::ProgramStatusUpdate),
+        SetActivityState(ActivityState),
+        UpdateProgress(vtcode_commons::ui_protocol::ProgressUpdate),
+        SetTerminalTitleItems {
+            items: Option<Vec<String>>,
+        },
+        SetTerminalTitleThreadLabel {
+            label: Option<String>,
+        },
+        SetTerminalTitleGitBranch {
+            branch: Option<String>,
+        },
+        SetTheme {
+            theme: InlineTheme,
+        },
+        SetColorSchemeAuto {
+            enabled: bool,
+        },
+        SetAppearance {
+            appearance: AppearanceConfig,
+        },
+        SetFullscreenInteraction {
+            interaction: FullscreenInteractionSettings,
+        },
+        SetVimModeEnabled(bool),
+        SetQueuedInputs {
+            entries: Vec<String>,
+        },
+        SetSubprocessEntries {
+            entries: Vec<String>,
+        },
+        SetSubagentPreview {
+            text: Option<String>,
+        },
+        SetPrimaryAgent {
+            name: Option<String>,
+            color: Option<String>,
+        },
+        SetCursorVisible(bool),
+        SetInputEnabled(bool),
+        SetImageInputEnabled(bool),
+        SetInput(String),
+        RestoreInputDraft(SubmittedInput),
+        ApplySuggestedPrompt(String),
+        SetInlinePromptSuggestion {
+            suggestion: String,
+            llm_generated: bool,
+        },
+        ClearInlinePromptSuggestion,
+        ClearInput,
+        ForceRedraw,
+        ShowOverlay {
+            request: Box<OverlayRequest>,
+        },
+        CloseOverlay,
+        // App-only palette/history commands are defined in the app protocol layer.
+        ClearScreen,
+        SuspendEventLoop,
+        ResumeEventLoop,
+        ClearInputQueue,
+        StopEventStream,
+        StartEventStream,
+        SetSkipConfirmations(bool),
+        Shutdown,
+        /// Update reasoning stage in header context
+        SetReasoningStage(Option<String>),
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum InlineEvent {
     Submit(SubmittedInput),
     QueueSubmit(SubmittedInput),
+    /// Mid-turn steer from external embedders. The built-in TUI no longer
+    /// emits this (busy input queues via `QueueSubmit`); the variant and its
+    /// handlers stay as the reserved external steering path.
     Steer(SubmittedInput),
     ProcessLatestQueued,
     /// Edit the newest queued input (pop into input buffer)
@@ -267,59 +263,8 @@ impl InlineHandle {
         let _ = self.sender.send(command);
     }
 
-    pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
-        self.send_command(InlineCommand::AppendLine { kind, segments });
-    }
-
-    pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
-        self.send_command(InlineCommand::AppendPastedMessage { kind, text, line_count });
-    }
-
-    pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {
-        self.send_command(InlineCommand::Inline { kind, segment });
-    }
-
-    pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
-        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: None });
-    }
-
-    pub fn replace_last_with_links(
-        &self,
-        count: usize,
-        kind: InlineMessageKind,
-        lines: Vec<Vec<InlineSegment>>,
-        link_ranges: Vec<Vec<InlineLinkRange>>,
-    ) {
-        self.send_command(InlineCommand::ReplaceLast { count, kind, lines, link_ranges: Some(link_ranges) });
-    }
-
-    pub fn suspend_event_loop(&self) {
-        self.send_command(InlineCommand::SuspendEventLoop);
-    }
-
-    pub fn resume_event_loop(&self) {
-        self.send_command(InlineCommand::ResumeEventLoop);
-    }
-
-    pub fn clear_input_queue(&self) {
-        self.send_command(InlineCommand::ClearInputQueue);
-    }
-
-    pub fn stop_event_stream(&self) {
-        self.send_command(InlineCommand::StopEventStream);
-    }
-
-    pub fn start_event_stream(&self) {
-        self.send_command(InlineCommand::StartEventStream);
-    }
-
-    pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
-        self.send_command(InlineCommand::SetPrompt { prefix, style });
-    }
-
-    pub fn set_placeholder(&self, hint: Option<String>) {
-        self.set_placeholder_with_style(hint, None);
-    }
+    impl_inline_message_methods!(InlineCommand);
+    impl_inline_control_methods!(InlineCommand);
 
     pub fn set_placeholder_with_style(&self, hint: Option<String>, style: Option<InlineTextStyle>) {
         self.send_command(InlineCommand::SetPlaceholder { hint, style });
@@ -327,110 +272,6 @@ impl InlineHandle {
 
     pub fn set_message_labels(&self, agent: Option<String>, user: Option<String>) {
         self.send_command(InlineCommand::SetMessageLabels { agent, user });
-    }
-
-    pub fn set_header_context(&self, context: InlineHeaderContext) {
-        self.send_command(InlineCommand::SetHeaderContext { context: Box::new(context) });
-    }
-
-    pub fn set_input_status(&self, left: Option<String>, right: Option<String>) {
-        self.send_command(InlineCommand::SetInputStatus { left, right });
-    }
-
-    pub fn set_activity_state(&self, state: ActivityState) {
-        self.send_command(InlineCommand::SetActivityState(state));
-    }
-
-    pub fn set_terminal_title_items(&self, items: Option<Vec<String>>) {
-        self.send_command(InlineCommand::SetTerminalTitleItems { items });
-    }
-
-    pub fn set_terminal_title_thread_label(&self, label: Option<String>) {
-        self.send_command(InlineCommand::SetTerminalTitleThreadLabel { label });
-    }
-
-    pub fn set_terminal_title_git_branch(&self, branch: Option<String>) {
-        self.send_command(InlineCommand::SetTerminalTitleGitBranch { branch });
-    }
-
-    pub fn set_theme(&self, theme: InlineTheme) {
-        self.send_command(InlineCommand::SetTheme { theme });
-    }
-
-    pub fn set_color_scheme_auto(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetColorSchemeAuto { enabled });
-    }
-
-    pub fn set_appearance(&self, appearance: AppearanceConfig) {
-        self.send_command(InlineCommand::SetAppearance { appearance });
-    }
-
-    pub fn set_fullscreen_interaction(&self, interaction: FullscreenInteractionSettings) {
-        self.send_command(InlineCommand::SetFullscreenInteraction { interaction });
-    }
-
-    pub fn set_vim_mode_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetVimModeEnabled(enabled));
-    }
-
-    pub fn set_queued_inputs(&self, entries: Vec<String>) {
-        self.send_command(InlineCommand::SetQueuedInputs { entries });
-    }
-
-    pub fn set_subprocess_entries(&self, entries: Vec<String>) {
-        self.send_command(InlineCommand::SetSubprocessEntries { entries });
-    }
-
-    pub fn set_subagent_preview(&self, text: Option<String>) {
-        self.send_command(InlineCommand::SetSubagentPreview { text });
-    }
-
-    pub fn set_primary_agent(&self, name: Option<String>, color: Option<String>) {
-        self.send_command(InlineCommand::SetPrimaryAgent { name, color });
-    }
-
-    pub fn set_cursor_visible(&self, visible: bool) {
-        self.send_command(InlineCommand::SetCursorVisible(visible));
-    }
-
-    pub fn set_input_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetInputEnabled(enabled));
-    }
-
-    pub fn set_image_input_enabled(&self, enabled: bool) {
-        self.send_command(InlineCommand::SetImageInputEnabled(enabled));
-    }
-
-    pub fn set_input(&self, content: String) {
-        self.send_command(InlineCommand::SetInput(content));
-    }
-
-    pub fn restore_input_draft(&self, input: SubmittedInput) {
-        self.send_command(InlineCommand::RestoreInputDraft(input));
-    }
-
-    pub fn apply_suggested_prompt(&self, content: String) {
-        self.send_command(InlineCommand::ApplySuggestedPrompt(content));
-    }
-
-    pub fn set_inline_prompt_suggestion(&self, suggestion: String, llm_generated: bool) {
-        self.send_command(InlineCommand::SetInlinePromptSuggestion { suggestion, llm_generated });
-    }
-
-    pub fn clear_inline_prompt_suggestion(&self) {
-        self.send_command(InlineCommand::ClearInlinePromptSuggestion);
-    }
-
-    pub fn clear_input(&self) {
-        self.send_command(InlineCommand::ClearInput);
-    }
-
-    pub fn force_redraw(&self) {
-        self.send_command(InlineCommand::ForceRedraw);
-    }
-
-    pub fn shutdown(&self) {
-        self.send_command(InlineCommand::Shutdown);
     }
 
     pub fn show_overlay(&self, request: OverlayRequest) {
@@ -466,6 +307,20 @@ impl InlineHandle {
         search: Option<InlineListSearchConfig>,
         footer_hint: Option<String>,
     ) {
+        self.show_list_modal_with_status(title, lines, items, selected, search, footer_hint, None);
+    }
+
+    /// Show a list modal with an optional status strip (last action feedback).
+    pub fn show_list_modal_with_status(
+        &self,
+        title: String,
+        lines: Vec<String>,
+        items: Vec<InlineListItem>,
+        selected: Option<InlineListSelection>,
+        search: Option<InlineListSearchConfig>,
+        footer_hint: Option<String>,
+        status: Option<crate::tui::core_tui::types::InlineStatus>,
+    ) {
         self.show_overlay(OverlayRequest::List(ListOverlayRequest {
             title,
             lines,
@@ -474,6 +329,7 @@ impl InlineHandle {
             search,
             footer_hint,
             hotkeys: Vec::new(),
+            status,
         }));
     }
 
@@ -483,18 +339,6 @@ impl InlineHandle {
 
     pub fn close_modal(&self) {
         self.close_overlay();
-    }
-
-    pub fn clear_screen(&self) {
-        self.send_command(InlineCommand::ClearScreen);
-    }
-
-    pub fn set_skip_confirmations(&self, skip: bool) {
-        self.send_command(InlineCommand::SetSkipConfirmations(skip));
-    }
-
-    pub fn set_reasoning_stage(&self, stage: Option<String>) {
-        self.send_command(InlineCommand::SetReasoningStage(stage));
     }
 }
 

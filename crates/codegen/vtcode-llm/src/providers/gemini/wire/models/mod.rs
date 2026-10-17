@@ -224,4 +224,14 @@ impl ToolConfig {
             include_server_side_tool_invocations: None,
         }
     }
+
+    /// Whether the config carries nothing the API does not already assume, so a
+    /// request may omit `toolConfig` without changing provider behaviour.
+    pub(crate) fn is_default(&self) -> bool {
+        self.include_server_side_tool_invocations != Some(true)
+            && self
+                .function_calling_config
+                .as_ref()
+                .is_none_or(super::function_calling::FunctionCallingConfig::is_default_auto)
+    }
 }

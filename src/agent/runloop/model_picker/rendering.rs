@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::fmt::Write;
 
+use vtcode_commons::modal_hints::MODEL_PICKER_NAVIGATE_FILTER;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::models::{ModelId, Provider};
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -14,21 +15,23 @@ use super::selection::SelectionDetail;
 
 mod prompts;
 pub(super) use prompts::{
-    prompt_api_key_plain, prompt_custom_model_entry, prompt_mimo_auth_method_plain, prompt_reasoning_plain,
-    prompt_service_tier_plain, render_mimo_auth_method_inline, render_reasoning_inline, render_service_tier_inline,
-    show_secure_api_modal,
+    DECISIONS_PROBE_DISABLE_ACTION, DECISIONS_PROBE_ENABLE_ACTION, DECISIONS_PROBE_SKIP_ACTION, back_to_model_list_row,
+    prompt_api_key_plain, prompt_custom_model_entry, prompt_decisions_probe_plain, prompt_mimo_auth_method_plain,
+    prompt_reasoning_plain, prompt_service_tier_plain, render_decisions_probe_inline, render_mimo_auth_method_inline,
+    render_reasoning_inline, render_service_tier_inline, show_secure_api_modal,
 };
 
 pub(super) const CLOSE_THEME_MESSAGE: &str = "Close the active model picker before selecting a theme.";
 const STEP_ONE_TITLE: &str = "Model";
 const STEP_TWO_TITLE: &str = "Reasoning";
 const STEP_THREE_TITLE: &str = "Service Tier";
+const STEP_FOUR_TITLE: &str = "Decisions Probe";
 
 pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str = "Provide the provider name and model identifier manually.";
-const CUSTOM_PROVIDER_BADGE: &str = "Manual";
-const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
+/// Selection action for the "← Back to model list" row on follow-up steps.
+pub(super) const PICKER_BACK_ACTION: &str = "model_picker:back";
 const TOOLS_LABEL: &str = "Tools";
 const NO_TOOLS_LABEL: &str = "No tools";
 const CODEX_RUNTIME_NOTE: &str =
@@ -88,11 +91,11 @@ fn input_modalities_label(input_modalities: &[&str]) -> Option<String> {
 
 fn compact_context_window_label(context_window_size: usize) -> String {
     if context_window_size >= 1_000_000 {
-        format!("{}M", context_window_size / 1_000_000)
+        format!("{}M context", context_window_size / 1_000_000)
     } else if context_window_size >= 1_000 {
-        format!("{}K", context_window_size / 1_000)
+        format!("{}K context", context_window_size / 1_000)
     } else {
-        context_window_size.to_string()
+        format!("{context_window_size} context")
     }
 }
 
@@ -155,15 +158,13 @@ pub(super) fn static_model_search_terms(model: &ModelId, supports_reasoning: boo
 }
 
 fn subtitle_from_segments(current: bool, segments: Vec<String>) -> Option<String> {
-    let mut parts = Vec::new();
-    if current {
-        parts.push(CURRENT_BADGE.to_string());
-    }
-    parts.extend(segments);
-    if parts.is_empty() {
+    // `Current` is a badge (tone `Current`), not subtitle text — metadata
+    // stays dimmed and the eye lands on the badge/value first.
+    let _ = current;
+    if segments.is_empty() {
         None
     } else {
-        Some(parts.join(" • "))
+        Some(segments.join(" • "))
     }
 }
 
@@ -279,7 +280,10 @@ fn should_show_codex_runtime_note(current_provider: &str) -> bool {
 }
 
 pub(super) fn step_one_header_lines(current_provider: &str, current_model: &str) -> Vec<String> {
-    let mut lines = vec![current_model_line(current_provider, current_model)];
+    let mut lines = vec![
+        "Step 1 · Model".to_string(),
+        current_model_line(current_provider, current_model),
+    ];
     if should_show_codex_runtime_note(current_provider) {
         lines.push(CODEX_RUNTIME_NOTE.to_string());
     }
@@ -309,24 +313,34 @@ pub(super) fn render_step_one_inline(
             continue;
         }
 
+        // Provider section header (non-selectable) so long model lists group
+        // visually by vendor.
+        items.push(vtcode_ui::design::list::group_header(provider.label()));
+
         for idx in provider_model_indexes {
             let Some(option) = options.get(*idx) else {
                 continue;
             };
-            items.push(InlineListItem {
-                title: option.display.to_string(),
-                subtitle: static_model_subtitle(option, current_provider, current_model),
-                badge: Some(provider.label().to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::Model(*idx)),
-                search_value: Some(model_search_value(
-                    provider,
-                    &option.display,
-                    &option.id,
-                    Some(&option.description),
-                    &static_model_search_terms(&option.model, option.supports_reasoning),
-                )),
-            });
+            let is_current = is_current_model(option.provider, &option.id, current_provider, current_model);
+            let description = option.description.trim();
+            let mut row = vtcode_ui::design::list::setting(
+                option.display.clone(),
+                static_model_subtitle(option, current_provider, current_model),
+                (!description.is_empty()).then(|| description.to_string()),
+                Some(InlineListSelection::Model(*idx)),
+            );
+            if is_current {
+                row.badge = Some(CURRENT_BADGE.to_string());
+                row.badge_tone = vtcode_commons::ui_protocol::InlineTone::Current;
+            }
+            row.search_value = Some(model_search_value(
+                provider,
+                &option.display,
+                &option.id,
+                Some(&option.description),
+                &static_model_search_terms(&option.model, option.supports_reasoning),
+            ));
+            items.push(row);
         }
 
         if provider.is_dynamic() {
@@ -342,96 +356,98 @@ pub(super) fn render_step_one_inline(
                         }
                         terms
                     };
-                    items.push(InlineListItem {
-                        title: detail.model_display.clone(),
-                        subtitle: dynamic_model_subtitle(
+                    let mut row = vtcode_ui::design::list::setting(
+                        detail.model_display.clone(),
+                        dynamic_model_subtitle(
                             provider,
                             &detail.model_id,
                             detail.reasoning_supported,
                             current_provider,
                             current_model,
                         ),
-                        badge: Some(provider.label().to_string()),
-                        indent: 0,
-                        selection: Some(InlineListSelection::DynamicModel(*entry_index)),
-                        search_value: Some(model_search_value(
-                            provider,
-                            &detail.model_display,
-                            &detail.model_id,
-                            None,
-                            &extra_terms,
-                        )),
-                    });
+                        None,
+                        Some(InlineListSelection::DynamicModel(*entry_index)),
+                    );
+                    row.search_value =
+                        Some(model_search_value(provider, &detail.model_display, &detail.model_id, None, &extra_terms));
+                    items.push(row);
                 }
             }
 
             if let Some(warning) = dynamic_models.warning_for(provider) {
-                items.push(InlineListItem {
-                    title: format!("{} cache notice", provider.label()),
-                    subtitle: Some(warning.to_string()),
-                    badge: Some("Action".to_string()),
-                    indent: 0,
-                    selection: Some(InlineListSelection::RefreshDynamicModels),
-                    search_value: Some(format!("{} cache", provider.label())),
-                });
+                items.push(vtcode_ui::design::list::action(
+                    format!("{} cache notice", provider.label()),
+                    warning,
+                    None,
+                    vtcode_commons::ui_protocol::InlineTone::Warning,
+                    Some(InlineListSelection::RefreshDynamicModels),
+                ));
             }
 
             if dynamic_indexes.is_empty()
                 && let Some(error) = dynamic_models.error_for(provider)
             {
-                items.push(InlineListItem {
-                    title: format!("{} unavailable", provider.label()),
-                    subtitle: Some(error.to_string()),
-                    badge: Some("Action".to_string()),
-                    indent: 0,
-                    selection: Some(InlineListSelection::RefreshDynamicModels),
-                    search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
-                });
+                items.push(
+                    vtcode_ui::design::list::action(
+                        format!("{} unavailable", provider.label()),
+                        error,
+                        None,
+                        vtcode_commons::ui_protocol::InlineTone::Warning,
+                        Some(InlineListSelection::RefreshDynamicModels),
+                    )
+                    .with_search_value(format!("{} setup", provider.label().to_ascii_lowercase())),
+                );
             }
         } else if provider == Provider::HuggingFace && provider_model_indexes.is_empty() {
-            items.push(InlineListItem {
-                title: "Custom Hugging Face model".to_string(),
-                subtitle: Some("Enter any HF model id (e.g., huggingface <org>/<model>)".to_string()),
-                badge: Some("Custom".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::CustomModel),
-                search_value: Some("huggingface custom".to_string()),
-            });
+            items.push(
+                vtcode_ui::design::list::action(
+                    "Custom Hugging Face model",
+                    "Enter any HF model id (e.g., huggingface <org>/<model>)",
+                    None,
+                    vtcode_commons::ui_protocol::InlineTone::Accent,
+                    Some(InlineListSelection::CustomModel),
+                )
+                .with_search_value("huggingface custom"),
+            );
         }
     }
 
     if !custom_providers.is_empty() {
         for (index, selection) in custom_providers.iter().enumerate() {
-            items.push(InlineListItem {
-                title: custom_provider_picker_title(selection).to_string(),
-                subtitle: Some(custom_provider_picker_subtitle(selection, current_provider, current_model)),
-                badge: Some("Custom".to_string()),
-                indent: 0,
-                selection: Some(InlineListSelection::CustomProvider(index)),
-                search_value: Some(custom_provider_search_value(selection)),
-            });
+            let mut row = vtcode_ui::design::list::setting(
+                custom_provider_picker_title(selection).to_string(),
+                Some(custom_provider_picker_subtitle(selection, current_provider, current_model)),
+                None,
+                Some(InlineListSelection::CustomProvider(index)),
+            );
+            row.search_value = Some(custom_provider_search_value(selection));
+            items.push(row);
         }
     }
 
-    items.push(InlineListItem {
-        title: "Refresh dynamic model lists".to_string(),
-        subtitle: Some(
-            "Re-query GitHub Copilot, LM Studio, and Ollama model lists without closing the picker.".to_string(),
-        ),
-        badge: Some("Action".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::RefreshDynamicModels),
-        search_value: Some("refresh dynamic models".to_string()),
-    });
+    items.push(divider_item());
 
-    items.push(InlineListItem {
-        title: CUSTOM_PROVIDER_TITLE.to_string(),
-        subtitle: Some(CUSTOM_PROVIDER_SUBTITLE.to_string()),
-        badge: Some(CUSTOM_PROVIDER_BADGE.to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::CustomModel),
-        search_value: Some("custom provider".to_string()),
-    });
+    items.push(
+        vtcode_ui::design::list::action(
+            "Refresh dynamic model lists",
+            "Re-query Copilot, LM Studio, and Ollama without closing the picker.",
+            None,
+            vtcode_commons::ui_protocol::InlineTone::Neutral,
+            Some(InlineListSelection::RefreshDynamicModels),
+        )
+        .with_search_value("refresh dynamic models"),
+    );
+
+    items.push(
+        vtcode_ui::design::list::action(
+            CUSTOM_PROVIDER_TITLE,
+            CUSTOM_PROVIDER_SUBTITLE,
+            None,
+            vtcode_commons::ui_protocol::InlineTone::Accent,
+            Some(InlineListSelection::CustomModel),
+        )
+        .with_search_value("custom provider"),
+    );
 
     let lines = step_one_header_lines(current_provider, current_model);
 
@@ -440,7 +456,15 @@ pub(super) fn render_step_one_inline(
         placeholder: Some("provider, name, id, or capability".to_string()),
         fuzzy: false,
     };
-    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, selected, Some(search));
+    renderer.show_list_modal_with_status(
+        STEP_ONE_TITLE,
+        lines,
+        items,
+        selected,
+        Some(search),
+        Some(MODEL_PICKER_NAVIGATE_FILTER.to_string()),
+        None,
+    );
 
     Ok(())
 }
@@ -565,6 +589,13 @@ pub(super) fn render_step_one_plain(
 }
 
 const HUGGINGFACE_DOCS_URL: &str = "https://huggingface.co/docs/inference-providers";
+
+/// Full-width, non-selectable separator between the provider list and the
+/// trailing action rows. An empty title is the canonical untitled divider:
+/// `is_divider_title` accepts it and the renderer expands it to content width.
+pub(super) fn divider_item() -> InlineListItem {
+    vtcode_ui::design::list::group_divider()
+}
 
 fn provider_group_divider_line() -> String {
     let modal_width = usize::from(ui::MODAL_MIN_WIDTH);

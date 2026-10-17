@@ -37,6 +37,37 @@ pub(crate) fn openrouter_presets() -> Vec<ModelPreset> {
             context_window: Some(131_072),
         },
         ModelPreset {
+            id: "openrouter/meta/muse-spark-open".to_string(),
+            model: "meta/muse-spark-open".to_string(),
+            display_name: "Muse Spark Open (OpenRouter)".to_string(),
+            description: "Meta Muse Spark Open 816B-A42B open-weight flagship for coding and agentic work with 1M context via OpenRouter".to_string(),
+            provider: Provider::OpenRouter,
+            default_reasoning_effort: ReasoningEffortLevel::High,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Low,
+                    description: "Fast".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::XHigh,
+                    description: "Maximum".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(1_048_576),
+        },
+        ModelPreset {
             id: "openrouter/deepseek-ai/DeepSeek-V4.1-Flash".to_string(),
             model: "deepseek-ai/DeepSeek-V4.1-Flash".to_string(),
             display_name: "DeepSeek V4.1 Flash (OpenRouter)".to_string(),

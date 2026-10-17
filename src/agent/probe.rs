@@ -7,12 +7,16 @@
 //!
 //! Instead, [`start_terminal_palette_probe`] spawns the probe on a blocking
 //! thread early during bootstrap so it overlaps with startup-context
-//! resolution (config loading, auth probing, theme determination).  The
-//! Session UI never awaits this probe before first paint. It calls
-//! `note_crossterm_raw_mode()` before spawning the TUI so a late probe
-//! `RawModeGuard` restore cannot undo crossterm raw mode, then
-//! [`await_terminal_palette_probe`] after spawn drains TTY replies and
-//! settles theme before the first model turn.
+//! resolution (config loading, auth probing, theme determination). The
+//! typeable shell awaits it before crossterm owns the TTY (bounded ~190 ms
+//! worst case, usually instant since startup already overlapped it), so
+//! late `OSC 10/11/4` replies cannot win the `/dev/tty` read race against
+//! the TUI event loop and leak as `10;rgb:...` keystrokes; the vendored
+//! crossterm `parse_osc` backstop swallows stragglers from slow terminals.
+//! `note_crossterm_raw_mode()` is still called before spawning the TUI so a
+//! late probe `RawModeGuard` restore cannot undo crossterm raw mode, and
+//! [`await_terminal_palette_probe`] after spawn settles theme before the
+//! first model turn.
 //!
 //! # Correctness guarantees
 //!

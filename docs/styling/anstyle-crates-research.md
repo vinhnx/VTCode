@@ -2,7 +2,9 @@
 
 ## Overview
 
-**anstyle-git** and **anstyle-ls** are complementary Rust crates that parse domain-specific color configuration syntaxes into standardized ANSI styles via the `anstyle` crate. This research explores how their parsing approaches can improve vtcode's styling system.
+**anstyle-git** and **anstyle-ls** are complementary Rust crates that parse domain-specific color configuration syntaxes
+into standardized ANSI styles via the `anstyle` crate. This research explores how their parsing approaches can improve
+vtcode's styling system.
 
 ## Crate Analysis
 
@@ -11,6 +13,7 @@
 **Purpose**: Parses Git's color configuration syntax
 
 **Key Features**:
+
 - Parses Git style descriptions (e.g., `"bold red blue"`)
 - Supports keywords: `bold`, `dim`, `italic`, `underline`, `reverse`, `strikethrough`
 - Supports named colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`
@@ -19,6 +22,7 @@
 - Returns `anstyle::Style` (composable style objects)
 
 **Example**:
+
 ```rust
 let style = anstyle_git::parse("bold red blue").unwrap();
 // Result: red foreground, blue background, with bold modifier
@@ -28,6 +32,7 @@ let hyperlink_style = anstyle_git::parse("#0000ee ul").unwrap();
 ```
 
 **Syntax Grammar**:
+
 - Words separated by whitespace
 - First color term is foreground
 - Second color term is background
@@ -39,6 +44,7 @@ let hyperlink_style = anstyle_git::parse("#0000ee ul").unwrap();
 **Purpose**: Parses `LS_COLORS` environment variable syntax
 
 **Key Features**:
+
 - Parses file type patterns with ANSI codes (e.g., `di=01;34` for directories)
 - Supports ANSI 8-bit escape codes (semicolon-separated)
 - Common file type codes:
@@ -50,13 +56,16 @@ let hyperlink_style = anstyle_git::parse("#0000ee ul").unwrap();
 - Handles both foreground and background in single code sequence
 
 **Example**:
+
 ```rust
 let style = anstyle_ls::parse("34;03").unwrap();
 // Result: blue foreground (34), italic (03)
 ```
 
 **Syntax Grammar**:
-- ANSI codes: `01` (bold), `03` (italic), `04` (underline), `30-37` (colors), `90-97` (bright colors), `40-47` (bg colors)
+
+- ANSI codes: `01` (bold), `03` (italic), `04` (underline), `30-37` (colors), `90-97` (bright colors), `40-47` (bg
+  colors)
 - Semicolon-separated sequence of codes
 - File type pattern keys precede the colon (e.g., `di=01;34:ln=36`)
 
@@ -67,6 +76,7 @@ let style = anstyle_ls::parse("34;03").unwrap();
 **Location**: `crates/codegen/vtcode-core/src/ui/tui/style.rs`, `crates/codegen/vtcode-core/src/ui/theme.rs`
 
 **Current Stack**:
+
 1. **anstyle** (v1.0) - Already integrated for ANSI style representation
 2. **anstyle-parse** (v0.2) - Parses ANSI escape sequences from terminal output
 3. **anstyle-crossterm** (v4.0) - Bridge to crossterm TUI library
@@ -74,7 +84,8 @@ let style = anstyle_ls::parse("34;03").unwrap();
 5. **catppuccin** (v2.5) - Theme color palettes
 
 **Styling Pipeline**:
-```
+
+```text
 anstyle::Style (abstract)
   ↓
 convert_style() → InlineTextStyle (limited: color, bold, italic only)
@@ -85,9 +96,13 @@ TUI rendering
 ```
 
 **Limitations**:
-1. **Incomplete Effect Support**: Only handles `bold` and `italic`, ignores `dim`, `underline`, `strikethrough`, `reverse`
-2. **No Config String Parsing**: Hard-coded theme palettes; no support for Git-style or LS_COLORS-style configuration strings
-3. **Manual Color Mixing**: Uses custom functions (`mix()`, `lighten()`, `ensure_contrast()`) instead of leveraging ecosystem tools
+
+1. **Incomplete Effect Support**: Only handles `bold` and `italic`, ignores `dim`, `underline`, `strikethrough`,
+   `reverse`
+2. **No Config String Parsing**: Hard-coded theme palettes; no support for Git-style or LS_COLORS-style configuration
+   strings
+3. **Manual Color Mixing**: Uses custom functions (`mix()`, `lighten()`, `ensure_contrast()`) instead of leveraging
+   ecosystem tools
 4. **Limited Background Support**: `InlineTextStyle` doesn't properly model background colors
 5. **Cargo.toml**: Missing `anstyle-git` and `anstyle-ls` dependencies
 
@@ -108,6 +123,7 @@ anstyle-query = "1.0"
 ```
 
 **Benefits**:
+
 - Parse Git config colors from `.git/config`
 - Parse file listing colors from `LS_COLORS` env var
 - Reduce custom parsing code
@@ -115,6 +131,7 @@ anstyle-query = "1.0"
 ### 2. Expand InlineTextStyle to Support Full Effects
 
 **Current** (`crates/codegen/vtcode-core/src/ui/tui/types.rs`):
+
 ```rust
 pub struct InlineTextStyle {
     pub color: Option<AnsiColorEnum>,
@@ -124,6 +141,7 @@ pub struct InlineTextStyle {
 ```
 
 **Improved**:
+
 ```rust
 use anstyle::Effects;
 
@@ -138,17 +156,17 @@ impl InlineTextStyle {
         self.effects = self.effects | Effects::BOLD;
         self
     }
-    
+
     pub fn italic(mut self) -> Self {
         self.effects = self.effects | Effects::ITALIC;
         self
     }
-    
+
     pub fn underline(mut self) -> Self {
         self.effects = self.effects | Effects::UNDERLINE;
         self
     }
-    
+
     pub fn dim(mut self) -> Self {
         self.effects = self.effects | Effects::DIMMED;
         self
@@ -175,14 +193,14 @@ impl ThemeConfigParser {
             anyhow::anyhow!("Failed to parse Git style: {}", e)
         })
     }
-    
+
     /// Parse LS_COLORS style codes for file colorization
     pub fn parse_ls_colors(input: &str) -> anyhow::Result<Style> {
         anstyle_ls::parse(input).map_err(|e| {
             anyhow::anyhow!("Failed to parse LS_COLORS: {}", e)
         })
     }
-    
+
     /// Parse custom theme string (supports both Git and LS syntax)
     pub fn parse_style(input: &str, dialect: StyleDialect) -> anyhow::Result<Style> {
         match dialect {
@@ -218,10 +236,10 @@ impl FileColorizer {
             ls_colors: env::var("LS_COLORS").ok(),
         }
     }
-    
+
     pub fn style_for_file(&self, path: &Path) -> Option<anstyle::Style> {
         let ls_colors = self.ls_colors.as_ref()?;
-        
+
         // Determine file type from path
         let file_type = if path.is_dir() {
             "di"  // directory
@@ -234,7 +252,7 @@ impl FileColorizer {
                 .map(|ext| format!("*.{}", ext).leak())
                 .unwrap_or("fi")  // fallback: file
         };
-        
+
         // Parse LS_COLORS and extract style for this file type
         anstyle_ls::parse(ls_colors)
             .ok()
@@ -262,23 +280,23 @@ impl GitColorConfig {
     pub fn from_git_config(config_path: &Path) -> anyhow::Result<Self> {
         // Read .git/config
         let content = std::fs::read_to_string(config_path)?;
-        
+
         // Parse color sections
         // [color "diff"] new = green
         // [color "diff"] old = red
         // [color "diff"] context = default
-        
+
         let diff_new = Self::extract_color_style(&content, "diff", "new")?;
         let diff_old = Self::extract_color_style(&content, "diff", "old")?;
         let diff_context = Self::extract_color_style(&content, "diff", "context")?;
-        
+
         Ok(Self {
             diff_new,
             diff_old,
             diff_context,
         })
     }
-    
+
     fn extract_color_style(
         content: &str,
         section: &str,
@@ -308,7 +326,7 @@ fn convert_style_bg_color(style: &AnsiStyle) -> Option<AnsiColorEnum> {
 
 pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
     let effects = style.get_effects();
-    
+
     InlineTextStyle {
         color: convert_style_color(&style),
         bg_color: convert_style_bg_color(&style),
@@ -330,17 +348,17 @@ pub fn ratatui_style_from_inline(
     fallback: Option<AnsiColorEnum>,
 ) -> Style {
     let mut resolved = Style::default();
-    
+
     // Foreground color
     if let Some(color) = style.color.or(fallback) {
         resolved = resolved.fg(ratatui_color_from_ansi(color));
     }
-    
+
     // Background color (NEW)
     if let Some(color) = style.bg_color {
         resolved = resolved.bg(ratatui_color_from_ansi(color));
     }
-    
+
     // Effects
     let effects = style.effects;
     if effects.contains(Effects::BOLD) {
@@ -359,7 +377,7 @@ pub fn ratatui_style_from_inline(
         resolved = resolved.add_modifier(Modifier::REVERSED);
     }
     // Note: strikethrough not widely supported in ratatui
-    
+
     resolved
 }
 ```
@@ -367,39 +385,42 @@ pub fn ratatui_style_from_inline(
 ## Implementation Priority
 
 ### Phase 1: Foundation (Low Risk)
+
 1. Add `anstyle-git` and `anstyle-ls` to Cargo.toml
 2. Create `theme_parser.rs` module with basic parsing functions
 3. Update `InlineTextStyle` to include `bg_color` and `effects`
 
 ### Phase 2: Integration (Medium Risk)
-4. Update `convert_style()` and `ratatui_style_from_inline()` for full effects
-5. Add Git config color parsing to diff renderer
-6. Update tests for new styling capabilities
+
+1. Update `convert_style()` and `ratatui_style_from_inline()` for full effects
+2. Add Git config color parsing to diff renderer
+3. Update tests for new styling capabilities
 
 ### Phase 3: Features (Lower Risk, High Value)
-7. Implement `FileColorizer` for LS_COLORS support
-8. Add environment variable parsing for system colors
-9. Support custom theme files with Git/LS syntax
+
+1. Implement `FileColorizer` for LS_COLORS support
+2. Add environment variable parsing for system colors
+3. Support custom theme files with Git/LS syntax
 
 ## Benefits Summary
 
-| Aspect | Current | Improved |
-|--------|---------|----------|
-| **Effect Support** | bold, italic only | bold, dim, italic, underline, strikethrough, reverse |
-| **Configuration** | Hard-coded palettes | Parse Git/LS configs + custom files |
-| **Background Colors** | Not supported | Full support via `bg_color` |
-| **System Integration** | None | Read LS_COLORS, .git/config, custom configs |
-| **Code Reuse** | Custom parsing | Leverage `anstyle-git`, `anstyle-ls` |
-| **WCAG Compliance** | Partial (contrast checking) | Enhanced with full effect control |
+| Aspect                 | Current                     | Improved                                             |
+| ---------------------- | --------------------------- | ---------------------------------------------------- |
+| **Effect Support**     | bold, italic only           | bold, dim, italic, underline, strikethrough, reverse |
+| **Configuration**      | Hard-coded palettes         | Parse Git/LS configs + custom files                  |
+| **Background Colors**  | Not supported               | Full support via `bg_color`                          |
+| **System Integration** | None                        | Read LS_COLORS, .git/config, custom configs          |
+| **Code Reuse**         | Custom parsing              | Leverage `anstyle-git`, `anstyle-ls`                 |
+| **WCAG Compliance**    | Partial (contrast checking) | Enhanced with full effect control                    |
 
 ## Risks & Mitigations
 
-| Risk | Impact | Mitigation |
-|------|--------|-----------|
-| Ratatui doesn't support all effects | Medium | Test with strikethrough, fallback gracefully |
-| Breaking changes to InlineTextStyle | High | Add deprecation layer, update all callers systematically |
-| Performance of Git config parsing | Low | Cache parsed configs, lazy initialization |
-| LS_COLORS parsing on non-Unix systems | Low | Graceful degradation (no-op on Windows) |
+| Risk                                  | Impact | Mitigation                                               |
+| ------------------------------------- | ------ | -------------------------------------------------------- |
+| Ratatui doesn't support all effects   | Medium | Test with strikethrough, fallback gracefully             |
+| Breaking changes to InlineTextStyle   | High   | Add deprecation layer, update all callers systematically |
+| Performance of Git config parsing     | Low    | Cache parsed configs, lazy initialization                |
+| LS_COLORS parsing on non-Unix systems | Low    | Graceful degradation (no-op on Windows)                  |
 
 ## Related Files
 

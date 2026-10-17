@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde_json::Value;
+use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::{ToolDisplayMode, ToolOutputMode};
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -110,10 +110,8 @@ pub(crate) async fn render_terminal_command_panel(
     // Keep inline streaming behavior only while the PTY is still running.
     // Once completed, always render the final captured output.
     let inline_streaming = is_pty_session && renderer.prefers_untruncated_output() && !is_completed;
-    let compact_completed_pipe = renderer.supports_inline_ui()
-        && renderer.tool_display_mode() == ToolDisplayMode::Compact
-        && is_completed
-        && !is_pty_session;
+    let compact_completed_pipe =
+        renderer.supports_inline_ui() && renderer.is_compact_display() && is_completed && !is_pty_session;
     let render_spool_reference_only =
         is_completed && tool_intent::should_use_spool_reference_only(None, unwrapped_payload);
 

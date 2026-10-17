@@ -1,70 +1,15 @@
 import { InMemoryBackend, VtCodeBackend, buildTurnPrompt, connectVtCode, createBackend, createUnifiedDiff, digest, MAX_FILE_BYTES } from "./backend.ts";
+import { $ } from "./app-elements.ts";
+import { createEvidenceController } from "./evidence-controller.ts";
+import { createSettingsController } from "./settings-controller.ts";
 import { CodeEditor } from "./editor.ts";
-import { browserOrigin, webmcpDeploymentForOrigin } from "./deployments.ts";
-import { loadBrowserSettings, loadBrowserState, saveBrowserSettings, saveBrowserState, type StorageLike } from "./persistence.ts";
-import { createWebMcpEvidenceRecorder, type WebMcpEvidenceRecorder } from "./webmcp-evidence.ts";
-import { createWebMcpTools, registerWebMcpTools, replaceExactText, type ModelContext, type StageTextEditInput, type ToolExecutionOptions, type WebMcpRegistration, type WebMcpTool } from "./webmcp.ts";
+import { browserOrigin } from "./deployments.ts";
+import { loadBrowserSettings, loadBrowserState, saveBrowserState, type StorageLike } from "./persistence.ts";
+import { createWebMcpEvidenceRecorder } from "./webmcp-evidence.ts";
+import { createWebMcpTools, registerWebMcpTools, replaceExactText, type ModelContext, type StageTextEditInput, type ToolExecutionOptions, type WebMcpRegistration } from "./webmcp.ts";
 import { BackendError, errorCode, errorMessage, isRecord, type BackendConnectionEvent, type BackendEvent, type ClientProposal, type EditorStateForWebMcp, type FileSnapshot, type Panel, type PatchProposal, type PersistedBrowserState, type RuntimeStatus, type SearchMatch, type SearchResult, type StatusPayload, type TreeNode, type WebMcpEnvironmentState, type WorkspaceFile } from "./types.ts";
 import "../styles.css";
-
-interface AppElements {
-  readonly [id: string]: HTMLElement;
-  readonly editor: HTMLDivElement;
-  readonly toast: HTMLDivElement;
-  readonly activityLog: HTMLOListElement;
-  readonly fileTree: HTMLDivElement;
-  readonly fileTabs: HTMLDivElement;
-  readonly diffView: HTMLDivElement;
-  readonly quickActionList: HTMLDivElement;
-  readonly workspacePath: HTMLInputElement;
-  readonly bridgeUrl: HTMLInputElement;
-  readonly pairingCode: HTMLInputElement;
-  readonly searchInput: HTMLInputElement;
-  readonly quickActionSearch: HTMLInputElement;
-  readonly promptInput: HTMLTextAreaElement;
-  readonly settingsDialog: HTMLDialogElement;
-  readonly confirmDialog: HTMLDialogElement;
-  readonly quickActionDialog: HTMLDialogElement;
-  readonly helpDialog: HTMLDialogElement;
-  readonly connectionPanel: HTMLDetailsElement;
-  readonly workspaceSetupPanel: HTMLDetailsElement;
-  readonly reviewChanges: HTMLButtonElement;
-  readonly approvePatch: HTMLButtonElement;
-  readonly applyPatch: HTMLButtonElement;
-  readonly revertPatch: HTMLButtonElement;
-  readonly reloadFile: HTMLButtonElement;
-  readonly discardDraft: HTMLButtonElement;
-  readonly runChecks: HTMLButtonElement;
-  readonly requestTurn: HTMLButtonElement;
-  readonly connectBridge: HTMLButtonElement;
-  readonly closeSettings: HTMLButtonElement;
-  readonly copyPairingCommand: HTMLButtonElement;
-  readonly settingsButton: HTMLButtonElement;
-  readonly copyActiveSetup: HTMLButtonElement;
-  readonly copyHeadlessSetup: HTMLButtonElement;
-  readonly showConnection: HTMLButtonElement;
-  readonly selfCheck: HTMLButtonElement;
-  readonly quickActions: HTMLButtonElement;
-  readonly helpButton: HTMLButtonElement;
-  readonly dialogConfirm: HTMLButtonElement;
-  readonly evidenceDialog: HTMLDialogElement;
-  readonly evidenceClient: HTMLSelectElement;
-  readonly evidenceSummary: HTMLElement;
-  readonly evidenceOutput: HTMLPreElement;
-  readonly beginEvidence: HTMLButtonElement;
-  readonly copyEvidence: HTMLButtonElement;
-  readonly downloadEvidence: HTMLButtonElement;
-  readonly evidenceButton: HTMLButtonElement;
-  readonly closeEvidence: HTMLButtonElement;
-}
-
-function $<K extends keyof AppElements>(id: K): AppElements[K];
-function $(id: string): HTMLElement;
-function $(id: string): HTMLElement {
-  const element = document.getElementById(id);
-  if (!element) throw new Error(`Required app element is missing: ${id}`);
-  return element;
-}
+import { mountExplanation } from "./explanation.ts";
 
 type Backend = InMemoryBackend | VtCodeBackend;
 
@@ -107,14 +52,12 @@ function browserStorage(): StorageLike | null {
 const persistedBrowserState = loadBrowserState(browserStorage(), APP_INSTANCE);
 const persistedBrowserSettings = loadBrowserSettings(browserStorage(), APP_INSTANCE);
 let backend: Backend = createBackend(persistedBrowserState?.fallback_files);
+const explanationView = mountExplanation(() => backend);
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 let openRequest = 0;
 let webMcpRegistration: WebMcpRegistration | null = null;
 let fallbackPersistenceTimer: ReturnType<typeof setTimeout> | null = null;
 let persistenceWarningShown = false;
-let settingsPersistenceWarningShown = false;
-const webMcpEvidence: WebMcpEvidenceRecorder = createWebMcpEvidenceRecorder();
-let registeredWebMcpToolNames: readonly string[] = [];
 
 const state: AppState = {
   files: new Map(),
@@ -155,6 +98,26 @@ const editor = new CodeEditor($("editor"), {
   onSelectionChange: () => updateEditorFooter(),
 });
 
+const {
+  renderEvidence, recordWebMcpDiscovery, instrumentWebMcpTools, beginWebMcpEvidence,
+  copyWebMcpEvidence, downloadWebMcpEvidence, openEvidenceDialog, setRegisteredWebMcpTools,
+} = createEvidenceController({
+  recorder: createWebMcpEvidenceRecorder(),
+  getEditorState: editorStateForWebMcp,
+  getEnvironment: webMcpEnvironmentState,
+  log, status, toast, copyText,
+});
+
+const {
+  renderSettings, renderWorkspaceSetup, openWorkspaceSetup, openConnectionPanel,
+  openSettingsDialog, persistBrowserSettings, copyPairingCommand, copySetupCommand,
+} = createSettingsController({
+  getBackend: () => backend,
+  getStorage: browserStorage,
+  appInstance: APP_INSTANCE,
+  log, status, toast, copyText,
+});
+
 function message(error: unknown): string { return errorMessage(error); }
 
 const contentSizeBytes = (content: unknown): number => new TextEncoder().encode(typeof content === "string" ? content : "").length;
@@ -190,6 +153,7 @@ function log(text: string): void {
 }
 
 function recordRuntimeEvent(event: BackendEvent): void {
+  explanationView.refresh();
   const sequence = event.type === "event" ? ` #${event.sequence}` : "";
   log(`Runtime event${sequence}`);
   status("Runtime event received", "Refresh a clean file to inspect the latest backend snapshot.");
@@ -198,241 +162,6 @@ function recordRuntimeEvent(event: BackendEvent): void {
 function status(title: string, detail: string): void {
   $("statusText").textContent = title;
   $("statusDetail").textContent = detail;
-}
-
-function evidenceNowMs(): number {
-  return typeof performance?.now === "function" ? performance.now() : Date.now();
-}
-
-function renderEvidence(): void {
-  const evidence = webMcpEvidence.snapshot();
-  const discoveryCount = evidence.records.filter((record) => record.kind === "discovery").length;
-  const callCount = evidence.records.filter((record) => record.kind === "tool_call").length;
-  const session = evidence.session?.client_label || "No client selected";
-  $("evidenceSummary").textContent = `${session} · ${discoveryCount} discovery event${discoveryCount === 1 ? "" : "s"} · ${callCount} tool call${callCount === 1 ? "" : "s"}${evidence.dropped_records ? ` · ${evidence.dropped_records} older record${evidence.dropped_records === 1 ? "" : "s"} dropped` : ""}`;
-  $("copyEvidence").disabled = !evidence.session;
-  $("downloadEvidence").disabled = !evidence.session;
-  $("evidenceOutput").textContent = webMcpEvidence.toJson();
-}
-
-function recordWebMcpDiscovery(toolNames: readonly string[], source: string): void {
-  try {
-    webMcpEvidence.recordDiscovery(toolNames, source);
-    renderEvidence();
-  } catch {
-    // Evidence capture must never prevent the browser tool surface from registering.
-  }
-}
-
-function recordWebMcpCall(evidence: {
-  readonly tool_name: string;
-  readonly input: unknown;
-  readonly success: boolean;
-  readonly result?: unknown;
-  readonly error?: unknown;
-  readonly duration_ms: number;
-}): void {
-  try {
-    webMcpEvidence.recordToolCall({
-      ...evidence,
-      editor_state: editorStateForWebMcp(),
-    });
-    renderEvidence();
-  } catch {
-    // Evidence capture must never change the result or failure of a tool call.
-  }
-}
-
-function instrumentWebMcpTools(tools: readonly WebMcpTool[]): WebMcpTool[] {
-  return tools.map((tool) => ({
-    ...tool,
-    execute: async (input: unknown = {}, options: ToolExecutionOptions = {}) => {
-      const startedAt = evidenceNowMs();
-      try {
-        const result = await tool.execute(input, options);
-        recordWebMcpCall({
-          tool_name: tool.name,
-          input,
-          success: true,
-          result,
-          duration_ms: evidenceNowMs() - startedAt,
-        });
-        return result;
-      } catch (error: unknown) {
-        recordWebMcpCall({
-          tool_name: tool.name,
-          input,
-          success: false,
-          error,
-          duration_ms: evidenceNowMs() - startedAt,
-        });
-        throw error;
-      }
-    },
-  }));
-}
-
-function beginWebMcpEvidence(): void {
-  const clientLabel = $("evidenceClient").value.trim() || "WebMCP client";
-  const environment = webMcpEnvironmentState();
-  webMcpEvidence.begin({
-    client_label: clientLabel,
-    origin: browserOrigin(),
-    user_agent: navigator.userAgent,
-    webmcp_context: {
-      browsing_context_required: environment.browsing_context_required,
-      origin_agent_cluster: environment.origin_agent_cluster,
-      tools_permission_allowed: environment.tools_permission_allowed,
-    },
-  });
-  if (registeredWebMcpToolNames.length) {
-    webMcpEvidence.recordDiscovery(registeredWebMcpToolNames, "registered browser tools");
-  }
-  renderEvidence();
-  log(`Started ${clientLabel} WebMCP evidence run`);
-  status("Evidence run started", "Use the selected browser client now, then export the sanitized JSON report.");
-  toast("WebMCP evidence run started");
-}
-
-async function copyWebMcpEvidence(): Promise<void> {
-  await copyText(webMcpEvidence.toJson());
-  log("Copied sanitized WebMCP evidence JSON");
-  toast("Evidence JSON copied");
-}
-
-function downloadWebMcpEvidence(): void {
-  const clientLabel = $("evidenceClient").value.trim() || "webmcp-client";
-  const slug = clientLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "webmcp-client";
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const blob = new Blob([webMcpEvidence.toJson()], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `webmcp-evidence-${slug}-${timestamp}.json`;
-  link.hidden = true;
-  document.body.append(link);
-  link.click();
-  setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 1_000);
-  log("Downloaded sanitized WebMCP evidence JSON");
-  toast("Evidence JSON downloaded");
-}
-
-function openEvidenceDialog(): void {
-  const dialog = $("evidenceDialog");
-  if (dialog.open) {
-    dialog.close();
-    return;
-  }
-  if ($("confirmDialog").open) return;
-  if ($("settingsDialog").open) $("settingsDialog").close();
-  if ($("quickActionDialog").open) $("quickActionDialog").close();
-  if ($("helpDialog").open) $("helpDialog").close();
-  renderEvidence();
-  dialog.showModal();
-  $("beginEvidence").focus();
-}
-
-function formatBytes(bytes: unknown): string {
-  const value = Number(bytes);
-  if (!Number.isFinite(value) || value < 0) return "not reported";
-  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(value % (1024 * 1024) ? 1 : 0)} MiB`;
-  if (value >= 1024) return `${Math.round(value / 1024)} KiB`;
-  return `${Math.round(value)} B`;
-}
-
-function renderSettings(): void {
-  const runtime = runtimeStatus();
-  const settings = backend.statusPayload?.settings;
-  const paired = backend.kind === "websocket" && backend.connected;
-  const runtimeLabel = backend.kind === "fallback"
-    ? "Fallback"
-    : runtime?.turns_available === true ? "Active VT Code TUI" : "Headless workspace bridge";
-  const workspace = runtime?.workspace_root || (backend.kind === "fallback" ? "Browser memory" : "Not reported");
-  const connection = backend.kind === "fallback"
-    ? "In-memory fallback"
-    : paired ? backend.url : "Bridge disconnected";
-  const origin = backend.statusPayload?.authenticated_origin || browserOrigin();
-  const ttl = Number(settings?.pairing_ttl_secs);
-  const frameBytes = Number(settings?.max_frame_bytes);
-  const inFlight = Number(settings?.max_in_flight_requests);
-  const listener = settings
-    ? `${settings.host}:${settings.port === 0 ? "auto" : settings.port} · ${settings.remote_enabled ? "remote proxy" : "loopback"}`
-    : backend.kind === "fallback" ? "Browser only" : "Not reported by bridge";
-  const deployment = webmcpDeploymentForOrigin(browserOrigin());
-  const pageLabel = deployment?.label ?? "Current browser origin";
-
-  $("settingsConnection").textContent = connection;
-  $("settingsWorkspace").textContent = workspace;
-  $("settingsOrigin").textContent = origin;
-  $("settingsRuntime").textContent = runtimeLabel;
-  $("settingsPairingTtl").textContent = Number.isSafeInteger(ttl) && ttl > 0 ? `${ttl} seconds` : "Not reported";
-  $("settingsLimits").textContent = Number.isSafeInteger(frameBytes) && Number.isSafeInteger(inFlight)
-    ? `${formatBytes(frameBytes)} · ${inFlight} in flight`
-    : "Not reported";
-  $("settingsListener").textContent = listener;
-
-  const syncState = $("settingsSyncState");
-  syncState.textContent = backend.kind === "fallback" ? "Fallback defaults" : paired ? "Synced from VT Code" : "Pairing required";
-  syncState.className = `settings-sync-state${paired ? " connected" : backend.kind === "websocket" ? " warning" : ""}`;
-  $("settingsSyncNote").textContent = backend.kind === "fallback"
-    ? `${pageLabel}. No bridge is paired. Browser edits stay in memory and never touch the filesystem.`
-    : paired
-      ? `${pageLabel}. These values are read from the paired VT Code bridge. The terminal owns workspace roots, policy, pairing, and writes.`
-      : `${pageLabel}. The previous bridge is not connected. Enter a fresh one-time code; bridge settings will appear after pairing.`;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function workspacePathValue(): string {
-  return $("workspacePath").value.trim() || "/absolute/path/to/workspace";
-}
-
-function renderWorkspaceSetup(): void {
-  const origin = browserOrigin();
-  $("pairingCommand").textContent = `/webmcp pair ${origin}`;
-  const path = shellQuote(workspacePathValue());
-  $("browserOrigin").textContent = origin;
-  $("activeSetupCommand").textContent = `vtcode --workspace ${path} chat\n\nThen in the TUI:\n/webmcp pair ${origin}`;
-  $("headlessSetupCommand").textContent = `vtcode webmcp serve \\\n  --origin ${origin} \\\n  --allowed-root ${path}`;
-}
-
-function openSettings(section: "connection" | "workspace" | null = null): void {
-  if ($("confirmDialog").open) return;
-  if ($("quickActionDialog").open) $("quickActionDialog").close();
-  if ($("helpDialog").open) $("helpDialog").close();
-  if ($("evidenceDialog").open) $("evidenceDialog").close();
-  const dialog = $("settingsDialog");
-  if (!dialog.open) dialog.showModal();
-  if (section === "connection") {
-    $("connectionPanel").open = true;
-    $("workspaceSetupPanel").open = false;
-  } else if (section === "workspace") {
-    $("connectionPanel").open = false;
-    $("workspaceSetupPanel").open = true;
-  }
-  renderWorkspaceSetup();
-  renderSettings();
-}
-
-function openWorkspaceSetup(): void {
-  openSettings("workspace");
-  $("workspacePath").focus();
-}
-
-function openConnectionPanel(): void {
-  openSettings("connection");
-  const field = $("bridgeUrl").value.trim() ? $("pairingCode") : $("bridgeUrl");
-  field.focus();
-}
-
-function openSettingsDialog(): void {
-  if ($("settingsDialog").open) $("settingsDialog").close();
-  else openSettings();
 }
 
 function selectTerminal(panel: Panel): void {
@@ -493,6 +222,7 @@ function updateTurnControl(): void {
 }
 
 function handleBackendConnection(event: BackendConnectionEvent): void {
+  explanationView.refresh();
   if (backend.kind !== "websocket") return;
   if (event.state === "connected") {
     $("supportStatus").textContent = "VT Code connected";
@@ -523,6 +253,7 @@ function handleBackendConnection(event: BackendConnectionEvent): void {
 }
 
 function handleBackendStatus(_payload: StatusPayload | null): void {
+  explanationView.refresh();
   if (backend.kind !== "websocket") return;
   renderSettings();
   updateTurnControl();
@@ -534,21 +265,6 @@ function snapshot(path: string): FileSnapshot | undefined { return state.snapsho
 function current(path: string): string { return state.drafts.get(path) ?? snapshot(path)?.content ?? ""; }
 function isDirty(path: string): boolean { return state.drafts.has(path) && state.drafts.get(path) !== snapshot(path)?.content; }
 function dirtyPaths(): string[] { return paths().filter(isDirty); }
-
-function persistBrowserSettings(): boolean {
-  const saved = saveBrowserSettings(browserStorage(), APP_INSTANCE, {
-    workspace_path: $("workspacePath").value.trim(),
-    bridge_url: $("bridgeUrl").value.trim(),
-  });
-  if (!saved && !settingsPersistenceWarningShown) {
-    settingsPersistenceWarningShown = true;
-    status("Settings not saved", "Browser storage is unavailable or full; setup values may be lost on refresh.");
-    toast("Settings could not be saved");
-  } else if (saved) {
-    settingsPersistenceWarningShown = false;
-  }
-  return saved;
-}
 
 function saveFallbackWorkspaceNow(silent = false): boolean {
   if (backend.kind !== "fallback") return true;
@@ -756,7 +472,11 @@ function renderProposal(): void {
   if (!proposal) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = "<strong>No changes staged</strong><small>Edit a buffer, then review the draft.</small>";
+    const emptyTitle = document.createElement("strong");
+    emptyTitle.textContent = "No changes staged";
+    const emptyHint = document.createElement("small");
+    emptyHint.textContent = "Edit a buffer, then review the draft.";
+    empty.append(emptyTitle, emptyHint);
     view.append(empty);
     $("proposalState").textContent = "No proposal";
     $("proposalState").className = "state-badge";
@@ -1116,6 +836,7 @@ async function loadWorkspace(nextBackend: Backend, restoreState: PersistedBrowse
   state.unsubscribeStatus?.();
   if (nextBackend !== backend) backend.close?.();
   backend = nextBackend;
+  explanationView.refresh();
   openRequest += 1;
   state.files.clear();
   for (const [path, file] of nextFiles) state.files.set(path, file);
@@ -1368,7 +1089,7 @@ function openPanelForWebMcp(panel: Panel): void {
 }
 
 async function registerWebMcp(): Promise<void> {
-  registeredWebMcpToolNames = [];
+  setRegisteredWebMcpTools([]);
   const modelContext = document.modelContext as ModelContext | undefined;
   const environment = webMcpEnvironmentState();
   if (environment.origin_agent_cluster === false) {
@@ -1457,7 +1178,7 @@ async function registerWebMcp(): Promise<void> {
         $("webmcpCapability").textContent = `WebMCP tools available: ${names.length}; browser agent tool set changed.`;
       },
       onToolsDiscovered: (names) => {
-        registeredWebMcpToolNames = [...names];
+        setRegisteredWebMcpTools(names);
         recordWebMcpDiscovery(names, "document.modelContext.getTools");
       },
     });
@@ -1694,33 +1415,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
   );
 }
 
-async function copyPairingCommand(): Promise<void> {
-  const command = $("pairingCommand").textContent?.trim() || "";
-  try {
-    await copyText(command);
-    log("Copied the active pairing command");
-    toast("Pairing command copied");
-  } catch {
-    status("Copy unavailable", "Select the command in the pairing panel and copy it manually.");
-    toast("Copy unavailable; copy the command manually");
-  }
-}
-
 async function copyText(value: string): Promise<void> {
   if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable");
   await navigator.clipboard.writeText(value);
-}
-
-async function copySetupCommand(id: keyof AppElements, label: string): Promise<void> {
-  renderWorkspaceSetup();
-  try {
-    await copyText($(id).textContent?.trim() || "");
-    log(`Copied ${label} setup command`);
-    toast(`${label} setup copied`);
-  } catch {
-    status("Copy unavailable", `Select the ${label.toLowerCase()} setup command and copy it manually.`);
-    toast("Copy unavailable; copy the command manually");
-  }
 }
 
 $("workspacePath").value = persistedBrowserSettings?.workspace_path || persistedBrowserState?.workspace_path || "";

@@ -19,6 +19,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use vtcode_macros::DebugNoInline;
 pub use vtcode_utility_tool_specs::{
     AdditionalProperties, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool,
 };
@@ -200,6 +201,15 @@ impl<T: Default> Default for Constrained<T> {
 /// Session trait for tool execution context
 #[async_trait]
 pub trait ToolSession: Send + Sync {
+    /// Session source ledger. Absence fails closed for edits to existing text.
+    fn source_inspection(&self) -> Option<&crate::tools::source_inspection::SourceInspection> {
+        self.edited_file_monitor().map(|monitor| monitor.source_inspection())
+    }
+
+    fn edited_file_monitor(&self) -> Option<&crate::tools::edited_file_monitor::EditedFileMonitor> {
+        None
+    }
+
     /// Get the current working directory
     fn cwd(&self) -> &PathBuf;
 
@@ -291,7 +301,10 @@ pub enum FileChange {
 }
 
 /// Error type for tool execution (from Codex)
-#[derive(Debug, thiserror::Error)]
+///
+/// `Debug` via [`DebugNoInline`]: the `Internal(anyhow::Error)` variant carries an
+/// arbitrary source chain formatted on tool-failure paths.
+#[derive(DebugNoInline, thiserror::Error)]
 pub enum ToolCallError {
     /// Error that should be sent back to the model
     #[error("Tool error: {0}")]

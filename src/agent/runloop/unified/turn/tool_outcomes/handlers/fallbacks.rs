@@ -130,7 +130,10 @@ pub(super) fn build_validation_error_content_with_schema_hint(
 ) -> String {
     let is_recoverable = fallback_tool.is_some();
     let loop_detected = validation_stage == "loop_detection";
-    let next_action = if is_recoverable {
+    let policy_correction = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(&error);
+    let next_action = if let Some(correction) = policy_correction {
+        correction
+    } else if is_recoverable {
         "Retry with fallback_tool_args."
     } else {
         "Fix tool arguments to match the schema."
@@ -138,7 +141,7 @@ pub(super) fn build_validation_error_content_with_schema_hint(
     let mut payload = serde_json::json!({
         "error": error,
         "failure_kind": "validation",
-        "error_class": "invalid_arguments",
+        "error_class": if policy_correction.is_some() { "policy_denied" } else { "invalid_arguments" },
         "validation_stage": validation_stage,
         "retryable": false,
         "is_recoverable": is_recoverable,

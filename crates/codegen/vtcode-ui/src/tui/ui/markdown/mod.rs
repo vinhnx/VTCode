@@ -316,6 +316,7 @@ fn strip_plan_markup_tags(text: &str, inline_code_ticks: &mut Option<usize>) -> 
 
 fn preprocess_plan_wrappers(source: &str) -> String {
     let mut out = String::with_capacity(source.len());
+    let mut may_have_plan_tags = None;
     let mut in_fenced_code = false;
     let mut inline_code_ticks = None;
 
@@ -325,7 +326,7 @@ fn preprocess_plan_wrappers(source: &str) -> String {
         }
 
         let is_fence = is_fence_delimiter(line);
-        if in_fenced_code || is_fence {
+        if in_fenced_code || is_fence || !*may_have_plan_tags.get_or_insert_with(|| source.contains('<')) {
             out.push_str(line);
         } else {
             out.push_str(&strip_plan_markup_tags(line, &mut inline_code_ticks));
