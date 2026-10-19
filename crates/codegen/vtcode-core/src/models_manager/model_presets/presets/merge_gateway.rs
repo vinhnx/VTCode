@@ -110,6 +110,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::MINIMAX_M3_1_FLASH,
+            "MiniMax M3.1 Flash (Merge Gateway)",
+            "MiniMax M3.1 Flash through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
             models::merge_gateway::MOONSHOT_KIMI_K3,
             "Kimi K3 (Merge Gateway)",
             "Moonshot Kimi K3 through Merge Gateway",

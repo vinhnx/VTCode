@@ -63,6 +63,7 @@ impl ModelId {
             ModelId::MergeGatewayXaiGrok46,
             ModelId::MergeGatewayXaiGrok47,
             ModelId::MergeGatewayMinimaxH3,
+            ModelId::MergeGatewayMinimaxM31Flash,
             ModelId::MergeGatewayMoonshotKimiK3,
             ModelId::MergeGatewayThinkingMachinesInkling,
             ModelId::MergeGatewayZaiGlm53Flash,
@@ -121,6 +122,7 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b,
             // MiniMax models
             ModelId::MinimaxM3,
+            ModelId::MinimaxM31Flash,
             // Hugging Face models
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,

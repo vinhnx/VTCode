@@ -33,7 +33,7 @@ This is a partial extraction from `vtcode-core`; integration-point files remain 
 | Z.AI          | `providers/zai.rs`                            | GLM-5.3, GLM-5.2, GLM-5.1, GLM-4.7                 |
 | Moonshot      | `providers/moonshot.rs`                       | Kimi K2.7 Code, K2.6, K2.5                         |
 | StepFun       | `providers/stepfun.rs` (native Responses API) | Step-5-Preview, Step-3.7-Flash                     |
-| MiniMax       | `providers/minimax.rs`                        | MiniMax-M3, M2.7, M2.5                             |
+| MiniMax       | `providers/minimax.rs`                        | MiniMax-M3.1-Flash, M3, M2.7                       |
 | Ollama        | `providers/ollama/`                           | Local and cloud models                             |
 | OpenRouter    | `providers/openrouter/`                       | Marketplace models                                 |
 | Evolink       | `providers/evolink.rs`                        | Multi-model gateway                                |

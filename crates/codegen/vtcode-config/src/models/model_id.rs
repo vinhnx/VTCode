@@ -120,6 +120,8 @@ pub enum ModelId {
     MergeGatewayXaiGrok47,
     /// MiniMax H3 through Merge Gateway
     MergeGatewayMinimaxH3,
+    /// MiniMax M3.1 Flash through Merge Gateway
+    MergeGatewayMinimaxM31Flash,
     /// Moonshot Kimi K3 through Merge Gateway
     MergeGatewayMoonshotKimiK3,
     /// Thinking Machines Inkling through Merge Gateway
@@ -272,6 +274,10 @@ pub enum ModelId {
     // MiniMax models
     /// MiniMax-M3 - Frontier multimodal coding model with 1M context
     MinimaxM3,
+    /// MiniMax-M3.1-Flash - Latest ultra-efficient multimodal model via OpenRouter
+    OpenRouterMinimaxM31FlashFree,
+    /// MiniMax-M3.1-Flash - Latest ultra-efficient multimodal model with 1M context and tunable thinking depth
+    MinimaxM31Flash,
 
     // OpenRouter models
     /// DeepSeek V4.1 Flash 1017 - Latest flash model via OpenRouter

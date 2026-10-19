@@ -220,6 +220,28 @@ mod tests {
     }
 
     #[test]
+    fn minimax_m31_flash_exposes_catalog_efforts() {
+        let provider = crate::providers::MinimaxProvider::from_config(
+            Some("offline-fixture".into()),
+            Some("MiniMax-M3.1-Flash".into()),
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(provider.supports_reasoning("MiniMax-M3.1-Flash"));
+        assert_eq!(
+            provider.supported_reasoning_efforts("MiniMax-M3.1-Flash"),
+            ["low", "medium", "high", "xhigh", "max"]
+        );
+        assert!(
+            ReasoningEffortMapper::resolve(&provider, "MiniMax-M3.1-Flash", ReasoningEffortLevel::High, false).is_ok()
+        );
+    }
+
+    #[test]
     fn catalog_presence_wins_over_provider_generic_fallback() {
         assert_eq!(crate::provider::catalog_reasoning_efforts("minimax", "MiniMax-M3"), Some(&[][..]));
         assert!(crate::provider::catalog_or_generic_reasoning_efforts("minimax", "MiniMax-M3").is_empty());

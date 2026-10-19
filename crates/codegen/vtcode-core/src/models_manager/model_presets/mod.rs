@@ -422,7 +422,7 @@ mod tests {
     #[test]
     fn merge_gateway_presets_expose_curated_routes_and_default() {
         let presets = presets::merge_gateway_presets();
-        assert_eq!(presets.len(), 28);
+        assert_eq!(presets.len(), 29);
         let default = presets
             .iter()
             .find(|preset| preset.is_default)

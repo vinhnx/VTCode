@@ -275,7 +275,7 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 29);
+    assert_eq!(merge_gateway_models.len(), 30);
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayDefaultRouting));
@@ -534,6 +534,31 @@ fn test_gpt_5_5_dated_alias_round_trips_to_gpt55_capabilities() {
     assert!(
         Provider::OpenAI.supports_service_tier(models::openai::GPT_5_6_SOL),
         "dated GPT-5.5 alias should inherit service-tier support"
+    );
+}
+
+#[test]
+fn test_minimax_m31_flash_routes_and_reasoning_metadata() {
+    let native = ModelId::from_str("MiniMax-M3.1-Flash").expect("native MiniMax M3.1 Flash");
+    assert_eq!(native, ModelId::MinimaxM31Flash);
+    assert_eq!(native.provider(), Provider::Minimax);
+    assert!(Provider::Minimax.supports_reasoning(native.as_str().as_ref()));
+    assert!(Provider::Minimax.supports_reasoning_effort(native.as_str().as_ref()));
+
+    let merge_route = models::merge_gateway::MINIMAX_M3_1_FLASH;
+    assert_eq!(ModelId::from_str(merge_route), Ok(ModelId::MergeGatewayMinimaxM31Flash));
+    assert!(models::merge_gateway::route_uses_thinking_budget(merge_route));
+    assert!(models::merge_gateway::REASONING_MODELS.contains(&merge_route));
+    assert!(Provider::MergeGateway.supports_reasoning_effort(merge_route));
+
+    let openrouter = ModelId::from_str("minimax/minimax-m3.1-flash:free").expect("OpenRouter free listing");
+    assert_eq!(openrouter, ModelId::OpenRouterMinimaxM31FlashFree);
+    assert_eq!(openrouter.provider(), Provider::OpenRouter);
+    assert!(openrouter.is_flash_variant());
+    assert!(openrouter.is_efficient_variant());
+    assert_eq!(
+        Provider::OpenRouter.supported_reasoning_efforts(openrouter.as_str().as_ref()),
+        ["low", "medium", "high", "xhigh", "max"]
     );
 }
 

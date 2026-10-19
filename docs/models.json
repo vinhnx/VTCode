@@ -1553,6 +1553,32 @@
           ]
         },
         "context": 1000000
+      },
+      "MiniMax-M3.1-Flash": {
+        "id": "MiniMax-M3.1-Flash",
+        "name": "MiniMax-M3.1-Flash",
+        "description": "Latest ultra-efficient multimodal coding model with 1M context and tunable thinking depth",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 524288
       }
     }
   },
@@ -2383,6 +2409,47 @@
           "top_tier": true,
           "generation": "V3.1-Nex",
           "doc_comment": "DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter"
+        }
+      },
+      "minimax/minimax-m3.1-flash:free": {
+        "id": "minimax/minimax-m3.1-flash:free",
+        "name": "MiniMax: MiniMax M3.1 Flash (free)",
+        "description": "MiniMax-M3.1-Flash is a multimodal model from MiniMax with 1M context, significant gains in agentic tasks, coding, and cybersecurity, and tunable thinking depth.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 524288,
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "vtcode": {
+          "variant": "OpenRouterMinimaxM31FlashFree",
+          "constant": "MINIMAX_M3_1_FLASH_FREE",
+          "vendor": "minimax",
+          "display": "MiniMax M3.1 Flash (free)",
+          "description": "Latest ultra-efficient MiniMax multimodal model with 1M context and tunable thinking depth - free tier via OpenRouter",
+          "efficient": true,
+          "top_tier": false,
+          "generation": "M3.1",
+          "doc_comment": "MiniMax M3.1 Flash:free - Latest ultra-efficient multimodal model with 1M context free tier via OpenRouter"
         }
       },
       "moonshotai/kimi-k3": {
@@ -4230,6 +4297,37 @@
         },
         "context": 131000,
         "output_tokens": 33000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        }
+      },
+      "minimax/minimax-m3.1-flash": {
+        "id": "minimax/minimax-m3.1-flash",
+        "name": "MiniMax M3.1 Flash (Merge Gateway)",
+        "description": "MiniMax M3.1 Flash ultra-efficient multimodal model with 1M context served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 524288,
         "capabilities": {
           "streaming": true,
           "function_calling": true,

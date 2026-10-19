@@ -378,6 +378,13 @@ model_id_table! {
         display: "MiniMax H3 (Merge Gateway)",
         description: "MiniMax H3 accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayMinimaxM31Flash {
+        provider: MergeGateway,
+        id: models::merge_gateway::MINIMAX_M3_1_FLASH,
+        parse: [models::merge_gateway::MINIMAX_M3_1_FLASH],
+        display: "MiniMax M3.1 Flash (Merge Gateway)",
+        description: "MiniMax M3.1 Flash accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
     MergeGatewayMoonshotKimiK3 {
         provider: MergeGateway,
         id: models::merge_gateway::MOONSHOT_KIMI_K3,
@@ -812,6 +819,13 @@ model_id_table! {
         parse: [models::minimax::MINIMAX_M3],
         display: "MiniMax-M3",
         description: "Frontier multimodal coding model with 1M context window",
+    },
+    MinimaxM31Flash {
+        provider: Minimax,
+        id: models::minimax::MINIMAX_M3_1_FLASH,
+        parse: [models::minimax::MINIMAX_M3_1_FLASH],
+        display: "MiniMax-M3.1-Flash",
+        description: "Latest ultra-efficient multimodal model with 1M context and tunable thinking depth",
     },
     // xAI models
     XaiGrok46 {

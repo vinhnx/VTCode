@@ -11,6 +11,7 @@ pub const GOOGLE_GEMINI_3_7_FLASH: &str = "google/gemini-3.7-flash";
 pub const XAI_GROK_4_6: &str = "xai/grok-4.6";
 pub const XAI_GROK_4_7: &str = "xai/grok-4.7";
 pub const MINIMAX_H3: &str = "minimax/minimax-h3";
+pub const MINIMAX_M3_1_FLASH: &str = "minimax/minimax-m3.1-flash";
 pub const MOONSHOT_KIMI_K3: &str = "moonshot/kimi-k3";
 pub const THINKINGMACHINES_INKLING: &str = "thinkingmachines/inkling";
 pub const ZAI_GLM_5_3_FLASH: &str = "zai/glm-5.3-flash";
@@ -55,6 +56,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,
@@ -110,6 +112,7 @@ pub const THINKING_BUDGET_ROUTES: &[&str] = &[
     GOOGLE_GEMINI_4_ARGON,
     DEEPSEEK_FLASH,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     THINKINGMACHINES_INKLING,
 ];
 
@@ -129,6 +132,7 @@ pub const REASONING_MODELS: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MINIMAX_H3,
+    MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,

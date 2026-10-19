@@ -37,6 +37,7 @@ mod capabilities_tests {
         assert!(supports_vision(models::CLAUDE_SONNET_5, models::anthropic::DEFAULT_MODEL));
         assert!(supports_vision("claude-3-opus", models::anthropic::DEFAULT_MODEL));
         assert!(supports_vision("claude-4-sonnet", models::anthropic::DEFAULT_MODEL));
+        assert!(supports_vision(models::minimax::MINIMAX_M3_1_FLASH, models::anthropic::DEFAULT_MODEL));
     }
 
     #[test]
@@ -50,6 +51,7 @@ mod capabilities_tests {
         assert_eq!(effective_context_size("claude-sonnet-4-5-latest"), 200_000);
         assert_eq!(effective_context_size("claude-haiku-4-5-latest"), 200_000);
         assert_eq!(effective_context_size("claude-3-opus"), 200_000);
+        assert_eq!(effective_context_size(models::minimax::MINIMAX_M3_1_FLASH), 1_000_000);
     }
 
     #[test]
@@ -1391,6 +1393,19 @@ mod request_builder_tests {
             Some(ReasoningEffortLevel::High),
             Some(ReasoningEffortLevel::Low),
         );
+        assert_eq!(payload["output_config"]["effort"], "high");
+    }
+
+    #[test]
+    fn test_convert_to_anthropic_format_minimax_m31_flash_uses_adaptive_effort() {
+        use vtcode_config::types::ReasoningEffortLevel;
+
+        let payload = adaptive_effort_payload(models::minimax::MINIMAX_M3_1_FLASH, None, None);
+        assert_eq!(payload["output_config"]["effort"], "max");
+        assert!(payload.get("thinking").is_some());
+
+        let payload =
+            adaptive_effort_payload(models::minimax::MINIMAX_M3_1_FLASH, Some(ReasoningEffortLevel::High), None);
         assert_eq!(payload["output_config"]["effort"], "high");
     }
 

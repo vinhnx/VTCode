@@ -65,6 +65,7 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `xai/grok-4.6` | 500k | No | xAI route |
 | `qwen/qwen3.8-max` | 1M | Yes | Qwen route |
 | `minimax/minimax-h3` | 131k | No | MiniMax route |
+| `minimax/minimax-m3.1-flash` | 1M | Yes | MiniMax M3.1 Flash ultra-efficient multimodal route |
 | `moonshot/kimi-k3` | 1M | Yes | Moonshot route |
 | `thinkingmachines/inkling` | 1M | No | Thinking Machines route |
 | `zai/glm-5.3-flash` | 1.31M | Yes | Z.AI route (320B/18B hybrid attention, native vision) |

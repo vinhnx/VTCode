@@ -79,7 +79,7 @@ Choose one of the supported LLM providers:
 
 - **MiniMax**: `export MINIMAX_API_KEY=your_key_here`
   - Get from [MiniMax Platform](https://platform.minimax.io/docs)
-  - Models: MiniMax-M3, M2.5
+  - Models: MiniMax-M3.1-Flash, MiniMax-M3, MiniMax-M2.7
   - Default model: `MiniMax-M3`
 
 - **NVIDIA NIM**: `export NVIDIA_API_KEY=your_key_here`

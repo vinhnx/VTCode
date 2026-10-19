@@ -34,6 +34,7 @@ deepseek/deepseek-v4.1-flash-1017
 xai/grok-4.6
 qwen/qwen3.8-max
 minimax/minimax-h3
+minimax/minimax-m3.1-flash
 moonshot/kimi-k3
 thinkingmachines/inkling
 zai/glm-5.3-flash

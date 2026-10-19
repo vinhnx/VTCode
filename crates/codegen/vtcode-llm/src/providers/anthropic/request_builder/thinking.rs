@@ -13,8 +13,8 @@ use vtcode_config::constants::models::anthropic;
 
 use super::super::capabilities::{
     ClaudeThinkingProfile, claude_thinking_profile, default_max_tokens_for_model, default_thinking_display,
-    effort_is_at_most_high, effort_str_is_at_most_high, matches_model, resolve_model_name, supports_reasoning_effort,
-    supports_thinking_display_updates,
+    effort_is_at_most_high, effort_str_is_at_most_high, is_minimax_m31_flash, matches_model, resolve_model_name,
+    supports_reasoning_effort, supports_thinking_display_updates,
 };
 
 fn resolve_configured_thinking_display(anthropic_config: &AnthropicConfig) -> Option<ThinkingDisplay> {
@@ -189,6 +189,21 @@ pub(crate) fn build_thinking_config(
     let resolved_model = resolve_model_name(&request.model, default_model);
     let profile = claude_thinking_profile(resolved_model, default_model);
     let display = resolve_thinking_display(request, anthropic_config, resolved_model, default_model);
+
+    // MiniMax-M3.1-Flash always thinks and accepts no `disabled` config; its
+    // depth is controlled exclusively through `output_config.effort`. Emit
+    // adaptive thinking so the request builder attaches the effort payload,
+    // and ignore any legacy manual budget instead of sending `budget_tokens`.
+    if is_minimax_m31_flash(resolved_model) {
+        if !anthropic_config.extended_thinking_enabled {
+            tracing::warn!(
+                model = %resolved_model,
+                "extended_thinking_enabled=false ignored: MiniMax-M3.1-Flash always thinks"
+            );
+        }
+        return Ok((Some(ThinkingConfig::Adaptive { display }), None));
+    }
+
     let default_thinking = profile.is_some_and(|p| p.default_thinking_enabled);
     // The request builder sends this same default whenever thinking is on, so
     // manual budgets are clamped against the real `max_tokens`.

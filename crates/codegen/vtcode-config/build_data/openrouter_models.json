@@ -401,6 +401,40 @@
         "generation": "MiMo-V2.6",
         "doc_comment": "MiMo-V2.6-Pro-UltraSpeed - Xiaomi's fastest flagship variant via OpenRouter"
       }
+    },
+    "minimax/minimax-m3.1-flash:free": {
+      "id": "minimax/minimax-m3.1-flash:free",
+      "name": "MiniMax: MiniMax M3.1 Flash (free)",
+      "description": "MiniMax-M3.1-Flash is a multimodal model from MiniMax with 1M context, significant gains in agentic tasks, coding, and cybersecurity, and tunable thinking depth.",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 1000000,
+      "max_output_tokens": 524288,
+      "cost": {
+        "input": 0,
+        "output": 0
+      },
+      "vtcode": {
+        "variant": "OpenRouterMinimaxM31FlashFree",
+        "constant": "MINIMAX_M3_1_FLASH_FREE",
+        "vendor": "minimax",
+        "display": "MiniMax M3.1 Flash (free)",
+        "description": "Latest ultra-efficient MiniMax multimodal model with 1M context and tunable thinking depth - free tier via OpenRouter",
+        "efficient": true,
+        "top_tier": false,
+        "generation": "M3.1",
+        "doc_comment": "MiniMax M3.1 Flash:free - Latest ultra-efficient multimodal model with 1M context free tier via OpenRouter"
+      }
     }
   },
   "default_model": "xiaomi/mimo-v2.6-pro"

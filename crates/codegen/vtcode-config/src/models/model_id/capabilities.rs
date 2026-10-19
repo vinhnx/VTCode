@@ -269,6 +269,9 @@ impl ModelId {
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::MiMoV26Flash
                 | ModelId::MergeGatewayXiaomimimoMimoV26Flash
+                | ModelId::MinimaxM31Flash
+                | ModelId::MergeGatewayMinimaxM31Flash
+                | ModelId::OpenRouterMinimaxM31FlashFree
         )
     }
 
@@ -307,6 +310,9 @@ impl ModelId {
                 | ModelId::HuggingFaceGlm53FlashTogether
                 | ModelId::VercelDeepseekFlash
                 | ModelId::MergeGatewayXiaomimimoMimoV26Flash
+                | ModelId::MinimaxM31Flash
+                | ModelId::MergeGatewayMinimaxM31Flash
+                | ModelId::OpenRouterMinimaxM31FlashFree
         )
     }
 
@@ -466,6 +472,7 @@ impl ModelId {
             ModelId::LlamaCppGptOss20b => "oss",
             // MiniMax models
             ModelId::MinimaxM3 => "M3",
+            ModelId::MinimaxM31Flash | ModelId::MergeGatewayMinimaxM31Flash => "M3.1",
             // StepFun models
             ModelId::StepFun37Flash => "3.7",
             ModelId::StepFun5Preview => "5",
