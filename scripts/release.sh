@@ -107,8 +107,6 @@ Options:
                       version, e.g. `./scripts/release.sh 0.171.5 --skip-release`.
   --ci-only           Trigger CI for Linux/Windows only (skip local macOS build)
                       Useful when macOS binaries already built locally
-  --force-ci          Allow another release build on the same UTC day (urgent
-                      releases); normally batch changes into one daily release
   -h, --help          Show this help message
 
 Cost Optimization:
@@ -525,7 +523,6 @@ main() {
 	local skip_docs=false
 	local skip_release=false
 	local ci_only=false
-	local force_ci=false
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -573,10 +570,6 @@ main() {
 			ci_only=true
 			shift
 			;;
-		--force-ci)
-			force_ci=true
-			shift
-			;;
 		--path)
 			print_error "'--path' is not supported by cargo-release."
 			print_info "Use '-p <package-name>' to select a workspace package, or cd into the crate directory."
@@ -599,16 +592,6 @@ main() {
 
 	if [[ -n "$increment_type" ]]; then
 		release_argument=$increment_type
-	fi
-
-	# Check before cargo-release installation, generated files, builds or tags.
-	# Resume and binary-free releases do not dispatch unless --ci-only is set.
-	if [[ "$force_ci" == 'false' && ( "$ci_only" == 'true' || ( "$skip_release" == 'false' && "$skip_binaries" == 'false' ) ) ]]; then
-		if [[ "$dry_run" == 'true' ]]; then
-			print_info "Dry run - would check the daily UTC release CI budget"
-		else
-			python3 "$SCRIPT_DIR/check_release_ci_budget.py" || return 1
-		fi
 	fi
 
 	check_branch

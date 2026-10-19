@@ -13,20 +13,6 @@ The project runs two GitHub Actions workflows.
 - Manual `workflow_dispatch` with release tag input
 - Dispatched from `scripts/release.sh` Step 3.5 via `gh workflow run`
 
-**Daily release budget:** `scripts/release.sh` checks GitHub before builds, generated-file
-updates, version bumps, or tags. A successful or active release build created on the same
-UTC day stops a new release; batch remaining changes for the next day. Failed and cancelled
-builds allow retries. API failures stop the release rather than silently spending more CI.
-Use `./scripts/release.sh --patch --force-ci` for an urgent additional release.
-`--skip-release` resumes and `--skip-binaries` releases do not spend new build budget
-unless combined with `--ci-only`. Dry runs describe the check without calling GitHub.
-This is a release-script guard, not a scheduler or atomic server-side quota: concurrent
-invocations can race, and direct manual workflow dispatch remains an explicit bypass.
-The full required platform matrix is preserved; intermediate versions are not published
-with missing binaries. The September 18–October 17, 2026 history suggests about 31 runner-minutes
-saved per day if maintainers batch the observed 48 builds into 26 daily builds, using
-the two successful post-optimization runs' average of 41.7 runner-minutes per build.
-
 **Rust toolchain:** all three Rust setup steps explicitly select the version in
 `rust-toolchain.toml`, currently 1.98.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
 otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
@@ -88,11 +74,11 @@ in the directory are retained, so use a fresh staging directory when packaging.
 runs the editor typecheck and tests in `parallel:`, builds the Vite app, and publishes it to
 GitHub Pages.
 
-### Release build budget
+### Release build contracts
 
-`scripts/release.sh` enforces a one-build-per-UTC-day budget before spending CI. The release
-contract tests run with `./scripts/check.sh contracts` (or directly via
-`python3 scripts/tests/test_ci_load.py` and `python3 scripts/tests/test_release_ci_budget.py`) and
+Release runs are not rate-limited by the release script: every invocation may dispatch the
+full Linux/Windows build. The release contract tests run with
+`./scripts/check.sh contracts` (or directly via `python3 scripts/tests/test_ci_load.py`) and
 also in the full `./scripts/check.sh`.
 
 Selective musl/ARM64/Windows omission is an alternative to daily batching and is not enabled:
@@ -290,7 +276,7 @@ Use the provided development check script to run the same checks locally:
 ./scripts/check.sh build    # Build project
 ./scripts/check.sh docs     # Generate docs
 ./scripts/check.sh unsafe-docs # Gate unsafe SAFETY/allowance + type-position contract docs
-./scripts/check.sh contracts # Release-artifact and CI-budget contract tests
+./scripts/check.sh contracts # Release-artifact contract tests
 ```
 
 ### Manual Setup

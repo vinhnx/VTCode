@@ -195,12 +195,11 @@ run_workflow_security_lint() {
     fi
 }
 
-# Release-artifact and CI-budget contract tests. These were only run by the
+# Release-artifact contract tests. These were only run by the
 # (now removed) ci.yml workflow, so keep them reachable from the local gate.
 run_release_contract_tests() {
     print_status "Running release contract tests..."
-    if python3 scripts/tests/test_ci_load.py \
-        && python3 scripts/tests/test_release_ci_budget.py; then
+    if python3 scripts/tests/test_ci_load.py; then
         print_success "Release contract tests passed."
         return 0
     else
@@ -446,7 +445,7 @@ case "${1:-}" in
         echo "  docs    - Generate documentation"
         echo "  legibility - Run agent legibility hotspot checks"
         echo "  workflow-security - Validate GitHub workflow trigger/action security policy"
-        echo "  contracts - Run release-artifact and CI-budget contract tests"
+        echo "  contracts - Run release-artifact contract tests"
         echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  unsafe-docs - Gate platform-gated unsafe missing SAFETY/unsafe_code docs"
         echo "  miri    - Run Miri (Tree Borrows) to detect Undefined Behavior (slow; scoped to pure-Rust unsafe)"
