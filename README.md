@@ -319,7 +319,7 @@ Thanks to everyone who builds, tests, and improves VT Code. For partnerships, re
 [GitHub Issues](https://github.com/vinhnx/VTCode/issues).
 
 <details>
-<summary>View all contributors</summary>
+<!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (28)</summary><!-- CONTRIBUTORS-COUNT:END -->
 
 <!-- CONTRIBUTORS:START -->
 
