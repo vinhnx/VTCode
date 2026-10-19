@@ -244,14 +244,7 @@ pub(super) fn bounded_tool_failure_metadata_at_depth(
 }
 
 pub(super) fn bounded_preview_string(value: &str, limit: usize) -> String {
-    if value.len() <= limit {
-        return value.to_string();
-    }
-    let mut end = limit;
-    while end > 0 && !value.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}…", &value[..end])
+    vtcode_commons::formatting::truncate_byte_budget(value, limit, "…")
 }
 
 pub(super) fn bounded_diagnosis_preview(value: &str, limit: usize) -> String {

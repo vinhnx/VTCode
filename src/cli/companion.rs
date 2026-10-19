@@ -602,12 +602,9 @@ impl EventProjection {
 fn public_text(text: &str, limit: usize, truncated: &mut bool) -> String {
     let clean = text.chars().filter(|c| !c.is_control() || matches!(c, '\n' | '\t')).collect();
     let redacted = vtcode_commons::sanitizer::redact_secrets(clean);
-    let mut end = limit.min(redacted.len());
-    while !redacted.is_char_boundary(end) {
-        end -= 1;
-    }
-    *truncated |= end < redacted.len();
-    redacted[..end].to_owned()
+    let end = vtcode_commons::formatting::truncate_utf8_prefix(&redacted, limit);
+    *truncated |= end.len() < redacted.len();
+    end.to_owned()
 }
 
 async fn collect_events(

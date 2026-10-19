@@ -65,15 +65,7 @@ impl<'a> TurnProcessingContext<'a> {
         } else {
             detail
         };
-        let detail = if detail.len() > 240 {
-            let mut end = 240;
-            while end > 0 && !detail.is_char_boundary(end) {
-                end -= 1;
-            }
-            format!("{}…", &detail[..end])
-        } else {
-            detail.to_string()
-        };
+        let detail = vtcode_commons::formatting::truncate_byte_budget(detail, 240, "…");
         let mut message = format!(
             "{PLANNING_RECOVERY_HANDOFF_PREFIX} ({detail}). The latest request and bounded evidence are preserved. The next attempt can reuse the tool outputs above instead of re-reading files, and should emit one complete `<proposed_plan>` with `Action -> files: [path] -> verify: [command]` steps. Each `verify:` must be a concrete command or observable check: valid examples are `verify: [cargo nextest run -p vtcode]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, and `verify: [grep -n 'symbol' src/file.rs]`; invalid examples are `verify: [run checks]`, `verify: [check later]`, and `verify: [git diff --check]`. Re-state the planning request or type `keep planning` to try again; no changes were applied."
         );
@@ -1250,15 +1242,8 @@ fn bounded_rejected_plan_draft(plan_text: &str) -> Option<String> {
     if plan_text.is_empty() {
         return None;
     }
-    let bounded = if plan_text.len() > REJECTED_PLAN_DRAFT_HISTORY_BUDGET {
-        let mut end = REJECTED_PLAN_DRAFT_HISTORY_BUDGET;
-        while !plan_text.is_char_boundary(end) {
-            end -= 1;
-        }
-        format!("{}…[truncated]", &plan_text[..end])
-    } else {
-        plan_text.to_string()
-    };
+    let bounded =
+        vtcode_commons::formatting::truncate_byte_budget(plan_text, REJECTED_PLAN_DRAFT_HISTORY_BUDGET, "…[truncated]");
     Some(format!("<proposed_plan>\n{bounded}\n</proposed_plan>"))
 }
 

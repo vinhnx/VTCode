@@ -305,15 +305,7 @@ fn format_tool_output_for_resume(content: &uni::MessageContent) -> Option<String
             let trimmed_output = output.trim();
             if !trimmed_output.is_empty() {
                 // Truncate very long output to keep resume display concise
-                let display = if trimmed_output.len() > 500 {
-                    let mut end = 500;
-                    while !trimmed_output.is_char_boundary(end) {
-                        end -= 1;
-                    }
-                    format!("{}...", &trimmed_output[..end])
-                } else {
-                    trimmed_output.to_string()
-                };
+                let display = vtcode_commons::formatting::truncate_byte_budget(trimmed_output, 500, "...");
                 parts.push(display);
             }
         }
