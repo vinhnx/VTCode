@@ -31,6 +31,43 @@ macro_rules! define_inline_message_commands {
             },
             $($rest)*
         }
+
+        impl $name {
+            /// Merge `next` into `self` when both are adjacent transcript appends,
+            /// folding a run of streamed lines into one `AppendLines` command.
+            ///
+            /// Returns `Ok(())` when `next` was absorbed, or `Err(next)` unchanged
+            /// when the pair cannot merge, so the drain can flush `self` and start a
+            /// fresh run with the returned command. Non-append commands never merge,
+            /// which keeps runs separated and preserves order.
+            #[expect(
+                clippy::result_large_err,
+                reason = "The command is a control-flow sentinel moved back into the drain, not an error payload."
+            )]
+            pub(crate) fn absorb_append(&mut self, next: Self) -> Result<(), Self> {
+                use vtcode_commons::ui_protocol::InlineTranscriptLine;
+                match (self, next) {
+                    (Self::AppendLines { lines }, Self::AppendLine { kind, segments }) => {
+                        lines.push(InlineTranscriptLine { kind, segments });
+                        Ok(())
+                    }
+                    (destination, Self::AppendLine { kind, segments }) => match destination {
+                        Self::AppendLine { kind: previous_kind, segments: previous_segments } => {
+                            let head = InlineTranscriptLine {
+                                kind: *previous_kind,
+                                segments: std::mem::take(previous_segments),
+                            };
+                            *destination = Self::AppendLines {
+                                lines: vec![head, InlineTranscriptLine { kind, segments }],
+                            };
+                            Ok(())
+                        }
+                        _ => Err(Self::AppendLine { kind, segments }),
+                    },
+                    (_, other) => Err(other),
+                }
+            }
+        }
     };
 }
 
@@ -187,6 +224,50 @@ mod tests {
                     _ => panic!("expected AppendLines"),
                 }
                 assert!(matches!(receiver.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
+
+                // The runner drain coalesces adjacent appends in place, keeping
+                // the line order and folding into an existing batch.
+                let mut merged = protocol::InlineCommand::AppendLine {
+                    kind: InlineMessageKind::Agent,
+                    segments: vec![first.clone()],
+                };
+                assert!(
+                    merged
+                        .absorb_append(protocol::InlineCommand::AppendLine {
+                            kind: InlineMessageKind::Info,
+                            segments: vec![second.clone()],
+                        })
+                        .is_ok()
+                );
+                assert!(
+                    merged
+                        .absorb_append(protocol::InlineCommand::AppendLine {
+                            kind: InlineMessageKind::User,
+                            segments: Vec::new(),
+                        })
+                        .is_ok()
+                );
+                match &merged {
+                    protocol::InlineCommand::AppendLines { lines } => {
+                        assert_eq!(lines.len(), 3);
+                        assert_eq!(lines[0].kind, InlineMessageKind::Agent);
+                        assert_eq!(lines[1].kind, InlineMessageKind::Info);
+                        assert_eq!(lines[1].segments[0].text, "second");
+                        assert_eq!(lines[2].kind, InlineMessageKind::User);
+                        assert!(lines[2].segments.is_empty());
+                    }
+                    _ => panic!("expected merged AppendLines"),
+                }
+                // A non-append command is never absorbed; it separates runs and
+                // comes back unchanged so the drain can handle it in order.
+                let unmerged = merged
+                    .absorb_append(protocol::InlineCommand::Inline {
+                        kind: InlineMessageKind::Tool,
+                        segment: second.clone(),
+                    })
+                    .expect_err("non-append command must not merge");
+                assert!(matches!(unmerged, protocol::InlineCommand::Inline { .. }));
+                assert!(matches!(&merged, protocol::InlineCommand::AppendLines { lines } if lines.len() == 3));
             }
         };
     }

@@ -33,6 +33,12 @@ impl Session {
                 if !segments.is_empty()
         ) || matches!(
             &command,
+            InlineCommand::AppendLines { lines }
+                if lines
+                    .iter()
+                    .any(|line| line.kind == InlineMessageKind::Agent && !line.segments.is_empty())
+        ) || matches!(
+            &command,
             InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Agent, text, .. }
                 if !text.is_empty()
         ) || matches!(
@@ -62,15 +68,12 @@ impl Session {
                 self.request_transcript_clear();
             }
             InlineCommand::AppendLines { lines } => {
+                let previous_max_offset = self.current_max_scroll_offset();
                 for line in lines {
                     self.clear_thinking_spinner_if_active(line.kind);
                     self.push_line(line.kind, line.segments);
                 }
-                // A batched load seeds the transcript (resume/rewind): land on
-                // the last message immediately instead of one scroll step per line.
-                self.scroll_manager.set_offset(0);
-                self.user_scrolled = false;
-                self.invalidate_transcript_viewport();
+                self.adjust_scroll_after_change(previous_max_offset);
                 self.request_transcript_clear();
             }
             InlineCommand::AppendPastedMessage { kind, text, line_count } => {

@@ -846,6 +846,10 @@ impl crate::tui::core_tui::runner::TuiCommand for InlineCommand {
     fn is_start_event_stream(&self) -> bool {
         matches!(self, InlineCommand::StartEventStream)
     }
+
+    fn absorb_transcript_append(&mut self, next: Self) -> Result<(), Self> {
+        self.absorb_append(next)
+    }
 }
 
 #[cfg(test)]

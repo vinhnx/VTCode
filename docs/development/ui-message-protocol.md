@@ -32,11 +32,14 @@ distinct from `Some(empty)`, and segment styles retain their existing `Arc`.
 App-only capture/review commands and transient/deferred input are not generated
 by these macros.
 
-`AppendLines` is the batched transcript reload path. `AnsiRenderer` buffers lines
+`AppendLines` is the batched transcript append path. `AnsiRenderer` buffers lines
 with `begin_transcript_batch`/`end_transcript_batch` (or `transcript_batch`, which
 flushes even on error) and delivers them as one command. The core session appends
-every line, then pins the viewport to the last line, so resume and rewind paint
-the final transcript in a single frame instead of following each append.
+every line under the same follow-scroll rule as `AppendLine` (a pinned view stays
+at the bottom; a scrolled-up view keeps its position), so resume and rewind — which
+start from the bottom — paint the final transcript in a single frame. The runner
+also folds adjacent queued `AppendLine`s into one `AppendLines` command, bounded by
+a raw-command budget, so a streamed burst paints in one frame without starving input.
 
 ## Common control forwarding
 

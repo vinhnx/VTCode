@@ -199,10 +199,15 @@ async fn process_event_stream_action(
     }
 }
 
-/// Maximum number of commands to drain per turn to prevent unbounded latency
-/// under load. Ensures input events and redraws are not starved by a flood of
-/// background commands (e.g., during tool execution or PTY output bursts).
+/// Maximum number of command runs to handle per turn to prevent unbounded
+/// latency under load. Ensures input events and redraws are not starved by a
+/// flood of background commands (e.g., during tool execution or PTY output
+/// bursts). Coalesced transcript appends count as a single run.
 const MAX_COMMANDS_PER_TURN: usize = 16;
+/// Maximum number of raw commands to receive per turn while coalescing. A
+/// streamed-line burst larger than this yields after one frame, so a runaway
+/// producer cannot monopolize the loop; the remainder drains on later frames.
+const MAX_DRAINED_COMMANDS_PER_TURN: usize = 512;
 /// Maximum number of terminal events to process in one wakeup.
 ///
 /// This keeps redraw latency bounded when the terminal produces a backlog of
@@ -305,6 +310,78 @@ fn should_count_as_user_activity(event: &crossterm::event::Event) -> bool {
     )
 }
 
+/// Folds adjacent transcript appends from a drain slice into one batched
+/// command so a burst of streamed lines paints in a single frame.
+///
+/// The drain offers each received command through [`Self::push`], which returns
+/// a command that is ready to handle whenever the incoming command starts a new
+/// run (or the accumulator is empty). Non-append commands never merge, so runs
+/// stay separated and order is preserved. [`Self::flush`] drains the tail after
+/// the slice ends.
+pub(super) struct CommandCoalescer<C: TuiCommand> {
+    pending: Option<C>,
+}
+
+impl<C: TuiCommand> CommandCoalescer<C> {
+    pub(super) fn new() -> Self {
+        Self { pending: None }
+    }
+
+    /// Offer a drained command; returns the command to handle, if any.
+    pub(super) fn push(&mut self, command: C) -> Option<C> {
+        let mut incoming = Some(command);
+        if let Some(current) = self.pending.as_mut()
+            && let Some(next) = incoming.take()
+        {
+            incoming = current.absorb_transcript_append(next).err();
+        }
+        match incoming {
+            Some(command) => self.pending.replace(command),
+            None => None,
+        }
+    }
+
+    /// Return the last accumulated command when the drain slice ends.
+    pub(super) fn flush(&mut self) -> Option<C> {
+        self.pending.take()
+    }
+}
+
+/// Drain pending commands, coalescing adjacent transcript appends into single
+/// batches. Stops after `max_runs` handled commands or `max_drained` raw
+/// commands (whichever comes first) so a flood cannot starve input. Returns the
+/// ordered commands to handle and whether the channel disconnected.
+fn drain_coalesced<C: TuiCommand>(
+    commands: &mut UnboundedReceiver<C>,
+    max_runs: usize,
+    max_drained: usize,
+) -> (Vec<C>, bool) {
+    let mut coalescer = CommandCoalescer::<C>::new();
+    let mut ready = Vec::new();
+    let mut runs = 0usize;
+    let mut received = 0usize;
+    let mut disconnected = false;
+    while runs < max_runs && received < max_drained {
+        let command = match commands.try_recv() {
+            Ok(command) => command,
+            Err(TryRecvError::Empty) => break,
+            Err(TryRecvError::Disconnected) => {
+                disconnected = true;
+                break;
+            }
+        };
+        received += 1;
+        if let Some(command) = coalescer.push(command) {
+            runs += 1;
+            ready.push(command);
+        }
+    }
+    if let Some(command) = coalescer.flush() {
+        ready.push(command);
+    }
+    (ready, disconnected)
+}
+
 pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
     terminal: &mut Terminal<B>,
     session: &mut S,
@@ -329,20 +406,18 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
             break 'main;
         }
 
-        // Drain a bounded number of pending commands to prevent unbounded latency
-        // under load (e.g., during heavy PTY output or tool execution).
-        for _ in 0..MAX_COMMANDS_PER_TURN {
-            match commands.try_recv() {
-                Ok(command) => {
-                    let action = handle_inline_command(terminal, session, inputs, &event_channels, command)?;
-                    process_event_stream_action(action, &event_channels, inputs, event_stream).await;
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    session.request_exit();
-                    break;
-                }
-            }
+        // Drain pending commands so a burst of background work cannot starve
+        // input and redraws. Adjacent transcript appends coalesce into one batched
+        // command (one run, one frame); every other command separates runs and
+        // preserves order. The run budget bounds latency, while the raw-command
+        // budget bounds a merged appends burst so it cannot monopolize the loop.
+        let (ready, disconnected) = drain_coalesced(commands, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+        if disconnected {
+            session.request_exit();
+        }
+        for command in ready {
+            let action = handle_inline_command(terminal, session, inputs, &event_channels, command)?;
+            process_event_stream_action(action, &event_channels, inputs, event_stream).await;
         }
 
         // Update terminal title based on current activity state
@@ -526,9 +601,134 @@ pub(super) async fn drive_terminal<B: Backend, S: TuiSessionDriver>(
 mod tests {
     use super::*;
     use crate::tui::core_tui::session::Session;
+    use crate::tui::core_tui::types::InlineCommand as CoreCommand;
     use crate::tui::core_tui::types::InlineTheme;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
+    use std::sync::Arc;
+    use vtcode_commons::ui_protocol::{InlineMessageKind, InlineSegment, InlineTextStyle};
+
+    fn agent_line(text: &str) -> CoreCommand {
+        CoreCommand::AppendLine {
+            kind: InlineMessageKind::Agent,
+            segments: vec![InlineSegment {
+                text: text.into(),
+                style: Arc::new(InlineTextStyle::default()),
+            }],
+        }
+    }
+
+    fn batch_texts(lines: &[vtcode_commons::ui_protocol::InlineTranscriptLine]) -> Vec<String> {
+        lines
+            .iter()
+            .map(|line| line.segments.iter().map(|segment| segment.text.as_str()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn command_coalescer_folds_a_burst_into_one_batch() {
+        let mut coalescer = CommandCoalescer::new();
+        assert!(coalescer.push(agent_line("one")).is_none());
+        assert!(coalescer.push(agent_line("two")).is_none());
+        assert!(coalescer.push(agent_line("three")).is_none());
+
+        match coalescer.flush().expect("a burst flushes one command") {
+            CoreCommand::AppendLines { lines } => assert_eq!(batch_texts(&lines), ["one", "two", "three"]),
+            _ => panic!("expected a single AppendLines batch"),
+        }
+        assert!(coalescer.flush().is_none(), "a flush is not repeatable");
+    }
+
+    #[test]
+    fn command_coalescer_releases_the_batch_before_a_non_append() {
+        let mut coalescer = CommandCoalescer::new();
+        assert!(coalescer.push(agent_line("one")).is_none());
+        assert!(coalescer.push(agent_line("two")).is_none());
+
+        let ready = coalescer
+            .push(CoreCommand::SetInput("draft".to_owned()))
+            .expect("the batch releases before the non-append command");
+        match ready {
+            CoreCommand::AppendLines { lines } => assert_eq!(batch_texts(&lines), ["one", "two"]),
+            _ => panic!("expected the batched appends to release first"),
+        }
+        assert!(
+            matches!(coalescer.flush(), Some(CoreCommand::SetInput(value)) if value == "draft"),
+            "the non-append becomes the next pending command"
+        );
+    }
+
+    #[test]
+    fn drain_coalesced_collapses_a_burst_into_one_run() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<CoreCommand>();
+        for index in 0..100 {
+            sender.send(agent_line(&format!("line-{index}"))).unwrap();
+        }
+
+        let (ready, disconnected) =
+            drain_coalesced(&mut receiver, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+
+        assert!(!disconnected);
+        assert_eq!(ready.len(), 1, "a burst within the raw cap collapses into one run");
+        match &ready[0] {
+            CoreCommand::AppendLines { lines } => {
+                assert_eq!(lines.len(), 100);
+                assert_eq!(batch_texts(lines)[0], "line-0");
+                assert_eq!(batch_texts(lines)[99], "line-99");
+            }
+            _ => panic!("expected one AppendLines batch"),
+        }
+    }
+
+    #[test]
+    fn drain_coalesced_keeps_non_append_runs_in_order() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<CoreCommand>();
+        sender.send(agent_line("a")).unwrap();
+        sender.send(CoreCommand::SetInput("draft".to_owned())).unwrap();
+        sender.send(agent_line("b")).unwrap();
+
+        let (ready, _) = drain_coalesced(&mut receiver, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+
+        assert_eq!(ready.len(), 3, "a non-append separates the append runs");
+        assert!(matches!(&ready[0], CoreCommand::AppendLine { segments, .. } if segments[0].text == "a"));
+        assert!(matches!(&ready[1], CoreCommand::SetInput(value) if value == "draft"));
+        assert!(matches!(&ready[2], CoreCommand::AppendLine { segments, .. } if segments[0].text == "b"));
+    }
+
+    #[test]
+    fn drain_coalesced_yields_after_the_raw_cap() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<CoreCommand>();
+        let overflow = 10;
+        for index in 0..(MAX_DRAINED_COMMANDS_PER_TURN + overflow) {
+            sender.send(agent_line(&format!("line-{index}"))).unwrap();
+        }
+
+        let (ready, _) = drain_coalesced(&mut receiver, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+        match &ready[0] {
+            CoreCommand::AppendLines { lines } => assert_eq!(lines.len(), MAX_DRAINED_COMMANDS_PER_TURN),
+            _ => panic!("expected one bounded AppendLines batch"),
+        }
+
+        // The remainder stays queued and drains on the next frame.
+        let (rest, _) = drain_coalesced(&mut receiver, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+        match &rest[0] {
+            CoreCommand::AppendLines { lines } => assert_eq!(lines.len(), overflow),
+            _ => panic!("expected the overflow batch"),
+        }
+    }
+
+    #[test]
+    fn drain_coalesced_reports_disconnect() {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<CoreCommand>();
+        sender.send(agent_line("only")).unwrap();
+        drop(sender);
+
+        let (ready, disconnected) =
+            drain_coalesced(&mut receiver, MAX_COMMANDS_PER_TURN, MAX_DRAINED_COMMANDS_PER_TURN);
+
+        assert!(disconnected);
+        assert!(matches!(&ready[0], CoreCommand::AppendLine { segments, .. } if segments[0].text == "only"));
+    }
 
     #[test]
     fn paused_redraw_preserves_dirty_state() {

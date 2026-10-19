@@ -19,6 +19,19 @@ pub trait TuiCommand {
     fn is_force_redraw(&self) -> bool;
     fn is_stop_event_stream(&self) -> bool;
     fn is_start_event_stream(&self) -> bool;
+
+    /// Merge `next` into `self` when both are adjacent transcript appends.
+    ///
+    /// The drain loop uses this to paint a burst of streamed lines in one frame
+    /// instead of one frame per `MAX_COMMANDS_PER_TURN` slice. Returns `Ok(())`
+    /// when `next` was absorbed, or `Err(next)` unchanged otherwise. The default
+    /// keeps every command distinct.
+    fn absorb_transcript_append(&mut self, next: Self) -> Result<(), Self>
+    where
+        Self: Sized,
+    {
+        Err(next)
+    }
 }
 
 pub trait TuiSessionDriver {
@@ -93,6 +106,10 @@ impl TuiCommand for crate::tui::core_tui::types::InlineCommand {
 
     fn is_start_event_stream(&self) -> bool {
         matches!(self, crate::tui::core_tui::types::InlineCommand::StartEventStream)
+    }
+
+    fn absorb_transcript_append(&mut self, next: Self) -> Result<(), Self> {
+        self.absorb_append(next)
     }
 }
 
