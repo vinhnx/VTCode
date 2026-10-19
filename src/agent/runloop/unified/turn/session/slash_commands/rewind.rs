@@ -387,8 +387,11 @@ fn replace_conversation_and_rerender(
         conversation_history,
         supports_reasoning,
     );
-    crate::agent::runloop::unified::session_setup::render_resume_lines(renderer, &resume_lines)?;
-    Ok(())
+    // Reload the transcript in one frame so the restored view lands on the
+    // last message without replaying the scroll.
+    renderer.transcript_batch(|renderer| {
+        crate::agent::runloop::unified::session_setup::render_resume_lines(renderer, &resume_lines)
+    })
 }
 
 fn render_rewind_restore_success(

@@ -1600,6 +1600,7 @@ fn other_name(command: &InlineCommand) -> &'static str {
     match command {
         InlineCommand::ShowTransient { .. } => "ShowTransient",
         InlineCommand::AppendLine { .. } => "AppendLine",
+        InlineCommand::AppendLines { .. } => "AppendLines",
         InlineCommand::AppendPastedMessage { .. } => "AppendPastedMessage",
         InlineCommand::Inline { .. } => "Inline",
         InlineCommand::ReplaceLast { .. } => "ReplaceLast",

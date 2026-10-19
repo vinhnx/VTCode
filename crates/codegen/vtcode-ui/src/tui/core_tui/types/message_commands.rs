@@ -26,6 +26,9 @@ macro_rules! define_inline_message_commands {
                 lines: Vec<Vec<vtcode_commons::ui_protocol::InlineSegment>>,
                 link_ranges: Option<Vec<Vec<vtcode_commons::ui_protocol::InlineLinkRange>>>,
             },
+            AppendLines {
+                lines: Vec<vtcode_commons::ui_protocol::InlineTranscriptLine>,
+            },
             $($rest)*
         }
     };
@@ -76,6 +79,10 @@ macro_rules! impl_inline_message_methods {
         ) {
             self.send_command($command::ReplaceLast { count, kind, lines, link_ranges: Some(link_ranges) });
         }
+
+        pub fn append_lines(&self, lines: Vec<vtcode_commons::ui_protocol::InlineTranscriptLine>) {
+            self.send_command($command::AppendLines { lines });
+        }
     };
 }
 
@@ -87,7 +94,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::mpsc;
     use vtcode_commons::ui_protocol::{
-        InlineLinkRange, InlineLinkTarget, InlineMessageKind, InlineSegment, InlineTextStyle,
+        InlineLinkRange, InlineLinkTarget, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTranscriptLine,
     };
 
     // Tests use the public facades and explicit payload expectations, independently
@@ -164,6 +171,21 @@ mod tests {
                 assert!(matches!(receiver.try_recv().expect("empty linked replacement"),
                     protocol::InlineCommand::ReplaceLast { count: 0, link_ranges: Some(links), lines, .. }
                     if links.is_empty() && lines.is_empty()));
+                handle.append_lines(vec![
+                    InlineTranscriptLine { kind: InlineMessageKind::User, segments: vec![first.clone()] },
+                    InlineTranscriptLine { kind: InlineMessageKind::Info, segments: Vec::new() },
+                ]);
+                match receiver.try_recv().expect("append lines") {
+                    protocol::InlineCommand::AppendLines { lines } => {
+                        assert_eq!(lines.len(), 2);
+                        assert_eq!(lines[0].kind, InlineMessageKind::User);
+                        assert_eq!(lines[0].segments[0].text, "first");
+                        assert!(Arc::ptr_eq(&lines[0].segments[0].style, &style));
+                        assert_eq!(lines[1].kind, InlineMessageKind::Info);
+                        assert!(lines[1].segments.is_empty());
+                    }
+                    _ => panic!("expected AppendLines"),
+                }
                 assert!(matches!(receiver.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
             }
         };

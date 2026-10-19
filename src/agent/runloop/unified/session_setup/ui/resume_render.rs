@@ -14,6 +14,16 @@ pub(super) fn render_resume_state_if_present(
         return Ok(());
     };
 
+    // Deliver the whole resume block in one UI command: the viewport paints
+    // the last message once instead of scrolling through the history.
+    renderer.transcript_batch(|renderer| render_resume_state_lines(renderer, session, supports_reasoning))
+}
+
+fn render_resume_state_lines(
+    renderer: &mut AnsiRenderer,
+    session: &ResumeSession,
+    supports_reasoning: bool,
+) -> Result<()> {
     let ended_local = session.snapshot().ended_at.with_timezone(&Local).format("%Y-%m-%d %H:%M");
     let action = if session.is_fork() { "Forking" } else { "Resuming" };
     renderer.line(

@@ -15,6 +15,7 @@ names/types, and handle method signatures. They add no runtime state or allocati
 | Shared variant | Payload | Handle method |
 | --- | --- | --- |
 | `AppendLine` | Message kind and ordered styled segments | `append_line` |
+| `AppendLines` | Ordered transcript lines (kind plus segments each) | `append_lines` |
 | `AppendPastedMessage` | Kind, literal text, supplied line count | `append_pasted_message` |
 | `Inline` | Kind and one styled segment | `inline` |
 | `ReplaceLast` | Replacement count, kind, nested segment rows, optional link rows | `replace_last`, `replace_last_with_links` |
@@ -30,6 +31,12 @@ recomputed, replacement row order and empty rows are retained, `None` links stay
 distinct from `Some(empty)`, and segment styles retain their existing `Arc`.
 App-only capture/review commands and transient/deferred input are not generated
 by these macros.
+
+`AppendLines` is the batched transcript reload path. `AnsiRenderer` buffers lines
+with `begin_transcript_batch`/`end_transcript_batch` (or `transcript_batch`, which
+flushes even on error) and delivers them as one command. The core session appends
+every line, then pins the viewport to the last line, so resume and rewind paint
+the final transcript in a single frame instead of following each append.
 
 ## Common control forwarding
 

@@ -1274,6 +1274,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
         InlineCommand::AppendLine { kind, segments } => {
             CoreCommand::AppendLine { kind: *kind, segments: segments.clone() }
         }
+        InlineCommand::AppendLines { lines } => CoreCommand::AppendLines { lines: lines.clone() },
         InlineCommand::AppendPastedMessage { kind, text, line_count } => CoreCommand::AppendPastedMessage {
             kind: *kind,
             text: text.clone(),

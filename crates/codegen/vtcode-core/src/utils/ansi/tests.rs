@@ -582,3 +582,63 @@ fn clickable_targets_decode_percent_encoded_bare_paths() {
 
     apply_file_opener_config(original);
 }
+
+#[test]
+fn transcript_batch_delivers_one_append_command() {
+    use crate::ui::InlineCommand;
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    renderer.begin_transcript_batch();
+    renderer.line(MessageStyle::Info, "resume header").unwrap();
+    renderer.line(MessageStyle::User, "hello").unwrap();
+    renderer.line(MessageStyle::Response, "world").unwrap();
+
+    assert!(
+        matches!(receiver.try_recv(), Err(tokio::sync::mpsc::error::TryRecvError::Empty)),
+        "an open transcript batch must not deliver partial commands"
+    );
+
+    renderer.end_transcript_batch();
+
+    let mut batches = Vec::new();
+    while let Ok(command) = receiver.try_recv() {
+        match command {
+            InlineCommand::AppendLines { lines } => batches.push(lines),
+            _ => panic!("unexpected non-batch command during batched load"),
+        }
+    }
+
+    assert_eq!(batches.len(), 1, "batch must deliver exactly one AppendLines command");
+    let joined = batches[0]
+        .iter()
+        .map(|line| line.segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("hello"), "user line missing from batch: {joined:?}");
+    assert!(joined.contains("world"), "response line missing from batch: {joined:?}");
+    assert!(joined.contains("resume header"), "info line missing from batch: {joined:?}");
+}
+
+#[test]
+fn transcript_batch_flushes_when_render_fails() {
+    use crate::ui::InlineCommand;
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+
+    let outcome: Result<()> = renderer.transcript_batch(|renderer| {
+        renderer.line(MessageStyle::Info, "before failure")?;
+        anyhow::bail!("render failed")
+    });
+    assert!(outcome.is_err());
+
+    let mut delivered = 0usize;
+    while let Ok(command) = receiver.try_recv() {
+        if let InlineCommand::AppendLines { lines } = command {
+            delivered += lines.len();
+        }
+    }
+    assert_eq!(delivered, 1, "buffered lines must flush when the batch render fails");
+}

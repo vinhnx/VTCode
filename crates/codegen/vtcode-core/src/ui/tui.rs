@@ -11,10 +11,10 @@
 pub use vtcode_commons::ui_protocol::{
     CompactActivityMetadata, InlineHeaderContext, InlineHeaderHighlight, InlineHeaderStatusBadge,
     InlineHeaderStatusTone, InlineLinkRange, InlineLinkTarget, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, LayoutModeOverride,
-    PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig, SessionSurface,
-    SlashCommandItem, ThinkingBlockState, ToolOutputId, UiMode, WizardModalMode, WizardStep, convert_style,
-    theme_from_color_fields,
+    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme, InlineTranscriptLine,
+    LayoutModeOverride, PlanContent, PlanPhase, PlanStep, ReasoningDisplayMode, RewindAction, SecurePromptConfig,
+    SessionSurface, SlashCommandItem, ThinkingBlockState, ToolOutputId, UiMode, WizardModalMode, WizardStep,
+    convert_style, theme_from_color_fields,
 };
 
 pub use vtcode_commons::ui_protocol::KeyboardProtocolSettings;
@@ -37,7 +37,7 @@ mod headless {
 
     use super::{
         CompactActivityMetadata, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
-        InlineSegment, SecurePromptConfig, ToolOutputId,
+        InlineSegment, InlineTranscriptLine, SecurePromptConfig, ToolOutputId,
     };
 
     use crate::ui::theme::ThemeStyles;
@@ -93,6 +93,9 @@ mod headless {
             count: usize,
             kind: InlineMessageKind,
             lines: Vec<Vec<InlineSegment>>,
+        },
+        AppendLines {
+            lines: Vec<InlineTranscriptLine>,
         },
         RecordToolOutput {
             id: ToolOutputId,
@@ -175,6 +178,9 @@ mod headless {
         }
         pub fn replace_last(&self, count: usize, kind: InlineMessageKind, lines: Vec<Vec<InlineSegment>>) {
             self.send_command(InlineCommand::ReplaceLast { count, kind, lines });
+        }
+        pub fn append_lines(&self, lines: Vec<InlineTranscriptLine>) {
+            self.send_command(InlineCommand::AppendLines { lines });
         }
         pub fn record_tool_output(&self, lines: Vec<String>) -> ToolOutputId {
             let id = self.next_tool_output_id.fetch_add(1, Ordering::Relaxed);

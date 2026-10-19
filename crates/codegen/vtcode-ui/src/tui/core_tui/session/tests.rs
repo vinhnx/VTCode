@@ -1,3 +1,4 @@
+mod batched_append;
 mod clipboard;
 mod color_scheme;
 mod diff_overlay;

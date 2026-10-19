@@ -11,7 +11,7 @@ use crate::ui::markdown::{
 use crate::ui::theme;
 use crate::ui::tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
-    InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
+    InlineTextStyle, InlineTranscriptLine, SecurePromptConfig, convert_style as convert_to_inline_style,
 };
 #[cfg(feature = "tui")]
 use ansi_to_tui::IntoText;
@@ -45,6 +45,8 @@ pub(super) struct InlineSink {
     pub(super) highlight_config: SyntaxHighlightingConfig,
     pub(super) table_max_width: Option<usize>,
     pub(super) table_max_width_override: Option<usize>,
+    /// Buffered transcript lines while a batched load is in progress.
+    pending_transcript_batch: Option<Vec<InlineTranscriptLine>>,
 }
 
 impl InlineSink {
@@ -398,11 +400,7 @@ impl InlineSink {
             table_max_width,
         );
         for (segments, line) in prepared.into_iter().zip(plain.iter()) {
-            if segments.is_empty() {
-                self.handle.append_line(kind, Vec::new());
-            } else {
-                self.handle.append_line(kind, segments);
-            }
+            self.append_transcript_line(kind, segments);
             if record_transcript {
                 transcript::append(line);
             }
@@ -429,6 +427,29 @@ impl InlineSink {
             highlight_config,
             table_max_width: None,
             table_max_width_override: None,
+            pending_transcript_batch: None,
+        }
+    }
+
+    /// Start buffering transcript lines for one batched append.
+    pub(super) fn begin_transcript_batch(&mut self) {
+        self.pending_transcript_batch = Some(Vec::new());
+    }
+
+    /// Deliver the buffered transcript lines as a single UI command.
+    pub(super) fn end_transcript_batch(&mut self) {
+        let Some(lines) = self.pending_transcript_batch.take() else {
+            return;
+        };
+        if !lines.is_empty() {
+            self.handle.append_lines(lines);
+        }
+    }
+
+    fn append_transcript_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
+        match self.pending_transcript_batch.as_mut() {
+            Some(batch) => batch.push(InlineTranscriptLine { kind, segments }),
+            None => self.handle.append_line(kind, segments),
         }
     }
 
@@ -626,7 +647,7 @@ impl InlineSink {
             if let Some(id) = tool_output_id {
                 self.handle.append_tool_output_line(id, kind, Vec::new());
             } else {
-                self.handle.append_line(kind, Vec::new());
+                self.append_transcript_line(kind, Vec::new());
             }
             return Ok(());
         }
@@ -690,7 +711,7 @@ impl InlineSink {
             if let Some(id) = tool_output_id {
                 self.handle.append_tool_output_line(id, kind, combined_segments);
             } else {
-                self.handle.append_line(kind, combined_segments);
+                self.append_transcript_line(kind, combined_segments);
             }
             if record_transcript {
                 transcript::append(&combined_plain);
@@ -718,10 +739,8 @@ impl InlineSink {
 
                 if let Some(id) = tool_output_id.take() {
                     self.handle.append_tool_output_line(id, kind, segments);
-                } else if segments.is_empty() {
-                    self.handle.append_line(kind, Vec::new());
                 } else {
-                    self.handle.append_line(kind, segments);
+                    self.append_transcript_line(kind, segments);
                 }
                 if record_transcript {
                     transcript::append(&plain);
@@ -772,7 +791,7 @@ impl InlineSink {
     pub(super) fn write_segments(&mut self, segments: &[MarkdownSegment], kind: InlineMessageKind) -> Result<()> {
         let converted = self.convert_segments(segments);
         let plain = segments.iter().map(|segment| segment.text.clone()).collect::<String>();
-        self.handle.append_line(kind, converted);
+        self.append_transcript_line(kind, converted);
         if Self::should_record_transcript(kind) {
             transcript::append(&plain);
         }

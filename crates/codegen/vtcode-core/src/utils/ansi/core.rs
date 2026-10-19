@@ -86,6 +86,34 @@ impl AnsiRenderer {
         self.highlight_config = config;
     }
 
+    /// Start buffering transcript lines for one batched UI append.
+    ///
+    /// Used by transcript reloads (resume, rewind) so the viewport paints the
+    /// final state once instead of scrolling through intermediate frames.
+    pub fn begin_transcript_batch(&mut self) {
+        if let Some(sink) = &mut self.sink {
+            sink.begin_transcript_batch();
+        }
+    }
+
+    /// Flush buffered transcript lines as a single UI command.
+    pub fn end_transcript_batch(&mut self) {
+        if let Some(sink) = &mut self.sink {
+            sink.end_transcript_batch();
+        }
+    }
+
+    /// Run `render` with transcript batching enabled.
+    ///
+    /// The batch is flushed even when `render` fails, so buffered lines never
+    /// leak into an unrelated later call.
+    pub fn transcript_batch<T>(&mut self, render: impl FnOnce(&mut Self) -> anyhow::Result<T>) -> anyhow::Result<T> {
+        self.begin_transcript_batch();
+        let result = render(self);
+        self.end_transcript_batch();
+        result
+    }
+
     /// Associate the next summary line with a captured tool output block.
     ///
     /// This edge is UI-only. It is carried directly on the summary command so
