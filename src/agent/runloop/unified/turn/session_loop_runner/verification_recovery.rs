@@ -26,6 +26,15 @@ pub(super) fn handle_verification_block(
     runtime: &mut AgentRuntime,
     stats: &mut SessionStats,
 ) -> VerificationBlockResult {
+    if crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(base).is_some()
+        && registry.completion_verification_pending()
+    {
+        // Budget exhaustion cannot start another verification recovery turn.
+        // Retain the prior failure as evidence without attributing this stop to it.
+        return VerificationBlockResult::Handoff {
+            reason: verification_exhausted_handoff_reason(base, None, 0, 0, stats.last_verification_failure()),
+        };
+    }
     if !verification_gate::is_pending_verification_block(base) {
         return VerificationBlockResult::NotVerification;
     }

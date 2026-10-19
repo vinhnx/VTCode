@@ -207,3 +207,25 @@ async fn exhausted_recovery_keeps_non_escalated_exit_and_bounded_failure_evidenc
     assert!(!fixture.runtime.has_pending_follow_up_inputs());
     assert_eq!(fixture.stats.verification_auto_recovery_turns(), 1);
 }
+
+#[tokio::test]
+async fn pending_verification_budget_stop_preserves_evidence_without_queueing_recovery() {
+    let mut fixture = RecoveryFixture::new().await;
+    fixture.registry.restore_completion_verification_debt();
+    fixture
+        .stats
+        .record_verification_auto_failure("rg -q count README.md".into(), r#"{"exit_code":1,"output":"no match"}"#);
+    let base = "Tool wall-clock budget exhausted for this turn (600s). Changes remain unverified; no additional verifier was scheduled.";
+    let VerificationBlockResult::Handoff { reason } = fixture.recover(base, None) else {
+        panic!("pending checks at budget exhaustion must hand off without another recovery");
+    };
+    assert!(reason.starts_with(base));
+    assert!(reason.contains("Previous check `rg -q count README.md`: terminal exit 1"));
+    assert!(reason.contains("no match"));
+    assert!(!reason.contains("so autonomous recovery stopped"));
+    assert_eq!(fixture.stats.verification_auto_recovery_turns(), 0);
+    assert_eq!(fixture.stats.verification_consecutive_failures(), 1);
+    assert!(!fixture.runtime.has_pending_follow_up_inputs());
+    assert!(fixture.runtime.state.messages.is_empty());
+    assert!(fixture.registry.completion_verification_pending());
+}

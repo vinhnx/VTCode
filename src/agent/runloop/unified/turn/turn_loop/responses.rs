@@ -12,7 +12,6 @@ use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use anyhow::Result;
 use vtcode_core::core::agent::refusal;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::tools::tool_intent::{GENERIC_VERIFIER_DESCRIPTION, VERIFIER_SHELL_FORM_NOTE};
 use vtcode_core::utils::ansi::MessageStyle;
 
 /// defined in crates/codegen/vtcode-core/src/tools/registry?" task produced 4 identical
@@ -30,19 +29,9 @@ pub(crate) const ASSISTANT_TEXT_RESPONSE_CAP_REASON: &str =
     "Turn blocked after repeated assistant responses reached the safety cap; the latest response was preserved.";
 pub(crate) const PENDING_VERIFICATION_BLOCK_REASON: &str =
     "Turn blocked after repeated unverified assistant responses; verification is still pending.";
-/// Final response for a turn blocked on the verification gate. The block
-/// happens after bounded autonomous recovery whether or not a project verifier
-/// was detected, so it states only that recovery ran and names the verifier
-/// generically; the shell-form rule comes from [`VERIFIER_SHELL_FORM_NOTE`] so
-/// it cannot drift from the classifier.
+/// The durable reason names the missing checks and their observed evidence.
 fn pending_verification_final_response() -> String {
-    format!(
-        "The turn is blocked because verification is still pending after bounded autonomous recovery. \
-         Inspection-only checks do not clear the verification gate. To clear it, run \
-         {GENERIC_VERIFIER_DESCRIPTION} with `exec_command`, standalone or as a pure `&&` chain of verifiers, \
-         and let it exit 0. {VERIFIER_SHELL_FORM_NOTE} Then type `continue` to resume with the gate preserved. \
-         Repair failed checks before attempting completion again."
-    )
+    "Completion remains unverified. Preserve the changes and passing evidence; resolve the missing checks before claiming success. Type `continue` to resume.".to_string()
 }
 const CONTEXT_CAPACITY_FINAL_RESPONSE: &str = "The turn is blocked because context capacity or compaction failed. \
     The retained tool outputs and progress are preserved; resume the request or switch \
@@ -264,16 +253,16 @@ pub(crate) fn format_blocked_turn_final_response(reason: &str) -> String {
         // with its own next step; wrapping it would repeat that guidance.
         return reason.trim().to_string();
     }
-    if super::super::tool_outcomes::helpers::is_pending_verification_block(reason) {
-        let evidence = vtcode_commons::formatting::truncate_byte_budget(reason, 2000, " [truncated]");
-        format!("{}\n\n{evidence}", pending_verification_final_response())
-    } else if reason.contains(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON) {
-        CONTEXT_CAPACITY_FINAL_RESPONSE.to_string()
-    } else if budget_exhaustion_cause(reason).is_some() {
+    if budget_exhaustion_cause(reason).is_some() {
         format!(
             "The turn stopped: {}. Continue from the retained conversation and pending task state; reuse gathered evidence and report remaining work and verification explicitly.",
             reason_clause(reason)
         )
+    } else if super::super::tool_outcomes::helpers::is_pending_verification_block(reason) {
+        let evidence = vtcode_commons::formatting::truncate_byte_budget(reason, 2000, " [truncated]");
+        format!("{}\n\n{evidence}", pending_verification_final_response())
+    } else if reason.contains(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON) {
+        CONTEXT_CAPACITY_FINAL_RESPONSE.to_string()
     } else if reason.contains("tool-call limit")
         || reason.contains("Recovery tool-call limit")
         || reason.contains("Blocked tool-call limit")

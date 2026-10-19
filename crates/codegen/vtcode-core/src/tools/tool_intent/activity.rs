@@ -444,7 +444,7 @@ pub fn verification_recovery_directive(default_verifier: Option<&str>, attempt: 
     let verifier = verifier_reference(default_verifier);
     format!(
         "Verification recovery ({attempt}/{max_attempts}): completion is unverified. Continue implementation and repair reported failures; edits remain available. \
-        Then run only missing checks, starting with {verifier} via `exec_command`, standalone or as a pure `&&` chain of verifiers. \
+        Validate a failing generated assertion against the original request before changing code; explicitly correct erroneous tracker verify metadata without weakening user criteria. Then run only missing checks, starting with {verifier} via `exec_command`, standalone or as a pure `&&` chain of verifiers. \
         {VERIFIER_SHELL_FORM_NOTE} Reuse fresh passes; successful completion requires all mandatory checks."
     )
 }

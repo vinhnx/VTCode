@@ -129,16 +129,28 @@ impl TurnProcessingContext<'_> {
     }
 
     fn verification_execution_blocker(&self, tracker: &helpers::LoopTracker) -> Option<String> {
-        let blocker = if self.harness_state.recovery_is_tool_free() {
-            Some("tools are disabled for recovery synthesis")
-        } else if self.harness_state.wall_clock_exhausted() {
-            Some("the turn wall-clock budget is exhausted")
-        } else if self.harness_state.tool_budget_exhausted() && tracker.pending_verifier_session_id.is_none() {
-            Some("the turn tool-call budget is exhausted")
-        } else {
-            None
-        };
-        blocker.map(|reason| format!("Verification is still pending: {reason}. No verifier was scheduled; resume with fresh execution budget."))
+        if self.harness_state.recovery_is_tool_free() {
+            return Some(
+                "Verification is still pending: tools are disabled for recovery synthesis. No verifier was scheduled."
+                    .to_string(),
+            );
+        }
+        let budget_notice = self
+            .harness_state
+            .wall_clock_budget_exhaustion()
+            .map(|budget| budget.synthesis_directive_message())
+            .or_else(|| {
+                tracker
+                    .pending_verifier_session_id
+                    .is_none()
+                    .then(|| self.harness_state.tool_budget_exhaustion())
+                    .flatten()
+                    .map(|budget| budget.synthesis_directive_message())
+            })?;
+        let cause = crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause(&budget_notice)?;
+        Some(format!(
+            "{cause}. Changes remain unverified; no additional verifier was scheduled. Resume with fresh execution budget and retain existing check evidence."
+        ))
     }
 
     /// Shared gate for harness-executed verification: kill-switch,

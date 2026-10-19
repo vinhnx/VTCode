@@ -233,7 +233,7 @@ impl LoopTracker {
     pub(crate) fn take_verifier_failed_guidance(&mut self) -> Option<String> {
         self.take_verifier_failed_notice().then(|| {
             append_revision_guidance(
-                "The verifier reported a terminal non-zero exit; success remains unverified. Use the reported cause to repair within the existing limits, then obtain a terminal exit 0. This notice grants no permissions or extra repair edits.",
+                "The verifier reported a terminal non-zero exit; success remains unverified. Inspect the failure against the original request and observed artifact. If a model-generated assertion is incorrect, explicitly correct tracker verify metadata while preserving status, outcome, files, and user criteria; do not change correct code to fit it. Otherwise repair within the existing limits, then obtain a terminal exit 0. This notice grants no permissions or extra repair edits.",
                 Some(MismatchKind::VerifierFailed),
             )
         })

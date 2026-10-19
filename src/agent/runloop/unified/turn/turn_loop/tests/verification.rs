@@ -285,10 +285,7 @@ async fn anti_blind_guard_stops_outer_loop_after_bounded_pending_stale_plan_paus
     assert!(outcome.final_response_was_fallback);
     assert!(history.iter().any(|message| {
         message.phase == Some(uni::AssistantPhase::FinalAnswer)
-            && message
-                .content
-                .as_text()
-                .contains("Inspection-only checks do not clear the verification gate")
+            && message.content.as_text().contains("Completion remains unverified")
     }));
     assert_eq!(
         history

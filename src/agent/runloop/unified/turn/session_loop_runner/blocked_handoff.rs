@@ -13,6 +13,7 @@ use vtcode_core::tools::tool_intent::{VERIFIER_SHELL_FORM_NOTE, verifier_referen
 
 use crate::agent::runloop::git::workspace_relative_display;
 use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, harness_event};
+use crate::agent::runloop::unified::run_loop_context::budget_exhaustion_cause;
 use crate::agent::runloop::unified::state::VerificationFailureSummary;
 
 const NO_ARCHIVE_RESUME_EXPLANATION: &str = "Resume is unavailable because no session archive exists.";
@@ -82,7 +83,7 @@ pub(crate) const VERIFICATION_AUTO_RECOVERY_PREFIX: &str = "Continue autonomousl
 pub(super) fn verification_auto_recovery_follow_up(verifier: Option<&str>) -> String {
     let verifier = verifier_reference(verifier);
     format!(
-        "{VERIFICATION_AUTO_RECOVERY_PREFIX} One corrective pass remains for this request. Repair the reported failure within scope; edits remain available. Then run only missing checks. Completion requires \
+        "{VERIFICATION_AUTO_RECOVERY_PREFIX} One corrective pass remains for this request. Inspect the failure against the original request and observed artifact. If a model-generated assertion is wrong, explicitly correct tracker verify metadata while preserving status, outcome, files, and user criteria; do not change correct code to fit it or weaken requirements. Otherwise repair within scope; edits remain available. Then run only missing checks. Completion requires \
         {verifier} to run with `exec_command`, standalone or as a pure `&&` chain, and exits 0. {VERIFIER_SHELL_FORM_NOTE} \
         A text-only reply leaves the gate pending, so this turn would end blocked again."
     )
@@ -112,12 +113,25 @@ pub(super) fn verification_exhausted_handoff_reason(
     max: u8,
     last_failure: Option<&VerificationFailureSummary>,
 ) -> String {
+    if budget_exhaustion_cause(base).is_some() {
+        return match last_failure {
+            Some(failure) => format!(
+                "{base} Previous check `{}`: terminal exit {}. Last output tail:\n{}",
+                failure.command,
+                failure
+                    .exit_code
+                    .map_or_else(|| "unobserved".to_string(), |code| code.to_string()),
+                failure.excerpt_tail,
+            ),
+            None => base.to_string(),
+        };
+    }
     if let Some(failure) = last_failure {
         let exit = failure
             .exit_code
             .map_or_else(|| "unobserved".to_string(), |code| code.to_string());
         return format!(
-            "{base} The harness auto-verification `{}` failed {} time(s) consecutively, so autonomous recovery stopped. \
+            "{base} The harness auto-verification `{}` failed {} time(s) consecutively. Completion remains unverified. \
             Terminal exit: {exit}. Last output tail:\n{}\nFix the reported failure, then run `{}` {HANDOFF_VERIFIER_SHELL_FORM} and let it exit 0 \
             before typing `continue` to resume with the gate preserved.",
             failure.command, failure.consecutive_failures, failure.excerpt_tail, failure.command,
@@ -217,7 +231,8 @@ pub(super) fn blocker_summary_with_diagnostics(
 /// Shared by the status label and the action-line verb so the literal stays
 /// in one place.
 pub(super) fn is_verification_pending_block(blocker_summary: &str) -> bool {
-    blocker_summary.to_ascii_lowercase().contains("verification is still pending")
+    budget_exhaustion_cause(blocker_summary).is_none()
+        && blocker_summary.to_ascii_lowercase().contains("verification is still pending")
 }
 
 const BLOCKED_STATUS_HEADLINE_LIMIT: usize = 80;
@@ -611,6 +626,31 @@ mod tests {
         let disabled = verification_exhausted_handoff_reason(BASE, None, 0, 0, None);
         assert!(disabled.contains("with cross-turn auto-recovery disabled"));
         assert!(!disabled.contains("0/0"));
+    }
+
+    #[test]
+    fn budget_stop_retains_previous_failure_without_claiming_another_attempt() {
+        let base = "Tool wall-clock budget exhausted for this turn (600s). Changes remain unverified; no additional verifier was scheduled.";
+        let failure = VerificationFailureSummary {
+            command: "rg -o 'View all contributors' README.md".into(),
+            exit_code: Some(1),
+            consecutive_failures: 1,
+            excerpt_tail: "no match".into(),
+        };
+        let reason = verification_exhausted_handoff_reason(base, Some("unused"), 1, 1, Some(&failure));
+        assert!(reason.starts_with(base));
+        assert!(reason.contains("Previous check `rg -o"));
+        assert!(reason.contains("terminal exit 1. Last output tail:\nno match"));
+        assert!(!reason.contains("so autonomous recovery stopped"));
+        assert!(!reason.contains("already tried"));
+        assert!(!reason.contains("then run"));
+        assert!(!is_verification_pending_block(&reason));
+        assert!(blocked_status_label(&reason).contains("wall-clock budget exhausted"));
+        let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
+        assert!(final_text.starts_with("The turn stopped: tool wall-clock"));
+        assert!(!final_text.contains("Inspection-only"));
+        assert!(!final_text.contains("bounded autonomous recovery"));
+        assert_eq!(verification_exhausted_handoff_reason(base, Some("unused"), 0, 0, None), base);
     }
 
     #[test]

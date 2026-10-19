@@ -264,7 +264,7 @@ mod tests {
             assert!(
                 selected
                     .next_action
-                    .ends_with("Inspect the verifier output, revise the fix hypothesis, then re-verify standalone.")
+                    .ends_with("Compare verifier to request/artifact; revise the fix hypothesis or a faulty generated assertion without weakening criteria. Metadata is not a pass; re-verify.")
             );
             assert!(selected.next_action.len() <= DIAGNOSIS_MAX_ACTION_BYTES);
         }

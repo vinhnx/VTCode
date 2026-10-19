@@ -74,6 +74,12 @@ remain failures. Choose a verifier with a zero-on-success contract when writing
 a plan. Test absence assertions with both present and absent fixtures; a reversed
 predicate can otherwise make the desired state fail its own required check.
 Existing tracker requirements are never repaired or replaced automatically.
+When a model-generated assertion contradicts the original request or observed
+artifact format (for example, a raw-text regex ignores HTML count-marker comments),
+inspect the mismatch before changing implementation. Explicitly correct the
+tracker's `verify` metadata while preserving status, outcome, files, and the original
+user criteria. A corrected assertion must execute and pass; metadata changes alone
+never establish evidence.
 Indexed tracker updates require `status`, including updates to `outcome`,
 `verify`, or notes; retain the current status when changing only metadata.
 Required inspections and custom checks bypass both result-cache boundaries,
@@ -234,3 +240,13 @@ at commit `9dc3a1ce7ea53bb818b8dd69416d6dde70d0b680` (Apache-2.0, copyright
 2025 OpenAI) and [OpenAI's harness engineering article](https://openai.com/index/harness-engineering/).
 These support validating completed work and enforcing outcome invariants. No
 upstream code was copied and no runtime speedup is claimed.
+
+Budget exhaustion remains the primary stop reason even when checks are pending.
+It does not count as another verifier failure or schedule a verification corrective
+turn. Handoffs retain earlier command, terminal status, and bounded output as
+previous evidence without claiming a new check ran. Resume retains required checks
+and fresh passes under the existing budget policy. This separation follows the
+distinct budget stop in OpenAI Codex
+[`codex-rs/core/src/tasks/mod.rs`](https://github.com/openai/codex/blob/4635d489254ba6d80eb6d2ef501929b0c617b6ec/codex-rs/core/src/tasks/mod.rs)
+at commit `4635d489254ba6d80eb6d2ef501929b0c617b6ec`
+(Apache-2.0, Copyright 2025 OpenAI); no upstream code was copied.

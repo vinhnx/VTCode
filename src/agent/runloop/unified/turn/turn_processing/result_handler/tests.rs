@@ -388,11 +388,36 @@ async fn exhausted_budget_blocks_verification_without_reminder_rounds() {
     let super::PendingVerificationTextOutcome::Block { reason } = outcome else {
         panic!("exhausted execution budget must produce a verification block");
     };
-    assert!(reason.contains("tool-call budget"));
+    assert!(reason.contains("Tool-call budget"));
     let final_text = crate::agent::runloop::unified::turn::turn_loop::format_blocked_turn_final_response(&reason);
-    assert!(super::helpers::is_pending_verification_block(&reason));
-    assert!(super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
+    assert!(!super::helpers::is_pending_verification_block(&reason));
+    assert!(!super::helpers::verification_block_allows_auto_recovery(&reason, &final_text));
+    assert!(reason.starts_with("Tool-call budget exhausted for this turn (1/1)"));
+    assert!(final_text.contains("Changes remain unverified"));
+    assert!(!final_text.contains("bounded autonomous recovery"));
     assert_eq!(tracker.verification_auto_recovery_attempts(), 0);
+    assert!(!tracker.auto_verification_executed);
+    assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
+}
+
+#[tokio::test]
+async fn wall_clock_exhaustion_has_priority_over_pending_verification_and_tool_calls() {
+    let mut backing = TestTurnProcessingBacking::new(1).await;
+    let mut tracker = LoopTracker::new();
+    let mut ctx = backing.turn_processing_context();
+    ctx.harness_state.tool_calls = 1;
+    ctx.harness_state.max_tool_wall_clock = std::time::Duration::from_secs(600);
+    ctx.harness_state.turn_started_at = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(601))
+        .unwrap();
+    let super::PendingVerificationTextOutcome::Block { reason } =
+        ctx.handle_pending_verification_text_response(&mut tracker, "Done").unwrap()
+    else {
+        panic!("wall-clock exhaustion must stop completion without scheduling checks");
+    };
+    assert!(reason.starts_with("Tool wall-clock budget exhausted for this turn (600s)."));
+    assert!(reason.contains("no additional verifier was scheduled"));
+    assert!(!super::helpers::is_pending_verification_block(&reason));
     assert!(!tracker.auto_verification_executed);
     assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
 }
@@ -713,6 +738,100 @@ async fn drive_model_tool_call(
     handle_tool_calls(&mut t_ctx, std::slice::from_ref(&call))
         .await
         .expect("model tool call should dispatch");
+}
+
+#[tokio::test]
+async fn incorrect_generated_assertion_requires_explicit_correction_and_fresh_execution() {
+    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let readme = backing.workspace_path().join("README.md");
+    let content = "<summary>View all contributors (<!-- CONTRIBUTORS-COUNT:START -->28<!-- CONTRIBUTORS-COUNT:END -->)</summary>\n";
+    std::fs::write(&readme, content).unwrap();
+    let wrong = "rg -o 'View all contributors \\([0-9]+\\)' README.md";
+    let corrected = "rg -q 'View all contributors \\(<!-- CONTRIBUTORS-COUNT:START -->[0-9]+<!-- CONTRIBUTORS-COUNT:END -->\\)' README.md";
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    {
+        let ctx = backing.turn_processing_context();
+        ctx.tool_registry.allow_all_tools().await.unwrap();
+        let mut commands = ctx.tool_registry.commands_config();
+        commands.allow_list.push("rg".into());
+        ctx.tool_registry.apply_commands_config(&commands);
+        let result = ctx.tool_registry.execute_tool("task_tracker", serde_json::json!({
+            "action":"create", "items":[{"description":"Display contributor count", "status":"completed", "verify":[wrong]}]
+        })).await.unwrap();
+        assert!(result.get("error").is_none(), "{result}");
+        ctx.tool_registry.restore_completion_verification_debt();
+    }
+    tracker.mark_verification_pending();
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "exec_command",
+        &serde_json::json!({"cmd":wrong}).to_string(),
+    )
+    .await;
+    {
+        let ctx = backing.turn_processing_context();
+        assert!(ctx.tool_registry.completion_verification_pending());
+        assert!(!ctx.tool_registry.completion_verifier_passed(wrong));
+        assert!(ctx.tool_registry.unverified_completion_reason().contains(wrong));
+        assert!(
+            ctx.working_history
+                .iter()
+                .any(|message| message.content.as_text().contains("original request and observed artifact")),
+            "history: {:?}",
+            ctx.working_history
+        );
+    }
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "task_tracker",
+        &serde_json::json!({"action":"update", "index":1, "status":"completed", "verify":[corrected]}).to_string(),
+    )
+    .await;
+    {
+        let ctx = backing.turn_processing_context();
+        assert!(ctx.tool_registry.completion_verification_pending());
+        assert!(ctx.tool_registry.unverified_completion_reason().contains(corrected));
+    }
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "exec_command",
+        &serde_json::json!({"cmd":corrected}).to_string(),
+    )
+    .await;
+    assert!(
+        !backing
+            .turn_processing_context()
+            .tool_registry
+            .completion_verification_pending()
+    );
+    assert_eq!(std::fs::read_to_string(&readme).unwrap(), content);
+    // The corrected assertion must still reject the missing-count boundary.
+    std::fs::write(&readme, "<summary>View all contributors</summary>\n").unwrap();
+    backing
+        .turn_processing_context()
+        .tool_registry
+        .restore_completion_verification_debt();
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "exec_command",
+        &serde_json::json!({"cmd":corrected}).to_string(),
+    )
+    .await;
+    assert!(
+        backing
+            .turn_processing_context()
+            .tool_registry
+            .completion_verification_pending()
+    );
 }
 
 #[tokio::test]

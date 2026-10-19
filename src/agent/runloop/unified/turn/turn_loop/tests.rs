@@ -50,7 +50,7 @@ pub(super) use super::{
     completed_fallback_reason, is_plan_entry_handoff,
 };
 
-const PENDING_VERIFICATION_RESPONSE_MARKER: &str = "Inspection-only checks do not clear the verification gate";
+const PENDING_VERIFICATION_RESPONSE_MARKER: &str = "Completion remains unverified";
 const CONTEXT_CAPACITY_RESPONSE_MARKER: &str = "context capacity or compaction failed";
 
 const STREAMED_VALID_PLAN: &str = r#"# Streamed plan

@@ -91,7 +91,7 @@ pub fn revision_guidance(kind: Option<MismatchKind>) -> &'static str {
             "Re-read the exact current lines, revise the patch hypothesis, then retry once with exact context."
         }
         Some(MismatchKind::VerifierFailed) => {
-            "Inspect the verifier output, revise the fix hypothesis, then re-verify standalone."
+            "Compare verifier to request/artifact; revise the fix hypothesis or a faulty generated assertion without weakening criteria. Metadata is not a pass; re-verify."
         }
         Some(MismatchKind::RepeatedEvidence) => {
             "Stop repeating the same query; revise the hypothesis and change scope or approach."
@@ -119,6 +119,15 @@ pub fn append_revision_guidance(base: &str, kind: Option<MismatchKind>) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifier_revision_preserves_user_criteria_and_requires_executed_evidence() {
+        let guidance = revision_guidance(Some(MismatchKind::VerifierFailed));
+        assert!(guidance.contains("Compare verifier to request/artifact"));
+        assert!(guidance.contains("faulty generated assertion"));
+        assert!(guidance.contains("without weakening criteria"));
+        assert!(guidance.contains("Metadata is not a pass; re-verify"));
+    }
 
     #[test]
     fn exit_code_alone_distinguishes_zero_from_nonzero() {

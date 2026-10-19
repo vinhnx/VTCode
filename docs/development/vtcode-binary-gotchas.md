@@ -41,44 +41,17 @@ changing the runloop, update path, allocator, or request assembly.
   normal turn-processing context. Loop-limit grants emit `ToolLoopLimitIncreased` and leave tools enabled. Exclude
   explicit `request_user_input` think-time and command-session `wait` time from the wall-clock calculation; neither
   consumes autonomous execution budget.
-- Anti-blind editing is session-scoped: after 6 consecutive successful mutations without verification, a blocked turn
-  and later `continue` retain the gate. A successful verification-classified command clears it — standalone or as a pure
-  `&&` chain of verifiers (`cargo fmt --all -- --check && cargo check --locked && cargo nextest run …`); reads, diffs,
-  and ordinary stall recovery do not. `cargo fmt --check` counts as verification while plain `cargo fmt` stays a
-  mutation. Verifiers span cargo/go/npm/bun/deno/make/just/ruff/tsc/eslint/pytest/gradle/scripts: `make`/`just` only
-  with test/check/lint targets, `tsc` only with `--noEmit`, `ruff format` only with `--check`, `eslint` without `--fix`.
-  Docs-only prose edits (`.md`/`.mdx`/`.txt`/`.rst` extensions, extensionless or docs-extensioned
-  `README`/`CHANGELOG`/`LICENSE`) stay allowed while pending and never increment the mutation counter; code under
-  `docs/` (e.g. `docs/script.py`) and mixed docs+code patches stay blocked. A failed verifier run (non-zero exit) keeps
-  the gate but grants 2 fix-up edits (`FAILED_VERIFICATION_FIX_ALLOWANCE`, persisted in `SessionStats`) plus one
-  diagnostic text allowance (the failed verifier resets `consecutive_assistant_text_responses`) so a broken build can be
-  explained and repaired before re-verify; tool-level failures that never executed grant no window. Truncation-only
-  piped verifiers with pure `head`/`tail` tails (`cargo check 2>&1 | head`) are elided at exec time into the standalone
-  verifier (output redirects preserved verbatim) with `max_output_tokens` capping, so the observed exit status is the
-  verifier's and a success clears the gate. Static read-only filters (`| grep`, `| wc`) run with fail-closed
-  `pipefail`; filtering stays intact and only terminal exit 0 clears the gate. No matches, filter failures, and SIGPIPE
-  keep it pending. Dynamic syntax, mutating tails, and `;`/`||`/background joins never qualify. Run other verifiers as pure
-  `&&` chains with `max_output_tokens` instead of pipes. Chained mutations smuggled behind a verifier prefix
-  (`cargo check && rm …`) stay blocked because every shell segment must be verification-or-readonly
-  (`shell_command_is_admitted_verification_attempt`). Verification commands always re-execute (excluded from read-only
-  fast-reuse caching) so the gate never clears or sticks on stale output. Planning synthesis (`<proposed_plan>` or
-  planning-active text) is exempt from the pending-verification text block because it makes no workspace mutation.
-  Autonomous verification recovery (no manual `continue`): configured in-turn directive attempts (default 2,
-  project-aware verifier directive via `default_verifier_for_workspace` or `default_verifier_override` + fresh streak),
-  completion claims jump straight to harness execution, then one harness-executed verifier per turn through the normal
-  tool pipeline (`auto_execute`, default true; exit 0 clears, failure grants the fix window with output in history,
-  denial falls through; 3 consecutive harness failures escalate to a handoff carrying the failure tail), plus up to 2
-  autonomous cross-turn recovery turns (skipped once escalated) before manual `continue` is required — all bounds
-  tunable under `[agent.harness.verification]`. Tool-free recovery synthesis bypasses verification accounting (its texts
-  cannot verify; recovery budgets govern); user-typed `continue` after a verification stall resumes verifier-first
-  instead of concluding. Copilot/direct execution and batch execution must persist the
-  `SessionStats::verification_snapshot` bundle immediately after updating their `LoopTracker`, so resumed turns
+- Verification gates successful completion, not edits or inspections. The registry owns required checks,
+  mutation generations, owned running sessions, and terminal verdicts. Run only missing checks at completion;
+  required checks bypass inspection-result replay. A failed attempt permits at most one corrective pass per genuine
+  request, and tracker progress or internal continuations do not replenish it. Existing settings can disable recovery.
+  Compare failed generated assertions against the original request and observed artifact before changing code;
+  explicitly correct erroneous tracker verification metadata without weakening user criteria, then execute the check.
+  Budget exhaustion remains a budget handoff with changes unverified and earlier failures labeled as previous evidence;
+  it cannot schedule another verification recovery turn. See [completion verification](completion-verification.md)
+  for shell classification, freshness, mandatory tracker checks, and recovery boundaries. Copilot/direct and batch
+  execution persist `SessionStats::verification_snapshot` after updating their `LoopTracker`, so resumed turns
   reconstruct the same gate state.
-- Verification auto-recovery for long-running work: tracker step completion resets only the verification cross-turn turn
-  budget (`reset_verification_auto_recovery_turns`, failures preserved so never-passing suites still escalate);
-  exhausted handoffs report `attempt/max` plus the exact verifier and the transcript banner leads verifier-first;
-  stalled follow-up treats a stall reason naming the pending gate as verification-stalled even when the snapshot was
-  lost.
 - If the ordinary tool-loop allowance is reached and no manual extension is granted, schedule one tool-free synthesis
   request before ending the turn. The loop allowance becomes unlimited only for that recovery control pass; the provider
   request still has tools disabled. The absolute hard cap and its terminal behavior remain unchanged. After the first

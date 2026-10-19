@@ -4,18 +4,11 @@ use super::*;
 fn blocked_turn_final_response_explains_pending_verification() {
     let response = blocked_turn_final_response(PENDING_VERIFICATION_BLOCK_REASON);
 
-    assert!(response.contains("Inspection-only checks do not clear the verification gate"));
-    assert!(response.contains("cargo check --locked"));
-    assert!(response.contains(vtcode_core::tools::tool_intent::GENERIC_VERIFIER_DESCRIPTION));
-    assert!(response.contains(vtcode_core::tools::tool_intent::VERIFIER_SHELL_FORM_NOTE));
-    assert!(response.contains("autonomous recovery"));
-    assert!(response.contains("max_output_tokens"));
+    assert!(response.contains("Completion remains unverified"));
+    assert!(response.contains("passing evidence"));
     assert!(response.contains("continue"));
-    // The block fires whether or not a project verifier was detected, so the
-    // notice must not claim the harness already ran one, and must not restate
-    // a stricter pipe rule than the classifier applies.
-    assert!(!response.contains("already tried"), "{response}");
-    assert!(!response.contains("no `|`"), "{response}");
+    assert!(!response.contains("already tried"));
+    assert!(!response.contains("Inspection-only"));
 }
 
 #[test]
@@ -35,7 +28,7 @@ fn blocked_turn_final_response_is_not_suppressed_by_prior_event_state() {
     // final assistant item; the blocked handoff must still be selected.
     assert!(
         blocked_turn_final_response(&format!("prior event; {PENDING_VERIFICATION_BLOCK_REASON}"))
-            .contains("Inspection-only checks")
+            .contains("Completion remains unverified")
     );
 }
 
