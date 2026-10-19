@@ -5,6 +5,33 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.0 - 2026-10-19
+
+### Highlights
+
+#### Bug Fixes
+
+- Preserve budget stops during verification (5bbcd42f)
+- Load resume transcript in one frame (64fef3b4)
+
+#### Documentation
+
+- Note runner transcript-append coalescing (5d687f5d)
+
+#### Features
+
+- Add MiniMax M3.1 Flash to MiniMax, Merge Gateway, and OpenRouter (41134bfb)
+
+### Other Changes
+
+#### Performance
+
+- Coalesce streamed transcript appends into one frame (252df1e9)
+
+#### Refactors
+
+- Delegate byte-bounded prefix truncation to vtcode-commons (7da3fe5b)
+
 ## 0.179.6 - 2026-10-19
 
 ### Highlights
