@@ -859,6 +859,12 @@ impl Session {
         self.core.transcript_view_top = view_top;
 
         let clicked_row = view_top.saturating_add(row_in_view);
+        // Diagnostic details toggle first, mirroring the core session's click
+        // order (diagnostic → paste → thinking → diff review).
+        if self.toggle_diagnostic_at_row(transcript_width, clicked_row) {
+            self.mark_dirty();
+            return true;
+        }
         let expanded = self.expand_collapsed_paste_at_row(transcript_width, clicked_row);
         if expanded {
             self.mark_dirty();

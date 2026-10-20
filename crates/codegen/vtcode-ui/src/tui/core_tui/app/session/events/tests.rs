@@ -1701,3 +1701,76 @@ fn composer_enter_and_control_j_keep_existing_newline_and_submit_behavior() {
         );
     }
 }
+
+#[test]
+fn diagnostic_details_affordance_click_expands_through_the_production_event_path() {
+    use ratatui::backend::TestBackend;
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+
+    // Production payload shape from `handle_mcp_updates` (mcp.catalog_ready).
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Info,
+        code: "mcp.catalog_ready".into(),
+        summary: "MCP tools are ready. Use /mcp tools to inspect the catalog.".into(),
+        agent_details: r#"{"phase":"ready:2_registered","error":null}"#.into(),
+        correlation_id: "mcp:catalog".into(),
+        actions: Vec::new(),
+    };
+
+    let mut session = build_session();
+    session.core.upsert_diagnostic(diagnostic.clone());
+    assert!(
+        !session.core.lines[0].diagnostic.as_ref().unwrap().expanded,
+        "the readiness diagnostic starts collapsed"
+    );
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+    terminal.draw(|frame| session.render(frame)).expect("render diagnostic");
+    let buffer = terminal.backend().buffer();
+    let affordance_row = (0..buffer.area.height)
+        .find(|row| {
+            (0..buffer.area.width)
+                .map(|col| buffer[(col, *row)].symbol())
+                .collect::<String>()
+                .contains("Details")
+        })
+        .expect("the Details affordance is rendered");
+    let body = session.core.transcript_area().expect("transcript body");
+    let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: body.x + 1,
+            row: affordance_row,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &events,
+        None,
+    );
+    assert!(
+        session.core.lines[0].diagnostic.as_ref().unwrap().expanded,
+        "clicking the Details affordance through the production mouse path must expand the diagnostic"
+    );
+
+    // A fresh session: clicking the summary row must not toggle.
+    let mut session = build_session();
+    session.core.upsert_diagnostic(diagnostic);
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+    terminal.draw(|frame| session.render(frame)).expect("render diagnostic");
+    let body = session.core.transcript_area().expect("transcript body");
+    let (events, _received) = tokio::sync::mpsc::unbounded_channel();
+    session.handle_event(
+        CrosstermEvent::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column: body.x + 1,
+            row: body.y,
+            modifiers: KeyModifiers::NONE,
+        }),
+        &events,
+        None,
+    );
+    assert!(
+        !session.core.lines[0].diagnostic.as_ref().unwrap().expanded,
+        "the summary row must preserve selection behavior and not toggle details"
+    );
+}
