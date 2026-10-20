@@ -307,10 +307,14 @@ fn build_terminal_title_preview(
     }
 
     let status = preview_status_label(status_left);
+    // Representative runtime values: the shared loading shimmer starts at its
+    // Braille head (`⠋`), attention uses `!`, and a loading-ended state shows
+    // the static status label.
     let spinner = match status {
         "Ready" => None,
         "Action Required" => Some("!".to_string()),
-        _ => Some("...".to_string()),
+        "Undoing" => Some("Undoing".to_string()),
+        _ => Some("⠋".to_string()),
     };
     let project = workspace
         .file_name()
@@ -366,8 +370,16 @@ fn build_terminal_title_preview(
 }
 
 fn preview_status_label(status_left: Option<&str>) -> &'static str {
+    // Keep these needles in sync with the shipped TUI classification
+    // (`vtcode-ui` `session/terminal_title.rs::terminal_title_status`).
     let normalized = status_left.unwrap_or("").trim().to_ascii_lowercase();
-    if normalized.contains("action required") || normalized.contains("approval") {
+    if normalized.contains("action required")
+        || normalized.contains("approval")
+        || normalized.contains("input required")
+        || normalized.contains("blocked")
+        || normalized.contains("tools disabled")
+        || normalized.contains("recovery")
+    {
         "Action Required"
     } else if normalized.contains("undo") || normalized.contains("rewind") || normalized.contains("revert") {
         "Undoing"
@@ -417,7 +429,7 @@ mod tests {
             &["project".to_string(), "spinner".to_string(), "status".to_string()],
         );
 
-        assert_eq!(preview, "demo-project ... Thinking");
+        assert_eq!(preview, "demo-project ⠋ Thinking");
     }
 
     #[test]

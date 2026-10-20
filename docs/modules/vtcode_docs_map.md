@@ -1986,7 +1986,7 @@ below based on the topic area.
 
 - **File**: `docs/user-guide/interactive-mode.md`
   - **Content**: Interactive Mode Reference
-  - **Topics**: Response progress, Keyboard Shortcuts, Execution Explanations, Reduced Motion, Fullscreen Rendering
+  - **Topics**: Response progress, Keyboard Shortcuts, Execution Explanations, Terminal Title, Reduced Motion
   - **User Questions**: "What can you tell me about Interactive Mode Reference?", "How does Response progress work?",
     "How does Keyboard Shortcuts work?"
 

@@ -28,6 +28,13 @@ mod tests {
     use super::{DEFAULT_TERMINAL_TITLE_ITEMS, TerminalTitleConfig};
 
     #[test]
+    fn shipped_default_items_lead_with_the_spinner() {
+        // The shipped binary must always manage the title with the activity
+        // spinner first; single source in `data/default_config.toml` mirrors it.
+        assert_eq!(DEFAULT_TERMINAL_TITLE_ITEMS, ["spinner", "project"]);
+    }
+
+    #[test]
     fn serde_defaults_when_terminal_title_table_is_missing() {
         let config: TerminalTitleConfig = toml::from_str("").expect("config should parse");
 

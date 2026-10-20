@@ -641,23 +641,58 @@ impl Session {
         self.has_active_foreground_pty().then_some(ACTIVE_PTY_STATUS_TEXT)
     }
 
+    /// Semantic loading indicator derived from the status text and activity
+    /// state, without the animation policy. Callers that animate layer
+    /// [`Self::appearance`]; loading classification must not depend on
+    /// accessibility settings. A blocked turn is quiescent and commandable,
+    /// so the persistent blocked label never looks like loading.
+    fn status_indicator_active(&self) -> bool {
+        self.activity_state.is_busy()
+            || (!matches!(self.activity_state, ActivityState::Blocked)
+                && status_requires_shimmer(self.animation_status_text()))
+    }
+
     pub(crate) fn has_status_spinner(&self) -> bool {
-        if self.activity_state.is_busy() {
-            return true;
-        }
-        // Do not let the persistent blocked label trigger the generic shimmer
-        // detector; a blocked turn is quiescent and commandable.
-        if matches!(self.activity_state, ActivityState::Blocked) {
-            return false;
-        }
-        if !self.appearance.should_animate_progress_status() {
-            return false;
-        }
-        status_requires_shimmer(self.animation_status_text())
+        self.appearance.should_animate_progress_status() && self.status_indicator_active()
     }
 
     pub(crate) fn is_shimmer_active(&self) -> bool {
         self.has_status_spinner() || self.thinking_spinner.is_active
+    }
+
+    /// Whether any canonical global loading observer is live: turn status
+    /// activity, thinking indicator, an animated transcript progress row, or
+    /// background work. Deliberately animation-independent — accessibility
+    /// policy only suppresses the animation frame, never the fact that work
+    /// is in flight. This is the shared clock the terminal title spinner and
+    /// the footer shimmer both follow; seeding a new animated surface here
+    /// keeps them from drifting.
+    pub(crate) fn loading_activity_active(&self) -> bool {
+        !matches!(self.activity_state, ActivityState::Blocked)
+            && (self.status_indicator_active()
+                || self.thinking_spinner.is_active
+                || self.progress.is_animated()
+                || self.background_status_shimmer_active())
+    }
+
+    /// Terminal-title attention signal: only real user attention (blocked
+    /// turn, approval/permission/input-required modal, or wizard) qualifies.
+    /// Ordinary overlays such as config pickers and setup modals stay out so
+    /// configuring the title never flashes "action required" at itself.
+    pub(crate) fn title_attention_required(&self) -> bool {
+        if matches!(self.activity_state, ActivityState::Blocked) {
+            return true;
+        }
+        if let Some(modal) = self.modal_state() {
+            let normalized_title = modal.title.trim().to_ascii_lowercase();
+            if normalized_title.contains("approval")
+                || normalized_title.contains("permission")
+                || normalized_title.contains("input required")
+            {
+                return true;
+            }
+        }
+        self.wizard_overlay().is_some()
     }
 
     /// Whether live background tasks must keep the loading shimmer animating.

@@ -893,8 +893,8 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.mode` | `string` | no | `"auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
 | `ui.status_line.show_clock` | `boolean` | no | `true` | Show the current system time (`HH:MM:SS`) on the status line (default: true). |
-| `ui.terminal_title.items` | `array \| null` | no | `null` | - |
-| `ui.terminal_title.items[]` | `string` | no | `-` | - |
+| `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `null` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
+| `ui.terminal_title.items[]` | `string` | no | `-` | One of `spinner`, `project`, `status`, `thread`, `git-branch`, `model`, `task-progress`. The `spinner` item follows the shared global loading animation (thinking, model wait, tools, background work) and shows `!` while a turn is blocked or a user-attention overlay is open. |
 | `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended") |
 | `ui.tool_display_mode` | `string` | no | `"compact"` | Tool transition summary display mode Options: "expanded" (expanded summary layout) or "compact" (one compact summary per tool call) |
 | `ui.tool_output_max_lines` | `integer` | no | `30` | Maximum number of lines to display in tool output (prevents transcript flooding) |

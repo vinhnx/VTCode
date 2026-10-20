@@ -98,6 +98,7 @@ use self::queue::QueueOverlay;
 use self::render_state::RenderState;
 use self::scroll::ScrollManager;
 pub(crate) use self::spinner::pulse_spinner_frame_for_phase;
+pub(crate) use self::spinner::title_spinner_frame;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;

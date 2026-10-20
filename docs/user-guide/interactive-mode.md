@@ -79,6 +79,22 @@ execution relationships. Add `--scope session` to include earlier retained tasks
 active. `/explain --export html` saves a report and prints its path without opening the browser. See
 [explanation usage](./commands.md#execution-explanations) for examples, attribution rules, and missing-evidence states.
 
+## Terminal Title
+
+While the TUI runs, VT Code manages the terminal window and tab title. Configure the ordered items interactively with
+`/title`, or set `ui.terminal_title.items` in `vtcode.toml`. The default is `["spinner", "project"]`; an empty list
+disables VT Code-managed titles and restores whatever the terminal showed before.
+
+- `spinner` follows the shared global loading animation — while the turn is thinking or streaming, a tool or command
+  runs, or background tasks execute — at the same cadence as the footer's loading shimmer, so it cannot diverge from
+  the rest of the UI.
+- `status` maps activity to `Ready`, `Thinking`, `Working`, `Waiting`, `Undoing`, or `Action Required`. The title shows
+  `!` when a turn is blocked or an approval, permission, or input-required overlay is open.
+- `project`, `thread`, `git-branch`, `model`, and `task-progress` render their configured values when they are
+  available; unavailable items and duplicates are omitted from the title.
+
+Reduced motion and screen-reader mode replace the Braille spinner with static labels such as `Thinking` or `Working`.
+
 ## Reduced Motion
 
 Set `ui.reduce_motion_mode = true` to keep progress labels visible while stopping shimmer and spinner animation. You can
