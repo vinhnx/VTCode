@@ -317,7 +317,7 @@ fn test_models_for_provider() {
     assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_cloud_models.contains(&ModelId::OllamaGptOss120bCloud));
     assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM3Cloud));
-    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM3Cloud));
+    assert!(ollama_cloud_models.contains(&ModelId::OllamaMinimaxM31FlashCloud));
 
     let _hf_models = ModelId::models_for_provider(Provider::HuggingFace);
 }
@@ -331,6 +331,7 @@ fn test_ollama_cloud_models() {
         (ModelId::OllamaGptOss20bCloud, models::ollama::GPT_OSS_20B_CLOUD),
         (ModelId::OllamaGptOss120bCloud, models::ollama::GPT_OSS_120B_CLOUD),
         (ModelId::OllamaMinimaxM3Cloud, models::ollama::MINIMAX_M3_CLOUD),
+        (ModelId::OllamaMinimaxM31FlashCloud, models::ollama::MINIMAX_M3_1_FLASH_CLOUD),
         (ModelId::OllamaGlm53Cloud, models::ollama::GLM_5_3_CLOUD),
         (ModelId::OllamaGlm53FlashCloud, models::ollama::GLM_5_3_FLASH_CLOUD),
         (ModelId::OllamaMistralLarge4Cloud, models::ollama::MISTRAL_LARGE_4_CLOUD),
@@ -357,7 +358,10 @@ fn test_ollama_cloud_models() {
             assert!(model_id.is_top_tier());
         }
 
-        if matches!(model_id, ModelId::OllamaGlm53FlashCloud | ModelId::OllamaDeepSeekV41FlashCloud) {
+        if matches!(
+            model_id,
+            ModelId::OllamaGlm53FlashCloud | ModelId::OllamaDeepSeekV41FlashCloud | ModelId::OllamaMinimaxM31FlashCloud
+        ) {
             assert!(model_id.is_flash_variant());
             assert!(model_id.is_efficient_variant());
         }
@@ -560,6 +564,19 @@ fn test_minimax_m31_flash_routes_and_reasoning_metadata() {
         Provider::OpenRouter.supported_reasoning_efforts(openrouter.as_str().as_ref()),
         ["low", "medium", "high", "xhigh", "max"]
     );
+
+    // Ollama Cloud route serves the same model; reasoning readiness comes
+    // from the Ollama REASONING_MODELS list, while structured reasoning
+    // efforts are not available on the boolean `think` wire.
+    let ollama_cloud =
+        ModelId::from_str(models::ollama::MINIMAX_M3_1_FLASH_CLOUD).expect("Ollama Cloud MiniMax M3.1 Flash");
+    assert_eq!(ollama_cloud, ModelId::OllamaMinimaxM31FlashCloud);
+    assert_eq!(ModelId::OllamaMinimaxM31FlashCloud.as_str(), models::ollama::MINIMAX_M3_1_FLASH_CLOUD);
+    assert_eq!(ollama_cloud.provider(), Provider::OllamaCloud);
+    assert!(models::ollama::REASONING_MODELS.contains(&ollama_cloud.as_str().as_ref()));
+    assert!(!Provider::OllamaCloud.supports_reasoning_effort(ollama_cloud.as_str().as_ref()));
+    assert!(ollama_cloud.is_flash_variant());
+    assert!(ollama_cloud.is_efficient_variant());
 }
 
 #[test]

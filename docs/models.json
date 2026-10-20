@@ -3309,6 +3309,23 @@
         },
         "context": 131072
       },
+      "minimax-m3.1-flash:cloud": {
+        "id": "minimax-m3.1-flash:cloud",
+        "name": "MiniMax M3.1 Flash (cloud)",
+        "description": "Cloud-hosted next-generation MiniMax M3.1 Flash for agentic coding, computer use, and cybersecurity with native vision and thinking via Ollama Cloud.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 999424
+      },
       "gemini-3-flash-preview:cloud": {
         "id": "gemini-3-flash-preview:cloud",
         "name": "Gemini 3 Flash Preview (cloud)",

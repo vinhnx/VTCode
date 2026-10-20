@@ -111,6 +111,7 @@ impl ModelId {
             ModelId::OllamaGlm53Cloud,
             ModelId::OllamaGlm53FlashCloud,
             ModelId::OllamaMinimaxM3Cloud,
+            ModelId::OllamaMinimaxM31FlashCloud,
             ModelId::OllamaMistralLarge4Cloud,
             ModelId::OllamaMuseSparkOpenCloud,
             ModelId::OllamaDeepSeekV41FlashCloud,

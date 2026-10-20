@@ -490,8 +490,8 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
 - **Configuration:** Local usage needs no key; set `OLLAMA_API_KEY` to access Ollama Cloud
 - **Default model:** `gpt-oss:20b` (local); any locally available model works
 - **Curated picker catalog:** `gpt-oss:20b`, `gemma4`, plus cloud models `deepseek-v4-flash:cloud`,
-  `deepseek-v4-pro:cloud`, `nemotron-3-ultra:cloud`, `kimi-k3:cloud`, `minimax-m3:cloud`, and `glm-5.2:cloud` (also
-  `gpt-oss:120b-cloud` via the OpenAI OSS support)
+  `deepseek-v4-pro:cloud`, `nemotron-3-ultra:cloud`, `kimi-k3:cloud`, `minimax-m3:cloud`, `minimax-m3.1-flash:cloud`,
+  and `glm-5.2:cloud` (also `gpt-oss:120b-cloud` via the OpenAI OSS support)
 - **Cloud models:** Use IDs like `gpt-oss:120b-cloud` with `OLLAMA_BASE_URL=https://ollama.com`
 - **Custom Models:** Use the `custom-ollama` option in the model picker to enter any locally or cloud-available model ID
 - **Base URL:** Configurable via `OLLAMA_BASE_URL` environment variable (defaults to `http://localhost:11434`)

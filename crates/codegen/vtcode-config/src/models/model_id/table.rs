@@ -741,6 +741,13 @@ model_id_table! {
         display: "MiniMax-M3 (cloud)",
         description: "Cloud-hosted MiniMax-M3 model served via Ollama Cloud",
     },
+    OllamaMinimaxM31FlashCloud {
+        provider: OllamaCloud,
+        id: models::ollama::MINIMAX_M3_1_FLASH_CLOUD,
+        parse: [models::ollama::MINIMAX_M3_1_FLASH_CLOUD],
+        display: "MiniMax M3.1 Flash (cloud)",
+        description: "Cloud-hosted ultra-efficient MiniMax M3.1 Flash for agentic coding and computer use with native vision and thinking via Ollama Cloud",
+    },
     OllamaGlm53Cloud {
         provider: OllamaCloud,
         id: models::ollama::GLM_5_3_CLOUD,

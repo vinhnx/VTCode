@@ -11,6 +11,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MUSE_SPARK_OPEN_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     MINIMAX_M3_CLOUD,
+    MINIMAX_M3_1_FLASH_CLOUD,
     KIMI_K3_CLOUD,
     GEMMA_4,
     LAGUNA_XS_2,
@@ -28,6 +29,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MUSE_SPARK_OPEN_CLOUD,
     GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     MINIMAX_M3_CLOUD,
+    MINIMAX_M3_1_FLASH_CLOUD,
     LAGUNA_XS_2,
     KIMI_K3_CLOUD,
     DEEPSEEK_V4_1_FLASH_CLOUD,
@@ -51,6 +53,7 @@ pub const MISTRAL_LARGE_4_CLOUD: &str = "mistral-large-4:cloud";
 pub const MUSE_SPARK_OPEN_CLOUD: &str = "muse-spark-open:cloud";
 const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:latest";
 pub const MINIMAX_M3_CLOUD: &str = "minimax-m3:cloud";
+pub const MINIMAX_M3_1_FLASH_CLOUD: &str = "minimax-m3.1-flash:cloud";
 pub const KIMI_K3_CLOUD: &str = "kimi-k3:cloud";
 pub(crate) const GEMMA_4: &str = "gemma4";
 pub(crate) const LAGUNA_XS_2: &str = "laguna-xs.2";

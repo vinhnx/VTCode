@@ -56,6 +56,7 @@ fn minimax_m2_model_detection_handles_variants() {
     assert!(is_minimax_m2_model("MiniMaxAI/MiniMax-M2.5:novita"));
     assert!(is_minimax_m2_model("MiniMax-M2.7"));
     assert!(is_minimax_m2_model("MiniMax-M3"));
+    assert!(is_minimax_m2_model("minimax-m3.1-flash:cloud"));
     assert!(is_minimax_m2_model("minimax/minimax-m2.7"));
     assert!(!is_minimax_m2_model("gpt-5"));
 }

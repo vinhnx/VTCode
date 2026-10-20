@@ -83,6 +83,7 @@ The `/model` picker now lists the core Ollama catalog so you can choose them wit
 - `nemotron-3-ultra:cloud`
 - `kimi-k3:cloud`
 - `minimax-m3:cloud`
+- `minimax-m3.1-flash:cloud` (976K-token context, native vision, thinking)
 - `glm-5.2:cloud`
 - `gpt-oss:120b-cloud` (via the OpenAI OSS support below)
 

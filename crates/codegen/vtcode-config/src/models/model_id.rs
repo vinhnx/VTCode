@@ -246,6 +246,8 @@ pub enum ModelId {
     OllamaGptOss120bCloud,
     /// MiniMax-M3 Cloud - Cloud-hosted MiniMax-M3 model served via Ollama Cloud
     OllamaMinimaxM3Cloud,
+    /// MiniMax M3.1 Flash Cloud - ultra-efficient multimodal MiniMax M3.1 Flash served via Ollama Cloud
+    OllamaMinimaxM31FlashCloud,
     /// GLM-5.2 Cloud - Cloud-hosted GLM-5.2 flagship model served via Ollama Cloud
     /// GLM-5.3 Cloud - Cloud-hosted GLM-5.3 flagship model served via Ollama Cloud
     OllamaGlm53Cloud,

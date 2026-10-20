@@ -264,6 +264,7 @@ impl ModelId {
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
                 | ModelId::OllamaGlm53FlashCloud
+                | ModelId::OllamaMinimaxM31FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
@@ -305,6 +306,7 @@ impl ModelId {
                 | ModelId::ZaiGlm53Flash
                 | ModelId::ZaiGlm53Flashx
                 | ModelId::OllamaGlm53FlashCloud
+                | ModelId::OllamaMinimaxM31FlashCloud
                 | ModelId::MergeGatewayZaiGlm53Flash
                 | ModelId::MergeGatewayZaiGlm53Flashx
                 | ModelId::HuggingFaceGlm53FlashTogether
@@ -465,6 +467,7 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaMinimaxM3Cloud => "minimax-m3",
+            ModelId::OllamaMinimaxM31FlashCloud => "minimax-m3.1",
             ModelId::OllamaGlm53Cloud => "glm-5.3",
             ModelId::OllamaGemma4 => "gemma-4",
             ModelId::LlamaCppGemma426bA4b => "4",
