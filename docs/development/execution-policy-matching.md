@@ -4,7 +4,7 @@
 
 ## References and applicability
 
-Charlie Marsh's October 20, 2026 thread, supplied in the task, explains the same transition from path enumeration to direct simplified-cover extraction. Public search did not recover the specific posts, so attribution here relies on the supplied text; implementation claims were checked against the pinned PR source below. The roughly 12,000× figure refers to uv's conflict-dependent formatting benchmark, not VT Code.
+[uv PR #22651](https://github.com/astral-sh/uv/pull/22651) demonstrates direct simplified-cover extraction from decision diagrams. Its roughly 12,000× speedup refers to uv's conflict-dependent formatting benchmark. VT Code's measurements are reported separately below.
 
 [DNF](https://en.wikipedia.org/wiki/Disjunctive_normal_form) expresses an OR of ANDs. Converting arbitrary factored expressions into explicit clauses can grow exponentially. VT Code's prefix policies are ordered token conjunctions with first-match decisions, rather than a Boolean formula requiring DNF conversion.
 
