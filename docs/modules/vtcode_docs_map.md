@@ -203,6 +203,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Execution explanations?", "How does Canonical contract work?", "How
     does Queries and reports work?"
 
+- **File**: `docs/development/execution-policy-matching.md`
+  - **Content**: Execution-policy matching analysis
+  - **Topics**: References and applicability, Contracts and compatibility, Validation and measurement
+  - **User Questions**: "What can you tell me about Execution-policy matching analysis?", "How does References and
+    applicability work?", "How does Contracts and compatibility work?"
+
 - **File**: `docs/development/decisions-probe.md`
   - **Content**: Experimental Decisions Probe
   - **Topics**: Implementation Boundaries, Validation, Labeled Comparison
