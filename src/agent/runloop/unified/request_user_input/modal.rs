@@ -124,14 +124,16 @@ pub(super) fn build_question_items_with_options(
     question: &RequestUserInputQuestion,
     options: Option<Vec<RequestUserInputOption>>,
 ) -> Vec<InlineListItem> {
-    let options = options.map(ensure_recommended_first);
-
     if let Some(options) = options {
+        // Recommendation markers belong to presentation. Echo the producer's
+        // original label so runtime actions retain their stable identity.
+        let displayed_options = ensure_recommended_first(options.clone());
         let mut items: Vec<InlineListItem> = options
             .iter()
+            .zip(displayed_options)
             .enumerate()
-            .map(|(index, opt)| InlineListItem {
-                title: format!("{}. {}", index + 1, opt.label),
+            .map(|(index, (opt, displayed))| InlineListItem {
+                title: format!("{}. {}", index + 1, displayed.label),
                 subtitle: Some(opt.description.clone()),
                 badge: None,
                 indent: 0,
@@ -140,7 +142,7 @@ pub(super) fn build_question_items_with_options(
                     selected: vec![opt.label.clone()],
                     other: None,
                 }),
-                search_value: Some(format!("{} {}", opt.label, opt.description)),
+                search_value: Some(format!("{} {}", displayed.label, opt.description)),
                 ..Default::default()
             })
             .collect();

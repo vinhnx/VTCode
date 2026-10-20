@@ -328,6 +328,9 @@ through `request_user_input`. In an interactive session this opens an inline wiz
 an optional free-form note). The selected answer is returned to the same planning turn, recorded as the completed
 interview, and supplied to the next model request so planning can continue with the user's choice.
 
+Recommendation markers and option numbering affect presentation only. The submitted answer keeps the option's
+declared label unchanged, including for runtime recovery choices such as Retry.
+
 Pressing `Esc` or `Ctrl-C` cancels the interview without submitting an answer; the planning agent may ask again when the
 ambiguity still matters. A plan approval popup is not shown until any required clarification has completed.
 

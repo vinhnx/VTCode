@@ -34,6 +34,9 @@ separate explicit approval even when confirmation bypass is configured. Headless
 same labeled options in a structured diagnostic. Persistence and queue errors stop automatic work while preserving
 in-memory evidence; cancellation never grants another request.
 
+Option labels are stable action values. Recommendation markers and list numbering are display-only; submitting
+an option returns its declared label unchanged so Retry, clarification, and model selection reach their runtime handlers.
+
 A clarification can supply missing facts directly. The separate explicit “Research missing facts” choice permits
 one targeted read-only research batch for a nonempty clarification, subject to the existing tool, time, and
 monetary budgets. It never restarts broad research. Retry, model switching, and diagnostic expansion keep research
@@ -52,6 +55,9 @@ repair. Provider payload tests cover streaming and non-streaming paths. Runtime 
 after synthesis starts, retained draft repair, persisted approval, cancellation, headless input, resume, and checkpoint
 admission failure. A live provider replay is supplementary; payload evidence alone does not prove why earlier responses
 were empty.
+
+Popup regressions submit the actual selections emitted by the wizard, including the recommended first option.
+The retry regression runs through the next provider dispatch, persisted repaired plan, and separate approval prompt.
 
 See [diagnostics](diagnostics.md) for human summaries and retained agent details, and
 [planning validation](planning-validation.md) for the scope-review/content-check distinction.

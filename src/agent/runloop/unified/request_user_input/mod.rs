@@ -18,6 +18,39 @@ mod tests {
     use serde_json::json;
     use vtcode_ui::tui::app::{InlineListSelection, WizardModalMode};
 
+    #[test]
+    fn recommendation_decoration_preserves_original_answer_labels() {
+        for labels in [["Retry", "Clarify"], ["First (Recommended)", "Second (recommended)"]] {
+            let question = RequestUserInputQuestion {
+                id: "recovery".into(),
+                header: "Recovery".into(),
+                question: "How should planning continue?".into(),
+                options: Some(
+                    labels
+                        .iter()
+                        .map(|label| RequestUserInputOption {
+                            label: (*label).into(),
+                            description: "Choose this action".into(),
+                        })
+                        .collect(),
+                ),
+                focus_area: None,
+                analysis_hints: Vec::new(),
+            };
+            let items = build_question_items(&question);
+            assert!(items[0].title.ends_with("(Recommended)"));
+            assert!(!items[1].title.contains("(recommended)"));
+            assert!(items[0].search_value.as_deref().unwrap().contains("(Recommended)"));
+            assert!(!items[1].search_value.as_deref().unwrap().contains("(recommended)"));
+            for (item, label) in items.iter().zip(labels) {
+                let Some(InlineListSelection::RequestUserInputAnswer { selected, .. }) = &item.selection else {
+                    panic!("displayed answer selection");
+                };
+                assert_eq!(selected, &[label], "display decoration must not rewrite the action payload");
+            }
+        }
+    }
+
     fn prompt_question_with_hints() -> RequestUserInputQuestion {
         RequestUserInputQuestion {
             id: "system_prompt_plan".to_string(),

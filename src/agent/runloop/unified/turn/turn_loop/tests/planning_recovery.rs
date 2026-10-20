@@ -1,6 +1,7 @@
 use super::*;
 use crate::agent::runloop::unified::state::CtrlCState;
 use std::collections::VecDeque;
+use std::time::Duration;
 use vtcode_core::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot, PlanningResponseClass};
 
 const RETAINED_DRAFT: &str = r#"# Recover the planning handoff
@@ -487,6 +488,11 @@ struct RecoveryModalFixture {
     renderer: AnsiRenderer,
 }
 
+enum PopupAnswer {
+    Option(usize),
+    Text(&'static str),
+}
+
 impl RecoveryModalFixture {
     fn new() -> Self {
         let (command_tx, commands) = tokio::sync::mpsc::unbounded_channel();
@@ -507,20 +513,82 @@ impl RecoveryModalFixture {
         }
     }
 
-    fn submit(&self, selections: Vec<InlineListSelection>) {
-        self.events
-            .as_ref()
-            .expect("modal event sender")
-            .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Wizard(selections))))
-            .expect("submit runtime recovery answer");
-    }
-
-    fn answer(question_id: &str, selected: &[&str], other: Option<&str>) -> InlineListSelection {
-        InlineListSelection::RequestUserInputAnswer {
-            question_id: question_id.into(),
-            selected: selected.iter().map(|label| (*label).into()).collect(),
-            other: other.map(str::to_owned),
-        }
+    fn answer_displayed_options(
+        &mut self,
+        replies: Vec<Vec<PopupAnswer>>,
+        dismiss_approval: bool,
+    ) -> tokio::task::JoinHandle<usize> {
+        let (_, replacement) = tokio::sync::mpsc::unbounded_channel();
+        let mut commands = std::mem::replace(&mut self.commands, replacement);
+        let events = self.events.as_ref().expect("modal event sender").clone();
+        tokio::spawn(async move {
+            let mut count = 0;
+            for replies in replies {
+                let request = loop {
+                    let command = tokio::time::timeout(Duration::from_secs(3), commands.recv())
+                        .await
+                        .expect("popup must be presented")
+                        .expect("popup command channel");
+                    if let vtcode_ui::tui::app::InlineCommand::ShowTransient { request } = command
+                        && let vtcode_ui::tui::app::TransientRequest::Wizard(request) = *request
+                    {
+                        break request;
+                    }
+                };
+                assert_eq!(request.steps.len(), replies.len());
+                let selections = request
+                    .steps
+                    .iter()
+                    .zip(replies)
+                    .map(|(step, reply)| match reply {
+                        PopupAnswer::Option(index) => step.items[index].selection.clone().expect("displayed action"),
+                        PopupAnswer::Text(text) => {
+                            let mut selection = step
+                                .items
+                                .iter()
+                                .find_map(|item| match item.selection.as_ref() {
+                                    Some(
+                                        selection @ InlineListSelection::RequestUserInputAnswer {
+                                            other: Some(_), ..
+                                        },
+                                    ) => Some(selection.clone()),
+                                    _ => None,
+                                })
+                                .expect("displayed free-text action");
+                            if let InlineListSelection::RequestUserInputAnswer { other, .. } = &mut selection {
+                                *other = Some(text.into());
+                            }
+                            selection
+                        }
+                    })
+                    .collect();
+                events
+                    .send(InlineEvent::Transient(TransientEvent::Submitted(TransientSubmission::Wizard(selections))))
+                    .expect("submit the actual displayed option payload");
+                count += 1;
+            }
+            if dismiss_approval {
+                loop {
+                    let command = tokio::time::timeout(Duration::from_secs(3), commands.recv())
+                        .await
+                        .expect("approval must be presented")
+                        .expect("approval command channel");
+                    if let vtcode_ui::tui::app::InlineCommand::ShowTransient { request } = command
+                        && let vtcode_ui::tui::app::TransientRequest::List(request) = *request
+                        && request
+                            .items
+                            .iter()
+                            .any(|item| matches!(item.selection, Some(InlineListSelection::PlanApprovalExecute)))
+                    {
+                        events
+                            .send(InlineEvent::Transient(TransientEvent::Cancelled))
+                            .expect("dismiss implementation approval");
+                        break;
+                    }
+                }
+            }
+            count
+        })
     }
 
     fn wizard_count(&mut self) -> usize {
@@ -549,16 +617,58 @@ fn exhausted_recovery_snapshot() -> PlanningRecoverySnapshot {
 }
 
 #[tokio::test]
+async fn planning_recovery_displayed_retry_reaches_provider_and_persists_plan_before_approval() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.activate_planning_for_test();
+    backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
+    let harness = backing.enable_harness_emitter();
+    let requests = install_script(
+        &mut backing,
+        &[
+            Reply::Empty,
+            Reply::NativeToolCall,
+            Reply::ApprovalOnly,
+            Reply::RepairedDraft,
+        ],
+    );
+    let mut modal = RecoveryModalFixture::new();
+    let popup = modal.answer_displayed_options(vec![vec![PopupAnswer::Option(0)]], true);
+    let mut history = retained_history();
+    let mut ctx = backing.turn_loop_context();
+    ctx.handle = &modal.handle;
+    ctx.session = &mut modal.session;
+    ctx.renderer = &mut modal.renderer;
+    let outcome = run_turn_loop(&mut history, ctx).await.expect("retry from displayed popup");
+    assert_eq!(popup.await.expect("popup interaction"), 1);
+    assert_tool_free(&requests, 4);
+    assert!(!outcome.plan_approved_execution_pending, "retry cannot approve implementation");
+    assert!(outcome.turn_modified_files.is_empty());
+    assert_eq!(outcome.turn_diagnostics.admitted_tool_calls, 0);
+    let saved = checkpoints(&harness);
+    let last = saved.last().expect("persisted repaired plan");
+    assert_eq!(last.outcome, PlanningOutcome::AwaitingApproval);
+    assert_eq!(last.cycle, 1);
+    assert_eq!(last.requests_used, 1);
+    assert!(
+        last.best_draft
+            .as_deref()
+            .unwrap()
+            .contains("python3 scripts/check_markdown.py")
+    );
+    assert!(
+        events(&harness)
+            .iter()
+            .any(|event| matches!(event, ThreadEvent::PlanApprovalRequested(_)))
+    );
+}
+
+#[tokio::test]
 async fn planning_recovery_runtime_retry_answer_starts_one_cycle_without_approval() {
     let mut backing = TestTurnProcessingBacking::new(8).await;
     backing.activate_planning_for_test();
     let harness = backing.enable_harness_emitter();
     let mut modal = RecoveryModalFixture::new();
-    modal.submit(vec![RecoveryModalFixture::answer(
-        "planning_recovery",
-        &["Retry from retained evidence"],
-        None,
-    )]);
+    let popup = modal.answer_displayed_options(vec![vec![PopupAnswer::Option(0)]], false);
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.recovery = exhausted_recovery_snapshot();
     ctx.handle = &modal.handle;
@@ -574,7 +684,7 @@ async fn planning_recovery_runtime_retry_answer_starts_one_cycle_without_approva
     assert!(ctx.plan_session.recovery.research_closed);
     assert_eq!(ctx.plan_session.recovery.best_draft.as_deref(), Some(RETAINED_DRAFT.trim()));
     assert!(!ctx.plan_session.recovery.model_selection_pending);
-    assert_eq!(modal.wizard_count(), 1);
+    assert_eq!(popup.await.expect("popup interaction"), 1);
     assert!(
         !events(&harness)
             .iter()
@@ -589,27 +699,16 @@ async fn planning_recovery_runtime_clarification_preserves_text_and_requires_exp
         backing.activate_planning_for_test();
         let harness = backing.enable_harness_emitter();
         let mut modal = RecoveryModalFixture::new();
-        modal.submit(vec![RecoveryModalFixture::answer(
-            "planning_recovery",
-            &["Add clarification"],
-            None,
-        )]);
-        modal.submit(vec![
-            RecoveryModalFixture::answer(
-                "clarification",
-                &[],
-                Some("The newly missing fact is the configured model endpoint."),
-            ),
-            RecoveryModalFixture::answer(
-                "clarification_evidence",
-                &[if request_research {
-                    "Research missing facts"
-                } else {
-                    "Use saved evidence"
-                }],
-                None,
-            ),
-        ]);
+        let popup = modal.answer_displayed_options(
+            vec![
+                vec![PopupAnswer::Option(1)],
+                vec![
+                    PopupAnswer::Text("The newly missing fact is the configured model endpoint."),
+                    PopupAnswer::Option(usize::from(request_research)),
+                ],
+            ],
+            false,
+        );
         let mut ctx = backing.turn_processing_context();
         ctx.plan_session.recovery = exhausted_recovery_snapshot();
         ctx.handle = &modal.handle;
@@ -631,7 +730,7 @@ async fn planning_recovery_runtime_clarification_preserves_text_and_requires_exp
         );
         assert_eq!(ctx.plan_session.recovery.targeted_research.is_some(), request_research);
         assert_eq!(ctx.plan_session.recovery.evidence, ["retained public evidence"]);
-        assert_eq!(modal.wizard_count(), 2);
+        assert_eq!(popup.await.expect("clarification popup interaction"), 2);
         assert!(
             !events(&harness)
                 .iter()
@@ -646,11 +745,7 @@ async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_select
     backing.activate_planning_for_test();
     let harness = backing.enable_harness_emitter();
     let mut modal = RecoveryModalFixture::new();
-    modal.submit(vec![RecoveryModalFixture::answer(
-        "planning_recovery",
-        &["Choose another model"],
-        None,
-    )]);
+    let popup = modal.answer_displayed_options(vec![vec![PopupAnswer::Option(2)]], false);
     let mut ctx = backing.turn_processing_context();
     ctx.plan_session.recovery = exhausted_recovery_snapshot();
     ctx.handle = &modal.handle;
@@ -665,7 +760,7 @@ async fn planning_recovery_runtime_model_answer_waits_for_explicit_picker_select
     assert!(ctx.plan_session.recovery.model_selection_pending);
     assert_eq!(ctx.plan_session.recovery.requests_used, 3);
     assert_eq!(ctx.plan_session.recovery.cycle, 0);
-    assert_eq!(modal.wizard_count(), 1);
+    assert_eq!(popup.await.expect("model popup interaction"), 1);
     assert!(
         !events(&harness)
             .iter()
