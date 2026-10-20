@@ -237,3 +237,14 @@ warning: simdutf@0.7.0:       |    ^~~~~~~
 warning: `vtcode-webmcp` (lib) generated 1 warning (run `cargo fix --lib -p vtcode-webmcp` to apply 1 suggestion)
 
 ```
+
+---
+
+find opportunity to optimize github action workflow cd times further https://github.com/vinhnx/VTCode/actions/runs/39372857468/usage. aim to reduce overall build time and improve efficiency.
+
+---
+
+fix
+
+1. Pre-existing test failure: overlay_list::modal_section_header_uses_foreground_contrast_on_light_theme — I verified via a clean baseline worktree at HEAD~2 that it fails before any of my changes. Root cause: 368c8205c ("use » marker for tracker current row and modal group headers") rewrote group-header rendering to » but didn't update the test's "B" glyph assertion. Fix is to update the stale test expectations — happy to do it as a separate fix(ui) commit if you want.
+2. Pre-existing schema-doc drift: regenerated field reference differs from the committed md on agent.harness.inspection.mode / verification.\* rows (other streams edited schema docs without regenerating) — untouched per scope.
