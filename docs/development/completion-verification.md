@@ -131,8 +131,38 @@ preserved. This projection never rewrites durable history.
 Verification, checker-session, and recovery suites live under
 `tool_outcomes/helpers/tests/`, sharing private parent fixtures.
 
-At attempted completion, the harness runs only missing checks and resumes owned
-running checks. A failed or unavailable result ends that completion attempt.
+At attempted completion, the harness withholds the draft from rendering and canonical
+assistant events, runs only missing checks, and resumes owned running checks.
+Successful checks publish the retained answer once through the normal final-response
+handler, with an attributed harness result listing commands and terminal statuses.
+No additional model request rewrites a verified draft. The registry owns both
+streaming suppression and completion admission, including native Copilot outcomes.
+Failure, cancellation, a changed mutation generation, or new steering discards the
+draft while retaining check evidence and existing recovery limits.
+
+The retained-draft loop uses the existing long-running command ceiling across
+successive waits for each verifier, with short polls to observe steering promptly.
+Reaching that ceiling withholds the draft and terminates/releases only its owned
+verifier session; cleanup errors remain in the handoff. It does not count as an
+observed nonzero checker exit. Pause remains interruptible by local cancellation
+and exit through the shared stop-aware await helper. A wait permits another wait
+only after a fresh yielded result identifies the same owned session; denied,
+unavailable, or replayed results end the attempt instead of repeating admission.
+Explicit session waits bypass read-result replay, while ordinary inspection
+caches and all execution/permission gates remain in force.
+
+Literal inline grep-family `--include=`, `--exclude=`, and `--exclude-dir=` filters
+preserve inspection evidence. Their AST arguments must remain literal; dynamic
+arguments, writes, unknown executables, and concrete changed-file evidence remain
+conservative. This accounting exception does not grant execution permission.
+
+The supplied WebMCP trace (`session-vtcode-20261020T051624Z_637421-02697`) showed
+an answer at 05:20:22, a harness check, and another answer at 05:20:36. Its
+`grep --include=*.rs` inspection now has a generation-preservation regression;
+streamed and non-streamed completion tests assert one provider request and one
+rendered and canonical final answer across multiple mandatory checks.
+
+A failed or unavailable result ends that completion attempt.
 The interactive session may queue one corrective pass per genuine user request;
 the headless runner likewise permits at most one corrective pass. A second
 unsuccessful attempt returns an unverified handoff with the command, status,
@@ -250,3 +280,18 @@ distinct budget stop in OpenAI Codex
 [`codex-rs/core/src/tasks/mod.rs`](https://github.com/openai/codex/blob/4635d489254ba6d80eb6d2ef501929b0c617b6ec/codex-rs/core/src/tasks/mod.rs)
 at commit `4635d489254ba6d80eb6d2ef501929b0c617b6ec`
 (Apache-2.0, Copyright 2025 OpenAI); no upstream code was copied.
+
+Retained completion was compared with OpenAI Codex at commit
+`18795fc12571a3530d3e4ac18366e41cd2f57448`,
+[`codex-rs/core/src/session/turn.rs`](https://github.com/openai/codex/blob/18795fc12571a3530d3e4ac18366e41cd2f57448/codex-rs/core/src/session/turn.rs).
+Its `needs_follow_up` distinction separates terminal completion from further model
+work; it does not prove summary deduplication. The retained draft and harness
+result are VT Code policy. No upstream code was copied (Apache-2.0, copyright
+2025 OpenAI). Regressions follow the trace-to-regression workflow linked above.
+
+The bounded retained-draft wait was also compared with
+[`codex-rs/core/src/unified_exec/process_manager.rs`](https://github.com/openai/codex/blob/18795fc12571a3530d3e4ac18366e41cd2f57448/codex-rs/core/src/unified_exec/process_manager.rs)
+at the same pinned commit. Its completion path bounds collection by a deadline
+and confirms termination on timeout. VT Code reuses its own timeout policy,
+stop-aware awaits, normal tool pipeline, and owned-session cleanup; no upstream
+implementation was copied.

@@ -366,8 +366,12 @@ pub(crate) fn enforce_repeated_read_only_call_guard(
     // Tracker calls are read-only with respect to workspace files, but their
     // state changes independently of file-read signatures and history caches.
     // Both list and updates must execute against the current checklist.
+    // Session waits likewise observe live process state; a yielded result is
+    // not reusable evidence, even when its captured output is unchanged.
     if !readonly_classification
         || canonical_tool_name == tool_names::TASK_TRACKER
+        || (vtcode_core::tools::tool_intent::is_command_session_tool(canonical_tool_name)
+            && vtcode_core::tools::tool_intent::command_session_action_is(effective_args, "wait"))
         || ctx
             .tool_registry
             .is_completion_verifier_call(canonical_tool_name, effective_args)

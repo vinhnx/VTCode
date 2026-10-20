@@ -936,7 +936,7 @@ pub(crate) async fn run_turn_loop(
             // T083718Z: a verified recap was continued into the cap and the
             // finished turn was published as Blocked).
             let cap_ends_completed =
-                promoted_final && !repeated_tool_attempts.verification_is_pending() && !ctx.is_planning_active();
+                promoted_final && !ctx.tool_registry.completion_verification_pending() && !ctx.is_planning_active();
             if cap_ends_completed {
                 result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
             } else {
@@ -991,7 +991,7 @@ pub(crate) async fn run_turn_loop(
         }
         turn_processing_ctx.session_stats.note_request_sent();
 
-        let suppress_unverified_output = repeated_tool_attempts.verification_is_pending();
+        let suppress_unverified_output = turn_processing_ctx.tool_registry.completion_verification_pending();
         let request_result = if suppress_unverified_output
             || turn_processing_ctx
                 .config

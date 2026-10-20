@@ -998,6 +998,17 @@ fn is_literal_path_glob(word: &str) -> bool {
             .any(|character| character.is_whitespace() || "\"'$`\\{}()<>&;|~!".contains(character))
 }
 
+/// Inline grep filters remain one option even when the literal pattern has globs.
+/// This is accounting proof only; shell admission is unchanged.
+fn is_literal_grep_filter(word: &str) -> bool {
+    let Some((option, pattern)) = word.split_once('=') else {
+        return false;
+    };
+    matches!(option, "--include" | "--exclude" | "--exclude-dir")
+        && !pattern.is_empty()
+        && !pattern.chars().any(|c| c.is_whitespace() || "\"'$`\\{}()<>&;|~!".contains(c))
+}
+
 /// Walk every supported node, including commands nested in substitutions.
 /// Unlike command extraction, this proof must never discard unknown syntax.
 fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
@@ -1027,7 +1038,8 @@ fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
                 }
                 if child != name
                     && child.kind() == "word"
-                    && is_literal_path_glob(word)
+                    && (is_literal_path_glob(word)
+                        || (matches!(name_text, "grep" | "egrep" | "fgrep" | "rg") && is_literal_grep_filter(word)))
                     && matches!(name_text, "rg" | "grep" | "egrep" | "fgrep" | "ls" | "cat" | "head" | "tail" | "wc")
                 {
                     // Classification sees a path operand; expansion cannot
@@ -1061,7 +1073,9 @@ fn nonmutating_shell_node(node: tree_sitter::Node<'_>, source: &str) -> bool {
             // as /dev/null.backup must not be mistaken for descriptor plumbing.
             return matches!(text, "2>&1" | "1>&2") || (cfg!(unix) && text == "2>/dev/null");
         }
-        "word" | "regex" => return !contains_dynamic_shell_syntax(text) || is_literal_path_glob(text),
+        "word" | "regex" => {
+            return !contains_dynamic_shell_syntax(text) || is_literal_path_glob(text) || is_literal_grep_filter(text);
+        }
         "raw_string" | "string_content" | "comment" | "number" | "variable_name" | "special_variable_name" => {
             return true;
         }
@@ -1912,6 +1926,10 @@ mod tests {
             "rg -n \"MD013|line_length\" docs/development/*.md | head",
             "rg -n x ./docs/file?.md | head -20",
             "grep -n x docs/*.md",
+            r#"grep -rn "default_webmcp\|WebmcpConfig" crates/codegen/vtcode-config/src --include=*.rs | head -10"#,
+            "grep -rn x src --exclude=*.lock --exclude-dir=target*",
+            "egrep x --include=*.rs src",
+            "fgrep x --exclude=*.md src",
             "cat ./docs/*.md",
             "ls docs/*.md",
         ] {
@@ -1920,6 +1938,12 @@ mod tests {
             assert!(exec_mutation_should_incur_debt(command, &json!({"exit_code":0,"modified_files":["src/lib.rs"]})));
         }
         for command in [
+            "grep --include=$(touch marker) x src",
+            "grep --exclude-dir=$directory x src",
+            "grep --include=*.rs x src > marker",
+            "grep --include=*.rs x src; touch marker",
+            "rg --pre=touch --include=*.rs x src",
+            "unknown --include=*.rs x src",
             "rg -n x *",
             "rg -n x ./docs/[a-z]*.md",
             "rg -n x -docs/*.md",

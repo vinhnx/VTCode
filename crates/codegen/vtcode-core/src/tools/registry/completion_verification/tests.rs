@@ -1181,3 +1181,38 @@ async fn completion_verification_unwraps_backticked_tracker_verify_commands() {
     assert!(registry.completion_verification_pending(), "one required check intentionally remains: cargo check");
     assert_eq!(registry.missing_required_completion_verifiers(), vec!["cargo check"]);
 }
+
+#[tokio::test]
+async fn webmcp_inspection_trace_preserves_generation_and_fresh_passes() {
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
+    let inspections = [
+        r#"grep -rn "default_webmcp\|WebmcpConfig" crates/codegen/vtcode-config/src --include=*.rs | head -10"#,
+        "grep -rn WebMCP src --exclude-dir=target* --exclude=*.lock",
+        "sed -n '1,100p' docs/development/webmcp.md",
+    ];
+    for with_pass in [false, true] {
+        if with_pass {
+            registry.restore_completion_verification_debt();
+            let args = json!({"cmd":"cargo check --locked"});
+            let id = registry.begin_completion_verifier(&args);
+            registry.observe_completion_verifier(id, &args, &Ok(json!({"exit_code":0})));
+        }
+        let generation = registry.completion_mutation_generation();
+        for command in inspections {
+            registry.observe_completion_mutation(tools::EXEC_COMMAND, &json!({"cmd":command}), &json!({"exit_code":0}));
+            assert_eq!(registry.completion_mutation_generation(), generation, "{command}");
+            assert!(!registry.completion_verification_pending(), "{command}");
+        }
+        if with_pass {
+            assert!(registry.completion_verifier_passed("cargo check --locked"));
+        }
+    }
+    registry.observe_completion_mutation(
+        tools::APPLY_PATCH,
+        &json!({}),
+        &json!({"success":true,"modified_files":["src/main.rs"]}),
+    );
+    assert!(registry.completion_verification_pending());
+    assert!(!registry.completion_verifier_passed("cargo check --locked"));
+}

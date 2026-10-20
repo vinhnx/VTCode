@@ -71,7 +71,6 @@ pub(crate) fn update_repetition_tracker_for_registry(
     args: &serde_json::Value,
     registry: &vtcode_core::tools::ToolRegistry,
 ) -> bool {
-    let was_pending = loop_tracker.verification_is_pending();
     let attempts = loop_tracker.verification_auto_recovery_attempts;
     let executed = loop_tracker.auto_verification_executed;
     let failed = update_repetition_tracker_inner(
@@ -83,12 +82,14 @@ pub(crate) fn update_repetition_tracker_for_registry(
     );
     if registry.completion_verification_pending() {
         // A partial or unrelated pass cannot refill the recovery episode.
-        if was_pending {
-            loop_tracker.mark_verification_pending();
-        }
-        loop_tracker.verification_auto_recovery_attempts = attempts;
-        loop_tracker.auto_verification_executed = executed;
+        loop_tracker.mark_verification_pending();
+    } else {
+        // Optional checker diagnostics remain useful even without completion debt.
+        // Synchronize admission state without consuming their pending notices.
+        loop_tracker.verification_pending = false;
     }
+    loop_tracker.verification_auto_recovery_attempts = attempts;
+    loop_tracker.auto_verification_executed = executed;
     failed
 }
 

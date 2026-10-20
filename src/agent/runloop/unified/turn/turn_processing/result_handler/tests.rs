@@ -341,7 +341,7 @@ async fn drive_pending_texts(
 }
 
 #[tokio::test]
-async fn harness_auto_verification_success_clears_gate_and_continues() {
+async fn harness_auto_verification_success_publishes_draft_once() {
     // `rustc --version` exits 0 without touching workspace files: a
     // hermetic passing verifier for the harness-executed path.
     let mut backing = TestTurnProcessingBacking::new(8).await;
@@ -358,7 +358,7 @@ async fn harness_auto_verification_success_clears_gate_and_continues() {
 
     // The text cap fires one harness execution before directive retries.
     let outcome = drive_pending_texts(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files, 6).await;
-    assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
     assert!(
         !repeated_tool_attempts.verification_is_pending(),
         "harness-executed `rustc --version` must clear the gate"
@@ -369,8 +369,8 @@ async fn harness_auto_verification_success_clears_gate_and_continues() {
         "a cleared gate must not re-arm harness execution"
     );
     assert!(
-        backing.last_history_message_contains("gate is cleared"),
-        "success must leave an explicit gate-cleared note"
+        backing.last_history_message_contains("Still working.\n\nHarness verification: `rustc --version` exited 0."),
+        "success publishes the retained draft and attributed terminal result"
     );
 }
 
@@ -583,7 +583,11 @@ async fn required_custom_verifiers_cross_the_interactive_gate_and_preserve_repai
             let mut modified = BTreeSet::new();
             if harness_issued {
                 let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 6).await;
-                assert_eq!(matches!(outcome, TurnHandlerOutcome::Continue), exit_code == 0, "exit={exit_code}");
+                assert_eq!(
+                    matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })),
+                    exit_code == 0,
+                    "exit={exit_code}"
+                );
             } else {
                 drive_model_tool_call(
                     &mut backing,
@@ -617,9 +621,14 @@ async fn harness_waits_for_a_running_verifier_instead_of_starting_another() {
     {
         let ctx = backing.turn_processing_context();
         let script = ctx.tool_registry.workspace_root().join("rustc");
-        std::fs::write(&script, "#!/bin/sh\nsleep 2\nprintf 'verifier-finished\\n'\n").unwrap();
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf 'launched\\n' >> launches\nwhile [ ! -f release ]; do sleep 0.02; done\nprintf 'verifier-finished\\n'\n",
+        )
+        .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
         ctx.tool_registry.allow_all_tools().await.unwrap();
+        ctx.tool_registry.restore_completion_verification_debt();
         let mut commands = ctx.tool_registry.commands_config();
         commands.allow_list.push("./rustc".to_string());
         ctx.tool_registry.apply_commands_config(&commands);
@@ -641,21 +650,53 @@ async fn harness_waits_for_a_running_verifier_instead_of_starting_another() {
         "{:?}",
         backing.turn_processing_context().working_history
     );
+    let harness_path = backing.enable_harness_emitter();
+    let registry = backing.turn_processing_context().tool_registry.clone();
+    let release_registry = registry.clone();
+    let release = tokio::spawn(async move {
+        let observed = tokio::time::timeout(std::time::Duration::from_secs(4), async {
+            loop {
+                let events = std::fs::read_to_string(&harness_path).unwrap_or_default();
+                if events
+                    .lines()
+                    .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+                    .any(|row| {
+                        row["event"]["type"] == "item.completed"
+                            && row["event"]["item"]["type"] == "tool_invocation"
+                            && row["event"]["item"]["tool_name"] == "write_stdin"
+                            && row["event"]["item"]["status"] == "completed"
+                    })
+                {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .is_ok();
+        std::fs::write(release_registry.workspace_root().join("release"), "ready").unwrap();
+        observed
+    });
     // Recreate the turn-local tracker to exercise live-session rediscovery.
     tracker = LoopTracker::new();
     tracker.mark_verification_pending();
-    let mut ctx = backing.turn_processing_context();
-    super::execute_harness_auto_verification(
-        &mut ctx,
-        &mut tracker,
-        &mut modified,
-        2,
-        8,
-        4,
-        "./rustc --version".to_string(),
-    )
-    .await
-    .unwrap();
+    backing.set_verification_override_for_test("./rustc --version");
+    backing.turn_processing_context().harness_state.max_tool_wall_clock = std::time::Duration::from_secs(5);
+    let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1).await;
+    assert!(release.await.unwrap(), "the first wait must execute before releasing the checker");
+    let ctx = backing.turn_processing_context();
+    assert!(
+        matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })),
+        "recent verifier history: {:?}",
+        ctx.working_history.iter().rev().take(4).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        ctx.working_history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .count(),
+        1
+    );
     assert!(!tracker.verification_is_pending());
     assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
     let calls: Vec<_> = ctx
@@ -665,8 +706,24 @@ async fn harness_waits_for_a_running_verifier_instead_of_starting_another() {
         .flatten()
         .filter(|call| call.id == "harness-auto-verify")
         .collect();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].function.as_ref().unwrap().name, "write_stdin");
+    assert!(calls.len() >= 2, "the yielded check needs fresh repeated waits");
+    assert!(
+        !ctx.working_history
+            .iter()
+            .filter(|message| message.tool_call_id.as_deref() == Some("harness-auto-verify"))
+            .any(|message| serde_json::from_str::<serde_json::Value>(&message.content.as_text())
+                .ok()
+                .is_some_and(
+                    |output| output.get("reused_recent_result").and_then(serde_json::Value::as_bool) == Some(true)
+                )),
+        "an in-progress session must never be replayed as a read result"
+    );
+    assert!(calls.iter().all(|call| call.function.as_ref().unwrap().name == "write_stdin"));
+    assert_eq!(
+        std::fs::read_to_string(registry.workspace_root().join("launches")).unwrap(),
+        "launched\n",
+        "all harness polls must reuse the single model-launched session"
+    );
 }
 
 #[test]
@@ -955,7 +1012,7 @@ async fn completion_claim_jumps_straight_to_harness_verification() {
     .await
     .expect("completion claim should be handled");
 
-    assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
     assert!(!repeated_tool_attempts.verification_is_pending(), "executed `rustc --version` must clear the gate");
     assert_eq!(
         repeated_tool_attempts.verification_auto_recovery_attempts(),
@@ -1784,7 +1841,7 @@ async fn completion_verification_short_edit_arms_gate_without_completion_wording
         r#"{"input":"*** Begin Patch\n*** Add File: main.rs\n+fn main() {}\n*** End Patch"}"#,
     )
     .await;
-    assert!(!tracker.verification_is_pending(), "mutation debt belongs to the registry until completion");
+    assert!(tracker.verification_is_pending(), "tracker mirrors registry debt after tool outcomes");
     assert!(
         backing
             .turn_processing_context()
@@ -1792,7 +1849,7 @@ async fn completion_verification_short_edit_arms_gate_without_completion_wording
             .completion_verification_pending()
     );
     let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 4).await;
-    assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
     assert!(!tracker.verification_is_pending());
     assert!(
         !backing
@@ -2200,7 +2257,7 @@ async fn failed_optional_check_without_mutations_cannot_create_completion_obliga
         r#"{"cmd":"rustc --invalid-flag-xyz"}"#,
     )
     .await;
-    assert!(tracker.verification_is_pending(), "local diagnostics retain the checker failure");
+    assert!(!tracker.verification_is_pending(), "optional diagnostics cannot create registry debt");
     let mut ctx = backing.turn_processing_context();
     assert!(!ctx.tool_registry.completion_verification_pending(), "no code edits or mandatory checks");
     let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
@@ -2221,4 +2278,265 @@ async fn failed_optional_check_without_mutations_cannot_create_completion_obliga
     .await
     .unwrap();
     assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
+}
+
+#[tokio::test]
+async fn retained_draft_is_discarded_for_new_steering_without_launching_checks() {
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.set_verification_override_for_test("rustc --version");
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    {
+        let ctx = backing.turn_processing_context();
+        ctx.tool_registry.restore_completion_verification_debt();
+        ctx.runtime_steering
+            .try_queue_follow_up_input("Change the scope first.".into())
+            .unwrap();
+    }
+    let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1).await;
+    assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+    let ctx = backing.turn_processing_context();
+    assert!(ctx.tool_registry.completion_verification_pending());
+    assert!(!ctx.working_history.iter().any(|m| m.role == uni::MessageRole::Assistant));
+    assert!(!ctx.working_history.iter().any(|m| m.tool_calls.is_some()));
+    assert!(!backing.rendered_inline_output().contains("Still working."));
+}
+
+#[tokio::test]
+async fn retained_draft_freshness_rejects_mutation_or_applied_user_input() {
+    for mutation in [false, true] {
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        let ctx = backing.turn_processing_context();
+        let draft = super::CompletionDraft {
+            text: "Original answer".into(),
+            reasoning: vec![],
+            reasoning_details: None,
+            response_streamed: false,
+            mutation_generation: ctx.tool_registry.completion_mutation_generation(),
+            user_messages: super::user_message_count(ctx.working_history),
+        };
+        assert!(draft.is_current(&ctx));
+        ctx.working_history.push(uni::Message::system("Verifier result".into()));
+        assert!(draft.is_current(&ctx), "tool evidence does not invalidate the answer");
+        if mutation {
+            ctx.tool_registry.restore_completion_verification_debt();
+        } else {
+            ctx.working_history.push(uni::Message::user("New scope".into()));
+        }
+        assert!(!draft.is_current(&ctx));
+    }
+}
+
+#[tokio::test]
+async fn retained_draft_cancellation_publishes_no_answer_or_verifier() {
+    for exit in [false, true] {
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        backing.set_verification_override_for_test("rustc --version");
+        {
+            let ctx = backing.turn_processing_context();
+            ctx.tool_registry.restore_completion_verification_debt();
+            if exit {
+                ctx.ctrl_c_state.request_exit();
+            } else {
+                ctx.ctrl_c_state.request_local_cancel();
+            }
+        }
+        let mut tracker = LoopTracker::new();
+        let mut modified = BTreeSet::new();
+        let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1).await;
+        assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Exit)) == exit);
+        if !exit {
+            assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
+        }
+        let ctx = backing.turn_processing_context();
+        assert!(!ctx.working_history.iter().any(|m| m.role == uni::MessageRole::Assistant));
+        assert!(ctx.tool_registry.completion_verification_pending());
+        assert!(!backing.rendered_inline_output().contains("Still working."));
+    }
+}
+
+#[tokio::test]
+async fn retained_draft_pause_remains_interruptible_by_cancel_and_exit() {
+    use crate::agent::runloop::unified::stop_requests::{request_local_cancel, request_local_exit};
+    use vtcode_core::core::agent::steering::SteeringMessage;
+
+    for exit in [false, true] {
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        backing.set_verification_override_for_test("rustc --version");
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        backing.set_steering_receiver(receiver);
+        sender.send(SteeringMessage::Pause).unwrap();
+        let (state, notify) = {
+            let ctx = backing.turn_processing_context();
+            ctx.tool_registry.restore_completion_verification_debt();
+            (ctx.ctrl_c_state.clone(), ctx.ctrl_c_notify.clone())
+        };
+        let mut tracker = LoopTracker::new();
+        let mut modified = BTreeSet::new();
+        let outcome = {
+            let waiting = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1);
+            tokio::pin!(waiting);
+            assert!(futures::poll!(&mut waiting).is_pending(), "Pause must defer execution");
+            if exit {
+                request_local_exit(&state, &notify);
+            } else {
+                request_local_cancel(&state, &notify);
+            }
+            tokio::time::timeout(std::time::Duration::from_secs(1), &mut waiting).await
+        }
+        .expect("a local stop must interrupt Pause without waiting for Resume");
+        assert_eq!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Exit)), exit);
+        if !exit {
+            assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
+        }
+        let ctx = backing.turn_processing_context();
+        assert!(!ctx.working_history.iter().any(|m| m.role == uni::MessageRole::Assistant));
+        assert!(ctx.tool_registry.completion_verification_pending());
+        assert!(!backing.rendered_inline_output().contains("Still working."));
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn retained_draft_yielded_verifier_obeys_execution_limit_and_cleans_up() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.set_verification_override_for_test("./rustc --version");
+    let registry = {
+        let ctx = backing.turn_processing_context();
+        let script = ctx.tool_registry.workspace_root().join("rustc");
+        std::fs::write(&script, "#!/bin/sh\nprintf 'launched\\n' >> launches\nsleep 30\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        ctx.tool_registry.allow_all_tools().await.unwrap();
+        ctx.tool_registry.restore_completion_verification_debt();
+        let mut commands = ctx.tool_registry.commands_config();
+        commands.allow_list.push("./rustc".into());
+        ctx.tool_registry.apply_commands_config(&commands);
+        ctx.tool_registry.apply_timeout_policy(&vtcode_core::config::TimeoutsConfig {
+            long_running_command_ceiling_seconds: 1,
+            ..Default::default()
+        });
+        ctx.tool_registry.clone()
+    };
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let launched = registry
+        .execute_harness_command_session(serde_json::json!({
+            "action":"run", "command":"./rustc --version", "background":true, "yield_time_ms":50
+        }))
+        .await
+        .unwrap();
+    assert!(vtcode_core::tools::command_args::session_id_text(&launched).is_some(), "{launched}");
+    let session_id = registry
+        .pending_completion_verifier_session("./rustc --version")
+        .expect("owned yielded check");
+    let outcome =
+        tokio::time::timeout(Duration::from_secs(4), drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1))
+            .await;
+    let remaining = registry.in_progress_exec_sessions(8).await;
+    // Always clean up the test's owned process even when testing the broken implementation.
+    if !remaining.is_empty() {
+        registry.terminate_harness_exec_session(&session_id).await.unwrap();
+        registry.close_harness_exec_session(&session_id).await.unwrap();
+    }
+    let outcome = outcome.expect("a verifier must not refresh its execution allowance on every wait");
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) })
+        if reason.contains("execution limit")));
+    assert!(remaining.is_empty(), "exhausted owned verification sessions must be released");
+    assert!(registry.completion_verification_pending());
+    assert!(!registry.completion_verifier_passed("./rustc --version"));
+    assert_eq!(std::fs::read_to_string(registry.workspace_root().join("launches")).unwrap(), "launched\n");
+    let ctx = backing.turn_processing_context();
+    assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0, "an execution stop is not a failed check");
+    assert!(
+        !ctx.working_history
+            .iter()
+            .any(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+    );
+    assert!(!backing.rendered_inline_output().contains("Still working."));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn retained_draft_denied_owned_wait_blocks_without_repeating_admission() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.set_verification_override_for_test("./rustc --version");
+    let registry = {
+        let ctx = backing.turn_processing_context();
+        let script = ctx.tool_registry.workspace_root().join("rustc");
+        std::fs::write(&script, "#!/bin/sh\nsleep 30\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        ctx.tool_registry.allow_all_tools().await.unwrap();
+        ctx.tool_registry.restore_completion_verification_debt();
+        let mut commands = ctx.tool_registry.commands_config();
+        commands.allow_list.push("./rustc".into());
+        ctx.tool_registry.apply_commands_config(&commands);
+        ctx.harness_state.max_tool_wall_clock = std::time::Duration::from_secs(3);
+        ctx.tool_registry.clone()
+    };
+    let launched = registry
+        .execute_harness_command_session(serde_json::json!({
+            "action":"run", "command":"./rustc --version", "background":true, "yield_time_ms":50
+        }))
+        .await
+        .unwrap();
+    let session_id = vtcode_core::tools::command_args::session_id_text(&launched).unwrap().to_owned();
+    registry
+        .set_tool_policy("write_stdin", vtcode_core::tool_policy::ToolPolicy::Deny)
+        .await
+        .unwrap();
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1).await;
+    let still_owned = registry.pending_completion_verifier_session("./rustc --version");
+    registry.terminate_harness_exec_session(&session_id).await.unwrap();
+    registry.close_harness_exec_session(&session_id).await.unwrap();
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+    assert_eq!(
+        still_owned.as_deref(),
+        Some(session_id.as_str()),
+        "a denied wait does not transfer session ownership"
+    );
+    let ctx = backing.turn_processing_context();
+    let waits = ctx
+        .working_history
+        .iter()
+        .filter_map(|message| message.tool_calls.as_ref())
+        .flatten()
+        .filter(|call| call.function.as_ref().is_some_and(|function| function.name == "write_stdin"))
+        .count();
+    assert_eq!(waits, 1, "a denied wait must end the attempt, not retry unchanged admission");
+    assert_eq!(ctx.session_stats.verification_consecutive_failures(), 0);
+    assert!(
+        !ctx.working_history
+            .iter()
+            .any(|message| message.phase == Some(uni::AssistantPhase::FinalAnswer))
+    );
+}
+
+#[test]
+fn running_verifier_proof_requires_fresh_matching_session_and_no_failure() {
+    use super::verifier_response_is_running_session;
+    for response in [
+        r#"{"session_id":"owned","exit_code":null}"#,
+        r#"{"next_wait_args":{"session_id":"owned"}}"#,
+        r#"{"next_continue_args":{"s":"owned"}}"#,
+    ] {
+        assert!(verifier_response_is_running_session(response, "owned"), "{response}");
+    }
+    for response in [
+        r#"{"session_id":"other"}"#,
+        r#"{"session_id":"owned","exit_code":0}"#,
+        r#"{"session_id":"owned","error":"denied"}"#,
+        r#"{"session_id":"owned","not_executed":true}"#,
+        r#"{"session_id":"owned","reused_recent_result":true}"#,
+        r#"{"session_id":"owned","success":false}"#,
+        r#"{"session_id":"owned","termination_requested":true}"#,
+        "not JSON",
+        "{}",
+    ] {
+        assert!(!verifier_response_is_running_session(response, "owned"), "{response}");
+    }
 }

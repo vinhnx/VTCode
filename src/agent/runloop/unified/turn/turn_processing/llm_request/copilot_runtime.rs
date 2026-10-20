@@ -395,9 +395,9 @@ impl<'a> CopilotRuntimeHost<'a> {
                 run_loop_ctx
                     .session_stats
                     .set_verification_snapshot(loop_tracker.verification_snapshot());
-                if let Some(signal) = self.suppress_output_signal.as_ref() {
-                    signal.store(loop_tracker.verification_is_pending(), Ordering::Release);
-                }
+            }
+            if let Some(signal) = self.suppress_output_signal.as_ref() {
+                signal.store(run_loop_ctx.tool_registry.completion_verification_pending(), Ordering::Release);
             }
 
             (pipeline_outcome, last_stdout)

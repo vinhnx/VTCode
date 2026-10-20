@@ -170,6 +170,7 @@ async fn execute_llm_request_with_options_impl(
     suppress_output: bool,
     mut loop_tracker: Option<&mut LoopTracker>,
 ) -> Result<(uni::LLMResponse, bool)> {
+    let suppress_output = suppress_output || ctx.tool_registry.completion_verification_pending();
     let turn_snapshot = capture_turn_request_snapshot(ctx, active_model, tool_free_recovery);
     let active_model = turn_snapshot.active_model.clone();
     let supports_non_streaming = ctx.provider_client.supports_non_streaming(&active_model);
@@ -328,12 +329,7 @@ async fn execute_llm_request_with_options_impl(
                 strip_proposed_plan_blocks: turn_snapshot.planning_active,
                 suppress_output,
                 suppress_output_signal: (turn_snapshot.provider_name == vtcode_core::copilot::COPILOT_PROVIDER_KEY)
-                    .then(|| {
-                        Arc::new(AtomicBool::new(
-                            suppress_output
-                                || loop_tracker.as_ref().is_some_and(|tracker| tracker.verification_is_pending()),
-                        ))
-                    }),
+                    .then(|| Arc::new(AtomicBool::new(suppress_output))),
             };
             let progress_handle = ctx.handle.clone();
             let progress_operation = ctx.handle.current_progress_operation();

@@ -160,14 +160,13 @@ async fn harness_auto_verification_completes_text_only_turn_without_manual_conti
 
     // The provider claims completion on its FIRST text, so the claim fast
     // path fires immediately: the harness runs `rustc --version` itself, the
-    // gate clears, and the second response completes normally — two requests,
-    // zero directive rounds, no manual `continue`, no blocked handoff.
+    // gate clears and the retained response completes without resampling.
     assert!(
         matches!(outcome.result, TurnLoopResult::Completed { .. }),
         "expected Completed, got: {:?}",
         outcome.result
     );
-    assert_eq!(requests.load(Ordering::SeqCst), 2);
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
     assert!(!outcome.final_response_was_fallback);
     assert!(
         !history.iter().any(|message| {
@@ -490,4 +489,113 @@ async fn blocked_anti_blind_recovery_publishes_one_actionable_handoff() {
         ]
     );
     assert_blocked_response_surfaces(&mut backing, &history, &harness_path, PENDING_VERIFICATION_RESPONSE_MARKER);
+}
+
+struct RetainedCompletionProvider {
+    calls: Arc<AtomicUsize>,
+    streaming: bool,
+}
+
+#[async_trait::async_trait]
+impl uni::LLMProvider for RetainedCompletionProvider {
+    fn name(&self) -> &str {
+        "openai"
+    }
+    fn supports_streaming(&self) -> bool {
+        self.streaming
+    }
+    async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(uni::LLMResponse {
+            content: Some("WebMCP inspection is complete.".into()),
+            model: request.model,
+            tool_calls: None,
+            usage: None,
+            finish_reason: uni::FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: vec![],
+            compaction: None,
+        })
+    }
+    async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
+        let response = self.generate(request).await?;
+        Ok(Box::pin(async_stream::stream! {
+            yield Ok(uni::LLMStreamEvent::Token { delta: "WebMCP inspection ".into() });
+            yield Ok(uni::LLMStreamEvent::Token { delta: "is complete.".into() });
+            yield Ok(uni::LLMStreamEvent::Completed { response: Box::new(response) });
+        }))
+    }
+    fn supported_models(&self) -> Vec<String> {
+        vec!["noop-model".into()]
+    }
+    fn validate_request(&self, _: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn retained_completion_runs_missing_checks_and_publishes_once_without_model_follow_up() {
+    for streaming in [false, true] {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut backing = TestTurnProcessingBacking::new(8).await;
+        backing.set_provider(Box::new(RetainedCompletionProvider { calls: calls.clone(), streaming }));
+        let harness_path = backing.enable_harness_emitter();
+        {
+            let ctx = backing.turn_processing_context();
+            ctx.tool_registry.allow_all_tools().await.unwrap();
+            ctx.tool_registry
+                .execute_tool(
+                    tool_names::TASK_TRACKER,
+                    json!({
+                        "action":"create", "items":[{"description":"Verify", "status":"completed",
+                        "verify":["rustc --version", "rustc --help"]}]
+                    }),
+                )
+                .await
+                .unwrap();
+            ctx.tool_registry.restore_completion_verification_debt();
+        }
+        let mut history = vec![uni::Message::user("Explain WebMCP.".into())];
+        run_turn_loop(&mut history, backing.turn_loop_context()).await.unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1, "verification must not resample the answer");
+        let expected = "WebMCP inspection is complete.\n\nHarness verification: `rustc --version` exited 0; `rustc --help` exited 0.";
+        let finals: Vec<_> = history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .collect();
+        assert_eq!(finals.len(), 1);
+        assert_eq!(finals[0].content.as_text(), expected);
+        assert_eq!(
+            backing
+                .rendered_inline_output()
+                .matches("WebMCP inspection is complete.")
+                .count(),
+            1
+        );
+        let commands: Vec<_> = history
+            .iter()
+            .filter_map(|m| m.tool_calls.as_ref())
+            .flatten()
+            .filter(|call| call.id == "harness-auto-verify")
+            .collect();
+        assert_eq!(commands.len(), 2);
+        let events = fs::read_to_string(harness_path).unwrap();
+        let messages: Vec<_> = events
+            .lines()
+            .filter_map(|line| {
+                let event = serde_json::from_str::<VersionedThreadEvent>(line).unwrap().into_event();
+                match event {
+                    ThreadEvent::ItemCompleted(item) => match item.item.details {
+                        ThreadItemDetails::AgentMessage(message) => Some(message.text),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            })
+            .collect();
+        assert_eq!(messages, vec![expected.to_string()], "canonical history must never expose the unchecked draft");
+    }
 }

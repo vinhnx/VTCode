@@ -294,6 +294,11 @@ impl ToolRegistry {
         self.harness_context.completion_verification.lock().pending()
     }
 
+    /// Monotonic identity of the code state used to reject stale completion drafts.
+    pub fn completion_mutation_generation(&self) -> u64 {
+        self.harness_context.completion_verification.lock().generation
+    }
+
     pub(super) fn observe_required_completion_verifiers(&self, output: &Value) {
         let Some(items) = output
             .get("checklist")
