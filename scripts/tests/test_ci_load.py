@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Release artifact contracts, using only the standard library."""
 
-from pathlib import Path
+import os
 import re
 import subprocess
 import tarfile
 import tempfile
 import textwrap
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE = (ROOT / ".github/workflows/build-linux-windows.yml").read_text()
@@ -61,6 +62,9 @@ class CiLoadTests(unittest.TestCase):
         self.assertIn("/actions/runs/${GITHUB_RUN_ID}/artifacts", man_step)
         self.assertIn("grep -qx man-pages", man_step)
         self.assertNotIn("2>&1) &&", man_step, "do not classify errors from stderr")
+        self.assertIn("/actions/runs/${GITHUB_RUN_ID}/jobs", man_step)
+        self.assertIn("Build (x86_64-unknown-linux-gnu)", man_step)
+        self.assertIn('.status == "completed" and .conclusion != "success"', man_step)
         # Bounded wait: 40 attempts, no sleep after the final one.
         self.assertIn("seq 1 40", man_step)
         self.assertIn("sleep 15", man_step)
@@ -77,6 +81,143 @@ class CiLoadTests(unittest.TestCase):
         )
         self.assertNotIn("mlugg/setup-zig", RELEASE)
         self.assertNotIn("  gen-man:", RELEASE)
+
+    def run_man_page_download(
+        self,
+        *,
+        artifact_ready_at,
+        producer_state,
+        has_man_page=True,
+        fail_endpoint="",
+    ):
+        script = step_script(job(RELEASE, "build-linux"), "Download man pages")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            tools = root / "bin"
+            tools.mkdir()
+            gh = tools / "gh"
+            gh.write_text(
+                r"""#!/usr/bin/env bash
+set -eu
+if [[ "$1" == api ]]; then
+  case "$3" in
+    */artifacts)
+      count_file="$GH_STUB_DIR/artifact-count"
+      count=$(cat "$count_file" 2>/dev/null || printf 0)
+      count=$((count + 1))
+      printf "%s\n" "$count" > "$count_file"
+      [[ "$GH_API_FAIL_ENDPOINT" != artifacts ]] || exit 7
+      if [[ "$GH_ARTIFACT_READY_AT" -gt 0 && "$count" -ge "$GH_ARTIFACT_READY_AT" ]]; then
+        printf "man-pages\n"
+      fi
+      ;;
+    */jobs)
+      [[ "$GH_API_FAIL_ENDPOINT" != jobs ]] || exit 8
+      if [[ "$GH_PRODUCER_STATE" == completed$'\t'* ]]; then
+        conclusion="${GH_PRODUCER_STATE#*$'\t'}"
+        [[ "$conclusion" == success ]] || printf "%s\n" "$conclusion"
+      fi
+      ;;
+    *) exit 90 ;;
+  esac
+elif [[ "$1" == run && "$2" == download ]]; then
+  shift 2
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == --dir ]]; then dir="$2"; shift 2; else shift; fi
+  done
+  mkdir -p "$dir/man1"
+  if [[ "$GH_HAS_MAN_PAGE" == true ]]; then printf "test\n" > "$dir/man1/vtcode.1"; fi
+else
+  exit 91
+fi
+"""
+            )
+            gh.chmod(0o755)
+            sleep = tools / "sleep"
+            sleep.write_text(
+                r"""#!/usr/bin/env bash
+printf "%s\n" "$*" >> "$GH_STUB_DIR/sleep-count"
+"""
+            )
+            sleep.chmod(0o755)
+            stub_dir = root / "stub-state"
+            stub_dir.mkdir()
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "PATH": f"{tools}{os.pathsep}{environment['PATH']}",
+                    "GH_STUB_DIR": str(stub_dir),
+                    "GH_ARTIFACT_READY_AT": str(artifact_ready_at),
+                    "GH_PRODUCER_STATE": producer_state,
+                    "GH_HAS_MAN_PAGE": "true" if has_man_page else "false",
+                    "GH_API_FAIL_ENDPOINT": fail_endpoint,
+                    "GITHUB_REPOSITORY": "example/project",
+                    "GITHUB_RUN_ID": "12345",
+                }
+            )
+            result = subprocess.run(
+                ["bash", "-eu", "-c", script],
+                cwd=root,
+                check=False,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            artifact_count = stub_dir / "artifact-count"
+            sleep_count = stub_dir / "sleep-count"
+            return {
+                "process": result,
+                "artifact_attempts": (
+                    int(artifact_count.read_text()) if artifact_count.exists() else 0
+                ),
+                "sleep_calls": (
+                    len(sleep_count.read_text().splitlines())
+                    if sleep_count.exists()
+                    else 0
+                ),
+                "page_exists": (root / "man/man1/vtcode.1").is_file(),
+            }
+
+    def test_cross_download_retries_and_fails_fast_when_gnu_producer_fails(self):
+        result = self.run_man_page_download(
+            artifact_ready_at=2,
+            producer_state="in_progress\t",
+        )
+        self.assertEqual(result["process"].returncode, 0, result["process"].stderr)
+        self.assertEqual(result["artifact_attempts"], 2)
+        self.assertEqual(result["sleep_calls"], 1)
+        self.assertTrue(result["page_exists"])
+
+        result = self.run_man_page_download(
+            artifact_ready_at=0,
+            producer_state="completed\tfailure",
+        )
+        self.assertEqual(result["process"].returncode, 1)
+        self.assertEqual(result["artifact_attempts"], 1)
+        self.assertEqual(result["sleep_calls"], 0)
+        self.assertFalse(result["page_exists"])
+        self.assertIn("finished with conclusion 'failure'", result["process"].stderr)
+
+    def test_cross_download_fails_closed_for_api_errors_and_empty_artifacts(self):
+        result = self.run_man_page_download(
+            artifact_ready_at=0,
+            producer_state="in_progress\t",
+            fail_endpoint="artifacts",
+        )
+        self.assertEqual(result["process"].returncode, 7)
+        self.assertEqual(result["artifact_attempts"], 1)
+        self.assertEqual(result["sleep_calls"], 0)
+
+        result = self.run_man_page_download(
+            artifact_ready_at=1,
+            producer_state="in_progress\t",
+            has_man_page=False,
+        )
+        self.assertEqual(result["process"].returncode, 1)
+        self.assertEqual(result["artifact_attempts"], 1)
+        self.assertEqual(result["sleep_calls"], 0)
+        self.assertFalse(result["page_exists"])
+        self.assertIn("man-pages artifact contained no pages", result["process"].stderr)
 
     def test_compiler_cache_is_explicit_and_excludes_cross_containers(self):
         defaults = re.findall(

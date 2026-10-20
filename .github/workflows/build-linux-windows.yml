@@ -322,6 +322,7 @@ jobs:
         run: |
           set -euo pipefail
           artifacts_api="repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts"
+          jobs_api="repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs"
 
           for i in $(seq 1 40); do
             names=$(gh api --paginate "$artifacts_api" --jq '.artifacts[].name')
@@ -336,6 +337,13 @@ jobs:
               fi
               echo "Downloaded man-pages artifact"
               exit 0
+            fi
+
+            producer_failure=$(gh api --paginate "$jobs_api" --jq \
+              '.jobs[] | select(.name == "Build (x86_64-unknown-linux-gnu)") | select(.status == "completed" and .conclusion != "success") | .conclusion')
+            if [[ -n "$producer_failure" ]]; then
+              echo "::error::build-linux-gnu finished with conclusion '$producer_failure' before publishing man-pages" >&2
+              exit 1
             fi
 
             echo "man-pages not available yet (attempt $i/40)"

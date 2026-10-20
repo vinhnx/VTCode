@@ -33,8 +33,10 @@ without assuming an old CI filename. Explicit nightly checks remain separate.
   is the `man-pages` artifact: after its own binary is built, the job polls the run's artifact list via
   `gh api` (40 attempts, 15s apart, ~10 min) and then downloads it. Polling the API rather than parsing
   `gh run download` output separates "not uploaded yet" from a genuine 404/auth failure, which fails
-  immediately; an empty artifact also fails the job, so a release can never ship an archive without man
-  pages. Cross uses its container toolchains; no host Zig installation is needed.
+  immediately. If the GNU producer job completes unsuccessfully before uploading the artifact, the cross
+  job also fails promptly instead of waiting out the full window. An empty artifact also fails the job,
+  so a release can never ship an archive without man pages. Cross uses its container toolchains; no host
+  Zig installation is needed.
 - **Build Windows**: Compiles `x86_64-pc-windows-msvc` binary (`--jobs 4`, `timeout 45m`)
 - **Upload Artifacts**: Stores compiled binaries + extension-stripped `.sha256` sidecars for release
   (`retention-days: 2`, `compression-level: 0` — archives already compressed)
