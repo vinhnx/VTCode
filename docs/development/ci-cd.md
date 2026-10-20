@@ -28,12 +28,21 @@ without assuming an old CI filename. Explicit nightly checks remain separate.
   This removes the separate `xtask` development-profile build for current tags. Rebuilding older tags
   without `man --all-pages` falls back to `xtask`; generation failures do not trigger that fallback.
 - **Build cross Linux**: Compiles `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-gnu`
-  (`needs: [build-linux-gnu]`, `fail-fast: true`, `timeout 45m`). Cross uses its container toolchains;
-  no host Zig installation is needed. Waiting for GNU Linux can increase elapsed workflow time even
-  while total runner-minutes decrease.
+  (`fail-fast: true`, `timeout 45m`). This job has no dependency edge on the GNU job, so both cross
+  targets start compiling immediately instead of idling behind the native build. The only shared input
+  is the `man-pages` artifact: after its own binary is built, the job polls the run's artifact list via
+  `gh api` (40 attempts, 15s apart, ~10 min) and then downloads it. Polling the API rather than parsing
+  `gh run download` output separates "not uploaded yet" from a genuine 404/auth failure, which fails
+  immediately; an empty artifact also fails the job, so a release can never ship an archive without man
+  pages. Cross uses its container toolchains; no host Zig installation is needed.
 - **Build Windows**: Compiles `x86_64-pc-windows-msvc` binary (`--jobs 4`, `timeout 45m`)
 - **Upload Artifacts**: Stores compiled binaries + extension-stripped `.sha256` sidecars for release
   (`retention-days: 2`, `compression-level: 0` — archives already compressed)
+- **Cache**: each job namespaces its own entry with `key: <target>`. Keep `hashFiles('Cargo.lock')` out
+  of `prefix-key`: rust-cache restores the full key first and falls back to the key without the lockfile
+  hash segment, so hashing the lockfile earlier would shrink that fallback. Cache storage is 10 GB per
+  account on every plan, including public repos where minutes are free; let GitHub evict rather than
+  adding a second cache lineage.
 - **Wait for tag**: every build job first polls the remote (inline `bash`) until the release tag is
   visible before checkout, deriving the repo URL from `GITHUB_REPOSITORY` so forks and renames stay
   correct. It must stay inline: a local `uses: ./.github/actions/...` cannot run before

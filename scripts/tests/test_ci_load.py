@@ -45,9 +45,32 @@ class CiLoadTests(unittest.TestCase):
                 "aarch64-unknown-linux-gnu",
             ],
         )
-        self.assertIn("needs: [build-linux-gnu]", cross)
+        self.assertNotRegex(
+            cross,
+            r"^\s+needs:",
+            "cross builds must start immediately, not idle on build-linux-gnu",
+        )
         self.assertIn("name: man-pages", native)
-        self.assertIn("name: man-pages", cross)
+        self.assertIn("Download man pages", cross)
+        # Packaging depends on the shared artifact; the fetch must retry and
+        # fail closed instead of silently producing an archive without man pages.
+        man_step = step_script(cross, "Download man pages")
+        # Poll the API for existence instead of scraping `gh` stderr: a missing
+        # artifact and a real 404 both exit non-zero, so message matching cannot
+        # tell "wait" from "give up".
+        self.assertIn("/actions/runs/${GITHUB_RUN_ID}/artifacts", man_step)
+        self.assertIn("grep -qx man-pages", man_step)
+        self.assertNotIn("2>&1) &&", man_step, "do not classify errors from stderr")
+        # Bounded wait: 40 attempts, no sleep after the final one.
+        self.assertIn("seq 1 40", man_step)
+        self.assertIn("sleep 15", man_step)
+        self.assertIn('if [[ "$i" -lt 40 ]]', man_step)
+        # Never package an empty artifact, and never merge stale extractions.
+        self.assertIn("rm -rf man", man_step)
+        self.assertIn("man-pages artifact contained no pages", man_step)
+        self.assertIn("exit 1", man_step)
+        # GET .../actions/artifacts requires the `actions` scope.
+        self.assertIn("actions: read", cross)
         self.assertIn("--target x86_64-pc-windows-msvc", windows)
         self.assertNotIn(
             "--frozen", windows.split("        run: cargo build", 1)[1].splitlines()[0]

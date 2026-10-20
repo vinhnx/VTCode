@@ -221,11 +221,17 @@ jobs:
 
   build-linux:
     name: Build (${{ matrix.target }})
-    needs: [build-linux-gnu]
+    # Deliberately not dependent on build-linux-gnu: the two cross targets
+    # compile immediately instead of idling ~6 min behind it. The only coupling
+    # is the shared man-pages artifact, fetched with a bounded wait after these
+    # binaries are built — see "Download man pages".
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
       contents: read
+      # Reading artifact metadata via `gh api .../actions/artifacts` needs the
+      # `actions` scope; specifying `permissions` zeroes all unnamed scopes.
+      actions: read
     env:
       CARGO_TERM_VERBOSE: false
       CARGO_TERM_COLOR: always
@@ -301,10 +307,46 @@ jobs:
           fi
 
       - name: Download man pages
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
-        with:
-          name: man-pages
-          path: man/
+        shell: bash
+        # build-linux-gnu runs concurrently with this job (no `needs:`), so its
+        # man-pages artifact may not exist yet. Wait for it, bounded by ~10 min;
+        # `timeout-minutes: 45` remains the backstop. Fail closed: shipping an
+        # archive without man pages is worse than failing the release.
+        #
+        # Ask the API whether the artifact exists rather than scraping `gh`
+        # stderr. A not-yet-uploaded artifact and a real 404 both exit non-zero
+        # with human-readable text ("no artifact matches ..." vs
+        # "HTTP 404: Not Found"), so message matching cannot tell "wait" from
+        # "give up". `gh api` separates them: any non-zero here is a genuine
+        # API/auth failure and fails immediately.
+        run: |
+          set -euo pipefail
+          artifacts_api="repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts"
+
+          for i in $(seq 1 40); do
+            names=$(gh api --paginate "$artifacts_api" --jq '.artifacts[].name')
+
+            if grep -qx man-pages <<<"$names"; then
+              # Clean before extracting so a retry is never additive.
+              rm -rf man
+              gh run download "$GITHUB_RUN_ID" --name man-pages --dir man
+              if ! find man/man1 -name '*.1' -print -quit | grep -q .; then
+                echo "::error::man-pages artifact contained no pages" >&2
+                exit 1
+              fi
+              echo "Downloaded man-pages artifact"
+              exit 0
+            fi
+
+            echo "man-pages not available yet (attempt $i/40)"
+            if [[ "$i" -lt 40 ]]; then
+              sleep 15
+            fi
+          done
+          echo "::error::man-pages artifact was not produced by build-linux-gnu" >&2
+          exit 1
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Package
         shell: bash
