@@ -1359,7 +1359,7 @@ pub(crate) async fn run_turn_loop(
         // rather than immediately falling back to the deterministic final answer.
         if tool_free_recovery
             && !turn_processing_ctx.is_planning_active()
-            && matches!(processing_result, TurnProcessingResult::Empty)
+            && matches!(processing_result, TurnProcessingResult::Empty { .. })
             && response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
             && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
         {

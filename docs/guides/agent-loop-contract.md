@@ -50,7 +50,12 @@ has incomplete steps, and when a turn ends on a recoverable block — in every m
   harness-visible final assistant response, and a failed tool-free synthesis that
   *did not produce an approval-ready plan*) auto-queue another planning turn (same `cross_turn_turns` budget).
   Deterministic empty-turn fallbacks and empty tool-free synthesis handoffs cannot self-loop: after 2 consecutive
-  turns that end without any plan synthesis the gate closes and the user must `continue` manually. Ordinary completed
+  turns that end without any plan synthesis the gate closes and the user must `continue` manually. Before that
+  handoff, one bounded salvage is allowed per turn when the synthesis response recorded completion tokens but no
+  extractable final content (reasoning-heavy models ending inside a thinking run), or when a tool-free pass dropped
+  native tool calls that displaced plan-like reasoning; a genuinely empty response goes straight to the handoff. The
+  handoff detail reports the captured evidence (token count or dropped calls) instead of asserting a plain empty
+  response, while keeping the marker text the consecutive-empty gate matches on. Ordinary completed
   planning turns are not auto-continued — they may be interview or approval handoffs. Planning never auto-approves or
   auto-implements. Plan-mode and tracker auto-continue share the `cross_turn_turns` episode budget; a planning episode
   can exhaust it for later tracker auto-continue until a genuine user turn resets the episode.

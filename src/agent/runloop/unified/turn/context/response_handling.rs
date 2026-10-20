@@ -49,6 +49,32 @@ pub(crate) const PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL: &str = "the model ret
 pub(crate) const PLANNING_RECOVERY_HANDOFF_REASON: &str =
     "planning recovery did not produce an approval-ready plan; planning remains active";
 
+/// Handoff detail for a tool-free synthesis that recorded completion tokens
+/// without extractable final content. Embeds
+/// `PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL` as a prefix so
+/// `is_plan_empty_synthesis_handoff_text` keeps counting these turns toward
+/// the consecutive-empty cap, while the message states the captured evidence
+/// instead of claiming plain emptiness.
+pub(crate) fn planning_tokens_without_content_handoff_detail(completion_tokens: u32) -> String {
+    format!(
+        "{PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL}; the provider recorded {completion_tokens} completion tokens but no extractable final content"
+    )
+}
+
+/// Request-only directive for the bounded `NoOutputFacts` salvage: a tool-free
+/// planning synthesis recorded completion tokens without extractable final
+/// content. Factor-built so the captured token count drives the wording
+/// instead of an unverified "the model returned nothing" claim.
+pub(crate) fn planning_tokens_without_content_salvage_directive(completion_tokens: u32) -> String {
+    format!(
+        "Planning salvage: your previous synthesis recorded {completion_tokens} completion tokens but returned no \
+         extractable final content, and a tool-free pass must not emit tool calls. Stop analyzing and emit the final \
+         content itself now as ONE compact `<proposed_plan>` (Summary; numbered steps in the form `Action -> files: \
+         [path] -> verify: [command]`; Validation; short Assumptions). Each `verify:` must be a concrete command or \
+         observable check. Reply with only the plan."
+    )
+}
+
 impl<'a> TurnProcessingContext<'a> {
     /// End a failed plan-mode recovery pass with an explicit resumable
     /// handoff. This path intentionally emits a `Blocked` outcome: no plan
@@ -115,10 +141,10 @@ impl<'a> TurnProcessingContext<'a> {
         // real contract violation. Invalid drafts use the report-specific
         // feedback via the shared error→directive mapping.
         let (error, directive) = if validation.is_ready() {
-            let reasons = "synthesis mixed a valid plan with tool-call markup; re-emit text only".to_string();
+            let reasons = "synthesis mixed a valid plan with a tool-call violation; re-emit text only".to_string();
             let error = PlanArtifactError::Invalid { reasons, report: Box::new(validation) };
             let directive = build_plan_repair_directive(
-                "The synthesis mixed a valid plan with tool-call markup. Re-emit the same plan as text only, without tool calls or tool-call markup.",
+                "The synthesis mixed a valid plan with a tool-call violation. Re-emit the same plan as text only, without tool calls or tool-call markup.",
             );
             (error, directive)
         } else {
@@ -137,6 +163,53 @@ impl<'a> TurnProcessingContext<'a> {
         );
         append_rejected_plan_draft_to_last_assistant(self.working_history, salvage);
         self.push_system_message(directive);
+        Ok(self.retry_recovery_pass())
+    }
+
+    /// One bounded salvage per planning turn for a tool-free synthesis that
+    /// recorded completion tokens but produced no extractable final content —
+    /// typically a reasoning-interlaced model that ended inside a thinking
+    /// run, or output the content-extraction pipeline could not surface.
+    ///
+    /// The captured facts drive the wording: the directive states the recorded
+    /// token count instead of asserting an unverified cause, and asks the
+    /// model to emit the plan as final content only. Returns `true` when the
+    /// caller should `Continue` (retry armed); `false` falls through to the
+    /// resumable blocked handoff with the honest detail.
+    pub(crate) fn try_planning_empty_output_salvage(&mut self, facts: &NoOutputFacts) -> anyhow::Result<bool> {
+        if !self.is_planning_active() {
+            return Ok(false);
+        }
+        // A pass that ended with dropped native tool calls is handled by the
+        // existing violation-repair route (salvage the reasoning prose).
+        if facts.dropped_tool_calls && !facts.salvaged_reasoning.trim().is_empty() {
+            let salvage = facts.salvaged_reasoning.clone();
+            if self.try_planning_violation_repair(&salvage)? {
+                return Ok(true);
+            }
+        }
+        if facts.dropped_tool_calls || !facts.has_completion_tokens() {
+            return Ok(false);
+        }
+        if !self.plan_session.empty_synthesis_salvage_allowed() {
+            return Ok(false);
+        }
+        self.plan_session.mark_empty_synthesis_salvage_used();
+        tracing::warn!(
+            target: "vtcode.planning_workflow",
+            completion_tokens = facts.completion_tokens,
+            salvage_scheduled = true,
+            tool_free = true,
+            "planning synthesis recorded completion tokens without extractable final content; scheduling bounded salvage"
+        );
+        self.renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Warning,
+            &format!(
+                "[!] Planning synthesis returned {n} tokens without extractable final content; retrying once as a targeted final-content pass.",
+                n = facts.completion_tokens
+            ),
+        )?;
+        self.push_system_message(planning_tokens_without_content_salvage_directive(facts.completion_tokens));
         Ok(self.retry_recovery_pass())
     }
 

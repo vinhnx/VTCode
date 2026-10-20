@@ -803,7 +803,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             params.ctx.harness_state.mark_turn_refused();
             Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }))
         }
-        TurnProcessingResult::Empty => {
+        TurnProcessingResult::Empty { facts } => {
             if params.ctx.is_recovery_active() && params.ctx.recovery_pass_used() {
                 let recovery_mode = if params.ctx.recovery_is_tool_free() {
                     RecoveryMode::ToolFreeSynthesis
@@ -838,10 +838,30 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }
 
                 if params.ctx.is_planning_active() && matches!(recovery_mode, RecoveryMode::ToolFreeSynthesis) {
-                    return params.ctx.break_planning_recovery_with_handoff(
-                        crate::agent::runloop::unified::turn::context::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL,
-                        None,
-                    );
+                    // Route recorded-token drops through bounded salvage
+                    // (dropped tool calls -> existing violation repair;
+                    // completion tokens without final content -> one
+                    // targeted final-content reprompt). A true no-output
+                    // response has no salvageable facts and goes straight
+                    // to the deterministic blocked handoff.
+                    if params.ctx.try_planning_empty_output_salvage(&facts)? {
+                        return Ok(TurnHandlerOutcome::Continue);
+                    }
+                    // Keep the detail honest: only a response with neither
+                    // tokens nor tool calls may claim plain emptiness. The
+                    // core marker substring stays intact so
+                    // `is_plan_empty_synthesis_handoff_text` keeps matching.
+                    let detail = if facts.dropped_tool_calls {
+                        "the synthesis response attempted native tool calls on a tool-free pass".to_string()
+                    } else if facts.has_completion_tokens() {
+                        crate::agent::runloop::unified::turn::context::planning_tokens_without_content_handoff_detail(
+                            facts.completion_tokens,
+                        )
+                    } else {
+                        crate::agent::runloop::unified::turn::context::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL
+                            .to_string()
+                    };
+                    return params.ctx.break_planning_recovery_with_handoff(&detail, None);
                 }
                 let recovery_reason = if params.ctx.recovery_is_tool_free() {
                     "Recovery mode requested a final synthesis pass, but the model returned no answer."

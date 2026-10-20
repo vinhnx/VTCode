@@ -210,6 +210,26 @@ fn detects_empty_tool_free_synthesis_handoff_text() {
         "{PLANNING_RECOVERY_HANDOFF_PREFIX} (the synthesis response attempted a tool call while tools were disabled). The latest request and bounded evidence are preserved."
     );
     assert!(!is_plan_empty_synthesis_handoff_text(&tool_violation_handoff));
+    // Dropped native tool calls report the violation shape, so a pass that
+    // merely attempted tools keeps auto-continuing instead of spending the
+    // consecutive-empty budget.
+    let dropped_native_calls_handoff = format!(
+        "{PLANNING_RECOVERY_HANDOFF_PREFIX} (the synthesis response attempted native tool calls on a tool-free pass). The latest request and bounded evidence are preserved."
+    );
+    assert!(!is_plan_empty_synthesis_handoff_text(&dropped_native_calls_handoff));
+    assert!(!is_plan_empty_turn_text(&dropped_native_calls_handoff));
+    // A tokens-without-content handoff keeps the empty detail as a prefix and
+    // appends the captured evidence, so it must still count toward the
+    // consecutive-empty cap or a reasoning-heavy model escapes the bound.
+    // Built from the production helper so drift between the wording and this
+    // marker contract fails here instead of silently disabling the cap.
+    let tokens_without_content_handoff = format!(
+        "{PLANNING_RECOVERY_HANDOFF_PREFIX} ({detail}). The latest request and bounded evidence are preserved.",
+        detail =
+            crate::agent::runloop::unified::turn::context::planning_tokens_without_content_handoff_detail(u32::MAX)
+    );
+    assert!(is_plan_empty_synthesis_handoff_text(&tokens_without_content_handoff));
+    assert!(is_plan_empty_turn_text(&tokens_without_content_handoff));
     // The deterministic fallback is still recognized by the combined gate.
     assert!(is_plan_empty_turn_text(
         crate::agent::runloop::unified::turn::turn_loop::PLANNING_COMPLETED_FALLBACK_RESPONSE

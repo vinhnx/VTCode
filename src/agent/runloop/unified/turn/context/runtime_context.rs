@@ -18,11 +18,42 @@ pub(crate) enum TurnProcessingResult {
         proposed_plan: Option<String>,
     },
     /// Turn resulted in no actionable output
-    Empty,
+    Empty {
+        /// Captured provider facts that classify *why* the output was empty.
+        /// Keeps empty-response handling honest: a true no-output response and
+        /// a response whose tokens never surfaced as final content (dropped
+        /// native tool calls, reasoning-only completions) must not both claim
+        /// "the model returned an empty synthesis response".
+        facts: NoOutputFacts,
+    },
     /// The provider stopped the turn with a refusal (`FinishReason::Refusal`).
     /// Retrying the same prompt reproduces the refusal, so the turn ends with
     /// `reason` as the user-facing explanation instead of entering recovery.
     Refusal { reason: String },
+}
+
+/// Provider-side facts captured when a response produces no actionable
+/// output. Built at classification time from data the response itself
+/// carries, so later recovery steps can distinguish mechanisms instead of
+/// asserting a single unverified cause.
+#[derive(Debug, Default)]
+pub(crate) struct NoOutputFacts {
+    /// Completion tokens the provider reported for this response.
+    pub(crate) completion_tokens: u32,
+    /// Bounded reasoning text kept for salvage when a tool-free recovery pass
+    /// dropped one or more native tool calls. Empty otherwise.
+    pub(crate) salvaged_reasoning: String,
+    /// The response carried native tool calls that were dropped because the
+    /// recovery pass forbids executing tools.
+    pub(crate) dropped_tool_calls: bool,
+}
+
+impl NoOutputFacts {
+    /// True when the provider recorded completion tokens even though no
+    /// final content could be extracted (tokens without surface content).
+    pub(crate) fn has_completion_tokens(&self) -> bool {
+        self.completion_tokens > 0
+    }
 }
 
 pub(crate) enum TurnHandlerOutcome {

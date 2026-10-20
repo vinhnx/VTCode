@@ -6,7 +6,7 @@ use super::{
 };
 use crate::agent::runloop::unified::run_loop_context::RecoveryMode;
 use crate::agent::runloop::unified::turn::context::{
-    PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingResult,
+    NoOutputFacts, PreparedAssistantToolCall, TurnHandlerOutcome, TurnLoopResult, TurnProcessingResult,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
 use crate::agent::runloop::unified::turn::turn_loop::RECOVERY_CONTRACT_VIOLATION_REASON;
@@ -1175,7 +1175,7 @@ async fn recovery_empty_response_emits_fallback_and_completes_turn() {
 
     let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
         ctx: &mut ctx,
-        processing_result: TurnProcessingResult::Empty,
+        processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
         response_streamed: false,
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1212,7 +1212,7 @@ async fn recovery_empty_response_fallback_stays_concise_without_evidence_dump() 
 
     let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
         ctx: &mut ctx,
-        processing_result: TurnProcessingResult::Empty,
+        processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
         response_streamed: false,
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1261,7 +1261,7 @@ async fn recovery_empty_response_fallback_omits_spool_excerpt() {
 
     let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
         ctx: &mut ctx,
-        processing_result: TurnProcessingResult::Empty,
+        processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
         response_streamed: false,
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1296,7 +1296,7 @@ async fn recovery_retry_empty_response_emits_fallback_and_completes_turn() {
 
     let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
         ctx: &mut ctx,
-        processing_result: TurnProcessingResult::Empty,
+        processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
         response_streamed: false,
         step_count: 1,
         repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1436,7 +1436,7 @@ async fn empty_response_schedules_tool_enabled_retry_without_prior_tool_activity
         let mut ctx = backing.turn_processing_context();
         handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
+            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
             response_streamed: true,
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1474,7 +1474,7 @@ async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
 
         handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
+            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
             response_streamed: true,
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1501,7 +1501,7 @@ async fn planning_two_empty_responses_schedule_one_tool_free_synthesis() {
         let mut ctx = backing.turn_processing_context();
         handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
+            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
             response_streamed: false,
             step_count: 1,
             repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1523,7 +1523,7 @@ async fn planning_two_empty_responses_schedule_one_tool_free_synthesis() {
         let mut ctx = backing.turn_processing_context();
         handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
+            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
             response_streamed: false,
             step_count: 2,
             repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1546,7 +1546,7 @@ async fn planning_two_empty_responses_schedule_one_tool_free_synthesis() {
         let mut ctx = backing.turn_processing_context();
         handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty,
+            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
             response_streamed: false,
             step_count: 3,
             repeated_tool_attempts: &mut repeated_tool_attempts,
@@ -1559,6 +1559,189 @@ async fn planning_two_empty_responses_schedule_one_tool_free_synthesis() {
     };
     assert!(matches!(third, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
     assert!(backing.last_history_message_contains("Planning remains active"));
+}
+
+/// Drive the deterministic planning ladder to the tool-free synthesis pass:
+/// two empty responses, both recovery passes consumed. The next
+/// `handle_turn_processing_result` call processes the synthesis response.
+async fn advance_planning_recovery_to_tool_free_pass(
+    backing: &mut TestTurnProcessingBacking,
+    repeated_tool_attempts: &mut LoopTracker,
+    turn_modified_files: &mut BTreeSet<std::path::PathBuf>,
+) {
+    for step in 1..=2usize {
+        let outcome = {
+            let mut ctx = backing.turn_processing_context();
+            handle_turn_processing_result(HandleTurnProcessingResultParams {
+                ctx: &mut ctx,
+                processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
+                response_streamed: false,
+                step_count: step,
+                repeated_tool_attempts,
+                turn_modified_files,
+                max_tool_loops: 4,
+                tool_repeat_limit: 4,
+            })
+            .await
+            .expect("empty response should arm the deterministic recovery ladder")
+        };
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        let mut ctx = backing.turn_processing_context();
+        assert!(ctx.consume_recovery_pass());
+    }
+}
+
+async fn handle_planning_empty_with(
+    backing: &mut TestTurnProcessingBacking,
+    facts: NoOutputFacts,
+    step_count: usize,
+    repeated_tool_attempts: &mut LoopTracker,
+    turn_modified_files: &mut BTreeSet<std::path::PathBuf>,
+) -> TurnHandlerOutcome {
+    let mut ctx = backing.turn_processing_context();
+    handle_turn_processing_result(HandleTurnProcessingResultParams {
+        ctx: &mut ctx,
+        processing_result: TurnProcessingResult::Empty { facts },
+        response_streamed: false,
+        step_count,
+        repeated_tool_attempts,
+        turn_modified_files,
+        max_tool_loops: 4,
+        tool_repeat_limit: 4,
+    })
+    .await
+    .expect("empty synthesis response should be handled by the result handler")
+}
+
+#[tokio::test]
+async fn planning_tokens_without_content_salvage_arms_one_final_content_retry() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+
+    advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
+        .await;
+
+    // The synthesis pass itself records completion tokens but no final
+    // content (reasoning-interlaced end). Bounded salvage must arm instead of
+    // parking the turn in a blocked handoff.
+    let third = handle_planning_empty_with(
+        &mut backing,
+        NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
+        3,
+        &mut repeated_tool_attempts,
+        &mut turn_modified_files,
+    )
+    .await;
+    assert!(matches!(third, TurnHandlerOutcome::Continue));
+    assert!(
+        backing
+            .last_history_message_contains("recorded 477 completion tokens but returned no extractable final content"),
+        "salvage directive must carry the captured token count, not an unverified emptiness claim"
+    );
+}
+
+#[tokio::test]
+async fn planning_second_tokens_without_content_handoff_states_captured_facts() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+
+    advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
+        .await;
+    let salvage = handle_planning_empty_with(
+        &mut backing,
+        NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
+        3,
+        &mut repeated_tool_attempts,
+        &mut turn_modified_files,
+    )
+    .await;
+    assert!(matches!(salvage, TurnHandlerOutcome::Continue));
+    {
+        let mut ctx = backing.turn_processing_context();
+        assert!(ctx.consume_recovery_pass());
+    }
+
+    // A second tokens-without-content response has consumed the salvage: the
+    // blocked handoff keeps both auto-continue marker substrings AND states
+    // the captured token count instead of a plain emptiness claim.
+    let handoff = handle_planning_empty_with(
+        &mut backing,
+        NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
+        4,
+        &mut repeated_tool_attempts,
+        &mut turn_modified_files,
+    )
+    .await;
+    let TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: blocked }) = handoff else {
+        panic!("exhausted salvage must end in the resumable blocked handoff");
+    };
+    let reason = blocked.expect("blocked reason must be present");
+    assert!(reason.contains("did not produce an approval-ready plan"));
+    assert!(
+        backing.last_history_message_contains("the model returned an empty synthesis response"),
+        "empty-shape marker must survive so the consecutive-empty cap keeps matching"
+    );
+    assert!(
+        backing.last_history_message_contains("provider recorded 477 completion tokens"),
+        "handoff must state the captured completion tokens"
+    );
+}
+
+#[tokio::test]
+async fn planning_true_no_output_handoff_never_claims_returned_tokens() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+
+    advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
+        .await;
+    let handoff = handle_planning_empty_with(
+        &mut backing,
+        NoOutputFacts::default(),
+        3,
+        &mut repeated_tool_attempts,
+        &mut turn_modified_files,
+    )
+    .await;
+    assert!(matches!(handoff, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+    assert!(backing.last_history_message_contains("the model returned an empty synthesis response"));
+    // Asymmetric pair for the tokens case: a genuinely empty response must
+    // not borrow a captured-token claim it has no evidence for.
+    assert!(!backing.last_history_message_contains("provider recorded"));
+    assert!(!backing.last_history_message_contains("completion tokens"));
+}
+
+#[tokio::test]
+async fn planning_dropped_tool_calls_report_the_actual_failure_shape() {
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    backing.activate_planning_for_test();
+    let mut repeated_tool_attempts = LoopTracker::new();
+    let mut turn_modified_files = BTreeSet::new();
+
+    advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
+        .await;
+    let facts = NoOutputFacts {
+        dropped_tool_calls: true,
+        salvaged_reasoning: "I considered searching the docs again, but decided against it.".to_string(),
+        completion_tokens: 210,
+    };
+    let handoff =
+        handle_planning_empty_with(&mut backing, facts, 3, &mut repeated_tool_attempts, &mut turn_modified_files).await;
+    assert!(matches!(handoff, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+    assert!(
+        backing.last_history_message_contains("the synthesis response attempted native tool calls on a tool-free pass"),
+        "dropped-tool-call shape must name the actual contract violation, not emptiness"
+    );
+    assert!(
+        !backing.last_history_message_contains("the model returned an empty synthesis response"),
+        "the empty marker must not be claimed for a tool-call violation"
+    );
+    assert!(!backing.last_history_message_contains("provider recorded"));
 }
 
 /// Regression test for TD-015: text containing malformed `<tool_call>` tags

@@ -37,6 +37,12 @@ pub(crate) struct PlanningWorkflowSessionState {
     /// from the research already gathered instead of ending with an approval
     /// hint that has no draft behind it.
     plan_synthesis_retry_used: bool,
+    /// Allows one bounded salvage per planning turn for a tool-free synthesis
+    /// that recorded completion tokens without extractable final content
+    /// (typically a reasoning-interlaced model that ended inside a thinking
+    /// run). Turn-scoped like the validation-repair budget so a fresh user
+    /// turn re-arms it while a failed retry cannot consume later budget.
+    empty_synthesis_salvage_used: bool,
     /// Counts automatic validation-repair prompts issued during the current
     /// planning turn. The counter is deliberately turn-scoped so a failed
     /// draft cannot consume the repair budget for every later user turn.
@@ -98,6 +104,7 @@ impl PlanningWorkflowSessionState {
         self.recovery_exhausted = false;
         self.interview_denied = false;
         self.plan_synthesis_retry_used = false;
+        self.empty_synthesis_salvage_used = false;
         self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
         self.pseudo_tool_call_reprompts = 0;
@@ -113,6 +120,7 @@ impl PlanningWorkflowSessionState {
         self.recovery_exhausted = false;
         self.interview_denied = false;
         self.plan_synthesis_retry_used = false;
+        self.empty_synthesis_salvage_used = false;
         self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
         self.pseudo_tool_call_reprompts = 0;
@@ -223,6 +231,21 @@ impl PlanningWorkflowSessionState {
     pub(crate) fn start_turn(&mut self) {
         self.plan_validation_repair_reprompts = 0;
         self.bounded_planning_follow_ups_pending = 0;
+        // Re-arm the per-turn salvage: a fresh user turn gets one bounded
+        // tokens-without-content attempt even after the previous turn failed.
+        self.empty_synthesis_salvage_used = false;
+    }
+
+    /// One bounded salvage attempt per planning turn for a tool-free synthesis
+    /// that recorded completion tokens without extractable final content.
+    /// Gated off when the session budget/recovery is exhausted because the
+    /// salvage retry needs another provider request.
+    pub(crate) fn empty_synthesis_salvage_allowed(&self) -> bool {
+        !self.empty_synthesis_salvage_used && !self.budget_exhausted && !self.recovery_exhausted
+    }
+
+    pub(crate) fn mark_empty_synthesis_salvage_used(&mut self) {
+        self.empty_synthesis_salvage_used = true;
     }
 
     pub(crate) fn plan_validation_repair_allowed(&self) -> bool {
@@ -684,6 +707,37 @@ mod tests {
         state.enter(PlanningEntrySource::UserRequest);
         assert!(state.plan_validation_repair_allowed());
         assert!(!state.bounded_planning_follow_up_allowed(), "re-entry clears pending repair requests");
+    }
+
+    #[test]
+    fn empty_synthesis_salvage_is_bounded_per_turn_and_gated_by_budget() {
+        let mut state = PlanningWorkflowSessionState::default();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(state.empty_synthesis_salvage_allowed(), "a fresh planning turn starts with one salvage");
+
+        state.mark_empty_synthesis_salvage_used();
+        assert!(
+            !state.empty_synthesis_salvage_allowed(),
+            "one salvage per turn; a second empty synthesis must fall through to the handoff"
+        );
+
+        state.start_turn();
+        assert!(
+            state.empty_synthesis_salvage_allowed(),
+            "a fresh user turn re-arms the salvage instead of leaving later tries expensively on the floor"
+        );
+
+        // The salvage schedules a provider request, so exhausted budgets must
+        // refuse it rather than spending one more call that cannot succeed.
+        state.mark_budget_exhausted();
+        assert!(!state.empty_synthesis_salvage_allowed());
+        state.start_turn();
+        state.mark_recovery_exhausted();
+        assert!(!state.empty_synthesis_salvage_allowed());
+
+        state.exit();
+        state.enter(PlanningEntrySource::UserRequest);
+        assert!(state.empty_synthesis_salvage_allowed(), "re-entry clears the salvage latch");
     }
 
     #[test]

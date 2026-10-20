@@ -9,7 +9,7 @@ use crate::agent::runloop::unified::plan_blocks::{
     strip_plan_persistence_policy_line,
 };
 use crate::agent::runloop::unified::planning_workflow::validate_plan_content;
-use crate::agent::runloop::unified::turn::context::{PreparedAssistantToolCall, TurnProcessingResult};
+use crate::agent::runloop::unified::turn::context::{NoOutputFacts, PreparedAssistantToolCall, TurnProcessingResult};
 use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
@@ -45,6 +45,18 @@ pub(crate) fn process_llm_response(
         .join("\n");
     let reasoning_details = response.reasoning_details.clone();
     let mut final_text = response.content.clone();
+
+    // Capture the empty-output facts before the planning salvage below can
+    // move `reasoning_text` into `final_text`; a dropped tool-call pass
+    // re-nulls `final_text` later, so the reasoning text is kept here for the
+    // bounded violation-repair salvage path.
+    let dropped_native_tool_calls =
+        planning_active && !allow_tool_calls && response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty());
+    let salvaged_reasoning = if dropped_native_tool_calls {
+        vtcode_commons::formatting::truncate_byte_budget(&reasoning_text, 8192, "…")
+    } else {
+        String::new()
+    };
 
     // Some providers put the completed planning synthesis in the reasoning
     // channel and return an empty assistant content field. That previously
@@ -282,6 +294,16 @@ pub(crate) fn process_llm_response(
         return Ok(TurnProcessingResult::TextResponse { text, reasoning, reasoning_details, proposed_plan });
     }
 
+    // Classify the empty shape from the response's own data so later recovery
+    // steps can distinguish a true no-output response from tokens that never
+    // surfaced as final content. Native tool calls on a tool-free passthrough
+    // keep their reasoning text in the capture above (see the drop site).
+    let facts = NoOutputFacts {
+        completion_tokens: response.usage.as_ref().map_or(0, |usage| usage.completion_tokens),
+        salvaged_reasoning,
+        dropped_tool_calls: dropped_native_tool_calls,
+    };
+
     tracing::info!(
         target: "vtcode.turn.metrics",
         metric = "llm_response_parsed",
@@ -291,6 +313,8 @@ pub(crate) fn process_llm_response(
         reasoning_segments = reasoning_segment_count,
         reasoning_details = reasoning_details_count,
         content_len = 0,
+        completion_tokens = facts.completion_tokens,
+        had_dropped_tool_calls = facts.dropped_tool_calls,
         is_harmony,
         planning_active,
         allow_plan_interview,
@@ -299,7 +323,7 @@ pub(crate) fn process_llm_response(
         "turn metric"
     );
 
-    Ok(TurnProcessingResult::Empty)
+    Ok(TurnProcessingResult::Empty { facts })
 }
 
 fn looks_like_structured_plan(text: &str) -> bool {
@@ -619,7 +643,7 @@ fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a s
 mod tests {
     use super::*;
     use vtcode_core::config::constants::tools;
-    use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+    use vtcode_core::llm::provider::{FinishReason, LLMResponse, ToolCall, Usage};
 
     #[test]
     fn attempted_draft_detection_preserves_questions_native_tools_and_execution_prose() {
@@ -632,7 +656,7 @@ mod tests {
             };
             let mut response = LLMResponse::new("test", &text);
             if native_tools {
-                response.tool_calls = Some(vec![vtcode_core::llm::provider::ToolCall::function(
+                response.tool_calls = Some(vec![ToolCall::function(
                     "read".to_string(),
                     "read_file".to_string(),
                     r#"{"path":"README.md"}"#.to_string(),
@@ -658,12 +682,12 @@ mod tests {
     #[test]
     fn prepare_tool_calls_reuses_parsed_arguments_and_metadata() {
         let tool_calls = vec![
-            vtcode_core::llm::provider::ToolCall::function(
+            ToolCall::function(
                 "call_search".to_string(),
                 tools::CODE_SEARCH.to_string(),
                 r#"{"query":"TurnProcessingResult"}"#.to_string(),
             ),
-            vtcode_core::llm::provider::ToolCall::function(
+            ToolCall::function(
                 "call_exec".to_string(),
                 tools::UNIFIED_EXEC.to_string(),
                 r#"{"action":"run","command":["cargo","check"]}"#.to_string(),
@@ -688,7 +712,7 @@ mod tests {
 
     #[test]
     fn prepare_tool_calls_records_invalid_json_without_reparsing() {
-        let tool_calls = vec![vtcode_core::llm::provider::ToolCall::function(
+        let tool_calls = vec![ToolCall::function(
             "call_invalid".to_string(),
             tools::CODE_SEARCH.to_string(),
             "{not-json}".to_string(),
@@ -707,7 +731,7 @@ mod tests {
 
     #[test]
     fn prepare_tool_calls_keeps_custom_tool_payload_as_raw_string() {
-        let tool_calls = vec![vtcode_core::llm::provider::ToolCall::custom(
+        let tool_calls = vec![ToolCall::custom(
             "call_patch".to_string(),
             tools::APPLY_PATCH.to_string(),
             "*** Begin Patch\n*** End Patch\n".to_string(),
@@ -777,6 +801,92 @@ mod tests {
             reasoning_details,
             ..Default::default()
         }
+    }
+
+    fn usage_with_completion_tokens(completion_tokens: u32) -> Usage {
+        Usage {
+            prompt_tokens: 1,
+            completion_tokens,
+            total_tokens: completion_tokens + 1,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn process_llm_response_captures_completion_tokens_without_content() {
+        // The observed failure shape: the provider billed tokens but surfaced
+        // no final content, so the turn must record that evidence instead of
+        // claiming a plain empty response.
+        let response = LLMResponse {
+            usage: Some(usage_with_completion_tokens(477)),
+            ..Default::default()
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, false, None, None)
+            .expect("processing should succeed");
+
+        let TurnProcessingResult::Empty { facts } = result else {
+            panic!("tokens without content must classify as empty with captured facts");
+        };
+        assert_eq!(facts.completion_tokens, 477);
+        assert!(facts.has_completion_tokens());
+        assert!(!facts.dropped_tool_calls);
+        assert!(facts.salvaged_reasoning.is_empty(), "no tool calls were dropped, so nothing is salvageable");
+    }
+
+    #[test]
+    fn process_llm_response_captures_dropped_tool_calls_and_keeps_reasoning() {
+        // A tool-free pass that still emits native tool calls drops them; the
+        // reasoning text those calls displaced must survive for repair instead
+        // of being reported as an empty synthesis. Reasoning models deliver
+        // that text inside `<thinking>` tags on the wire.
+        let plan_body = "## Summary\nPlan to change the parser.\n## Implementation Steps\n1. Edit the parser -> files: [src/a.rs] -> verify: [cargo check]";
+        let response = LLMResponse {
+            content: None,
+            reasoning: Some(format!("<thinking>{plan_body}</thinking>")),
+            tool_calls: Some(vec![ToolCall::function(
+                "call_1".to_string(),
+                "grep".to_string(),
+                "{}".to_string(),
+            )]),
+            usage: Some(usage_with_completion_tokens(210)),
+            ..Default::default()
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, false, None, None)
+            .expect("processing should succeed");
+
+        let TurnProcessingResult::Empty { facts } = result else {
+            panic!("dropped tool calls must classify as empty with captured facts");
+        };
+        assert!(facts.dropped_tool_calls);
+        assert_eq!(facts.completion_tokens, 210);
+        assert_eq!(
+            facts.salvaged_reasoning.trim(),
+            plan_body,
+            "the reasoning displaced by the dropped calls must be preserved verbatim for repair"
+        );
+    }
+
+    #[test]
+    fn process_llm_response_total_absence_captures_no_evidence() {
+        // Asymmetric pair for the tokens case: a genuinely empty response must
+        // not fabricate salvage or a token count it has no evidence for.
+        let response = LLMResponse::default();
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, false, None, None)
+            .expect("processing should succeed");
+
+        let TurnProcessingResult::Empty { facts } = result else {
+            panic!("a response with nothing in it must classify as empty");
+        };
+        assert_eq!(facts.completion_tokens, 0);
+        assert!(!facts.has_completion_tokens());
+        assert!(!facts.dropped_tool_calls);
+        assert!(facts.salvaged_reasoning.is_empty());
     }
 
     #[test]
@@ -910,7 +1020,7 @@ mod tests {
     fn process_llm_response_keeps_execution_replan_with_tool_calls_unextracted() {
         let response = LLMResponse {
             content: Some("Continuing work.\n<proposed_plan>\n## Summary\nDraft only.\n</proposed_plan>".to_string()),
-            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+            tool_calls: Some(vec![ToolCall::function(
                 "call_1".to_string(),
                 "code_search".to_string(),
                 r#"{"query":"x"}"#.to_string(),
@@ -972,7 +1082,7 @@ mod tests {
             TurnProcessingResult::TextResponse { text, .. } => {
                 panic!("spaced DSML leaked as text: {text}");
             }
-            TurnProcessingResult::Empty | TurnProcessingResult::Refusal { .. } => {
+            TurnProcessingResult::Empty { .. } | TurnProcessingResult::Refusal { .. } => {
                 panic!("spaced DSML should produce a tool call")
             }
         }
@@ -1132,7 +1242,7 @@ mod tests {
             content: Some(
                 "# Attached plan\n\n## Summary\nKeep approval ahead of tool execution.\n\n## Steps\n1. Gate the plan -> files: [src/agent/runloop/unified/turn/turn_processing/response_processing.rs] -> verify: cargo check\n\n## Validation\n1. Run the planning regression tests.\n\n## Assumptions\n1. Preserve the existing planning policy.\n".to_string(),
             ),
-            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+            tool_calls: Some(vec![ToolCall::function(
                 "call_after_plan".to_string(),
                 "code_search".to_string(),
                 r#"{"query":"should-not-run"}"#.to_string(),
@@ -1158,7 +1268,7 @@ mod tests {
                 assert!(proposed_plan.is_some());
             }
             TurnProcessingResult::ToolCalls { .. } => panic!("attached calls must not bypass plan approval"),
-            TurnProcessingResult::Empty | TurnProcessingResult::Refusal { .. } => {
+            TurnProcessingResult::Empty { .. } | TurnProcessingResult::Refusal { .. } => {
                 panic!("complete plan should remain actionable")
             }
         }
@@ -1290,7 +1400,7 @@ Outro"#
             "test",
             "<proposed_plan>\n## Summary\nDo the work.\n\n## Implementation Steps\n1. Update src/lib.rs -> files: [src/lib.rs] -> verify: [cargo check --locked]\n\n## Test Cases and Validation\n- Run nextest.\n\n## Assumptions and Defaults\n- Preserve the contract.\n</proposed_plan>",
         );
-        response.tool_calls = Some(vec![vtcode_core::llm::provider::ToolCall::function(
+        response.tool_calls = Some(vec![ToolCall::function(
             "call-forbidden".to_string(),
             "code_search".to_string(),
             r#"{"query":"must not execute"}"#.to_string(),
@@ -1299,7 +1409,7 @@ Outro"#
         let mut renderer = AnsiRenderer::stdout();
         let result = process_llm_response(&response, &mut renderer, 0, true, false, false, false, None, None)
             .expect("forbidden tool call should be handled as an empty recovery result");
-        assert!(matches!(result, TurnProcessingResult::Empty));
+        assert!(matches!(result, TurnProcessingResult::Empty { .. }));
     }
 
     #[test]
@@ -1374,7 +1484,7 @@ Open questions for alignment:
     fn process_llm_response_preserves_reasoning_details_for_tool_calls() {
         let response = LLMResponse {
             content: Some("".to_string()),
-            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+            tool_calls: Some(vec![ToolCall::function(
                 "call_1".to_string(),
                 "code_search".to_string(),
                 r#"{"query":"x"}"#.to_string(),
@@ -1438,7 +1548,7 @@ Open questions for alignment:
     fn process_llm_response_ignores_structured_tool_calls_when_tool_calls_disabled() {
         let response = LLMResponse {
             content: Some("Final synthesis only.".to_string()),
-            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+            tool_calls: Some(vec![ToolCall::function(
                 "call_1".to_string(),
                 "code_search".to_string(),
                 r#"{"query":"Widget","path":"src","result_types":["path"]}"#.to_string(),
