@@ -58,24 +58,33 @@ fn concise_diagnosis_line(tool_name: &str, diagnosis: &ToolFailureDiagnosis) -> 
 
 pub(crate) fn render_diagnosis(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
-    harness_emitter: Option<&crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    _harness_emitter: Option<&crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     turn_id: &str,
     tool_name: &str,
     diagnosis: &ToolFailureDiagnosis,
 ) {
-    // TUI stays to one concise line; the full Observed/Likely-cause/Next-action
-    // triple lives in the tool payload `diagnosis` JSON (model) + the harness
-    // `diagnosis` reasoning item (agent forensics).
-    let display_tool_name = bounded_field(tool_name);
-    let line = concise_diagnosis_line(tool_name, diagnosis);
-    if let Err(error) = renderer.line(MessageStyle::Info, &line) {
-        tracing::warn!(tool = %display_tool_name, error = %error, "failed to render tool failure diagnosis");
+    use std::hash::{Hash, Hasher};
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+    // Empty search results are ordinary tool outcomes, not operational failures.
+    if diagnosis.no_matches {
+        if let Err(error) = renderer.line(MessageStyle::Info, &concise_diagnosis_line(tool_name, diagnosis)) {
+            tracing::warn!(error = %error, "failed to render empty search result");
+        }
+        return;
     }
-
-    if let Some(emitter) = harness_emitter
-        && let Err(error) = emitter.emit_diagnosis(turn_id, &diagnosis.render_text(tool_name))
-    {
-        tracing::warn!(tool = %display_tool_name, error = %error, "failed to emit tool failure diagnosis event");
+    let mut identity = std::collections::hash_map::DefaultHasher::new();
+    (turn_id, tool_name, &diagnosis.observed).hash(&mut identity);
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        code: "tool.execution_failed".into(),
+        summary: format!("Tool '{}' failed. Expand Details for recovery steps.", bounded_field(tool_name)),
+        agent_details: diagnosis.render_text(tool_name),
+        correlation_id: format!("tool-diagnosis:{:016x}", identity.finish()),
+        actions: Vec::new(),
+    };
+    // The renderer's canonical callback owns the event; do not emit a second incident.
+    if let Err(error) = renderer.diagnostic(&diagnostic) {
+        tracing::warn!(tool = %tool_name, error = %error, "failed to persist or render tool failure diagnosis");
     }
 }
 

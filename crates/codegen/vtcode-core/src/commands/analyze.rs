@@ -51,7 +51,7 @@ pub async fn handle_analyze_command(config: AgentConfig, depth: String, format: 
             names
         }
         Err(e) => {
-            println!("{} {}", style("Failed to list root directory:").red(), e);
+            vtcode_commons::diagnostics::stderr(format_args!("Failed to list root directory: {e}"));
             Vec::new()
         }
     };

@@ -48,6 +48,7 @@ mod evaluator_types;
 mod execute;
 mod execute_checks;
 mod execute_helpers;
+mod headless_planning;
 mod helpers;
 mod orchestration;
 mod output;
@@ -181,7 +182,7 @@ impl AgentRunner {
 
     fn runner_println(&self, args: std::fmt::Arguments) {
         if !self.quiet {
-            println!("{args}");
+            println!("{}", vtcode_commons::sanitizer::redact_secrets(args.to_string()));
         }
     }
 

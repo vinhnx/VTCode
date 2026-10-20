@@ -64,11 +64,15 @@ fn drain_appended_lines(
 ) -> Vec<String> {
     let mut lines = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } = command {
-            let line = segments.into_iter().map(|segment| segment.text).collect::<String>();
-            if !line.trim().is_empty() {
-                lines.push(line);
+        match command {
+            vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } => {
+                let line = segments.into_iter().map(|segment| segment.text).collect::<String>();
+                if !line.trim().is_empty() {
+                    lines.push(line);
+                }
             }
+            vtcode_ui::tui::app::InlineCommand::Diagnostic(diagnostic) => lines.push(diagnostic.text()),
+            _ => {}
         }
     }
     lines

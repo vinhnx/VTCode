@@ -163,7 +163,7 @@ fn maybe_recover_after_post_tool_llm_failure_with_progress(
             renderer.line(MessageStyle::Warning, &guidance.user_message())?;
         }
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::Warning,
             "The provider rejected an unmatched tool result after one bounded history repair; the turn is paused for resume.",
         )?;
         return Ok(PostToolFailureRecovery::StopAfterDirective);
@@ -516,7 +516,7 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery_with_events(
         && let (Some(session), Some(state), Some(plan_text)) =
             (plan_session.as_deref_mut(), plan_state, recovered_plan_text.as_deref())
     {
-        emit_plan_ready_events(
+        if let Err(error) = emit_plan_ready_events(
             session,
             state,
             event_context.emitter,
@@ -524,7 +524,14 @@ pub(super) async fn complete_turn_after_failed_tool_free_recovery_with_events(
             event_context.turn_id,
             plan_text,
         )
-        .await;
+        .await
+        {
+            tracing::warn!(%error, "failed to persist planning approval state");
+            session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+            return TurnLoopResult::Blocked {
+                reason: Some("planning persistence failed; awaiting input".into()),
+            };
+        }
     }
 
     // Plan mode: never dead-end. Preserve the planning session and re-force
@@ -796,7 +803,7 @@ pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>)
     if is_unmatched_tool_result_error(&err.to_string()) {
         ensure_post_tool_resume_directive(working_history);
         renderer.line(
-            MessageStyle::Info,
+            MessageStyle::Warning,
             "The provider rejected an unmatched tool result after one bounded history repair; the turn is blocked for resume.",
         )?;
         return Ok(PostToolFailureAction::Break(TurnLoopResult::Blocked {
@@ -889,7 +896,7 @@ pub(super) async fn dispatch_post_tool_failure(ctx: PostToolRecoveryContext<'_>)
             if planning_synthesis_retry && harness_state.retry_recovery_pass() {
                 prepare_post_tool_tool_free_recovery(working_history, POST_TOOL_RECOVERY_REASON_PLAN_MODE);
                 renderer.line(
-                    MessageStyle::Info,
+                    MessageStyle::Warning,
                     "[!] Final plan synthesis failed transiently; retrying once from the gathered research with tools disabled.",
                 )?;
                 tracing::warn!(

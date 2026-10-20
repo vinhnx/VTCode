@@ -1,7 +1,5 @@
 use super::*;
-use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-    plan_mode_recoverable_block, tracker_auto_continue_is_recoverable_block,
-};
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::tracker_auto_continue_is_recoverable_block;
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use vtcode_core::tools::handlers::planning_workflow::CANONICAL_STEP_FORMAT;
 
@@ -28,7 +26,6 @@ fn assert_terminal_plan_rejection_is_blocked(outcome: &TurnHandlerOutcome) {
         panic!("a rejected plan must end blocked instead of reporting completion");
     };
     assert_eq!(reason, "plan artifact rejected; revise the plan before continuing");
-    assert!(!plan_mode_recoverable_block(reason));
     assert!(!tracker_auto_continue_is_recoverable_block(Some(reason)));
 }
 
@@ -225,36 +222,50 @@ async fn tool_free_recovery_tolerates_intro_prose_around_valid_plan() {
 }
 
 #[tokio::test]
-async fn tool_free_invalid_plan_schedules_one_bounded_repair_then_blocks() {
+async fn tool_free_invalid_plan_uses_two_corrections_then_awaits_input() {
+    use vtcode_core::exec::events::planning::PlanningOutcome;
     let mut backing = TestTurnProcessingBacking::new(8).await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("per-file read cap");
     let mut ctx = backing.turn_processing_context();
-    assert!(ctx.consume_recovery_pass());
 
-    // First invalid draft: repair budget is fresh, so the turn continues
-    // with a validator-owned repair directive instead of ending Blocked.
-    let first = ctx
-        .handle_text_response(String::new(), Vec::new(), None, Some(RECOVERY_INVALID_PLAN.to_string()), false)
-        .await
-        .expect("first invalid draft should be handled");
+    // Model the production provider boundary: each response consumes one
+    // admitted synthesis/correction request, rather than merely changing a
+    // turn-local validation counter.
+    for attempt in 1..=3 {
+        assert!(
+            ctx.admit_planning_recovery_request("test-model")
+                .await
+                .expect("request admission")
+        );
+        assert!(ctx.consume_recovery_pass());
+        let outcome = ctx
+            .handle_text_response(String::new(), Vec::new(), None, Some(RECOVERY_INVALID_PLAN.to_string()), false)
+            .await
+            .expect("invalid draft should be handled");
+        assert_eq!(ctx.plan_session.recovery.requests_used, attempt);
+        if attempt < 3 {
+            assert!(
+                matches!(outcome, TurnHandlerOutcome::Continue),
+                "request {attempt} should schedule the remaining correction"
+            );
+            assert!(ctx.recovery_is_tool_free(), "corrections cannot reopen research");
+        } else {
+            assert!(
+                matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })),
+                "the third failed request must await input"
+            );
+            assert_eq!(ctx.plan_session.recovery.outcome, PlanningOutcome::AwaitingInput);
+            assert!(ctx.plan_session.recovery.input_prompt_shown);
+        }
+    }
     assert!(
-        matches!(first, TurnHandlerOutcome::Continue),
-        "first invalid recovery draft must schedule bounded repair"
+        !ctx.admit_planning_recovery_request("test-model")
+            .await
+            .expect("exhausted admission")
     );
-
-    // Exhaust the turn-scoped repair budget and re-enter the pass:
-    // the next invalid draft must take the resumable blocked handoff.
-    ctx.plan_session.mark_plan_validation_repair_used();
-    assert!(ctx.consume_recovery_pass());
-    let second = ctx
-        .handle_text_response(String::new(), Vec::new(), None, Some(RECOVERY_INVALID_PLAN.to_string()), false)
-        .await
-        .expect("second invalid draft should be handled");
-    assert!(
-        matches!(second, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })),
-        "exhausted repair budget must end with the resumable blocked handoff"
-    );
+    assert_eq!(ctx.plan_session.recovery.requests_used, 3);
+    assert!(!persisted_plan_is_ready(&ctx.tool_registry.planning_workflow_state()).await);
 }
 
 #[tokio::test]
@@ -262,7 +273,13 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
     let mut backing = TestTurnProcessingBacking::new(8).await;
     backing.activate_planning_for_test();
     backing.activate_tool_free_recovery_for_test("preview budget exhausted");
+    let events_path = backing.enable_harness_emitter();
     let mut ctx = backing.turn_processing_context();
+    assert!(
+        ctx.admit_planning_recovery_request("test-model")
+            .await
+            .expect("request admission")
+    );
     assert!(ctx.consume_recovery_pass());
 
     let first = ctx
@@ -303,10 +320,11 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
     assert!(feedback.contains("2 of 5 implementation step(s)"), "feedback should count both invalid steps");
     assert!(feedback.contains("step 1: verification item 1"));
     assert!(feedback.contains("step 5: verification item 1"));
-    assert!(feedback.contains("Valid examples: `verify: [cargo nextest run -p vtcode]`"));
+    assert!(feedback.contains(CANONICAL_STEP_FORMAT), "the canonical step contract must remain available");
+    assert!(feedback.contains("Repair the listed defects"));
     assert!(
-        feedback.contains("verify: [sed -n") && feedback.contains("verify: [grep -n"),
-        "repair feedback must list inspection-command valid examples: {feedback}"
+        !feedback.contains("Valid examples:"),
+        "repair should target the defects without repeating an example wall"
     );
     for (name, text) in [
         ("denied-interview-retry", DENIED_INTERVIEW_PLAN_SYNTHESIS_RETRY_DIRECTIVE),
@@ -320,6 +338,11 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
         "validator-owned feedback must not echo the rejected draft"
     );
 
+    assert!(
+        ctx.admit_planning_recovery_request("test-model")
+            .await
+            .expect("request admission")
+    );
     assert!(ctx.consume_recovery_pass());
     let repaired = ctx
         .handle_text_response(
@@ -334,19 +357,21 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
     assert!(
         matches!(
             repaired,
-            TurnHandlerOutcome::BreakWithPolicy {
-                result: TurnLoopResult::Completed { plan_approved_execution_pending: true },
-                ..
-            }
+            TurnHandlerOutcome::Break(TurnLoopResult::Completed { plan_approved_execution_pending: false })
         ),
-        "the corrected draft must reach the approval handoff without a blocked recovery"
+        "the corrected draft must wait for separate human approval without scheduling implementation"
     );
+    assert_eq!(
+        ctx.plan_session.recovery.outcome,
+        vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval,
+    );
+    assert!(ctx.tool_registry.is_planning_active(), "saving a repaired draft cannot authorize implementation");
     assert!(
         ctx.working_history.iter().any(|message| {
             message.role == uni::MessageRole::Assistant
                 && message.content.as_text().contains("Update the preview guard")
         }),
-        "the rejected draft must remain available after the corrected plan is accepted"
+        "the rejected draft must remain available after the corrected plan is saved"
     );
     let plan_file = ctx
         .tool_registry
@@ -359,6 +384,22 @@ async fn tool_free_invalid_plan_repair_preserves_draft_feedback_and_accepts_corr
         persisted_plan.contains("with concrete verification"),
         "the corrected fixture, rather than the rejected draft, must be persisted"
     );
+    let events = tokio::fs::read_to_string(events_path).await.expect("approval event log");
+    assert_eq!(events.matches("\"type\":\"plan.approval.requested\"").count(), 1);
+    for event in events.lines().map(|line| {
+        serde_json::from_str::<vtcode_core::exec::events::VersionedThreadEvent>(line)
+            .expect("versioned event")
+            .into_event()
+    }) {
+        if let vtcode_core::exec::events::ThreadEvent::PlanApprovalResolved(event) = event {
+            assert!(!event.automatic, "recovery cannot authorize implementation");
+            assert_eq!(
+                event.decision,
+                vtcode_core::exec::events::PlanApprovalDecision::Cancel,
+                "disconnected approval UI may dismiss, but cannot approve"
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -381,7 +422,8 @@ async fn tool_free_unwrapped_plan_is_repaired_instead_of_blocking_immediately() 
     assert!(
         ctx.working_history.iter().any(|message| {
             message.role == uni::MessageRole::System
-                && message.content.as_text().contains("Rewrite every implementation step")
+                && message.content.as_text().contains("Repair the listed defects")
+                && message.content.as_text().contains(CANONICAL_STEP_FORMAT)
         }),
         "the repair directive should be retained for the next synthesis pass"
     );
@@ -409,7 +451,8 @@ async fn untagged_planlike_text_schedules_bounded_repair_instead_of_generic_hint
     assert!(
         ctx.working_history.iter().any(|message| {
             message.role == uni::MessageRole::System
-                && message.content.as_text().contains("Rewrite every implementation step")
+                && message.content.as_text().contains("Repair the listed defects")
+                && message.content.as_text().contains(CANONICAL_STEP_FORMAT)
         }),
         "the repair directive should teach the canonical step contract"
     );
@@ -561,8 +604,8 @@ async fn execution_mode_invalid_unapproved_plan_gets_tool_free_repair_and_reache
     assert!(ctx.recovery_is_tool_free(), "repair must not expose edit tools before approval");
     assert!(ctx.working_history.iter().any(|message| {
         message.role == uni::MessageRole::System
-            && message.content.as_text().contains("missing required section(s)")
-            && message.content.as_text().contains("## Summary")
+            && message.content.as_text().contains("missing required section(s): Summary")
+            && message.content.as_text().contains(CANONICAL_STEP_FORMAT)
     }));
     assert!(ctx.working_history.iter().any(|message| {
         message.role == uni::MessageRole::Assistant && message.content.as_text().contains(INVALID_README_PLAN)
@@ -1139,7 +1182,8 @@ async fn session_161453_draft_reaches_repair_then_persisted_approval_request() {
         ctx.working_history
             .iter()
             .any(|message| message.role == uni::MessageRole::System
-                && message.content.as_text().contains("Rewrite every implementation step"))
+                && message.content.as_text().contains("Repair the listed defects")
+                && message.content.as_text().contains(CANONICAL_STEP_FORMAT))
     );
 
     let repaired = "## Summary\nRefine README prose.\n\n## Implementation Steps\n1. Tighten README wording -> files: [README.md] -> verify: [npx markdownlint-cli2 README.md]\n\n## Test Cases and Validation\n- Markdown lint exits zero; review links and the contributor block.\n\n## Assumptions and Defaults\n- Preserve commands and generated content.\n";

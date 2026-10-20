@@ -834,8 +834,8 @@ impl HarnessTurnState {
         true
     }
 
-    /// Only called after an admitted navigation synthesis; request-scoped state
-    /// prevents this reset from granting another automatic execution attempt.
+    /// Resume tools only after admitted navigation recovery or explicit missing-fact clarification.
+    /// The caller retains request allowances, hard budgets, and permission boundaries.
     pub(crate) fn resume_after_navigation_synthesis(&mut self) {
         self.recovery_phase = RecoveryPhase::Inactive;
         self.recovery_mode = None;

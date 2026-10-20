@@ -737,11 +737,14 @@ fn native_payload_keeps_wire_prefix_byte_stable_across_grown_history() {
 }
 
 #[test]
-fn native_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
-    for model in models::merge_gateway::SUPPORTED_MODELS {
-        let provider = MergeGatewayProvider::with_model("test-key".to_string(), (*model).to_string());
+fn native_payload_omits_callable_tools_for_tool_choice_none() {
+    for (model, stream) in models::merge_gateway::SUPPORTED_MODELS
+        .iter()
+        .flat_map(|model| [(*model, false), (*model, true)])
+    {
+        let provider = MergeGatewayProvider::with_model("test-key".to_string(), model.to_string());
         let mut request = LLMRequest {
-            model: (*model).to_string(),
+            model: model.to_string(),
             messages: vec![Message::user("Summarize the conversation.".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "read_file".to_string(),
@@ -752,23 +755,21 @@ fn native_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
             ..Default::default()
         };
 
-        let payload = provider.build_native_payload(&request, false).expect("payload");
-        // Definitions stay on the wire so recovery turns can reuse the
-        // same cached prefix as tool-enabled turns.
-        assert!(payload.get("tools").is_some(), "tools must stay on the wire for route {model}");
+        let payload = provider.build_native_payload(&request, stream).expect("payload");
+        assert!(payload.get("tools").is_none(), "tool-free request must omit tools for route {model}");
         assert!(payload.get("tool_choice").is_none(), "tool_choice=none must not be sent for route {model}");
 
         // The no-tool normalization must not suppress an explicit
         // tool-enabled request on any route.
         request.tool_choice = Some(ToolChoice::Auto);
-        let enabled_payload = provider.build_native_payload(&request, false).expect("enabled payload");
+        let enabled_payload = provider.build_native_payload(&request, stream).expect("enabled payload");
         assert!(enabled_payload.get("tools").is_some(), "tools must be preserved for route {model}");
         assert_eq!(enabled_payload["tool_choice"], json!("auto"));
     }
 }
 
 #[test]
-fn legacy_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
+fn legacy_payload_omits_callable_tools_for_tool_choice_none() {
     let provider = MergeGatewayProvider::from_config(
         Some("test-key".to_string()),
         Some(models::merge_gateway::DEFAULT_ROUTING.to_string()),
@@ -780,9 +781,12 @@ fn legacy_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
     );
     let core = provider.legacy_core.as_ref().expect("legacy core");
 
-    for model in models::merge_gateway::SUPPORTED_MODELS {
+    for (model, stream) in models::merge_gateway::SUPPORTED_MODELS
+        .iter()
+        .flat_map(|model| [(*model, false), (*model, true)])
+    {
         let mut request = LLMRequest {
-            model: (*model).to_string(),
+            model: model.to_string(),
             messages: vec![Message::user("Summarize the conversation.".to_string())].into(),
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "read_file".to_string(),
@@ -790,11 +794,12 @@ fn legacy_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
                 json!({"type": "object"}),
             )])),
             tool_choice: Some(ToolChoice::None),
+            stream,
             ..Default::default()
         };
 
         let payload = core.convert_request(&request).expect("legacy payload");
-        assert!(payload.get("tools").is_some(), "tools must stay on the wire for route {model}");
+        assert!(payload.get("tools").is_none(), "tool-free request must omit tools for route {model}");
         assert!(payload.get("tool_choice").is_none(), "tool_choice=none must not be sent for route {model}");
 
         request.tool_choice = Some(ToolChoice::Auto);
@@ -805,7 +810,7 @@ fn legacy_payload_omits_tool_choice_none_but_keeps_tools_for_cache() {
 }
 
 #[test]
-fn native_payload_keeps_tools_for_tool_choice_none_but_omits_them_without_tool_vendor() {
+fn native_payload_omits_callable_tools_regardless_of_tool_vendor() {
     let provider =
         MergeGatewayProvider::with_model("test-key".to_string(), models::merge_gateway::DEFAULT_ROUTING.to_string());
     let mut request = LLMRequest {
@@ -820,12 +825,10 @@ fn native_payload_keeps_tools_for_tool_choice_none_but_omits_them_without_tool_v
         ..Default::default()
     };
 
-    // Default: recovery keeps tools for cache stability.
     let payload = provider.build_native_payload(&request, false).expect("payload");
-    assert!(payload.get("tools").is_some());
+    assert!(payload.get("tools").is_none());
 
-    // Once the route is known to lack a tool vendor, recovery omits tools
-    // so synthesis can still run (cache is secondary on that route).
+    // A cached missing-vendor verdict cannot reopen tool use during synthesis.
     provider.mark_tool_vendor_missing(&request.model);
     let recovered = provider.build_native_payload(&request, false).expect("recovery payload");
     assert!(recovered.get("tools").is_none(), "tools omitted when no tool vendor can serve them");

@@ -111,7 +111,7 @@ async fn install_ast_grep() -> Result<()> {
             }
 
             if let Some(warning) = outcome.warning {
-                println!("{} {}", "⚠".yellow(), warning);
+                vtcode_commons::diagnostics::stderr(format_args!("Warning: {warning}"));
             }
 
             println!("{} Add this to your shell if you want ast-grep outside VT Code:", "→".cyan());

@@ -482,10 +482,13 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     if params.ctx.try_planning_violation_repair(&assistant_text)? {
                         return Ok(TurnHandlerOutcome::Continue);
                     }
-                    return params.ctx.break_planning_recovery_with_handoff(
-                        "the synthesis response attempted a tool call while tools were disabled",
-                        (!assistant_text.trim().is_empty()).then_some(assistant_text.as_str()),
-                    );
+                    return params
+                        .ctx
+                        .break_planning_recovery_with_handoff(
+                            "the synthesis response attempted a tool call while tools were disabled",
+                            (!assistant_text.trim().is_empty()).then_some(assistant_text.as_str()),
+                        )
+                        .await;
                 }
                 params
                     .ctx
@@ -782,10 +785,13 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                     if params.ctx.try_planning_violation_repair(&salvage)? {
                         return Ok(TurnHandlerOutcome::Continue);
                     }
-                    return params.ctx.break_planning_recovery_with_handoff(
-                        "the synthesis response attempted tool-call markup",
-                        (!salvage.is_empty()).then_some(salvage.as_str()),
-                    );
+                    return params
+                        .ctx
+                        .break_planning_recovery_with_handoff(
+                            "the synthesis response attempted tool-call markup",
+                            (!salvage.is_empty()).then_some(salvage.as_str()),
+                        )
+                        .await;
                 }
                 params.ctx.harness_state.record_recovery_rejected_synthesis(salvage);
                 return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
@@ -838,21 +844,18 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                 }
 
                 if params.ctx.is_planning_active() && matches!(recovery_mode, RecoveryMode::ToolFreeSynthesis) {
-                    // Route recorded-token drops through bounded salvage
-                    // (dropped tool calls -> existing violation repair;
-                    // completion tokens without final content -> one
-                    // targeted final-content reprompt). A true no-output
-                    // response has no salvageable facts and goes straight
-                    // to the deterministic blocked handoff.
+                    // Every response failure uses the same persisted admission
+                    // allowance; private reasoning never becomes a draft.
                     if params.ctx.try_planning_empty_output_salvage(&facts)? {
                         return Ok(TurnHandlerOutcome::Continue);
                     }
                     // Keep the detail honest: only a response with neither
-                    // tokens nor tool calls may claim plain emptiness. The
-                    // core marker substring stays intact so
-                    // `is_plan_empty_synthesis_handoff_text` keeps matching.
+                    // tokens nor tool calls may claim plain emptiness.
+                    // Structured classification retains the actual failure shape.
                     let detail = if facts.dropped_tool_calls {
                         "the synthesis response attempted native tool calls on a tool-free pass".to_string()
+                    } else if facts.reasoning_only {
+                        "the synthesis returned private reasoning without final content".to_string()
                     } else if facts.has_completion_tokens() {
                         crate::agent::runloop::unified::turn::context::planning_tokens_without_content_handoff_detail(
                             facts.completion_tokens,
@@ -861,7 +864,7 @@ pub(crate) async fn handle_turn_processing_result<'a>(
                         crate::agent::runloop::unified::turn::context::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL
                             .to_string()
                     };
-                    return params.ctx.break_planning_recovery_with_handoff(&detail, None);
+                    return params.ctx.break_planning_recovery_with_handoff(&detail, None).await;
                 }
                 let recovery_reason = if params.ctx.recovery_is_tool_free() {
                     "Recovery mode requested a final synthesis pass, but the model returned no answer."

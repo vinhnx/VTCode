@@ -24,7 +24,7 @@ pub(super) async fn handle_list() -> anyhow::Result<()> {
                 );
             }
             PluginRow::Invalid { path, error } => {
-                eprintln!("  {} — invalid: {error}", path.display());
+                vtcode_commons::diagnostics::stderr(format_args!("  {} — invalid: {error}", path.display()));
             }
         }
     }

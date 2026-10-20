@@ -5,10 +5,11 @@ use super::sections::{
     VALIDATION_SECTION_ALIASES, collect_implementation_step_blocks, find_placeholder_tokens, is_numbered_line,
     labeled_body_for_aliases, meaningful_section_lines, section_body_for_aliases,
 };
-use super::steps::{PLAN_TARGET_LABELS, marker_value, step_action_segments};
+use super::steps::{PLAN_TARGET_LABELS, marker_value, parse_bracket_list, step_action_segments};
 use super::tracker::strip_embedded_tracker;
 use super::verification::{
-    VerificationValidationError, is_concrete_target, is_markdown_target, is_optional_markdown_verification,
+    VerificationValidationError, is_concrete_file_target, is_concrete_target, is_markdown_target,
+    is_optional_markdown_verification, is_scope_review_action, is_scope_review_command, parse_scope_review_checks,
     validate_concrete_verification,
 };
 
@@ -18,8 +19,8 @@ use super::verification::{
 pub const CANONICAL_STEP_FORMAT: &str = "1. Action -> files: [path/to/file.rs] -> verify: [cargo check]";
 
 /// Shared valid `verify:` examples for planning synthesis/repair prompts.
-/// `repair_feedback()` embeds this list; binary runloop constants stay
-/// compile-time literals but must keep these examples via presence tests.
+/// Binary runloop constants stay compile-time literals and preserve these
+/// examples via presence tests; repair feedback contains only the contract.
 pub const PLANNING_VERIFY_VALID_EXAMPLES: &str = "`verify: [cargo nextest run -p vtcode]`, `verify: [cargo check --locked]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, `verify: [grep -n 'symbol' src/file.rs]`, `verify: [git show --stat HEAD]`";
 
 /// Shared invalid `verify:` examples. Kept adjacent to
@@ -34,6 +35,10 @@ pub struct PlanValidationReport {
     pub open_decisions: Vec<String>,
     pub invalid_implementation_steps: Vec<String>,
     pub implementation_step_count: usize,
+    /// Explicit workspace-scope checks; these do not establish content correctness.
+    pub scope_review_step_count: usize,
+    /// Non-scope steps whose verification must establish their own content outcome.
+    pub content_verification_step_count: usize,
     pub validation_item_count: usize,
     pub assumption_count: usize,
     pub summary_present: bool,
@@ -127,20 +132,130 @@ impl PlanValidationReport {
         } else {
             format!("Plan validation issues: {}", feedback.join("; "))
         };
-        result.push_str("\n\nRewrite every implementation step in this canonical one-line form:\n");
+        result.push_str("\n\nRepair the listed defects in the retained draft; preserve valid steps. Step format:\n");
         result.push_str(CANONICAL_STEP_FORMAT);
-        result.push_str(&format!(
-            "\nEach step must name a concrete file path or symbol (not prose) and one concrete verify command or observable check. \
-             List separate verification commands as comma-separated entries, not a semicolon chain; each must be a command or an observable check. Commas inside single or double quotes stay inside one item. \
-             Valid examples: {PLANNING_VERIFY_VALID_EXAMPLES}. \
-             Invalid examples: {PLANNING_VERIFY_INVALID_EXAMPLES}; vague prose and generic VCS-only checks do not satisfy this validator. \
-             Command heads that are common English words (`file`, `sort`, `find`, `ls`, `wc`, …) also need a flag or path-like argument.",
-        ));
+        result.push_str(
+            "\nName a concrete file path or symbol and a concrete verify command or observable check. \
+             Separate commands with commas, preserving quoted commas. \
+             Explicit scope-review steps require concrete files, a Git status/diff check, and an observable exclusive changed-file expectation (prefer the captured baseline); \
+             they cannot replace content or functional verification. Return the complete plan, not approval commentary.",
+        );
         result
     }
 }
 
-fn implementation_step_shape_error(step: &ImplementationStepBlock) -> Option<String> {
+/// Preserve the best bounded public draft across planning repairs and resume.
+/// Callers must pass final content only; private reasoning is never eligible.
+pub fn retain_plan_recovery_draft(snapshot: &mut crate::exec::events::planning::PlanningRecoverySnapshot, text: &str) {
+    if text.len() > 16 * 1024 {
+        return;
+    }
+    let report = validate_plan_content(text);
+    if !report.summary_present || report.implementation_step_count == 0 {
+        return;
+    }
+    let defects = report.reasons().len() + report.invalid_implementation_steps.len();
+    if snapshot.best_draft_defects.is_none_or(|best| defects <= best) {
+        let redacted = vtcode_commons::sanitizer::redact_secrets(text.to_owned());
+        snapshot.best_draft =
+            Some(vtcode_commons::formatting::truncate_byte_budget(&redacted, 16 * 1024, "\n[truncated]"));
+        snapshot.best_draft_defects = Some(defects);
+        snapshot.validation_report = Some(if report.is_ready() {
+            "The retained draft validates. Re-emit it as public final plan content without tool calls or approval prose.".to_owned()
+        } else {
+            let feedback = vtcode_commons::sanitizer::redact_secrets(report.repair_feedback());
+            vtcode_commons::formatting::truncate_byte_budget(&feedback, 4096, "\n[truncated]")
+        });
+    }
+}
+
+fn scope_review_shape_error(
+    step: &ImplementationStepBlock,
+    segments: &[String],
+    validation_body: Option<&str>,
+) -> Option<String> {
+    let fields: Vec<&str> = segments
+        .iter()
+        .skip(1)
+        .map(String::as_str)
+        .chain(step.lines.iter().skip(1).map(String::as_str))
+        .collect();
+    let targets: Vec<String> = fields
+        .iter()
+        .filter_map(|field| marker_value(field, PLAN_TARGET_LABELS))
+        .flat_map(parse_bracket_list)
+        .collect();
+    if targets.is_empty() || !targets.iter().all(|target| is_concrete_file_target(target)) {
+        return Some("scope review must name concrete file targets".to_string());
+    }
+    let verifications: Vec<String> = fields
+        .iter()
+        .filter_map(|field| marker_value(field, &["verify", "verification"]))
+        .flat_map(parse_scope_review_checks)
+        .collect();
+    if verifications.is_empty() || !verifications.iter().all(|verify| is_scope_review_command(verify)) {
+        return Some("scope review must include a concrete Git status or diff check".to_string());
+    }
+    // Expectations may accompany the command or live in the explicit outcome.
+    // Match whole tokens, so README.md cannot stand in for other-README.md.
+    let expectation = fields
+        .iter()
+        .filter_map(|field| marker_value(field, &["verify", "verification", "outcome"]))
+        .chain(segments.first().map(String::as_str))
+        .chain(validation_body)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let words: Vec<&str> = expectation
+        .split_whitespace()
+        .map(|word| word.trim_matches(|character: char| character.is_ascii_punctuation()))
+        .collect();
+    let has = |needle: &str| words.iter().any(|word| word.eq_ignore_ascii_case(needle));
+    // A single named file can also use the concise `README-only` form.
+    let shorthand = (targets.len() == 1)
+        .then(|| {
+            std::path::Path::new(targets[0].trim_matches(['`', '\'', '"']))
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|stem| format!("{stem}-only"))
+        })
+        .flatten();
+    let has_shorthand = shorthand.as_deref().is_some_and(|shorthand| words.contains(&shorthand));
+    let has_exclusive_scope = has("only")
+        || has_shorthand
+        || (has("unchanged") && has("except"))
+        || (has("no") && has("other") && has("than"));
+    let is_reference_character =
+        |character: char| character.is_alphanumeric() || matches!(character, '/' | '\\' | '.' | '_' | '-');
+    let names_all_targets = targets.iter().all(|target| {
+        let target = target.trim_matches(['`', '\'', '"']);
+        has_shorthand
+            || expectation.match_indices(target).any(|(index, _)| {
+                expectation[..index]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|character| !is_reference_character(character))
+                    && expectation[index + target.len()..]
+                        .chars()
+                        .next()
+                        .is_none_or(|character| !is_reference_character(character))
+            })
+    });
+    if !has_exclusive_scope
+        || (!["differs", "differ", "changed", "changes", "modified", "unchanged"]
+            .iter()
+            .any(|word| has(word))
+            && !(has("no") && has("unrelated") && has("hunks")))
+        || !names_all_targets
+    {
+        return Some(
+            "scope review must state an observable expectation limiting changed files to its concrete targets"
+                .to_string(),
+        );
+    }
+    None
+}
+
+fn implementation_step_shape_error(step: &ImplementationStepBlock, validation_body: Option<&str>) -> Option<String> {
     let first_line = step.lines.first().map(String::as_str).unwrap_or_default();
     let action = first_line.trim();
     if action.is_empty() {
@@ -148,6 +263,9 @@ fn implementation_step_shape_error(step: &ImplementationStepBlock) -> Option<Str
     }
 
     let segments = step_action_segments(action);
+    if segments.first().is_some_and(|action| is_scope_review_action(action)) {
+        return scope_review_shape_error(step, &segments, validation_body);
+    }
     let verify_index = segments
         .iter()
         .position(|segment| marker_value(segment, &["verify", "verification"]).is_some());
@@ -298,10 +416,22 @@ pub fn validate_plan_content(content: &str) -> PlanValidationReport {
     }
 
     report.implementation_step_count = implementation_blocks.len();
+    report.scope_review_step_count = implementation_blocks
+        .iter()
+        .filter(|step| {
+            step.lines
+                .first()
+                .map(|line| step_action_segments(line))
+                .and_then(|segments| segments.first().cloned())
+                .is_some_and(|action| is_scope_review_action(&action))
+        })
+        .count();
+    report.content_verification_step_count = report.implementation_step_count - report.scope_review_step_count;
     report.invalid_implementation_steps = implementation_blocks
         .iter()
         .filter_map(|step| {
-            implementation_step_shape_error(step).map(|reason| format!("step {}: {reason}", step.number))
+            implementation_step_shape_error(step, validation_body.as_deref())
+                .map(|reason| format!("step {}: {reason}", step.number))
         })
         .collect();
     if report.implementation_step_count == 0 && !report.missing_sections.iter().any(|s| s == "Implementation Steps") {

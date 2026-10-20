@@ -109,20 +109,6 @@ impl SessionStats {
 
     pub(crate) fn reset_plan_continuation_budget(&mut self) {
         self.plan_continuation_turns = 0;
-        self.consecutive_plan_empty_fallbacks = 0;
-    }
-
-    pub(crate) fn consecutive_plan_empty_fallbacks(&self) -> u8 {
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn record_plan_empty_fallback(&mut self) -> u8 {
-        self.consecutive_plan_empty_fallbacks = self.consecutive_plan_empty_fallbacks.saturating_add(1);
-        self.consecutive_plan_empty_fallbacks
-    }
-
-    pub(crate) fn reset_plan_empty_fallbacks(&mut self) {
-        self.consecutive_plan_empty_fallbacks = 0;
     }
 
     /// Record a failed harness auto-verification of `command`, keeping a

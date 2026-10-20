@@ -193,6 +193,52 @@ fn convert_to_gemini_request_keeps_apply_patch_as_function_tool() {
 }
 
 #[test]
+fn tool_free_requests_disable_hosted_and_function_tools_in_both_protocols() {
+    let provider = GeminiProvider::new("test-key".to_owned());
+    for hosted in [false, true] {
+        for stream in [false, true] {
+            let mut tools = vec![ToolDefinition::function(
+                "lookup".to_owned(),
+                "Look up data".to_owned(),
+                json!({"type": "object"}),
+            )];
+            if hosted {
+                tools.push(ToolDefinition::web_search(json!({})));
+            }
+            let mut request = LLMRequest {
+                model: "gemini-3-flash-preview".to_owned(),
+                messages: vec![Message::user("Synthesize saved evidence".to_owned())].into(),
+                tools: Some(Arc::new(tools)),
+                tool_choice: Some(ToolChoice::None),
+                stream,
+                ..Default::default()
+            };
+            let generate =
+                serde_json::to_value(provider.convert_to_gemini_request(&request).expect("generate payload")).unwrap();
+            let interaction =
+                serde_json::to_value(provider.convert_to_interaction_request(&request).expect("interaction payload"))
+                    .unwrap();
+            if hosted {
+                assert!(generate.get("tools").is_none());
+                assert!(interaction.get("tools").is_none());
+            } else {
+                assert_eq!(generate["toolConfig"]["functionCallingConfig"]["mode"], "NONE");
+                assert_eq!(interaction["tool_choice"]["mode"], "none");
+                assert!(generate["tools"].is_array());
+                assert!(interaction["tools"].is_array());
+            }
+            request.tool_choice = Some(ToolChoice::Auto);
+            let enabled = provider.convert_to_gemini_request(&request).expect("enabled payload");
+            assert!(enabled.tools.is_some());
+            let enabled = provider
+                .convert_to_interaction_request(&request)
+                .expect("enabled interaction payload");
+            assert!(enabled.tools.is_some());
+        }
+    }
+}
+
+#[test]
 fn convert_to_interaction_request_serializes_built_in_and_function_tools() {
     let provider = GeminiProvider::new("test-key".to_string());
     let request = LLMRequest {

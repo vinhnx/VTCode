@@ -1656,12 +1656,14 @@ fn agent_to_tool_has_single_blank() {
     use crate::tui::core_tui::session::reflow::should_add_tool_block_top_spacing_for_kinds;
     use crate::tui::core_tui::types::InlineMessageKind as Kind;
     let agent_line = MessageLine {
+        diagnostic: None,
         kind: Kind::Agent,
         segments: vec![make_segment("hello")],
         link_ranges: vec![],
         revision: 0,
     };
     let tool_line = MessageLine {
+        diagnostic: None,
         kind: Kind::Info,
         segments: vec![make_segment("• Search code")],
         link_ranges: vec![],

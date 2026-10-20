@@ -1377,3 +1377,52 @@ fn liveness_probe_held_lock_reports_live_consistently() {
     drop(log);
     assert!(!crate::retention::session_dir_is_live(&target), "released lock must report not live");
 }
+
+#[test]
+fn planning_checkpoint_survives_event_cap_and_index_rebuild() {
+    use vtcode_exec_events::{
+        PlanDeltaEvent,
+        planning::{PlanningOutcome, PlanningRecoverySnapshot},
+    };
+    let workspace = TempDir::new().unwrap();
+    let log = open(workspace.path(), "planning-cap", 5).unwrap();
+    let recovery = PlanningRecoverySnapshot {
+        outcome: PlanningOutcome::AwaitingInput,
+        research_closed: true,
+        requests_used: 3,
+        input_prompt_shown: true,
+        ..Default::default()
+    };
+    for turn in 0..8 {
+        log.append(&ThreadEvent::TurnStarted(TurnStartedEvent::default())).unwrap();
+        if turn == 0 {
+            log.append(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                thread_id: "planning-cap".into(),
+                turn_id: "t1".into(),
+                item_id: "planning-recovery".into(),
+                delta: String::new(),
+                recovery: Some(Box::new(recovery.clone())),
+            })))
+            .unwrap();
+        }
+        log.append(&ThreadEvent::TurnCompleted(TurnCompletedEvent {
+            completed_at: None,
+            usage: Usage::default(),
+            in_progress_exec_sessions: Vec::new(),
+        }))
+        .unwrap();
+    }
+    log.flush().unwrap();
+    let mut retained = None;
+    log.visit_snapshot(|_, bytes| {
+        if let Ok(event) = serde_json::from_slice::<VersionedThreadEvent>(bytes)
+            && let ThreadEvent::PlanDelta(delta) = event.into_event()
+        {
+            retained = delta.recovery.map(|state| *state);
+        }
+    })
+    .unwrap();
+    assert_eq!(retained, Some(recovery));
+    assert_eq!(log.turn_count(), 8);
+    assert!(log.manifest().evicted_turn_count() > 0);
+}

@@ -551,7 +551,7 @@ fn http_oauth_status_label(provider_name: &str, http: &McpHttpServerConfig) -> S
 fn open_browser_or_print_url(url: &str) -> Result<()> {
     println!("Open this URL to continue OAuth:\n{url}");
     if let Err(error) = webbrowser::open(url) {
-        println!("Automatic browser open failed: {error}");
+        vtcode_commons::diagnostics::stderr(format_args!("Automatic browser open failed: {error}"));
     }
     Ok(())
 }

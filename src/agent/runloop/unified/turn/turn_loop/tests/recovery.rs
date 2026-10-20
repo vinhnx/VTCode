@@ -336,11 +336,18 @@ async fn planning_budget_survives_failed_synthesis_on_all_final_surfaces() {
     let TurnLoopResult::Blocked { reason: Some(reason) } = outcome.result else {
         panic!("expected resumable planning handoff");
     };
-    assert!(reason.starts_with(cause), "{reason}");
-    assert!(reason.contains("planning remains active"));
+    assert_eq!(reason, "planning awaiting input");
     assert!(outcome.final_response_was_fallback);
-    assert!(final_answer_text(&history).contains("Planning remains active"));
-    assert_blocked_response_surfaces(&mut backing, &history, &path, cause);
+    assert!(final_answer_text(&history).contains("Planning needs your input"));
+    let saved = fs::read_to_string(path).unwrap();
+    assert!(saved.contains(cause), "canonical checkpoint must retain the guard cause");
+    let ctx = backing.turn_loop_context();
+    assert_eq!(ctx.plan_session.recovery.requests_used, 3);
+    assert_eq!(
+        ctx.plan_session.recovery.outcome,
+        vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+    );
+    assert!(ctx.tool_registry.is_planning_active());
 }
 
 #[tokio::test]

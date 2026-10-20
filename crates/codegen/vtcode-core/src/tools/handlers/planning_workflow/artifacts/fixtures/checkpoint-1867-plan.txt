@@ -1,0 +1,45 @@
+<!-- Sanitized checkpoint 1867 model output. Repository claims are inert fixture data, not verified facts. -->
+<proposed_plan>
+## Summary
+
+Refresh `README.md` so it accurately describes the current VT Code repository and its documentation tree, and restructure it for faster scanning. The README already covers install, quick start, usage, docs, and community, but it has drifted from the repo: it claims "23 crates" while `Cargo.toml` now lists 22 workspace members plus the root binary crate (23 total), the `Contents` table of contents is missing the newer sections and anchors, and the CLI surface documented in `Usage` omits shipped commands such as `vtcode a2a`, `vtcode app-server`, `vtcode pods`, `vtcode man`, `vtcode schema`, `vtcode check`, and `vtcode skills`/`vtcode plugins`. The work is documentation-only: no Rust or config code changes, no new crates, and no changes to `AGENTS.md` or `docs/`.
+
+## Scope
+
+In scope:
+- `README.md` only (content accuracy + structure/ordering + TOC + section additions).
+- Correcting stale facts in the README: crate count, CLI command list, session/exec command syntax, doc links.
+
+Out of scope:
+- `AGENTS.md`, `docs/**`, `Cargo.toml`, `scripts/**`, and all Rust sources (no code or config edits).
+- Adding or editing new documentation pages; the README will only link to existing `docs/` files.
+- Re-running the contributor avatar block (managed by `scripts/update-contributors-readme.sh`; the `CONTRIBUTORS-COUNT:START` / `CONTRIBUTORS:START` / `CONTRIBUTORS:END` markers must stay byte-identical and in place).
+
+## Implementation Steps
+
+1. Audit the current README against the repo and record every stale item before editing -> files: [README.md, Cargo.toml, crates/codegen/vtcode-core/src/cli/args/mod.rs] -> verify: [rg -n '^\s{4}[A-Z][A-Za-z0-9]*(\s*\{|\s*\(|\s*,|\s*$)' crates/codegen/vtcode-core/src/cli/args/mod.rs] and [rg -n '^\s*"crates/' Cargo.toml]
+2. Fix the workspace-size claim in the Development section so the stated crate total matches `Cargo.toml` (22 workspace members + root `vtcode` binary crate) -> files: [README.md] -> verify: [rg -n 'crates' README.md]
+3. Add a "CLI reference" subsection under `## Usage` that lists the shipped top-level commands and points at the canonical references, covering the commands missing today (`a2a`, `app-server`, `pods`, `man`, `schema`, `check`, `skills`, `plugins`, `mcp`, `webmcp`, `models`, `login`/`logout`/`auth`) -> files: [README.md] -> verify: [rg -n 'vtcode a2a|vtcode app-server|vtcode pods|vtcode man|vtcode schema' README.md]
+4. Correct the session/exec command examples to match the real CLI grammar (`vtcode exec resume --last "<prompt>"`, `vtcode exec resume <session-id> "<prompt>"`, `vtcode continue --session-id <id>`) instead of the current `vtcode exec resume --last "..."` phrasing and fork wording -> files: [README.md, crates/codegen/vtcode-core/src/cli/args/exec.rs] -> verify: [rg -n 'exec resume' README.md] and [rg -n 'Resume\(ExecResumeArgs\)|--last' crates/codegen/vtcode-core/src/cli/args/exec.rs]
+5. Rebuild the `## Contents` list to mirror the final heading tree exactly (Overview, Quick start, Usage, Documentation, Development, Contributing, Security, Community, Support the project, License, plus the new CLI reference entry) and drop stale entries -> files: [README.md] -> verify: [rg -n '^#{1,4} ' README.md]
+6. Reorder and tighten the long `## Documentation` table so each goal row stays one line (the `Extend and integrate` and `Integrations` rows are currently very wide), and add the missing integration links that exist on disk (`docs/a2a/README.md`, `docs/mcp/MCP_INTEGRATION_GUIDE.md`, `docs/reference/webmcp.md`) -> files: [README.md, docs/INDEX.md] -> verify: [rg -n 'docs/a2a/README.md|docs/mcp/MCP_INTEGRATION_GUIDE.md' README.md] and [rg -n 'MCP Integration Guide' docs/INDEX.md]
+7. Refresh the stale "Last reviewed" style metadata and any dated claims inside the README to match the current docs headers (for example `docs/INDEX.md` "Last reviewed: 2026-08-28") -> files: [README.md, docs/INDEX.md] -> verify: [rg -n 'Last reviewed' README.md docs/INDEX.md]
+8. Keep the contributor, sponsorship, share, and license blocks byte-identical (they are script-managed or license text) while editing only the prose sections around them -> files: [README.md, scripts/update-contributors-readme.sh] -> verify: [rg -n 'CONTRIBUTORS-COUNT:START|CONTRIBUTORS:START|CONTRIBUTORS:END' README.md] and [rg -n 'CONTRIBUTORS-COUNT:START' scripts/update-contributors-readme.sh]
+9. Verify every relative link in the final README resolves to a real file, and that Markdown lint passes with the repo config -> files: [README.md, scripts/check_docs_links.py, scripts/check_markdown.py, .markdownlint-cli2.jsonc] -> verify: [python3 scripts/check_docs_links.py] and [python3 scripts/check_markdown.py]
+10. Review the final diff for scope discipline (README-only, no unrelated hunks) and confirm no worktree noise -> files: [README.md] -> verify: [git status --porcelain] and [git diff --stat HEAD -- README.md]
+
+## Test Cases and Validation
+
+- `python3 scripts/check_docs_links.py` exits 0: every `./...` link in `README.md` resolves on disk (the script checks `README.md` as a required entrypoint).
+- `python3 scripts/check_markdown.py` exits 0: README passes `markdownlint-cli2@0.23.3` with `.markdownlint-cli2.jsonc` (ATX headings, `-` lists, 120-col body limit, MD024 siblings-only, MD033 allowed elements).
+- `git diff --stat HEAD -- README.md` shows only `README.md` changed; `git status --porcelain` shows no other modified paths.
+- Spot checks: the crate count in the Development section equals the number of `members` entries in `Cargo.toml` plus the root crate; every CLI command named in the new CLI reference appears in `crates/codegen/vtcode-core/src/cli/args/mod.rs`; every `## Contents` anchor matches a heading in the final file.
+
+## Assumptions and Defaults
+
+- "Refine structure" means reorganize and clarify the existing README (ordering, TOC, sectioning, table shape) rather than a rewrite; the product narrative, badges, demo GIF, and community/sponsorship blocks are preserved.
+- Where a documented command's exact flag spelling is ambiguous, prefer the grammar in `crates/codegen/vtcode-core/src/cli/args/*.rs` (clap definitions) over prose, since those are the shipped surface.
+- Documentation-only change: no `cargo check`/`cargo nextest` run is required, and `./scripts/check-dev.sh` is not part of the verification set for a Markdown-only edit. The Markdown and link checkers above are the gates.
+- `npx`/`node` are present in this environment, so `scripts/check_markdown.py` is expected to run; if the pinned `markdownlint-cli2@0.23.3` cannot be fetched offline, that check is reported as skipped rather than silently passed.
+- The `docs/` tree is treated as the source of truth for links; the README will not link to `docs/project/private-notes.md` (excluded from maintained Markdown) or to any file not already tracked.
+</proposed_plan>

@@ -14,6 +14,7 @@ names/types, and handle method signatures. They add no runtime state or allocati
 
 | Shared variant | Payload | Handle method |
 | --- | --- | --- |
+| `Diagnostic` | Boxed canonical diagnostic with incident identity | `diagnostic` |
 | `AppendLine` | Message kind and ordered styled segments | `append_line` |
 | `AppendLines` | Ordered transcript lines (kind plus segments each) | `append_lines` |
 | `AppendPastedMessage` | Kind, literal text, supplied line count | `append_pasted_message` |
@@ -121,3 +122,12 @@ Full core-frame regressions cover transcript, input, and status at 120×40 and
 44×18, including restoration after Escape. PTY output and buffered render tests
 establish these contracts; rendered host acceptance still requires a live visual
 walkthrough.
+
+## Operational diagnostics
+
+`Diagnostic` carries the canonical exec-event payload through both protocols.
+The session replaces an incident by `correlation_id`, retains its complete payload,
+and renders its summary for every severity. Click or F8 toggles details locally;
+Transcript Review retains the complete details. The existing Markdown renderer
+owns wrapping and plan-wrapper removal. See [diagnostics](diagnostics.md) for
+redaction, canonical persistence, headless behavior, and the producer audit.

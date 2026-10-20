@@ -18,6 +18,7 @@ use vtcode_core::ui::{
 
 fn inline_command_variant_name(command: &InlineCommand) -> &'static str {
     match command {
+        InlineCommand::Diagnostic(_) => "Diagnostic",
         InlineCommand::AppendLine { .. } => "AppendLine",
         InlineCommand::AppendLines { .. } => "AppendLines",
         InlineCommand::AppendPastedMessage { .. } => "AppendPastedMessage",

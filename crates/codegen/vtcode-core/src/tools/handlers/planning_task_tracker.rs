@@ -192,6 +192,7 @@ fn flatten_items_json_inner(nodes: &[PlanTaskNode], index_prefix: &str, level: u
             "files": node.metadata.files.clone(),
             "outcome": node.metadata.outcome.clone(),
             "verify": node.metadata.verify.clone(),
+            "scope_review": node.metadata.scope_review.clone(),
         }));
         flatten_items_json_inner(&node.children, &index_path, level + 1, out);
     }
@@ -835,6 +836,37 @@ mod tests {
             created["checklist"]["items"][1]["verify"],
             json!(["cargo test -p vtcode-core task_tracker", "cargo check -p vtcode"])
         );
+    }
+
+    #[tokio::test]
+    async fn scope_review_survives_resume_bulk_sync_and_global_mirror() {
+        let (temp, state, tool) = setup_planning_workflow().await;
+        tool.execute(json!({
+            "action": "create", "items": [{
+                "description": "Review final scope", "files": ["README.md"],
+                "scope_review": ["git status --porcelain", "git diff --stat HEAD -- README.md"]
+            }]
+        }))
+        .await
+        .expect("create scope tracker");
+        let resumed = PlanningTaskTrackerTool::new(state);
+        let updated = resumed
+            .execute(json!({
+                "action": "update", "items": ["[x] Review final scope"]
+            }))
+            .await
+            .expect("bulk status update");
+        assert_eq!(
+            updated["checklist"]["items"][0]["scope_review"],
+            json!(["git status --porcelain", "git diff --stat HEAD -- README.md"])
+        );
+        assert_eq!(updated["checklist"]["items"][0]["verify"], json!([]));
+        for path in [".vtcode/plans/test-plan.tasks.md", ".vtcode/tasks/current_task.md"] {
+            let persisted = std::fs::read_to_string(temp.path().join(path)).expect("persisted tracker");
+            assert!(persisted.contains("[x] Review final scope"));
+            assert_eq!(persisted.matches("  scope-review:").count(), 2);
+            assert!(!persisted.contains("  verify:"));
+        }
     }
 
     #[tokio::test]

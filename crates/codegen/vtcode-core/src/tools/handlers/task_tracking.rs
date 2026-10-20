@@ -18,6 +18,9 @@ pub struct TaskStepMetadata {
     pub outcome: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub verify: Vec<String>,
+    /// Workspace-scope evidence, kept separate from functional verification.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scope_review: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -38,6 +41,8 @@ pub struct TaskItemInputObject {
     pub outcome: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string_list")]
     pub verify: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_optional_string_list")]
+    pub scope_review: Option<Vec<String>>,
 }
 
 pub(crate) struct TaskMetadataRef<'a> {
@@ -93,14 +98,17 @@ pub(crate) fn parse_task_items(
         } else {
             None
         };
+        let has_previous_scope_review = previous
+            .iter()
+            .any(|previous| previous.description.trim() == description && !previous.metadata.scope_review.is_empty());
         if previous_metadata.is_none()
             && previous
                 .iter()
                 .any(|item| item.description.trim() == description && item.metadata != &TaskStepMetadata::default())
-            && !matches!(item, TaskItemInput::Structured(input) if input.files.is_some() && input.outcome.is_some() && input.verify.is_some())
+            && !matches!(item, TaskItemInput::Structured(input) if input.files.is_some() && input.outcome.is_some() && input.verify.is_some() && (!has_previous_scope_review || input.scope_review.is_some()))
         {
             bail!(
-                "Ambiguous task description '{description}': provide explicit files, outcome, and verify metadata for duplicate steps. Use empty arrays and an empty outcome to clear them. The checklist was not changed."
+                "Ambiguous task description '{description}': provide explicit files, outcome, verify, and scope_review metadata for duplicate steps. Use empty arrays and an empty outcome to clear them. The checklist was not changed."
             );
         }
         let mut metadata = previous_metadata.cloned().unwrap_or_default();
@@ -114,6 +122,9 @@ pub(crate) fn parse_task_items(
                 input.outcome.as_deref(),
                 input.verify.as_deref(),
             );
+            if let Some(scope_review) = input.scope_review.as_deref() {
+                metadata.scope_review = normalize_verify_items(scope_review.iter().map(String::as_str));
+            }
         }
         parsed_items.push(ParsedTaskItem {
             level: raw.chars().take_while(|character| *character == ' ').count() / 2,
@@ -314,7 +325,7 @@ pub(crate) fn validate_action_index_fields(action: &str, index: Option<usize>, i
     Ok(())
 }
 
-pub(crate) const TASK_ITEMS_DESCRIPTION: &str = "Full checklist replacement for create or bulk update, not indexed updates. Send plain descriptions with [x]/[~]/[!]/[ ] status prefixes or actual objects with description and status; never JSON-encoded strings. Bulk updates preserve omitted metadata for unique unchanged descriptions. Explicit metadata replaces it; use empty arrays or an empty outcome to clear fields. Duplicate descriptions with existing metadata require explicit files, outcome, and verify.";
+pub(crate) const TASK_ITEMS_DESCRIPTION: &str = "Full checklist replacement for create or bulk update, not indexed updates. Send plain descriptions with [x]/[~]/[!]/[ ] status prefixes or actual objects with description and status; never JSON-encoded strings. Bulk updates preserve omitted metadata for unique unchanged descriptions. Explicit metadata replaces it; use empty arrays or an empty outcome to clear fields. Duplicate descriptions with existing metadata require explicit files, outcome, and verify; include scope_review when existing scope checks would otherwise be ambiguous.";
 
 /// Shared status values for every task-tracker schema (standard + planning,
 /// top-level and nested item objects). Single source so a future status
@@ -469,7 +480,8 @@ pub(crate) fn task_item_object_schema() -> Value {
             "status": task_status_schema(),
             "files": task_files_schema(),
             "outcome": { "type": "string" },
-            "verify": task_verify_schema()
+            "verify": task_verify_schema(),
+            "scope_review": with_description(task_verify_schema(), "Workspace scope checks; do not satisfy functional verification.")
         },
         "required": ["description"]
     })
@@ -616,7 +628,7 @@ pub fn parse_files_metadata(value: &str) -> Vec<String> {
 }
 
 /// Consume one indented markdown metadata line (`files:`, `outcome:`,
-/// `verify:`) into `metadata`, tracking multi-line `verify:` blocks through
+/// `verify:`, `scope-review:`) into `metadata`, tracking multi-line `verify:` blocks through
 /// `in_verify_block`. Returns `true` when the line was metadata.
 pub fn apply_metadata_line(metadata: &mut TaskStepMetadata, raw: &str, in_verify_block: &mut bool) -> bool {
     let trimmed = raw.trim_start();
@@ -641,6 +653,14 @@ pub fn apply_metadata_line(metadata: &mut TaskStepMetadata, raw: &str, in_verify
     }
     if let Some(rest) = trimmed.strip_prefix("outcome:") {
         metadata.outcome = normalize_optional_text(Some(rest));
+        return true;
+    }
+    if let Some(rest) = trimmed.strip_prefix("scope-review:") {
+        if rest.trim().is_empty() {
+            metadata.scope_review.clear();
+        } else {
+            metadata.scope_review.extend(normalize_verify_items([rest]));
+        }
         return true;
     }
     if trimmed == "verify:" {
@@ -668,6 +688,13 @@ pub fn append_task_step_metadata(markdown: &mut String, indent: &str, metadata: 
         markdown.push_str(indent);
         markdown.push_str("  outcome: ");
         markdown.push_str(outcome);
+        markdown.push('\n');
+    }
+
+    for command in &metadata.scope_review {
+        markdown.push_str(indent);
+        markdown.push_str("  scope-review: ");
+        markdown.push_str(command);
         markdown.push('\n');
     }
 
@@ -873,6 +900,7 @@ fn append_compact_task_tree_view(nodes: &[TaskTreeNode], tree_prefix: &str, out:
             "files": node.metadata.files.clone(),
             "outcome": node.metadata.outcome.clone(),
             "verify": node.metadata.verify.clone(),
+            "scope_review": node.metadata.scope_review.clone(),
         }));
 
         let next_prefix = if is_last {
@@ -937,6 +965,7 @@ pub fn compact_task_tree_view_from_items(items: &[Value]) -> Vec<Value> {
             files: string_array(item.get("files")),
             outcome: item.get("outcome").and_then(Value::as_str).map(ToOwned::to_owned),
             verify: string_or_string_array(item.get("verify")),
+            scope_review: string_or_string_array(item.get("scope_review")),
         };
         if metadata.files.is_empty() {
             metadata.files = parsed_files;
@@ -1037,6 +1066,56 @@ impl TaskCounts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scope_review_rows_round_trip_without_functional_verification_credit() {
+        let mut metadata = TaskStepMetadata::default();
+        let mut in_verify_block = false;
+        for row in [
+            "  files: README.md",
+            "  scope-review: `git status --porcelain`",
+            "  scope-review: git diff --stat HEAD -- README.md",
+        ] {
+            assert!(apply_metadata_line(&mut metadata, row, &mut in_verify_block));
+        }
+        assert_eq!(metadata.scope_review, vec!["git status --porcelain", "git diff --stat HEAD -- README.md"]);
+        assert!(metadata.verify.is_empty());
+        let mut markdown = String::new();
+        append_task_step_metadata(&mut markdown, "", &metadata);
+        assert_eq!(
+            markdown,
+            "  files: README.md\n  scope-review: git status --porcelain\n  scope-review: git diff --stat HEAD -- README.md\n"
+        );
+        let old: TaskStepMetadata = serde_json::from_value(json!({"verify": ["cargo check"]})).unwrap();
+        assert!(old.scope_review.is_empty());
+        assert_eq!(old.verify, vec!["cargo check"]);
+        let restored: TaskStepMetadata = serde_json::from_value(serde_json::to_value(&metadata).unwrap()).unwrap();
+        assert_eq!(restored, metadata);
+        let previous = [TaskMetadataRef { description: "Review scope", metadata: &metadata }];
+        let updated = parse_task_items(&[TaskItemInput::Text("[x] Review scope".to_string())], &previous).unwrap();
+        assert_eq!(updated[0].metadata.scope_review, metadata.scope_review);
+        assert!(updated[0].metadata.verify.is_empty());
+        let cleared = parse_task_items(
+            &[TaskItemInput::Structured(TaskItemInputObject {
+                description: "Review scope".to_string(),
+                scope_review: Some(Vec::new()),
+                ..Default::default()
+            })],
+            &previous,
+        )
+        .unwrap();
+        assert!(cleared[0].metadata.scope_review.is_empty());
+    }
+
+    #[test]
+    fn compact_tree_retains_scope_metadata_in_a_distinct_field() {
+        let rows = compact_task_tree_view_from_items(&[json!({
+            "description": "Review scope", "scope_review": ["git status --porcelain"],
+            "verify": ["rg -n 'Overview' README.md"],
+        })]);
+        assert_eq!(rows[0]["scope_review"], json!(["git status --porcelain"]));
+        assert_eq!(rows[0]["verify"], json!(["rg -n 'Overview' README.md"]));
+    }
 
     #[test]
     fn parse_files_metadata_keeps_quoted_commas_as_single_item() {
@@ -1267,6 +1346,7 @@ mod tests {
                 files: vec!["Cargo.toml".to_string()],
                 outcome: Some("Ready".to_string()),
                 verify: vec!["cargo check".to_string()],
+                ..Default::default()
             },
             children: vec![TaskTreeNode {
                 index_path: "1.1".to_string(),

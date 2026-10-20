@@ -515,7 +515,14 @@ async fn handle_cancelled(
 ) -> Result<()> {
     let display_tool = tool_action_label(tool_name, args_val);
     let error_msg = format!("Tool '{display_tool}' execution cancelled");
-    t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
+    t_ctx.ctx.renderer.diagnostic(&vtcode_commons::diagnostics::Diagnostic {
+        severity: vtcode_commons::diagnostics::DiagnosticSeverity::Info,
+        code: "tool.cancelled".into(),
+        summary: error_msg.clone(),
+        agent_details: "The tool was cancelled; its result cannot count as completed verification.".into(),
+        correlation_id: format!("tool:{tool_call_id}"),
+        actions: Vec::new(),
+    })?;
 
     let error_content = serde_json::json!({"error": error_msg});
     push_tool_response_with_auto_permission_probe(t_ctx, tool_call_id, tool_name, error_content.to_string(), None)

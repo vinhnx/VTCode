@@ -29,32 +29,12 @@ fn terminal_plan_rejection_message(notice: &str, error: &PlanArtifactError) -> S
     format!("{notice}\n\n{}", plan_rejection_history_feedback(error))
 }
 
-/// Frozen opening of the `break_planning_recovery_with_handoff` message.
-/// `is_plan_empty_synthesis_handoff_text` (auto-continue) matches this prefix
-/// by substring, so the two must move together: the constant is the single
-/// source the handoff builder and its marker test share, so a wording change
-/// fails loudly instead of silently disabling the consecutive-empty cap.
-pub(crate) const PLANNING_RECOVERY_HANDOFF_PREFIX: &str =
-    "Planning remains active, but the one tool-free recovery synthesis did not produce an approval-ready plan";
-
-/// Detail for a tool-free pass that returned no content. The consecutive-empty
-/// auto-continue cap counts only this exact detail; validation-failure and
-/// tool-call-violation handoffs carry different details and stay resumable.
+/// Detail for a tool-free pass that returned no public final content.
 pub(crate) const PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL: &str = "the model returned an empty synthesis response";
 
-/// Blocked reason for every `break_planning_recovery_with_handoff` failure.
-/// It contains the plan-mode deny token "approval-ready plan", so
-/// `RECOVERABLE_BLOCK_ALLOW_TOKENS` must allow-list the "did not produce an
-/// approval-ready plan" shape or the handoff parks at the user prompt.
-pub(crate) const PLANNING_RECOVERY_HANDOFF_REASON: &str =
-    "planning recovery did not produce an approval-ready plan; planning remains active";
-
 /// Handoff detail for a tool-free synthesis that recorded completion tokens
-/// without extractable final content. Embeds
-/// `PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL` as a prefix so
-/// `is_plan_empty_synthesis_handoff_text` keeps counting these turns toward
-/// the consecutive-empty cap, while the message states the captured evidence
-/// instead of claiming plain emptiness.
+/// without extractable final content. Retains the plain empty-content detail
+/// while stating the observed token evidence.
 pub(crate) fn planning_tokens_without_content_handoff_detail(completion_tokens: u32) -> String {
     format!(
         "{PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL}; the provider recorded {completion_tokens} completion tokens but no extractable final content"
@@ -80,34 +60,12 @@ impl<'a> TurnProcessingContext<'a> {
     /// handoff. This path intentionally emits a `Blocked` outcome: no plan
     /// was approved, but the planning session and its bounded evidence remain
     /// available for a later `keep planning`/restatement turn.
-    pub(crate) fn break_planning_recovery_with_handoff(
+    pub(crate) async fn break_planning_recovery_with_handoff(
         &mut self,
         detail: &str,
         rejected_plan: Option<&str>,
     ) -> anyhow::Result<TurnHandlerOutcome> {
-        let detail = detail.trim();
-        let detail = if detail.is_empty() {
-            "the synthesis pass failed"
-        } else {
-            detail
-        };
-        let detail = vtcode_commons::formatting::truncate_byte_budget(detail, 240, "…");
-        let mut message = format!(
-            "{PLANNING_RECOVERY_HANDOFF_PREFIX} ({detail}). The latest request and bounded evidence are preserved. The next attempt can reuse the tool outputs above instead of re-reading files, and should emit one complete `<proposed_plan>` with `Action -> files: [path] -> verify: [command]` steps. Each `verify:` must be a concrete command or observable check: valid examples are `verify: [cargo nextest run -p vtcode]`, `verify: [rg -n 'symbol' src/file.rs]`, `verify: [sed -n '1,40p' docs/file.md]`, and `verify: [grep -n 'symbol' src/file.rs]`; invalid examples are `verify: [run checks]`, `verify: [check later]`, and `verify: [git diff --check]`. Re-state the planning request or type `keep planning` to try again; no changes were applied."
-        );
-        let mut reason = PLANNING_RECOVERY_HANDOFF_REASON.to_string();
-        if let Some(cause) = self.harness_state.budget_recovery_reason() {
-            message = format!("{cause}. {message}");
-            reason = format!("{cause}. {reason}");
-        }
-
-        self.harness_state.mark_final_response_fallback();
-        self.handle_assistant_response(message, Vec::new(), None, false, Some(uni::AssistantPhase::FinalAnswer))?;
-        if let Some(rejected_plan) = rejected_plan {
-            append_rejected_plan_draft_to_last_assistant(self.working_history, rejected_plan);
-        }
-        self.finish_recovery_pass();
-        Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }))
+        self.recover_planning_failure(detail, rejected_plan).await
     }
 
     /// Bounded repair for a planning tool-free violation that still carried
@@ -121,7 +79,7 @@ impl<'a> TurnProcessingContext<'a> {
     /// canonical format directive, and re-arm a tool-free pass instead.
     /// Returns `true` when the caller should `Continue`; `false` means fall
     /// through to the handoff. Terminal invariant holds: at most
-    /// `MAX_PLAN_VALIDATION_REPAIR_REPROMPTS` repairs per turn.
+    /// the shared request allowance after research closes.
     pub(crate) fn try_planning_violation_repair(&mut self, salvage: &str) -> anyhow::Result<bool> {
         if !self.is_planning_active() {
             return Ok(false);
@@ -166,7 +124,7 @@ impl<'a> TurnProcessingContext<'a> {
         Ok(self.retry_recovery_pass())
     }
 
-    /// One bounded salvage per planning turn for a tool-free synthesis that
+    /// A bounded salvage within the shared allowance for a tool-free synthesis that
     /// recorded completion tokens but produced no extractable final content —
     /// typically a reasoning-interlaced model that ended inside a thinking
     /// run, or output the content-extraction pipeline could not surface.
@@ -177,18 +135,7 @@ impl<'a> TurnProcessingContext<'a> {
     /// caller should `Continue` (retry armed); `false` falls through to the
     /// resumable blocked handoff with the honest detail.
     pub(crate) fn try_planning_empty_output_salvage(&mut self, facts: &NoOutputFacts) -> anyhow::Result<bool> {
-        if !self.is_planning_active() {
-            return Ok(false);
-        }
-        // A pass that ended with dropped native tool calls is handled by the
-        // existing violation-repair route (salvage the reasoning prose).
-        if facts.dropped_tool_calls && !facts.salvaged_reasoning.trim().is_empty() {
-            let salvage = facts.salvaged_reasoning.clone();
-            if self.try_planning_violation_repair(&salvage)? {
-                return Ok(true);
-            }
-        }
-        if facts.dropped_tool_calls || !facts.has_completion_tokens() {
+        if !self.is_planning_active() || facts.dropped_tool_calls {
             return Ok(false);
         }
         if !self.plan_session.empty_synthesis_salvage_allowed() {
@@ -202,18 +149,11 @@ impl<'a> TurnProcessingContext<'a> {
             tool_free = true,
             "planning synthesis recorded completion tokens without extractable final content; scheduling bounded salvage"
         );
-        self.renderer.line(
-            vtcode_core::utils::ansi::MessageStyle::Warning,
-            &format!(
-                "[!] Planning synthesis returned {n} tokens without extractable final content; retrying once as a targeted final-content pass.",
-                n = facts.completion_tokens
-            ),
-        )?;
         self.push_system_message(planning_tokens_without_content_salvage_directive(facts.completion_tokens));
         Ok(self.retry_recovery_pass())
     }
 
-    fn reject_plan_artifact(
+    async fn reject_plan_artifact(
         &mut self,
         error: PlanArtifactError,
         plan_text: &str,
@@ -284,7 +224,7 @@ impl<'a> TurnProcessingContext<'a> {
             // existing recovery retry (`retry_recovery_pass`, which re-arms a
             // Pending pass without re-enabling tools). Without this, any
             // invalid draft ends Blocked even though the evidence is present.
-            // The terminal invariant holds: at most 2 repairs per turn, then
+            // The terminal invariant holds: the persisted shared allowance bounds repairs, then
             // the resumable blocked handoff below.
             if self.plan_session.plan_validation_repair_allowed() {
                 self.plan_session.mark_plan_validation_repair_used();
@@ -302,10 +242,12 @@ impl<'a> TurnProcessingContext<'a> {
                     return Ok(TurnHandlerOutcome::Continue);
                 }
             }
-            return self.break_planning_recovery_with_handoff(
-                &format!("the synthesized draft failed validation: {error}"),
-                Some(plan_text),
-            );
+            return self
+                .break_planning_recovery_with_handoff(
+                    &format!("the synthesized draft failed validation: {error}"),
+                    Some(plan_text),
+                )
+                .await;
         }
 
         if allow_repair && self.plan_session.plan_validation_repair_allowed() {
@@ -557,12 +499,31 @@ impl<'a> TurnProcessingContext<'a> {
         };
         let recovery_plan_was_extracted = proposed_plan.is_some();
         if tool_free_recovery_pass && self.is_planning_active() {
+            if proposed_plan.is_none() && looks_like_clarifying_question(&text) && !looks_like_attempted_plan(&text) {
+                self.plan_session.recovery.outcome =
+                    vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+                self.plan_session.recovery.input_prompt_shown = true;
+                self.persist_planning_recovery().await?;
+                self.handle_assistant_response(
+                    text,
+                    Vec::new(),
+                    None,
+                    response_streamed,
+                    Some(uni::AssistantPhase::FinalAnswer),
+                )?;
+                self.finish_recovery_pass();
+                return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed {
+                    plan_approved_execution_pending: false,
+                }));
+            }
             if proposed_plan.is_none() {
                 if text.trim().is_empty() {
-                    return self.break_planning_recovery_with_handoff(
-                        "the response did not contain exactly one completed <proposed_plan> block",
-                        None,
-                    );
+                    return self
+                        .break_planning_recovery_with_handoff(
+                            "the response did not contain exactly one completed <proposed_plan> block",
+                            None,
+                        )
+                        .await;
                 }
                 proposed_plan = Some(text.clone());
                 tracing::info!(
@@ -888,7 +849,7 @@ impl<'a> TurnProcessingContext<'a> {
                     self.push_system_message(directive);
                     return Ok(TurnHandlerOutcome::Continue);
                 }
-                return self.reject_plan_artifact(error, &final_text, false);
+                return self.reject_plan_artifact(error, &final_text, false).await;
             }
             tracing::info!(
                 target: "vtcode.planning_workflow",
@@ -988,7 +949,7 @@ impl<'a> TurnProcessingContext<'a> {
                     reasons: validation.reasons().join("; "),
                     report: Box::new(validation),
                 };
-                return self.reject_plan_artifact(error, &plan_text, !tool_free_recovery_pass);
+                return self.reject_plan_artifact(error, &plan_text, !tool_free_recovery_pass).await;
             }
             self.handle
                 .set_input_status(Some("Persisting plan...".to_string()), self.input_status_state.right.clone());
@@ -1012,7 +973,7 @@ impl<'a> TurnProcessingContext<'a> {
                     && let Err(error) = allocate_plan_file_if_missing(&plan_state).await
                 {
                     let error = PlanArtifactError::Persistence { reason: error.to_string() };
-                    return self.reject_plan_artifact(error, &plan_text, false);
+                    return self.reject_plan_artifact(error, &plan_text, false).await;
                 }
             }
 
@@ -1027,7 +988,7 @@ impl<'a> TurnProcessingContext<'a> {
                 }
                 Err(error) => {
                     let error = PlanArtifactError::Persistence { reason: error.to_string() };
-                    return self.reject_plan_artifact(error, &plan_text, false);
+                    return self.reject_plan_artifact(error, &plan_text, false).await;
                 }
             };
             // `persist_plan_draft` already validated the same immutable text
@@ -1039,7 +1000,7 @@ impl<'a> TurnProcessingContext<'a> {
                 let error = PlanArtifactError::Persistence {
                     reason: "plan, sidecar tracker, and workspace tracker were not published completely".to_string(),
                 };
-                return self.reject_plan_artifact(error, &plan_text, false);
+                return self.reject_plan_artifact(error, &plan_text, false).await;
             }
             // Construct from the already-validated report instead of
             // re-parsing the same immutable text a fourth time.
@@ -1057,9 +1018,11 @@ impl<'a> TurnProcessingContext<'a> {
                 &self.harness_state.turn_id.0,
                 &plan_text,
             )
-            .await;
+            .await?;
 
-            let require_confirmation = self.vt_cfg.map(|cfg| cfg.agent.require_plan_confirmation).unwrap_or(true);
+            let recovery_requires_approval = planning_active && self.plan_session.recovery.research_closed;
+            let require_confirmation = recovery_requires_approval
+                || self.vt_cfg.map(|cfg| cfg.agent.require_plan_confirmation).unwrap_or(true);
             let supports_inline = self.renderer.supports_inline_ui();
             tracing::info!(
                 target: "vtcode.planning_workflow",
@@ -1071,7 +1034,12 @@ impl<'a> TurnProcessingContext<'a> {
             let approval_route = if approved_execution_revision {
                 PlanApprovalRoute::Automatic
             } else {
-                plan_approval_route(require_confirmation, supports_inline, self.skip_confirmations, self.full_auto)
+                plan_approval_route(
+                    require_confirmation,
+                    supports_inline,
+                    self.skip_confirmations && !recovery_requires_approval,
+                    self.full_auto && !recovery_requires_approval,
+                )
             };
             tracing::info!(
                 target: "vtcode.planning_workflow",
@@ -1101,8 +1069,8 @@ impl<'a> TurnProcessingContext<'a> {
                     self.ctrl_c_notify,
                     PlanApprovalRequestContext {
                         plan: &plan,
-                        skip_confirmations: self.skip_confirmations,
-                        full_auto: self.full_auto,
+                        skip_confirmations: self.skip_confirmations && !recovery_requires_approval,
+                        full_auto: self.full_auto && !recovery_requires_approval,
                         context_usage_percent: self.context_manager.context_usage_percent(
                             vtcode_core::compaction::effective_context_budget(
                                 self.vt_cfg,

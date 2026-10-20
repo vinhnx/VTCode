@@ -445,6 +445,9 @@ impl Session {
         self.transcript_view_top = view_top;
 
         let clicked_row = view_top.saturating_add(row_in_view);
+        if self.toggle_diagnostic_at_row(self.transcript_width, clicked_row) {
+            return true;
+        }
         let expanded = self.expand_collapsed_paste_at_row(self.transcript_width, clicked_row);
         if expanded {
             self.mark_dirty();

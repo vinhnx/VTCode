@@ -362,18 +362,15 @@ impl StepFunProvider {
             payload["reasoning"] = json!({"effort": effort});
         }
 
-        // Keep tool definitions on the wire even when tools are disabled so the
-        // rendered prefix stays cache-stable. StepFun accepts only
-        // `tool_choice: "auto"`, so omit the choice field for ToolChoice::None
-        // instead of removing the catalog (OpenAI caching guidance).
-        if let Some(tools) = &request.tools {
+        // StepFun accepts only tool_choice=auto. Omit callable definitions
+        // for tool-free synthesis instead of silently enabling tool use.
+        if !matches!(request.tool_choice, Some(ToolChoice::None))
+            && let Some(tools) = &request.tools
+        {
             let serialized = serialize_tools(tools);
             if !serialized.is_empty() {
                 payload["tools"] = Value::Array(serialized);
-                if !matches!(request.tool_choice, Some(ToolChoice::None)) {
-                    // StepFun currently accepts only the string "auto".
-                    payload["tool_choice"] = json!("auto");
-                }
+                payload["tool_choice"] = json!("auto");
             }
         }
 
@@ -812,7 +809,9 @@ impl_llm_client!(StepFunProvider);
 #[cfg(test)]
 mod tests {
     use super::StepFunProvider;
-    use crate::provider::{LLMProvider, LLMRequest, Message, NormalizedStreamEvent, ToolCall, ToolDefinition};
+    use crate::provider::{
+        LLMProvider, LLMRequest, Message, NormalizedStreamEvent, ToolCall, ToolChoice, ToolDefinition,
+    };
     use futures::StreamExt;
     use serde_json::{Value, json};
     use std::sync::Arc;
@@ -921,7 +920,7 @@ mod tests {
                     "Get the weather".to_string(),
                     json!({"type": "object"}),
                 )])),
-                tool_choice: Some(crate::provider::ToolChoice::Auto),
+                tool_choice: Some(ToolChoice::Auto),
                 ..Default::default()
             })
             .await
@@ -1171,7 +1170,7 @@ mod tests {
                 "Get the weather".to_string(),
                 json!({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}),
             )])),
-            tool_choice: Some(crate::provider::ToolChoice::Auto),
+            tool_choice: Some(ToolChoice::Auto),
             ..Default::default()
         });
 
@@ -1184,24 +1183,29 @@ mod tests {
     }
 
     #[test]
-    fn payload_keeps_tools_but_omits_choice_for_tool_choice_none() {
-        let payload = build_payload(&LLMRequest {
-            model: models::stepfun::STEP_3_7_FLASH.to_string(),
-            messages: vec![Message::user("hello".to_string())].into(),
-            tools: Some(Arc::new(vec![ToolDefinition::function(
-                "get_weather".to_string(),
-                "Get the weather".to_string(),
-                json!({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}),
-            )])),
-            tool_choice: Some(crate::provider::ToolChoice::None),
-            ..Default::default()
-        });
-
-        assert!(payload.get("tools").is_some(), "tool definitions stay on the wire for cache stability");
-        assert!(
-            payload.get("tool_choice").is_none(),
-            "StepFun accepts only tool_choice=auto, so none must omit the field"
-        );
+    fn payload_omits_callable_tools_for_tool_choice_none() {
+        for stream in [false, true] {
+            let mut request = LLMRequest {
+                model: models::stepfun::STEP_3_7_FLASH.to_string(),
+                messages: vec![Message::user("hello".to_string())].into(),
+                tools: Some(Arc::new(vec![ToolDefinition::function(
+                    "get_weather".to_string(),
+                    "Get the weather".to_string(),
+                    json!({"type": "object"}),
+                )])),
+                tool_choice: Some(ToolChoice::None),
+                stream,
+                ..Default::default()
+            };
+            let payload = build_payload(&request);
+            assert!(payload.get("tools").is_none());
+            assert!(payload.get("tool_choice").is_none());
+            assert_eq!(payload["stream"], stream);
+            request.tool_choice = Some(ToolChoice::Auto);
+            let enabled = build_payload(&request);
+            assert_eq!(enabled["tools"][0]["name"], "get_weather");
+            assert_eq!(enabled["tool_choice"], "auto");
+        }
     }
 
     #[test]

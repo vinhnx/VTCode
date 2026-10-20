@@ -1211,8 +1211,8 @@ async fn unavailable_spool_capture_remains_visible_and_does_not_collapse_pty() {
 
     let commands = std::iter::from_fn(|| receiver.try_recv().ok()).collect::<Vec<_>>();
     assert!(commands.iter().any(|command| {
-        matches!(command, InlineCommand::AppendLine { segments, .. }
-            if segments.iter().any(|segment| segment.text.contains("capture unavailable")))
+        matches!(command, InlineCommand::Diagnostic(diagnostic)
+            if diagnostic.summary.contains("capture unavailable"))
     }));
     assert!(
         !commands
@@ -1282,8 +1282,8 @@ async fn compact_pty_attention_keeps_command_summary_and_stderr_visible() {
             if segments.iter().map(|segment| segment.text.as_str()).collect::<String>().contains("• Ran printf diagnostic"))
     }));
     assert!(commands.iter().any(|command| {
-        matches!(command, InlineCommand::AppendLine { segments, .. }
-            if segments.iter().map(|segment| segment.text.as_str()).collect::<String>().contains("stderr: diagnostic output"))
+        matches!(command, InlineCommand::Diagnostic(diagnostic)
+            if diagnostic.summary.contains("stderr: diagnostic output"))
     }));
 }
 
@@ -1450,6 +1450,7 @@ async fn compact_command_capture_keeps_structured_result_metadata() {
                 Some(segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text.clone()),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary.clone()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1542,6 +1543,7 @@ async fn compact_warning_remains_visible_and_flushes_command_group() {
                 Some(segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text.clone()),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary.clone()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1671,6 +1673,7 @@ async fn compact_file_diff_is_a_glance_boundary_between_command_groups() {
                 Some(segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text.clone()),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary.clone()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1800,6 +1803,7 @@ async fn compact_command_output_keeps_distinct_stderr_visible() {
                 Some(segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text.clone()),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary.clone()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1845,6 +1849,7 @@ async fn compact_command_output_preserves_identical_stdout_and_stderr() {
                 Some(segments.iter().map(|segment| segment.text.as_str()).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text.clone()),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary.clone()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1922,6 +1927,7 @@ async fn compact_pty_output_keeps_distinct_stderr_visible() {
                 Some(segments.into_iter().map(|segment| segment.text).collect::<String>())
             }
             InlineCommand::Inline { segment, .. } => Some(segment.text),
+            InlineCommand::Diagnostic(diagnostic) => Some(diagnostic.summary),
             _ => None,
         })
         .collect::<Vec<_>>()

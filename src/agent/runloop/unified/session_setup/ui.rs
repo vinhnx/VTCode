@@ -152,6 +152,10 @@ pub(crate) async fn initialize_session_ui(
             }
         }};
     }
+    // Bind before setup warnings and pending transcript messages can be displayed.
+    if let Some(emitter) = exit_context.emitter {
+        handle.set_diagnostic_sink(emitter.diagnostic_sink())?;
+    }
     let initialization_progress = handle.begin_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     session_state.session_bootstrap.legacy_key_bindings = legacy_key_bindings;
     // Embedded callers without the CLI bootstrap snapshot: load dot-config
@@ -280,6 +284,9 @@ pub(crate) async fn initialize_session_ui(
 
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+    if let Some(emitter) = exit_context.emitter {
+        renderer.set_diagnostic_sink(emitter.diagnostic_sink());
+    }
     let supports_reasoning = model_supports_reasoning(&*session_state.provider_client, &config.model);
     renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
     if let Some(cfg) = vt_cfg {

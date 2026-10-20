@@ -32,20 +32,10 @@ impl OpenAiCompatSpec for MergeGatewaySpec {
     }
 
     fn insert_tool_choice(_core: &OpenAiCompatCore<Self>, request: &LLMRequest, payload: &mut Map<String, Value>) {
-        // Merge routes that terminate at Anthropic Bedrock reject
-        // `tool_choice: "none"`. Keep the serialized tool definitions on the
-        // wire so the provider prefix stays cache-stable across recovery turns
-        // (OpenAI guidance: disable tool use with `tool_choice: "none"` rather
-        // than removing definitions). Only the choice field is omitted; the
-        // harness rejects tool calls during tool-free recovery.
+        // Bedrock-backed routes reject tool_choice=none; omitting only the
+        // choice enables tools by default, so remove callable definitions too.
         if matches!(request.tool_choice, Some(ToolChoice::None)) {
-            static OMITTED_CHOICE_ADVISORY: std::sync::Once = std::sync::Once::new();
-            OMITTED_CHOICE_ADVISORY.call_once(|| {
-                tracing::debug!(
-                    "Merge Gateway omits tool_choice for ToolChoice::None (Bedrock rejects none); \
-                     tool definitions stay on the wire for prompt-cache stability"
-                );
-            });
+            payload.remove("tools");
             return;
         }
 

@@ -481,6 +481,14 @@ impl ToolChoice {
     }
 
     #[inline]
+    pub(crate) fn to_responses_format(&self) -> Value {
+        match self {
+            Self::Specific(choice) => json!({"type": "function", "name": &choice.function.name}),
+            _ => self.to_openai_format(),
+        }
+    }
+
+    #[inline]
     fn to_openai_format(&self) -> Value {
         match self {
             Self::Auto => json!("auto"),

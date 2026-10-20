@@ -46,29 +46,11 @@ pub(crate) fn process_llm_response(
     let reasoning_details = response.reasoning_details.clone();
     let mut final_text = response.content.clone();
 
-    // Capture the empty-output facts before the planning salvage below can
-    // move `reasoning_text` into `final_text`; a dropped tool-call pass
-    // re-nulls `final_text` later, so the reasoning text is kept here for the
-    // bounded violation-repair salvage path.
     let dropped_native_tool_calls =
         planning_active && !allow_tool_calls && response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty());
-    let salvaged_reasoning = if dropped_native_tool_calls {
-        vtcode_commons::formatting::truncate_byte_budget(&reasoning_text, 8192, "…")
-    } else {
-        String::new()
-    };
-
-    // Some providers put the completed planning synthesis in the reasoning
-    // channel and return an empty assistant content field. That previously
-    // made a successful planning turn look empty and left the user stuck after
-    // the model said it was ready to present the plan. Preserve this only for
-    // planning mode, and only when there is no normal response content.
-    if planning_active
-        && final_text.as_deref().is_none_or(|text| text.trim().is_empty())
-        && !reasoning_text.trim().is_empty()
-    {
-        final_text = Some(reasoning_text);
-    }
+    let reasoning_only = response.content.as_deref().is_none_or(|text| text.trim().is_empty())
+        && (!reasoning_text.trim().is_empty()
+            || response.reasoning_details.as_ref().is_some_and(|details| !details.is_empty()));
 
     // Strip provider noise (e.g. MiniMax `]<]minimax[>[`) from non-streamed
     // response content before any downstream processing. This prevents noise
@@ -107,7 +89,11 @@ pub(crate) fn process_llm_response(
     if planning_active && let Some(ref text) = final_text {
         let extraction = extract_any_plan(text);
         let strict_recovery_plan_shape = !allow_tool_calls;
-        let plan_shape_is_valid = !strict_recovery_plan_shape || has_exactly_one_proposed_plan_block(text);
+        let complete_unwrapped_plan = extraction.plan_text.is_none()
+            && crate::agent::runloop::unified::plan_blocks::strip_all_plan_tags(text) == text.trim()
+            && validate_plan_content(text).is_ready();
+        let plan_shape_is_valid =
+            !strict_recovery_plan_shape || has_exactly_one_proposed_plan_block(text) || complete_unwrapped_plan;
         // The plan is rendered once by the approval flow below. Keep only the
         // non-plan prose in the normal assistant response; retaining the plan
         // body here makes the transcript render it a second time before the
@@ -117,13 +103,17 @@ pub(crate) fn process_llm_response(
             // recovery handoff. The handler stores it as a bounded rejected
             // draft instead of silently reducing the failure to "no answer".
             text.to_string()
+        } else if complete_unwrapped_plan {
+            String::new()
         } else if extraction.plan_text.is_some() {
             strip_plan_persistence_policy_line(&extraction.stripped_text)
         } else {
             extraction.stripped_text
         };
         proposed_plan = if plan_shape_is_valid {
-            extraction.plan_text
+            extraction
+                .plan_text
+                .or_else(|| complete_unwrapped_plan.then(|| text.trim().to_owned()))
         } else {
             None
         };
@@ -300,7 +290,7 @@ pub(crate) fn process_llm_response(
     // keep their reasoning text in the capture above (see the drop site).
     let facts = NoOutputFacts {
         completion_tokens: response.usage.as_ref().map_or(0, |usage| usage.completion_tokens),
-        salvaged_reasoning,
+        reasoning_only,
         dropped_tool_calls: dropped_native_tool_calls,
     };
 
@@ -832,7 +822,7 @@ mod tests {
         assert_eq!(facts.completion_tokens, 477);
         assert!(facts.has_completion_tokens());
         assert!(!facts.dropped_tool_calls);
-        assert!(facts.salvaged_reasoning.is_empty(), "no tool calls were dropped, so nothing is salvageable");
+        assert!(!facts.reasoning_only);
     }
 
     #[test]
@@ -863,11 +853,7 @@ mod tests {
         };
         assert!(facts.dropped_tool_calls);
         assert_eq!(facts.completion_tokens, 210);
-        assert_eq!(
-            facts.salvaged_reasoning.trim(),
-            plan_body,
-            "the reasoning displaced by the dropped calls must be preserved verbatim for repair"
-        );
+        assert!(facts.reasoning_only);
     }
 
     #[test]
@@ -886,7 +872,7 @@ mod tests {
         assert_eq!(facts.completion_tokens, 0);
         assert!(!facts.has_completion_tokens());
         assert!(!facts.dropped_tool_calls);
-        assert!(facts.salvaged_reasoning.is_empty());
+        assert!(!facts.reasoning_only);
     }
 
     #[test]
@@ -1392,6 +1378,21 @@ Outro"#
             duplicate,
             TurnProcessingResult::TextResponse { proposed_plan: None, text, .. } if text.matches("<proposed_plan>").count() == 2
         ));
+    }
+
+    #[test]
+    fn tool_free_planning_recovery_accepts_complete_unwrapped_plans_only() {
+        let valid = "## Summary\nKeep recovery deterministic.\n\n## Implementation Steps\n1. Update src/lib.rs -> files: [src/lib.rs] -> verify: [cargo check --locked]\n\n## Test Cases and Validation\n- Run the focused nextest suite.\n\n## Assumptions and Defaults\n- Preserve the existing event contract.";
+        assert!(validate_plan_content(valid).is_ready());
+        for (content, accepted) in [(valid, true), ("The plan is ready; please approve it.", false)] {
+            let response = LLMResponse::new("test", content);
+            let result =
+                process_llm_response(&response, &mut AnsiRenderer::stdout(), 0, true, false, false, false, None, None)
+                    .expect("public plan response");
+            assert!(
+                matches!(result, TurnProcessingResult::TextResponse { proposed_plan, .. } if proposed_plan.is_some() == accepted)
+            );
+        }
     }
 
     #[test]

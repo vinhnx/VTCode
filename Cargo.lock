@@ -8558,6 +8558,7 @@ dependencies = [
  "unicode-width",
  "url",
  "vtcode-diff",
+ "vtcode-exec-events",
 ]
 
 [[package]]

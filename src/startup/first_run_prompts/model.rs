@@ -24,7 +24,10 @@ pub(crate) fn prompt_model(
     match select_model_with_ratatui(&options, default_model) {
         Ok(model) => Ok(model),
         Err(error) => {
-            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Interactive setup could not continue. Enter the value manually.\n{error}"),
+            )?;
             prompt_model_text(renderer, provider, default_model, &options)
         }
     }
@@ -84,7 +87,10 @@ pub(crate) fn prompt_lightweight_model(
     match select_lightweight_model_with_ratatui(&options) {
         Ok(selected) => Ok(selected),
         Err(error) => {
-            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Interactive setup could not continue. Enter the value manually.\n{error}"),
+            )?;
             prompt_lightweight_model_text(renderer, &options)
         }
     }

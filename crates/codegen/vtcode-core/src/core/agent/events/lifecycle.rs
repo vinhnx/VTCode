@@ -796,6 +796,7 @@ impl SharedLifecycleEmitter {
                 context: None,
                 id: item_id,
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: text.to_string(),
                     stage: self.reasoning_stage.clone(),
                 })),
@@ -839,7 +840,7 @@ impl SharedLifecycleEmitter {
         let item_id = item_id.unwrap_or_else(|| self.next_item_id());
         let stage = self.reasoning_stage.clone();
         emit_text_snapshot(&mut self.pending_events, &mut self.reasoning, item_id, move |text| {
-            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { text, stage: stage.clone() }))
+            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { diagnostic: None, text, stage: stage.clone() }))
         })
     }
 
@@ -856,6 +857,7 @@ impl SharedLifecycleEmitter {
                 context: None,
                 id: item_id,
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: self.reasoning.text.clone(),
                     stage: self.reasoning_stage.clone(),
                 })),
@@ -868,7 +870,7 @@ impl SharedLifecycleEmitter {
     pub fn complete_reasoning_stream(&mut self) -> bool {
         let stage = self.reasoning_stage.clone();
         complete_text_stream(&mut self.pending_events, &mut self.reasoning, move |text| {
-            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { text, stage: stage.clone() }))
+            ThreadItemDetails::Reasoning(Box::new(ReasoningItem { diagnostic: None, text, stage: stage.clone() }))
         })
     }
 

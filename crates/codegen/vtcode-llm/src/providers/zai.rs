@@ -56,6 +56,10 @@ impl OpenAiCompatSpec for ZaiSpec {
     }
 
     fn insert_tool_choice(_core: &OpenAiCompatCore<Self>, request: &LLMRequest, payload: &mut Map<String, Value>) {
+        if matches!(request.tool_choice, Some(crate::provider::ToolChoice::None)) {
+            payload.remove("tools");
+            return;
+        }
         if let Some(choice) = &request.tool_choice {
             // Z.AI only supports "auto"; any other requested mode is coerced.
             let tool_choice_value = match choice {
@@ -137,7 +141,7 @@ impl OpenAiCompatSpec for ZaiSpec {
             payload.insert("do_sample".to_owned(), Value::Bool(do_sample));
         }
 
-        if request.stream && request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
+        if request.stream && payload.contains_key("tools") {
             payload.insert("tool_stream".to_string(), Value::Bool(true));
         }
 
@@ -181,10 +185,40 @@ impl_openai_compat_provider!(ZAIProvider, ZaiSpec, {
 #[cfg(test)]
 mod tests {
     use super::{ZAIProvider, resolve_zai_base_url};
-    use crate::provider::{LLMRequest, Message, ToolChoice, ToolDefinition};
+    use crate::provider::{LLMProvider, LLMRequest, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
     use vtcode_config::constants::models;
     use vtcode_config::types::ReasoningEffortLevel;
+
+    #[test]
+    fn payload_omits_callable_tools_for_tool_choice_none() {
+        let provider = ZAIProvider::new("test-key".to_owned());
+        for stream in [false, true] {
+            let mut request = LLMRequest {
+                model: models::zai::GLM_5_3.to_owned(),
+                messages: vec![Message::user("Synthesize the saved evidence".to_owned())].into(),
+                tools: Some(Arc::new(vec![ToolDefinition::function(
+                    "lookup".to_owned(),
+                    "Look up a value".to_owned(),
+                    serde_json::json!({"type": "object"}),
+                )])),
+                tool_choice: Some(ToolChoice::None),
+                stream,
+                ..Default::default()
+            };
+            provider
+                .validate_request(&request)
+                .expect("none is supported by omitting tools");
+            let payload = provider.core.convert_request(&request).expect("payload");
+            assert!(payload.get("tools").is_none());
+            assert!(payload.get("tool_choice").is_none());
+            assert!(payload.get("tool_stream").is_none());
+            request.tool_choice = Some(ToolChoice::Auto);
+            let enabled = provider.core.convert_request(&request).expect("enabled payload");
+            assert_eq!(enabled["tools"][0]["function"]["name"], "lookup");
+            assert_eq!(enabled["tool_choice"], "auto");
+        }
+    }
 
     /// Explicit config wins over both env layers; blank explicit values keep
     /// falling to the legacy env var, and the default is the last resort.
@@ -437,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn payload_forces_tool_choice_to_auto_for_non_auto_permissions() {
+    fn payload_omits_tool_choice_for_none() {
         let provider = ZAIProvider::new("test-key".to_string());
         let request = LLMRequest {
             model: models::zai::GLM_5_3.to_string(),
@@ -447,7 +481,7 @@ mod tests {
         };
 
         let payload = provider.core.convert_request(&request).expect("payload should be valid");
-        assert_eq!(payload.get("tool_choice").and_then(|v| v.as_str()), Some("auto"));
+        assert!(payload.get("tool_choice").is_none());
     }
 
     #[test]

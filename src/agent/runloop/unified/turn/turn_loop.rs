@@ -473,7 +473,11 @@ pub(crate) async fn run_turn_loop(
     // the session loop.
     ctx.renderer.flush_compact_command_group();
     ctx.set_phase(TurnPhase::Preparing);
-    super::turn_loop_helpers::restore_fresh_turn_tool_guidance(working_history, ctx.harness_state.is_recovery_active());
+    super::turn_loop_helpers::restore_fresh_turn_tool_guidance(
+        working_history,
+        ctx.harness_state.is_recovery_active()
+            || (ctx.is_planning_active() && ctx.plan_session.recovery.research_closed),
+    );
     if let Some(Err(e)) = ctx.harness_emitter.map(|e| e.emit(turn_started_event())) {
         tracing::debug!(error = %e, "harness turn_started event emission failed");
     }
@@ -905,8 +909,8 @@ pub(crate) async fn run_turn_loop(
         // allowance is queued independently of the response count because a
         // retry can be scheduled after an ordinary planning response has
         // already used that budget.
-        let bounded_planning_follow_up =
-            ctx.is_planning_active() && ctx.plan_session.bounded_planning_follow_up_allowed();
+        let bounded_planning_follow_up = ctx.is_planning_active()
+            && (ctx.plan_session.bounded_planning_follow_up_allowed() || ctx.plan_session.recovery.research_closed);
         if text_response_streak >= MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN && !bounded_planning_follow_up {
             tracing::warn!(
                 text_response_streak,
@@ -959,6 +963,40 @@ pub(crate) async fn run_turn_loop(
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
         run_proactive_guards(&mut turn_processing_ctx, step_count).await?;
+
+        match turn_processing_ctx.admit_planning_recovery_request(&active_model).await {
+            Ok(true) => {}
+            Ok(false) => {
+                match turn_processing_ctx
+                    .await_planning_recovery_input("The planning recovery allowance is exhausted.")
+                    .await?
+                {
+                    TurnHandlerOutcome::Continue => continue,
+                    TurnHandlerOutcome::Break(outcome) => {
+                        result = outcome;
+                        break;
+                    }
+                    _ => {
+                        result = TurnLoopResult::Blocked { reason: Some("planning awaiting input".into()) };
+                        break;
+                    }
+                }
+            }
+            Err(error) => {
+                turn_processing_ctx.plan_session.recovery.outcome =
+                    vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+                turn_processing_ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!(
+                        "Planning could not save recovery state. Retry after fixing persistence. Details: {error}"
+                    ),
+                )?;
+                result = TurnLoopResult::Blocked {
+                    reason: Some("planning persistence failed; awaiting input".into()),
+                };
+                break;
+            }
+        }
 
         // Execute the LLM request
         turn_processing_ctx.set_phase(TurnPhase::Requesting);
@@ -1047,6 +1085,22 @@ pub(crate) async fn run_turn_loop(
                 turn_processing_ctx.restore_input_status(restore_status_left.clone(), restore_status_right.clone());
 
                 let planning = turn_processing_ctx.is_planning_active();
+                if planning && turn_processing_ctx.plan_session.recovery.research_closed {
+                    turn_processing_ctx.plan_session.recovery.response_class =
+                        Some(vtcode_core::exec::events::planning::PlanningResponseClass::ProviderFailure);
+                    turn_processing_ctx.persist_planning_recovery().await?;
+                    match turn_processing_ctx
+                        .recover_planning_failure(&error_message_for_user(&err), None)
+                        .await?
+                    {
+                        TurnHandlerOutcome::Continue => continue,
+                        TurnHandlerOutcome::Break(outcome) => {
+                            result = outcome;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
                 match dispatch_post_tool_failure(PostToolRecoveryContext {
                     renderer: &mut *turn_processing_ctx.renderer,
                     working_history: &mut *turn_processing_ctx.working_history,
@@ -1129,6 +1183,8 @@ pub(crate) async fn run_turn_loop(
                 break;
             }
         };
+
+        turn_processing_ctx.record_planning_response(&response).await?;
 
         // Track turn usage and context pressure before later processing borrows `response`.
         let response_usage = response.usage.clone();

@@ -192,7 +192,9 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     let key = if io::stdin().is_terminal() {
         prompt_hidden_input(&format!("{} API key: ", label))?
     } else {
-        eprintln!("Warning: stdin is not a terminal — the pasted key will be visible.");
+        vtcode_commons::diagnostics::stderr(format_args!(
+            "Warning: stdin is not a terminal — the pasted key will be visible."
+        ));
         print!("{} API key: ", label);
         io::stdout().flush()?;
         let mut input = String::new();
@@ -343,7 +345,7 @@ async fn handle_migrate(
                 skipped += 1;
             }
             Err(err) => {
-                eprintln!("Failed to migrate {}: {}", env_key, err);
+                vtcode_commons::diagnostics::stderr(format_args!("Failed to migrate {}: {}", env_key, err));
                 failed += 1;
             }
         }

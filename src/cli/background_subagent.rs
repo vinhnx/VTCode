@@ -76,7 +76,7 @@ pub(crate) async fn handle_background_subagent_command(
             println!("background-subagent-summary: {}", summary.trim());
         }
         if let Some(error) = status.error.as_deref() {
-            eprintln!("background-subagent-error: {}", error.trim());
+            vtcode_commons::diagnostics::stderr(format_args!("background-subagent-error: {}", error.trim()));
         }
         if !status.status.is_terminal() || matches!(status.status, vtcode_core::subagents::SubagentStatus::Completed) {
             println!("background-subagent-ready: {} {}", status.agent_name, status.session_id);

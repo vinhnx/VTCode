@@ -512,9 +512,8 @@ impl CopilotAcpClient {
         if !custom_tools.is_empty() {
             params.insert("tools".to_string(), Value::Array(custom_tools));
         }
-        if !config.available_tools.is_empty() {
-            params.insert("availableTools".to_string(), json!(config.available_tools));
-        }
+        // Empty is an explicit deny-all catalog, not the provider default.
+        params.insert("availableTools".to_string(), json!(config.available_tools));
         if !config.excluded_tools.is_empty() {
             params.insert("excludedTools".to_string(), json!(config.excluded_tools));
         }

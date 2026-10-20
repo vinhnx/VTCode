@@ -60,6 +60,7 @@ impl Session {
         }
 
         match command {
+            InlineCommand::Diagnostic(diagnostic) => self.upsert_diagnostic(*diagnostic),
             InlineCommand::AppendLine { kind, segments } => {
                 let previous_max_offset = self.current_max_scroll_offset();
                 self.clear_thinking_spinner_if_active(kind);

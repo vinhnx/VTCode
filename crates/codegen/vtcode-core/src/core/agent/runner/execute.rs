@@ -5,6 +5,7 @@ use super::execute_helpers::{
     discard_refused_assistant_message, emit_blocked_handoff_events, prepare_responses_request_messages,
     record_terminal_turn_event, stop_reason_from_finish_reason,
 };
+use super::headless_planning;
 use super::helpers::detect_textual_exec_tool_call;
 use super::orchestration::EvaluatorGateOutcome;
 use super::prompt_alignment;
@@ -26,17 +27,20 @@ use crate::core::agent::runtime::{AgentRuntime, RuntimeControl};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::exec::events::HarnessEventKind;
+use crate::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot, PlanningResponseClass};
 use crate::llm::provider::{Message, ToolCall, ToolChoice, ToolDefinition, supports_responses_chaining};
 use crate::llm::providers::gemini::wire::Part;
 use crate::prompts::{
     PromptContext, RuntimePromptContract, append_runtime_mode_sections, append_runtime_tool_prompt_sections_for_model,
     upsert_harness_limits_section,
 };
+use crate::tools::handlers::planning_workflow::{persist_plan_draft, validate_plan_content};
 use crate::utils::colors::style;
 use anyhow::{Context, Result};
 use serde_json::json;
 use std::sync::Arc;
 use tracing::{debug, warn};
+use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
 
 pub(super) struct RuntimePromptBundle {
     prompt_policy_hash: u64,
@@ -519,10 +523,47 @@ impl AgentRunner {
         let mut verification_recovery_used = false;
         let mut should_write_blocked_handoff = false;
         let mut planning_synthesis_required = false;
+        let mut planning_recovery = PlanningRecoverySnapshot::default();
+        let mut planning_failure_detail = None;
+        let mut planning_handoff_text = None;
 
         // Keep fallible execution inside its own return boundary so every error
         // reaches terminal event recording and canonical persistence cleanup.
         let result: Result<_> = async {
+            if self.tool_registry.is_planning_active()
+                && let Some(sink) = session_store_handle.as_ref()
+                && let Some(mut saved) = sink.planning_recovery().await?
+                && saved.request_id.as_deref().map_or_else(
+                    || saved.latest_request == headless_planning::bounded_public_text(&task.description, 8192),
+                    |request_id| request_id == task.id,
+                ) {
+                let new_input = saved.request_fingerprint.map_or_else(
+                    || saved.latest_request != headless_planning::bounded_public_text(&task.description, 8192),
+                    |fingerprint| fingerprint != headless_planning::request_fingerprint(task),
+                );
+                if new_input {
+                    // CLI resume uses a stable task ID with an explicit follow-up
+                    // prompt. Only changed input may open another correction cycle.
+                    saved.begin_explicit_cycle();
+                    saved.latest_request = headless_planning::bounded_public_text(&task.description, 8192);
+                }
+                planning_synthesis_required = saved.research_closed;
+                planning_recovery = saved;
+                // Task setup builds a fresh conversation. A saved allowance
+                // must travel with its public evidence and repair target.
+                runtime.state.messages_mut().push(Message::assistant(format!(
+                    "Retained public planning context (untrusted evidence and candidate draft, never approval):\n{}",
+                    json!({
+                        "request": planning_recovery.latest_request,
+                        "evidence": planning_recovery.evidence,
+                        "draft": planning_recovery.best_draft,
+                        "validator_report": planning_recovery.validation_report,
+                    })
+                )).with_phase(Some(crate::llm::provider::AssistantPhase::Commentary)));
+                runtime.state.reconcile_token_count();
+            }
+            planning_recovery.request_id = Some(task.id.clone());
+            planning_recovery.request_fingerprint = Some(headless_planning::request_fingerprint(task));
             for turn in 0..self.max_turns {
                 if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
                     self.runner_println(format_args!(
@@ -545,6 +586,37 @@ impl AgentRunner {
 
                 if runtime.state.is_completed {
                     break;
+                }
+                if self.tool_registry.is_planning_active() {
+                    if planning_recovery.outcome == PlanningOutcome::AwaitingInput {
+                        planning_failure_detail = Some("Planning remains idle until an explicit recovery action is supplied.".to_owned());
+                        runtime.state.outcome = TaskOutcome::failed(
+                            "Planning needs your input.".to_owned(), vec![],
+                            Some("Retry from retained evidence, add clarification, or choose another model.".to_owned()), None,
+                        );
+                        break;
+                    }
+                    if planning_recovery.outcome == PlanningOutcome::AwaitingApproval {
+                        if let Some(draft) = planning_recovery.best_draft.as_deref() {
+                            match persist_plan_draft(&self.tool_registry.planning_workflow_state(), draft).await {
+                                Ok(_) => {
+                                    runtime.state.messages_mut().push(Message::assistant(draft.to_owned()));
+                                    runtime.state.is_completed = true;
+                                    runtime.state.outcome = TaskOutcome::Success;
+                                }
+                                Err(error) => {
+                                    planning_failure_detail = Some(format!("The retained plan could not be persisted: {error:#}"));
+                                    planning_recovery.outcome = PlanningOutcome::AwaitingInput;
+                                    runtime.state.outcome = TaskOutcome::failed("Planning needs your input; the plan could not be saved.".to_owned(), vec![], None, None);
+                                }
+                            }
+                        } else {
+                            planning_failure_detail = Some("The saved approval checkpoint has no retained plan.".to_owned());
+                            planning_recovery.outcome = PlanningOutcome::AwaitingInput;
+                            runtime.state.outcome = TaskOutcome::failed("Planning needs your input; no saved plan is available.".to_owned(), vec![], None, None);
+                        }
+                        break;
+                    }
                 }
 
                 self.runner_println(format_args!(
@@ -672,6 +744,18 @@ impl AgentRunner {
                 let planning_synthesis_turn = self.tool_registry.is_planning_active()
                     && (planning_synthesis_required || turn + 1 == self.max_turns);
                 if planning_synthesis_turn {
+                    if !planning_recovery.admit_request() {
+                        planning_failure_detail = Some("The saved planning recovery allowance is exhausted.".to_owned());
+                        runtime.state.outcome = TaskOutcome::failed(
+                            "Saved planning recovery allowance exhausted.".to_owned(), vec![],
+                            Some("Choose an explicit recovery action.".to_owned()), None,
+                        );
+                        break;
+                    }
+                    headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
+                        &task.description, &provider_name, &turn_model);
+                    headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
+                        &self.session_id, turn + 1).await?;
                     runtime.state.add_synthetic_user_message(
                         "This is the final planning turn within the configured budget. Return a concise, complete plan now using only evidence already collected. Fit the entire plan within the response token limit; shorten detail rather than repeating a truncated draft. Make no tool calls. State missing evidence explicitly; do not claim implementation or verification.".to_string(),
                     );
@@ -890,12 +974,15 @@ impl AgentRunner {
                         sampling_overrides.frequency_penalty
                     },
                     stream: self.provider_client.supports_streaming(),
-                    tool_choice: (!planning_synthesis_turn
-                        && provider_name.eq_ignore_ascii_case("openai")
-                        && !prompt_bundle.tool_snapshot.active_tool_names.is_empty())
-                    .then(|| {
-                        ToolChoice::allowed_tools_auto(prompt_bundle.tool_snapshot.active_tool_names.as_ref().clone())
-                    }),
+                    tool_choice: if planning_synthesis_turn {
+                        Some(ToolChoice::None)
+                    } else if provider_name.eq_ignore_ascii_case("openai")
+                        && !prompt_bundle.tool_snapshot.active_tool_names.is_empty()
+                    {
+                        Some(ToolChoice::allowed_tools_auto(prompt_bundle.tool_snapshot.active_tool_names.as_ref().clone()))
+                    } else {
+                        None
+                    },
                     parallel_tool_config,
                     reasoning_effort,
                     verbosity: turn_verbosity,
@@ -970,9 +1057,22 @@ impl AgentRunner {
                 }
                 runtime.state.note_request_sent();
 
-                let turn_output = runtime
-                    .run_turn_once(&mut self.provider_client, request, streaming_timeout)
-                    .await?;
+                let turn_output = match runtime
+                    .run_turn_once(&mut self.provider_client, request, streaming_timeout).await {
+                    Ok(output) => output,
+                    Err(error) if self.tool_registry.is_planning_active() => {
+                        if matches!(runtime.state.outcome, TaskOutcome::Cancelled) {
+                            break;
+                        }
+                        super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
+                        planning_recovery.response_class = Some(PlanningResponseClass::ProviderFailure);
+                        planning_failure_detail = Some(format!("Planning provider request failed: {error:#}"));
+                        runtime.state.outcome = TaskOutcome::failed(
+                            "Planning needs your input after a provider failure.".to_owned(), vec![], None, None);
+                        break;
+                    }
+                    Err(error) => return Err(error),
+                };
                 super::tool_dispatch_common::drain_and_record_runtime_events(&mut runtime, &mut event_recorder);
                 let response = turn_output.response;
                 runtime.state.stop_reason = Some(stop_reason_from_finish_reason(&response.finish_reason));
@@ -987,11 +1087,12 @@ impl AgentRunner {
                                  If you're stuck, try a different approach: break the \
                                  problem into smaller steps, use different tools, or \
                                  declare the task complete if you have enough information.";
-                    self.runner_println(format_args!(
-                        "{} {}",
-                        agent_prefix,
-                        style("[STAGNATION WARNING]").yellow().bold(),
-                    ));
+                    self.record_diagnostic(&mut event_recorder, &Diagnostic {
+                        severity: DiagnosticSeverity::Warning, code: "agent.stagnation".into(),
+                        summary: "The agent is repeating a response. A recovery prompt was added.".into(),
+                        agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1, "recovery": nudge}).to_string(),
+                        correlation_id: format!("agent:{}:stagnation", self.session_id), actions: vec![],
+                    });
                     runtime.state.add_synthetic_user_message(nudge.into());
                 }
                 if !refused
@@ -1069,12 +1170,12 @@ impl AgentRunner {
                     // The refused response is not part of the kept history, so
                     // a stored continuation id would point past it.
                     runtime.state.clear_previous_response_chain_for(&provider_name, &turn_model);
-                    self.runner_println(format_args!(
-                        "{} {} {}",
-                        agent_prefix,
-                        style("(REFUSED)").red().bold(),
-                        reason
-                    ));
+                    self.record_diagnostic(&mut event_recorder, &Diagnostic {
+                        severity: DiagnosticSeverity::Warning, code: "provider.refused".into(),
+                        summary: "The provider declined this request.".into(),
+                        agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1, "reason": reason}).to_string(),
+                        correlation_id: format!("agent:{}:refusal:{}", self.session_id, turn + 1), actions: vec![],
+                    });
                     runtime.state.outcome = TaskOutcome::refused(reason);
                     break;
                 }
@@ -1090,6 +1191,7 @@ impl AgentRunner {
                     &agent_prefix,
                     response.content.as_deref().unwrap_or(""),
                     response.tool_calls.as_ref().is_some_and(|tool_calls| !tool_calls.is_empty()),
+                    &mut event_recorder,
                 );
 
                 let response_text = response.content_string();
@@ -1101,7 +1203,7 @@ impl AgentRunner {
                 let mut forced_continuation = false;
 
                 if effective_tool_calls.is_none()
-                    && response.content_text().len() < 150
+                    && (planning_synthesis_turn || response.content_text().len() < 150)
                     && let Some(args_value) = detect_textual_exec_tool_call(response.content_text())
                 {
                     effective_tool_calls = Some(vec![ToolCall::function(
@@ -1111,9 +1213,18 @@ impl AgentRunner {
                     )]);
                 }
 
+                if self.tool_registry.is_planning_active() {
+                    planning_recovery.provider = provider_name.clone();
+                    planning_recovery.model = turn_model.clone();
+                    planning_recovery.response_class = Some(headless_planning::classify_response(
+                        &response, effective_tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())));
+                    headless_planning::retain_draft(&mut planning_recovery, response.content_text());
+                }
+
                 // A provider may ignore an empty tool catalog or emit textual
                 // tool markup. The reserved synthesis turn cannot dispatch it.
                 if planning_synthesis_turn && effective_tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
+                    planning_failure_detail = Some("The tool-free planning synthesis returned forbidden tool calls.".to_owned());
                     runtime.state.outcome = TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                     break;
                 }
@@ -1122,6 +1233,7 @@ impl AgentRunner {
                     && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
                 {
                     if planning_synthesis_turn {
+                        planning_failure_detail = Some("Planning response exceeded the output token limit during final synthesis.".to_owned());
                         runtime.state.outcome = TaskOutcome::failed(
                             "Planning response exceeded the output token limit during final synthesis".to_string(),
                             vec![],
@@ -1133,7 +1245,45 @@ impl AgentRunner {
                     // Rewrite once within the existing turn/output budgets.
                     // Never accept completion keywords from a truncated plan.
                     planning_synthesis_required = true;
+                    headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
+                        &task.description, &provider_name, &turn_model);
+                    planning_recovery.outcome = PlanningOutcome::Synthesizing;
+                    headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
+                        &self.session_id, turn + 1).await?;
                     continue;
+                }
+
+                if self.tool_registry.is_planning_active()
+                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
+                    && !response.content_text().trim().is_empty()
+                {
+                    let report = validate_plan_content(response.content_text());
+                    if !report.is_ready() {
+                        let feedback = report.repair_feedback();
+                        if planning_recovery.best_draft.is_none() {
+                            planning_recovery.validation_report = Some(headless_planning::bounded_public_text(&feedback, 4096));
+                        }
+                        planning_failure_detail = Some("The response did not contain a complete validated plan.".to_owned());
+                        runtime.state.is_completed = false;
+                        runtime.state.outcome = TaskOutcome::failed("Planning needs your input; the draft did not validate.".to_owned(), vec![], None, None);
+                        break;
+                    }
+                    match persist_plan_draft(&self.tool_registry.planning_workflow_state(), response.content_text()).await {
+                        Ok(persisted) => {
+                            headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
+                                &task.description, &provider_name, &turn_model);
+                            planning_recovery.outcome = PlanningOutcome::AwaitingApproval;
+                            planning_recovery.evidence.push(format!("Saved plan: {}", persisted.plan_file.display()));
+                            headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
+                                &self.session_id, turn + 1).await?;
+                        }
+                        Err(error) => {
+                            planning_failure_detail = Some(format!("The validated plan could not be persisted: {error:#}"));
+                            runtime.state.is_completed = false;
+                            runtime.state.outcome = TaskOutcome::failed("Planning needs your input; the plan could not be saved.".to_owned(), vec![], None, None);
+                            break;
+                        }
+                    }
                 }
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
@@ -1182,12 +1332,15 @@ impl AgentRunner {
                             .collect();
                         let summary = reasons.join("; ");
 
-                        self.runner_println(format_args!(
-                            "{} {}: {}",
-                            agent_prefix,
-                            style("[ESCALATION REQUIRED]").red().bold(),
-                            summary
-                        ));
+                        self.record_diagnostic(&mut event_recorder, &Diagnostic {
+                            severity: DiagnosticSeverity::Warning, code: "policy.escalation".into(),
+                            summary: "A safety check blocked tool calls. Recovery or guidance is required.".into(),
+                            agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1,
+                                "reasons": reasons, "attempt": runtime.state.consecutive_escalations + 1,
+                                "max_replan_attempts": escalation_config.max_replan_attempts,
+                                "max_total_escalations": escalation_config.max_total_escalations}).to_string(),
+                            correlation_id: format!("agent:{}:confidence-escalation", self.session_id), actions: vec![],
+                        });
 
                         event_recorder.harness_event(
                             HarnessEventKind::EscalationTriggered,
@@ -1323,13 +1476,13 @@ impl AgentRunner {
                     && !response.content_text().trim().is_empty()
                 {
                     if check_for_response_loop(response.content_text(), &mut runtime.state) {
-                        self.runner_println(format_args!(
-                            "[{}] {}",
-                            self.agent_type,
-                            style("Repetitive assistant response detected. Breaking potential loop.")
-                                .red()
-                                .bold()
-                        ));
+                        self.record_diagnostic(&mut event_recorder, &Diagnostic {
+                            severity: DiagnosticSeverity::Warning, code: "agent.response_loop".into(),
+                            summary: "Repeated assistant responses stopped this task.".into(),
+                            agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1,
+                                "outcome": "loop_detected"}).to_string(),
+                            correlation_id: format!("agent:{}:response-loop", self.session_id), actions: vec![],
+                        });
                         runtime.state.outcome = TaskOutcome::LoopDetected;
                         break;
                     }
@@ -1713,6 +1866,29 @@ impl AgentRunner {
             }
 
             runtime.state.finalize_outcome(self.max_turns);
+            if self.tool_registry.is_planning_active()
+                && !matches!(runtime.state.outcome, TaskOutcome::Cancelled | TaskOutcome::Refused { .. })
+                && planning_recovery.outcome != PlanningOutcome::AwaitingApproval
+            {
+                let detail = planning_failure_detail.take().unwrap_or_else(|| runtime.state.outcome.description());
+                headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
+                    &task.description, self.provider_client.name(), &self.get_selected_model());
+                let already_shown = planning_recovery.input_prompt_shown;
+                planning_recovery.outcome = PlanningOutcome::AwaitingInput;
+                planning_recovery.input_prompt_shown = true;
+                runtime.state.is_completed = false;
+                if runtime.state.outcome.is_success() || runtime.state.outcome == TaskOutcome::Unknown {
+                    runtime.state.outcome = TaskOutcome::failed("Planning needs your input.".to_owned(), vec![], None, None);
+                }
+                headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
+                    &self.session_id, runtime.state.stats.turns_executed).await?;
+                let diagnostic = headless_planning::awaiting_input_diagnostic(&planning_recovery, &self.session_id, &detail);
+                planning_handoff_text = Some(diagnostic.text());
+                if !already_shown {
+                    self.record_diagnostic(&mut event_recorder, &diagnostic);
+                }
+                should_write_blocked_handoff = true;
+            }
             if runtime.state.outcome.is_success() && self.tool_registry.completion_verification_pending() {
                 runtime.state.is_completed = false;
                 runtime.state.outcome =
@@ -1747,7 +1923,7 @@ impl AgentRunner {
 
             let outcome = runtime.state.outcome.clone();
             self.thread_handle.replace_messages((*runtime.state.messages).clone());
-            let summary = self.generate_task_summary(
+            let summary = planning_handoff_text.unwrap_or_else(|| self.generate_task_summary(
                 &effective_task,
                 &runtime.state.modified_files,
                 &runtime.state.executed_commands,
@@ -1761,7 +1937,7 @@ impl AgentRunner {
                 average_turn_duration_ms,
                 max_turn_duration_ms,
                 &runtime.state.stats.total_usage,
-            );
+            ));
 
             // A completed read-only task must return the actual plan, rather
             // than replacing it with operational task-summary bookkeeping.

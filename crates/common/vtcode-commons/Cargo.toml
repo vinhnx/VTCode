@@ -24,6 +24,7 @@ schema = ["dep:schemars"]
 default = []
 
 [dependencies]
+vtcode-exec-events = { workspace = true }
 vtcode-diff = { workspace = true, features = ["serde"] }
 anyhow = { workspace = true }
 arc-swap = { workspace = true }

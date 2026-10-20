@@ -305,9 +305,9 @@ fn build_responses_request_from_history(
                     tool_choice,
                     openai_request["tools"].as_array().map(Vec::as_slice).unwrap_or_default(),
                 )
-                .unwrap_or_else(|| tool_choice.to_provider_format("openai"))
+                .unwrap_or_else(|| tool_choice.to_responses_format())
             } else {
-                tool_choice.to_provider_format("openai")
+                tool_choice.to_responses_format()
             };
         }
 

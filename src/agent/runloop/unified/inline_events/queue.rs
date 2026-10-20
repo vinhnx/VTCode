@@ -545,8 +545,10 @@ mod tests {
         let mut snapshots = 0usize;
         while let Ok(command) = rx.try_recv() {
             match command {
-                InlineCommand::AppendLine { kind: InlineMessageKind::Warning, segments } => {
-                    warnings.push(segments.into_iter().map(|s| s.text).collect::<String>());
+                InlineCommand::Diagnostic(diagnostic)
+                    if diagnostic.severity == vtcode_commons::diagnostics::DiagnosticSeverity::Warning =>
+                {
+                    warnings.push(diagnostic.summary);
                 }
                 InlineCommand::SetQueuedInputs { .. } => snapshots += 1,
                 _ => {}

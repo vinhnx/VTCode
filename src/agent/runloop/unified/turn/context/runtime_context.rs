@@ -40,9 +40,8 @@ pub(crate) enum TurnProcessingResult {
 pub(crate) struct NoOutputFacts {
     /// Completion tokens the provider reported for this response.
     pub(crate) completion_tokens: u32,
-    /// Bounded reasoning text kept for salvage when a tool-free recovery pass
-    /// dropped one or more native tool calls. Empty otherwise.
-    pub(crate) salvaged_reasoning: String,
+    /// Reasoning was present without public final content; its text is never salvaged.
+    pub(crate) reasoning_only: bool,
     /// The response carried native tool calls that were dropped because the
     /// recovery pass forbids executing tools.
     pub(crate) dropped_tool_calls: bool,

@@ -486,21 +486,26 @@ impl OllamaProvider {
             None
         };
 
-        // Keep tool definitions on the wire even when tools are disabled so the
-        // rendered prefix stays cache-stable across recovery turns (OpenAI
-        // guidance: disable tool use with `tool_choice: "none"` rather than
-        // removing definitions).
-        let tools = request.tools.as_ref().map(|tools| {
-            tools
-                .iter()
-                .filter_map(|tool| {
-                    // Normalize all tools to function type for Ollama compatibility
-                    tool.function.as_ref().map(|func| {
-                        ToolDefinition::function(func.name.clone(), func.description.clone(), func.parameters.clone())
+        // Ollama has no wire-level tool_choice, so a tool-free request must
+        // omit the callable catalog. Historical calls and results stay paired.
+        let tools = request
+            .tools
+            .as_ref()
+            .filter(|_| !matches!(request.tool_choice, Some(ToolChoice::None)))
+            .map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(|tool| {
+                        tool.function.as_ref().map(|func| {
+                            ToolDefinition::function(
+                                func.name.clone(),
+                                func.description.clone(),
+                                func.parameters.clone(),
+                            )
+                        })
                     })
-                })
-                .collect()
-        });
+                    .collect()
+            });
 
         Ok(OllamaChatRequest {
             model: request.model.clone(),
@@ -668,6 +673,24 @@ impl OllamaProvider {
         }
     }
 
+    /// Tagged private reasoning must never become public content when no final
+    /// text remains. Apply the same boundary to both completed wire modes.
+    fn normalize_response_reasoning(response: &mut LLMResponse) {
+        let Some(content) = response.content.take() else {
+            return;
+        };
+        let (reasoning_parts, cleaned_content) = crate::utils::extract_reasoning_content(&content);
+        if reasoning_parts.is_empty() {
+            response.content = Some(content);
+            return;
+        }
+        super::common::preserve_interleaved_content_in_reasoning_details(&mut response.reasoning_details, &content);
+        if response.reasoning.is_none() {
+            response.reasoning = Some(reasoning_parts.join("\n\n"));
+        }
+        response.content = cleaned_content;
+    }
+
     fn response_from_chat_payload(model: String, parsed: OllamaChatResponse) -> Result<LLMResponse, LLMError> {
         if let Some(error) = parsed.error {
             return Err(LLMError::Provider { message: error, metadata: None });
@@ -688,39 +711,19 @@ impl OllamaProvider {
                 .as_deref()
                 .and_then(extract_reasoning_text_from_detail_values)
         });
-        let mut reasoning_details = native_reasoning_details.as_deref().and_then(serialize_reasoning_detail_values);
-
-        // Fallback: Extract reasoning from content if not provided natively
-        // This handles MiniMax-M2.5 cloud models that use <think></think> tags
-        let (final_reasoning, final_content) = if reasoning.is_none() {
-            if let Some(ref content_str) = content {
-                let (reasoning_parts, cleaned_content) = crate::utils::extract_reasoning_content(content_str);
-                if reasoning_parts.is_empty() {
-                    (None, content)
-                } else {
-                    super::common::preserve_interleaved_content_in_reasoning_details(
-                        &mut reasoning_details,
-                        content_str,
-                    );
-                    (Some(reasoning_parts.join("\n\n")), cleaned_content.or(content))
-                }
-            } else {
-                (None, content)
-            }
-        } else {
-            (reasoning, content)
-        };
-
-        Ok(Self::build_response(
-            final_content,
+        let reasoning_details = native_reasoning_details.as_deref().and_then(serialize_reasoning_detail_values);
+        let mut response = Self::build_response(
+            content,
             tool_calls,
-            final_reasoning,
+            reasoning,
             reasoning_details,
             model,
             parsed.done_reason.as_deref(),
             parsed.prompt_eval_count,
             parsed.eval_count,
-        ))
+        );
+        Self::normalize_response_reasoning(&mut response);
+        Ok(response)
     }
 
     fn authorized_post_with_key(http_client: &HttpClient, url: &str, api_key: Option<&str>) -> reqwest::RequestBuilder {
@@ -950,6 +953,9 @@ impl LLMProvider for OllamaProvider {
         let model = request.model.clone();
         let payload = self.build_payload(&request, true)?;
         let fallback_payload = self.build_payload(&request, false)?;
+        // Tool-free recovery owns a shared request allowance in the runloop.
+        // Propagate transport failure so that layer admits any corrective call.
+        let allow_transport_fallback = !matches!(request.tool_choice, Some(ToolChoice::None));
         let url = self.chat_url();
 
         let response = self
@@ -993,7 +999,7 @@ impl LLMProvider for OllamaProvider {
                         saw_stream_chunk = true;
                         chunk
                     }
-                    Err(err) if !saw_stream_chunk => {
+                    Err(err) if !saw_stream_chunk && allow_transport_fallback => {
                         tracing::warn!(
                             model = %fallback_model,
                             url = %fallback_url,
@@ -1119,6 +1125,7 @@ impl LLMProvider for OllamaProvider {
                 response.reasoning = extract_reasoning_text_from_serialized_details(details);
             }
 
+            Self::normalize_response_reasoning(&mut response);
             yield LLMStreamEvent::Completed { response: Box::new(response) };
         };
 
@@ -1260,11 +1267,23 @@ mod tests {
     }
 
     #[test]
-    fn build_payload_keeps_tools_for_tool_choice_none() {
+    fn build_payload_omits_callable_tools_for_tool_choice_none() {
         let provider = test_provider();
         let request = LLMRequest {
             model: "test-model".to_string(),
-            messages: vec![Message::user("hello".to_string())].into(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_history".to_owned(),
+                        "get_weather".to_owned(),
+                        "{}".to_owned(),
+                    )],
+                ),
+                Message::tool_response("call_history".to_owned(), "sunny".to_owned()),
+                Message::user("Synthesize the result".to_owned()),
+            ]
+            .into(),
             tools: Some(std::sync::Arc::new(vec![ToolDefinition::function(
                 "get_weather".to_string(),
                 "Get the weather".to_string(),
@@ -1274,11 +1293,18 @@ mod tests {
             ..Default::default()
         };
 
-        let payload = provider.build_payload(&request, false).unwrap();
-        assert!(
-            payload.tools.as_ref().is_some_and(|tools| !tools.is_empty()),
-            "tool definitions stay on the wire for prompt-cache stability"
-        );
+        for stream in [false, true] {
+            let payload = serde_json::to_value(provider.build_payload(&request, stream).unwrap()).unwrap();
+            assert!(payload.get("tools").is_none(), "tool-free synthesis must not advertise callable tools");
+            assert_eq!(payload["stream"], stream);
+            assert_eq!(payload["messages"][0]["tool_calls"][0]["function"]["name"], "get_weather");
+            assert_eq!(payload["messages"][1]["tool_call_id"], "call_history");
+            assert_eq!(payload["messages"][1]["content"], "sunny");
+            let mut enabled = request.clone();
+            enabled.tool_choice = Some(ToolChoice::Auto);
+            let payload = serde_json::to_value(provider.build_payload(&enabled, stream).unwrap()).unwrap();
+            assert_eq!(payload["tools"][0]["function"]["name"], "get_weather");
+        }
     }
 
     #[test]
@@ -1501,6 +1527,219 @@ mod tests {
         let tools = payload.tools.expect("tools should be present");
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].function_name(), "apply_patch");
+    }
+
+    #[test]
+    fn reasoning_only_responses_never_promote_private_content_in_either_wire_mode() {
+        for (content, native_thinking, expected_public, expected_reasoning) in [
+            (None, Some("native private reasoning"), None, "native private reasoning"),
+            (Some("<think>private reasoning</think>"), None, None, "private reasoning"),
+            (
+                Some("<think>private reasoning</think>Public final answer"),
+                None,
+                Some("Public final answer"),
+                "private reasoning",
+            ),
+            (
+                Some("<think>tagged private reasoning</think>"),
+                Some("native private reasoning"),
+                None,
+                "native private reasoning",
+            ),
+        ] {
+            let parsed: OllamaChatResponse = serde_json::from_value(json!({
+                "message": {"role": "assistant", "content": content, "thinking": native_thinking},
+                "done": true, "done_reason": "stop",
+            }))
+            .expect("Ollama response fixture");
+            let response =
+                OllamaProvider::response_from_chat_payload("test-model".into(), parsed).expect("nonstream response");
+            assert_eq!(response.content.as_deref(), expected_public);
+            assert_eq!(response.reasoning.as_deref(), Some(expected_reasoning));
+
+            let mut aggregator = crate::providers::shared::StreamAggregator::new("test-model".into());
+            if let Some(thinking) = native_thinking {
+                aggregator.handle_reasoning(thinking);
+            }
+            let mut rendered_public = String::new();
+            for chunk in content.unwrap_or_default().as_bytes().chunks(7) {
+                for event in aggregator.handle_content(std::str::from_utf8(chunk).expect("ASCII fixture")) {
+                    if let LLMStreamEvent::Token { delta } = event {
+                        rendered_public.push_str(&delta);
+                    }
+                }
+            }
+            let mut streamed = aggregator.finalize();
+            OllamaProvider::normalize_response_reasoning(&mut streamed);
+            assert_eq!(streamed.content.as_deref(), expected_public);
+            assert_eq!(streamed.reasoning.as_deref(), Some(expected_reasoning));
+            assert_eq!(rendered_public.trim(), expected_public.unwrap_or_default());
+            assert!(!rendered_public.contains("private reasoning"));
+        }
+    }
+
+    #[tokio::test]
+    async fn streaming_completion_keeps_tagged_reasoning_out_of_public_content() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, ResponseTemplate};
+        let Some(server) = crate::providers::test_support::start_mock_server_or_skip().await else {
+            return;
+        };
+        let provider = OllamaProvider::from_config(
+            None,
+            Some("test-model:cloud".into()),
+            Some(server.uri()),
+            None,
+            None,
+            None,
+            None,
+        );
+        for public_tail in ["", "Public final answer"] {
+            let frames = [
+                json!({"message": {"role": "assistant", "content": "<thi"}, "done": false}),
+                json!({"message": {"role": "assistant", "content": "nk>private reasoning</think>"}, "done": false}),
+                json!({"message": {"role": "assistant", "content": public_tail}, "done": true, "done_reason": "stop"}),
+            ];
+            let body = frames.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n") + "\n";
+            Mock::given(method("POST"))
+                .and(path("/api/chat"))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/x-ndjson"))
+                .up_to_n_times(1)
+                .expect(1)
+                .mount(&server)
+                .await;
+            let mut stream = LLMProvider::stream(
+                &provider,
+                LLMRequest {
+                    model: "test-model:cloud".into(),
+                    messages: vec![Message::user("Synthesize saved evidence".into())].into(),
+                    tool_choice: Some(ToolChoice::None),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("mock Ollama stream");
+            let mut public_tokens = String::new();
+            let mut completed = None;
+            while let Some(event) = stream.next().await {
+                match event.expect("Ollama streaming event") {
+                    LLMStreamEvent::Token { delta } => public_tokens.push_str(&delta),
+                    LLMStreamEvent::Completed { response } => completed = Some(response),
+                    _ => {}
+                }
+            }
+            assert_eq!(public_tokens, public_tail);
+            let response = completed.expect("terminal completed response");
+            assert_eq!(response.content.as_deref(), (!public_tail.is_empty()).then_some(public_tail));
+            assert_eq!(response.reasoning.as_deref(), Some("private reasoning"));
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_free_stream_failure_does_not_dispatch_an_uncharged_nonstream_fallback() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        async fn drain_request(socket: &mut tokio::net::TcpStream) {
+            let mut request = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            loop {
+                let read = socket.read(&mut chunk).await.expect("read mock HTTP request");
+                assert!(read > 0, "request must contain complete headers and body");
+                request.extend_from_slice(&chunk[..read]);
+                if let Some(end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                    let headers = std::str::from_utf8(&request[..end]).expect("HTTP headers");
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().expect("content length"))
+                        })
+                        .unwrap_or(0);
+                    if request.len() >= end + 4 + content_length {
+                        return;
+                    }
+                }
+            }
+        }
+
+        for choice in [ToolChoice::None, ToolChoice::Auto] {
+            let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+                .await
+                .expect("mock transport listener");
+            let address = listener.local_addr().expect("listener address");
+            let requests = std::sync::Arc::new(AtomicUsize::new(0));
+            let captured = requests.clone();
+            let server = tokio::spawn(async move {
+                for index in 0..2 {
+                    let (mut socket, _) = listener.accept().await.expect("accept mock request");
+                    drain_request(&mut socket).await;
+                    captured.fetch_add(1, Ordering::SeqCst);
+                    if index == 0 {
+                        // Successful headers followed by a truncated body fail
+                        // only when the stream polls its first body chunk.
+                        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 64\r\nContent-Type: application/x-ndjson\r\nConnection: close\r\n\r\n").await.expect("write truncated response");
+                    } else {
+                        let body = r#"{"message":{"role":"assistant","content":"Fallback final"},"done":true,"done_reason":"stop"}"#;
+                        let header = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        socket.write_all(header.as_bytes()).await.expect("write fallback headers");
+                        socket.write_all(body.as_bytes()).await.expect("write fallback body");
+                    }
+                    socket.shutdown().await.expect("finish mock response");
+                }
+            });
+            let provider = OllamaProvider::from_config(
+                None,
+                Some("test-model:cloud".into()),
+                Some(format!("http://{address}")),
+                None,
+                None,
+                None,
+                None,
+            );
+            let mut stream = LLMProvider::stream(
+                &provider,
+                LLMRequest {
+                    model: "test-model:cloud".into(),
+                    messages: vec![Message::user("Synthesize saved evidence".into())].into(),
+                    tool_choice: Some(choice.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("successful mock response headers");
+            let mut failed = false;
+            let mut completed = None;
+            while let Some(event) = stream.next().await {
+                match event {
+                    Err(_) => failed = true,
+                    Ok(LLMStreamEvent::Completed { response }) => completed = Some(response),
+                    _ => {}
+                }
+            }
+            server.abort();
+            let _ = server.await;
+            if matches!(choice, ToolChoice::None) {
+                assert!(failed && completed.is_none());
+                assert_eq!(
+                    requests.load(Ordering::SeqCst),
+                    1,
+                    "recovery must return failure to charged runloop admission"
+                );
+            } else {
+                assert!(!failed);
+                assert_eq!(completed.expect("enabled fallback response").content.as_deref(), Some("Fallback final"));
+                assert_eq!(
+                    requests.load(Ordering::SeqCst),
+                    2,
+                    "ordinary requests retain the existing transport fallback"
+                );
+            }
+        }
     }
 
     #[test]

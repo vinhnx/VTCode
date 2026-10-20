@@ -557,8 +557,13 @@ impl AtifTrajectoryBuilder {
             ThreadItemDetails::Reasoning(r) => {
                 let mut step = Step::agent(self.next_step_id, "");
                 step.timestamp = Some(ts.to_string());
-                step.reasoning_content = Some(r.text.clone());
-                step.message = None;
+                if let Some(diagnostic) = &r.diagnostic {
+                    step.message = Some(diagnostic.summary.clone());
+                    step.extra = Some(serde_json::json!({ "diagnostic": diagnostic }));
+                } else {
+                    step.reasoning_content = Some(r.text.clone());
+                    step.message = None;
+                }
                 self.push_step(step);
             }
             ThreadItemDetails::ToolInvocation(inv) => {

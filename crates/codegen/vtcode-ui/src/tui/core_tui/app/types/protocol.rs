@@ -322,6 +322,7 @@ struct HandleProgress {
 
 #[derive(Clone)]
 pub struct InlineHandle {
+    diagnostic_observer: vtcode_commons::diagnostics::DiagnosticObserver,
     pub(crate) sender: UnboundedSender<InlineCommand>,
     message_layout: Arc<InlineLayoutState>,
     deferred_events: Arc<Mutex<VecDeque<InlineEvent>>>,
@@ -358,6 +359,7 @@ impl InlineHandle {
     ) -> Self {
         Self {
             sender,
+            diagnostic_observer: Default::default(),
             message_layout: Arc::new(InlineLayoutState::default()),
             deferred_events: Arc::new(Mutex::new(VecDeque::new())),
             transient_activity,

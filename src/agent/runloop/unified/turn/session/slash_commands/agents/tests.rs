@@ -124,6 +124,7 @@ fn summarize_thread_event_preview_uses_latest_live_updates() {
                 context: None,
                 id: "reasoning-1".to_string(),
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: "Inspecting the diff".to_string(),
                     stage: None,
                 })),
@@ -134,6 +135,7 @@ fn summarize_thread_event_preview_uses_latest_live_updates() {
                 context: None,
                 id: "reasoning-1".to_string(),
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: "Inspecting the diff carefully".to_string(),
                     stage: None,
                 })),

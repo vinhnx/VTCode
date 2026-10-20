@@ -41,8 +41,8 @@ const START_PLANNING_GUIDANCE_LINE: &str = "- For demanding, ambiguous, or multi
 /// routes to the plan sidecar, which rejects index 0 (`index_path components
 /// must be >= 1`); checklist-level `index: 0` completion exists only outside
 /// planning, so neither line advertises it.
-const PLANNING_TASK_TRACKER_COMPACT_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; updates use positive index/index_path or items, never conflicting fields; index 0 is invalid while planning. Keep blockers and verification open.";
-const PLANNING_TASK_TRACKER_INDEX_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; update {\"action\":\"update\",\"index\":1,\"status\":\"in_progress\"}; bulk {\"action\":\"update\",\"items\":[\"[x] Done\",\"[ ] Remaining\"]}. Use positive flat indices or hierarchical index_path (index 0 is invalid while planning), or items for full checklist replacement. Omit unused fields; never combine index, index_path, and items.";
+const PLANNING_TASK_TRACKER_COMPACT_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; updates use positive index/index_path or items, never conflicting fields; index 0 is invalid while planning. Keep blockers and verification open. `scope_review` checks cannot satisfy functional `verify` checks.";
+const PLANNING_TASK_TRACKER_INDEX_LINE: &str = "- `task_tracker`: list {\"action\":\"list\"}; update {\"action\":\"update\",\"index\":1,\"status\":\"in_progress\"}; bulk {\"action\":\"update\",\"items\":[\"[x] Done\",\"[ ] Remaining\"]}. Use positive flat indices or hierarchical index_path (index 0 is invalid while planning), or items for full checklist replacement. Omit unused fields; never combine index, index_path, and items. `scope_review` checks cannot satisfy functional `verify` checks.";
 
 /// Context-token ceiling at or below which Active Tools documentation
 /// resolves to the Minimal density.
@@ -1203,6 +1203,8 @@ mod tests {
         // The planning sidecar rejects index 0, so no planning line may present
         // it as a valid checklist-completion index.
         for line in [PLANNING_TASK_TRACKER_INDEX_LINE, PLANNING_TASK_TRACKER_COMPACT_LINE] {
+            assert!(line.contains("`scope_review` checks cannot satisfy functional `verify` checks"));
+            assert!(line.len() <= 570, "keep tracker guidance bounded");
             assert!(line.contains("index 0 is invalid while planning"), "{line}");
             assert!(!line.contains("reserved"), "{line}");
             assert!(!line.contains("index: 0"), "{line}");

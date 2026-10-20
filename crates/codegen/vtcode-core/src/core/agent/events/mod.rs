@@ -11,7 +11,7 @@ pub use lifecycle::{
 
 use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
-    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, EVENT_SCHEMA_VERSION, ErrorItem,
+    CommandExecutionItem, CommandExecutionStatus, CompactionMode, CompactionTrigger, EVENT_SCHEMA_VERSION,
     HarnessEventItem, HarnessEventKind, ItemCompletedEvent, ItemStartedEvent, ThreadCompactBoundaryEvent,
     ThreadCompletedEvent, ThreadCompletionSubtype, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
     ToolOutcome, TurnBlockedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent,
@@ -84,7 +84,7 @@ fn matrix_persistence(state: Arc<SessionStoreSinkState>) -> crate::subagents::ma
                     .context("canonical event sink is closed")
                     .and_then(|sender| {
                         sender
-                            .try_send(SessionStoreRequest::MatrixPersist(queued, reply))
+                            .try_send(SessionStoreRequest::Checkpoint(queued, reply))
                             .map_err(|error| anyhow!("canonical matrix queue unavailable: {error}"))
                     });
                 if let Err(error) = sent {
@@ -150,8 +150,10 @@ impl SessionStoreSinkHealth {
 }
 
 enum SessionStoreRequest {
-    MatrixPersist(QueuedSessionEvent, tokio::sync::oneshot::Sender<Result<()>>),
+    Checkpoint(QueuedSessionEvent, tokio::sync::oneshot::Sender<Result<()>>),
     MatrixLoad(tokio::sync::oneshot::Sender<Result<Vec<crate::exec::events::matrix::MatrixSnapshot>>>),
+    DiagnosticsLoad(tokio::sync::oneshot::Sender<Result<Vec<crate::exec::events::Diagnostic>>>),
+    PlanningLoad(tokio::sync::oneshot::Sender<Result<Option<crate::exec::events::planning::PlanningRecoverySnapshot>>>),
     Event(QueuedSessionEvent),
     ValidateDecision(String, Vec<String>, tokio::sync::oneshot::Sender<Result<()>>),
     Explanation(
@@ -193,6 +195,14 @@ pub(crate) struct SessionStoreSinkHandle {
 }
 
 impl SessionStoreSinkHandle {
+    pub(crate) async fn persist_checkpoint(&self, event: &ThreadEvent) -> Result<()> {
+        persist_session_checkpoint(&self.state, event).await
+    }
+    pub(crate) async fn planning_recovery(
+        &self,
+    ) -> Result<Option<crate::exec::events::planning::PlanningRecoverySnapshot>> {
+        load_planning_recovery(&self.state).await
+    }
     pub(crate) fn matrix_persistence(&self) -> crate::subagents::matrix::MatrixPersistence {
         matrix_persistence(Arc::clone(&self.state))
     }
@@ -256,6 +266,23 @@ impl SessionStoreSink {
         enqueue_session_event(&self.state, event)
     }
 
+    /// Persist a checkpoint and acknowledge its durable write before an external effect.
+    pub async fn persist_checkpoint(&self, event: &ThreadEvent) -> Result<()> {
+        persist_session_checkpoint(&self.state, event).await
+    }
+
+    /// Restore the latest complete planning checkpoint after all accepted events.
+    pub async fn planning_recovery(&self) -> Result<Option<crate::exec::events::planning::PlanningRecoverySnapshot>> {
+        load_planning_recovery(&self.state).await
+    }
+
+    /// Restore complete latest diagnostic states without replaying them into model history.
+    pub async fn diagnostics(&self) -> Result<Vec<crate::exec::events::Diagnostic>> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.enqueue_query(SessionStoreRequest::DiagnosticsLoad(sender))?;
+        receiver.await.context("diagnostic replay barrier unavailable")?
+    }
+
     /// Return the callback form used by the core event recorder.
     pub fn event_sink(&self) -> EventSink {
         event_sink_for_state(Arc::clone(&self.state))
@@ -294,16 +321,7 @@ impl SessionStoreSink {
     }
 
     fn enqueue_query(&self, request: SessionStoreRequest) -> Result<()> {
-        if self.state.health.failed.load(Ordering::Acquire) {
-            return Err(anyhow!("canonical persistence failed; explanation unavailable"));
-        }
-        self.state
-            .sender
-            .lock()
-            .as_ref()
-            .context("canonical event sink is closed")?
-            .try_send(request)
-            .map_err(|error| anyhow!("canonical event queue unavailable; retry explanation query: {error}"))
+        enqueue_session_query(&self.state, request)
     }
 
     /// Drain and close the canonical persistence task.
@@ -323,6 +341,50 @@ impl SessionStoreSink {
             Err(error) => Err(anyhow!(error.clone())),
         }
     }
+}
+
+async fn persist_session_checkpoint(state: &SessionStoreSinkState, event: &ThreadEvent) -> Result<()> {
+    anyhow::ensure!(!state.health.failed.load(Ordering::Acquire), "canonical persistence failed");
+    let queued = prepare_queued_session_event(state, event)?;
+    let reserved_bytes = queued.reserved_bytes;
+    let (reply, receiver) = tokio::sync::oneshot::channel();
+    let sent = state
+        .sender
+        .lock()
+        .as_ref()
+        .context("canonical event sink is closed")
+        .and_then(|sender| {
+            sender
+                .try_send(SessionStoreRequest::Checkpoint(queued, reply))
+                .map_err(|error| anyhow!("canonical checkpoint queue unavailable: {error}"))
+        });
+    if let Err(error) = sent {
+        release_reserved_bytes(state, reserved_bytes);
+        return Err(error);
+    }
+    state.health.accepted_events.fetch_add(1, Ordering::Relaxed);
+    receiver.await.context("checkpoint persistence barrier unavailable")?
+}
+
+async fn load_planning_recovery(
+    state: &SessionStoreSinkState,
+) -> Result<Option<crate::exec::events::planning::PlanningRecoverySnapshot>> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    enqueue_session_query(state, SessionStoreRequest::PlanningLoad(sender))?;
+    receiver.await.context("planning replay barrier unavailable")?
+}
+
+fn enqueue_session_query(state: &SessionStoreSinkState, request: SessionStoreRequest) -> Result<()> {
+    if state.health.failed.load(Ordering::Acquire) {
+        return Err(anyhow!("canonical persistence failed; explanation unavailable"));
+    }
+    state
+        .sender
+        .lock()
+        .as_ref()
+        .context("canonical event sink is closed")?
+        .try_send(request)
+        .map_err(|error| anyhow!("canonical event queue unavailable; retry explanation query: {error}"))
 }
 
 impl Drop for SessionStoreSink {
@@ -514,7 +576,7 @@ fn drain_session_events(
     let mut matrix_evidence_restored = false;
     while let Ok(request) = rx.recv() {
         let queued = match request {
-            SessionStoreRequest::MatrixPersist(queued, reply) => {
+            SessionStoreRequest::Checkpoint(queued, reply) => {
                 let result = (|| -> Result<()> {
                     if let ThreadEvent::MatrixUpdated(snapshot) = &queued.event {
                         if !matrix_evidence_restored {
@@ -585,6 +647,35 @@ fn drain_session_events(
                 let _ = reply.send(result);
                 continue;
             }
+            SessionStoreRequest::DiagnosticsLoad(reply) => {
+                let result = (|| -> Result<_> {
+                    let mut projection = crate::exec::events::diagnostic::DiagnosticProjection::default();
+                    log.visit_snapshot(|_, bytes| {
+                        if let Ok(event) = serde_json::from_slice::<VersionedThreadEvent>(bytes) {
+                            projection.observe(&event.into_event());
+                        }
+                    })?;
+                    Ok(projection.into_diagnostics())
+                })();
+                let _ = reply.send(result);
+                continue;
+            }
+            SessionStoreRequest::PlanningLoad(reply) => {
+                let result = (|| -> Result<_> {
+                    let mut latest = None;
+                    log.visit_snapshot(|_, bytes| {
+                        if let Ok(versioned) = serde_json::from_slice::<VersionedThreadEvent>(bytes)
+                            && let ThreadEvent::PlanDelta(event) = versioned.into_event()
+                            && let Some(snapshot) = event.recovery
+                        {
+                            latest = Some(*snapshot);
+                        }
+                    })?;
+                    Ok(latest)
+                })();
+                let _ = reply.send(result);
+                continue;
+            }
             SessionStoreRequest::Event(event) => event,
             SessionStoreRequest::ValidateDecision(task_id, ids, reply) => {
                 let result = (|| -> Result<()> {
@@ -648,8 +739,7 @@ fn drain_session_events(
                 );
                 release_reserved_bytes(&state, reserved_bytes);
                 while let Ok(request) = rx.try_recv() {
-                    if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request
-                    {
+                    if let SessionStoreRequest::Event(queued) | SessionStoreRequest::Checkpoint(queued, _) = request {
                         release_reserved_bytes(&state, queued.reserved_bytes);
                     }
                 }
@@ -718,7 +808,7 @@ fn enqueue_session_event(state: &SessionStoreSinkState, event: &ThreadEvent) -> 
             Ok(())
         }
         Err(TrySendError::Full(request) | TrySendError::Disconnected(request)) => {
-            if let SessionStoreRequest::Event(queued) | SessionStoreRequest::MatrixPersist(queued, _) = request {
+            if let SessionStoreRequest::Event(queued) | SessionStoreRequest::Checkpoint(queued, _) = request {
                 release_reserved_bytes(state, queued.reserved_bytes);
             }
             state.health.failed.store(true, Ordering::Release);
@@ -1261,13 +1351,46 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
+    /// Record an operational incident update using the canonical event contract.
+    pub fn diagnostic(&mut self, diagnostic: &vtcode_commons::diagnostics::Diagnostic) {
+        let diagnostic = vtcode_commons::diagnostics::redact_diagnostic(diagnostic);
+        let previous = self.events.iter().rev().find_map(|event| {
+            let item = match event {
+                ThreadEvent::ItemStarted(event) => &event.item,
+                ThreadEvent::ItemUpdated(event) => &event.item,
+                ThreadEvent::ItemCompleted(event) => &event.item,
+                _ => return None,
+            };
+            let ThreadItemDetails::Reasoning(reasoning) = &item.details else {
+                return None;
+            };
+            reasoning
+                .diagnostic
+                .as_deref()
+                .filter(|previous| previous.correlation_id == diagnostic.correlation_id)
+        });
+        if previous == Some(&diagnostic) {
+            return;
+        }
+        self.record(ThreadEvent::ItemUpdated(crate::exec::events::ItemUpdatedEvent {
+            item: ThreadItem {
+                context: None,
+                id: diagnostic.correlation_id.clone(),
+                details: ThreadItemDetails::Reasoning(Box::new(crate::exec::events::ReasoningItem {
+                    text: diagnostic.summary.clone(),
+                    stage: Some("diagnosis".into()),
+                    diagnostic: Some(Box::new(diagnostic)),
+                })),
+            },
+        }));
+    }
+
+    #[track_caller]
     pub fn warning(&mut self, message: &str) {
-        let item = ThreadItem {
-            context: None,
-            id: self.next_item_id(),
-            details: ThreadItemDetails::Error(ErrorItem { message: message.to_string() }),
-        };
-        self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        self.diagnostic(&vtcode_commons::diagnostics::legacy_ui_diagnostic(
+            vtcode_commons::diagnostics::DiagnosticSeverity::Warning,
+            message,
+        ));
     }
 
     pub fn harness_event(
@@ -1382,6 +1505,76 @@ impl ExecEventRecorder {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn diagnostic_recorder_preserves_payload_redacts_and_deduplicates_transitions() {
+        use super::*;
+        use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+        let mut recorder = ExecEventRecorder::new("thread-diagnostic", None, None);
+        recorder.task_started("Inspect evidence");
+        let diagnostic = Diagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: "provider.retrying".into(),
+            summary: "Retry needs attention".into(),
+            agent_details: "password=recorder-private-secret".into(),
+            correlation_id: "request-7".into(),
+            actions: Vec::new(),
+        };
+        recorder.diagnostic(&diagnostic);
+        recorder.diagnostic(&diagnostic);
+        let mut updated = diagnostic.clone();
+        updated.agent_details = "attempt=3".into();
+        recorder.diagnostic(&updated);
+        let diagnostics: Vec<_> = recorder
+            .take_events()
+            .into_iter()
+            .filter_map(|event| {
+                let ThreadEvent::ItemUpdated(event) = event else {
+                    return None;
+                };
+                let ThreadItemDetails::Reasoning(reasoning) = event.item.details else {
+                    return None;
+                };
+                reasoning.diagnostic
+            })
+            .collect();
+        assert_eq!(diagnostics.len(), 2);
+        assert!(!diagnostics[0].agent_details.contains("recorder-private-secret"));
+        assert_eq!(diagnostics[1].agent_details, "attempt=3");
+    }
+    #[tokio::test]
+    async fn planning_checkpoint_is_durable_before_admission_and_replay_preserves_allowance() {
+        use crate::exec::events::{
+            PlanDeltaEvent,
+            planning::{PlanningOutcome, PlanningRecoverySnapshot},
+        };
+        let workspace = tempfile::tempdir().unwrap();
+        let snapshot = PlanningRecoverySnapshot {
+            outcome: PlanningOutcome::Repairing,
+            research_closed: true,
+            requests_used: 2,
+            best_draft: Some("retained public draft".into()),
+            ..Default::default()
+        };
+        let sink = SessionStoreSink::open(workspace.path(), "planning-recovery").await.unwrap();
+        let event = ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+            thread_id: "planning-recovery".into(),
+            turn_id: "turn-1".into(),
+            item_id: "planning-recovery".into(),
+            delta: String::new(),
+            recovery: Some(Box::new(snapshot.clone())),
+        }));
+        sink.persist_checkpoint(&event).await.unwrap();
+        assert_eq!(sink.planning_recovery().await.unwrap(), Some(snapshot.clone()));
+        sink.close().await.unwrap();
+        assert!(
+            sink.persist_checkpoint(&event).await.is_err(),
+            "closed checkpoint queue must fail before a model request"
+        );
+        let reopened = SessionStoreSink::open(workspace.path(), "planning-recovery").await.unwrap();
+        assert_eq!(reopened.planning_recovery().await.unwrap(), Some(snapshot));
+        reopened.close().await.unwrap();
+    }
+
     fn pending_verifier(recorder: &mut ExecEventRecorder, session: &str) -> String {
         let args = serde_json::json!({"cmd":"cargo check --locked"});
         let launch = recorder.tool_started("exec_command", Some(&args), Some(session));

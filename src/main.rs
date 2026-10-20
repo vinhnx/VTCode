@@ -90,7 +90,7 @@ fn main() -> std::process::ExitCode {
         Ok(false) => {}
         Ok(true) => return std::process::ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("owned command startup failed: {error}");
+            vtcode_commons::diagnostics::stderr(format_args!("owned command startup failed: {error}"));
             return std::process::ExitCode::FAILURE;
         }
     }
@@ -136,7 +136,7 @@ fn main() -> std::process::ExitCode {
         }) {
         Ok(handle) => handle,
         Err(err) => {
-            eprintln!("Error: failed to spawn vtcode main thread: {err}");
+            vtcode_commons::diagnostics::stderr(format_args!("Error: failed to spawn vtcode main thread: {err}"));
             return std::process::ExitCode::FAILURE;
         }
     };
@@ -153,7 +153,7 @@ fn main() -> std::process::ExitCode {
         }
         Err(_) => {
             let _ = panic_hook::restore_tui();
-            eprintln!("Error: vtcode main thread panicked");
+            vtcode_commons::diagnostics::stderr(format_args!("Error: vtcode main thread panicked"));
             let _ = std::io::Write::flush(&mut std::io::stderr());
             std::process::ExitCode::FAILURE
         }
@@ -247,7 +247,7 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
             }
             let err_text = err.to_string();
             if let Some(enhanced) = try_enhance_clap_error(&err_text) {
-                eprintln!("{enhanced}");
+                vtcode_commons::diagnostics::stderr(format_args!("{enhanced}"));
                 std::process::exit(1);
             }
             err.exit();
@@ -378,14 +378,16 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
 fn migrate_legacy_global_paths(quiet: bool) {
     match VtCodePaths::resolve().and_then(|paths| paths.migrate_legacy()) {
         Ok(report) if !report.failures.is_empty() && !quiet => {
-            eprintln!(
+            vtcode_commons::diagnostics::stderr(format_args!(
                 "Warning: VT Code legacy migration is incomplete with {} diagnostic failure(s); startup will retry it. See `vtcode --version` for the migration report path.",
                 report.failures.len()
-            );
+            ));
         }
         Ok(_) => {}
         Err(error) if !quiet => {
-            eprintln!("Warning: VT Code could not start legacy migration: {error:#}. Startup will continue.");
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "Warning: VT Code could not start legacy migration: {error:#}. Startup will continue."
+            ));
         }
         Err(_) => {}
     }
@@ -408,7 +410,9 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     } else if !env_tracing_initialized && !startup.config.debug.enable_tracing {
         // Always collect ERROR-level logs into the session archive for post-mortem debugging
         if let Err(err) = initialize_default_error_tracing() {
-            eprintln!("warning: failed to initialize default error tracing: {err}");
+            vtcode_commons::diagnostics::stderr(format_args!(
+                "warning: failed to initialize default error tracing: {err}"
+            ));
         }
     }
 

@@ -1271,6 +1271,7 @@ fn to_core_command(command: &InlineCommand) -> Option<crate::tui::core_tui::type
     use crate::tui::core_tui::types::InlineCommand as CoreCommand;
 
     Some(match command {
+        InlineCommand::Diagnostic(diagnostic) => CoreCommand::Diagnostic(diagnostic.clone()),
         InlineCommand::AppendLine { kind, segments } => {
             CoreCommand::AppendLine { kind: *kind, segments: segments.clone() }
         }

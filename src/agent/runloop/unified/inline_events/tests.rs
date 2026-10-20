@@ -1466,12 +1466,10 @@ async fn steer_with_attachments_restores_full_draft_and_continues() {
     let mut restored_draft = false;
     let mut warning_rendered = false;
     while let Ok(command) = commands.try_recv() {
-        if let InlineCommand::AppendLine { segments, .. } = &command
-            && segments.iter().any(|segment| {
-                segment
-                    .text
-                    .contains("Live steering supports text only. Remove image attachments before steering.")
-            })
+        if let InlineCommand::Diagnostic(diagnostic) = &command
+            && diagnostic
+                .summary
+                .contains("Live steering supports text only. Remove image attachments before steering.")
         {
             warning_rendered = true;
         }
@@ -1598,6 +1596,7 @@ async fn inline_prompt_suggestion_event_maps_to_inline_action() {
 
 fn other_name(command: &InlineCommand) -> &'static str {
     match command {
+        InlineCommand::Diagnostic(_) => "Diagnostic",
         InlineCommand::ShowTransient { .. } => "ShowTransient",
         InlineCommand::AppendLine { .. } => "AppendLine",
         InlineCommand::AppendLines { .. } => "AppendLines",

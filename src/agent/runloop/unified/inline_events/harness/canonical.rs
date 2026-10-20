@@ -48,6 +48,20 @@ impl CanonicalEventSink {
         self.inner.emit(event)
     }
 
+    pub(crate) async fn persist_checkpoint(&self, event: &ThreadEvent) -> Result<()> {
+        self.inner.persist_checkpoint(event).await
+    }
+
+    pub(crate) async fn diagnostics(&self) -> Result<Vec<vtcode_core::exec::events::Diagnostic>> {
+        self.inner.diagnostics().await
+    }
+
+    pub(crate) async fn planning_recovery(
+        &self,
+    ) -> Result<Option<vtcode_core::exec::events::planning::PlanningRecoverySnapshot>> {
+        self.inner.planning_recovery().await
+    }
+
     /// Drain all accepted events and report persistence failures.
     pub(crate) async fn close(&self) -> Result<()> {
         self.inner.close().await

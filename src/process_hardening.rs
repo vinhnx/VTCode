@@ -64,7 +64,9 @@ fn verify_hardening_effectiveness() {
         return;
     };
     if soft != 0 {
-        eprintln!("warning: vtcode-process-hardening: RLIMIT_CORE is not zero after hardening");
+        vtcode_commons::diagnostics::stderr(format_args!(
+            "warning: vtcode-process-hardening: RLIMIT_CORE is not zero after hardening"
+        ));
     }
 }
 
@@ -72,11 +74,15 @@ fn verify_hardening_effectiveness() {
 #[cfg(unix)]
 fn check_environment_sanity() {
     if std::env::var_os("HOME").is_none() {
-        eprintln!("warning: HOME environment variable is not set; config resolution may fail");
+        vtcode_commons::diagnostics::stderr(format_args!(
+            "warning: HOME environment variable is not set; config resolution may fail"
+        ));
     }
 
     if std::env::var_os("USER").is_none() {
-        eprintln!("warning: USER environment variable is not set; some features may not work correctly");
+        vtcode_commons::diagnostics::stderr(format_args!(
+            "warning: USER environment variable is not set; some features may not work correctly"
+        ));
     }
 }
 
@@ -99,7 +105,7 @@ fn pre_main_hardening_linux() {
 
     // Disable ptrace attach / mark process non-dumpable.
     if let Err(e) = prctl_set_dumpable() {
-        eprintln!("ERROR: prctl(PR_SET_DUMPABLE) failed: {e}");
+        vtcode_commons::diagnostics::stderr(format_args!("ERROR: prctl(PR_SET_DUMPABLE) failed: {e}"));
         std::process::exit(PRCTL_FAILED_EXIT_CODE);
     }
 
@@ -141,7 +147,7 @@ fn pre_main_hardening_macos() {
 #[cfg(unix)]
 fn set_core_file_size_limit_to_zero() {
     if let Err(e) = setrlimit(Resource::RLIMIT_CORE, 0, 0) {
-        eprintln!("ERROR: setrlimit(RLIMIT_CORE) failed: {e}");
+        vtcode_commons::diagnostics::stderr(format_args!("ERROR: setrlimit(RLIMIT_CORE) failed: {e}"));
         std::process::exit(SET_RLIMIT_CORE_FAILED_EXIT_CODE);
     }
 }

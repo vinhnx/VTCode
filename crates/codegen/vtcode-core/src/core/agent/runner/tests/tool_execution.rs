@@ -30,19 +30,6 @@ fn tool_invocation_outcome(events: &[ThreadEvent], tool_call_id: &str) -> Option
     })
 }
 
-fn error_item_messages(events: &[ThreadEvent]) -> Vec<String> {
-    events
-        .iter()
-        .filter_map(|event| match event {
-            ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) => match &item.details {
-                ThreadItemDetails::Error(error) => Some(error.message.clone()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
-}
-
 /// Register `tool_call_id`'s invocation item the way a streamed turn does, then
 /// run admission so the registered rejection branch (which records the outcome)
 /// is the one under test rather than the unregistered `tool_rejected` fallback.
@@ -111,12 +98,29 @@ async fn planning_denial_reports_policy_denial_not_invalid_arguments() {
         "a policy denial must not be recorded as a malformed-call outcome"
     );
 
-    let summaries = error_item_messages(&events);
-    let denial_summary = summaries
+    let denial = events
         .iter()
-        .find(|message| message.starts_with("Tool 'exec_command' denied by policy:"))
-        .unwrap_or_else(|| panic!("expected a policy-denial summary event, got {summaries:?}"));
-    assert!(!denial_summary.contains('\n'), "event summary must stay single-line: {denial_summary}");
+        .find_map(|event| {
+            let ThreadEvent::ItemUpdated(event) = event else {
+                return None;
+            };
+            let ThreadItemDetails::Reasoning(reasoning) = &event.item.details else {
+                return None;
+            };
+            let diagnostic = reasoning.diagnostic.as_deref()?;
+            if diagnostic.summary.starts_with("Tool 'exec_command' denied by policy:") {
+                assert_eq!(reasoning.stage.as_deref(), Some("diagnosis"));
+                Some(diagnostic)
+            } else {
+                None
+            }
+        })
+        .expect("policy denial must retain a canonical diagnostic summary");
+    assert_eq!(denial.code, "runtime.warning");
+    assert_eq!(denial.severity, crate::exec::events::DiagnosticSeverity::Warning);
+    assert!(!denial.correlation_id.is_empty(), "the incident must have a stable presentation identity");
+    assert!(!denial.summary.contains('\n'), "the human summary must remain single-line");
+    assert!(!denial.summary.contains("Invalid arguments"));
 }
 
 #[tokio::test]

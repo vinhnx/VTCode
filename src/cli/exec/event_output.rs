@@ -235,6 +235,25 @@ pub(super) fn serialize_event_line(event: &ThreadEvent) -> Result<String> {
 }
 
 pub(super) fn human_event_line(event: &ThreadEvent) -> Option<String> {
+    let diagnostic_item = match event {
+        ThreadEvent::ItemStarted(event) => Some(&event.item),
+        ThreadEvent::ItemUpdated(event) => Some(&event.item),
+        ThreadEvent::ItemCompleted(event) => Some(&event.item),
+        _ => None,
+    };
+    if let Some(item) = diagnostic_item
+        && let ThreadItemDetails::Reasoning(reasoning) = &item.details
+        && let Some(diagnostic) = &reasoning.diagnostic
+    {
+        use vtcode_commons::diagnostics::{DiagnosticSeverity, redact_diagnostic};
+        let diagnostic = redact_diagnostic(diagnostic);
+        let label = match diagnostic.severity {
+            DiagnosticSeverity::Info => style("[INFO]").cyan().bold(),
+            DiagnosticSeverity::Warning => style("[WARNING]").yellow().bold(),
+            DiagnosticSeverity::Error => style("[ERROR]").red().bold(),
+        };
+        return Some(format!("{label} {}", diagnostic.text()));
+    }
     match event {
         ThreadEvent::ItemStarted(started) => match &started.item.details {
             ThreadItemDetails::CommandExecution(details) => {

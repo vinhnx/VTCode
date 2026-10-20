@@ -286,6 +286,16 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Performance Optimization?", "How does Goals work?", "How does
     Performance & Simplicity Rules work?"
 
+- **File**: `docs/development/planning-recovery.md`
+  - **Content**: Planning recovery contract
+  - **Topics**: Admission and persistence, Input and model choice, Verification scope
+  - **User Questions**: "What can you tell me about Planning recovery contract?", "How does Admission and persistence
+    work?", "How does Input and model choice work?"
+
+- **File**: `docs/development/planning-validation.md`
+  - **Content**: Planning validation
+  - **User Questions**: "What can you tell me about Planning validation?"
+
 - **File**: `docs/development/preview-budget-blocked-replan.md`
   - **Content**: Preview Budget, Blocked Turns, and Replans
   - **User Questions**: "What can you tell me about Preview Budget, Blocked Turns, and Replans?"
@@ -333,6 +343,11 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Runtime Guidance and Project Instructions?", "How does Planning
     contract ownership work?", "How does User-facing progress contract work?"
 
+- **File**: `docs/development/diagnostics.md`
+  - **Content**: Runtime diagnostics
+  - **Topics**: Producer review
+  - **User Questions**: "What can you tell me about Runtime diagnostics?", "How does Producer review work?"
+
 - **File**: `docs/development/rust-error-handling-reference.md`
   - **Content**: Rust Error Handling — Reference Notes
   - **Topics**: Source (not vendored), Why this matters to VT Code, Distilled principles (in our own words), How VT Code
@@ -368,7 +383,7 @@ below based on the topic area.
 
 - **File**: `docs/development/ui-message-protocol.md`
   - **Content**: Shared inline message and control commands
-  - **Topics**: Common control forwarding, Verification, Interactive protocol fixture
+  - **Topics**: Common control forwarding, Verification, Interactive protocol fixture, Operational diagnostics
   - **User Questions**: "What can you tell me about Shared inline message and control commands?", "How does Common
     control forwarding work?", "How does Verification work?"
 
@@ -423,6 +438,10 @@ below based on the topic area.
 - **File**: `docs/development/tool-reentrancy.md`
   - **Content**: Tool reentrancy guard
   - **User Questions**: "What can you tell me about Tool reentrancy guard?"
+
+- **File**: `docs/development/planning-provider-audit.md`
+  - **Content**: Tool-free planning provider audit
+  - **User Questions**: "What can you tell me about Tool-free planning provider audit?"
 
 - **File**: `docs/development/async-performance-audit.md`
   - **Content**: VT Code Async Performance Audit
@@ -1152,9 +1171,9 @@ below based on the topic area.
 
 - **File**: `docs/reference/ansi-quick-reference.md`
   - **Content**: ANSI Quick Reference for VT Code Development
-  - **Topics**: Most Common Sequences, VT Code Usage Examples, Regex Patterns, Program Status Protocol, Testing Helpers
-  - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does Most
-    Common Sequences work?", "How does VT Code Usage Examples work?"
+  - **Topics**: Diagnostics, Most Common Sequences, VT Code Usage Examples, Regex Patterns, Program Status Protocol
+  - **User Questions**: "What can you tell me about ANSI Quick Reference for VT Code Development?", "How does
+    Diagnostics work?", "How does Most Common Sequences work?"
 
 - **File**: `docs/audits/agent-harness-duplication-report.md`
   - **Content**: Agent / Harness Duplication & Optimization Report

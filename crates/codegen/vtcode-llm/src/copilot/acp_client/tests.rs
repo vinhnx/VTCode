@@ -14,6 +14,27 @@ fn make_inner(write_tx: mpsc::Sender<String>) -> Arc<CopilotAcpClientInner> {
     })
 }
 
+#[tokio::test]
+async fn empty_tool_allowlist_is_serialized_in_session_create() {
+    for available_tools in [Vec::new(), vec!["view".to_owned()]] {
+        let (tx, mut rx) = mpsc::channel(4);
+        let client = CopilotAcpClient { inner: make_inner(tx) };
+        let config = CopilotAuthConfig {
+            available_tools: available_tools.clone(),
+            ..Default::default()
+        };
+        let call = client.create_session_v2(&config, PathBuf::from("/tmp"), None, &[]);
+        tokio::pin!(call);
+        let payload = tokio::select! {
+            result = &mut call => panic!("expected session.create request before reply: {result:?}"),
+            message = rx.recv() => serde_json::from_str::<Value>(&message.unwrap()).unwrap(),
+        };
+        assert_eq!(payload["method"], "session.create");
+        assert_eq!(payload["params"]["availableTools"], json!(available_tools));
+        assert!(payload["params"].get("tools").is_none());
+    }
+}
+
 #[test]
 fn extracts_text_from_text_objects() {
     let text = extract_text(Some(&json!({

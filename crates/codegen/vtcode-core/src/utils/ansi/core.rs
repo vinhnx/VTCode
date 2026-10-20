@@ -57,6 +57,8 @@ impl AnsiRenderer {
             pending_tool_output_anchor: None,
             session_expand_anchor: None,
             session_body: false,
+            diagnostic_sink: None,
+            diagnostic_history: std::collections::VecDeque::new(),
         }
     }
 

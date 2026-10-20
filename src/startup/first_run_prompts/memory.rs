@@ -22,7 +22,10 @@ pub(crate) fn prompt_persistent_memory(renderer: &mut AnsiRenderer, default_enab
     match select_persistent_memory_with_ratatui(default_enabled) {
         Ok(enabled) => Ok(enabled),
         Err(error) => {
-            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Interactive setup could not continue. Enter the value manually.\n{error}"),
+            )?;
             prompt_persistent_memory_text(renderer, default_enabled)
         }
     }

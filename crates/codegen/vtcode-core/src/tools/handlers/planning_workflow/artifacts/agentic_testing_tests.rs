@@ -297,3 +297,173 @@ fn parse_bracket_list_supports_whole_group_and_per_item_forms() {
     assert_eq!(parse_bracket_list("[sed -n '1,40p' README.md]"), vec!["sed -n '1,40p' README.md"]);
     assert!(parse_bracket_list("[]").is_empty());
 }
+
+fn scope_review_plan(action: &str, targets: &str, verify: &str, outcome: &str) -> String {
+    format!(
+        "## Summary\nRefine documentation.\n\n## Implementation Steps\n1. Refine introduction -> files: [README.md] -> verify: [rg -n 'Overview' README.md]\n2. {action} -> files: [{targets}] -> verify: [{verify}] -> outcome: [{outcome}]\n\n## Test Cases and Validation\nHeading links resolve.\n\n## Assumptions and Defaults\nPreserve the captured workspace baseline."
+    )
+}
+
+#[test]
+fn explicit_scope_review_accepts_status_with_baseline_expectation() {
+    let plan = scope_review_plan(
+        "Review final scope",
+        "README.md",
+        "git status --porcelain",
+        "only README.md differs from the captured baseline",
+    );
+    let report = validate_plan_content(&plan);
+    assert!(report.is_ready(), "scope-review draft must validate: {report:?}");
+    assert_eq!(report.scope_review_step_count, 1);
+    assert_eq!(report.content_verification_step_count, 1);
+    let tracker = super::generate_tracker_markdown_from_plan(&plan).expect("tracker");
+    assert!(tracker.contains("  scope-review: git status --porcelain"));
+    assert!(!tracker.contains("  verify: git status"));
+    assert!(tracker.contains("  verify: rg -n 'Overview' README.md"));
+}
+
+#[test]
+fn scope_review_requires_explicit_action_concrete_files_and_observable_expectation() {
+    for (action, targets, verify, outcome) in [
+        (
+            "Implement parser",
+            "src/parser.rs",
+            "git status --porcelain",
+            "only src/parser.rs differs from the captured baseline",
+        ),
+        ("Review scope", "files", "git status --porcelain", "only files differ from the captured baseline"),
+        ("Review scope", "README.md", "git status --porcelain", "review changes"),
+        (
+            "Review scope",
+            "README.md",
+            "git status --porcelain",
+            "only src/lib.rs differs from the captured baseline",
+        ),
+        (
+            "Review scope",
+            "README.md, src/lib.rs",
+            "git status --porcelain",
+            "only README.md differs from the captured baseline",
+        ),
+        (
+            "Review scope",
+            "README.md",
+            "git status --porcelain; git reset --hard HEAD",
+            "only README.md differs from the captured baseline",
+        ),
+        (
+            "Review scope",
+            "README.md",
+            "git diff --output=report.txt",
+            "only README.md differs from the captured baseline",
+        ),
+    ] {
+        let report = validate_plan_content(&scope_review_plan(action, targets, verify, outcome));
+        assert!(!report.is_ready(), "must reject {action}, {targets}, {verify}, {outcome}");
+        assert_eq!(report.invalid_implementation_steps.len(), 1);
+    }
+    assert!(
+        !validate_plan_content(&scope_review_plan(
+            "Review scope",
+            "README.md",
+            "git diff --check",
+            "only README.md changed",
+        ))
+        .is_ready(),
+        "whitespace checks cannot establish changed-file scope"
+    );
+    for verify in [
+        "git diff --name-only",
+        "git diff --stat -- README.md",
+        "git status --short",
+    ] {
+        assert!(
+            validate_plan_content(&scope_review_plan(
+                "Review scope",
+                "README.md",
+                verify,
+                "only README.md differs from the captured baseline",
+            ))
+            .is_ready(),
+            "must accept {verify}"
+        );
+    }
+}
+
+#[test]
+fn scope_listing_does_not_verify_implementation_even_with_file_selector() {
+    for verify in [
+        "git diff --name-only -- src/lib.rs",
+        "git diff --stat HEAD -- src/lib.rs",
+    ] {
+        let plan = scope_review_plan("Implement parser", "src/lib.rs", verify, "parser handles empty input");
+        assert!(!validate_plan_content(&plan).is_ready(), "listing cannot establish implementation: {verify}");
+    }
+}
+
+#[test]
+fn repair_feedback_targets_defects_without_repeated_example_wall() {
+    let plan = scope_review_plan("Review scope", "README.md", "git status --porcelain", "review changes");
+    let feedback = validate_plan_content(&plan).repair_feedback();
+    assert!(feedback.contains("step 2"));
+    assert!(feedback.contains("observable expectation"));
+    assert!(!feedback.contains("Valid examples:"));
+    assert!(!feedback.contains("Rewrite every implementation step"));
+    assert!(feedback.len() < 1600);
+}
+
+#[test]
+fn retained_checkpoint_scope_review_accepts_explicit_readme_only_expectation() {
+    // Sanitized final-step excerpt from checkpoint 1867. Retain the useful
+    // draft with an explicit observable scope expectation, without requiring
+    // the literal word baseline.
+    let plan = scope_review_plan(
+        "Review the final diff for scope discipline (README-only, no unrelated hunks) and confirm no worktree noise",
+        "README.md",
+        "git status --porcelain",
+        "README-only, no unrelated hunks",
+    );
+    let report = validate_plan_content(&plan);
+    assert!(report.is_ready(), "README-only expectation should validate: {report:?}");
+    let repaired = plan.replace(
+        "outcome: [README-only, no unrelated hunks]",
+        "outcome: [only README.md differs from the captured baseline]",
+    );
+    assert!(validate_plan_content(&repaired).is_ready());
+    assert!(!validate_plan_content("The plan is ready; approve it to continue.").is_ready());
+}
+
+#[test]
+fn multiline_scope_review_preserves_separate_metadata_in_tracker() {
+    let plan = scope_review_plan(
+        "Review scope",
+        "README.md",
+        "git status --porcelain",
+        "only README.md differs from the captured baseline",
+    )
+    .replace(
+        "2. Review scope -> files: [README.md] -> verify: [git status --porcelain] -> outcome:",
+        "2. Review scope\n   files: [README.md]\n   verify: [git status --porcelain]\n   outcome:",
+    );
+    assert!(validate_plan_content(&plan).is_ready());
+    let tracker = super::generate_tracker_markdown_from_plan(&plan).expect("tracker");
+    assert!(tracker.contains("  scope-review: git status --porcelain"));
+    assert!(tracker.contains("  outcome: only README.md differs from the captured baseline"));
+}
+
+#[test]
+fn sanitized_checkpoint_1867_retains_a_complete_approvable_draft() {
+    let plan = include_str!("fixtures/checkpoint-1867-plan.txt");
+    let report = validate_plan_content(plan);
+    assert!(report.is_ready(), "retained checkpoint plan should validate: {report:?}");
+    let unwrapped = plan.replace("<proposed_plan>", "").replace("</proposed_plan>", "");
+    assert!(validate_plan_content(&unwrapped).is_ready(), "complete unwrapped draft remains valid");
+    assert_eq!(report.implementation_step_count, 10);
+    assert_eq!(report.scope_review_step_count, 1);
+    assert_eq!(report.content_verification_step_count, 9);
+    let tracker = super::generate_tracker_markdown_from_plan(plan).expect("tracker");
+    assert!(tracker.contains("  scope-review: git status --porcelain\n"));
+    assert!(tracker.contains("  scope-review: git diff --stat HEAD -- README.md"));
+    assert!(!tracker.contains("  verify: git status"));
+    assert!(!tracker.contains("  verify: git diff --stat"));
+}

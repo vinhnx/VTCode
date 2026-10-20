@@ -42,233 +42,74 @@ fn tracker_continue_directive_is_shared_calm_prose() {
     }
 }
 
-#[test]
-fn plan_mode_auto_continue_gate_respects_user_gates_and_budget() {
-    // Ready-for-approval is a user gate.
-    assert!(!should_queue_plan_mode_auto_continue(true, true, true, true, None, false, 8, 0));
-    // Ordinary completed planning turns never auto-continue (interview risk).
-    assert!(!should_queue_plan_mode_auto_continue(true, true, false, true, None, false, 8, 0));
-    // Recoverable blocked planning continues.
-    assert!(should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some("reached the safety cap"),
-        false,
-        8,
-        0
-    ));
-    // Planning handoff / verification / blocked-without-reason stay off.
-    // Production PLANNING_COMPLETED_TURN_FALLBACK_REASON is recoverable
-    // (allow-list after true-handoff deny) so planning auto-continues.
-    assert!(should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some(
-            "Planning turn ended via recovery fallback without confirming an approval-ready plan; planning remains active."
-        ),
-        false,
-        8,
-        0
-    ));
-    // Compound permission+recovery stays denied.
-    assert!(!should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some("recovery fallback; permission denied for exec_command"),
-        false,
-        8,
-        0
-    ));
-    assert!(!should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some("pending verification"),
-        true,
-        8,
-        0
-    ));
-    assert!(!should_queue_plan_mode_auto_continue(true, true, false, false, None, false, 8, 0));
-    // Kill-switch / zero budget / inactive planning stay off.
-    assert!(!should_queue_plan_mode_auto_continue(false, true, false, false, Some("turn budget"), false, 8, 0));
-    assert!(!should_queue_plan_mode_auto_continue(true, true, false, false, Some("turn budget"), false, 0, 0));
-    assert!(!should_queue_plan_mode_auto_continue(true, false, false, false, Some("turn budget"), false, 8, 0));
+fn open_planning_auto_continue_gates() -> PlanningAutoContinueGates {
+    PlanningAutoContinueGates {
+        enabled: true,
+        planning_active: true,
+        plan_ready_for_approval: false,
+        turn_completed: false,
+        verification_blocked: false,
+        refused: false,
+        hard_budget_exhausted: false,
+        stop_requested: false,
+        cross_turn_turns: 8,
+    }
 }
 
 #[test]
-fn plan_mode_auto_continue_recovers_entry_turn_blocked_shapes() {
-    // Mid-turn start_planning + mutating attempts trip the blocked-tool fuse;
-    // the entry turn must not park at the user Continue prompt.
-    let fuse = "Blocked tool-call limit reached after 3 consecutive blocked calls (streak 3, total 3). Last blocked call: 'apply_patch'. Rebase the patch on current file contents and confirm edit approval before retrying. A bounded recovery response will run without more tool calls. History and outputs are retained. Type 'continue' with new guidance, or run `vtcode --resume <session>`; details: .vtcode/tasks/current_blocked.md.";
-    assert!(plan_mode_recoverable_block(fuse));
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, Some(fuse), false, 8, 0));
-
-    let recovery_fuse = "Recovery tool-call limit reached after 3 blocked calls (streak 3, total 3) (last blocked call: 'exec_command'). Check sandbox/approval policy, narrow the command, or request approval instead of retrying verbatim. History and outputs are retained. Type 'continue' with new guidance, or run `vtcode --resume <session>`; details: .vtcode/tasks/current_blocked.md.";
-    assert!(plan_mode_recoverable_block(recovery_fuse));
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, Some(recovery_fuse), false, 8, 0));
-
-    // Tools ended without a published final after planning entry.
-    let no_final = "Turn ended without a harness-visible final assistant response, so successful completion could not be confirmed.";
-    assert!(plan_mode_recoverable_block(no_final));
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, Some(no_final), false, 8, 0));
-
-    // Tools outside the named remedy set use the default remedy. Keep that
-    // prose free of the deny token `permission` so a fuse trip on e.g.
-    // `write_file` still auto-continues plan-mode research.
-    let default_remedy_fuse = "Blocked tool-call limit reached after 3 consecutive blocked calls (streak 3, total 3). Last blocked call: 'write_file'. Adjust arguments, policy, or approvals instead of retrying the identical call. A bounded recovery response will run without more tool calls. History and outputs are retained. Type 'continue' with new guidance, or run `vtcode --resume <session>`; details: .vtcode/tasks/current_blocked.md.";
-    assert!(plan_mode_recoverable_block(default_remedy_fuse));
-    assert!(should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some(default_remedy_fuse),
-        false,
-        8,
-        0
-    ));
-
-    // True permission handoffs still never auto-continue.
-    assert!(!plan_mode_recoverable_block(
-        "Blocked tool-call limit reached; permission denied for apply_patch; user input required."
-    ));
-    assert!(!should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some("permission denied for apply_patch"),
-        false,
-        8,
-        0
-    ));
+fn typed_planning_auto_continue_allows_only_synthesis_and_repair_outcomes() {
+    use vtcode_core::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot};
+    for outcome in [PlanningOutcome::Synthesizing, PlanningOutcome::Repairing] {
+        let recovery = PlanningRecoverySnapshot { outcome, requests_used: 1, ..Default::default() };
+        assert!(should_queue_plan_mode_auto_continue(&recovery, open_planning_auto_continue_gates()), "{outcome:?}");
+    }
+    for outcome in [
+        PlanningOutcome::Researching,
+        PlanningOutcome::AwaitingInput,
+        PlanningOutcome::AwaitingApproval,
+    ] {
+        let recovery = PlanningRecoverySnapshot { outcome, requests_used: 1, ..Default::default() };
+        assert!(!should_queue_plan_mode_auto_continue(&recovery, open_planning_auto_continue_gates()), "{outcome:?}");
+    }
 }
 
 #[test]
-fn plan_mode_auto_continue_stops_after_consecutive_empty_fallbacks() {
-    let reason = Some(
-        "Planning turn ended via recovery fallback without confirming an approval-ready plan; planning remains active.",
-    );
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, reason, false, 32, 0));
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, reason, false, 32, 1));
-    assert!(!should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        reason,
-        false,
-        32,
-        MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE
-    ));
-    assert!(!should_queue_plan_mode_auto_continue(true, true, false, false, reason, false, 32, 3));
-}
-
-#[test]
-fn detects_plan_empty_fallback_text() {
-    let empty = "Planning remains active, but this turn ended without a final plan synthesis. The research gathered above is preserved, so the next turn can reuse it without re-reading files. Type `keep planning`.";
-    assert!(is_plan_empty_fallback_text(empty));
-    // The gate must recognize the production fallback text, not only the fixture.
-    assert!(is_plan_empty_fallback_text(
-        crate::agent::runloop::unified::turn::turn_loop::PLANNING_COMPLETED_FALLBACK_RESPONSE
-    ));
-    assert!(!is_plan_empty_fallback_text("Planning turn ended via recovery fallback without confirming plan."));
-    assert!(!is_plan_empty_fallback_text(""));
-}
-
-#[test]
-fn detects_empty_tool_free_synthesis_handoff_text() {
-    use crate::agent::runloop::unified::turn::context::{
-        PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL, PLANNING_RECOVERY_HANDOFF_PREFIX,
+fn typed_planning_auto_continue_shares_the_three_request_allowance() {
+    use vtcode_core::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot};
+    let mut recovery = PlanningRecoverySnapshot {
+        outcome: PlanningOutcome::Repairing,
+        requests_used: 2,
+        ..Default::default()
     };
-    // Compose the production handoff message from its real constants (not a
-    // copy) so a wording change fails here instead of silently disabling the
-    // consecutive-empty cap for a blank model.
-    let empty_handoff = format!(
-        "{PLANNING_RECOVERY_HANDOFF_PREFIX} ({PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL}). The latest request and bounded evidence are preserved. The next attempt can reuse the tool outputs above instead of re-reading files."
-    );
-    assert!(is_plan_empty_synthesis_handoff_text(&empty_handoff));
-    assert!(is_plan_empty_turn_text(&empty_handoff));
-    // A budget-cause prefix prepended by the handoff builder stays matched.
-    assert!(is_plan_empty_synthesis_handoff_text(&format!("turn budget exhausted. {empty_handoff}")));
-    // Only the empty detail counts. A synthesized-but-invalid draft or a
-    // tool-call violation must keep auto-continuing (still resumable), so it
-    // must not increment the empty-turn cap.
-    let invalid_draft_handoff = format!(
-        "{PLANNING_RECOVERY_HANDOFF_PREFIX} (the synthesized draft failed validation: missing `verify:` command). The latest request and bounded evidence are preserved."
-    );
-    assert!(!is_plan_empty_synthesis_handoff_text(&invalid_draft_handoff));
-    assert!(!is_plan_empty_turn_text(&invalid_draft_handoff));
-    let tool_violation_handoff = format!(
-        "{PLANNING_RECOVERY_HANDOFF_PREFIX} (the synthesis response attempted a tool call while tools were disabled). The latest request and bounded evidence are preserved."
-    );
-    assert!(!is_plan_empty_synthesis_handoff_text(&tool_violation_handoff));
-    // Dropped native tool calls report the violation shape, so a pass that
-    // merely attempted tools keeps auto-continuing instead of spending the
-    // consecutive-empty budget.
-    let dropped_native_calls_handoff = format!(
-        "{PLANNING_RECOVERY_HANDOFF_PREFIX} (the synthesis response attempted native tool calls on a tool-free pass). The latest request and bounded evidence are preserved."
-    );
-    assert!(!is_plan_empty_synthesis_handoff_text(&dropped_native_calls_handoff));
-    assert!(!is_plan_empty_turn_text(&dropped_native_calls_handoff));
-    // A tokens-without-content handoff keeps the empty detail as a prefix and
-    // appends the captured evidence, so it must still count toward the
-    // consecutive-empty cap or a reasoning-heavy model escapes the bound.
-    // Built from the production helper so drift between the wording and this
-    // marker contract fails here instead of silently disabling the cap.
-    let tokens_without_content_handoff = format!(
-        "{PLANNING_RECOVERY_HANDOFF_PREFIX} ({detail}). The latest request and bounded evidence are preserved.",
-        detail =
-            crate::agent::runloop::unified::turn::context::planning_tokens_without_content_handoff_detail(u32::MAX)
-    );
-    assert!(is_plan_empty_synthesis_handoff_text(&tokens_without_content_handoff));
-    assert!(is_plan_empty_turn_text(&tokens_without_content_handoff));
-    // The deterministic fallback is still recognized by the combined gate.
-    assert!(is_plan_empty_turn_text(
-        crate::agent::runloop::unified::turn::turn_loop::PLANNING_COMPLETED_FALLBACK_RESPONSE
-    ));
-    assert!(!is_plan_empty_turn_text(""));
+    assert!(should_queue_plan_mode_auto_continue(&recovery, open_planning_auto_continue_gates()));
+    recovery.requests_used = 3;
+    assert!(!should_queue_plan_mode_auto_continue(&recovery, open_planning_auto_continue_gates()));
+    recovery.requests_used = 4;
+    assert!(!should_queue_plan_mode_auto_continue(&recovery, open_planning_auto_continue_gates()));
 }
 
 #[test]
-fn plan_mode_recoverable_block_allow_list() {
-    assert!(plan_mode_recoverable_block("turn budget exhausted"));
-    assert!(plan_mode_recoverable_block("reached the safety cap"));
-    assert!(plan_mode_recoverable_block("tool-free recovery after safety cap"));
-    assert!(plan_mode_recoverable_block(
-        "Turn ended with a recovery fallback; the requested work was not confirmed."
-    ));
-    // Production planning fallback must auto-queue (allow-list first).
-    assert!(plan_mode_recoverable_block(
-        "Planning turn ended via recovery fallback without confirming an approval-ready plan; planning remains active."
-    ));
-    assert!(plan_mode_recoverable_block(
-        "Tool loop budget exhausted before a final response; planning remains active."
-    ));
-    // Interview / approval / permission handoffs stay denied.
-    assert!(!plan_mode_recoverable_block("request_user_input pending"));
-    assert!(!plan_mode_recoverable_block("permission required"));
-    assert!(!plan_mode_recoverable_block(
-        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
-    ));
-    // Compound recovery+permission must deny (true handoff first).
-    assert!(!plan_mode_recoverable_block("recovery fallback after permission denied for exec_command"));
-    assert!(!plan_mode_recoverable_block("tool budget exhausted while awaiting user approval"));
-    // Budget-exhausted verification blocks retry, unless a harder handoff
-    // signal shares the reason.
-    assert!(plan_mode_recoverable_block(
-        "Verification is still pending: the turn tool-call budget is exhausted; resume with fresh execution budget."
-    ));
-    assert!(!plan_mode_recoverable_block(
-        "Verification is still pending: the turn tool-call budget is exhausted; permission denied by policy."
-    ));
+fn typed_planning_auto_continue_respects_approval_refusal_stop_and_budget_gates() {
+    use vtcode_core::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot};
+    let recovery = PlanningRecoverySnapshot {
+        outcome: PlanningOutcome::Synthesizing,
+        ..Default::default()
+    };
+    let open = open_planning_auto_continue_gates();
+    assert!(should_queue_plan_mode_auto_continue(&recovery, open));
+    for closed in [
+        PlanningAutoContinueGates { enabled: false, ..open },
+        PlanningAutoContinueGates { planning_active: false, ..open },
+        PlanningAutoContinueGates { plan_ready_for_approval: true, ..open },
+        PlanningAutoContinueGates { turn_completed: true, ..open },
+        PlanningAutoContinueGates { verification_blocked: true, ..open },
+        PlanningAutoContinueGates { refused: true, ..open },
+        PlanningAutoContinueGates { hard_budget_exhausted: true, ..open },
+        PlanningAutoContinueGates { stop_requested: true, ..open },
+        PlanningAutoContinueGates { cross_turn_turns: 0, ..open },
+    ] {
+        assert!(!should_queue_plan_mode_auto_continue(&recovery, closed));
+    }
 }
 
 #[test]
@@ -285,15 +126,13 @@ fn plan_progress_line_shapes() {
 
 #[test]
 fn plan_mode_continue_messages_keep_planning_read_only_without_a_user_nudge() {
-    for prompt in [
-        plan_mode_continue_follow_up(),
-        plan_mode_auto_continue_directive(),
-        plan_mode_resume_directive(),
-    ] {
+    for prompt in [plan_mode_continue_follow_up(), plan_mode_auto_continue_directive()] {
         assert!(prompt.contains("no user reply is needed"), "{prompt}");
         assert!(prompt.contains("read-only"), "{prompt}");
         assert!(prompt.contains("code changes wait for plan approval"), "{prompt}");
         assert!(prompt.contains("<proposed_plan>"), "{prompt}");
+        assert!(prompt.contains("repair the retained draft from saved evidence"), "{prompt}");
+        assert!(prompt.contains("Research stays closed"), "{prompt}");
         let normalized = vtcode_core::planning::normalize_plan_intent(&prompt);
         assert!(vtcode_core::planning::matches_stay_intent(&normalized), "{prompt}");
         assert!(!vtcode_core::planning::contains_implementation_cue(&normalized), "{prompt}");
@@ -312,7 +151,6 @@ fn refusal_notices_never_auto_continue() {
         refusal::REFUSAL_NOTICE_PREFIX
     );
     assert!(!tracker_auto_continue_is_recoverable_block(Some(&reason)));
-    assert!(!plan_mode_recoverable_block(&reason));
     assert!(!should_queue_tracker_auto_continue(
         true,
         false,
@@ -324,7 +162,6 @@ fn refusal_notices_never_auto_continue() {
         false,
         false,
     ));
-    assert!(!should_queue_plan_mode_auto_continue(true, true, false, false, Some(&reason), false, 3, 0));
 }
 
 #[test]
@@ -398,7 +235,7 @@ fn recoverable_block_classification_allow_list() {
 }
 
 #[test]
-fn production_block_reasons_stay_denied_by_both_classifiers() {
+fn production_block_reasons_stay_denied_by_tracker_classifier() {
     // The deny-token tables mirror production `Blocked`-reason constants
     // by substring. Feed the real constants (not copies) so a wording
     // change that drops a token fails here instead of silently flipping
@@ -408,7 +245,6 @@ fn production_block_reasons_stay_denied_by_both_classifiers() {
         crate::agent::runloop::unified::turn::turn_loop::PENDING_VERIFICATION_BLOCK_REASON,
     ] {
         assert!(!tracker_auto_continue_is_recoverable_block(Some(reason)), "{reason}");
-        assert!(!plan_mode_recoverable_block(reason), "{reason}");
     }
 }
 
@@ -813,51 +649,6 @@ fn recoverable_block_includes_tool_budget_and_plan_fallback_shapes() {
     assert!(tracker_auto_continue_is_recoverable_block(Some(
         "Planning turn ended via recovery fallback without confirming an approval-ready plan; planning remains active."
     )));
-}
-
-#[test]
-fn plan_mode_recoverable_allows_planning_fallback_constant() {
-    // PLANNING_COMPLETED_TURN_FALLBACK_REASON must auto-queue (allow-list first).
-    assert!(plan_mode_recoverable_block(
-        "Planning turn ended via recovery fallback without confirming an approval-ready plan; planning remains active. The current plan and task state were retained."
-    ));
-    assert!(plan_mode_recoverable_block(
-        "Turn ended with a recovery fallback; the requested work was not confirmed."
-    ));
-    // Interview / approval / permission handoffs stay denied.
-    assert!(!plan_mode_recoverable_block("request_user_input is required for the planning interview"));
-    assert!(!plan_mode_recoverable_block("permission denied for exec_command"));
-    assert!(!plan_mode_recoverable_block(
-        "Recovery mode requested a final tool-free synthesis pass, but the model attempted more tool calls."
-    ));
-    assert!(!plan_mode_recoverable_block("recovery fallback; interview waiting on user decision"));
-}
-
-#[test]
-fn planning_recovery_handoff_without_a_ready_plan_auto_continues() {
-    // Production `break_planning_recovery_with_handoff` reason. It contains
-    // the plan-mode deny token "approval-ready plan" but is a *failure* to
-    // produce one, so it must stay recoverable (session-vtcode-20261019T022628Z
-    // parked at the user `continue` prompt after an empty tool-free synthesis).
-    let reason = crate::agent::runloop::unified::turn::context::PLANNING_RECOVERY_HANDOFF_REASON;
-    assert!(plan_mode_recoverable_block(reason));
-    assert!(tracker_auto_continue_is_recoverable_block(Some(reason)));
-    assert!(should_queue_plan_mode_auto_continue(true, true, false, false, Some(reason), false, 8, 0));
-    // A compound budget cause keeps the reason recoverable.
-    assert!(plan_mode_recoverable_block(&format!("turn budget exhausted. {reason}")));
-    // Genuine approval handoffs remain denied: the allow list must not shadow
-    // a ready plan that is waiting for the user.
-    assert!(!plan_mode_recoverable_block("Approval-ready plan remains available for approval in a later turn."));
-    assert!(!should_queue_plan_mode_auto_continue(
-        true,
-        true,
-        false,
-        false,
-        Some("Approval-ready plan remains available for approval in a later turn."),
-        false,
-        8,
-        0
-    ));
 }
 
 #[test]

@@ -6,8 +6,8 @@ use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::ToolCallStatus;
 use crate::llm::providers::gemini::wire::{Content, Part};
 use crate::tools::registry::ToolExecutionError;
-use crate::utils::colors::style;
 use serde::Serialize;
+use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity, redact_diagnostic};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub(super) struct ObservabilityFields {
@@ -76,6 +76,41 @@ impl AgentRunner {
 }
 
 impl AgentRunner {
+    /// Record through the active task recorder so context and result events stay aligned.
+    pub(super) fn record_diagnostic(&self, recorder: &mut ExecEventRecorder, diagnostic: &Diagnostic) {
+        let diagnostic = redact_diagnostic(diagnostic);
+        recorder.diagnostic(&diagnostic);
+        if !self.quiet {
+            vtcode_commons::diagnostics::stderr_diagnostic(&diagnostic);
+        }
+    }
+
+    /// Retry transitions outside an individual task attempt still reach the canonical thread.
+    pub(super) fn emit_diagnostic(&self, diagnostic: &Diagnostic) {
+        use crate::exec::events::{ItemUpdatedEvent, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails};
+        let diagnostic = redact_diagnostic(diagnostic);
+        let event = ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+            item: ThreadItem {
+                context: None,
+                id: diagnostic.correlation_id.clone(),
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    text: diagnostic.summary.clone(),
+                    stage: Some("diagnosis".into()),
+                    diagnostic: Some(Box::new(diagnostic.clone())),
+                })),
+            },
+        });
+        if let Some(sink) = &self.event_sink {
+            let mut callback = sink.lock();
+            callback(&event);
+        }
+        self.thread_handle.record_event(None, None, event);
+        if !self.quiet {
+            vtcode_commons::diagnostics::stderr_diagnostic(&diagnostic);
+        }
+    }
+
+    #[track_caller]
     pub(super) fn record_warning(
         &self,
         agent_prefix: &str,
@@ -84,11 +119,13 @@ impl AgentRunner {
         warning_message: impl Into<String>,
     ) {
         let warning_message = warning_message.into();
-        if !self.quiet {
-            println!("{} {} {}", agent_prefix, style("(WARN)").red().bold(), warning_message);
-        }
-        event_recorder.warning(&warning_message);
-        session_state.push_warning(warning_message);
+        let mut diagnostic =
+            vtcode_commons::diagnostics::legacy_ui_diagnostic(DiagnosticSeverity::Warning, &warning_message);
+        diagnostic.code = "agent.warning".into();
+        diagnostic.agent_details = format!("Agent: {agent_prefix}\n\n{}", diagnostic.agent_details);
+        let diagnostic = redact_diagnostic(&diagnostic);
+        self.record_diagnostic(event_recorder, &diagnostic);
+        session_state.push_warning(diagnostic.text());
     }
 
     pub(super) fn record_tool_failure(
@@ -98,10 +135,20 @@ impl AgentRunner {
         error: &ToolExecutionError,
         tool_response_id: Option<&str>,
     ) {
-        let failure_text = error.user_message();
-        if !self.quiet {
-            println!("{} {} {}", failure_ctx.agent_prefix, style("(ERR)").red().bold(), failure_text);
-        }
+        let failure_text = vtcode_commons::sanitizer::redact_secrets(error.user_message());
+        let mut diagnostic = vtcode_commons::diagnostics::legacy_diagnostic(
+            DiagnosticSeverity::Error,
+            &failure_text,
+            format!("tool:{}", failure_ctx.tool_call_id),
+        );
+        diagnostic.code = "tool.execution_failed".into();
+        diagnostic.agent_details = vtcode_commons::sanitizer::sanitize_provider_diagnostic(
+            serde_json::json!({
+                "agent": failure_ctx.agent_prefix, "tool": tool_name, "error": error.to_json_value(),
+            })
+            .to_string(),
+        );
+        self.record_diagnostic(failure_ctx.event_recorder, &diagnostic);
         if let Some(call_item_id) = failure_ctx.call_item_id {
             failure_ctx.event_recorder.tool_output_finished(
                 call_item_id,
@@ -112,7 +159,6 @@ impl AgentRunner {
                 None,
             );
         }
-        failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
         failure_ctx.session_state.push_warning(failure_text.clone());
 

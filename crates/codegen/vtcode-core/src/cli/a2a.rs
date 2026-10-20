@@ -180,7 +180,7 @@ async fn send_task_to_agent(
                     }
                 }
                 Err(e) => {
-                    eprintln!("Stream error: {e}");
+                    vtcode_commons::diagnostics::stderr(format_args!("Stream error: {e}"));
                     break;
                 }
             }

@@ -373,6 +373,13 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
     let mut default_placeholder = ui_setup.default_placeholder;
     let mut follow_up_placeholder = ui_setup.follow_up_placeholder;
     let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
+    if resume_ref.is_some()
+        && let Some(emitter) = harness_emitter.as_ref()
+    {
+        for diagnostic in harness_try!(emitter.diagnostics().await) {
+            harness_try!(renderer.restore_diagnostic(&diagnostic));
+        }
+    }
     let mut session_end_reason = ui_setup.session_end_reason;
     let mut turn_id = turn_run_id.0.clone();
     let _file_palette_task_guard = ui_setup.file_palette_task_guard;
@@ -465,46 +472,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         } else {
             None
         };
-        // Planning-blocked resume: auto-queue plan continuation when the
-        // blocked-handoff summary is planning-related and recoverable, and
-        // no plan is approval-ready. Require planning context so long
-        // diagnostic summaries that merely quote "budget exhausted" cannot
-        // trigger plan auto-queue.
-        let resume_blocked_summary =
-            vtcode_core::core::agent::blocked_handoff::read_current_blocked_handoff(config.workspace.as_path())
-                .map(|info| info.blocker_summary);
-        let planning_resume = auto_continue_enabled
-            && cross_turn_turns > 0
-            && tool_registry.is_planning_active()
-            && resume_blocked_summary.as_deref().is_some_and(|summary| {
-                let lower = summary.to_ascii_lowercase();
-                lower.contains("planning") && tracker_continue::plan_mode_recoverable_block(summary)
-            });
-        if planning_resume {
-            let plan_state = tool_registry.planning_workflow_state();
-            let plan_ready =
-                crate::agent::runloop::unified::planning_workflow::persisted_plan_is_ready(&plan_state).await;
-            if !plan_ready {
-                let follow_up = tracker_continue::plan_mode_continue_follow_up();
-                let directive = tracker_continue::plan_mode_resume_directive();
-                {
-                    let messages = std::sync::Arc::make_mut(&mut runtime.state.messages);
-                    messages.push(vtcode_core::llm::provider::Message::system(directive));
-                }
-                let (_, runtime_steering) = runtime.split_mut();
-                match runtime_steering.try_queue_follow_up_input(follow_up) {
-                    Ok(()) => {
-                        let _ = renderer.line(
-                                MessageStyle::Info,
-                                "[i] Resumed planning session with recoverable blocked handoff; auto-continuing without manual `continue`.",
-                            );
-                    }
-                    Err(error) => {
-                        tracing::warn!(%error, "Unable to queue plan resume continuation");
-                    }
-                }
-            }
-        } else if !tool_registry.is_planning_active()
+        if !tool_registry.is_planning_active()
             && tracker_continue::should_queue_tracker_resume_continuation(
                 auto_continue_enabled,
                 tracker_adoption_allowed,
@@ -623,6 +591,57 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
     let mut input_status_state = InputStatusState::default();
     let mut dismissed_memory_cleanup_fingerprint: Option<(usize, usize)> = None;
     let mut prefer_latest_queued_input_once = false;
+    if resume_ref.is_some()
+        && tool_registry.is_planning_active()
+        && let Some(emitter) = harness_emitter.as_ref()
+    {
+        let saved_recovery = harness_try!(emitter.planning_recovery().await);
+        let legacy_progress = saved_recovery.is_none()
+            && runtime
+                .state
+                .messages
+                .iter()
+                .any(|message| matches!(message.role, MessageRole::Assistant | MessageRole::Tool));
+        if saved_recovery.is_some() || legacy_progress {
+            plan_session.recovery = saved_recovery.unwrap_or_else(|| {
+                crate::agent::runloop::unified::planning_workflow::recovery_state::recover_legacy_session(
+                    &runtime.state.messages,
+                    provider_client.name(),
+                    &config.model,
+                )
+            });
+            harness_try!(
+                emitter
+                    .persist_checkpoint(
+                        &crate::agent::runloop::unified::planning_workflow::recovery_state::checkpoint_event(
+                            &plan_session.recovery,
+                            thread_handle.thread_id().as_str(),
+                            "planning-resume",
+                        )
+                    )
+                    .await
+            );
+            if matches!(
+                plan_session.recovery.outcome,
+                vtcode_core::exec::events::planning::PlanningOutcome::Synthesizing
+                    | vtcode_core::exec::events::planning::PlanningOutcome::Repairing
+            ) || (plan_session.recovery.outcome
+                == vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+                && !plan_session.recovery.input_prompt_shown)
+            {
+                if let Err(error) = runtime.try_queue_follow_up_input(
+                    crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up(),
+                ) {
+                    plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
+                    renderer.line(
+                        MessageStyle::Warning,
+                        &format!("Planning could not resume automatically. Research and draft are saved. {error}"),
+                    )?;
+                }
+            }
+        }
+    }
+
     let mut queued_inputs: VecDeque<crate::agent::runloop::unified::inline_events::QueuedInput> =
         VecDeque::with_capacity(8);
     let mut background_completion_receiver = tool_registry
@@ -1357,6 +1376,22 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     tool_registry.set_decision_evidence_validator(validator);
                 }
                 tool_registry.set_harness_task(Some(task_id));
+            }
+            if tool_registry.is_planning_active()
+                && !active_task_follow_up
+                && !crate::agent::runloop::unified::turn::is_internal_harness_follow_up(&next_turn_input)
+                && matches!(
+                    plan_session.recovery.outcome,
+                    vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+                        | vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval
+                )
+            {
+                plan_session.begin_explicit_recovery_cycle();
+                crate::agent::runloop::unified::planning_workflow::recovery_state::record_clarification(
+                    &mut plan_session.recovery,
+                    &next_turn_input,
+                    false,
+                );
             }
             let (session_state, runtime_steering) = runtime.split_mut();
             let working_history = std::sync::Arc::make_mut(&mut session_state.messages);
@@ -2196,35 +2231,25 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     final_text_is_safety_handoff,
                     final_text_requires_user_input,
                 ) && (!turn_completed || tracker_adoption_allowed);
-                // Plan-mode outer auto-continue: only recoverable *blocked*
-                // planning ends (budget/safety-cap/tool-free recovery) queue
-                // another turn. Completed planning turns may be interview or
-                // approval handoffs and must wait for the user. Never auto-approves.
-                // Empty-fallback guard: deterministic `PLANNING_COMPLETED_FALLBACK_RESPONSE`
-                // turns (no LLM synthesis, no tools) increment a consecutive
-                // counter; after MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE the
-                // gate closes so 32 empty turns cannot re-queue forever
-                // (session-vtcode-20260921T045723Z).
-                let plan_auto_continue_enabled = planning_active && tracker_kill_switch;
+                // Persisted planning outcomes control continuations. Approval,
+                // input waits, exhausted requests, and hard stops stay idle.
                 let plan_state = tool_registry.planning_workflow_state();
                 let plan_ready_for_approval = planning_active
                     && crate::agent::runloop::unified::planning_workflow::persisted_plan_is_ready(&plan_state).await;
-                let final_text_is_plan_empty_turn =
-                    final_text.as_deref().is_some_and(tracker_continue::is_plan_empty_turn_text);
-                if final_text_is_plan_empty_turn {
-                    session_stats.record_plan_empty_fallback();
-                } else {
-                    session_stats.reset_plan_empty_fallbacks();
-                }
                 let should_queue_plan = tracker_continue::should_queue_plan_mode_auto_continue(
-                    plan_auto_continue_enabled,
-                    planning_active,
-                    plan_ready_for_approval,
-                    turn_completed,
-                    blocked_reason,
-                    is_verification_block,
-                    max_turns,
-                    session_stats.consecutive_plan_empty_fallbacks(),
+                    &plan_session.recovery,
+                    tracker_continue::PlanningAutoContinueGates {
+                        enabled: tracker_kill_switch,
+                        planning_active,
+                        plan_ready_for_approval,
+                        turn_completed,
+                        verification_blocked: is_verification_block,
+                        refused: turn_refused,
+                        hard_budget_exhausted: plan_session.is_budget_exhausted(),
+                        stop_requested: crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state)
+                            .is_some(),
+                        cross_turn_turns: max_turns,
+                    },
                 );
                 if should_queue_plan {
                     let follow_up = tracker_continue::plan_mode_continue_follow_up();
@@ -2253,7 +2278,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                                     "Plan-mode auto-continue queue full; falling through to turn end"
                                 );
                                 let _ = renderer.line(
-                                        MessageStyle::Info,
+                                        MessageStyle::Warning,
                                         "[i] Plan-mode auto-continue could not resume automatically; planning remains active. Type `continue` to resume planning.",
                                     );
                                 tracker_auto_continue_exhausted = true;
@@ -2318,7 +2343,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                             Err(err) => {
                                 tracing::warn!(%err, "Tracker auto-continue queue full; falling through to turn end");
                                 let _ = renderer.line(
-                                        MessageStyle::Info,
+                                        MessageStyle::Warning,
                                         if incomplete.is_empty() {
                                             "[i] Blocked-end auto-continue could not resume automatically. Type `continue` to retry the request."
                                         } else {
@@ -2349,22 +2374,13 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 } else if planning_active && plan_ready_for_approval && turn_completed {
                     session_stats.reset_plan_continuation_budget();
                     let _ = renderer.line(MessageStyle::Info, &tracker_continue::plan_progress_line("", true, 0, 0));
-                } else if planning_active && !plan_ready_for_approval && !turn_completed && !should_queue_plan {
-                    // Blocked planning without auto-queue: compact status only.
-                    // When the empty-fallback cap fired, name it explicitly so
-                    // the user knows why auto-continue stopped instead of
-                    // seeing 32 silent `research/synthesis` lines.
-                    if session_stats.consecutive_plan_empty_fallbacks()
-                        >= tracker_continue::MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE
-                    {
-                        let _ = renderer.line(
-                                MessageStyle::Info,
-                                &format!(
-                                    "[i] Plan-mode auto-continue stopped after {} empty turns with no synthesis; planning remains active. Type `continue` or re-state the request to resume.",
-                                    session_stats.consecutive_plan_empty_fallbacks()
-                                ),
-                            );
-                    }
+                } else if planning_active
+                    && !plan_ready_for_approval
+                    && !turn_completed
+                    && !should_queue_plan
+                    && plan_session.recovery.outcome
+                        != vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
+                {
                     let _ = renderer.line(MessageStyle::Info, &tracker_continue::plan_progress_line("", false, 0, 0));
                 } else if !planning_active
                     && session_stats.preflight_recovery.is_clear()

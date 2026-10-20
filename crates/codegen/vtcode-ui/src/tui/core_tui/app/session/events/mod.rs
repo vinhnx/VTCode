@@ -79,6 +79,13 @@ fn process_key_with_clipboard_readers(
     text_reader: impl FnMut() -> Result<String, ClipboardTextError>,
 ) -> Option<InlineEvent> {
     let key = normalize_terminal_control_event(key);
+    if !session.has_active_overlay()
+        && key.code == KeyCode::F(8)
+        && key.kind != KeyEventKind::Release
+        && session.core.toggle_latest_diagnostic()
+    {
+        return None;
+    }
     let modifiers = key.modifiers;
     let has_control = modifiers.contains(KeyModifiers::CONTROL);
     let has_shift = modifiers.contains(KeyModifiers::SHIFT);

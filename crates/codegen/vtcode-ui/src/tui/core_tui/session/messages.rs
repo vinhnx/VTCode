@@ -143,8 +143,13 @@ impl Session {
     pub(crate) fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let revision = self.next_revision();
         let index = self.lines.len();
-        self.lines
-            .push(MessageLine { kind, segments, link_ranges: Vec::new(), revision });
+        self.lines.push(MessageLine {
+            diagnostic: None,
+            kind,
+            segments,
+            link_ranges: Vec::new(),
+            revision,
+        });
         // Transcript-only content change: do not drop header/sidebar caches on
         // every streamed or appended line (see `mark_transcript_line_dirty`).
         self.mark_transcript_line_dirty(index);
@@ -381,6 +386,7 @@ impl Session {
         for segments in lines {
             let revision = self.next_revision();
             self.lines.push(MessageLine {
+                diagnostic: None,
                 kind,
                 segments,
                 link_ranges: link_ranges.next().unwrap_or_default(),
@@ -628,6 +634,7 @@ impl Session {
         let revision = self.next_revision();
         let index = self.lines.len();
         self.lines.push(MessageLine {
+            diagnostic: None,
             kind,
             segments: vec![InlineSegment {
                 text: text.to_owned(),

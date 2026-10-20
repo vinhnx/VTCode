@@ -278,6 +278,7 @@ mod tests {
 
     fn message_line(kind: InlineMessageKind, text: &str) -> MessageLine {
         MessageLine {
+            diagnostic: None,
             kind,
             segments: vec![InlineSegment {
                 text: text.to_string(),

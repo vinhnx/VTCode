@@ -1491,79 +1491,40 @@ async fn empty_response_after_tool_activity_schedules_tool_free_recovery() {
 }
 
 #[tokio::test]
-async fn planning_two_empty_responses_schedule_one_tool_free_synthesis() {
+async fn planning_two_empty_responses_allow_one_synthesis_and_two_corrections() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
+    backing.mark_interview_denied_for_test();
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-
-    let first = {
-        let mut ctx = backing.turn_processing_context();
-        handle_turn_processing_result(HandleTurnProcessingResultParams {
-            ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
-            response_streamed: false,
-            step_count: 1,
-            repeated_tool_attempts: &mut repeated_tool_attempts,
-            turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
-            tool_repeat_limit: 4,
-        })
-        .await
-        .expect("first empty response should arm recovery")
-    };
-    assert!(matches!(first, TurnHandlerOutcome::Continue));
-    assert!(!backing.recovery_is_tool_free());
-    {
-        let mut ctx = backing.turn_processing_context();
-        assert!(ctx.consume_recovery_pass());
-    }
-
-    let second = {
-        let mut ctx = backing.turn_processing_context();
-        handle_turn_processing_result(HandleTurnProcessingResultParams {
-            ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
-            response_streamed: false,
-            step_count: 2,
-            repeated_tool_attempts: &mut repeated_tool_attempts,
-            turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
-            tool_repeat_limit: 4,
-        })
-        .await
-        .expect("second empty response should schedule synthesis")
-    };
-    assert!(matches!(second, TurnHandlerOutcome::Continue));
+    advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
+        .await;
     assert!(backing.recovery_is_tool_free());
     assert!(backing.last_history_message_contains("exactly one completed `<proposed_plan>` block"));
-    {
-        let mut ctx = backing.turn_processing_context();
-        assert!(ctx.consume_recovery_pass());
+    for request in 1..=3 {
+        let outcome = handle_planning_empty_with(
+            &mut backing,
+            NoOutputFacts::default(),
+            request + 2,
+            &mut repeated_tool_attempts,
+            &mut turn_modified_files,
+        )
+        .await;
+        if request < 3 {
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        } else {
+            assert!(
+                matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }) if reason == "planning awaiting input")
+            );
+        }
     }
-
-    let third = {
-        let mut ctx = backing.turn_processing_context();
-        handle_turn_processing_result(HandleTurnProcessingResultParams {
-            ctx: &mut ctx,
-            processing_result: TurnProcessingResult::Empty { facts: NoOutputFacts::default() },
-            response_streamed: false,
-            step_count: 3,
-            repeated_tool_attempts: &mut repeated_tool_attempts,
-            turn_modified_files: &mut turn_modified_files,
-            max_tool_loops: 4,
-            tool_repeat_limit: 4,
-        })
-        .await
-        .expect("failed synthesis should produce a blocked handoff")
-    };
-    assert!(matches!(third, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
-    assert!(backing.last_history_message_contains("Planning remains active"));
+    assert_eq!(backing.turn_processing_context().plan_session.recovery.requests_used, 3);
+    assert!(backing.last_history_message_contains("Planning needs your input. Saved progress is available."));
 }
 
 /// Drive the deterministic planning ladder to the tool-free synthesis pass:
-/// two empty responses, both recovery passes consumed. The next
-/// `handle_turn_processing_result` call processes the synthesis response.
+/// two empty responses, with the first recovery pass consumed. The next
+/// response helper admits and consumes the first synthesis request.
 async fn advance_planning_recovery_to_tool_free_pass(
     backing: &mut TestTurnProcessingBacking,
     repeated_tool_attempts: &mut LoopTracker,
@@ -1586,8 +1547,10 @@ async fn advance_planning_recovery_to_tool_free_pass(
             .expect("empty response should arm the deterministic recovery ladder")
         };
         assert!(matches!(outcome, TurnHandlerOutcome::Continue));
-        let mut ctx = backing.turn_processing_context();
-        assert!(ctx.consume_recovery_pass());
+        if step == 1 {
+            let mut ctx = backing.turn_processing_context();
+            assert!(ctx.consume_recovery_pass());
+        }
     }
 }
 
@@ -1599,6 +1562,38 @@ async fn handle_planning_empty_with(
     turn_modified_files: &mut BTreeSet<std::path::PathBuf>,
 ) -> TurnHandlerOutcome {
     let mut ctx = backing.turn_processing_context();
+    let model = ctx.config.model.clone();
+    assert!(
+        ctx.admit_planning_recovery_request(&model)
+            .await
+            .expect("admit actual synthesis request")
+    );
+    assert!(ctx.consume_recovery_pass());
+    let response = uni::LLMResponse {
+        content: None,
+        model,
+        tool_calls: facts.dropped_tool_calls.then(|| {
+            vec![uni::ToolCall::function(
+                "forbidden-research".into(),
+                "read_file".into(),
+                "{}".into(),
+            )]
+        }),
+        usage: Some(uni::Usage {
+            completion_tokens: facts.completion_tokens,
+            ..Default::default()
+        }),
+        finish_reason: uni::FinishReason::Stop,
+        reasoning: facts.reasoning_only.then(|| "private planning reasoning".into()),
+        reasoning_details: None,
+        organization_id: None,
+        request_id: None,
+        tool_references: Vec::new(),
+        compaction: None,
+    };
+    ctx.record_planning_response(&response)
+        .await
+        .expect("record observed response shape");
     handle_turn_processing_result(HandleTurnProcessingResultParams {
         ctx: &mut ctx,
         processing_result: TurnProcessingResult::Empty { facts },
@@ -1642,77 +1637,105 @@ async fn planning_tokens_without_content_salvage_arms_one_final_content_retry() 
     );
 }
 
+fn capture_planning_recovery_diagnostics(
+    backing: &mut TestTurnProcessingBacking,
+) -> std::sync::Arc<std::sync::Mutex<Vec<vtcode_commons::diagnostics::Diagnostic>>> {
+    let diagnostics = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    backing
+        .turn_processing_context()
+        .renderer
+        .set_diagnostic_sink(std::sync::Arc::new(move |diagnostic| {
+            captured.lock().expect("captured diagnostics").push(diagnostic.clone());
+            Ok(())
+        }));
+    diagnostics
+}
+
 #[tokio::test]
-async fn planning_second_tokens_without_content_handoff_states_captured_facts() {
+async fn planning_third_tokens_without_content_handoff_states_captured_facts() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
+    backing.mark_interview_denied_for_test();
+    let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-
     advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
         .await;
-    let salvage = handle_planning_empty_with(
-        &mut backing,
-        NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
-        3,
-        &mut repeated_tool_attempts,
-        &mut turn_modified_files,
-    )
-    .await;
-    assert!(matches!(salvage, TurnHandlerOutcome::Continue));
-    {
-        let mut ctx = backing.turn_processing_context();
-        assert!(ctx.consume_recovery_pass());
+    for request in 1..=3 {
+        let outcome = handle_planning_empty_with(
+            &mut backing,
+            NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
+            request + 2,
+            &mut repeated_tool_attempts,
+            &mut turn_modified_files,
+        )
+        .await;
+        if request < 3 {
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        } else {
+            assert!(
+                matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }) if reason == "planning awaiting input")
+            );
+        }
     }
-
-    // A second tokens-without-content response has consumed the salvage: the
-    // blocked handoff keeps both auto-continue marker substrings AND states
-    // the captured token count instead of a plain emptiness claim.
-    let handoff = handle_planning_empty_with(
-        &mut backing,
-        NoOutputFacts { completion_tokens: 477, ..NoOutputFacts::default() },
-        4,
-        &mut repeated_tool_attempts,
-        &mut turn_modified_files,
-    )
-    .await;
-    let TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: blocked }) = handoff else {
-        panic!("exhausted salvage must end in the resumable blocked handoff");
-    };
-    let reason = blocked.expect("blocked reason must be present");
-    assert!(reason.contains("did not produce an approval-ready plan"));
+    let notices = diagnostics.lock().expect("diagnostics");
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "planning.awaiting_input")
+        .expect("canonical awaiting-input diagnostic");
+    let details: serde_json::Value = serde_json::from_str(&notice.agent_details).expect("diagnostic details");
+    assert_eq!(details["requests_used"], 3);
+    assert_eq!(details["retained_draft"], false, "an empty response cannot create a saved draft");
     assert!(
-        backing.last_history_message_contains("the model returned an empty synthesis response"),
-        "empty-shape marker must survive so the consecutive-empty cap keeps matching"
+        details["failure"]
+            .as_str()
+            .unwrap()
+            .contains("provider recorded 477 completion tokens")
     );
-    assert!(
-        backing.last_history_message_contains("provider recorded 477 completion tokens"),
-        "handoff must state the captured completion tokens"
-    );
+    assert_eq!(notices.iter().filter(|notice| notice.code == "planning.awaiting_input").count(), 1);
+    assert!(backing.last_history_message_contains("Planning needs your input. Saved progress is available."));
 }
 
 #[tokio::test]
 async fn planning_true_no_output_handoff_never_claims_returned_tokens() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
+    backing.mark_interview_denied_for_test();
+    let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-
     advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
         .await;
-    let handoff = handle_planning_empty_with(
-        &mut backing,
-        NoOutputFacts::default(),
-        3,
-        &mut repeated_tool_attempts,
-        &mut turn_modified_files,
-    )
-    .await;
-    assert!(matches!(handoff, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
-    assert!(backing.last_history_message_contains("the model returned an empty synthesis response"));
-    // Asymmetric pair for the tokens case: a genuinely empty response must
-    // not borrow a captured-token claim it has no evidence for.
-    assert!(!backing.last_history_message_contains("provider recorded"));
+    for request in 1..=3 {
+        let outcome = handle_planning_empty_with(
+            &mut backing,
+            NoOutputFacts::default(),
+            request + 2,
+            &mut repeated_tool_attempts,
+            &mut turn_modified_files,
+        )
+        .await;
+        if request < 3 {
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        } else {
+            assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+        }
+    }
+    let notices = diagnostics.lock().expect("diagnostics");
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "planning.awaiting_input")
+        .expect("canonical awaiting-input diagnostic");
+    let details: serde_json::Value = serde_json::from_str(&notice.agent_details).expect("diagnostic details");
+    assert_eq!(details["category"], "empty_content");
+    assert!(
+        details["failure"]
+            .as_str()
+            .unwrap()
+            .contains("the model returned an empty synthesis response")
+    );
+    assert!(!details["failure"].as_str().unwrap().contains("completion tokens"));
     assert!(!backing.last_history_message_contains("completion tokens"));
 }
 
@@ -1720,28 +1743,48 @@ async fn planning_true_no_output_handoff_never_claims_returned_tokens() {
 async fn planning_dropped_tool_calls_report_the_actual_failure_shape() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
+    backing.mark_interview_denied_for_test();
+    let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-
     advance_planning_recovery_to_tool_free_pass(&mut backing, &mut repeated_tool_attempts, &mut turn_modified_files)
         .await;
-    let facts = NoOutputFacts {
-        dropped_tool_calls: true,
-        salvaged_reasoning: "I considered searching the docs again, but decided against it.".to_string(),
-        completion_tokens: 210,
-    };
-    let handoff =
-        handle_planning_empty_with(&mut backing, facts, 3, &mut repeated_tool_attempts, &mut turn_modified_files).await;
-    assert!(matches!(handoff, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+    for request in 1..=3 {
+        let facts = NoOutputFacts {
+            dropped_tool_calls: true,
+            reasoning_only: true,
+            completion_tokens: 210,
+        };
+        let outcome = handle_planning_empty_with(
+            &mut backing,
+            facts,
+            request + 2,
+            &mut repeated_tool_attempts,
+            &mut turn_modified_files,
+        )
+        .await;
+        if request < 3 {
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        } else {
+            assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })));
+        }
+    }
+    let notices = diagnostics.lock().expect("diagnostics");
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "planning.awaiting_input")
+        .expect("canonical awaiting-input diagnostic");
+    let details: serde_json::Value = serde_json::from_str(&notice.agent_details).expect("diagnostic details");
+    assert_eq!(details["category"], "native_tool_calls");
     assert!(
-        backing.last_history_message_contains("the synthesis response attempted native tool calls on a tool-free pass"),
-        "dropped-tool-call shape must name the actual contract violation, not emptiness"
+        details["failure"]
+            .as_str()
+            .unwrap()
+            .contains("attempted native tool calls on a tool-free pass")
     );
-    assert!(
-        !backing.last_history_message_contains("the model returned an empty synthesis response"),
-        "the empty marker must not be claimed for a tool-call violation"
-    );
-    assert!(!backing.last_history_message_contains("provider recorded"));
+    assert!(!details["failure"].as_str().unwrap().contains("empty synthesis response"));
+    assert!(!notice.agent_details.contains("private planning reasoning"));
+    assert!(turn_modified_files.is_empty());
 }
 
 /// Regression test for TD-015: text containing malformed `<tool_call>` tags
@@ -1904,42 +1947,58 @@ async fn recovery_complete_tool_call_with_appended_disclosure_still_breaks() {
 /// Planning-mode complete calls take the planning violation tail (bounded
 /// repair or resumable handoff), never a normal text completion.
 #[tokio::test]
-async fn recovery_complete_tool_call_in_planning_takes_handoff() {
+async fn recovery_complete_tool_call_in_planning_uses_shared_allowance_before_handoff() {
     let mut backing = TestTurnProcessingBacking::new(4).await;
     backing.activate_planning_for_test();
-    let mut ctx = backing.turn_processing_context();
-    ctx.activate_recovery("loop detector");
-    assert!(ctx.consume_recovery_pass());
-
-    let text = "•   I have sufficient evidence from prior reads. Applying the section rewrite now.\
-                <tool_call>exec_command<arg_key>cmd</arg_key><arg_value>grep -n x README.md</arg_value></tool_call>";
-
+    backing.mark_interview_denied_for_test();
+    backing.activate_tool_free_recovery_for_test("loop detector");
+    let diagnostics = capture_planning_recovery_diagnostics(&mut backing);
+    let text = "I have sufficient evidence from prior reads. Applying the section rewrite now. <tool_call>exec_command<arg_key>cmd</arg_key><arg_value>grep -n x README.md</arg_value></tool_call>";
     let mut repeated_tool_attempts = LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
-
-    let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
-        ctx: &mut ctx,
-        processing_result: TurnProcessingResult::TextResponse {
-            text: text.to_string(),
-            reasoning: Vec::new(),
-            reasoning_details: None,
-            proposed_plan: None,
-        },
-        response_streamed: false,
-        step_count: 1,
-        repeated_tool_attempts: &mut repeated_tool_attempts,
-        turn_modified_files: &mut turn_modified_files,
-        max_tool_loops: 4,
-        tool_repeat_limit: 4,
-    })
-    .await
-    .expect("planning complete tool-call markup should take the handoff path");
-
-    assert!(
-        matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. })),
-        "planning complete tool-call markup must break with a resumable handoff, not complete"
-    );
-    assert!(backing.last_history_message_contains("Planning remains active"));
+    for request in 1..=3 {
+        let mut ctx = backing.turn_processing_context();
+        let model = ctx.config.model.clone();
+        assert!(
+            ctx.admit_planning_recovery_request(&model)
+                .await
+                .expect("admit synthesis request")
+        );
+        assert!(ctx.consume_recovery_pass());
+        let outcome = handle_turn_processing_result(HandleTurnProcessingResultParams {
+            ctx: &mut ctx,
+            processing_result: TurnProcessingResult::TextResponse {
+                text: text.into(),
+                reasoning: Vec::new(),
+                reasoning_details: None,
+                proposed_plan: None,
+            },
+            response_streamed: false,
+            step_count: request,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+            max_tool_loops: 4,
+            tool_repeat_limit: 4,
+        })
+        .await
+        .expect("planning tool-call markup must use bounded recovery");
+        if request < 3 {
+            assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        } else {
+            assert!(
+                matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }) if reason == "planning awaiting input")
+            );
+        }
+    }
+    assert!(turn_modified_files.is_empty());
+    assert_eq!(backing.turn_processing_context().plan_session.recovery.requests_used, 3);
+    assert!(backing.last_history_message_contains("Planning needs your input. Saved progress is available."));
+    let notices = diagnostics.lock().expect("diagnostics");
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "planning.awaiting_input")
+        .expect("canonical awaiting-input diagnostic");
+    assert!(notice.agent_details.contains("tool-call markup"));
 }
 
 /// Regression test: recovery text that contains only prose (no markers)

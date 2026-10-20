@@ -242,6 +242,7 @@ pub mod completion;
 pub mod handoff;
 pub mod mid_turn_model_switch;
 pub mod plan;
+pub mod planning_recovery;
 pub mod preview;
 pub mod recovery;
 pub mod response_cap;

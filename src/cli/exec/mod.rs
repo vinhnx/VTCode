@@ -32,7 +32,7 @@ pub async fn handle_exec_command(
     tokio::select! {
         res = run::handle_exec_command_impl(config, vt_cfg, options) => res,
         _ = vtcode_core::shutdown::shutdown_signal() => {
-            eprintln!("{}", crate::cli::messages::warn("Cancelled by user."));
+            vtcode_commons::diagnostics::stderr(format_args!("{}", crate::cli::messages::warn("Cancelled by user.")));
             bail!("Operation cancelled");
         }
     }
@@ -97,6 +97,7 @@ mod tests {
             turn_id: "turn-1".to_string(),
             item_id: "plan-1".to_string(),
             delta: "First plan".to_string(),
+            recovery: None,
         })));
         assert_eq!(processor.final_message(), Some("First plan"));
 
@@ -175,12 +176,42 @@ mod tests {
     }
 
     #[test]
+    fn human_event_line_preserves_canonical_updated_diagnostic_details() {
+        use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+        let event = ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
+            item: ThreadItem {
+                context: None,
+                id: "diagnostic-3".into(),
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    text: "short summary".into(),
+                    stage: Some("diagnosis".into()),
+                    diagnostic: Some(Box::new(Diagnostic {
+                        severity: DiagnosticSeverity::Error,
+                        code: "planning.awaiting_input".into(),
+                        summary: "Planning needs input".into(),
+                        agent_details: "attempts=3 password=headless-private-secret".into(),
+                        correlation_id: "diagnostic-3".into(),
+                        actions: Vec::new(),
+                    })),
+                })),
+            },
+        });
+        let line = human_event_line(&event).unwrap();
+        assert!(line.contains("[ERROR]"));
+        assert!(line.contains("Planning needs input"));
+        assert!(line.contains("Details:"));
+        assert!(line.contains("attempts=3"));
+        assert!(!line.contains("headless-private-secret"));
+    }
+
+    #[test]
     fn human_event_line_formats_diagnosis_reasoning() {
         let line = human_event_line(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 context: None,
                 id: "diagnosis-1".to_string(),
                 details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    diagnostic: None,
                     text: "Diagnosis: exec\nObserved: exit 1".to_string(),
                     stage: Some("diagnosis".to_string()),
                 })),

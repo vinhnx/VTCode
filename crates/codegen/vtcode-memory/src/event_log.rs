@@ -592,24 +592,35 @@ impl SessionEventLog {
         // Matrix snapshots are complete session-level checkpoints. Preserve the
         // latest evicted checkpoint only when no newer snapshot survives.
         let mut matrix_checkpoints = BTreeMap::new();
+        let mut planning_checkpoint = None;
         for event in &evicted_events {
+            if let ThreadEvent::PlanDelta(delta) = event
+                && delta.recovery.is_some()
+            {
+                planning_checkpoint = Some(event);
+            }
             if let ThreadEvent::MatrixUpdated(snapshot) = event {
                 matrix_checkpoints.insert(snapshot.spec.id.clone(), event);
             }
         }
         for event in decode_events(&remaining) {
+            if let ThreadEvent::PlanDelta(delta) = &event
+                && delta.recovery.is_some()
+            {
+                planning_checkpoint = None;
+            }
             if let ThreadEvent::MatrixUpdated(snapshot) = event {
                 matrix_checkpoints.remove(&snapshot.spec.id);
             }
         }
         let mut checkpoint_prefix = Vec::new();
-        for event in matrix_checkpoints.values() {
+        for event in matrix_checkpoints.values().copied().chain(planning_checkpoint) {
             serde_json::to_writer(&mut checkpoint_prefix, &VersionedThreadEvent::new((*event).clone()))
                 .map_err(|error| SessionStoreError::io(&self.events_path, std::io::Error::other(error)))?;
             checkpoint_prefix.push(b'\n');
         }
         let checkpoint_bytes = checkpoint_prefix.len() as u64;
-        let checkpoint_count = matrix_checkpoints.len() as u64;
+        let checkpoint_count = matrix_checkpoints.len() as u64 + u64::from(planning_checkpoint.is_some());
         if !checkpoint_prefix.is_empty() {
             checkpoint_prefix.extend_from_slice(&remaining);
             remaining = checkpoint_prefix;

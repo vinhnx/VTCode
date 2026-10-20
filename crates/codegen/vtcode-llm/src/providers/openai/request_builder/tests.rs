@@ -45,6 +45,24 @@ fn request() -> provider::LLMRequest {
     }
 }
 
+#[test]
+fn responses_forced_function_choice_uses_flat_native_shape() {
+    let mut request = request();
+    request.tools = Some(std::sync::Arc::new(vec![provider::ToolDefinition::function(
+        "lookup".into(),
+        "Look up a value".into(),
+        json!({"type": "object"}),
+    )]));
+    request.tool_choice = Some(provider::ToolChoice::function("lookup".into()));
+    for supports_allowed_tools in [false, true] {
+        let mut context = base_context(None);
+        context.supports_tools = true;
+        context.supports_allowed_tools = supports_allowed_tools;
+        let payload = build_responses_request(&request, &context).unwrap();
+        assert_eq!(payload["tool_choice"], json!({"type": "function", "name": "lookup"}));
+    }
+}
+
 fn chat_context() -> ChatRequestContext<'static> {
     ChatRequestContext {
         model: "custom-chat-model",

@@ -449,6 +449,8 @@ fn line_function_no_trailing_empty_line() {
         pending_tool_output_anchor: None,
         session_expand_anchor: None,
         session_body: false,
+        diagnostic_sink: None,
+        diagnostic_history: std::collections::VecDeque::new(),
     };
 
     // This should not create an extra empty line after "line 2"
@@ -459,7 +461,7 @@ fn line_function_no_trailing_empty_line() {
 }
 
 #[test]
-fn inline_ui_shows_error_lines_without_recording_transcript_when_disabled() {
+fn inline_ui_always_records_error_summaries_when_diagnostics_disabled() {
     use crate::ui::InlineCommand;
     use crate::utils::transcript;
 
@@ -472,16 +474,16 @@ fn inline_ui_shows_error_lines_without_recording_transcript_when_disabled() {
 
     let mut saw_append = false;
     while let Ok(command) = receiver.try_recv() {
-        if matches!(command, InlineCommand::AppendLine { .. }) {
+        if matches!(command, InlineCommand::Diagnostic(_)) {
             saw_append = true;
         }
     }
     assert!(saw_append, "error output should still be visible in inline UI");
     assert!(
-        !transcript::snapshot()
+        transcript::snapshot()
             .iter()
             .any(|line| line.contains("fatal: hidden transcript failure")),
-        "error output should not be recorded in transcript when disabled"
+        "error summaries must remain in transcript when details are collapsed"
     );
 }
 
@@ -496,7 +498,7 @@ fn inline_ui_shows_error_lines_when_enabled() {
 
     let mut saw_append = false;
     while let Ok(command) = receiver.try_recv() {
-        if matches!(command, InlineCommand::AppendLine { .. }) {
+        if matches!(command, InlineCommand::Diagnostic(_)) {
             saw_append = true;
         }
     }
@@ -641,4 +643,124 @@ fn transcript_batch_flushes_when_render_fails() {
         }
     }
     assert_eq!(delivered, 1, "buffered lines must flush when the batch render fails");
+}
+
+#[test]
+fn diagnostic_persistence_sees_redacted_payload_and_failure_keeps_summary_visible() {
+    use crate::ui::InlineCommand;
+    use std::sync::{Arc, Mutex};
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let persisted = Arc::clone(&captured);
+    renderer.set_diagnostic_sink(Arc::new(move |diagnostic| {
+        persisted.lock().unwrap().push(diagnostic.clone());
+        Ok(())
+    }));
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Warning,
+        code: "planning.awaiting_input".into(),
+        summary: "Planning needs your input.".into(),
+        agent_details: "password=private-diagnostic-value".into(),
+        correlation_id: "planning-3".into(),
+        actions: Vec::new(),
+    };
+    renderer.diagnostic(&diagnostic).unwrap();
+    assert!(!captured.lock().unwrap()[0].agent_details.contains("private-diagnostic-value"));
+    assert!(matches!(receiver.try_recv().unwrap(), InlineCommand::Diagnostic(_)));
+    renderer.diagnostic(&diagnostic).unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 1, "identical incident state is persisted once");
+    assert!(matches!(receiver.try_recv().unwrap(), InlineCommand::Diagnostic(_)));
+
+    let mut restored = diagnostic.clone();
+    restored.agent_details = "saved evidence survives resume".into();
+    renderer.restore_diagnostic(&restored).unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 1, "restoration never emits another event");
+    let InlineCommand::Diagnostic(displayed) = receiver.try_recv().unwrap() else {
+        panic!("restored diagnostic");
+    };
+    assert_eq!(displayed.agent_details, "saved evidence survives resume");
+
+    renderer.set_diagnostic_sink(Arc::new(|_| anyhow::bail!("diagnostic persistence failed")));
+    assert!(
+        renderer
+            .diagnostic(&diagnostic)
+            .unwrap_err()
+            .to_string()
+            .contains("persistence failed")
+    );
+    let InlineCommand::Diagnostic(displayed) = receiver.try_recv().unwrap() else {
+        panic!("diagnostic summary remains visible");
+    };
+    assert_eq!(displayed.summary, "Planning needs your input.");
+    assert!(displayed.agent_details.contains("Diagnostic persistence failed"));
+    assert!(!displayed.agent_details.contains("private-diagnostic-value"));
+}
+
+#[test]
+fn secondary_diagnostic_renderer_uses_handle_observer_but_resume_does_not_emit() {
+    use crate::ui::InlineCommand;
+    use std::sync::{Arc, Mutex};
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let handle = InlineHandle::new_for_tests(sender);
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&recorded);
+    handle
+        .set_diagnostic_sink(Arc::new(move |diagnostic| {
+            observed.lock().unwrap().push(diagnostic.clone());
+            Ok(())
+        }))
+        .unwrap();
+    let mut secondary = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    secondary
+        .line(MessageStyle::Warning, "Secondary renderer warning\npassword=secondary-private-secret")
+        .unwrap();
+    assert_eq!(recorded.lock().unwrap().len(), 1);
+    let InlineCommand::Diagnostic(displayed) = receiver.try_recv().unwrap() else {
+        panic!("visible secondary diagnostic");
+    };
+    assert_eq!(displayed.summary, "Secondary renderer warning");
+    assert!(!displayed.agent_details.contains("secondary-private-secret"));
+    secondary
+        .restore_diagnostic(&Diagnostic {
+            severity: DiagnosticSeverity::Info,
+            code: "saved.incident".into(),
+            summary: "Saved diagnostic".into(),
+            agent_details: "retained evidence".into(),
+            correlation_id: "saved-2".into(),
+            actions: Vec::new(),
+        })
+        .unwrap();
+    assert_eq!(recorded.lock().unwrap().len(), 1, "resume bypasses the handle observer too");
+    assert!(matches!(receiver.try_recv().unwrap(), InlineCommand::Diagnostic(_)));
+}
+
+#[test]
+fn repeated_legacy_failures_keep_fresh_transcript_incidents() {
+    use crate::ui::InlineCommand;
+    use std::sync::{Arc, Mutex};
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut renderer = AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let output = captured.clone();
+    renderer.set_diagnostic_sink(Arc::new(move |diagnostic| {
+        output.lock().unwrap().push(diagnostic.clone());
+        Ok(())
+    }));
+    for _ in 0..2 {
+        renderer.line(MessageStyle::Error, "Clipboard unavailable").unwrap();
+        renderer.line(MessageStyle::Info, "Another command completed").unwrap();
+    }
+    assert_eq!(captured.lock().unwrap().len(), 2);
+    let mut incidents = Vec::new();
+    while let Ok(command) = receiver.try_recv() {
+        if let InlineCommand::Diagnostic(diagnostic) = command {
+            incidents.push(diagnostic.correlation_id);
+        }
+    }
+    assert_eq!(incidents.len(), 2);
+    assert_ne!(incidents[0], incidents[1]);
 }

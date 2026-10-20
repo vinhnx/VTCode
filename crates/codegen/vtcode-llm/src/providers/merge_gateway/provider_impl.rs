@@ -243,14 +243,10 @@ impl MergeGatewayProvider {
         payload.insert("model".to_owned(), Value::String(request.model.clone()));
         payload.insert("input".to_owned(), Value::Array(input));
 
-        // Some Merge routes terminate at Anthropic Bedrock, which rejects
-        // `tool_choice: "none"`. Keep tool definitions on the wire even when
-        // tools are disabled so the rendered prefix stays cache-stable across
-        // recovery turns; only the choice field is omitted. If the route has
-        // no tool vendor at all, omit definitions so synthesis can still run.
+        // Bedrock-backed routes reject tool_choice=none, so omit callable
+        // definitions when synthesis disables tools. Preserve historical input.
         let tools_disabled = matches!(request.tool_choice, Some(ToolChoice::None));
-        let omit_tools_for_missing_vendor = tools_disabled && self.tool_vendor_known_missing(&request.model);
-        if !omit_tools_for_missing_vendor
+        if !tools_disabled
             && let Some(tools) = request
                 .tools
                 .as_ref()
@@ -339,9 +335,7 @@ impl MergeGatewayProvider {
         // Fail fast only when this request would put tools on the wire and the
         // route has no tool vendor. Recovery (ToolChoice::None) can still
         // synthesize without tools.
-        if self.tool_vendor_known_missing(&request.model)
-            && native_request_sends_tools(&request, self.tool_vendor_known_missing(&request.model))
-        {
+        if self.tool_vendor_known_missing(&request.model) && native_request_sends_tools(&request) {
             return Err(Self::no_tool_vendor_cached_error(&request.model));
         }
         let payload = self.build_native_payload(&request, false)?;
@@ -397,7 +391,7 @@ impl MergeGatewayProvider {
             // verdict: a tools-only retry may still route.
             let sent_reasoning = request.reasoning_effort.is_some_and(is_active_reasoning_effort);
             if is_capability_unavailable(status, &body)
-                && native_request_sends_tools(&request, self.tool_vendor_known_missing(&request.model))
+                && native_request_sends_tools(&request)
                 && !(sent_reasoning && is_reasoning_capability_rejection(&body))
             {
                 self.mark_tool_vendor_missing(&request.model);
@@ -440,9 +434,7 @@ impl MergeGatewayProvider {
     ) -> Result<LLMNormalizedStream, LLMError> {
         self.prepare_native_request(&mut request);
         LLMProvider::validate_request(self, &request)?;
-        if self.tool_vendor_known_missing(&request.model)
-            && native_request_sends_tools(&request, self.tool_vendor_known_missing(&request.model))
-        {
+        if self.tool_vendor_known_missing(&request.model) && native_request_sends_tools(&request) {
             return Err(Self::no_tool_vendor_cached_error(&request.model));
         }
         request.stream = true;

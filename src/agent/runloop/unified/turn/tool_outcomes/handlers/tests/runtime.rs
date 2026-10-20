@@ -1986,7 +1986,10 @@ async fn filtered_verifier_failure_grants_repair_and_success_continues_loop() {
     cache_tool_permission(&mut backing, tool_names::EXEC_COMMAND, &args, PermissionGrant::Permanent).await;
     let patch = json!({"input":"*** Begin Patch\n*** Update File: sample.txt\n@@\n-hello\n+verified continuation\n*** End Patch\n"});
     cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &patch, PermissionGrant::Permanent).await;
-    let mut tracker = LoopTracker::with_verification_snapshot((true, 0));
+    // Completion debt belongs to observed code mutations, not the local snapshot alone.
+    let setup_patch = json!({"input":"*** Begin Patch\n*** Add File: verification_fixture.rs\n+pub fn requires_verification() {}\n*** End Patch\n"});
+    cache_tool_permission(&mut backing, tool_names::APPLY_PATCH, &setup_patch, PermissionGrant::Permanent).await;
+    let mut tracker = LoopTracker::new();
     let mut modified = BTreeSet::new();
     let mut ctx = backing.turn_processing_context();
     let mut outcome_ctx = ToolOutcomeContext {
@@ -1994,6 +1997,12 @@ async fn filtered_verifier_failure_grants_repair_and_success_continues_loop() {
         repeated_tool_attempts: &mut tracker,
         turn_modified_files: &mut modified,
     };
+    handle_single_tool_call(&mut outcome_ctx, "establish_verification_debt", tool_names::APPLY_PATCH, setup_patch)
+        .await
+        .unwrap();
+    assert!(workspace.join("verification_fixture.rs").is_file(), "fixture must establish a real code mutation");
+    assert!(outcome_ctx.ctx.tool_registry.completion_verification_pending());
+    assert!(outcome_ctx.repeated_tool_attempts.verification_is_pending());
     for (exit, pending) in [(7, true), (0, false)] {
         std::fs::write(
             &checker,
@@ -2009,13 +2018,17 @@ async fn filtered_verifier_failure_grants_repair_and_success_continues_loop() {
         )
         .await
         .unwrap();
-        assert_eq!(outcome_ctx.repeated_tool_attempts.verification_is_pending(), pending);
         let output = outcome_ctx.ctx.working_history[start..]
             .iter()
             .filter(|message| message.role == uni::MessageRole::Tool)
             .map(|message| message.content.as_text())
             .collect::<Vec<_>>()
             .join("\n");
+        assert_eq!(
+            outcome_ctx.repeated_tool_attempts.verification_is_pending(),
+            pending,
+            "exit={exit}; tool responses: {output}"
+        );
         assert!(output.contains("README: checker output"), "{output}");
         assert!(!output.contains("unrelated output"), "filter must be preserved: {output}");
         assert_eq!(outcome_ctx.ctx.harness_state.blocked_tool_calls, 0);

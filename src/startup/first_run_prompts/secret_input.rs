@@ -49,7 +49,9 @@ pub(super) fn mask_key(key: &str) -> String {
 }
 
 fn read_secret_line_fallback(prompt: &str) -> Result<Option<String>> {
-    eprintln!("Warning: stdin is not a terminal — the pasted key will be visible.");
+    vtcode_commons::diagnostics::stderr(format_args!(
+        "Warning: stdin is not a terminal — the pasted key will be visible."
+    ));
     print!("{prompt}");
     io::stdout().flush().context("Failed to flush secret prompt")?;
     let mut input = String::new();

@@ -23,8 +23,8 @@ pub mod state;
 pub(in crate::tools::handlers) use artifacts::render_plan_with_tracker;
 pub use artifacts::{
     CANONICAL_STEP_FORMAT, PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES, PlanValidationReport,
-    generate_tracker_markdown_from_plan, merge_plan_content, plan_file_for_tracker_file, split_bracket_items,
-    tracker_file_for_plan_file, validate_plan_content,
+    generate_tracker_markdown_from_plan, merge_plan_content, plan_file_for_tracker_file, retain_plan_recovery_draft,
+    split_bracket_items, tracker_file_for_plan_file, validate_plan_content,
 };
 pub use persistence::{
     PersistedPlanDraft, allocate_plan_file_if_missing, persist_plan_draft, sync_tracker_into_plan_file,
@@ -778,14 +778,12 @@ Tighten the Why VT Code section using ordinary inspection verifies.
 
         let feedback = report.repair_feedback();
         assert!(
-            feedback.contains("sed -n") && feedback.contains("grep -n"),
-            "repair feedback must list inspection-command valid examples: {feedback}"
+            feedback.contains(super::CANONICAL_STEP_FORMAT),
+            "the fallback feedback must retain the validator contract"
         );
-        assert!(
-            feedback.contains(super::artifacts::PLANNING_VERIFY_VALID_EXAMPLES)
-                && feedback.contains(super::artifacts::PLANNING_VERIFY_INVALID_EXAMPLES),
-            "repair feedback must embed the shared example constants: {feedback}"
-        );
+        assert!(feedback.contains("Repair the listed defects"));
+        assert!(!feedback.contains("Valid examples:"), "accepted inspection steps do not need another example wall");
+        assert!(!feedback.contains("invalid implementation steps"));
     }
 
     #[test]

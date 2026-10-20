@@ -48,6 +48,10 @@ impl OpenAiCompatSpec for MetaSpec {
     }
 
     fn insert_tool_choice(_core: &OpenAiCompatCore<Self>, request: &LLMRequest, payload: &mut Map<String, Value>) {
+        if matches!(request.tool_choice, Some(ToolChoice::None)) {
+            payload.remove("tools");
+            return;
+        }
         // Meta Chat Completions defaults to `auto`; only emit the documented
         // supported choice when callers explicitly select it.
         if request.tools.as_ref().is_some_and(|tools| !tools.is_empty())
@@ -79,7 +83,7 @@ impl OpenAiCompatSpec for MetaSpec {
             payload.insert("response_format".to_owned(), output_format.clone());
         }
         if let Some(parallel_tool_calls) = request.parallel_tool_calls
-            && request.tools.as_ref().is_some_and(|tools| !tools.is_empty())
+            && payload.contains_key("tools")
         {
             payload.insert("parallel_tool_calls".to_owned(), Value::Bool(parallel_tool_calls));
         }
@@ -93,7 +97,7 @@ impl OpenAiCompatSpec for MetaSpec {
             && request
                 .tool_choice
                 .as_ref()
-                .is_some_and(|choice| !matches!(choice, ToolChoice::Auto))
+                .is_some_and(|choice| !matches!(choice, ToolChoice::Auto | ToolChoice::None))
         {
             return Err(LLMError::InvalidRequest {
                 message: "Meta AI Chat Completions supports only `tool_choice: auto` when tools are present".to_owned(),
@@ -162,6 +166,36 @@ mod tests {
             top_p: Some(0.8),
             stream: true,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn payload_omits_callable_tools_for_tool_choice_none() {
+        let provider = provider();
+        for stream in [false, true] {
+            let mut request = LLMRequest {
+                model: models::meta::DEFAULT_MODEL.to_owned(),
+                messages: vec![Message::user("Synthesize the saved evidence".to_owned())].into(),
+                tools: Some(Arc::new(vec![ToolDefinition::function(
+                    "lookup".to_owned(),
+                    "Look up a value".to_owned(),
+                    serde_json::json!({"type": "object"}),
+                )])),
+                tool_choice: Some(ToolChoice::None),
+                stream,
+                ..Default::default()
+            };
+            provider
+                .validate_request(&request)
+                .expect("none is supported by omitting tools");
+            let payload = provider.core.convert_request(&request).expect("payload");
+            assert!(payload.get("tools").is_none());
+            assert!(payload.get("tool_choice").is_none());
+            assert!(payload.get("tool_stream").is_none());
+            request.tool_choice = Some(ToolChoice::Auto);
+            let enabled = provider.core.convert_request(&request).expect("enabled payload");
+            assert_eq!(enabled["tools"][0]["function"]["name"], "lookup");
+            assert_eq!(enabled["tool_choice"], "auto");
         }
     }
 

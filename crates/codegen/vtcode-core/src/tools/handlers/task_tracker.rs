@@ -103,6 +103,7 @@ impl TaskChecklist {
                     "files": item.metadata.files.clone(),
                     "outcome": item.metadata.outcome.clone(),
                     "verify": item.metadata.verify.clone(),
+                    "scope_review": item.metadata.scope_review.clone(),
                 })
             }).collect::<Vec<_>>()
             ,
@@ -690,7 +691,10 @@ impl TaskTrackerTool {
                 .all(|(left, right)| left.description == right.description);
         let requested_has_explicit_status = items.iter().any(|item| item.status != TaskStatus::Pending);
         let requested_has_step_metadata = items.iter().any(|item| {
-            !item.metadata.files.is_empty() || item.metadata.outcome.is_some() || !item.metadata.verify.is_empty()
+            !item.metadata.files.is_empty()
+                || item.metadata.outcome.is_some()
+                || !item.metadata.verify.is_empty()
+                || !item.metadata.scope_review.is_empty()
         });
 
         let unchanged = if same_structure && !requested_has_explicit_status && !requested_has_step_metadata {
@@ -1036,6 +1040,34 @@ mod tests {
         assert!(persisted.contains("files: docs/ARCHITECTURE.md"));
         assert!(persisted.contains("outcome: Document the harness map"));
         assert!(persisted.contains("verify: cargo check"));
+    }
+
+    #[tokio::test]
+    async fn test_scope_review_metadata_survives_public_create_and_status_update() {
+        let temp = TempDir::new().unwrap();
+        let (_state, tool) = setup_tool(&temp);
+        let created = tool
+            .execute(json!({
+                "action": "create", "title": "Scope review", "items": [{
+                    "description": "Review final scope", "files": ["README.md"],
+                    "scope_review": ["git status --porcelain", "git diff --stat HEAD -- README.md"]
+                }]
+            }))
+            .await
+            .unwrap();
+        assert_eq!(
+            created["checklist"]["items"][0]["scope_review"],
+            json!(["git status --porcelain", "git diff --stat HEAD -- README.md"])
+        );
+        assert_eq!(created["checklist"]["items"][0]["verify"], json!([]));
+        tool.execute(json!({"action": "update", "index": 1, "status": "completed"}))
+            .await
+            .unwrap();
+        let persisted = std::fs::read_to_string(temp.path().join(".vtcode/tasks/current_task.md")).unwrap();
+        assert!(persisted.contains("[x] Review final scope"));
+        assert!(persisted.contains("  scope-review: git status --porcelain"));
+        assert!(persisted.contains("  scope-review: git diff --stat HEAD -- README.md"));
+        assert!(!persisted.contains("  verify:"));
     }
 
     #[tokio::test]

@@ -13,7 +13,7 @@ pub(crate) fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[Hook
 
         let style = match message.level {
             HookMessageLevel::Info => MessageStyle::Info,
-            HookMessageLevel::Warning => MessageStyle::Info,
+            HookMessageLevel::Warning => MessageStyle::Warning,
             HookMessageLevel::Error => MessageStyle::Error,
         };
 

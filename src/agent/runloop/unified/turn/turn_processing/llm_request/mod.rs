@@ -73,7 +73,6 @@ use snapshot::{is_openai_prompt_cache_enabled, is_session_affinity_key_enabled, 
 use streaming::HarnessStreamingBridge;
 #[cfg(test)]
 use vtcode_core::config::build_openai_prompt_cache_key;
-use vtcode_core::utils::transcript::MessageStyle;
 
 async fn run_standard_stream_attempt(
     ctx: &mut TurnProcessingContext<'_>,
@@ -210,6 +209,14 @@ async fn execute_llm_request_with_options_impl(
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
+    let max_retries = if ctx.is_planning_active() && ctx.plan_session.recovery.research_closed {
+        let available = vtcode_core::exec::events::planning::PlanningRecoverySnapshot::MAX_REQUESTS
+            .saturating_sub(ctx.plan_session.recovery.requests_used)
+            .saturating_add(1); // The outer admission already reserved this dispatch.
+        max_retries.min(usize::from(available))
+    } else {
+        max_retries
+    };
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
@@ -224,9 +231,37 @@ async fn execute_llm_request_with_options_impl(
     let mut request_timer = Instant::now();
 
     let mut attempt = 0usize;
+    let mut recovery_dispatches = 0usize;
     while attempt < max_retries {
+        if ctx.is_planning_active() && ctx.plan_session.recovery.research_closed {
+            if recovery_dispatches > 0 {
+                if ctx.plan_session.recovery.outcome
+                    == vtcode_core::exec::events::planning::PlanningOutcome::Researching
+                    || !crate::agent::runloop::unified::planning_workflow::recovery_state::admit_request(
+                        &mut ctx.plan_session.recovery,
+                    )
+                {
+                    llm_result = Err(anyhow::anyhow!("planning recovery allowance exhausted; awaiting input"));
+                    break;
+                }
+                ctx.persist_planning_recovery().await?;
+            }
+            recovery_dispatches += 1;
+        }
         attempts_made = attempt + 1;
         if attempt > 0 {
+            ctx.renderer
+                .diagnostic(&retry::provider_retry_diagnostic(retry::ProviderRetryReport {
+                    turn_id: &ctx.harness_state.turn_id.0,
+                    step_count,
+                    provider: &turn_snapshot.provider_name,
+                    model: &active_model,
+                    attempt: attempt + 1,
+                    max_attempts: max_retries,
+                    category: last_error_category.as_ref().map(|category| category.user_label()),
+                    reason: last_error_preview.as_deref(),
+                    outcome: retry::ProviderRetryOutcome::Retrying,
+                }))?;
             ctx.handle
                 .set_progress_phase(vtcode_commons::ui_protocol::ProgressPhase::Retrying);
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
@@ -639,7 +674,17 @@ async fn execute_llm_request_with_options_impl(
                             ctx.session_stats.stream_timeout_billing_advisory(&turn_snapshot.provider_name)
                         {
                             tracing::warn!("{advisory}");
-                            let _ = ctx.renderer.line(MessageStyle::Warning, &advisory);
+                            ctx.renderer.diagnostic(&vtcode_commons::diagnostics::Diagnostic {
+                                severity: vtcode_commons::diagnostics::DiagnosticSeverity::Warning,
+                                code: "provider.stream_billing_advisory".into(),
+                                summary: "The provider may bill the timed-out stream. Retrying may add cost.".into(),
+                                agent_details: advisory,
+                                correlation_id: format!(
+                                    "provider-billing:{}:{}",
+                                    ctx.harness_state.turn_id.0, turn_snapshot.provider_name
+                                ),
+                                actions: Vec::new(),
+                            })?;
                         }
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
@@ -732,6 +777,24 @@ async fn execute_llm_request_with_options_impl(
         && let Err(err) = &llm_result
     {
         last_error_preview = Some(compact_error_message(&err.to_string(), 180));
+    }
+    if attempts_made > 1 {
+        ctx.renderer
+            .diagnostic(&retry::provider_retry_diagnostic(retry::ProviderRetryReport {
+                turn_id: &ctx.harness_state.turn_id.0,
+                step_count,
+                provider: &turn_snapshot.provider_name,
+                model: &active_model,
+                attempt: attempts_made,
+                max_attempts: max_retries,
+                category: last_error_category.as_ref().map(|category| category.user_label()),
+                reason: last_error_preview.as_deref(),
+                outcome: if llm_result.is_ok() {
+                    retry::ProviderRetryOutcome::Succeeded
+                } else {
+                    retry::ProviderRetryOutcome::Stopped
+                },
+            }))?;
     }
     emit_llm_retry_metrics(
         ctx,

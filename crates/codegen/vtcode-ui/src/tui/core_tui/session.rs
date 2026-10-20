@@ -27,6 +27,7 @@ use crate::tui::core_tui::types::LocalAgentEntry;
 use crate::tui::options::FullscreenInteractionSettings;
 use crate::tui::ui::tui::widgets::SessionWidget;
 
+mod diagnostics;
 mod frame_layout;
 mod header;
 mod impl_events;

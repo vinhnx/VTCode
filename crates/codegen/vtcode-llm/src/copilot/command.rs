@@ -117,30 +117,7 @@ pub fn spawn_copilot_acp_process(
     raw_model: Option<&str>,
     model_selection_mode: CopilotModelSelectionMode,
 ) -> Result<Child> {
-    let mut extra_args = Vec::new();
-    if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty())
-        && matches!(model_selection_mode, CopilotModelSelectionMode::CliArgument)
-    {
-        extra_args.push("--model".to_string());
-        extra_args.push(raw_model.to_string());
-    }
-    for tool in &config.available_tools {
-        let trimmed = tool.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        extra_args.push("--available-tools".to_string());
-        extra_args.push(trimmed.to_string());
-    }
-    for tool in &config.excluded_tools {
-        let trimmed = tool.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        extra_args.push("--excluded-tools".to_string());
-        extra_args.push(trimmed.to_string());
-    }
-    extra_args.extend(ACP_FLAGS.iter().map(|flag| (*flag).to_string()));
+    let extra_args = copilot_acp_arguments(config, raw_model, model_selection_mode);
     let mut command = resolved.command(Some(cwd), &extra_args);
     command
         .stdin(Stdio::piped())
@@ -162,6 +139,43 @@ pub fn spawn_copilot_acp_process(
     command
         .spawn()
         .with_context(|| format!("failed to spawn GitHub Copilot ACP runtime using `{}`", resolved.display()))
+}
+
+fn copilot_acp_arguments(
+    config: &CopilotAuthConfig,
+    raw_model: Option<&str>,
+    model_selection_mode: CopilotModelSelectionMode,
+) -> Vec<String> {
+    let mut extra_args = Vec::new();
+    if let Some(raw_model) = raw_model.filter(|value| !value.trim().is_empty())
+        && matches!(model_selection_mode, CopilotModelSelectionMode::CliArgument)
+    {
+        extra_args.push("--model".to_string());
+        extra_args.push(raw_model.to_string());
+    }
+    if config.available_tools.iter().all(|tool| tool.trim().is_empty()) {
+        // An absent flag restores the CLI's built-in tools. An explicit empty
+        // allowlist also keeps the legacy ACP session fallback tool-free.
+        extra_args.push("--available-tools=".to_owned());
+    }
+    for tool in &config.available_tools {
+        let trimmed = tool.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        extra_args.push("--available-tools".to_string());
+        extra_args.push(trimmed.to_string());
+    }
+    for tool in &config.excluded_tools {
+        let trimmed = tool.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        extra_args.push("--excluded-tools".to_string());
+        extra_args.push(trimmed.to_string());
+    }
+    extra_args.extend(ACP_FLAGS.iter().map(|flag| (*flag).to_string()));
+    extra_args
 }
 
 pub fn spawn_copilot_server_process(resolved: &ResolvedCopilotCommand, cwd: &Path) -> Result<Child> {
@@ -222,6 +236,18 @@ fn format_command(program: &str, args: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_tool_allowlist_is_explicit_in_acp_command() {
+        let mut config = default_config();
+        config.available_tools.clear();
+        let args = copilot_acp_arguments(&config, None, CopilotModelSelectionMode::CliArgument);
+        assert!(args.iter().any(|arg| arg == "--available-tools="));
+        assert!(!args.iter().any(|arg| arg == "view" || arg == "grep" || arg == "glob"));
+        let enabled = copilot_acp_arguments(&default_config(), None, CopilotModelSelectionMode::CliArgument);
+        assert!(!enabled.iter().any(|arg| arg == "--available-tools="));
+        assert!(enabled.windows(2).any(|args| args == ["--available-tools", "view"]));
+    }
 
     fn default_config() -> CopilotAuthConfig {
         CopilotAuthConfig::default()

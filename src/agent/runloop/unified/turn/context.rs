@@ -9,6 +9,7 @@
 
 mod continuation;
 mod message_history;
+mod planning_recovery;
 mod response_handling;
 mod runtime_context;
 mod tool_response_events;
@@ -43,11 +44,6 @@ pub(crate) use self::message_history::{last_user_message, last_user_message_inde
 /// the auto-continue marker match together instead of silently diverging.
 pub(crate) use self::response_handling::PLANNING_RECOVERY_EMPTY_SYNTHESIS_DETAIL;
 pub(crate) use self::response_handling::planning_tokens_without_content_handoff_detail;
-/// Test-only surface: `tracker_continue_tests` composes the frozen prefix and
-/// detail into fixture text, so a wording change in `response_handling.rs`
-/// fails the marker test loudly instead of silently disabling the cap.
-#[cfg(test)]
-pub(crate) use self::response_handling::{PLANNING_RECOVERY_HANDOFF_PREFIX, PLANNING_RECOVERY_HANDOFF_REASON};
 pub(crate) use self::runtime_context::{
     LLMContext, NoOutputFacts, ToolContext, TurnHandlerOutcome, TurnOutcomeContext, TurnProcessingContext,
     TurnProcessingContextParts, TurnProcessingResult, TurnProcessingState, UIContext,

@@ -231,17 +231,30 @@ fn config_poll_retains_rejected_config_and_recovers_with_cli_overrides() {
     assert_eq!(retained.agent.default_model, config.model);
     let mut warnings = Vec::new();
     while let Ok(command) = receiver.try_recv() {
-        if let vtcode_ui::tui::app::InlineCommand::AppendLine { segments, .. } = command {
-            warnings.push(segments.into_iter().map(|segment| segment.text).collect::<String>());
+        if let vtcode_ui::tui::app::InlineCommand::Diagnostic(diagnostic) = command {
+            assert_eq!(diagnostic.severity, vtcode_commons::diagnostics::DiagnosticSeverity::Warning);
+            assert!(!diagnostic.summary.trim().is_empty(), "the warning summary must always remain visible");
+            warnings.push(*diagnostic);
         }
     }
     assert_eq!(
         warnings
             .iter()
-            .filter(|text| text.contains("Configuration reload rejected"))
+            .filter(|diagnostic| diagnostic.text().contains("Configuration reload rejected"))
             .count(),
         1
     );
+    let rejection = warnings
+        .iter()
+        .find(|diagnostic| diagnostic.text().contains("Configuration reload rejected"))
+        .unwrap();
+    if !rejection.summary.contains("Configuration reload rejected") {
+        assert!(rejection.summary.contains("Expand Details"), "long diagnostic keeps a visible next action");
+        assert!(
+            rejection.agent_details.contains("Configuration reload rejected"),
+            "the complete rejection remains available in Details"
+        );
+    }
     assert!(watcher.take_reload_error().is_none());
 
     std::fs::write(&path, "[agent]\nprovider = 'openai'\ndefault_model = 'file-model'\n[ui]\nvim_mode = false\n")

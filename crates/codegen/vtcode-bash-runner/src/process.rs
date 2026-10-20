@@ -384,7 +384,7 @@ pub async fn collect_output_until_exit(
                     match tokio::time::timeout(quiet, output_rx.recv()).await {
                         Ok(Ok(chunk)) => collected.extend_from_slice(&chunk),
                         Ok(Err(broadcast::error::RecvError::Lagged(count))) => {
-                            eprintln!("[vtcode] output stream lagged ({count} dropped)");
+                            vtcode_commons::diagnostics::stderr(format_args!("Warning: output stream lagged ({count} dropped)"));
                             continue;
                         }
                         Ok(Err(broadcast::error::RecvError::Closed)) => break,

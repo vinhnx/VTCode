@@ -1,5 +1,16 @@
 # ANSI Quick Reference for VT Code Development
 
+## Diagnostics
+
+| Surface | Behavior |
+| --- | --- |
+| `AnsiRenderer::diagnostic` | Redacts, persists through the installed callback, and displays a canonical diagnostic |
+| Human transcript | Always shows the severity summary and actions; click or F8 toggles details |
+| Transcript Review / headless | Retains full labeled operational details |
+| Legacy Error / Warning | Uses the shared adapter; summaries remain visible when diagnostics are collapsed |
+
+See the [diagnostic contract](../development/diagnostics.md).
+
 ## Most Common Sequences
 
 ### Colors (Foreground)
@@ -317,3 +328,13 @@ for line in clean_output.lines() {
 - `docs/reference/ansi-escape-sequences.md` - Full ANSI reference
 - `docs/reference/ansi-in-vtcode.md` - VT Code-specific usage
 - `crates/codegen/vtcode-core/src/utils/ansi_parser.rs` - Implementation
+
+## Planning recovery
+
+| Runtime state | Human action |
+| --- | --- |
+| Synthesizing or repairing | Wait for a validated draft; the shared automatic limit is three requests. |
+| Awaiting input | Retry with retained evidence, add clarification, or choose a model. |
+| Awaiting approval | Review and explicitly approve the persisted plan before implementation. |
+
+Recovery input does not approve a plan. See the [recovery contract](../development/planning-recovery.md).

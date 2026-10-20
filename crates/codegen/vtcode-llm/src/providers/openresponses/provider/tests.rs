@@ -17,6 +17,53 @@ fn test_provider(base_url: &str) -> OpenResponsesProvider {
     )
 }
 
+#[test]
+fn payload_preserves_explicit_none_in_both_transports() {
+    use crate::provider::{ToolChoice, ToolDefinition};
+    use std::sync::Arc;
+
+    let provider = test_provider("https://example.test/v1");
+    for stream in [false, true] {
+        let mut request = LLMRequest {
+            model: "gpt-5".to_owned(),
+            messages: vec![Message::user("Synthesize saved evidence".to_owned())].into(),
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "lookup".to_owned(),
+                "Look up a value".to_owned(),
+                json!({"type": "object"}),
+            )])),
+            tool_choice: Some(ToolChoice::None),
+            ..Default::default()
+        };
+        for native in [false, true] {
+            let build = |request: &LLMRequest| {
+                if native {
+                    provider.build_native_payload(request, stream)
+                } else {
+                    provider.build_payload(request, stream)
+                }
+            };
+            let disabled = build(&request).expect("disabled payload");
+            assert_eq!(disabled["tool_choice"], "none");
+            assert!(disabled["tools"].as_array().is_some_and(|tools| !tools.is_empty()));
+            assert_eq!(disabled["stream"], stream);
+            request.tool_choice = Some(ToolChoice::Auto);
+            let enabled = build(&request).expect("enabled payload");
+            assert_eq!(enabled["tool_choice"], "auto");
+            assert_eq!(disabled["tools"], enabled["tools"]);
+            request.tool_choice = Some(ToolChoice::function("lookup".to_owned()));
+            let forced = build(&request).expect("forced function payload");
+            let expected = if native {
+                json!({"type": "function", "name": "lookup"})
+            } else {
+                json!({"type": "function", "function": {"name": "lookup"}})
+            };
+            assert_eq!(forced["tool_choice"], expected);
+            request.tool_choice = Some(ToolChoice::None);
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum NativeEntrypoint {
     Generate,

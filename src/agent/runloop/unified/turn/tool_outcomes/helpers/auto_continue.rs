@@ -57,22 +57,14 @@ pub(crate) fn tracker_continue_directive(label: &str, incomplete: &[String]) -> 
     )
 }
 
-/// Shared recoverable blocked-reason shapes for every mode's auto-continue.
-/// Keep this the single allow-list so plan-mode and tracker classifiers cannot
-/// drift (fuse / no-final / budget / recovery-fallback wording).
-/// Deny lists stay per-mode: evaluation order differs (plan allows first so
-/// `PLANNING_COMPLETED_TURN_FALLBACK_REASON` is not shadowed by
-/// "approval-ready plan").
+/// Recoverable blocked-reason shapes for tracker continuation. Planning uses
+/// its persisted typed outcome and request allowance instead of diagnostics.
 pub(crate) const RECOVERABLE_BLOCK_ALLOW_TOKENS: &[&str] = &[
     "recovery fallback",
     "recovery could not confirm",
     "recovery exhausted",
     "recovery was exhausted",
-    // `break_planning_recovery_with_handoff` failure reason. It contains the
-    // plan-mode deny token "approval-ready plan", so it must be allow-listed
-    // explicitly (plan mode evaluates allow entries before that deny) or a
-    // recoverable planning block parks at the user `continue` prompt instead
-    // of auto-continuing (session-vtcode-20261019T022628Z).
+    // Retain compatibility with stored recovery handoffs in tracker history.
     "did not produce an approval-ready plan",
     "reached the safety cap",
     "safety cap",
@@ -109,7 +101,7 @@ fn contains_any_token(lower: &str, tokens: &[&str]) -> bool {
     tokens.iter().any(|token| lower.contains(token))
 }
 
-/// Deny tokens shared by the tracker and plan-mode auto-continue classifiers.
+/// Deny tokens for tracker auto-continue.
 /// They mirror production blocked-reason constants and true-handoff vocabulary:
 /// `RECOVERY_CONTRACT_VIOLATION_REASON` ("final tool-free synthesis pass" /
 /// "attempted more tool calls"), `PENDING_VERIFICATION_BLOCK_REASON`
@@ -158,9 +150,8 @@ pub(crate) fn is_budget_exhausted_verification_block(lower: &str) -> bool {
 }
 
 /// Hard-handoff signals that veto a budget-exhausted verification auto-retry.
-/// Shared by the tracker and plan-mode classifiers so compound reasons cannot
-/// auto-queue past a permission/interview wait. `extra_deny` holds
-/// mode-specific tokens (tracker extras vs plan-mode's broad `"awaiting"`).
+/// Compound reasons cannot auto-queue past a permission/interview wait.
+/// `extra_deny` carries the tracker's additional terminal handoff tokens.
 fn verification_block_has_hard_deny(lower: &str, extra_deny: &[&str]) -> bool {
     RECOVERABLE_BLOCK_BASE_DENY_TOKENS
         .iter()
@@ -292,111 +283,40 @@ pub(crate) fn should_queue_tracker_resume_continuation(
         && incomplete_items.is_some_and(|items| !items.is_empty())
 }
 
-/// Pure gate for plan-mode outer auto-continue.
-///
-/// Continues incomplete planning only on recoverable **blocked** ends when the
-/// plan is not yet ready for approval. Ordinary completed planning turns are
-/// never auto-continued (they may be interview or approval handoffs). Never
-/// auto-approves.
-///
-/// `consecutive_empty_fallbacks` breaks the empty-turn self-loop: turns that
-/// end with the deterministic `PLANNING_COMPLETED_FALLBACK_RESPONSE` or an
-/// empty tool-free synthesis handoff (no LLM output, no plan) must not
-/// re-queue forever. After [`MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE`]
-/// consecutive empties the gate closes and the user must `continue` manually.
-pub(crate) const MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE: u8 = 2;
-
-/// Stable marker of the deterministic empty-turn fallback text in
-/// `turn_loop::PLANNING_COMPLETED_FALLBACK_RESPONSE`. Matched by substring so
-/// the gate stays pure (no cross-module constant import) and robust to
-/// surrounding file-list appends.
-pub(crate) fn is_plan_empty_fallback_text(text: &str) -> bool {
-    text.contains("without a final plan synthesis")
-        && text.contains("the next turn can reuse it without re-reading files")
+/// Runtime gates for an automatic planning continuation. Cross-turn queue
+/// consumption remains caller-owned; zero disables automatic continuation.
+#[derive(Clone, Copy)]
+pub(crate) struct PlanningAutoContinueGates {
+    pub enabled: bool,
+    pub planning_active: bool,
+    pub plan_ready_for_approval: bool,
+    pub turn_completed: bool,
+    pub verification_blocked: bool,
+    pub refused: bool,
+    pub hard_budget_exhausted: bool,
+    pub stop_requested: bool,
+    pub cross_turn_turns: u8,
 }
 
-/// Stable marker of the empty-synthesis handoff built by
-/// `break_planning_recovery_with_handoff` when the tool-free pass returned no
-/// content (detail `the model returned an empty synthesis response`). Matched
-/// by substring so the gate stays pure and robust to the optional budget-cause
-/// prefix. A validation-failure or tool-call-violation handoff carries a
-/// different detail, so it is not counted as an empty turn.
-pub(crate) fn is_plan_empty_synthesis_handoff_text(text: &str) -> bool {
-    text.contains("the one tool-free recovery synthesis did not produce an approval-ready plan")
-        && text.contains("the model returned an empty synthesis response")
-}
-
-/// True when a planning turn consumed a full turn without producing any plan
-/// synthesis: the deterministic fallback or an empty tool-free synthesis
-/// handoff. Both share the consecutive-empty counter so a blank model cannot
-/// re-queue the whole `cross_turn_turns` budget (session-vtcode-20261019T022628Z).
-pub(crate) fn is_plan_empty_turn_text(text: &str) -> bool {
-    is_plan_empty_fallback_text(text) || is_plan_empty_synthesis_handoff_text(text)
-}
-
+/// Continue only admitted synthesis/repair work with shared allowance left.
+/// Diagnostic wording cannot authorize a continuation or cross a human gate.
 pub(crate) fn should_queue_plan_mode_auto_continue(
-    auto_continue_enabled: bool,
-    planning_active: bool,
-    plan_ready_for_approval: bool,
-    turn_completed: bool,
-    blocked_reason: Option<&str>,
-    is_verification_block: bool,
-    cross_turn_turns: u8,
-    consecutive_empty_fallbacks: u8,
+    recovery: &vtcode_core::exec::events::planning::PlanningRecoverySnapshot,
+    gates: PlanningAutoContinueGates,
 ) -> bool {
-    if !auto_continue_enabled || !planning_active || cross_turn_turns == 0 {
-        return false;
-    }
-    if plan_ready_for_approval || is_verification_block || turn_completed {
-        return false;
-    }
-    if consecutive_empty_fallbacks >= MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE {
-        return false;
-    }
-    blocked_reason.is_some_and(plan_mode_recoverable_block)
-}
-
-/// Recoverable planning blocked-reason classifier.
-///
-/// Allow-list is evaluated **first**. Production
-/// `PLANNING_COMPLETED_TURN_FALLBACK_REASON` ("Planning turn ended via
-/// recovery fallback … approval-ready plan …") must auto-queue; a deny-first
-/// match on "planning turn ended" / "approval-ready plan" incorrectly blocked
-/// that path and forced a user `continue` nudge. Interview/approval/permission
-/// handoffs stay denied after the allow-list misses.
-pub(crate) fn plan_mode_recoverable_block(reason: &str) -> bool {
-    // Refusals never auto-continue; see `tracker_auto_continue_is_recoverable_block`.
-    if refusal::is_refusal_notice(reason) {
-        return false;
-    }
-    let lower = reason.to_ascii_lowercase();
-    // Budget-only verification blocks can retry on a fresh turn, same as the
-    // tracker gate. Other verification blocks stay terminal.
-    if is_budget_exhausted_verification_block(&lower) {
-        return !verification_block_has_hard_deny(&lower, &["awaiting"]);
-    }
-    // True handoffs deny even when recovery/budget tokens are also present
-    // (compound reasons must not auto-queue past a permission/interview wait).
-    // "awaiting" is deliberately broader than the tracker's "awaiting approval".
-    if contains_any_token(&lower, RECOVERABLE_BLOCK_BASE_DENY_TOKENS) || lower.contains("awaiting") {
-        return false;
-    }
-    // Production recovery constants (including PLANNING_COMPLETED_TURN_FALLBACK_REASON)
-    // are recoverable. Deny tokens like "planning turn ended" / "approval-ready
-    // plan" must not shadow "recovery fallback".
-    //
-    // Entry-turn Blocked shapes common after mid-turn `start_planning`: the
-    // model hits the read-only gate (blocked-tool fuse) or ends tools without a
-    // published final. Both must auto-continue planning research instead of
-    // parking at the user `Continue…` prompt.
-    if matches_recoverable_block_shape(&lower) {
-        return true;
-    }
-    // Remaining planning handoffs (interview/approval without recovery tokens).
-    if lower.contains("planning turn ended") || lower.contains("approval-ready plan") {
-        return false;
-    }
-    false
+    use vtcode_core::exec::events::planning::PlanningOutcome;
+    gates.enabled
+        && gates.planning_active
+        && !gates.plan_ready_for_approval
+        && !gates.turn_completed
+        && !gates.verification_blocked
+        && !gates.refused
+        && !gates.hard_budget_exhausted
+        && !gates.stop_requested
+        && gates.cross_turn_turns > 0
+        && matches!(recovery.outcome, PlanningOutcome::Synthesizing | PlanningOutcome::Repairing)
+        && recovery.requests_used
+            < crate::agent::runloop::unified::planning_workflow::recovery_state::MAX_PLANNING_RECOVERY_REQUESTS
 }
 
 /// User-facing plan progress line (title + phase/status only).
@@ -441,8 +361,9 @@ pub(crate) const PLAN_MODE_AUTO_CONTINUE_MARKER: &str = "Plan-mode auto-continue
 /// the [`PLAN_MODE_AUTO_CONTINUE_MARKER`] guard it could never read as an
 /// exit-and-implement intent.
 const PLAN_MODE_CONTINUE_DIRECTIVE_TAIL: &str = "Planning stays active and read-only, so the next step is to continue \
-planning: read-only research and synthesis toward one compact `<proposed_plan>`. The harness queued this \
-continuation, so no user reply is needed, and code changes wait for plan approval.";
+planning: repair the retained draft from saved evidence and specific validator feedback, then emit one compact \
+`<proposed_plan>`. Research stays closed during automatic continuation. The harness queued this continuation, \
+so no user reply is needed, and code changes wait for plan approval.";
 
 /// Follow-up prompt for plan-mode auto-continue turns.
 pub(crate) fn plan_mode_continue_follow_up() -> String {
@@ -456,15 +377,6 @@ pub(crate) fn plan_mode_continue_follow_up() -> String {
 pub(crate) fn plan_mode_auto_continue_directive() -> String {
     format!(
         "{PLAN_MODE_AUTO_CONTINUE_MARKER} planning remains active and no validated plan is ready for approval. \
-{PLAN_MODE_CONTINUE_DIRECTIVE_TAIL}"
-    )
-}
-
-/// System directive paired with a plan-mode continuation queued on session
-/// resume after a recoverable blocked handoff.
-pub(crate) fn plan_mode_resume_directive() -> String {
-    format!(
-        "Resume continuation: planning remains active after a recoverable blocked handoff. \
 {PLAN_MODE_CONTINUE_DIRECTIVE_TAIL}"
     )
 }

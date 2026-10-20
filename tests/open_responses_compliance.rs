@@ -181,6 +181,7 @@ fn test_reasoning_item_compliance() {
         context: None,
         id: "r1".to_string(),
         details: ThreadItemDetails::Reasoning(Box::new(ExecReasoningItem {
+            diagnostic: None,
             text: "Thinking...".to_string(),
             stage: None,
         })),

@@ -1,9 +1,8 @@
 //! Plan/tracker embedding, path pairing, and tracker generation.
 
-use super::sections::{
-    IMPLEMENTATION_SECTION_ALIASES, collect_implementation_step_blocks, numbered_line_parts, section_body_for_aliases,
-};
+use super::sections::{IMPLEMENTATION_SECTION_ALIASES, collect_implementation_step_blocks, section_body_for_aliases};
 use super::steps::{marker_value, parse_bracket_list, step_action_segments};
+use super::verification::{is_scope_review_action, parse_scope_review_checks};
 use super::{PLAN_TRACKER_END, PLAN_TRACKER_START};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -89,16 +88,11 @@ pub(in crate::tools::handlers::planning_workflow) fn tracker_has_progress_or_not
 
 pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String> {
     let stripped = strip_embedded_tracker(plan_markdown);
-    let implementation = section_body_for_aliases(&stripped, IMPLEMENTATION_SECTION_ALIASES).or_else(|| {
-        let blocks = collect_implementation_step_blocks(&stripped, true);
-        (!blocks.is_empty()).then(|| {
-            blocks
-                .into_iter()
-                .filter_map(|block| block.lines.first().map(|line| format!("{}. {line}", block.number)))
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
-    })?;
+    let implementation = section_body_for_aliases(&stripped, IMPLEMENTATION_SECTION_ALIASES);
+    let blocks = implementation.as_deref().map_or_else(
+        || collect_implementation_step_blocks(&stripped, true),
+        |body| collect_implementation_step_blocks(body, false),
+    );
     let title = plan_markdown
         .lines()
         .find_map(|line| line.trim().strip_prefix("# ").map(str::trim))
@@ -107,8 +101,8 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
 
     let mut items = Vec::new();
     let mut seen_descriptions = HashSet::new();
-    for line in implementation.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let Some((_, description)) = numbered_line_parts(line) else {
+    for block in &blocks {
+        let Some(description) = block.lines.first() else {
             continue;
         };
         // Share marker boundaries with validation so prose arrows remain
@@ -124,7 +118,12 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
         }
 
         let mut entry = format!("- [ ] {main}\n");
-        for segment in segments.iter().skip(1) {
+        let verification_label = if is_scope_review_action(main) {
+            "scope-review"
+        } else {
+            "verify"
+        };
+        for segment in segments.iter().skip(1).chain(block.lines.iter().skip(1)) {
             // Reuse the validator's emphasis-tolerant marker parsing so an
             // accepted `**files:**`-style segment yields the same tracker
             // metadata the validator saw.
@@ -142,16 +141,20 @@ pub fn generate_tracker_markdown_from_plan(plan_markdown: &str) -> Option<String
                 }
                 continue;
             }
-            if let Some(verify) = marker_value(segment, &["verify"]) {
-                let values = parse_bracket_list(verify);
+            if let Some(verify) = marker_value(segment, &["verify", "verification"]) {
+                let values = if is_scope_review_action(main) {
+                    parse_scope_review_checks(verify)
+                } else {
+                    parse_bracket_list(verify)
+                };
                 if values.is_empty() {
                     let trimmed = verify.trim();
                     if !trimmed.is_empty() {
-                        entry.push_str(&format!("  verify: {trimmed}\n"));
+                        entry.push_str(&format!("  {verification_label}: {trimmed}\n"));
                     }
                 } else {
                     for value in values {
-                        entry.push_str(&format!("  verify: {value}\n"));
+                        entry.push_str(&format!("  {verification_label}: {value}\n"));
                     }
                 }
             }

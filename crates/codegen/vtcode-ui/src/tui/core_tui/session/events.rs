@@ -247,6 +247,13 @@ pub(crate) fn dispatch_rebindable_action(session: &mut Session, action: Action) 
 
 pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<InlineEvent> {
     let key = action::normalize_terminal_control_event(key);
+    if !session.has_active_overlay()
+        && key.code == KeyCode::F(8)
+        && key.kind != KeyEventKind::Release
+        && session.toggle_latest_diagnostic()
+    {
+        return None;
+    }
     let modifiers = key.modifiers;
     let has_control = modifiers.contains(KeyModifiers::CONTROL);
     let has_shift = modifiers.contains(KeyModifiers::SHIFT);

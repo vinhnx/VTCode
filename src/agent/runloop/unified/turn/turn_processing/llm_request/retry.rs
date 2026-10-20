@@ -211,9 +211,96 @@ pub(super) fn next_post_tool_retry_action(
     None
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum ProviderRetryOutcome {
+    Retrying,
+    Succeeded,
+    Stopped,
+}
+
+pub(super) struct ProviderRetryReport<'a> {
+    pub turn_id: &'a str,
+    pub step_count: usize,
+    pub provider: &'a str,
+    pub model: &'a str,
+    pub attempt: usize,
+    pub max_attempts: usize,
+    pub category: Option<&'a str>,
+    pub reason: Option<&'a str>,
+    pub outcome: ProviderRetryOutcome,
+}
+
+/// Correlate one logical provider request across retry count and outcome updates.
+pub(super) fn provider_retry_diagnostic(report: ProviderRetryReport<'_>) -> vtcode_commons::diagnostics::Diagnostic {
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity, redact_diagnostic};
+    let (severity, code, summary) = match report.outcome {
+        ProviderRetryOutcome::Retrying => (
+            DiagnosticSeverity::Warning,
+            "provider.retrying",
+            "The provider request failed. Retrying from the existing conversation; cancel to stop.",
+        ),
+        ProviderRetryOutcome::Succeeded => (
+            DiagnosticSeverity::Info,
+            "provider.retry_succeeded",
+            "The provider request recovered. Continuing the conversation.",
+        ),
+        ProviderRetryOutcome::Stopped => (
+            DiagnosticSeverity::Error,
+            "provider.retry_stopped",
+            "The provider request could not recover. Review Details before retrying.",
+        ),
+    };
+    redact_diagnostic(&Diagnostic {
+        severity,
+        code: code.into(),
+        summary: summary.into(),
+        correlation_id: format!("provider-request:{}:{}", report.turn_id, report.step_count),
+        agent_details: serde_json::json!({
+            "provider": report.provider,
+            "model": report.model,
+            "attempt": report.attempt,
+            "max_attempts": report.max_attempts,
+            "remaining_allowance": report.max_attempts.saturating_sub(report.attempt),
+            "allowance_scope": "provider_request",
+            "category": report.category,
+            "reason": report.reason.map(vtcode_commons::sanitizer::sanitize_provider_diagnostic),
+        })
+        .to_string(),
+        actions: Vec::new(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_retry_diagnostic_retains_identity_counts_redaction_and_terminal_outcome() {
+        let make = |attempt, outcome| {
+            provider_retry_diagnostic(ProviderRetryReport {
+                turn_id: "turn-5",
+                step_count: 8,
+                provider: "ollama",
+                model: "minimax",
+                attempt,
+                max_attempts: 3,
+                category: Some("Network error"),
+                reason: Some("password=provider-private-secret"),
+                outcome,
+            })
+        };
+        let first = make(2, ProviderRetryOutcome::Retrying);
+        let last = make(3, ProviderRetryOutcome::Stopped);
+        let recovered = make(3, ProviderRetryOutcome::Succeeded);
+        assert_eq!(first.correlation_id, last.correlation_id);
+        assert_eq!(last.correlation_id, recovered.correlation_id);
+        assert_ne!(first.code, last.code);
+        assert_ne!(last.code, recovered.code);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&first.agent_details).unwrap()["remaining_allowance"], 1);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&last.agent_details).unwrap()["remaining_allowance"], 0);
+        assert!(!first.agent_details.contains("provider-private-secret"));
+        assert_eq!(recovered.severity, vtcode_commons::diagnostics::DiagnosticSeverity::Info);
+    }
 
     #[test]
     fn compact_error_message_preserves_short_input() {

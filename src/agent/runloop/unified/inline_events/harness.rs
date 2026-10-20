@@ -57,9 +57,53 @@ struct HarnessEventEmitterInner {
 }
 
 impl HarnessEventEmitter {
+    /// One canonical observer for primary renderers and direct/secondary UI writers.
+    pub(crate) fn diagnostic_sink(&self) -> vtcode_commons::diagnostics::DiagnosticSink {
+        let emitter = self.clone();
+        Arc::new(move |diagnostic| {
+            let diagnostic = vtcode_commons::diagnostics::redact_diagnostic(diagnostic);
+            emitter.emit(ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
+                item: ThreadItem {
+                    context: None,
+                    id: diagnostic.correlation_id.clone(),
+                    details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                        text: diagnostic.summary.clone(),
+                        stage: Some("diagnosis".into()),
+                        diagnostic: Some(Box::new(diagnostic)),
+                    })),
+                },
+            }))
+        })
+    }
+
     pub(crate) fn matrix_persistence(&self) -> Option<vtcode_core::subagents::matrix::MatrixPersistence> {
         self.inner.canonical.as_ref().map(CanonicalEventSink::matrix_persistence)
     }
+    pub(crate) async fn persist_checkpoint(&self, event: &ThreadEvent) -> Result<()> {
+        if let Some(canonical) = self.inner.canonical.as_ref() {
+            canonical.persist_checkpoint(event).await
+        } else {
+            // Legacy/test sinks write synchronously through their existing path.
+            self.emit(event.clone())
+        }
+    }
+
+    pub(crate) async fn diagnostics(&self) -> Result<Vec<vtcode_core::exec::events::Diagnostic>> {
+        match self.inner.canonical.as_ref() {
+            Some(canonical) => canonical.diagnostics().await,
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub(crate) async fn planning_recovery(
+        &self,
+    ) -> Result<Option<vtcode_core::exec::events::planning::PlanningRecoverySnapshot>> {
+        match self.inner.canonical.as_ref() {
+            Some(canonical) => canonical.planning_recovery().await,
+            None => Ok(None),
+        }
+    }
+
     pub(crate) fn decision_validator(&self) -> Option<vtcode_core::core::agent::events::DecisionEvidenceValidator> {
         self.inner.canonical.as_ref().map(CanonicalEventSink::decision_validator)
     }
@@ -418,26 +462,6 @@ impl HarnessEventEmitter {
                 context: None,
                 id: format!("{turn_id}-assistant-final-{}", Uuid::new_v4()),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.to_string() }),
-            },
-        }))
-    }
-
-    /// Emit bounded, non-secret failure diagnosis as a normal reasoning item.
-    /// This uses the existing item contract so it remains available to session
-    /// replay and exporters without exposing provider-native chain-of-thought.
-    pub(crate) fn emit_diagnosis(&self, turn_id: &str, text: &str) -> Result<()> {
-        if text.trim().is_empty() {
-            return Ok(());
-        }
-
-        self.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
-            item: ThreadItem {
-                context: None,
-                id: format!("{turn_id}-diagnosis-{}", Uuid::new_v4()),
-                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
-                    text: text.to_string(),
-                    stage: Some("diagnosis".to_string()),
-                })),
             },
         }))
     }
@@ -815,22 +839,6 @@ mod tests {
         assert!(content.contains("item.completed"));
         assert!(content.contains("agent_message"));
         assert!(content.contains("The turn was blocked; retry the request."));
-    }
-
-    #[test]
-    fn diagnosis_is_written_as_a_reasoning_item_with_a_diagnosis_stage() {
-        let tmp = TempDir::new().expect("temp dir");
-        let path = tmp.path().join("events.jsonl");
-        let emitter = HarnessEventEmitter::new(path.clone()).expect("emitter");
-
-        emitter
-            .emit_diagnosis("turn-1", "Diagnosis: exec\nObserved: exit 1")
-            .expect("emit diagnosis");
-
-        let content = fs::read_to_string(path).expect("read harness log");
-        assert!(content.contains("\"type\":\"reasoning\""));
-        assert!(content.contains("\"stage\":\"diagnosis\""));
-        assert!(content.contains("Observed: exit 1"));
     }
 
     #[test]

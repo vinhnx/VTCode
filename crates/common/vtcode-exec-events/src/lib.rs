@@ -21,11 +21,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod atif;
+pub mod diagnostic;
+pub use diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity};
 pub mod matrix;
+pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.18.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.19.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -891,6 +894,9 @@ pub struct PlanDeltaEvent {
     pub item_id: String,
     /// Incremental plan text chunk.
     pub delta: String,
+    /// Runtime-owned recovery checkpoint; absent in older sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<Box<planning::PlanningRecoverySnapshot>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1012,6 +1018,9 @@ pub struct PlanItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ReasoningItem {
+    /// Operational diagnostic independent of private model reasoning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostic: Option<Box<Diagnostic>>,
     /// Free-form reasoning content captured during planning.
     pub text: String,
     /// Optional stage of reasoning (e.g., "analysis", "plan", "verification",

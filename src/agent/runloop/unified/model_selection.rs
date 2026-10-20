@@ -215,7 +215,15 @@ pub(crate) async fn finalize_model_selection(
         provider: provider_client.as_ref(),
         workspace: &config.workspace,
         vt_cfg: vt_cfg.as_ref(),
-        targets: compaction,
+        targets: ModelSwitchCompactionTargets {
+            history: compaction.history,
+            session_stats: &mut *compaction.session_stats,
+            context_manager: compaction.context_manager,
+            session_id: compaction.session_id,
+            thread_id: compaction.thread_id,
+            lifecycle_hooks: compaction.lifecycle_hooks,
+            harness_emitter: compaction.harness_emitter,
+        },
     })
     .await?;
     let compact_elapsed = compact_start.elapsed();
@@ -343,6 +351,9 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
+    // Includes an explicit same-model selection. Configuration changes and
+    // failed selection attempts never create this acceptance proof.
+    compaction.session_stats.record_accepted_model_selection();
     Ok(())
 }
 

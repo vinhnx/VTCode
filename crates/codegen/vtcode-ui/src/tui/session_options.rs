@@ -135,14 +135,14 @@ pub fn spawn_session_with_options(theme: InlineTheme, options: SessionOptions) -
         {
             let error_msg = error.to_string();
             if error_msg.contains("stdin is not a terminal") {
-                eprintln!("Error: Interactive TUI requires a proper terminal.");
+                vtcode_commons::diagnostics::stderr(format_args!("Error: Interactive TUI requires a proper terminal."));
                 if let Some(hint) = options.non_interactive_hint.as_deref() {
                     eprintln!("{hint}");
                 } else {
                     eprintln!("Use a non-interactive mode in your host app for piped input.");
                 }
             } else {
-                eprintln!("Error: TUI startup failed: {error:#}");
+                vtcode_commons::diagnostics::stderr(format_args!("Error: TUI startup failed: {error:#}"));
             }
             tracing::error!(%error, "inline session terminated unexpectedly");
         }

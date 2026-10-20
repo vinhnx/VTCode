@@ -40,6 +40,8 @@ pub(crate) struct AutoPermissionDenial {
 
 #[derive(Default)]
 pub(crate) struct SessionStats {
+    /// One-shot proof that an explicit model selection completed successfully.
+    accepted_model_selection: bool,
     pub(crate) preflight_recovery: PreflightRecovery,
     pub(crate) navigation_recovery: NavigationRecovery,
     tools: std::collections::BTreeSet<String>,
@@ -99,14 +101,6 @@ pub(crate) struct SessionStats {
     /// Bounded plan-mode auto-continue turns (recoverable blocked planning
     /// ends when no plan is approval-ready). Independent of tracker budget.
     plan_continuation_turns: u8,
-    /// Consecutive plan-mode turns that ended with the deterministic empty
-    /// fallback (`PLANNING_COMPLETED_FALLBACK_RESPONSE`: no LLM synthesis, no
-    /// tool activity). Breaks the self-loop observed in
-    /// session-vtcode-20260921T045723Z where 32 empty turns each re-queued
-    /// auto-continue and ended `Blocked` with zero progress. Reset on any
-    /// turn with LLM text or tool activity; capped by
-    /// `MAX_PLAN_EMPTY_FALLBACK_AUTO_CONTINUE`.
-    consecutive_plan_empty_fallbacks: u8,
     /// Consecutive failed harness auto-verifications this stall episode.
     /// Incremented by [`Self::record_verification_auto_failure`], reset by
     /// [`Self::record_verification_auto_success`] and every
@@ -201,6 +195,14 @@ impl FirstCallComposition {
 }
 
 impl SessionStats {
+    pub(crate) fn record_accepted_model_selection(&mut self) {
+        self.accepted_model_selection = true;
+    }
+
+    pub(crate) fn take_accepted_model_selection(&mut self) -> bool {
+        std::mem::take(&mut self.accepted_model_selection)
+    }
+
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name =
             vtcode_core::tools::tool_intent::canonical_command_session_tool_name(name).unwrap_or(name);

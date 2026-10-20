@@ -34,10 +34,24 @@ pub(crate) async fn emit_plan_ready_events(
     thread_id: &str,
     turn_id: &str,
     plan_text: &str,
-) {
+) -> anyhow::Result<()> {
+    let mut recovery = plan_session.recovery.clone();
+    recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingApproval;
+    if let Some(emitter) = emitter {
+        emitter
+            .persist_checkpoint(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                thread_id: thread_id.to_owned(),
+                turn_id: turn_id.to_owned(),
+                item_id: "planning-recovery".to_owned(),
+                delta: String::new(),
+                recovery: Some(Box::new(recovery.clone())),
+            })))
+            .await?;
+    }
+    plan_session.recovery = recovery;
     plan_session.mark_plan_approval_pending(thread_id.to_owned(), turn_id.to_owned());
     let Some(emitter) = emitter else {
-        return;
+        return Ok(());
     };
 
     let item_id = format!("{turn_id}-plan");
@@ -66,6 +80,7 @@ pub(crate) async fn emit_plan_ready_events(
         turn_id: turn_id.to_owned(),
         item_id: item_id.clone(),
         delta: plan_text.to_owned(),
+        recovery: None,
     })));
 
     let completed_item = ThreadItem {
@@ -82,6 +97,7 @@ pub(crate) async fn emit_plan_ready_events(
         None,
     ));
     emit_plan_approval_requested(Some(emitter), thread_id, turn_id, plan_path);
+    Ok(())
 }
 
 pub(crate) fn emit_plan_approval_requested(
@@ -180,7 +196,9 @@ mod tests {
         let emitter = HarnessEventEmitter::new(event_path.clone()).expect("harness emitter");
         let mut plan_session = PlanningWorkflowSessionState::default();
 
-        super::emit_plan_ready_events(&mut plan_session, &state, Some(&emitter), "thread-1", "turn-1", "# Task").await;
+        super::emit_plan_ready_events(&mut plan_session, &state, Some(&emitter), "thread-1", "turn-1", "# Task")
+            .await
+            .unwrap();
 
         let events = std::fs::read_to_string(event_path)
             .expect("event log")

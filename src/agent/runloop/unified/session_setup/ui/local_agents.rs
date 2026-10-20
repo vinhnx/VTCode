@@ -353,7 +353,12 @@ fn thread_event_preview_line(event: &ThreadEvent) -> Option<(String, String)> {
             format!("assistant: {}", summarize_preview_text(&message.text)?)
         }
         ThreadItemDetails::Reasoning(reasoning) => {
-            format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
+            if let Some(diagnostic) = &reasoning.diagnostic {
+                let diagnostic = vtcode_commons::diagnostics::redact_diagnostic(diagnostic);
+                format!("diagnostic [{}]: {}", diagnostic.code, diagnostic.text())
+            } else {
+                format!("thinking: {}", summarize_preview_text(&reasoning.text)?)
+            }
         }
         ThreadItemDetails::ToolInvocation(tool) => {
             format!("tool {}: {}", tool.tool_name, tool_status_label(tool.status.clone()))
@@ -421,6 +426,35 @@ fn truncate_preview_text(text: String, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_diagnostic_preview_retains_details_without_private_reasoning_label() {
+        use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+        use vtcode_core::exec::events::{ItemCompletedEvent, ReasoningItem, ThreadItem};
+        let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                context: None,
+                id: "incident-2".into(),
+                details: ThreadItemDetails::Reasoning(Box::new(ReasoningItem {
+                    text: "legacy summary".into(),
+                    stage: Some("diagnosis".into()),
+                    diagnostic: Some(Box::new(Diagnostic {
+                        severity: DiagnosticSeverity::Warning,
+                        code: "planning.awaiting_input".into(),
+                        summary: "Planning needs input.".into(),
+                        agent_details: "attempts=3; password=preview-private-secret".into(),
+                        correlation_id: "incident-2".into(),
+                        actions: Vec::new(),
+                    })),
+                })),
+            },
+        });
+        let (_, preview) = thread_event_preview_line(&event).unwrap();
+        assert!(preview.starts_with("diagnostic [planning.awaiting_input]"));
+        assert!(preview.contains("attempts=3"));
+        assert!(!preview.contains("preview-private-secret"));
+        assert!(!preview.contains("thinking:"));
+    }
 
     #[test]
     fn program_status_child_outcomes_use_typed_evidence() {

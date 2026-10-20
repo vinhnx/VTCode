@@ -4,6 +4,7 @@ use crate::tui::ui::tui::types::{InlineLinkRange, InlineLinkTarget, InlineMessag
 
 #[derive(Clone)]
 pub struct MessageLine {
+    pub diagnostic: Option<Box<super::diagnostics::DiagnosticPresentation>>,
     pub kind: InlineMessageKind,
     pub segments: Vec<InlineSegment>,
     pub link_ranges: Vec<InlineLinkRange>,

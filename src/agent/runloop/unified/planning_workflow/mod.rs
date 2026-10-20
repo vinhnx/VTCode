@@ -18,6 +18,7 @@ pub(crate) mod exit_trigger;
 pub(crate) mod intent;
 pub(crate) mod plan_approval;
 pub(crate) mod recovery;
+pub(crate) mod recovery_state;
 pub(crate) mod start_confirmation;
 pub(crate) mod task_tracker;
 mod tracker_response;
@@ -204,9 +205,13 @@ use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSes
 // modules should depend on these re-exports instead of reaching through the
 // core tool-handler path directly.
 pub(crate) use vtcode_core::tools::handlers::planning_workflow::{
-    CANONICAL_STEP_FORMAT, PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES, PlanValidationReport,
-    PlanningWorkflowState, allocate_plan_file_if_missing, merge_plan_content, persist_plan_draft,
-    tracker_file_for_plan_file, validate_plan_content,
+    CANONICAL_STEP_FORMAT, PlanValidationReport, PlanningWorkflowState, allocate_plan_file_if_missing,
+    merge_plan_content, persist_plan_draft, tracker_file_for_plan_file, validate_plan_content,
+};
+
+#[cfg(test)]
+use vtcode_core::tools::handlers::planning_workflow::{
+    PLANNING_VERIFY_INVALID_EXAMPLES, PLANNING_VERIFY_VALID_EXAMPLES,
 };
 
 pub(crate) async fn persisted_plan_is_ready(state: &PlanningWorkflowState) -> bool {
@@ -305,23 +310,13 @@ fn is_stale_recovery_directive(message: &uni::Message) -> bool {
 /// the model receives consistent format guidance from every repair surface.
 pub(crate) fn build_plan_repair_directive(feedback: &str) -> String {
     format!(
-        "Planning recovery: the proposed plan was rejected. Repair it in this bounded pass using concrete repository evidence. \
+        "Planning recovery: the proposed plan was rejected. Repair the retained draft using existing evidence. \
          {feedback}\n\n\
-         Re-emit only one compact `<proposed_plan>` block. Use these headings exactly and replace every example with \
-         evidence-backed content; do not copy placeholders:\n\
-         ## Summary\n\
-         ## Implementation Steps\n\
-         {canonical}\n\
-         Valid verify examples: {valid}. Invalid: {invalid}.\n\
-         Every verify command must exit 0 on success; grep/rg no-match exit 1 cannot satisfy completion.\n\
-         ## Test Cases and Validation\n\
-         - concrete command or observable check\n\
-         ## Assumptions and Defaults\n\
-         - concrete default or scope boundary\n\n\
-         Resolve every open decision. Do not emit tool calls or ask for approval until the artifact is complete.",
+         Re-emit one compact `<proposed_plan>` with Summary, Implementation Steps, Test Cases and Validation, \
+         and Assumptions and Defaults. Step format: {canonical}. \
+         Every verify command must exit 0 on success; grep/rg no-match exit 1 cannot satisfy completion. \
+         Do not emit tool calls or approval prose. Resolve open decisions before approval.",
         canonical = CANONICAL_STEP_FORMAT,
-        valid = PLANNING_VERIFY_VALID_EXAMPLES,
-        invalid = PLANNING_VERIFY_INVALID_EXAMPLES,
     )
 }
 
@@ -702,16 +697,12 @@ Improve launch time.
     }
 
     #[test]
-    fn repair_directive_reuses_canonical_step_format_constant() {
-        // DRY guardrail: the repair directive must embed the single
-        // `CANONICAL_STEP_FORMAT` constant so prompt guidance can never drift
-        // from validator and tracker generation.
-        let directive = build_plan_repair_directive("feedback");
-        assert!(directive.contains(CANONICAL_STEP_FORMAT), "directive must reuse CANONICAL_STEP_FORMAT: {directive}");
-        assert!(
-            directive.contains(PLANNING_VERIFY_VALID_EXAMPLES) && directive.contains(PLANNING_VERIFY_INVALID_EXAMPLES),
-            "repair directive must embed shared verify-example constants: {directive}"
-        );
+    fn repair_directive_reuses_canonical_contract_without_repeated_example_walls() {
+        let directive = build_plan_repair_directive("step 7: missing observable expectation");
+        assert!(directive.contains(CANONICAL_STEP_FORMAT));
+        assert!(directive.contains("step 7: missing observable expectation"));
+        assert!(directive.len() < 1000);
+        assert_eq!(directive.matches("step 7:").count(), 1);
     }
 
     #[test]
@@ -722,12 +713,7 @@ Improve launch time.
                 && vtcode_core::prompts::system::PLANNING_WORKFLOW_PLAN_QUALITY_LINE.contains("grep -n"),
             "quality line missing inspection examples"
         );
-        assert!(
-            repair_feedback.contains("sed -n")
-                && repair_feedback.contains("grep -n")
-                && repair_feedback.contains("git diff --check"),
-            "repair feedback missing shared examples: {repair_feedback}"
-        );
+        assert!(repair_feedback.contains(CANONICAL_STEP_FORMAT));
         assert!(
             PLANNING_VERIFY_VALID_EXAMPLES.contains("sed -n") && PLANNING_VERIFY_VALID_EXAMPLES.contains("grep -n")
         );

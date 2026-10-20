@@ -254,6 +254,12 @@ impl OpenResponsesProvider {
             map.insert("input".to_string(), Value::Array(input));
         }
 
+        if payload.get("tools").is_some()
+            && let Some(choice) = &request.tool_choice
+        {
+            payload["tool_choice"] = choice.to_responses_format();
+        }
+
         if let Some(context_management) = &request.context_management
             && let Some(map) = payload.as_object_mut()
         {

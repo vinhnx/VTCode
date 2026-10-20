@@ -65,7 +65,7 @@ When a turn stops because of blocked behavior, VT Code forces a session-history 
 handoff. The handoff advertises `vtcode --resume <archive-id>` only after that archive is successfully persisted and its
 identifier is verified. If history persistence is disabled or the checkpoint fails, the handoff explains that resume is
 unavailable and does not advertise a misleading command. Interactive sessions return to the next input after the handoff
-— except for recoverable blocked ends (budgets, safety caps, blocked-tool fuse, tool-free recovery), which auto-continue
+— except for typed synthesizing or repairing outcomes with remaining allowance, which may auto-continue
 a bounded follow-up turn in every mode before control returns to you; manual `continue` matters once that budget
 (`agent.harness.continuation.cross_turn_turns`) is exhausted.
 
@@ -336,18 +336,32 @@ planning session and suppresses repeated interview attempts. VT Code gives the m
 the repository evidence already gathered. If that retry does not produce a validated persisted plan, the session stays
 in planning and shows a keep-planning message; it does not advertise implementation or emit approval events.
 
-### Empty-response recovery
+### Bounded synthesis recovery
 
-Two consecutive empty model responses in planning have one deterministic recovery path. The first empty response
-receives the ordinary tool-enabled retry. The second schedules exactly one tool-free synthesis using the latest request
-and bounded recent evidence; the synthesis must contain exactly one canonical `<proposed_plan>...</proposed_plan>` block
-and no tools, questions, or approval prose. The runtime validates and persists the block before exposing approval
-controls.
+After a research guard closes tools, one synthesis request and at most two corrective requests share a request-scoped
+allowance. Empty content, private reasoning without final content, native tool-call violations, truncated output,
+malformed plans, and provider failures all use the same allowance. Automatic continuations and session resume retain
+consumed requests and cannot reopen research. Transport retries also consume this allowance. Private reasoning never
+becomes a plan or final response.
 
-If synthesis is empty, malformed, contains tool markup, fails validation, or cannot be persisted, the runtime preserves
-any rejected draft, emits a concise actionable blocked handoff, and keeps planning active. It does not inject another
-interactive question, claim completion, or emit `thread.completed`; the blocked turn is resumable and the session is
-finalized only during shutdown.
+The runtime retains the latest request, bounded public evidence, best structured draft, and validator report in the
+canonical session event log. A repair targets that draft and its specific defects. Approval-only prose cannot replace
+the draft or change readiness. Complete unwrapped plans still validate; approval requires successful artifact and
+checkpoint persistence.
+
+On exhaustion, a runtime-generated interview offers these choices without another model response:
+
+| Choice | Result |
+| --- | --- |
+| Retry from retained evidence | One explicitly requested synthesis cycle; research stays closed. |
+| Add clarification | Free text revises the retained plan and starts a bounded cycle. |
+| Choose another model | The existing picker opens; synthesis waits for an explicit selection. |
+
+No option submits automatically. Dismissal leaves planning idle and resumable. A genuine clarifying question may pause
+before exhaustion. Headless or unavailable interviews produce a structured `planning.awaiting_input` diagnostic with
+the same choices. Answers do not approve implementation. Cancellation, permissions, and hard execution budgets remain
+in force. See the [recovery contract](../development/planning-recovery.md), [validator contract](../development/planning-validation.md),
+and [provider audit](../development/planning-provider-audit.md).
 
 ## Plan Output Format
 

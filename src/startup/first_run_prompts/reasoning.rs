@@ -23,7 +23,10 @@ pub(crate) fn prompt_reasoning_effort(
     match select_reasoning_with_ratatui(&levels, default) {
         Ok(level) => Ok(level),
         Err(error) => {
-            renderer.line(MessageStyle::Info, &format!("Falling back to manual input ({error})."))?;
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Interactive setup could not continue. Enter the value manually.\n{error}"),
+            )?;
             prompt_reasoning_effort_text(renderer, &levels, default)
         }
     }

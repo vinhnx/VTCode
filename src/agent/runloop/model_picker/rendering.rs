@@ -513,7 +513,7 @@ pub(super) fn render_step_one_plain(
             if dynamic_indexes.is_empty() {
                 if let Some(error) = dynamic_models.error_for(provider) {
                     renderer.line(
-                        MessageStyle::Info,
+                        MessageStyle::Warning,
                         &format!("{provider_label} server not reachable ({error}) • Setup instructions:"),
                     )?;
                     for line in provider.local_install_instructions().unwrap_or("").lines() {

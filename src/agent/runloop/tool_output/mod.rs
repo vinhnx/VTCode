@@ -463,6 +463,10 @@ pub(crate) fn collect_inline_output(
                         .map(|line| line.into_iter().map(|segment| segment.text).collect::<String>()),
                 );
             }
+            vtcode_core::ui::InlineCommand::Diagnostic(diagnostic) => {
+                // This helper models the collapsed human transcript, not retained details.
+                lines.push(diagnostic.summary);
+            }
             vtcode_core::ui::InlineCommand::RecordDiffReview(anchor) => {
                 lines.push(format!("RecordDiffReview {}", anchor.file_path));
                 lines.push(anchor.notice);
