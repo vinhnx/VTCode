@@ -556,7 +556,7 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
     }
     let session_total_usage = session_stats.total_usage();
     print_exit_summary(ExitData {
-        app_name: "VT Code",
+        app_name: vtcode_core::config::constants::app::DISPLAY_NAME,
         version: env!("CARGO_PKG_VERSION"),
         model: &config.model,
         provider: &provider_label,

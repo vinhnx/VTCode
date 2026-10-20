@@ -524,7 +524,7 @@ impl NotificationManager {
 
     #[cfg(target_os = "macos")]
     fn send_osascript_notification(&self, message: &str) -> bool {
-        match send_macos_osascript_notification("VT Code", message) {
+        match send_macos_osascript_notification(crate::config::constants::app::DISPLAY_NAME, message) {
             Ok(()) => true,
             Err(error) => {
                 tracing::warn!(error = %error, "Failed to send macOS osascript notification");
@@ -539,7 +539,7 @@ impl NotificationManager {
             use std::time::Duration;
             let mut notification = notify_rust::Notification::new();
             notification
-                .summary("VT Code")
+                .summary(crate::config::constants::app::DISPLAY_NAME)
                 .body(message)
                 .icon("dialog-information")
                 .timeout(Duration::from_secs(5));

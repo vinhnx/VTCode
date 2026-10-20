@@ -223,7 +223,16 @@ impl ProgramStatus {
             ProgramState::Working | ProgramState::Blocked => self.task_progress,
             _ => None,
         };
-        records.insert(self.parent.clone(), Report { state, kind, progress, title: "VT Code", message });
+        records.insert(
+            self.parent.clone(),
+            Report {
+                state,
+                kind,
+                progress,
+                title: vtcode_config::constants::app::DISPLAY_NAME,
+                message,
+            },
+        );
         if self.closed {
             records.retain(|_, report| report.state.is_finished());
         }

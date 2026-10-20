@@ -455,7 +455,7 @@ impl CopilotAcpClient {
                     },
                     "clientInfo": {
                         "name": "vtcode",
-                        "title": "VT Code",
+                        "title": vtcode_config::constants::app::DISPLAY_NAME,
                         "version": env!("CARGO_PKG_VERSION"),
                     }
                 }),
@@ -498,7 +498,7 @@ impl CopilotAcpClient {
         custom_tools: &[ToolDefinition],
     ) -> Result<String> {
         let mut params = serde_json::Map::from_iter([
-            ("clientName".to_string(), Value::String("VT Code".to_string())),
+            ("clientName".to_string(), Value::String(vtcode_config::constants::app::DISPLAY_NAME.to_string())),
             ("workingDirectory".to_string(), json!(workspace_root)),
             ("requestPermission".to_string(), Value::Bool(true)),
             ("streaming".to_string(), Value::Bool(true)),

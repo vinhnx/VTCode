@@ -329,7 +329,7 @@ fn build_terminal_title_preview(
     let mut seen = std::collections::HashSet::new();
     for item_id in draft_items {
         let candidate = match item_id.as_str() {
-            "app-name" => Some(("VT Code".to_string(), false)),
+            "app-name" => Some((vtcode_core::config::constants::app::DISPLAY_NAME.to_string(), false)),
             "project" => Some((project.clone(), false)),
             "spinner" => spinner.as_ref().map(|spinner| (spinner.clone(), true)),
             "status" => Some((status.to_string(), false)),

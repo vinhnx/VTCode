@@ -164,7 +164,7 @@ fn subtitle_from_segments(current: bool, segments: Vec<String>) -> Option<String
     if segments.is_empty() {
         None
     } else {
-        Some(segments.join(" • "))
+        Some(segments.join(ui::META_BULLET_SEPARATOR))
     }
 }
 

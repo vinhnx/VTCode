@@ -100,8 +100,8 @@ impl ManPageGenerator {
         }
         let man = man
             .date(chrono::Utc::now().format("%Y-%m-%d").to_string())
-            .manual("VT Code")
-            .source("VT Code");
+            .manual(crate::config::constants::app::DISPLAY_NAME)
+            .source(crate::config::constants::app::DISPLAY_NAME);
 
         let mut buf = Vec::new();
         man.render(&mut buf).context("failed to render clap-derived man page")?;

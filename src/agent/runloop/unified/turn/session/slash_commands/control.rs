@@ -19,13 +19,14 @@ use super::apps::handle_configure_editor;
 use super::ui;
 
 pub(crate) async fn handle_notify(ctx: SlashCommandContext<'_>, message: String) -> Result<SlashCommandControl> {
+    let app_name = vtcode_core::config::constants::app::DISPLAY_NAME;
     send_global_notification_force(NotificationEvent::Custom {
-        title: "VT Code".to_string(),
+        title: app_name.to_string(),
         message: message.clone(),
     })
     .await?;
     ctx.renderer
-        .line(MessageStyle::Info, &format!("Sent VT Code notification: {message}"))?;
+        .line(MessageStyle::Info, &format!("Sent {app_name} notification: {message}"))?;
     Ok(SlashCommandControl::Continue)
 }
 

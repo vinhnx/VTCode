@@ -444,7 +444,7 @@ mod tests {
         code_deletions: u64,
     ) -> ExitData<'static> {
         ExitData {
-            app_name: "VT Code",
+            app_name: vtcode_core::config::constants::app::DISPLAY_NAME,
             version: "0.0.0",
             model: "",
             provider: "",

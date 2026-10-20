@@ -364,7 +364,7 @@ pub(crate) fn text_chunk(text: impl Into<String>) -> acp::ContentChunk {
 
 pub(crate) fn agent_implementation_info(title_override: Option<String>) -> acp::Implementation {
     acp::Implementation::new("vtcode", env!("CARGO_PKG_VERSION"))
-        .title(title_override.or_else(|| Some("VT Code".to_string())))
+        .title(title_override.or_else(|| Some(vtcode_config::constants::app::DISPLAY_NAME.to_string())))
 }
 
 fn command_input_hint(name: &str) -> Option<String> {

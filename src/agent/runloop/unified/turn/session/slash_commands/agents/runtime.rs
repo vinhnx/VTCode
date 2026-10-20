@@ -285,7 +285,7 @@ pub(super) async fn show_active_agent_inspector(
                     let mut detail = truncate_modal_text(&summary, 120);
                     if let Some(error) = current_entry.error.as_deref() {
                         if !detail.is_empty() {
-                            detail.push_str(" • ");
+                            detail.push_str(vtcode_config::constants::ui::META_BULLET_SEPARATOR);
                         }
                         detail.push_str("Error: ");
                         detail.push_str(&truncate_modal_text(error, 80));
@@ -409,7 +409,7 @@ pub(super) async fn show_background_subprocess_inspector(
                         truncate_modal_text(&background_subprocess_summary(current_entry), 120);
                     if let Some(error) = current_entry.error.as_deref() {
                         if !detail.is_empty() {
-                            detail.push_str(" • ");
+                            detail.push_str(vtcode_config::constants::ui::META_BULLET_SEPARATOR);
                         }
                         detail.push_str("Error: ");
                         detail.push_str(&truncate_modal_text(error, 80));

@@ -178,7 +178,7 @@ pub(crate) async fn finish_initialization_exit(
     tracing::debug!(target: "vtcode.shutdown", boundary = "terminal_restored", accepted_exit_elapsed_ms = ?state.exit_elapsed_ms());
     crate::agent::runloop::unified::postamble::print_exit_summary(
         crate::agent::runloop::unified::postamble::ExitData {
-            app_name: "VT Code",
+            app_name: vtcode_core::config::constants::app::DISPLAY_NAME,
             version: env!("CARGO_PKG_VERSION"),
             model: &config.model,
             provider: &config.provider,
