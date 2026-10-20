@@ -753,6 +753,121 @@ fn busy_plain_enter_queues_preserve_fifo_order() {
 }
 
 #[test]
+fn composer_status_yields_to_turn_activity_status() {
+    // The active turn's own phase status owns the composer line; a queued
+    // acknowledgement must not displace it.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.push_queued_input("queued follow-up".to_string());
+
+    let line = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("composer status line");
+    let text: String = line.iter().map(|span| span.content.as_ref()).collect();
+    assert!(text.contains("Running tool: code_search"), "expected turn status, got: {text:?}");
+    assert!(!text.contains("Queued:"), "queued ack must not displace turn status, got: {text:?}");
+}
+
+#[test]
+fn composer_status_hides_queued_acknowledgement_when_idle() {
+    // Idle queues are already visible in the transcript overlay; the composer
+    // line must not keep asserting a running turn.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_queued_input("idle queued draft".to_string());
+
+    let text = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .map(|line| line.iter().map(|span| span.content.as_ref()).collect::<String>())
+        .unwrap_or_default();
+    assert!(
+        !text.contains("Queued:") && !text.contains("turns queued"),
+        "idle composer must not claim a queued turn, got: {text:?}"
+    );
+}
+
+#[test]
+fn composer_status_reports_single_queued_follow_up_while_busy() {
+    // The active turn's own "Running tool: …" status is the reserved phase
+    // acknowledgement, so it keeps priority over the queued preview.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.set_input("check the failing test next".to_string());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(session.queued_inputs.len(), 1);
+
+    let line = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("composer status line");
+    let text: String = line.iter().map(|span| span.content.as_ref()).collect();
+    assert!(text.contains("Running tool: code_search"), "expected turn status, got: {text:?}");
+}
+
+#[test]
+fn composer_status_reports_queued_count_while_transcript_progress_owns_row() {
+    // Reported gap: while the transcript loading row shows a progress phase
+    // the composer keeps no runtime status text, so the queued follow-up
+    // acknowledgement must still surface there.
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.handle_command(InlineCommand::UpdateProgress(vtcode_commons::ui_protocol::ProgressUpdate::Begin {
+        operation: vtcode_commons::ui_protocol::ProgressOperation::start(),
+        phase: vtcode_commons::ui_protocol::ProgressPhase::RunningTools,
+    }));
+    for text in ["first", "second"] {
+        session.set_input(text.to_string());
+        let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    }
+    assert_eq!(session.queued_inputs.len(), 2);
+
+    let line = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("composer status line");
+    let text: String = line.iter().map(|span| span.content.as_ref()).collect();
+    assert!(
+        text.contains("2 turns queued — running after this turn"),
+        "expected queued count in the composer status line, got: {text:?}"
+    );
+}
+
+#[test]
+fn composer_status_truncates_long_single_queued_follow_up() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.handle_command(InlineCommand::UpdateProgress(vtcode_commons::ui_protocol::ProgressUpdate::Begin {
+        operation: vtcode_commons::ui_protocol::ProgressOperation::start(),
+        phase: vtcode_commons::ui_protocol::ProgressPhase::WaitingForModel,
+    }));
+    let long = "a".repeat(120);
+    session.set_input(long.clone());
+    let _ = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let line = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("composer status line");
+    let text: String = line.iter().map(|span| span.content.as_ref()).collect();
+    assert!(text.contains(&format!("Queued: {}…", "a".repeat(40))), "expected truncated preview, got: {text:?}");
+    assert!(!text.contains(&long), "composer must not echo the full queued text, got: {text:?}");
+}
+
+#[test]
+fn composer_status_queued_acknowledgement_yields_to_configured_context() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    set_busy_status(&mut session);
+    session.handle_command(InlineCommand::SetConfiguredInputStatus {
+        left: Some("Configured context".to_string()),
+        right: None,
+    });
+    session.push_queued_input("queued follow-up".to_string());
+
+    let line = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("composer status line");
+    let text: String = line.iter().map(|span| span.content.as_ref()).collect();
+    assert!(text.contains("Configured context"), "configured context must keep priority, got: {text:?}");
+    assert!(!text.contains("Queued:"), "queued ack must not displace configured context, got: {text:?}");
+}
+
+#[test]
 fn queued_inputs_cap_keeps_newest() {
     // Asymmetric boundary: 260 pushes must keep the newest 256, dropping the
     // 4 oldest, so the optimistic overlay mirrors the authoritative cap.

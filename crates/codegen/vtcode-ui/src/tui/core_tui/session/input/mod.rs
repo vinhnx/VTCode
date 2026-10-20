@@ -128,6 +128,38 @@ const SHELL_MODE_BORDER_TITLE: &str = " ! Shell mode ";
 const SHELL_MODE_STATUS_HINT: &str = "Shell mode (!): direct command execution";
 
 impl Session {
+    /// Composer-area acknowledgement for queued follow-ups while a turn runs.
+    ///
+    /// The transcript queue overlay can be scrolled away (or covered by a live
+    /// progress row) while the agent is working, so the composer's own status
+    /// line also reports the pending count. Hidden while idle (the overlay
+    /// already shows an idle queue); superseded by a copy notification or the
+    /// active turn's own live phase status, and placed ahead of configured
+    /// context and the generic "Thinking" label because a queued entry is the
+    /// freshest user action.
+    fn queued_input_status_text(&self) -> Option<String> {
+        let pending = self.queued_inputs.len();
+        if pending == 0 || !self.is_running_activity() || self.copy_notification_text().is_some() {
+            return None;
+        }
+        // One queued item renders the truncated text so the user gets direct
+        // confirmation of what was captured; several fall back to a count.
+        if pending == 1 {
+            const PREVIEW_CHARS: usize = 40;
+            let entry = &self.queued_inputs[0];
+            let flattened = entry.replace(['\r', '\n'], " ");
+            let trimmed = flattened.trim();
+            let preview: String = trimmed.chars().take(PREVIEW_CHARS).collect();
+            let ellipsis = if trimmed.chars().count() > PREVIEW_CHARS {
+                "…"
+            } else {
+                ""
+            };
+            return Some(format!("Queued: {preview}{ellipsis} — runs after this turn"));
+        }
+        Some(format!("{pending} turns queued — running after this turn"))
+    }
+
     #[cfg_attr(feature = "profiling", hotpath::measure)]
     pub(crate) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
         if area.height == 0 {
@@ -841,8 +873,16 @@ impl Session {
 
         let copy_notification = self.copy_notification_text();
         let showing_progress = copy_notification.is_none() && self.progress.is_active() && !self.progress_row_visible();
-        // Configured context survives every foreground phase. Runtime activity
-        // belongs to the transcript, or a bounded optional footer slot.
+        // Queued follow-ups are the freshest user action, so they take the
+        // composer line ahead of configured context and the generic
+        // "Thinking" label — but never ahead of a live phase status.
+        //
+        // While the transcript owns foreground progress, runtime/stage status
+        // text stays suppressed so the line never repeats or reflows the
+        // loading row between phases; a queued follow-up is a direct user
+        // action rather than background churn, so it still surfaces (and is
+        // often the only acknowledgement visible once the loading row has
+        // scrolled the queue overlay away).
         let left = copy_notification.or_else(|| {
             self.progress_footer_status_text().map(str::to_owned).or_else(|| {
                 (!self.progress.is_active() && !self.footer_context_configured)
@@ -850,10 +890,7 @@ impl Session {
                     .flatten()
             })
         });
-        // Thinking fallback when nothing else owns the composer line. Plain
-        // text renders as one span through the shared git-status path, so the
-        // spinner frame and label stay a single static unit.
-        let left = left.or_else(|| {
+        let thinking_spinner_line = || {
             (self.thinking_spinner.is_active && !self.progress.is_active()).then(|| {
                 if self.appearance.should_animate_progress_status() {
                     format!("{} Thinking", self.thinking_spinner.current_frame())
@@ -861,7 +898,8 @@ impl Session {
                     "Thinking".to_owned()
                 }
             })
-        });
+        };
+        let left = left.or_else(|| self.queued_input_status_text()).or_else(thinking_spinner_line);
         let configured_right = if self.footer_context_configured {
             self.footer_context_right.as_deref()
         } else {
