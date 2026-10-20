@@ -225,3 +225,61 @@ Turn blocked: planning recovery did not produce an approval-ready plan; planning
 ```
 
 same session /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261020T070723Z_313588-50570
+
+---
+
+CRITICAL: vtcode suffer from plan infite loop
+
+```
+
+Planning research has reached its safe limit. I’m stopping research and synthesizing a plan from the evidence
+already collected.
+
+
+  • README.md is clean in the worktree (git status --porcelain empty), so the edit starts from committed content.
+  • Stale claim: README says "maps all 23 crates"; Cargo.toml lists 22 workspace members plus the root vtcode
+    binary crate.
+  • Missing CLI surface: crates/codegen/vtcode-core/src/cli/args/mod.rs exposes a2a, app-server, pods, man, schema,
+    check, skills, plugins, mcp, webmcp, models, auth — none appear in the README's Usage section.
+  • Session grammar: crates/codegen/vtcode-core/src/cli/args/exec.rs defines Resume(ExecResumeArgs) with --last and
+    positional session id (vtcode exec resume session-123 "<prompt>"), which the README's vtcode continue --session
+    -id <id> fork wording does not match.
+  • Gates: scripts/check_docs_links.py treats README.md as a required entrypoint and fails on broken relative links
+    ; scripts/check_markdown.py lints tracked Markdown with markdownlint-cli2@0.23.3 and .markdownlint-cli2.jsonc.
+  • docs/INDEX.md still lists modules/vtcode_a2a.md and mcp/MCP_INTEGRATION_GUIDE.md — newer files docs/a2a/
+    README.md exist too; the README links neither.
+  Plan shape: README-only, 10 steps, each with a concrete files: target and an exit-0 verify: command. Out of scope
+  : AGENTS.md, docs/**, Cargo.toml, Rust sources. The contributor/sponsorship/share/license blocks stay byte-
+  identical because scripts/update-contributors-readme.sh owns the CONTRIBUTORS-COUNT:START / CONTRIBUTORS:START /
+  CONTRIBUTORS:END markers.
+  Awaiting approval before any edit.
+  ❋ Validating plan...
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  The plan is ready for your review in the plan panel. Nothing has been modified yet — all work so far was read-
+  only inspection.
+
+
+  Two decisions I made rather than asking
+  • "Refine structure" is treated as reorganize/clarify the existing README, not a rewrite — badges, demo GIF, and
+    community blocks stay.
+  • Because the change is Markdown-only, cargo check and cargo nextest run are excluded from the verification set;
+    the two docs checkers are the real gates.
+  Approve the plan and I'll implement it, or tell me what to adjust first.
+  ❋ Validating plan...
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Planning remains active, but the one tool-free recovery synthesis did not produce an approval-ready plan (the
+  synthesized draft failed validation: invalid plan artifact: missing sections: Summary, Implementation Steps, Test
+  Cases and Validation, Assumptions and Defaults; summary is empty; no implementation steps; no validation items;
+  no assumpt…). The latest request and bounded evidence are preserved. The next attempt can reuse the tool outputs
+  above instead of re-reading files, and should emit one complete <proposed_plan> with Action -> files: [path] ->
+  verify: [command] steps. Each verify: must be a concrete command or observable check: valid examples are verify:
+  [cargo nextest run -p vtcode], verify: [rg -n 'symbol' src/file.rs], verify: [sed -n '1,40p' docs/file.md], and
+  verify: [grep -n 'symbol' src/file.rs]; invalid examples are verify: [run checks], verify: [check later], and
+  verify: [git diff --check]. Re-state the planning request or type keep planning to try again; no changes were
+  applied.
+planning recovery did not produce an approval-ready plan; planning remains active
+  ❋ Drafting plan — researching codebase...
+
+```
+
+check session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261020T092318Z_679892-53234 and deep dive and analysis of vtcode session and fix.
