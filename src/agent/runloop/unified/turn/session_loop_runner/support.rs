@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::agent::steering::{FollowUpProvenance, QueuedFollowUpIntent};
 use vtcode_core::llm::provider::{AssistantPhase, MessageRole};
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::session_archive;
@@ -552,9 +553,11 @@ pub(super) async fn approved_plan_execution_summary(
     ExecutionSummary { status, blocker }
 }
 
+/// Remove an unanswered trailing user message and reconstruct its queued
+/// intent, retaining any persisted identity and provenance.
 pub(super) fn take_pending_resumed_user_prompt(
     history: &mut Vec<vtcode_core::llm::provider::Message>,
-) -> Option<String> {
+) -> Option<QueuedFollowUpIntent> {
     let user_index = last_user_message_index(history)?;
     if history
         .iter()
@@ -569,8 +572,20 @@ pub(super) fn take_pending_resumed_user_prompt(
         return None;
     }
 
+    let metadata = history[user_index].metadata.as_ref();
+    let provenance = match metadata.and_then(vtcode_commons::message_metadata::MessageMetadata::source) {
+        Some("user_input") | None => FollowUpProvenance::UserInput,
+        Some(_) => FollowUpProvenance::Synthetic,
+    };
+    let intent_id = metadata
+        .and_then(vtcode_commons::message_metadata::MessageMetadata::intent_id)
+        .map(str::to_owned);
+
     let _ = history.remove(user_index);
-    Some(prompt)
+    Some(match intent_id {
+        Some(intent_id) => QueuedFollowUpIntent::from_parts_with_provenance(intent_id, prompt, provenance),
+        None => QueuedFollowUpIntent::new_with_provenance(prompt, provenance),
+    })
 }
 
 pub(super) fn prepare_resume_bootstrap_without_archive(

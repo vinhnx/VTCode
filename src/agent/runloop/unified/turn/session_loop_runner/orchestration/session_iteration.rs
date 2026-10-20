@@ -457,7 +457,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut())
     {
         let (_, runtime_steering) = runtime.split_mut();
-        if let Err(error) = runtime_steering.try_queue_follow_up_input(pending_prompt) {
+        if let Err(error) = runtime_steering.try_queue_follow_up_intent(pending_prompt) {
             tracing::warn!(%error, "Unable to queue resumed user prompt");
         }
     } else if resume_ref.is_some() {
@@ -493,7 +493,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 messages.push(vtcode_core::llm::provider::Message::system(directive));
             }
             let (_, runtime_steering) = runtime.split_mut();
-            match runtime_steering.try_queue_follow_up_input(follow_up) {
+            match runtime_steering.try_queue_synthetic_follow_up_input(follow_up) {
                 Ok(()) => {
                     let _ = renderer.line(
                             MessageStyle::Info,
@@ -629,7 +629,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 == vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput
                 && !plan_session.recovery.input_prompt_shown)
             {
-                if let Err(error) = runtime.try_queue_follow_up_input(
+                if let Err(error) = runtime.try_queue_synthetic_follow_up_input(
                     crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up(),
                 ) {
                     plan_session.recovery.outcome = vtcode_core::exec::events::planning::PlanningOutcome::AwaitingInput;
@@ -896,7 +896,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                         && session.events.is_empty()
                         && !runtime.has_pending_follow_up_inputs()))
             {
-                match runtime.try_queue_follow_up_input(background_completion_continuation_prompt()) {
+                match runtime.try_queue_synthetic_follow_up_input(background_completion_continuation_prompt()) {
                     Ok(()) => {
                         if background_continuation_requested {
                             pending_background_completions.mark_continuation_queued();
@@ -2152,7 +2152,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     "{} Tools are available under current policy. Resume the original request by correcting the rejected arguments against the current tool schema. Omit unused fields; do not repeat an unchanged rejected call. This is the single automatic corrective turn; no user reply is needed.",
                     crate::agent::runloop::unified::state::PREFLIGHT_CORRECTIVE_FOLLOW_UP_PREFIX
                 );
-                if runtime.try_queue_follow_up_input(follow_up).is_ok() {
+                if runtime.try_queue_synthetic_follow_up_input(follow_up).is_ok() {
                     session_stats.preflight_recovery.begin_corrective_turn();
                     if tool_registry.is_planning_active() {
                         session_stats.record_plan_continuation_turn_with_limit(max_corrective_turns);
@@ -2257,7 +2257,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     let budget_remaining = session_stats.plan_continuation_turns() < max_turns;
                     let queued = budget_remaining
                         && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
-                        && match runtime.try_queue_follow_up_input(follow_up) {
+                        && match runtime.try_queue_synthetic_follow_up_input(follow_up) {
                             Ok(()) => {
                                 session_stats.record_plan_continuation_turn_with_limit(max_turns);
                                 std::sync::Arc::make_mut(&mut runtime.state.messages)
@@ -2322,7 +2322,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                     let budget_remaining = session_stats.tracker_continuation_turns() < max_turns;
                     let queued = budget_remaining
                         && crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state).is_none()
-                        && match runtime.try_queue_follow_up_input(follow_up) {
+                        && match runtime.try_queue_synthetic_follow_up_input(follow_up) {
                             Ok(()) => {
                                 session_stats.record_tracker_continuation_turn_with_limit(max_turns);
                                 std::sync::Arc::make_mut(&mut runtime.state.messages)

@@ -55,7 +55,7 @@ pub(super) fn handle_verification_block(
         let attempt = stats.verification_auto_recovery_turns().saturating_add(1);
         let directive =
             vtcode_core::tools::tool_intent::verification_recovery_directive(verifier.as_deref(), attempt, max_turns);
-        match runtime.try_queue_follow_up_input(verification_auto_recovery_follow_up(verifier.as_deref())) {
+        match runtime.try_queue_synthetic_follow_up_input(verification_auto_recovery_follow_up(verifier.as_deref())) {
             Ok(()) => {
                 let recorded = stats.record_verification_auto_recovery_turn_with_limit(max_turns);
                 debug_assert!(recorded, "exclusive recovery admission must retain its checked budget");

@@ -1,8 +1,8 @@
 use crate::core::agent::events::{EventSink, SharedLifecycleEmitter};
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::{
-    FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_OVERFLOW_FOLLOW_UP_INTENTS, MAX_QUEUED_FOLLOW_UP_INTENTS,
-    QueuedFollowUpIntent, SteeringMessage,
+    FollowUpProvenance, FollowUpQueueFull, MAX_APPLIED_FOLLOW_UP_INTENT_IDS, MAX_OVERFLOW_FOLLOW_UP_INTENTS,
+    MAX_QUEUED_FOLLOW_UP_INTENTS, QueuedFollowUpIntent, SteeringMessage,
 };
 use crate::exec::events::{ThreadEvent, ToolCallStatus, ToolOutcome};
 use crate::llm::provider::{
@@ -293,6 +293,11 @@ impl RuntimeSteering {
     /// Queue a follow-up user input and return an explicit overflow error.
     pub fn try_queue_follow_up_input(&mut self, input: String) -> Result<(), FollowUpQueueFull> {
         self.try_queue_follow_up_intent(QueuedFollowUpIntent::new(input))
+    }
+
+    /// Queue a harness-generated continuation or recovery instruction.
+    pub fn try_queue_synthetic_follow_up_input(&mut self, input: String) -> Result<(), FollowUpQueueFull> {
+        self.try_queue_follow_up_intent(QueuedFollowUpIntent::new_with_provenance(input, FollowUpProvenance::Synthetic))
     }
 
     /// Queue a recovered intent without changing its stable identity.
@@ -754,11 +759,19 @@ impl AgentRuntime {
     /// retain the intent until the enclosing history checkpoint succeeds.
     pub fn run_until_idle(&mut self) -> Option<String> {
         let intent = self.steering.pop_follow_up_intent()?;
-        let (intent_id, input) = intent.into_parts();
-        self.state.add_user_message_with_intent(input.clone(), Some(intent_id.clone()));
+        let (intent_id, input, provenance) = intent.into_parts_with_provenance();
+        match provenance {
+            FollowUpProvenance::UserInput => {
+                self.state.add_user_message_with_intent(input.clone(), Some(intent_id.clone()));
+            }
+            FollowUpProvenance::Synthetic => {
+                self.state
+                    .add_synthetic_user_message_with_intent(input.clone(), Some(intent_id.clone()));
+            }
+        }
         self.steering
             .in_flight_follow_up_intents
-            .push_back(QueuedFollowUpIntent::from_parts(intent_id, input.clone()));
+            .push_back(QueuedFollowUpIntent::from_parts_with_provenance(intent_id, input.clone(), provenance));
         Some(input)
     }
 
@@ -772,6 +785,11 @@ impl AgentRuntime {
     /// Queue a follow-up input while exposing FIFO overflow to the caller.
     pub fn try_queue_follow_up_input(&mut self, input: String) -> Result<(), FollowUpQueueFull> {
         self.steering.try_queue_follow_up_input(input)
+    }
+
+    /// Queue a harness-generated continuation or recovery instruction.
+    pub fn try_queue_synthetic_follow_up_input(&mut self, input: String) -> Result<(), FollowUpQueueFull> {
+        self.steering.try_queue_synthetic_follow_up_input(input)
     }
 
     /// Restore the durable steering snapshot after loading session history.
@@ -1334,6 +1352,11 @@ mod tests {
             .and_then(|metadata| metadata.intent_id())
             .expect("follow-up message should carry intent identity")
             .to_string();
+        assert_eq!(
+            message.metadata.as_ref().and_then(|metadata| metadata.source()),
+            Some("user_input"),
+            "ordinary steering input must remain attributed to the user"
+        );
         assert!(runtime.applied_follow_up_intent_ids().is_empty());
         assert_eq!(runtime.steering.pending_follow_up_intents_snapshot().len(), 1);
         runtime.steering.acknowledge_durable_follow_up_intents();
@@ -1341,8 +1364,48 @@ mod tests {
     }
 
     #[test]
+    fn run_until_idle_preserves_synthetic_follow_up_provenance_at_turn_boundary() {
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut runtime = AgentRuntime::new(state, None, None);
+        runtime
+            .try_queue_synthetic_follow_up_input("continue the saved plan".to_string())
+            .expect("harness intent should be accepted");
+
+        assert_eq!(runtime.run_until_idle().as_deref(), Some("continue the saved plan"));
+
+        let message = runtime.state.messages.last().expect("turn-boundary message should be present");
+        let metadata = message.metadata.as_ref().expect("turn-boundary message should have metadata");
+        assert_eq!(metadata.source(), Some("synthetic"));
+        assert!(metadata.is_synthetic());
+        assert!(metadata.intent_id().is_some(), "synthetic message must retain its recovery identity");
+
+        let pending = runtime.steering.pending_follow_up_intents_snapshot();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].provenance(), FollowUpProvenance::Synthetic);
+    }
+
+    #[test]
+    fn follow_up_provenance_round_trips_and_legacy_intents_default_to_user_input() {
+        let synthetic =
+            QueuedFollowUpIntent::new_with_provenance("auto continue".to_string(), FollowUpProvenance::Synthetic);
+        let encoded = serde_json::to_value(&synthetic).expect("intent should serialize");
+        assert_eq!(encoded["provenance"], "synthetic");
+        let restored: QueuedFollowUpIntent = serde_json::from_value(encoded).expect("intent should deserialize");
+        assert_eq!(restored.provenance(), FollowUpProvenance::Synthetic);
+
+        let legacy = serde_json::json!({"id": "legacy", "text": "continue"});
+        let restored_legacy: QueuedFollowUpIntent =
+            serde_json::from_value(legacy).expect("legacy intent without provenance should deserialize");
+        assert_eq!(restored_legacy.provenance(), FollowUpProvenance::UserInput);
+    }
+
+    #[test]
     fn recovery_replays_only_unrepresented_intent_ids() {
-        let pending = QueuedFollowUpIntent::from_parts("intent-pending", "finish the request");
+        let pending = QueuedFollowUpIntent::from_parts_with_provenance(
+            "intent-pending",
+            "finish the request",
+            FollowUpProvenance::Synthetic,
+        );
         let same_text_different_id = QueuedFollowUpIntent::from_parts("intent-distinct", pending.text());
 
         let mut interrupted =
@@ -1363,6 +1426,7 @@ mod tests {
 
         assert_eq!(restarted.steering.pending_follow_up_intents().len(), 1);
         assert_eq!(restarted.steering.pending_follow_up_intents()[0].id(), "intent-distinct");
+        assert_eq!(restarted.steering.pending_follow_up_intents()[0].provenance(), FollowUpProvenance::UserInput);
     }
 
     #[test]

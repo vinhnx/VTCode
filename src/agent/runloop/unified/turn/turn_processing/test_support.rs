@@ -307,6 +307,12 @@ impl TestTurnProcessingBacking {
         self.runtime_steering.queue_follow_up_input(input.to_string());
     }
 
+    pub(crate) fn queue_synthetic_follow_up_input_for_test(&mut self, input: &str) {
+        self.runtime_steering
+            .try_queue_synthetic_follow_up_input(input.to_string())
+            .expect("test synthetic follow-up should fit");
+    }
+
     /// Snapshot of intents accepted but not yet durably checkpointed
     /// (queued + in-flight).
     pub(crate) fn pending_follow_up_intents_snapshot(

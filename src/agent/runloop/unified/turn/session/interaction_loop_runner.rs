@@ -104,7 +104,7 @@ fn queue_planning_model_recovery(
     plan_session: &mut PlanningWorkflowSessionState,
     steering: &mut RuntimeSteering,
 ) -> Result<()> {
-    if let Err(error) = steering.try_queue_follow_up_input(
+    if let Err(error) = steering.try_queue_synthetic_follow_up_input(
         crate::agent::runloop::unified::turn::tool_outcomes::helpers::plan_mode_continue_follow_up(),
     ) {
         plan_session.recovery.outcome = PlanningOutcome::AwaitingInput;

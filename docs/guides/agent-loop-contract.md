@@ -498,11 +498,14 @@ diagnostics do not hide external locations. The same display rule is used for ge
 canonical workspace paths reached through symlinks; planning lifecycle events reuse the same display value, and it does
 not change the path used for I/O.
 
-Steering follow-ups are persisted as UUID-tagged intents. The schema-v3 session envelope keeps at most 16 pending
-intents and a 64-ID applied window. Recovery replays only pending IDs absent from both the applied window and tagged
-user history; the public `FollowUpInput(String)` message shape remains unchanged. Intents are applied to live history at
-the next turn-loop iteration boundary (after the current tool-call batch) and acknowledged only after the post-turn
-history checkpoint succeeds.
+Steering follow-ups are persisted as UUID-tagged intents with provenance: genuine steering input is `user_input`, while
+harness continuations and recovery prompts are `synthetic`. Provenance survives mid-turn and turn-boundary application,
+resume recovery, and envelope recovery; intents written before provenance existed default to `user_input`. The schema-v3
+session envelope keeps at most 16 pending intents and a 64-ID applied window. Recovery replays only pending IDs absent
+from both the applied window and tagged history; the public `FollowUpInput(String)` message shape remains unchanged.
+Mid-turn intents are appended as steering arrives; other pending intents enter live history at the next turn-loop
+iteration boundary (after the current tool-call batch). Both are acknowledged only after the post-turn history
+checkpoint succeeds.
 
 ## Budget and Limits
 

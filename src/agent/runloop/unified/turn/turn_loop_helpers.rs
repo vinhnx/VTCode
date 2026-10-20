@@ -18,7 +18,7 @@ use vtcode_core::config::constants::tool_limits::{
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::features::FeatureSet;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::core::agent::steering::{FollowUpProvenance, SteeringMessage};
 use vtcode_core::llm::provider as uni;
 
 #[derive(Debug, Clone)]
@@ -580,10 +580,10 @@ fn apply_pending_follow_ups_mid_turn(
     working_history: &mut Vec<uni::Message>,
 ) -> Result<()> {
     for intent in runtime_steering.drain_follow_up_intents_to_in_flight() {
-        let (intent_id, input) = intent.into_parts();
-        push_steered_user_message(working_history, &intent_id, &input);
-        if is_internal_harness_follow_up(&input) {
-            tracing::debug!("Applied internal harness follow-up mid-turn without TUI echo");
+        let (intent_id, input, provenance) = intent.into_parts_with_provenance();
+        push_steered_user_message(working_history, &intent_id, &input, provenance);
+        if provenance == FollowUpProvenance::Synthetic {
+            tracing::debug!("Applied synthetic follow-up mid-turn without TUI echo");
             continue;
         }
         display_status(renderer, &format!("Steered into active turn: {input}"))?;
@@ -677,22 +677,24 @@ pub(super) fn restore_fresh_turn_tool_guidance(history: &mut Vec<uni::Message>, 
     }
 }
 
-/// Append a steered user message tagged with its intent id so restart
-/// recovery can dedupe it (mirrors
-/// `AgentSessionState::add_user_message_with_intent`).
-fn push_steered_user_message(working_history: &mut Vec<uni::Message>, intent_id: &str, input: &str) {
+/// Append a steered user message tagged with its intent id and provenance so
+/// restart recovery can dedupe it (mirrors the corresponding
+/// `AgentSessionState` insertion method).
+fn push_steered_user_message(
+    working_history: &mut Vec<uni::Message>,
+    intent_id: &str,
+    input: &str,
+    provenance: FollowUpProvenance,
+) {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());
     let tokens = input.len().saturating_div(4);
-    // Harness-queued steering stays synthetic so archived history never offers
-    // it as user-typed text.
-    let metadata = if is_internal_harness_follow_up(input) {
-        vtcode_commons::message_metadata::MessageMetadata::harness_notice(now, tokens).with_intent_id(intent_id)
-    } else {
-        vtcode_commons::message_metadata::MessageMetadata::user_input(now, tokens).with_intent_id(intent_id)
+    let metadata = match provenance {
+        FollowUpProvenance::UserInput => vtcode_commons::message_metadata::MessageMetadata::user_input(now, tokens),
+        FollowUpProvenance::Synthetic => vtcode_commons::message_metadata::MessageMetadata::harness_notice(now, tokens),
     };
-    working_history.push(uni::Message::user(input.to_string()).with_metadata(metadata));
+    working_history.push(uni::Message::user(input.to_string()).with_metadata(metadata.with_intent_id(intent_id)));
 }
 
 async fn cancel_for_steering_stop(tool_registry: &mut vtcode_core::tools::ToolRegistry, result: &mut TurnLoopResult) {

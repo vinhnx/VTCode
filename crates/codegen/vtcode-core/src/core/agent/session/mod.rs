@@ -373,7 +373,12 @@ impl AgentSessionState {
     /// The role must stay `User` so the provider treats it as steering, but the
     /// message is tagged synthetic so reverse history can skip it.
     pub fn add_synthetic_user_message(&mut self, text: String) {
-        let metadata = Self::user_message_metadata(&text, None, true);
+        self.add_synthetic_user_message_with_intent(text, None);
+    }
+
+    /// Add a synthetic `User`-role message with its originating follow-up ID.
+    pub fn add_synthetic_user_message_with_intent(&mut self, text: String, intent_id: Option<String>) {
+        let metadata = Self::user_message_metadata(&text, intent_id, true);
         self.push_user_message(text, metadata);
     }
 

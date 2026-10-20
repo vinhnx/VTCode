@@ -515,6 +515,12 @@ async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
         .map(|message| message.content.as_text().to_string())
         .collect();
     assert_eq!(steered, vec!["first".to_string(), "second".to_string()]);
+    assert!(
+        working_history
+            .iter()
+            .filter(|message| message.role == MessageRole::User)
+            .all(|message| { message.metadata.as_ref().and_then(|metadata| metadata.source()) == Some("user_input") })
+    );
     // Every steered message is tagged with its intent id so restart
     // recovery can dedupe it.
     assert!(working_history.iter().any(|message| {
@@ -534,6 +540,37 @@ async fn steering_follow_up_inputs_apply_mid_turn_in_order() {
         .collect();
     assert_eq!(snapshot, vec!["first".to_string(), "second".to_string()]);
     assert_eq!(backing.deferred_follow_up_inputs(), Vec::<String>::new());
+}
+
+#[tokio::test]
+async fn mid_turn_follow_up_provenance_comes_from_the_queued_intent() {
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::TRACKER_CONTINUE_FOLLOW_UP_PREFIX;
+
+    let mut backing = TestTurnProcessingBacking::new(4).await;
+    let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    backing.set_steering_receiver(receiver);
+    backing.queue_synthetic_follow_up_input_for_test("continue the plan");
+    let user_text_with_harness_prefix = format!("{TRACKER_CONTINUE_FOLLOW_UP_PREFIX} this is user-authored");
+    backing.queue_follow_up_input_for_test(&user_text_with_harness_prefix);
+
+    let mut working_history = Vec::new();
+    let mut result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
+    {
+        let mut ctx = backing.turn_loop_context();
+        handle_steering_messages(&mut ctx, &mut working_history, &mut result)
+            .await
+            .expect("handle queued follow-ups");
+    }
+
+    let user_messages: Vec<_> = working_history
+        .iter()
+        .filter(|message| message.role == MessageRole::User)
+        .collect();
+    assert_eq!(user_messages.len(), 2);
+    assert_eq!(user_messages[0].content.as_text(), "continue the plan");
+    assert_eq!(user_messages[0].metadata.as_ref().and_then(|metadata| metadata.source()), Some("synthetic"));
+    assert_eq!(user_messages[1].content.as_text(), user_text_with_harness_prefix.as_str());
+    assert_eq!(user_messages[1].metadata.as_ref().and_then(|metadata| metadata.source()), Some("user_input"));
 }
 
 #[tokio::test]
