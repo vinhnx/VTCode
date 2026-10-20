@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use hashbrown::HashMap as SandboxEnvironment;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::Read;
+#[cfg(all(unix, not(any(target_os = "redox", target_os = "solaris"))))]
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};

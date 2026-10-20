@@ -122,6 +122,13 @@ pub(crate) fn read_legacy_compatible_file(path: &Path) -> Result<Option<Vec<u8>>
     }
 }
 
+#[cfg_attr(
+    not(unix),
+    allow(
+        unused_variables,
+        reason = "enforce_private_permissions only gates Unix permission checks"
+    )
+)]
 fn read_file_with_policy(path: &Path, enforce_private_permissions: bool) -> Result<Option<Vec<u8>>> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
