@@ -26,33 +26,18 @@ Plan, build, and review with hosted or local models, sandboxed tools, and resuma
 
 - [Overview](#overview)
 - [Quick start](#quick-start)
-  - [1. Install](#1-install)
-  - [2. Configure your project](#2-configure-your-project)
-  - [3. Run your first task](#3-run-your-first-task)
 - [Usage](#usage)
-  - [Interactive](#interactive)
-  - [Headless](#headless)
-  - [Scheduled tasks](#scheduled-tasks)
-  - [Sessions](#sessions)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Contributing](#contributing)
 - [Security](#security)
-- [Community](#community)
-  - [Security Advisors](#security-advisors)
-  - [Main Contributor](#main-contributor)
-  - [Core Contributors](#core-contributors)
-  - [Contributors](#contributors)
-- [Support the project](#support-the-project)
-  - [Resources](#resources)
-  - [Share VT Code](#share-vt-code)
-  - [Sponsorship](#sponsorship)
+- [Community and support](#community-and-support)
 - [License](#license)
 
 ## Overview
 
-Use the interactive TUI or `vtcode exec` to explore a codebase, plan and review changes, and run tools. Choose a
-model and permission level; VT Code manages context, tool calls, and execution policy.
+VT Code runs in your terminal and works on your repository: explore, plan, edit, and verify with the model you
+choose. It owns context, tool calls, and execution policy, so long tasks stay auditable and resumable.
 
 | At a glance      | What you get                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------ |
@@ -73,9 +58,8 @@ flowchart LR
     E -->|match| D[Done]
 ```
 
-Each loop states the expected outcome, gathers bounded evidence, checks the verifier result, and revises only
-when the evidence disagrees; rereading alone is not revision. See the
-[HOVER acceptance table](./docs/development/hypothesis-revision-validation.md) for the full contract.
+Every loop states the expected outcome, gathers bounded evidence, and revises only when the evidence disagrees.
+See the [HOVER acceptance table](./docs/development/hypothesis-revision-validation.md) for the full contract.
 
 ## Quick start
 
@@ -147,6 +131,18 @@ see the [getting started guide](./docs/user-guide/getting-started.md).
 
 ## Usage
 
+Common commands:
+
+| Goal                    | Command                                             |
+| ----------------------- | --------------------------------------------------- |
+| Start the TUI           | `vtcode`                                            |
+| Ask without tools       | `vtcode ask "explain Rc vs Arc"`                    |
+| Run a task headlessly   | `vtcode exec "refactor main.rs"`                    |
+| Review pending changes  | `vtcode review`                                     |
+| Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h`  |
+| Resume the last session | `vtcode continue`                                   |
+| Inspect a run log       | `vtcode trajectory`                                 |
+
 ### Interactive
 
 Use `vtcode` to explore, plan, and implement changes in the TUI. For larger tasks, start with
@@ -158,23 +154,23 @@ changes, decisions, and verification without another model call; see the
 
 ### Headless
 
-Use `ask` for tool-free answers, `exec` for tool-enabled coding tasks, and `review` to inspect uncommitted changes:
+`ask` is tool-free, `exec` runs the full tool loop, and `review` inspects uncommitted changes:
 
 ```bash
-vtcode ask "explain Rc vs Arc"    # one-shot answer, no session, no tools
-vtcode exec "refactor main.rs"    # headless task with the full tool loop
-vtcode review                     # agent review of uncommitted changes
+vtcode ask "explain Rc vs Arc"
+vtcode exec "refactor main.rs"
+vtcode review
 ```
+
+### Automation
 
 `exec` runs the full tool loop and requires `[automation.full_auto]` plus `full_auto` workspace trust. Interactive
 terminals prompt for trust. Non-TTY runs require `VTCODE_TRUST_WORKSPACE=full-auto`; tool allow-lists, explicit denies,
 and execution policy still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
 [full automation](./docs/guides/full-automation.md) for configuration and output details.
 
-### Scheduled tasks
-
-For recurring work, use [scheduled tasks](./docs/user-guide/scheduled-tasks.md): durable prompt jobs on the same exec
-runtime.
+Recurring work uses [scheduled tasks](./docs/user-guide/scheduled-tasks.md), durable prompt jobs on the same exec
+runtime:
 
 ```bash
 # Weekly dependency audit (Mondays 09:00)
@@ -208,16 +204,18 @@ none are required for the quick start.
 
 <!-- markdownlint-disable MD060 -->
 
-| Goal                 | Guides                                                                                                                                                                                                                                                                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Get started          | [Installation](./docs/installation/README.md) · [Getting started](./docs/user-guide/getting-started.md) · [Providers](./docs/providers/PROVIDER_GUIDES.md) · [OAuth login](./docs/guides/oauth-authentication.md) · [FAQ](./docs/FAQ.md) · [Compatibility](./docs/COMPATIBILITY.md)                                                              |
-| Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md)                                   |
-| Automate             | [Exec mode](./docs/user-guide/exec-mode.md) · [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                                                                        |
-| Extend and integrate | [Skills](./docs/skills/SKILLS_GUIDE.md) · [Plugins](./docs/guides/agent-plugins.md) · [MCP](./docs/guides/mcp-integration.md) · [Editors (ACP)](./docs/guides/zed-acp.md) · [WebMCP](./docs/user-guide/webmcp.md) · [Memcode](./docs/guides/memcode-mcp.md)                                                                                      |
-| Integrations         | [Companion (experimental)](./docs/user-guide/vtcode-companion.md) · [WebMCP app](https://vtcode.vinhnx.chatgpt.site/) · [WebMCP mirror](https://vinhnx.github.io/VTCode/) · [WebMCP deployment](./docs/reference/webmcp.md) · [Memcode write-up](https://memcode.in/blogs/vt-code-memory-across-threads)                                          |
+| Goal                 | Guides                                                                                                                                                                                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Get started          | [Installation](./docs/installation/README.md) · [Getting started](./docs/user-guide/getting-started.md) · [Providers](./docs/providers/PROVIDER_GUIDES.md) · [OAuth login](./docs/guides/oauth-authentication.md) · [FAQ](./docs/FAQ.md) · [Compatibility](./docs/COMPATIBILITY.md) |
+| Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md) |
+| Automate             | [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                   |
+| Extend and integrate | [Skills](./docs/skills/SKILLS_GUIDE.md) · [Plugins](./docs/guides/agent-plugins.md) · [MCP](./docs/guides/mcp-integration.md) · [Editors (ACP)](./docs/guides/zed-acp.md) · [WebMCP](./docs/user-guide/webmcp.md) · [Companion (experimental)](./docs/user-guide/vtcode-companion.md) · [Memcode](./docs/guides/memcode-mcp.md) · [WebMCP deployment](./docs/reference/webmcp.md) |
 | Develop and evaluate | [Development](./docs/development/README.md) · [Testing](./docs/development/testing.md) · [Evals](./docs/guides/eval.md) · [Architecture](./docs/ARCHITECTURE.md) · [HOVER](./docs/development/hypothesis-revision-validation.md) · [Protocols](./docs/protocols/OPEN_RESPONSES.md) · [Loop engineering](./docs/project/PLAN-loop-engineering.md) |
 
 <!-- markdownlint-enable MD060 -->
+
+Elsewhere: [WebMCP app](https://vtcode.vinhnx.chatgpt.site/) · [mirror](https://vinhnx.github.io/VTCode/) ·
+[Memcode write-up](https://memcode.in/blogs/vt-code-memory-across-threads).
 
 ## Development
 
@@ -264,11 +262,16 @@ Report vulnerabilities privately via
 [GitHub private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new); never open a public
 issue. Details: [security policy](./docs/SECURITY.md).
 
-## Community
+## Community and support
 
-Thanks to everyone who builds, tests, and improves VT Code. For partnerships, reach the maintainer at
-`vinhnguyen2308 [at] gmail [dot] com`; bugs and feature requests belong in
-[GitHub Issues](https://github.com/vinhnx/VTCode/issues).
+Thanks to everyone who builds, tests, and improves VT Code. Bugs and feature requests belong in
+[GitHub Issues](https://github.com/vinhnx/VTCode/issues); for partnerships, reach the maintainer at
+`vinhnguyen2308 [at] gmail [dot] com`.
+
+[Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) ·
+[Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
+[Share feedback](https://github.com/vinhnx/VTCode/discussions) ·
+[Star the repo](https://github.com/vinhnx/VTCode/stargazers) · [Contribute](./docs/CONTRIBUTING.md)
 
 <details>
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (28)</summary><!-- CONTRIBUTORS-COUNT:END -->
@@ -324,13 +327,6 @@ Thanks to everyone who builds, tests, and improves VT Code. For partnerships, re
 </details>
 
 Want to see your avatar here? Every bit counts: one-line fixes, bug reports, and feedback are all welcome.
-
-[Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) ·
-[Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
-[Share feedback](https://github.com/vinhnx/VTCode/discussions) ·
-[Star the repo](https://github.com/vinhnx/VTCode/stargazers) · [Contribute](./docs/CONTRIBUTING.md)
-
-## Support the project
 
 ### Resources
 
