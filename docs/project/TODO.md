@@ -226,6 +226,8 @@ Turn blocked: planning recovery did not produce an approval-ready plan; planning
 
 same session /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261020T070723Z_313588-50570
 
+NOTE: this seems only happen under certain models and providers.
+
 ---
 
 CRITICAL: vtcode suffer from plan infite loop
@@ -283,3 +285,8 @@ planning recovery did not produce an approval-ready plan; planning remains activ
 ```
 
 check session: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261020T092318Z_679892-53234 and deep dive and analysis of vtcode session and fix.
+NOTE: this seems only happen under certain models and providers.
+
+---
+
+don't show MCP tools ready (3 registered). Use /mcp tools to inspect the catalog repeatedly in the session. only show once in the session. check mcp inits and invocation logic
