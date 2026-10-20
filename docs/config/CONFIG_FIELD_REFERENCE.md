@@ -68,7 +68,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.continuation.cross_turn_turns` | `integer` | no | `32` | Bounded cross-turn auto-continue turns after a recoverable end (budget/preview/tool-free recovery) or on resume while tracker work remains. The episode budget **progress-resets** when any tracker step completes. `0` disables cross-turn tracker auto-queue (in-turn continuation still applies when `auto_continue_tracker` is true). Default: 32. |
 | `agent.harness.continuation_policy` | `string` | no | `"all"` | Controls whether harness-managed continuation loops are enabled. |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional compatibility/export JSONL path for harness events. Canonical events are always stored under the workspace session store; unset configuration creates no global harness file. |
-| `agent.harness.inspection.mode` | `string` | no | `"warn"` | Advisory source exposure by default: `enforce`, `warn`, or `off`; independent of verification. See [source inspection](../development/source-inspection.md). |
+| `agent.harness.inspection.mode` | `string` | no | `"warn"` | Whether missing source exposure blocks mutations. |
 | `agent.harness.max_budget_usd` | `null \| number` | no | `null` | Optional maximum estimated API cost in USD before VT Code stops the session. |
 | `agent.harness.max_parallel_tool_calls` | `integer` | no | `4` | Maximum number of tool calls that may execute concurrently within a single parallel batch. Set to `0` to disable the cap (unlimited concurrency). Default: 4. |
 | `agent.harness.max_revision_rounds` | `integer` | no | `2` | Maximum generator revision rounds after evaluator rejection. |
@@ -85,10 +85,10 @@ python3 scripts/generate_config_field_reference.py
 | `agent.harness.tool_result_clearing.keep_recent_tool_batches` | `integer` | no | `2` | Local clearing additionally protects the newest assistant messages with tool calls, selected by originating message order (default 2). Protection is the union with keep_tool_uses; 0 restores count-based batch retention. Native Anthropic context edits continue to use keep_tool_uses only. |
 | `agent.harness.tool_result_clearing.keep_tool_uses` | `integer` | no | `2` | Protect newest results. Local clearing also retains all results from their originating assistant tool-call batches, matching call IDs across reordered completions and intervening directives. |
 | `agent.harness.tool_result_clearing.trigger_tokens` | `integer` | no | `40000` | Local clearing caps this at 60% of the provider/session history budget after output reserves and system/tool-schema overhead (minimum positive cap: 1). Lower configured triggers win; unknown capacity keeps this value. Configured values must be positive. Native edit thresholds keep the configured value. |
-| `agent.harness.verification.auto_execute` | `boolean` | no | `true` | Run the detected project verifier through the normal tool pipeline when the model exhausts its directive retries without verifying. Default: true. Set to false to restore directive-only recovery. |
-| `agent.harness.verification.cross_turn_turns` | `integer` | no | `2` | Autonomous cross-turn recovery turns scheduled after a verification-blocked turn before a manual blocked handoff is written. Default: 2. |
+| `agent.harness.verification.auto_execute` | `boolean` | no | `true` | Run missing interactive completion checks through the normal pipeline. Default: true. False disables automatic interactive execution and corrective recovery; headless mandatory verification remains required. |
+| `agent.harness.verification.cross_turn_turns` | `integer` | no | `2` | Legacy cross-turn recovery bound. Zero disables the corrective pass; nonzero values permit at most one pass per request. Default: 2 for compatibility. |
 | `agent.harness.verification.default_verifier_override` | `null \| string` | no | `null` | Explicit verifier command overriding project-marker detection (e.g. `"cargo nextest run -p mycrate"`). Must be a standalone verifier or pure `&&` chain; pipes and `;`/`\|\|` joins are rejected at use. |
-| `agent.harness.verification.in_turn_attempts` | `integer` | no | `2` | Bounded in-turn directive retries granted when the model emits text instead of a verifier while the gate is pending. Each grant resets the text-response streak once and injects a project-aware directive. Default: 2. |
+| `agent.harness.verification.in_turn_attempts` | `integer` | no | `2` | Legacy in-turn recovery bound. Zero disables the corrective pass; nonzero values permit at most one pass. Default: 2 for compatibility. |
 | `agent.harness.verification.max_consecutive_failures` | `integer` | no | `3` | Consecutive failed harness auto-verifications before escalation to a manual blocked handoff carrying the failure log. Reset by any success, completed turn, or fresh user input. Default: 3. |
 | `agent.idle_turn_limit` | `integer` | no | `3` | Maximum consecutive idle turns (no tool calls, no meaningful response) before the agent runner treats the session as stalled and aborts the loop. |
 | `agent.include_structured_reasoning_tags` | `boolean \| null` | no | `null` | Controls inclusion of the structured reasoning tag instructions block. Behavior: - `Some(true)`: always include structured reasoning instructions. - `Some(false)`: never include structured reasoning instructions. - `None` (default): omit structured reasoning instructions in every prompt mode. Models with native reasoning do not need visible reasoning tags, so the block is opt-in for users who want tag-based reasoning guidance. |
@@ -150,7 +150,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.require_plan_confirmation` | `boolean` | no | `true` | Require user confirmation before executing a plan generated in planning workflow When true, exiting planning workflow shows the implementation blueprint and requires explicit user approval before enabling edit tools. |
 | `agent.shell_prompt_profile` | `string` | no | `"auto"` | Shell syntax profile used in model-facing command examples. This controls prompt wording only; command policy remains in the runtime. Values: auto, unix_like, powershell. |
 | `agent.small_model.enabled` | `boolean` | no | `true` | Enable small model tier for efficient operations |
-| `agent.small_model.model` | `string` | no | `""` | Small model to use (e.g., claude-4-5-haiku, "gpt-4-mini", "gemini-2.0-flash") Leave empty to auto-select a lightweight sibling of the main model |
+| `agent.small_model.model` | `string` | no | `""` | Provider-specific model ID for efficient operations. Leave empty to auto-select a lightweight sibling of the main model |
 | `agent.small_model.temperature` | `number` | no | `0.3` | Temperature for small model responses |
 | `agent.small_model.use_for_git_history` | `boolean` | no | `true` | Enable small model for git history processing |
 | `agent.small_model.use_for_large_reads` | `boolean` | no | `true` | Enable small model for large file reads (>50KB) |
@@ -490,7 +490,7 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.server.name` | `string` | no | `"vtcode-mcp-server"` | Server identifier |
 | `mcp.server.port` | `integer` | no | `3000` | Port for the MCP server |
 | `mcp.server.transport` | `string` | no | `"sse"` | Server transport type |
-| `mcp.server.version` | `string` | no | `"0.171.3"` | Server version |
+| `mcp.server.version` | `string` | no | `"0.180.1"` | Server version |
 | `mcp.startup_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) when starting providers |
 | `mcp.tool_cache_capacity` | `integer` | no | `100` | Cache capacity for tool discovery results |
 | `mcp.tool_timeout_seconds` | `integer \| null` | no | `null` | Optional timeout (seconds) for tool execution |
@@ -581,7 +581,7 @@ python3 scripts/generate_config_field_reference.py
 | `permissions.auto.max_total_denials` | `integer` | no | `20` | Maximum total denials before auto permission review falls back. |
 | `permissions.auto.model` | `string` | no | `""` | Optional model override for the transcript reviewer. |
 | `permissions.auto.probe_model` | `string` | no | `""` | Optional model override for the prompt-injection probe. |
-| `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe in ordinary interactive TUI and full-auto sessions. Direct OpenAI API-key sessions at the standard endpoint only; billed to your OpenAI API account. One generation fallback shares the eight-second deadline. TUI use requires no full-auto acknowledgement and preserves manual approvals and tool permissions. |
+| `permissions.auto.use_decisions_probe` | `boolean` | no | `false` | Experimental OpenAI Decisions tool-output probe. Direct OpenAI API-key TUI or full-auto sessions at the standard endpoint only; billed to your OpenAI API account. Inconclusive requests fall back to the generation probe within its deadline. Manual approvals and tool permissions remain unchanged; no full-auto acknowledgement is needed in TUI. |
 | `permissions.cache_enabled` | `boolean` | no | `true` | Enable permission decision caching to avoid redundant evaluations |
 | `permissions.cache_ttl_seconds` | `integer` | no | `300` | Cache time-to-live in seconds (how long to cache decisions) Default: 300 seconds (5 minutes) |
 | `permissions.deny` | `array` | no | `[]` | Rules that deny matching tool calls. |
@@ -617,13 +617,13 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.providers.gemini.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.gemini.mode` | `string` | no | `"implicit"` | Gemini prompt caching mode selection |
 | `prompt_cache.providers.moonshot.enabled` | `boolean` | no | `true` | - |
-| `prompt_cache.providers.openai.auxiliary_explicit_cache` | `boolean` | no | `false` | Opt in to stable-instruction-only cache writes for independent auxiliary requests on supported native OpenAI models. Interactive caching is unchanged. See [measurement guide](../development/prompt-cache-measurement.md). |
+| `prompt_cache.providers.openai.auxiliary_explicit_cache` | `boolean` | no | `false` | Opt in to stable-instruction-only cache writes for independent native GPT-5.6+ auxiliary requests. Interactive requests keep implicit caching. |
 | `prompt_cache.providers.openai.enabled` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openai.idle_expiration_seconds` | `integer` | no | `3600` | - |
 | `prompt_cache.providers.openai.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.openai.prompt_cache_key_mode` | `string` | no | `"session"` | Strategy for generating OpenAI `prompt_cache_key`. Session-scoped keys derive one stable key per VT Code conversation. |
 | `prompt_cache.providers.openai.prompt_cache_retention` | `PromptCacheRetention \| null` | no | `null` | Optional prompt cache retention policy to pass directly into OpenAI Responses API. Supported values are "in_memory" and "24h". If set, VT Code will include `prompt_cache_retention` in the request body to extend the model-side prompt caching window or request the explicit in-memory policy. |
-| `prompt_cache.providers.openai.surface_metrics` | `boolean` | no | `true` | Enable optional cache comparison diagnostics; billing counters are always retained. |
+| `prompt_cache.providers.openai.surface_metrics` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.enabled` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.propagate_provider_capabilities` | `boolean` | no | `true` | Propagate provider cache instructions automatically |
 | `prompt_cache.providers.openrouter.report_savings` | `boolean` | no | `true` | Surface cache savings reported by OpenRouter |
@@ -678,7 +678,7 @@ python3 scripts/generate_config_field_reference.py
 | `provider.openai.responses_include` | `array` | no | `-` | Optional Responses API `include` selectors. Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity. |
 | `provider.openai.responses_include[]` | `string` | no | `-` | - |
 | `provider.openai.responses_store` | `boolean \| null` | no | `-` | Optional Responses API `store` flag. Set to `false` to avoid server-side storage when using Responses-compatible models. |
-| `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "flex", "priority", "ultrafast". "ultrafast" is the fastest tier: supported only for native OpenAI `gpt-6-astra` and `gpt-6.1-sol`. Toggle with `/fast`, `/fast on`, or `/fast off`. It costs more, starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`. |
+| `provider.openai.service_tier` | `OpenAIServiceTier \| null` | no | `-` | Optional native OpenAI `service_tier` request parameter. Leave unset to inherit the Project-level default service tier. Options: "flex", "priority", "ultrafast". "ultrafast" is the fastest tier: GA for `gpt-6-astra` and `gpt-6.1-sol`, preview-only for `gpt-5.6-sol` (contact your OpenAI account team). It costs more, starts at low TPM limits (Astra 500k/1M/5M, 6.1-sol 1M/4M/40M), supports US/global processing on Astra and US/EU/global on 6.1-sol, and pairs best with `websocket_mode = true`. |
 | `provider.openai.tool_search.always_available_tools` | `array` | no | `[]` | Tool names that should never be deferred (always available). |
 | `provider.openai.tool_search.always_available_tools[]` | `string` | no | `-` | - |
 | `provider.openai.tool_search.defer_by_default` | `boolean` | no | `true` | Automatically defer loading of all tools except the core always-on set. |
@@ -893,8 +893,8 @@ python3 scripts/generate_config_field_reference.py
 | `ui.status_line.mode` | `string` | no | `"auto"` | - |
 | `ui.status_line.refresh_interval_ms` | `integer` | no | `1000` | - |
 | `ui.status_line.show_clock` | `boolean` | no | `true` | Show the current system time (`HH:MM:SS`) on the status line (default: true). |
-| `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `null` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
-| `ui.terminal_title.items[]` | `string` | no | `-` | One of `spinner`, `project`, `status`, `thread`, `git-branch`, `model`, `task-progress`. The `spinner` item follows the shared global loading animation (thinking, model wait, tools, background work) and shows `!` while a turn is blocked or a user-attention overlay is open. |
+| `ui.terminal_title.items` | `array \| null` | no | `null` | Ordered title items; `None` resolves to `["spinner", "project"]` (spinner enabled by default), and an empty array disables VT Code-managed titles. |
+| `ui.terminal_title.items[]` | `string` | no | `-` | - |
 | `ui.thinking_display` | `string` | no | `"collapsed"` | Default collapse state of agent thinking/reasoning blocks ("collapsed" or "extended") |
 | `ui.tool_display_mode` | `string` | no | `"compact"` | Tool transition summary display mode Options: "expanded" (expanded summary layout) or "compact" (one compact summary per tool call) |
 | `ui.tool_output_max_lines` | `integer` | no | `30` | Maximum number of lines to display in tool output (prevents transcript flooding) |
