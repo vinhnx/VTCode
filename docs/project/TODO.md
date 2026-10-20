@@ -160,3 +160,7 @@ Blocker encountered: the runtime's verification-gate fuse kept re-queueing the s
 the blocked-call limit (6 blocked calls) on a final redundant diff re-run.
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/sessions/session-vtcode-20261019T091807Z_142563-67504
+
+---
+
+IMPORTANT: make sure preventing rm -r of a mounted drive or a folder at its top level (/Volumes, /media, WSL's /mnt/c) not getting the safety prompt that rm -rf /Applications gets.
