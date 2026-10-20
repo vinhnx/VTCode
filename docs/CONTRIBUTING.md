@@ -267,16 +267,35 @@ pub async fn example_function(path: &str) -> Result<()> {
 
 ## Community
 
-### Need Help?
+VT Code is created and maintained by [@vinhnx](https://github.com/vinhnx), and it gets better every time someone
+contributes - code, docs, a bug report, or a careful review. You do not need to be a Rust expert, know the harness, or
+ship a big change to help. Curiosity is enough to start.
 
-- **GitHub Issues**: Report bugs and request features at [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
-- **Discussions**: Ask questions and discuss development in
-  [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
+### Where to start
 
-### Questions?
+- [Good first issues](https://github.com/vinhnx/vtcode/labels/good%20first%20issue) - small, self-contained tasks with
+  the relevant files and a way to verify your work.
+- [Help wanted](https://github.com/vinhnx/vtcode/labels/help%20wanted) - bigger items where a second pair of hands
+  genuinely helps.
+- [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions) - ask questions and talk through design. Asking
+  before you build is always cheaper than reworking later.
+- [GitHub Issues](https://github.com/vinhnx/vtcode/issues) - report bugs or suggest features. For bugs, include
+  `vtcode trajectory` output, your OS, and the provider/model if you can.
 
-If you have questions about contributing or need clarification on any aspect of the project, feel free to open an issue
-or reach out through the appropriate channel. We're committed to helping new contributors get up to speed.
+### How a contribution lands
+
+1. Comment on the issue and say what you plan to change. That way nobody duplicates work, and you get early input.
+2. Keep the first pull request small. A failing test plus a fix is the ideal shape, and a tiny docs fix is just as
+   welcome.
+3. Run `./scripts/check-dev.sh` and the relevant `cargo nextest run` target, then paste the result in the PR.
+4. Review will focus on tests, docs, and boundaries - not on your experience level. Disagreeing with reasoning is
+   welcome too.
+5. Once merged, your avatar joins the [README contributor grid](../README.md#community-and-support).
+
+### Community standards
+
+The [Code of Conduct](./CODE_OF_CONDUCT.md) covers every space here. Assume good intent, keep feedback about the code,
+and help the next person the way you would have liked to be helped.
 
 ---
 

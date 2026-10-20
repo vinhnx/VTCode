@@ -264,14 +264,27 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community and support
 
-Thanks to everyone who builds, tests, and improves VT Code. Bugs and feature requests belong in
-[GitHub Issues](https://github.com/vinhnx/VTCode/issues); for partnerships, reach the maintainer at
-`vinhnguyen2308 [at] gmail [dot] com`.
+VT Code is created and maintained by [@vinhnx](https://github.com/vinhnx), with help from everyone in the grid below.
+Whether you write code, fix docs, or just try a release and tell me what broke, you are welcome here.
 
-[Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) ·
-[Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) ·
-[Share feedback](https://github.com/vinhnx/VTCode/discussions) ·
-[Star the repo](https://github.com/vinhnx/VTCode/stargazers) · [Contribute](./docs/CONTRIBUTING.md)
+- [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell me,
+  and include `vtcode trajectory` output if you can.
+- [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) - describe the workflow
+  you wish worked better.
+- [Ask a question or share feedback](https://github.com/vinhnx/VTCode/discussions) - no question is too small.
+- [Good first issues](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) - friendly, self-contained places
+  to start.
+- [Help wanted](https://github.com/vinhnx/VTCode/labels/help%20wanted) - bigger items where a second pair of hands
+  would genuinely help.
+- [Contributing guide](./docs/CONTRIBUTING.md) - setup, checks, and commit conventions.
+
+New to open source or to Rust? That is completely fine. Pick a good first issue or a docs fix, leave a comment, and I
+will help you scope it and land it. The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review kind and
+constructive.
+
+Partnerships and private matters: `vinhnguyen2308 [at] gmail [dot] com`.
+
+Thank you to everyone below - you are the reason this project keeps moving.
 
 <details>
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (28)</summary><!-- CONTRIBUTORS-COUNT:END -->
@@ -326,7 +339,9 @@ Thanks to everyone who builds, tests, and improves VT Code. Bugs and feature req
 
 </details>
 
-Want to see your avatar here? Every bit counts: one-line fixes, bug reports, and feedback are all welcome.
+Want to see your avatar here? Every bit counts - a one-line fix, a bug report, or a thoughtful comment. Not sure where
+to begin? Say hello on a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) and we will
+figure it out together.
 
 ### Resources
 
