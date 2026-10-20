@@ -141,7 +141,7 @@ proptest! {
     #[test]
     fn fuzz_prefix_rule_invariant(command_words in prop::collection::vec("\\PC{1,8}", 1..6)) {
         let empty_rule = PrefixRule::new(vec![], Decision::Allow);
-        prop_assert!(empty_rule.matches(&command_words));
+        prop_assert!(!empty_rule.matches(&command_words));
 
         let rule = PrefixRule::new(
             command_words.iter().take(1).cloned().collect(),
@@ -273,5 +273,17 @@ fn fuzz_known_safe_commands() {
     for cmd in safe_cases {
         let command: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
         assert!(!command_might_be_dangerous(&command), "expected safe: {cmd:?}");
+    }
+}
+
+proptest! {
+    /// Independently compare matching semantics, including zero-token and empty-string inputs.
+    #[test]
+    fn prop_prefix_matching_equivalence(
+        pattern in prop::collection::vec(prop_oneof![Just(String::new()), Just("git".into()), Just("push".into())], 0..5),
+        command in prop::collection::vec(prop_oneof![Just(String::new()), Just("git".into()), Just("push".into())], 0..7),
+    ) {
+        let expected = !pattern.is_empty() && command.get(..pattern.len()) == Some(pattern.as_slice());
+        prop_assert_eq!(PrefixRule::new(pattern, Decision::Allow).matches(&command), expected);
     }
 }

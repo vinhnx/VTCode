@@ -1,7 +1,7 @@
 //! Policy types for execution control.
 
 use serde::{Deserialize, Serialize};
-use std::default::Default;
+use std::{collections::HashSet, default::Default};
 
 /// Decision made by a policy rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -34,13 +34,15 @@ impl PrefixRule {
         Self { pattern, decision }
     }
 
-    /// Check if a command matches this rule.
+    /// Check if a command matches this rule. Zero-token patterns never match.
     pub fn matches(&self, command: &[String]) -> bool {
-        if command.len() < self.pattern.len() {
-            return false;
-        }
-        self.pattern.iter().zip(command.iter()).all(|(pattern, cmd)| pattern == cmd)
+        matches_prefix(&self.pattern, command)
     }
+}
+
+/// Empty token conjunctions must never authorize a command.
+pub(super) fn matches_prefix(pattern: &[String], command: &[String]) -> bool {
+    !pattern.is_empty() && command.starts_with(pattern)
 }
 
 /// Result of matching a command against a rule.
@@ -92,7 +94,11 @@ impl Policy {
     }
 
     /// Add a prefix rule to the policy.
+    ///
+    /// # Errors
+    /// Returns an error for a zero-token pattern without changing the policy.
     pub fn add_prefix_rule(&mut self, pattern: &[String], decision: Decision) -> anyhow::Result<()> {
+        anyhow::ensure!(!pattern.is_empty(), "prefix pattern cannot be empty");
         self.prefix_rules.push(PrefixRule::new(pattern.to_vec(), decision));
         Ok(())
     }
@@ -109,15 +115,19 @@ impl Policy {
     /// `rules` — keeps its first occurrence, so the highest-precedence layer
     /// wins and evaluation order (`check`) stays deterministic.
     pub fn prepend_layer(&mut self, rules: impl IntoIterator<Item = PrefixRule>) {
-        let mut new_rules: Vec<PrefixRule> = Vec::new();
-        for rule in rules {
-            let pattern = rule.pattern.clone();
-            let duplicate = new_rules.iter().any(|existing: &PrefixRule| existing.pattern == pattern)
-                || self.prefix_rules.iter().any(|existing| existing.pattern == pattern);
-            if !duplicate {
-                new_rules.push(rule);
-            }
+        let rules: Vec<_> = rules.into_iter().collect();
+        if rules.is_empty() {
+            return;
         }
+        // Membership is separate from evaluation order; the vector still defines precedence.
+        let mut seen: HashSet<&[String]> = self.prefix_rules.iter().map(|rule| rule.pattern.as_slice()).collect();
+        let keep: Vec<_> = rules.iter().map(|rule| seen.insert(rule.pattern.as_slice())).collect();
+        drop(seen);
+        let new_rules: Vec<_> = rules
+            .into_iter()
+            .zip(keep)
+            .filter_map(|(rule, keep)| keep.then_some(rule))
+            .collect();
         drop(self.prefix_rules.splice(0..0, new_rules));
     }
 
@@ -173,6 +183,129 @@ impl Policy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_prefix_never_matches() {
+        let rule = PrefixRule::new(Vec::new(), Decision::Allow);
+        assert!(!rule.matches(&[]));
+        assert!(!rule.matches(&["untrusted".into()]));
+    }
+
+    #[test]
+    fn empty_deserialized_rule_and_layer_cannot_match() {
+        let rule: PrefixRule = serde_json::from_str(r#"{"pattern":[],"decision":"allow"}"#).unwrap();
+        let mut policy = Policy::empty();
+        policy.prepend_layer([rule]);
+        for command in [vec![], vec!["untrusted".into()]] {
+            assert_eq!(policy.check(&command), RuleMatch::HeuristicsRuleMatch { decision: Decision::Prompt });
+        }
+    }
+
+    #[test]
+    fn rejected_insertion_preserves_rules() {
+        let mut policy = Policy::empty();
+        policy.add_prefix_rule(&["git".into()], Decision::Forbidden).unwrap();
+        let before = policy.rules().to_vec();
+        for decision in [Decision::Allow, Decision::Prompt, Decision::Forbidden] {
+            assert!(policy.add_prefix_rule(&[], decision).is_err());
+            assert_eq!(policy.rules(), before);
+        }
+    }
+
+    #[test]
+    fn layer_deduplication_matches_pairwise_reference() {
+        let choices = [
+            PrefixRule::new(vec!["a".into()], Decision::Allow),
+            PrefixRule::new(vec!["b".into()], Decision::Prompt),
+            PrefixRule::new(vec!["a".into()], Decision::Forbidden),
+            PrefixRule::new(vec!["a".into(), "b".into()], Decision::Forbidden),
+            PrefixRule::new(vec![], Decision::Allow),
+        ];
+        for existing in &choices {
+            for first in &choices {
+                for second in &choices {
+                    let mut policy = Policy { prefix_rules: vec![existing.clone()] };
+                    let incoming = [first.clone(), second.clone(), first.clone()];
+                    let mut expected = Vec::<PrefixRule>::new();
+                    for rule in &incoming {
+                        if !expected.iter().chain(policy.rules()).any(|prior| prior.pattern == rule.pattern) {
+                            expected.push(rule.clone());
+                        }
+                    }
+                    expected.push(existing.clone());
+                    policy.prepend_layer(incoming);
+                    assert_eq!(policy.rules(), expected);
+                    for command in [vec![], vec!["a".into()], vec!["b".into()], vec!["a".into(), "b".into()]] {
+                        let reference = Policy { prefix_rules: expected.clone() };
+                        assert_eq!(policy.check(&command), reference.check(&command));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn layer_deduplication_preserves_order_and_existing_duplicates() {
+        let mut policy = Policy::empty();
+        policy.add_prefix_rule(&["git".into()], Decision::Prompt).unwrap();
+        policy.add_prefix_rule(&["git".into()], Decision::Forbidden).unwrap();
+        let existing = policy.rules().to_vec();
+        let first = PrefixRule::new(vec!["cargo".into()], Decision::Allow);
+        policy.prepend_layer([
+            first.clone(),
+            PrefixRule::new(vec!["git".into()], Decision::Allow),
+            PrefixRule::new(vec!["cargo".into()], Decision::Forbidden),
+            PrefixRule::new(vec!["cargo".into(), "build".into()], Decision::Forbidden),
+        ]);
+        assert_eq!(policy.rules().len(), 4);
+        assert_eq!(policy.rules()[0], first);
+        assert_eq!(&policy.rules()[2..], existing);
+        assert_eq!(policy.check(&["cargo".into(), "build".into()]).decision(), Decision::Allow);
+        assert_eq!(policy.check(&["git".into()]).decision(), Decision::Prompt);
+        let before = policy.rules().to_vec();
+        policy.prepend_layer([]);
+        assert_eq!(policy.rules(), before);
+    }
+
+    #[test]
+    fn nonempty_matching_agrees_with_prefix_oracle() {
+        // Enumerate asymmetric tokens, including an empty-string argument.
+        let mut vectors = vec![Vec::new()];
+        for _ in 0..3 {
+            let previous = vectors.clone();
+            for prefix in previous {
+                for token in ["git", "push", ""] {
+                    let mut next = prefix.clone();
+                    next.push(token.to_string());
+                    vectors.push(next);
+                }
+            }
+        }
+        for pattern in &vectors {
+            let rule = PrefixRule::new(pattern.clone(), Decision::Allow);
+            for command in &vectors {
+                let expected = !pattern.is_empty() && command.get(..pattern.len()) == Some(pattern.as_slice());
+                assert_eq!(rule.matches(command), expected, "{pattern:?} vs {command:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn first_match_and_restrictive_aggregation_are_preserved() {
+        let mut policy = Policy::empty();
+        policy.add_prefix_rule(&["git".into()], Decision::Prompt).unwrap();
+        policy.add_prefix_rule(&["git".into(), "push".into()], Decision::Allow).unwrap();
+        policy.add_prefix_rule(&["deny".into()], Decision::Forbidden).unwrap();
+        policy.add_prefix_rule(&["allow".into()], Decision::Allow).unwrap();
+        let mut commands = vec![vec!["allow".into()]];
+        assert_eq!(policy.check_multiple(commands.iter(), &|_| Decision::Allow).decision, Decision::Allow);
+        commands.push(vec!["git".into(), "push".into()]);
+        assert_eq!(policy.check_multiple(commands.iter(), &|_| Decision::Allow).decision, Decision::Prompt);
+        commands.push(vec!["deny".into()]);
+        assert_eq!(policy.check_multiple(commands.iter(), &|_| Decision::Allow).decision, Decision::Forbidden);
+        let unknown = [vec!["unknown".into()]];
+        assert_eq!(policy.check_multiple(unknown.iter(), &|_| Decision::Forbidden).decision, Decision::Forbidden);
+    }
 
     #[test]
     fn test_prefix_rule_matching() {
