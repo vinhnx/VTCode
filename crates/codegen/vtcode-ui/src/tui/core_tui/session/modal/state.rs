@@ -161,7 +161,47 @@ impl ModalSearchState {
     }
 }
 
+/// Typed selections whose modals block until the user responds (approvals,
+/// permissions, HITL questions/input, file conflicts, session limits).
+fn attends_to_user(selection: &InlineListSelection) -> bool {
+    matches!(
+        selection,
+        InlineListSelection::ToolApproval(_)
+            | InlineListSelection::ToolApprovalDenyOnce
+            | InlineListSelection::ToolApprovalSession
+            | InlineListSelection::ToolApprovalPermanent
+            | InlineListSelection::ToolApprovalEnable
+            | InlineListSelection::PlanApprovalExecute
+            | InlineListSelection::PlanApprovalFreshContext
+            | InlineListSelection::PlanApprovalEditPlan
+            | InlineListSelection::PlanApprovalDiscuss
+            | InlineListSelection::PlanApprovalAutoAccept
+            | InlineListSelection::PlanApprovalSwitchBuild
+            | InlineListSelection::PlanApprovalSwitchAuto
+            | InlineListSelection::AskUserChoice { .. }
+            | InlineListSelection::RequestUserInputAnswer { .. }
+            | InlineListSelection::FileConflictReload
+            | InlineListSelection::FileConflictViewDiff
+            | InlineListSelection::FileConflictAbort
+            | InlineListSelection::SessionLimitIncrease(_)
+    )
+}
+
 impl ModalState {
+    /// Whether the open modal gates the agent on the user: an approval or
+    /// permission prompt, a HITL question/input, a file-conflict decision, or
+    /// a session-limit confirmation. Typed selections are authoritative so a
+    /// reworded title cannot hide the gate; wording-only fallbacks stay at
+    /// the caller.
+    pub(crate) fn attention_required(&self) -> bool {
+        self.secure_prompt.is_some()
+            || self.list.as_ref().is_some_and(|list| {
+                list.items
+                    .iter()
+                    .any(|item| item.selection.as_ref().is_some_and(attends_to_user))
+            })
+    }
+
     pub(crate) fn hotkey_action(&self, key: &KeyEvent, modifiers: ModalKeyModifiers) -> Option<OverlayHotkeyAction> {
         self.hotkeys.iter().find_map(|hotkey| match hotkey.key {
             OverlayHotkeyKey::CtrlChar(ch)

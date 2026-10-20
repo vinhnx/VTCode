@@ -642,8 +642,8 @@ impl Session {
     }
 
     /// Semantic loading indicator derived from the status text and activity
-    /// state, without the animation policy. Callers that animate layer
-    /// [`Self::appearance`]; loading classification must not depend on
+    /// state, without the animation policy. Animation-side gating belongs to
+    /// the appearance settings; loading classification must not depend on
     /// accessibility settings. A blocked turn is quiescent and commandable,
     /// so the persistent blocked label never looks like loading.
     fn status_indicator_active(&self) -> bool {
@@ -684,6 +684,11 @@ impl Session {
             return true;
         }
         if let Some(modal) = self.modal_state() {
+            // Typed HITL selections are authoritative; the title-wording
+            // needles below keep word-only legacy prompts working.
+            if modal.attention_required() {
+                return true;
+            }
             let normalized_title = modal.title.trim().to_ascii_lowercase();
             if normalized_title.contains("approval")
                 || normalized_title.contains("permission")

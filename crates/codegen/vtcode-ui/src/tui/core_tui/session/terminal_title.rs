@@ -54,6 +54,27 @@ enum TerminalTitleStatus {
     ActionRequired,
 }
 
+/// Attention needles (case-insensitive) matched against the runtime left
+/// input status for the `Action Required` classification. Shared with the
+/// binary's `/title` preview (`slash_commands/ui/terminal_title.rs`) so a
+/// reword cannot desynchronize the preview from the shipped mapping.
+pub const TERMINAL_TITLE_ATTENTION_NEEDLES: &[&str] = &[
+    "action required",
+    "approval",
+    "input required",
+    "blocked",
+    "tools disabled",
+    "recovery",
+];
+
+/// Undo-word needles for the `Undoing` classification, shared with the
+/// `/title` preview.
+pub const TERMINAL_TITLE_UNDOING_NEEDLES: &[&str] = &["undo", "rewind", "revert"];
+
+/// Waiting-state word needles for the `Waiting` classification, shared with
+/// the `/title` preview.
+pub const TERMINAL_TITLE_WAITING_NEEDLES: &[&str] = &["waiting", "queued", "paused"];
+
 impl TerminalTitleStatus {
     fn label(self) -> &'static str {
         match self {
@@ -120,21 +141,16 @@ impl Session {
             .to_ascii_lowercase();
 
         if self.title_attention_required()
-            || left.contains("action required")
-            || left.contains("approval")
-            || left.contains("input required")
-            || left.contains("blocked")
-            || left.contains("tools disabled")
-            || left.contains("recovery")
+            || TERMINAL_TITLE_ATTENTION_NEEDLES.iter().any(|needle| left.contains(needle))
         {
             TerminalTitleStatus::ActionRequired
-        } else if left.contains("undo") || left.contains("rewind") || left.contains("revert") {
+        } else if TERMINAL_TITLE_UNDOING_NEEDLES.iter().any(|needle| left.contains(needle)) {
             TerminalTitleStatus::Undoing
-        } else if left.contains("waiting") || left.contains("queued") || left.contains("paused") {
+        } else if TERMINAL_TITLE_WAITING_NEEDLES.iter().any(|needle| left.contains(needle)) {
             TerminalTitleStatus::Waiting
         } else if self.thinking_spinner.is_active || left.contains("thinking") || left.contains("processing") {
             TerminalTitleStatus::Thinking
-        } else if self.loading_activity_active() || self.is_running_activity() {
+        } else if self.loading_activity_active() {
             TerminalTitleStatus::Working
         } else {
             TerminalTitleStatus::Ready
@@ -663,6 +679,45 @@ mod tests {
         });
         assert!(!picker.title_attention_required(), "configuring the title must not flag action required at itself");
         assert_ne!(picker.terminal_title_status(), TerminalTitleStatus::ActionRequired);
+    }
+
+    #[test]
+    fn typed_approval_selections_flag_attention_despite_other_titles() {
+        // Production approval modals are not guaranteed to carry needles in
+        // their title (lifecycle hooks, shell permission prompts), so typed
+        // HITL selections must be authoritative for the `!` spinner value.
+        let mut session = session_for_title_tests();
+        session.set_workspace_root(Some(std::path::PathBuf::from("/tmp/demo-project")));
+        session.handle_command(InlineCommand::ShowOverlay {
+            request: Box::new(OverlayRequest::List(ListOverlayRequest {
+                title: "Would you like to run the following command?".to_string(),
+                lines: Vec::new(),
+                footer_hint: None,
+                items: vec![
+                    InlineListItem {
+                        title: "Yes".to_string(),
+                        selection: Some(InlineListSelection::ToolApproval(true)),
+                        ..Default::default()
+                    },
+                    InlineListItem {
+                        title: "No".to_string(),
+                        selection: Some(InlineListSelection::ToolApprovalDenyOnce),
+                        ..Default::default()
+                    },
+                ],
+                selected: None,
+                search: None,
+                hotkeys: Vec::new(),
+                status: None,
+            })),
+        });
+
+        assert!(
+            session.title_attention_required(),
+            "typed approval selections flag attention regardless of title wording"
+        );
+        let title = session.render_terminal_title().expect("approval title");
+        assert!(title.contains('!'), "approval overlay flags the title: {title}");
     }
 
     #[test]

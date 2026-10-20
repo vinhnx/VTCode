@@ -5,6 +5,9 @@ pub const DEFAULT_TERMINAL_TITLE_ITEMS: &[&str] = &["spinner", "project"];
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
 pub struct TerminalTitleConfig {
+    /// Ordered title items; `None` resolves to `["spinner", "project"]`
+    /// (spinner enabled by default), and an empty array disables VT
+    /// Code-managed titles.
     #[serde(default)]
     pub items: Option<Vec<String>>,
 }

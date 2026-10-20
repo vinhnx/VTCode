@@ -6,6 +6,9 @@ use vtcode_core::config::DEFAULT_TERMINAL_TITLE_ITEMS;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSelection};
+use vtcode_ui::tui::core_tui::session::{
+    TERMINAL_TITLE_ATTENTION_NEEDLES, TERMINAL_TITLE_UNDOING_NEEDLES, TERMINAL_TITLE_WAITING_NEEDLES,
+};
 
 use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 
@@ -370,20 +373,17 @@ fn build_terminal_title_preview(
 }
 
 fn preview_status_label(status_left: Option<&str>) -> &'static str {
-    // Keep these needles in sync with the shipped TUI classification
-    // (`vtcode-ui` `session/terminal_title.rs::terminal_title_status`).
+    // The word needles come from the shipped TUI classifier
+    // (`vtcode-ui` `session/terminal_title.rs`); only the stateless Working /
+    // Ready tail is preview-local, because the preview has no live loading
+    // state to consult.
     let normalized = status_left.unwrap_or("").trim().to_ascii_lowercase();
-    if normalized.contains("action required")
-        || normalized.contains("approval")
-        || normalized.contains("input required")
-        || normalized.contains("blocked")
-        || normalized.contains("tools disabled")
-        || normalized.contains("recovery")
-    {
+    let matches = |needles: &[&str]| needles.iter().any(|needle| normalized.contains(needle));
+    if matches(TERMINAL_TITLE_ATTENTION_NEEDLES) {
         "Action Required"
-    } else if normalized.contains("undo") || normalized.contains("rewind") || normalized.contains("revert") {
+    } else if matches(TERMINAL_TITLE_UNDOING_NEEDLES) {
         "Undoing"
-    } else if normalized.contains("waiting") || normalized.contains("queued") {
+    } else if matches(TERMINAL_TITLE_WAITING_NEEDLES) {
         "Waiting"
     } else if normalized.contains("thinking") || normalized.contains("processing") {
         "Thinking"

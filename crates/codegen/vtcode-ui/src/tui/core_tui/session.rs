@@ -101,6 +101,9 @@ pub(crate) use self::spinner::pulse_spinner_frame_for_phase;
 pub(crate) use self::spinner::title_spinner_frame;
 use self::spinner::{ShimmerState, ThinkingSpinner};
 use self::styling::SessionStyles;
+pub use self::terminal_title::{
+    TERMINAL_TITLE_ATTENTION_NEEDLES, TERMINAL_TITLE_UNDOING_NEEDLES, TERMINAL_TITLE_WAITING_NEEDLES,
+};
 use self::transcript::TranscriptReflowCache;
 use self::transcript_links::TranscriptFileLinkTarget;
 pub(crate) use self::transcript_links::TranscriptLinkClickAction;
