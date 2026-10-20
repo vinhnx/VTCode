@@ -164,3 +164,76 @@ the blocked-call limit (6 blocked calls) on a final redundant diff re-run.
 ---
 
 IMPORTANT: make sure preventing rm -r of a mounted drive or a folder at its top level (/Volumes, /media, WSL's /mnt/c) not getting the safety prompt that rm -rf /Applications gets.
+
+---
+
+check /compact failure and fix
+
+Context compaction failed · 2s. History preserved. Reason: Provider error: Merge Gateway HTTP 400 Bad Request: {"error":{"type":"invalid_request_error","message":"messages[145] has tool_calls without matching tool result messages before messages[147]. Missing: call_41315097768f4c70b017fad2, call_66637e98e7ee4795ad08dce6.","code":"invalid_tool_messages","param":"messages","source":"gateway","provider":null}}. Details are in the debug log.
+
+---
+
+fix warnings
+
+```
+
+warning: unused variable: `home_dir`
+  --> crates\common\vtcode-commons\src\vtcode_paths.rs:41:5
+   |
+41 |     home_dir: &Path,
+   |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_home_dir`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+warning: unused variable: `path`
+   --> crates\common\vtcode-commons\src\vtcode_paths.rs:949:28
+    |
+949 | fn set_private_permissions(path: &Path) -> io::Result<()> {
+    |                            ^^^^ help: if this is intentional, prefix it with an underscore: `_path`
+   Compiling vtcode-a2a v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-a2a)
+   Compiling vtcode-auth v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-auth)
+warning: unused variable: `enforce_private_permissions`
+   --> crates\codegen\vtcode-auth\src\storage_paths.rs:125:39
+    |
+125 | fn read_file_with_policy(path: &Path, enforce_private_permissions: bool) -> Result<Option<Vec<u8>>> {
+    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_enforce_private_permissions`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+   Compiling vtcode-safety v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-safety)
+warning: `vtcode-commons` (lib) generated 2 warnings (run `cargo fix --lib -p vtcode-commons` to apply 2 suggestions)
+   Compiling vtcode-utility-tool-specs v0.180.1 (D:\a\VTCode\VTCode\crates\common\vtcode-utility-tool-specs)
+   Compiling vtcode-skills v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-skills)
+warning: `vtcode-auth` (lib) generated 1 warning (run `cargo fix --lib -p vtcode-auth` to apply 1 suggestion)
+   Compiling vtcode-llm v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-llm)
+   Compiling vtcode-memory v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-memory)
+   Compiling vtcode-agent-plugins v0.180.1 (D:\a\VTCode\VTCode\crates\common\vtcode-agent-plugins)
+   Compiling rio-vt v0.5.28
+   Compiling vtcode-bash-runner v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-bash-runner)
+   Compiling vtcode-indexer v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-indexer)
+   Compiling vtcode v0.180.1 (D:\a\VTCode\VTCode)
+   Compiling vtcode-webmcp v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-webmcp)
+warning: unused imports: `SeekFrom`, `Seek`, and `Write`
+  --> crates\codegen\vtcode-webmcp\src\filesystem.rs:10:21
+   |
+10 | use std::io::{Read, Seek, SeekFrom, Write};
+   |                     ^^^^  ^^^^^^^^  ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+   Compiling vtcode-mcp v0.180.1 (D:\a\VTCode\VTCode\crates\codegen\vtcode-mcp)
+warning: `vtcode-webmcp` (lib) generated 1 warning (run `cargo fix --lib -p vtcode-webmcp` to apply 1 suggestion)
+
+
+warning: simdutf@0.7.0: In file included from cpp/simdutfrs.cpp:5:0:
+warning: simdutf@0.7.0: cpp/simdutf.cpp:2635:24: warning: unknown option after '#pragma GCC diagnostic' kind [-Wpragmas]
+warning: simdutf@0.7.0:  SIMDUTF_DISABLE_UNUSED_WARNING
+warning: simdutf@0.7.0:                         ^
+
+
+warning: simdutf@0.7.0: In file included from cpp/simdutfrs.cpp:5:
+warning: simdutf@0.7.0: cpp/simdutf.cpp:4149:4: warning: #warning "You are using a legacy GCC compiler, we are disabling AVX-512 support" [-Wcpp]
+warning: simdutf@0.7.0:  4149 |   #warning                                                                     \
+warning: simdutf@0.7.0:       |    ^~~~~~~
+
+
+warning: `vtcode-webmcp` (lib) generated 1 warning (run `cargo fix --lib -p vtcode-webmcp` to apply 1 suggestion)
+
+```
