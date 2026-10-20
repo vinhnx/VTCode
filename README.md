@@ -22,37 +22,32 @@ Plan, build, and review with hosted or local models, sandboxed tools, and resuma
 <img src="./resources/gif/vtcode.gif" alt="VT Code demo: plan, then review changes in the terminal" width="76%" />
 </div>
 
-<details>
-<summary><strong>Contents</strong></summary>
+## Contents
 
-- [VT Code](#vt-code)
-  - [Overview](#overview)
-  - [Quick start](#quick-start)
-    - [1. Install](#1-install)
-    - [2. Configure your project](#2-configure-your-project)
-    - [3. Run your first task](#3-run-your-first-task)
-  - [Usage](#usage)
-    - [Interactive](#interactive)
-    - [Headless](#headless)
-    - [Scheduled tasks](#scheduled-tasks)
-    - [Sessions](#sessions)
-  - [Integrations](#integrations)
-  - [Documentation](#documentation)
-  - [Development](#development)
-  - [Contributing](#contributing)
-  - [Security](#security)
-  - [Community](#community)
-    - [Security Advisors](#security-advisors)
-    - [Main Contributor](#main-contributor)
-    - [Core Contributors](#core-contributors)
-    - [Contributors](#contributors)
-  - [Support the project](#support-the-project)
-    - [Resources](#resources)
-    - [Share VT Code](#share-vt-code)
-    - [Sponsorship](#sponsorship)
-  - [License](#license)
-
-</details>
+- [Overview](#overview)
+- [Quick start](#quick-start)
+  - [1. Install](#1-install)
+  - [2. Configure your project](#2-configure-your-project)
+  - [3. Run your first task](#3-run-your-first-task)
+- [Usage](#usage)
+  - [Interactive](#interactive)
+  - [Headless](#headless)
+  - [Scheduled tasks](#scheduled-tasks)
+  - [Sessions](#sessions)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Community](#community)
+  - [Security Advisors](#security-advisors)
+  - [Main Contributor](#main-contributor)
+  - [Core Contributors](#core-contributors)
+  - [Contributors](#contributors)
+- [Support the project](#support-the-project)
+  - [Resources](#resources)
+  - [Share VT Code](#share-vt-code)
+  - [Sponsorship](#sponsorship)
+- [License](#license)
 
 ## Overview
 
@@ -78,18 +73,13 @@ flowchart LR
     E -->|match| D[Done]
 ```
 
-Legend: **H** states the expected outcome, **O** gathers bounded evidence, **V** checks the exit status
-and verifier result, **E** compares them, and **R** applies an evidence-supported correction. A
-`mismatch` (non-zero exit, empty search, stale patch, failed verifier, or repeated evidence) loops back
-with corrected arguments; a `match` exits to `Done`. Rereads alone are not revision. See the full
-[HOVER acceptance table](./docs/development/hypothesis-revision-validation.md).
-
-Start with installation and configuration, then run your first task. The sections below cover interactive use,
-automation, integrations, and development.
+Each loop states the expected outcome, gathers bounded evidence, checks the verifier result, and revises only
+when the evidence disagrees; rereading alone is not revision. See the
+[HOVER acceptance table](./docs/development/hypothesis-revision-validation.md) for the full contract.
 
 ## Quick start
 
-Requirements: macOS, Linux, or Windows/WSL. Cargo installs require Rust 1.98.1+ (edition 2024).
+Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.98.1+ (edition 2024).
 
 ### 1. Install
 
@@ -98,28 +88,25 @@ Requirements: macOS, Linux, or Windows/WSL. Cargo installs require Rust 1.98.1+ 
 curl -fsSL https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.sh | bash
 ```
 
-On macOS and Linux, the native installer also attempts to install the optional `ripgrep` and `ast-grep` search tools by
-default. To manage installation yourself, use Homebrew or Cargo; Cargo installs require Rust 1.98.1+:
+The installer also attempts to add the optional `ripgrep` and `ast-grep` search tools. To manage installation
+yourself, use Homebrew or Cargo:
 
 ```bash
-brew tap vinhnx/tap
+brew trust vinhnx/tap
 brew install vinhnx/tap/vtcode
 
-# Or install with Rust (requires Rust 1.98.1+)
+# Or install from crates.io
 cargo install vtcode
 ```
 
-Run `vtcode --version` to verify the installation. The [installation guide](./docs/installation/README.md) covers
-prerequisites, other install methods, and optional search tools.
-
-> [!NOTE]
-> Windows artifacts are best-effort and may lag behind macOS/Linux.
-
-On Windows, install with PowerShell:
+On Windows, install with PowerShell; Windows artifacts are best-effort and may lag behind macOS/Linux:
 
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/VTCode/main/scripts/install.ps1 | iex
 ```
+
+Run `vtcode --version` to verify the installation. The [installation guide](./docs/installation/README.md) covers
+prerequisites, other install methods, and optional search tools.
 
 ### 2. Configure your project
 
@@ -164,18 +151,10 @@ see the [getting started guide](./docs/user-guide/getting-started.md).
 
 Use `vtcode` to explore, plan, and implement changes in the TUI. For larger tasks, start with
 [read-only planning](./docs/guides/planning-workflow.md) and review the
-[turn diff](./docs/development/diff-preview.md) before committing. See the
+[turn diff](./docs/development/diff-preview.md) before committing. `/explain` then summarizes the outcome,
+changes, decisions, and verification without another model call; see the
+[explanation options](./docs/user-guide/commands.md#execution-explanations) and the
 [interactive guide](./docs/user-guide/interactive-mode.md) for controls.
-
-After a task, `/explain` summarizes the outcome, changes, decisions, verification, and review priorities without
-another model call:
-
-- `/explain --details` adds evidence.
-- `/explain diagram` shows execution relationships.
-- `/explain --web` opens the browser view with an offline fallback.
-- `/explain --export html` saves a standalone report.
-
-Scopes and report options: [explanation usage](./docs/user-guide/commands.md#execution-explanations).
 
 ### Headless
 
@@ -191,9 +170,6 @@ vtcode review                     # agent review of uncommitted changes
 terminals prompt for trust. Non-TTY runs require `VTCODE_TRUST_WORKSPACE=full-auto`; tool allow-lists, explicit denies,
 and execution policy still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
 [full automation](./docs/guides/full-automation.md) for configuration and output details.
-
-For repeatable, environment-checked results, use the [eval framework](./docs/guides/eval.md). A completion message
-alone is not verification.
 
 ### Scheduled tasks
 
@@ -224,28 +200,11 @@ vtcode trajectory
 
 Use `vtcode continue --session-id <id>` to fork an earlier session.
 
-## Integrations
-
-Enable these only when you need them; none are required for the quick start.
-
-<!-- markdownlint-disable MD060 -->
-
-| Integration                                                               | What it gives you                                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [MCP](./docs/guides/mcp-integration.md)                                   | Connect external tools and data sources.                                                                                                                                                                                                                                          |
-| [Agent Skills](./docs/skills/SKILLS_GUIDE.md)                             | Load reusable prompt packages on demand.                                                                                                                                                                                                                                          |
-| [VT Code Companion (experimental)](./docs/user-guide/vtcode-companion.md) | Drive VT Code from a local Codex or ChatGPT Desktop host via `vtcode companion setup`.                                                                                                                                                                                            |
-| [Plugins](./docs/guides/agent-plugins.md)                                 | Extend the agent with plugin manifests.                                                                                                                                                                                                                                           |
-| [ACP with Zed](./docs/guides/zed-acp.md)                                  | Drive VT Code from the Zed editor.                                                                                                                                                                                                                                                |
-| [WebMCP](./docs/user-guide/webmcp.md)                                     | Pair the TUI with an authenticated browser editor via `/webmcp pair <origin>`; the hosted app ([site](https://vtcode.vinhnx.chatgpt.site/), [mirror](https://vinhnx.github.io/VTCode/)) connects through this bridge. See the [deployment reference](./docs/reference/webmcp.md). |
-| [Memcode MCP](./docs/guides/memcode-mcp.md)                               | Carry context between tasks; see the [design write-up](https://memcode.in/blogs/vt-code-memory-across-threads).                                                                                                                                                                   |
-
-<!-- markdownlint-enable MD060 -->
-
 ## Documentation
 
 Guides grouped by task. The full catalog lives in the [documentation index](./docs/INDEX.md), the
-[docs overview](./docs/README.md), and the [Wiki](https://github.com/vinhnx/VTCode/wiki):
+[docs overview](./docs/README.md), and the [Wiki](https://github.com/vinhnx/VTCode/wiki). Integrations are optional;
+none are required for the quick start.
 
 <!-- markdownlint-disable MD060 -->
 
@@ -255,6 +214,7 @@ Guides grouped by task. The full catalog lives in the [documentation index](./do
 | Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md)                                   |
 | Automate             | [Exec mode](./docs/user-guide/exec-mode.md) · [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                                                                        |
 | Extend and integrate | [Skills](./docs/skills/SKILLS_GUIDE.md) · [Plugins](./docs/guides/agent-plugins.md) · [MCP](./docs/guides/mcp-integration.md) · [Editors (ACP)](./docs/guides/zed-acp.md) · [WebMCP](./docs/user-guide/webmcp.md) · [Memcode](./docs/guides/memcode-mcp.md)                                                                                      |
+| Integrations         | [Companion (experimental)](./docs/user-guide/vtcode-companion.md) · [WebMCP app](https://vtcode.vinhnx.chatgpt.site/) · [WebMCP mirror](https://vinhnx.github.io/VTCode/) · [WebMCP deployment](./docs/reference/webmcp.md) · [Memcode write-up](https://memcode.in/blogs/vt-code-memory-across-threads)                                          |
 | Develop and evaluate | [Development](./docs/development/README.md) · [Testing](./docs/development/testing.md) · [Evals](./docs/guides/eval.md) · [Architecture](./docs/ARCHITECTURE.md) · [HOVER](./docs/development/hypothesis-revision-validation.md) · [Protocols](./docs/protocols/OPEN_RESPONSES.md) · [Loop engineering](./docs/project/PLAN-loop-engineering.md) |
 
 <!-- markdownlint-enable MD060 -->
@@ -273,12 +233,10 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-To build, use Rust 1.98.1+ (edition 2024); to run tests, install `cargo-nextest`. See the
-[architecture guide](./docs/ARCHITECTURE.md) for the full 23-crate map.
-
-Context handling separates session history from provider request projections; local clearing protects complete recent
-tool batches before automatic compaction. See [context architecture](./docs/ARCHITECTURE.md#request-projection-and-context-budgets)
-and the [compaction guide](./docs/development/compaction.md) for details.
+Build with Rust 1.98.1+ (edition 2024) and install `cargo-nextest` to run tests. Context handling separates session
+history from provider request projections; see [context architecture](./docs/ARCHITECTURE.md#request-projection-and-context-budgets)
+and the [compaction guide](./docs/development/compaction.md). The [architecture guide](./docs/ARCHITECTURE.md) maps all
+23 crates.
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git
@@ -296,15 +254,9 @@ Release binaries and notes: [GitHub releases](https://github.com/vinhnx/VTCode/r
 
 ## Contributing
 
-Contributions are welcome in every form:
-
-- **Code**: pick or propose an issue; keep changes surgical and tested.
-- **Docs**: every user-facing feature lands with its documentation.
-- **Evals**: new suites and regression cases are high-leverage; see the [eval guide](./docs/guides/eval.md).
-- **Bug reports**: include `vtcode trajectory` output when possible.
-
-Before a PR, see the [contribution guide](./docs/CONTRIBUTING.md): Conventional Commits (`type(scope): subject`),
-`./scripts/check-dev.sh` + `cargo nextest run`, and a focused diff.
+Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
+output when possible). Before a PR, read the [contribution guide](./docs/CONTRIBUTING.md) for Conventional Commits,
+the local gates, and diff expectations.
 
 ## Security
 
@@ -390,13 +342,11 @@ Want to see your avatar here? Every bit counts: one-line fixes, bug reports, and
 
 If VT Code helped you ship something, spread the word:
 
-[Share on X](https://twitter.com/intent/tweet?text=VT%20Code%20is%20an%20open-source%20coding%20agent%20for%20your%20terminal&url=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
-·
-[Share on Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode&t=VT%20Code%20%E2%80%93%20Open-source%20coding%20agent%20for%20your%20terminal)
-· [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode) ·
-[Share via Email](mailto:?subject=VT%20Code%3A%20open-source%20coding%20agent%20for%20your%20terminal&body=Check%20out%20VT%20Code%2C%20an%20open-source%20coding%20agent%20for%20your%20terminal%3A%20https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
-·
-[Share via SMS](sms:?&body=Check%20out%20VT%20Code%2C%20an%20open-source%20coding%20agent%20for%20your%20terminal%3A%20https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
+- [Share on X](https://twitter.com/intent/tweet?text=VT%20Code%20is%20an%20open-source%20coding%20agent%20for%20your%20terminal&url=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
+- [Share on Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode&t=VT%20Code%20%E2%80%93%20Open-source%20coding%20agent%20for%20your%20terminal)
+- [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
+- [Share via Email](mailto:?subject=VT%20Code%3A%20open-source%20coding%20agent%20for%20your%20terminal&body=Check%20out%20VT%20Code%2C%20an%20open-source%20coding%20agent%20for%20your%20terminal%3A%20https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
+- [Share via SMS](sms:?&body=Check%20out%20VT%20Code%2C%20an%20open-source%20coding%20agent%20for%20your%20terminal%3A%20https%3A%2F%2Fgithub.com%2Fvinhnx%2FVTCode)
 
 ### Sponsorship
 
