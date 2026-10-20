@@ -5,6 +5,38 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.2 - 2026-10-20
+
+### Highlights
+
+#### Bug Fixes
+
+- Sync terminal title spinner with global loading state (0db11e57)
+- Write terminal title and iTerm2 profile updates to stderr (ea93afa8)
+- Typed approval detection and shared title needles (1f98e386)
+- Publish retained completions once after verification (2ede149a)
+- Update stale overlay header glyph assertion (adc9ffcd)
+- Silence Windows-only unused warnings in paths and webmcp (7a57a82d)
+- Recover from token-only planning synthesis instead of stalling (df82eda5)
+
+#### Documentation
+
+- Regenerate field reference from current schema (968d0fa0)
+- Restructure for faster scanning (7fc432b1)
+- Fix table alignment in println TUI audit (9502ed02)
+- Welcome contributors in community sections (b28ca153)
+
+#### Features
+
+- Add minimax-m3.1-flash:cloud to Ollama Cloud (7fdeb0d3)
+- Acknowledge queued follow-ups on the composer line (8484cfba)
+
+### Other Changes
+
+#### Refactors
+
+- Drop shadowed constants and unify product-name and separator copy (3179cb1a)
+
 ## 0.180.1 - 2026-10-20
 
 ### Highlights
