@@ -54,7 +54,7 @@ continue operating with the new agent but without synchronized hooks/MCP.
 | `src/main.rs`, `src/main_helpers/`                                    | various                    | Startup/shutdown, not TUI                      |
 | `src/process_hardening.rs`                                            | various                    | `eprintln!` for error messages                 |
 | `src/startup/first_run_prompts/`                                      | various                    | First-run setup, not TUI                       |
-| `crates/codegen/vtcode-ui/src/tui/core_tui/session/terminal_title.rs` | Title/iTerm2 writers          | Writes to stderr (canonical TUI stream)         |
+| `crates/codegen/vtcode-ui/src/tui/core_tui/session/terminal_title.rs` | Title/iTerm2 writers       | Writes to stderr (canonical TUI stream)        |
 | `crates/codegen/vtcode-ui/src/tui/core_tui/panic_hook.rs`             | 89-208                     | `eprintln!` in panic hook by design            |
 
 ## Recommendations
