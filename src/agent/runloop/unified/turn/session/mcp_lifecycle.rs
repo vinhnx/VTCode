@@ -10,6 +10,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::session_setup::active_deferred_tool_policy;
+use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use vtcode_core::config::loader::VTCodeConfig;
 
@@ -44,6 +45,7 @@ pub(crate) async fn handle_mcp_updates(
     provider_client: &dyn uni::LLMProvider,
     tool_documentation_mode: ToolDocumentationMode,
     renderer: &mut AnsiRenderer,
+    session_stats: &mut SessionStats,
     mcp_catalog_initialized: &mut bool,
     last_mcp_refresh: &mut Instant,
     last_known_mcp_tools: &mut Vec<String>,
@@ -58,10 +60,10 @@ pub(crate) async fn handle_mcp_updates(
                 tool_registry.set_mcp_client(Arc::clone(&client)).await;
                 match tool_registry.refresh_mcp_tools().await {
                     Ok(()) => {
-                        let mut registered_tools = 0usize;
+                        let mut registered_tools = None;
                         match tool_registry.list_mcp_tools().await {
                             Ok(mcp_tools) => {
-                                registered_tools = mcp_tools.len();
+                                registered_tools = Some(mcp_tools.len());
                                 McpToolManager::enumerate_mcp_tools_after_initial_setup(
                                     tool_registry,
                                     tools,
@@ -81,13 +83,18 @@ pub(crate) async fn handle_mcp_updates(
                             }
                         }
 
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!(
-                                "MCP tools ready ({registered_tools} registered). Use /mcp tools to inspect the catalog."
-                            ),
-                        )?;
-                        renderer.line_if_not_empty(MessageStyle::Output)?;
+                        // A failed enumeration reports nothing: only warn above.
+                        if let Some(registered_tools) = registered_tools
+                            && session_stats.take_mcp_ready_notice()
+                        {
+                            renderer.line(
+                                MessageStyle::Info,
+                                &format!(
+                                    "MCP tools ready ({registered_tools} registered). Use /mcp tools to inspect the catalog."
+                                ),
+                            )?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                        }
                     }
                     Err(err) => {
                         tracing::warn!("Failed to refresh MCP tools after initialization: {err}");

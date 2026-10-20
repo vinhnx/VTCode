@@ -145,6 +145,10 @@ pub(crate) struct SessionStats {
     total_usage: HarnessUsage,
     decisions_probe_suggestion_shown: bool,
     fast_mode_suggestion_shown: bool,
+    /// Session-lifetime latch for the MCP catalogue readiness line. Wiring
+    /// state (`mcp_catalog_initialized`) resets on agent switches and manual
+    /// `/mcp` refreshes, so the notice needs its own latch to stay once-per-session.
+    mcp_ready_notice_shown: bool,
     /// Rolling prompt-cache health fed by every recorded turn. Shared
     /// `vtcode-core` monitor so thresholds and wording match the headless
     /// runloop; fires at most two session-scoped hit-rate alerts.
@@ -248,6 +252,24 @@ impl SessionStats {
 
     pub(crate) fn dismiss_fast_mode_suggestion(&mut self) {
         self.fast_mode_suggestion_shown = true;
+    }
+
+    /// Claim the one-per-session MCP readiness line. Returns `true` the first
+    /// time the catalogue is announceable, then latches so agent switches,
+    /// plan handoffs, and manual `/mcp` refreshes stay silent.
+    #[must_use]
+    pub(crate) fn take_mcp_ready_notice(&mut self) -> bool {
+        if self.mcp_ready_notice_shown {
+            return false;
+        }
+        self.mcp_ready_notice_shown = true;
+        true
+    }
+
+    /// Suppress the MCP readiness line without rendering it, for sessions that
+    /// attach the catalogue before the interaction loop starts.
+    pub(crate) fn mark_mcp_ready_notice_shown(&mut self) {
+        self.mcp_ready_notice_shown = true;
     }
 
     /// Record one turn's usage for prompt-cache health and return a
@@ -573,6 +595,23 @@ mod tests {
 
     fn function_tool(name: &str) -> ToolDefinition {
         ToolDefinition::function(name.to_string(), name.to_string(), serde_json::json!({"type": "object"}))
+    }
+
+    #[test]
+    fn mcp_ready_notice_is_claimed_exactly_once_per_session() {
+        let mut stats = SessionStats::default();
+        assert!(stats.take_mcp_ready_notice(), "first catalogue wiring must render");
+        assert!(
+            !stats.take_mcp_ready_notice(),
+            "agent switches and manual /mcp refreshes must not repeat the notice"
+        );
+    }
+
+    #[test]
+    fn mcp_ready_notice_presuppression_does_not_render_later() {
+        let mut stats = SessionStats::default();
+        stats.mark_mcp_ready_notice_shown();
+        assert!(!stats.take_mcp_ready_notice(), "a catalogue attached before the interaction loop must stay silent");
     }
 
     #[test]

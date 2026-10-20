@@ -664,6 +664,11 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
     let mut ctrl_c_notice_displayed = false;
     let mut inline_prompt_cost_notice_shown = false;
     let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
+    if mcp_catalog_initialized {
+        // The catalogue is already wired before the interaction loop starts, so
+        // the readiness line would be stale; suppress it without rendering.
+        session_stats.mark_mcp_ready_notice_shown();
+    }
     let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
     let mut pending_mcp_refresh = false;
     let mut last_mcp_refresh = Instant::now();
@@ -990,7 +995,6 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                         ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
                         inline_prompt_cost_notice_shown: &mut inline_prompt_cost_notice_shown,
                     };
-
                 harness_try!(
                     crate::agent::runloop::unified::turn::session::interaction_loop::run_interaction_loop(
                         &mut interaction_ctx,

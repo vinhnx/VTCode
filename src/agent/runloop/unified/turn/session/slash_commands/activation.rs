@@ -40,6 +40,9 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
 
     match manager.get_status().await {
         McpInitStatus::Ready { client } => {
+            // Attaching here (rather than through `handle_mcp_updates`) does not
+            // print the readiness line: that notice is session-latched there, so
+            // a manual `/mcp` activation never repeats it.
             if ctx.tool_registry.mcp_client().is_none() {
                 ctx.tool_registry.set_mcp_client(Arc::clone(&client)).await;
                 if let Err(err) = ctx.tool_registry.refresh_mcp_tools().await {

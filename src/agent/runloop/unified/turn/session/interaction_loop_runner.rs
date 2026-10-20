@@ -188,6 +188,7 @@ pub(super) async fn run_interaction_loop_impl(
                         .map(|cfg| cfg.agent.tool_documentation_mode)
                         .unwrap_or_default(),
                     ctx.renderer,
+                    ctx.session_stats,
                     state.mcp_catalog_initialized,
                     state.last_mcp_refresh,
                     state.last_known_mcp_tools,
