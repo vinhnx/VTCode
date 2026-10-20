@@ -5,6 +5,20 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.1 - 2026-10-20
+
+### Highlights
+
+#### Bug Fixes
+
+- Harden prefix matching and optimize policy layers (289c98fe) (@vinhnx)
+
+### Other Changes
+
+#### Other
+
+- Remove the daily release CI budget gate (0a1336a2) (@vinhnx)
+
 ## 0.180.0 - 2026-10-19
 
 ### Highlights
