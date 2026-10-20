@@ -263,9 +263,11 @@ fn terminal_title_sequence(title: &str) -> String {
 }
 
 fn write_terminal_title(title: &str) -> std::io::Result<()> {
-    let mut stdout = std::io::stdout();
-    stdout.write_all(terminal_title_sequence(title).as_bytes())?;
-    stdout.flush()
+    // stderr is the TUI's canonical stream (CrosstermBackend + restore path);
+    // stdout may be redirected or a pipe, where title sequences would leak.
+    let mut stderr = std::io::stderr();
+    stderr.write_all(terminal_title_sequence(title).as_bytes())?;
+    stderr.flush()
 }
 
 /// One-shot switch to the installed VT Code iTerm2 profile, if applicable.
@@ -298,9 +300,10 @@ pub(crate) fn apply_iterm2_profile_once() {
 }
 
 fn write_iterm2_profile_switch() -> std::io::Result<()> {
-    let mut stdout = std::io::stdout();
-    stdout.write_all(set_iterm2_profile(ITERM2_PROFILE_NAME).as_bytes())?;
-    stdout.flush()
+    // Same canonical stream as the title (see `write_terminal_title`).
+    let mut stderr = std::io::stderr();
+    stderr.write_all(set_iterm2_profile(ITERM2_PROFILE_NAME).as_bytes())?;
+    stderr.flush()
 }
 
 fn sanitize_terminal_title(title: &str) -> Option<String> {
