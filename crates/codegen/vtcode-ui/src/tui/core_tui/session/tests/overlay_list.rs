@@ -367,7 +367,7 @@ fn modal_section_header_uses_foreground_contrast_on_light_theme() {
 
     assert_eq!(title_cell.symbol(), "T");
     assert_eq!(title_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
-    assert_eq!(header_cell.symbol(), "B");
+    assert_eq!(header_cell.symbol(), "»");
     assert_eq!(header_cell.style().fg, Some(Color::Rgb(0x7A, 0x8F, 0xFF)));
     assert_eq!(header_cell.style().bg, Some(Color::Rgb(0xF5, 0xF5, 0xF0)));
     assert!(header_cell.style().add_modifier.contains(Modifier::BOLD));
