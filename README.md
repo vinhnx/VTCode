@@ -24,15 +24,31 @@ Plan, build, and review with hosted or local models, sandboxed tools, and resuma
 
 ## Contents
 
-- [Overview](#overview)
-- [Quick start](#quick-start)
-- [Usage](#usage)
-- [Documentation](#documentation)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Security](#security)
-- [Community and support](#community-and-support)
-- [License](#license)
+- [VT Code](#vt-code)
+  - [Contents](#contents)
+  - [Overview](#overview)
+  - [Quick start](#quick-start)
+    - [1. Install](#1-install)
+    - [2. Configure your project](#2-configure-your-project)
+    - [3. Run your first task](#3-run-your-first-task)
+  - [Usage](#usage)
+    - [Interactive](#interactive)
+    - [Headless](#headless)
+    - [Automation](#automation)
+    - [Sessions](#sessions)
+  - [Documentation](#documentation)
+  - [Development](#development)
+  - [Contributing](#contributing)
+  - [Security](#security)
+  - [Community and support](#community-and-support)
+    - [Security Advisors](#security-advisors)
+    - [Main Contributor](#main-contributor)
+    - [Core Contributors](#core-contributors)
+    - [Contributors](#contributors)
+    - [Resources](#resources)
+    - [Share VT Code](#share-vt-code)
+    - [Sponsorship](#sponsorship)
+  - [License](#license)
 
 ## Overview
 
@@ -133,15 +149,15 @@ see the [getting started guide](./docs/user-guide/getting-started.md).
 
 Common commands:
 
-| Goal                    | Command                                             |
-| ----------------------- | --------------------------------------------------- |
-| Start the TUI           | `vtcode`                                            |
-| Ask without tools       | `vtcode ask "explain Rc vs Arc"`                    |
-| Run a task headlessly   | `vtcode exec "refactor main.rs"`                    |
-| Review pending changes  | `vtcode review`                                     |
-| Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h`  |
-| Resume the last session | `vtcode continue`                                   |
-| Inspect a run log       | `vtcode trajectory`                                 |
+| Goal                    | Command                                            |
+| ----------------------- | -------------------------------------------------- |
+| Start the TUI           | `vtcode`                                           |
+| Ask without tools       | `vtcode ask "explain Rc vs Arc"`                   |
+| Run a task headlessly   | `vtcode exec "refactor main.rs"`                   |
+| Review pending changes  | `vtcode review`                                    |
+| Schedule recurring work | `vtcode schedule create --prompt "..." --every 1h` |
+| Resume the last session | `vtcode continue`                                  |
+| Inspect a run log       | `vtcode trajectory`                                |
 
 ### Interactive
 
@@ -204,13 +220,13 @@ none are required for the quick start.
 
 <!-- markdownlint-disable MD060 -->
 
-| Goal                 | Guides                                                                                                                                                                                                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Get started          | [Installation](./docs/installation/README.md) · [Getting started](./docs/user-guide/getting-started.md) · [Providers](./docs/providers/PROVIDER_GUIDES.md) · [OAuth login](./docs/guides/oauth-authentication.md) · [FAQ](./docs/FAQ.md) · [Compatibility](./docs/COMPATIBILITY.md) |
-| Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md) |
-| Automate             | [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                   |
+| Goal                 | Guides                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Get started          | [Installation](./docs/installation/README.md) · [Getting started](./docs/user-guide/getting-started.md) · [Providers](./docs/providers/PROVIDER_GUIDES.md) · [OAuth login](./docs/guides/oauth-authentication.md) · [FAQ](./docs/FAQ.md) · [Compatibility](./docs/COMPATIBILITY.md)                                                                                               |
+| Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md)                                                                    |
+| Automate             | [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                                                                                                                                                       |
 | Extend and integrate | [Skills](./docs/skills/SKILLS_GUIDE.md) · [Plugins](./docs/guides/agent-plugins.md) · [MCP](./docs/guides/mcp-integration.md) · [Editors (ACP)](./docs/guides/zed-acp.md) · [WebMCP](./docs/user-guide/webmcp.md) · [Companion (experimental)](./docs/user-guide/vtcode-companion.md) · [Memcode](./docs/guides/memcode-mcp.md) · [WebMCP deployment](./docs/reference/webmcp.md) |
-| Develop and evaluate | [Development](./docs/development/README.md) · [Testing](./docs/development/testing.md) · [Evals](./docs/guides/eval.md) · [Architecture](./docs/ARCHITECTURE.md) · [HOVER](./docs/development/hypothesis-revision-validation.md) · [Protocols](./docs/protocols/OPEN_RESPONSES.md) · [Loop engineering](./docs/project/PLAN-loop-engineering.md) |
+| Develop and evaluate | [Development](./docs/development/README.md) · [Testing](./docs/development/testing.md) · [Evals](./docs/guides/eval.md) · [Architecture](./docs/ARCHITECTURE.md) · [HOVER](./docs/development/hypothesis-revision-validation.md) · [Protocols](./docs/protocols/OPEN_RESPONSES.md) · [Loop engineering](./docs/project/PLAN-loop-engineering.md)                                  |
 
 <!-- markdownlint-enable MD060 -->
 
@@ -365,10 +381,8 @@ VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors
 
 <div align="center">
 
-[![@dnhn](https://avatars.githubusercontent.com/u/2561973?s=80)](https://github.com/dnhn)&nbsp;
 [![@codemod](https://avatars.githubusercontent.com/u/78830094?s=80)](https://github.com/codemod)&nbsp;
 [![@coderabbitai](https://avatars.githubusercontent.com/u/132028505?s=80)](https://github.com/coderabbitai)&nbsp;
-[![@KhaiRyth](https://avatars.githubusercontent.com/u/273723951?s=80)](https://github.com/KhaiRyth)
 
 <!-- markdownlint-disable-next-line MD013 -->
 

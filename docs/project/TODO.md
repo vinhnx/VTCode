@@ -13,7 +13,6 @@ Inspect code changes from the last 24 hours for high-confidence risks involving 
 --
 
 gui
-
 gpui
 gpui-kit
 
@@ -34,10 +33,6 @@ check and change DDG search engine to a different one if web fetch continues to 
 matched nothing. Try a different query, or wait a few seconds and try again
 
 try: https://api-docs.deepseek.com/guides/search/
-
-===
-
-check https://developers.openai.com/api/docs/guides/prompt-caching new 12 hours prompt caching policy
 
 ---
 
