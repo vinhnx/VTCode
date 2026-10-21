@@ -109,7 +109,17 @@ fn is_environment_assignment(argument: &str) -> bool {
         && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
-pub(super) fn unwrap_command_prefix(mut command: &[String]) -> Option<&[String]> {
+pub(super) struct UnwrappedCommand<'a> {
+    pub(super) command: &'a [String],
+    pub(super) changes_directory: bool,
+}
+
+pub(super) fn unwrap_command_prefix(command: &[String]) -> Option<&[String]> {
+    unwrap_command_prefix_with_context(command).map(|unwrapped| unwrapped.command)
+}
+
+pub(super) fn unwrap_command_prefix_with_context(mut command: &[String]) -> Option<UnwrappedCommand<'_>> {
+    let mut changes_directory = false;
     loop {
         while command.first().is_some_and(|argument| is_environment_assignment(argument)) {
             command = &command[1..];
@@ -143,6 +153,7 @@ pub(super) fn unwrap_command_prefix(mut command: &[String]) -> Option<&[String]>
                         break;
                     }
                     if matches!(argument, "-u" | "--user" | "-g" | "--group" | "-h" | "--host" | "-C" | "--chdir") {
+                        changes_directory |= argument == "--chdir";
                         command = command.get(2..)?;
                     } else if matches!(argument, "-E" | "-H" | "-n" | "-S" | "-k" | "-K" | "-b")
                         || argument.starts_with("--user=")
@@ -150,6 +161,7 @@ pub(super) fn unwrap_command_prefix(mut command: &[String]) -> Option<&[String]>
                         || argument.starts_with("--host=")
                         || argument.starts_with("--chdir=")
                     {
+                        changes_directory |= argument.starts_with("--chdir=");
                         command = &command[1..];
                     } else if argument.starts_with('-') {
                         return None;
@@ -158,7 +170,7 @@ pub(super) fn unwrap_command_prefix(mut command: &[String]) -> Option<&[String]>
                     }
                 }
             }
-            _ => return Some(command),
+            _ => return Some(UnwrappedCommand { command, changes_directory }),
         }
     }
 }

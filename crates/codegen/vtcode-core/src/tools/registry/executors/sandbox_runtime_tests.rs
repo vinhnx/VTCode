@@ -117,33 +117,34 @@ fn recursive_rm_of_mount_layout_requests_approval() {
 }
 
 #[test]
-fn recursive_rm_after_shell_directory_change_requests_approval() {
+fn recursive_rm_after_shell_or_wrapper_directory_change_requests_approval() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,
         default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
         ..Default::default()
     };
-    let command = vec![
-        "bash".to_string(),
-        "-lc".to_string(),
-        "cd /Volumes/Backup && rm --recursive Photos".to_string(),
-    ];
-    let plan = build_shell_execution_plan(
-        &config,
-        Path::new("/tmp/workspace"),
-        Path::new("/tmp/workspace"),
-        &command,
-        SandboxPermissions::UseDefault,
-        None,
-    )
-    .unwrap();
+    for command in [
+        vec!["bash", "-lc", "cd /Volumes/Backup && rm --recursive Photos"],
+        vec!["sudo", "--chdir=/Volumes/Backup", "rm", "--recursive", "Photos"],
+    ] {
+        let command: Vec<String> = command.into_iter().map(str::to_owned).collect();
+        let plan = build_shell_execution_plan(
+            &config,
+            Path::new("/tmp/workspace"),
+            Path::new("/tmp/workspace"),
+            &command,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .unwrap();
 
-    assert!(plan.sandbox_policy.is_none());
-    assert!(
-        plan.approval_reason
-            .as_deref()
-            .is_some_and(|reason| reason.contains("mounted filesystem"))
-    );
+        assert!(plan.sandbox_policy.is_none());
+        assert!(
+            plan.approval_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("mounted filesystem"))
+        );
+    }
 }
 
 #[test]

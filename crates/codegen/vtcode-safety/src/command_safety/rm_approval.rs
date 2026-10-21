@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 ))]
 use std::process::Command;
 
-use super::dangerous_commands::unwrap_command_prefix;
+use super::dangerous_commands::{unwrap_command_prefix, unwrap_command_prefix_with_context};
 
 /// Returns whether a recursive `rm` command requires approval based on its
 /// target and the command working directory.
@@ -19,7 +19,7 @@ use super::dangerous_commands::unwrap_command_prefix;
 /// Relative targets are resolved from `working_directory`. A mounted root,
 /// its immediate children, and known mount-layout roots require approval. If
 /// mount data or target resolution is unavailable, the function fails closed.
-/// Shell directory changes make relative target resolution uncertain and
+/// Shell or wrapper directory changes make relative target resolution uncertain and
 /// therefore require approval for recursive deletes.
 pub fn recursive_rm_targets_require_approval_in_directory(command: &[String], working_directory: &Path) -> bool {
     if !contains_recursive_rm(command) {
@@ -130,9 +130,11 @@ fn recursive_rm_targets_are_sensitive_in_context(
     working_directory: Option<&Path>,
     mount_points: &[PathBuf],
 ) -> bool {
-    let Some(command) = unwrap_command_prefix(command) else {
+    let Some(unwrapped) = unwrap_command_prefix_with_context(command) else {
         return false;
     };
+    let working_directory = working_directory.filter(|_| !unwrapped.changes_directory);
+    let command = unwrapped.command;
     let Some(executable) = command.first() else {
         return false;
     };
@@ -566,6 +568,50 @@ mod tests {
                     Some(&mounts),
                 ),
                 "known ordinary targets or nonrecursive deletes should retain their classification: {script}"
+            );
+        }
+    }
+
+    #[test]
+    fn recursive_rm_preserves_directory_uncertainty_from_command_wrappers() {
+        let project = tempfile::tempdir().expect("project directory");
+        let mounts = [PathBuf::from("/Volumes/Backup")];
+        for invocation in [
+            command(&["sudo", "--chdir", "/Volumes/Backup", "rm", "--recursive", "Photos"]),
+            command(&["sudo", "--chdir=/Volumes/Backup", "rm", "--recursive", "Photos"]),
+            command(&[
+                "env",
+                "MODE=test",
+                "sudo",
+                "--chdir=/Volumes/Backup",
+                "rm",
+                "--recursive",
+                "Photos",
+            ]),
+            command(&["sudo", "--chdir=/Volumes/Backup", "sh", "-c", "rm --recursive Photos"]),
+        ] {
+            assert!(!super::super::command_might_be_dangerous(&invocation));
+            assert!(
+                recursive_rm_targets_require_approval_with_mount_points(&invocation, project.path(), Some(&mounts)),
+                "a directory-changing wrapper must invalidate relative target context: {invocation:?}"
+            );
+        }
+
+        let absolute_cleanup = project.path().join("build/cache");
+        for invocation in [
+            command(&["sudo", "-u", "root", "rm", "--recursive", "Photos"]),
+            command(&["sudo", "-C", "3", "rm", "--recursive", "Photos"]),
+            command(&[
+                "sudo",
+                "--chdir=/Volumes/Backup",
+                "rm",
+                "--recursive",
+                absolute_cleanup.to_str().unwrap(),
+            ]),
+        ] {
+            assert!(
+                !recursive_rm_targets_require_approval_with_mount_points(&invocation, project.path(), Some(&mounts)),
+                "ordinary wrappers and absolute project targets retain their classification: {invocation:?}"
             );
         }
     }
