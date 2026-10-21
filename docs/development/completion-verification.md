@@ -161,6 +161,18 @@ unavailable, or replayed results end the attempt instead of repeating admission.
 Explicit session waits bypass read-result replay, while ordinary inspection
 caches and all execution/permission gates remain in force.
 
+The harness announces each checker once rather than repeating the announcement
+on every wait. Its short internal waits still observe cancellation and steering;
+they do not request additional model responses. Request-only history projection
+keeps the launch and latest result of a contiguous harness-owned session, folding
+intermediate wait output into a UTF-8-safe tail of at most 16 KiB. Drained chunks
+are concatenated without separators; wait boundaries are not line breaks. The
+projection preserves terminal status and complete remaining call/result pairs. User input, other
+tools, new launches, different sessions, diagnostics, truncation, spool references,
+and unknown result fields stop folding. Canonical events and archived history
+remain intact; this projection cannot establish verification credit or change
+admission, checker freshness, or recovery budgets.
+
 Literal inline grep-family `--include=`, `--exclude=`, and `--exclude-dir=` filters
 preserve inspection evidence. Their AST arguments must remain literal; dynamic
 arguments, writes, unknown executables, and concrete changed-file evidence remain

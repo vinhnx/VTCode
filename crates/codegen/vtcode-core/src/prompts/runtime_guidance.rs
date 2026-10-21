@@ -17,9 +17,9 @@ pub(crate) const RUNTIME_GUIDANCE_SECTION: &str = r#"## Runtime Guidance
 - Attachments are context, not disk evidence; retain workspace paths.
 - Call `apply_patch` directly, never through shell. JSON envelope: `input`. Use complete context/deletion lines, preserving internal whitespace. After mismatch: one fresh file read range (1-200) or `sed -n` range per path/turn, even at either read cap; preserve safeguards. Never retry unchanged failed input. Do not probe matching with scratch edits.
 - Diagnose failures; change approach. Treat empty searches as evidence. Check optional tools once; report unavailable checks as skipped. 429: max two attempts/origin/request; waits <=5s within deadline. Use returned `next_wait_args`; consumed completions are terminal.
-- HOVER: Hypothesize, Observe, Verify, Evaluate, Revise, Repeat. On mismatch inspect evidence and revise before retrying.
+- HOVER: On mismatch inspect evidence and revise within limits. Stop after required passes.
 - User cancellation ends the current task: do not retry, recover, call tools, or auto-continue cancelled work. Preserve output/state. Resume only on fresh user input. Exit takes priority.
-- Reuse evidence; read missing/changed ranges. At caps, edit/verify. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
+- Reuse evidence; read missing/changed ranges. At caps: Plan synthesizes; edit/verify if allowed. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
 - Tool previews are bounded per result; accumulated output never exhausts tool access. Page `spool_path` within `spool_line_count` in small non-overlapping ranges; stop at EOF. {"cleared":"tool_input"} is not executable; rebuild arguments. Recovery expires at a fresh turn; navigation synthesis may resume once under policy. Reuse retained source.
 - State next step in one sentence; update only on findings, direction changes, or blockers. Do not repeat plans or calls. UI reports phases; never echo them or invent percentages. Finish with the outcome, changes, checks, blockers, user action; omit empty categories. Small tasks: up to four bullets; expand as requested.
 - Write plain text without emojis, including verification results (`pass (6/6)`).
@@ -203,7 +203,7 @@ mod tests {
         assert!(RUNTIME_GUIDANCE_SECTION.contains("one fresh file read range"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("even at either read cap"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Never retry unchanged failed input"));
-        assert!(RUNTIME_GUIDANCE_SECTION.contains("At caps, edit/verify"));
+        assert!(RUNTIME_GUIDANCE_SECTION.contains("At caps: Plan synthesizes; edit/verify if allowed"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("UI reports phases; never echo them or invent percentages"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("Write plain text without emojis"));
         assert!(RUNTIME_GUIDANCE_SECTION.contains("including verification results"));
@@ -213,11 +213,11 @@ mod tests {
         assert!(RUNTIME_GUIDANCE_SECTION.contains("- Diagnose failures; change approach. Treat empty searches as evidence. Check optional tools once; report unavailable checks as skipped. 429: max two attempts/origin/request; waits <=5s within deadline. Use returned `next_wait_args`; consumed completions are terminal.\n"));
         // HOVER: evidence-driven self-correction, distinct from
         // the patch-specific unchanged-retry rule below.
-        assert!(RUNTIME_GUIDANCE_SECTION.contains("HOVER: Hypothesize, Observe, Verify, Evaluate, Revise, Repeat"));
+        assert!(RUNTIME_GUIDANCE_SECTION.contains("Stop after required passes"));
         assert_eq!(RUNTIME_GUIDANCE_SECTION.matches("HOVER:").count(), 1);
         assert!(RUNTIME_GUIDANCE_SECTION.contains("On mismatch inspect evidence"));
-        assert!(RUNTIME_GUIDANCE_SECTION.contains("revise before retrying"));
-        assert_eq!(RUNTIME_GUIDANCE_SECTION.matches("revise before retrying").count(), 1);
+        assert!(RUNTIME_GUIDANCE_SECTION.contains("revise within limits"));
+        assert_eq!(RUNTIME_GUIDANCE_SECTION.matches("revise within limits").count(), 1);
         // Per-result preview bounds and spool paging share one home here; Active Tools
         // does not restate them.
         assert!(RUNTIME_GUIDANCE_SECTION.contains(

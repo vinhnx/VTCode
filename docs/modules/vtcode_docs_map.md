@@ -115,12 +115,6 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Checkpoints and combined rewind?", "How does Rewind in the terminal
     work?"
 
-- **File**: `docs/development/codex-reference-workflow.md`
-  - **Content**: Codex reference workflow for VT Code internals
-  - **Topics**: Inspect and research, Compare and apply, Attribute and verify
-  - **User Questions**: "What can you tell me about Codex reference workflow for VT Code internals?", "How does Inspect
-    and research work?", "How does Compare and apply work?"
-
 - **File**: `docs/development/compaction.md`
   - **Content**: Compaction Engine
   - **Topics**: Request history and local clearing, Headless staging and module ownership, Strategy dispatch, Live
@@ -163,6 +157,12 @@ below based on the topic area.
   - **Topics**: What Charon gives you, Design lessons VT Code adopts, Boundaries and non-goals
   - **User Questions**: "What can you tell me about Deep Rust Analysis with Charon?", "How does What Charon gives you
     work?", "How does Design lessons VT Code adopts work?"
+
+- **File**: `docs/development/codex-reference-workflow.md`
+  - **Content**: DeepWiki grounding and Codex reference workflow
+  - **Topics**: Inspect and research, Compare and apply, Attribute and verify
+  - **User Questions**: "What can you tell me about DeepWiki grounding and Codex reference workflow?", "How does Inspect
+    and research work?", "How does Compare and apply work?"
 
 - **File**: `docs/development/DESIRE_PATHS.md`
   - **Content**: Desire Paths in VT Code

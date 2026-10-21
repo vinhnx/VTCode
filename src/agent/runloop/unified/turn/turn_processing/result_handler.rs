@@ -301,19 +301,22 @@ pub(crate) async fn execute_harness_auto_verification(
     };
 
     let required_before = ctx.tool_registry.next_required_completion_verifier();
+    let announce = !repeated_tool_attempts.auto_verification_executed;
     repeated_tool_attempts.record_auto_verification_executed();
     let action = if tool_name == tool_names::WRITE_STDIN {
         "waiting for the existing verifier"
     } else {
         "running the project verifier"
     };
-    ctx.renderer
-        .line(MessageStyle::Info, &format!("Harness auto-verification: {action}: `{command}`"))
-        .unwrap_or(());
-    ctx.working_history.push(uni::Message::system(format!(
-        "Harness auto-verification: {action}: `{command}` via {tool_name} (output capped). \
-        This call is harness-issued autonomous recovery, not a model action; its result carries the same weight as a model-run verifier."
-    )));
+    if announce {
+        ctx.renderer
+            .line(MessageStyle::Info, &format!("Harness auto-verification: {action}: `{command}`"))
+            .unwrap_or(());
+        ctx.working_history.push(uni::Message::system(format!(
+            "Harness auto-verification: {action}: `{command}` via {tool_name} (output capped). \
+            This call is harness-issued autonomous recovery, not a model action; its result carries the same weight as a model-run verifier."
+        )));
+    }
 
     let raw_call = uni::ToolCall::function(
         helpers::HARNESS_AUTO_VERIFY_CALL_ID.to_string(),

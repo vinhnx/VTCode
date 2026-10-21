@@ -2640,6 +2640,71 @@ async fn retained_draft_pause_remains_interruptible_by_cancel_and_exit() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn yielded_verifier_announces_once_while_preserving_real_waits_and_one_final_answer() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut backing = TestTurnProcessingBacking::new(8).await;
+    backing.set_verification_override_for_test("./rustc --version");
+    let registry = {
+        let ctx = backing.turn_processing_context();
+        let script = ctx.tool_registry.workspace_root().join("rustc");
+        std::fs::write(&script, "#!/bin/sh\nsleep 3\nprintf 'terminal evidence\\n'\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        ctx.tool_registry.allow_all_tools().await.unwrap();
+        ctx.tool_registry.restore_completion_verification_debt();
+        let mut commands = ctx.tool_registry.commands_config();
+        commands.allow_list.push("./rustc".into());
+        ctx.tool_registry.apply_commands_config(&commands);
+        ctx.tool_registry.clone()
+    };
+    let launched = registry
+        .execute_harness_command_session(serde_json::json!({
+            "action":"run", "command":"./rustc --version", "background":true, "yield_time_ms":50
+        }))
+        .await
+        .unwrap();
+    let session_id = vtcode_core::tools::command_args::session_id_text(&launched).unwrap().to_owned();
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 1).await;
+    // Always clean up owned test resources before assertions about the outcome.
+    if !registry.in_progress_exec_sessions(8).await.is_empty() {
+        registry.terminate_harness_exec_session(&session_id).await.unwrap();
+        registry.close_harness_exec_session(&session_id).await.unwrap();
+    }
+    assert!(matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })));
+    assert!(registry.completion_verifier_passed("./rustc --version"));
+    let ctx = backing.turn_processing_context();
+    let announcements = ctx
+        .working_history
+        .iter()
+        .filter(|message| {
+            message.role == uni::MessageRole::System
+                && message.content.as_text().starts_with("Harness auto-verification:")
+        })
+        .count();
+    assert_eq!(announcements, 1);
+    let waits = ctx
+        .working_history
+        .iter()
+        .flat_map(|message| message.tool_calls.iter().flatten())
+        .filter(|call| {
+            call.id == super::helpers::HARNESS_AUTO_VERIFY_CALL_ID
+                && call.function.as_ref().is_some_and(|function| function.name == "write_stdin")
+        })
+        .count();
+    assert!(waits >= 2, "exercise multiple real waits, observed {waits}");
+    assert_eq!(
+        ctx.working_history
+            .iter()
+            .filter(|message| message.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .count(),
+        1
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn retained_draft_yielded_verifier_obeys_execution_limit_and_cleans_up() {
     use std::os::unix::fs::PermissionsExt;
     use std::time::Duration;

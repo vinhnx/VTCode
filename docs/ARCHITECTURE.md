@@ -86,8 +86,9 @@ That split keeps VT Code aligned with the current runtime while making the harne
 
 ### HOVER self-correction loop
 
-VT Code's compiled guidance names the HOVER loop: **Hypothesize → Observe → Verify → Evaluate → Revise →
-Repeat**. The mismatch contract is Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis.
+VT Code's HOVER model is **Hypothesize → Observe → Verify → Evaluate → Revise → Repeat**. Compiled guidance
+permits repetition only after a mismatch, within existing limits, and stops after required checks pass.
+The mismatch contract is Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis.
 Guidance and bounded diagnosis feedback encourage this behavior; they do not prove compliance.
 
 - Pure classification lives in `crates/codegen/vtcode-core/src/core/agent/hypothesis.rs`: `MismatchEvidence`,

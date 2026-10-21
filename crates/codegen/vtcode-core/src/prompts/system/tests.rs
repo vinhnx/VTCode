@@ -582,11 +582,12 @@ async fn test_generated_prompts_keep_sparse_execution_contract() {
         );
         assert_eq!(
             result
-                .matches("HOVER: Hypothesize, Observe, Verify, Evaluate, Revise, Repeat")
+                .matches("HOVER: On mismatch inspect evidence and revise within limits.")
                 .count(),
             1,
-            "{mode_name} prompt should include the HOVER loop once"
+            "{mode_name} prompt should include bounded HOVER guidance once"
         );
+        assert!(result.contains("Stop after required passes."));
         assert!(normalized.contains("do not guess"), "{mode_name} prompt should gate missing context");
         assert!(
             normalized.contains("do the rest and state plainly what is missing"),
@@ -1438,9 +1439,9 @@ Work the way a senior engineer on this codebase would: understand the relevant c
 - Attachments are context, not disk evidence; retain workspace paths.
 - Call `apply_patch` directly, never through shell. JSON envelope: `input`. Use complete context/deletion lines, preserving internal whitespace. After mismatch: one fresh file read range (1-200) or `sed -n` range per path/turn, even at either read cap; preserve safeguards. Never retry unchanged failed input. Do not probe matching with scratch edits.
 - Diagnose failures; change approach. Treat empty searches as evidence. Check optional tools once; report unavailable checks as skipped. 429: max two attempts/origin/request; waits <=5s within deadline. Use returned `next_wait_args`; consumed completions are terminal.
-- HOVER: Hypothesize, Observe, Verify, Evaluate, Revise, Repeat. On mismatch inspect evidence and revise before retrying.
+- HOVER: On mismatch inspect evidence and revise within limits. Stop after required passes.
 - User cancellation ends the current task: do not retry, recover, call tools, or auto-continue cancelled work. Preserve output/state. Resume only on fresh user input. Exit takes priority.
-- Reuse evidence; read missing/changed ranges. At caps, edit/verify. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
+- Reuse evidence; read missing/changed ranges. At caps: Plan synthesizes; edit/verify if allowed. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
 - Tool previews are bounded per result; accumulated output never exhausts tool access. Page `spool_path` within `spool_line_count` in small non-overlapping ranges; stop at EOF. {"cleared":"tool_input"} is not executable; rebuild arguments. Recovery expires at a fresh turn; navigation synthesis may resume once under policy. Reuse retained source.
 - State next step in one sentence; update only on findings, direction changes, or blockers. Do not repeat plans or calls. UI reports phases; never echo them or invent percentages. Finish with the outcome, changes, checks, blockers, user action; omit empty categories. Small tasks: up to four bullets; expand as requested.
 - Write plain text without emojis, including verification results (`pass (6/6)`).
@@ -1515,9 +1516,9 @@ You are VT Code (Build mode), a coding agent working in the user's repository an
 - Attachments are context, not disk evidence; retain workspace paths.
 - Call `apply_patch` directly, never through shell. JSON envelope: `input`. Use complete context/deletion lines, preserving internal whitespace. After mismatch: one fresh file read range (1-200) or `sed -n` range per path/turn, even at either read cap; preserve safeguards. Never retry unchanged failed input. Do not probe matching with scratch edits.
 - Diagnose failures; change approach. Treat empty searches as evidence. Check optional tools once; report unavailable checks as skipped. 429: max two attempts/origin/request; waits <=5s within deadline. Use returned `next_wait_args`; consumed completions are terminal.
-- HOVER: Hypothesize, Observe, Verify, Evaluate, Revise, Repeat. On mismatch inspect evidence and revise before retrying.
+- HOVER: On mismatch inspect evidence and revise within limits. Stop after required passes.
 - User cancellation ends the current task: do not retry, recover, call tools, or auto-continue cancelled work. Preserve output/state. Resume only on fresh user input. Exit takes priority.
-- Reuse evidence; read missing/changed ranges. At caps, edit/verify. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
+- Reuse evidence; read missing/changed ranges. At caps: Plan synthesizes; edit/verify if allowed. Verify standalone; use `max_output_tokens`, exit codes, never `; echo $?`. Recovery keeps context/budgets. Finish once with external limits; builds cannot verify images.
 - Tool previews are bounded per result; accumulated output never exhausts tool access. Page `spool_path` within `spool_line_count` in small non-overlapping ranges; stop at EOF. {"cleared":"tool_input"} is not executable; rebuild arguments. Recovery expires at a fresh turn; navigation synthesis may resume once under policy. Reuse retained source.
 - State next step in one sentence; update only on findings, direction changes, or blockers. Do not repeat plans or calls. UI reports phases; never echo them or invent percentages. Finish with the outcome, changes, checks, blockers, user action; omit empty categories. Small tasks: up to four bullets; expand as requested.
 - Write plain text without emojis, including verification results (`pass (6/6)`).

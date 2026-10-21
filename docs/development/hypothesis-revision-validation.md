@@ -1,6 +1,9 @@
 # Hypothesis revision validation
 
 VT Code's HOVER loop is **Hypothesize → Observe → Verify → Evaluate → Revise → Repeat**.
+Repeat only after an observed mismatch and within existing recovery limits. Stop
+after required checks pass and reuse fresh evidence. Planning read caps lead to
+synthesis; they do not authorize edits or execution.
 Its mismatch contract is **Hypothesis → Observation → Mismatch → Inspect evidence → Revise hypothesis**.
 Compiled runtime guidance and bounded diagnosis feedback encourage this behavior; they do not prove compliance.
 Inspection can use retained, current evidence. Fresh context is required when it is stale or insufficient.
