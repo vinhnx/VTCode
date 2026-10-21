@@ -57,6 +57,7 @@ fn read_only_mutating_command_requires_approval_and_workspace_write() {
     let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
+        PathBuf::from("/tmp/ws").as_path(),
         &command,
         SandboxPermissions::UseDefault,
         None,
@@ -78,6 +79,7 @@ fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     let plan = build_shell_execution_plan(
         &config,
         PathBuf::from("/tmp/ws").as_path(),
+        PathBuf::from("/tmp/ws").as_path(),
         &command,
         SandboxPermissions::UseDefault,
         None,
@@ -85,6 +87,63 @@ fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     .unwrap();
     assert!(plan.approval_reason.is_none());
     assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
+}
+
+#[test]
+fn recursive_rm_of_mount_layout_requests_approval() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    let command = vec!["rm".to_string(), "--recursive".to_string(), "Documents".to_string()];
+
+    let plan = build_shell_execution_plan(
+        &config,
+        Path::new("/tmp/workspace"),
+        Path::new("/mnt/c"),
+        &command,
+        SandboxPermissions::UseDefault,
+        None,
+    )
+    .unwrap();
+
+    assert!(plan.sandbox_policy.is_none());
+    assert!(
+        plan.approval_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("mounted filesystem"))
+    );
+}
+
+#[test]
+fn recursive_rm_after_shell_directory_change_requests_approval() {
+    let config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::DangerFullAccess,
+        ..Default::default()
+    };
+    let command = vec![
+        "bash".to_string(),
+        "-lc".to_string(),
+        "cd /Volumes/Backup && rm --recursive Photos".to_string(),
+    ];
+    let plan = build_shell_execution_plan(
+        &config,
+        Path::new("/tmp/workspace"),
+        Path::new("/tmp/workspace"),
+        &command,
+        SandboxPermissions::UseDefault,
+        None,
+    )
+    .unwrap();
+
+    assert!(plan.sandbox_policy.is_none());
+    assert!(
+        plan.approval_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("mounted filesystem"))
+    );
 }
 
 #[test]
@@ -98,6 +157,7 @@ fn inline_interpreter_code_runs_under_restrictive_sandbox_without_prompt() {
 
     let plan = build_shell_execution_plan(
         &config,
+        PathBuf::from("/tmp/ws").as_path(),
         PathBuf::from("/tmp/ws").as_path(),
         &command,
         SandboxPermissions::UseDefault,
@@ -122,6 +182,7 @@ fn inline_interpreter_code_requires_approval_without_enforceable_sandbox() {
         let command = vec!["node".to_string(), "-e".to_string(), "console.log('ok')".to_string()];
         let plan = build_shell_execution_plan(
             &config,
+            PathBuf::from("/tmp/ws").as_path(),
             PathBuf::from("/tmp/ws").as_path(),
             &command,
             SandboxPermissions::UseDefault,

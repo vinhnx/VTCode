@@ -16,6 +16,7 @@ pub mod audit;
 pub mod cache;
 pub mod command_db;
 pub mod dangerous_commands;
+pub mod rm_approval;
 pub mod safe_command_registry;
 pub mod shell_parser;
 pub mod unified;
@@ -39,6 +40,7 @@ pub use command_db::CommandDatabase;
 pub use dangerous_commands::{
     command_might_be_dangerous, command_requires_approval, git_global_option_requires_prompt,
 };
+pub use rm_approval::recursive_rm_targets_require_approval_in_directory;
 pub use safe_command_registry::{SafeCommandRegistry, SafetyDecision};
 pub use shell_parser::parse_bash_lc_commands;
 pub use unified::{EvaluationReason, EvaluationResult, PolicyAwareEvaluator, UnifiedCommandEvaluator};

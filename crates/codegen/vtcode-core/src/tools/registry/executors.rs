@@ -288,6 +288,7 @@ impl ToolRegistry {
         let plan = build_shell_execution_plan(
             &sandbox_config,
             self.workspace_root(),
+            &sandbox_request.working_dir_path,
             &requested_command,
             sandbox_request.sandbox_permissions,
             sandbox_request.additional_permissions.as_ref(),
@@ -369,6 +370,7 @@ impl ToolRegistry {
         let sandbox_plan = build_shell_execution_plan(
             &sandbox_config,
             self.workspace_root(),
+            &sandbox_request.working_dir_path,
             &prepared_command.requested_command,
             sandbox_request.sandbox_permissions,
             sandbox_request.additional_permissions.as_ref(),

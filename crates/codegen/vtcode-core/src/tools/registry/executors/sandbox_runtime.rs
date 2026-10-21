@@ -63,12 +63,16 @@ pub(super) fn shell_working_dir_value(payload: &serde_json::Map<String, Value>) 
 pub(super) fn build_shell_execution_plan(
     sandbox_config: &vtcode_config::SandboxConfig,
     workspace_root: &Path,
+    working_directory: &Path,
     requested_command: &[String],
     sandbox_permissions: SandboxPermissions,
     additional_permissions: Option<&AdditionalPermissions>,
 ) -> Result<ShellExecutionPlan> {
     let mut approval_reasons = Vec::new();
     let requires_code_boundary_approval = crate::command_safety::command_requires_approval(requested_command);
+    if crate::command_safety::recursive_rm_targets_require_approval_in_directory(requested_command, working_directory) {
+        push_unique_reason(&mut approval_reasons, "Recursive rm targets a mounted filesystem and requires approval.");
+    }
     if crate::command_safety::command_might_be_dangerous(requested_command) {
         push_unique_reason(&mut approval_reasons, "Command appears dangerous and requires approval.");
     }
@@ -613,6 +617,7 @@ pub(super) fn apply_runtime_sandbox_to_command(
     let plan = build_shell_execution_plan(
         sandbox_config,
         workspace_root,
+        working_dir,
         requested_command,
         sandbox_permissions,
         additional_permissions,
