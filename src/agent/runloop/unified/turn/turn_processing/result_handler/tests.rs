@@ -13,6 +13,146 @@ use crate::agent::runloop::unified::turn::turn_loop::RECOVERY_CONTRACT_VIOLATION
 use crate::agent::runloop::unified::turn::turn_processing::test_support::TestTurnProcessingBacking;
 use vtcode_core::llm::provider as uni;
 
+/// Sanitized replay of session 20261019T075619: Markdown verify metadata
+/// must cross the approval boundary without becoming shell substitution.
+#[cfg(unix)]
+#[tokio::test]
+async fn incident_plan_handoff_executes_bare_verifier_and_publishes_once() {
+    use crate::agent::runloop::unified::planning_workflow::{
+        PlanExecutionContext, PlanExecutionTarget, allocate_plan_file_if_missing, complete_approved_plan_handoff,
+        load_plan_text_for_approval, persist_plan_draft,
+    };
+    use std::os::unix::fs::PermissionsExt;
+    use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails, VersionedThreadEvent};
+    use vtcode_core::tool_policy::ToolPolicy;
+
+    let mut backing = TestTurnProcessingBacking::new(20).await;
+    let events_path = backing.enable_harness_emitter();
+    backing.activate_planning_for_test();
+    let plan = "## Summary\nUpdate the README locally.\n## Implementation Steps\n1. Update documentation -> files: [README.md] -> verify: [`./verify.sh`]\n## Test Cases and Validation\n- The local verifier exits 0 when README contains the new text.\n## Assumptions and Defaults\n- No network access is needed.";
+    let registry = {
+        let ctx = backing.turn_processing_context();
+        let registry = ctx.tool_registry.clone();
+        let root = registry.workspace_root();
+        std::fs::write(root.join("README.md"), "old\n").unwrap();
+        std::fs::write(
+            root.join("verify.sh"),
+            "#!/bin/sh\nprintf 'run\\n' >> verifier-runs\ngrep -qx updated README.md\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(root.join("verify.sh"), std::fs::Permissions::from_mode(0o700)).unwrap();
+        registry.allow_all_tools().await.unwrap();
+        let mut commands = registry.commands_config();
+        commands.allow_list.push("./verify.sh".into());
+        registry.apply_commands_config(&commands);
+        let state = registry.planning_workflow_state();
+        allocate_plan_file_if_missing(&state).await.unwrap();
+        persist_plan_draft(&state, plan).await.unwrap();
+        let artifact = load_plan_text_for_approval(&registry).await.unwrap();
+        assert!(artifact.text.contains("[`./verify.sh`]"));
+        registry.set_tool_policy("task_tracker", ToolPolicy::Deny).await.unwrap();
+        let denied = complete_approved_plan_handoff(
+            &registry,
+            ctx.plan_session,
+            ctx.handle,
+            artifact.clone(),
+            PlanExecutionTarget::build(PlanExecutionContext::Current, false),
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{denied:#}").contains("denied by policy"));
+        assert!(registry.is_planning_active());
+        assert!(state.is_active());
+        assert!(!registry.tracker_adopted_for_request());
+        assert!(registry.next_required_completion_verifier().is_none());
+        assert_eq!(load_plan_text_for_approval(&registry).await.unwrap().text, artifact.text);
+        registry.set_tool_policy("task_tracker", ToolPolicy::Allow).await.unwrap();
+        // Explicit approval is a separate runtime boundary, never inferred
+        // from synthesis success or restored planning state.
+        complete_approved_plan_handoff(
+            &registry,
+            ctx.plan_session,
+            ctx.handle,
+            artifact,
+            PlanExecutionTarget::build(PlanExecutionContext::Current, false),
+        )
+        .await
+        .unwrap();
+        assert!(registry.tracker_adopted_for_request());
+        assert_eq!(registry.next_required_completion_verifier().as_deref(), Some("./verify.sh"));
+        assert!(!registry.is_planning_active());
+        registry
+    };
+    let mut tracker = LoopTracker::new();
+    let mut modified = BTreeSet::new();
+    registry.restore_completion_verification_debt();
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "apply_patch",
+        r#"{"input":"*** Begin Patch\n*** Update File: README.md\n@@\n-old\n+updated\n*** End Patch"}"#,
+    )
+    .await;
+    assert_eq!(std::fs::read_to_string(registry.workspace_root().join("README.md")).unwrap(), "updated\n");
+    let unrelated = registry
+        .execute_tool("exec_command", serde_json::json!({"cmd":"rustc --version"}))
+        .await
+        .unwrap();
+    assert_eq!(unrelated["exit_code"], 0, "the unrelated check must actually pass");
+    assert!(registry.completion_verification_pending());
+    assert!(!registry.workspace_root().join("verifier-runs").exists());
+    drive_model_tool_call(
+        &mut backing,
+        &mut tracker,
+        &mut modified,
+        "task_tracker",
+        r#"{"action":"update","index":1,"status":"completed"}"#,
+    )
+    .await;
+    assert!(registry.completion_verification_pending(), "tracker progress cannot replace verification");
+    let outcome = drive_pending_texts(&mut backing, &mut tracker, &mut modified, 6).await;
+    assert!(
+        matches!(outcome, TurnHandlerOutcome::Break(TurnLoopResult::Completed { .. })),
+        "{}",
+        backing.rendered_inline_output()
+    );
+    assert!(registry.completion_verifier_passed("./verify.sh"));
+    assert!(!registry.completion_verification_pending());
+    assert_eq!(std::fs::read_to_string(registry.workspace_root().join("verifier-runs")).unwrap(), "run\n");
+    let ctx = backing.turn_processing_context();
+    let calls: Vec<_> = ctx
+        .working_history
+        .iter()
+        .flat_map(|m| m.tool_calls.iter().flatten())
+        .filter(|call| call.id == super::helpers::HARNESS_AUTO_VERIFY_CALL_ID)
+        .collect();
+    assert_eq!(calls.len(), 1);
+    assert!(!calls[0].function.as_ref().unwrap().arguments.contains('`'));
+    assert_eq!(
+        ctx.working_history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .count(),
+        1
+    );
+    assert_eq!(backing.rendered_inline_output().matches("Still working.").count(), 1);
+    let emitter = backing.turn_processing_context().harness_emitter.cloned().unwrap();
+    emitter.finish().await.unwrap();
+    let events = std::fs::read_to_string(events_path).unwrap();
+    let messages: Vec<_> = events
+        .lines()
+        .filter_map(|line| match serde_json::from_str::<VersionedThreadEvent>(line).unwrap().into_event() {
+            ThreadEvent::ItemCompleted(item) => match item.item.details {
+                ThreadItemDetails::AgentMessage(message) => Some(message.text),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(messages, ["Still working.\n\nHarness verification: `./verify.sh` exited 0."]);
+}
+
 fn prepared_command_tool_call() -> PreparedAssistantToolCall {
     PreparedAssistantToolCall::new(uni::ToolCall::function(
         "call_1".to_string(),

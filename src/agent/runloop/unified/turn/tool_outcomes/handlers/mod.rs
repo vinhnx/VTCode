@@ -159,8 +159,8 @@ pub(crate) fn handle_preflight_failure(
     let max_failures = max_consecutive_blocked_tool_calls_per_turn(ctx);
     // LLM mistakes never trip the circuit, even if a prior policy streak is
     // already at the cap: one prose blob must not skip valid sibling calls.
-    let recoverable_validation = !is_llm_mistake
-        && vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error).is_none();
+    let policy_correction = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error);
+    let recoverable_validation = !is_llm_mistake && policy_correction.is_none();
     let repeated = recoverable_validation
         && ctx.session_stats.preflight_recovery.reject(
             &ctx.tool_registry.resolve_tool_name_with_display(tool_name).canonical,
@@ -175,9 +175,7 @@ pub(crate) fn handle_preflight_failure(
         );
     let exhausted = ctx.session_stats.preflight_recovery.exhausted();
     let circuit_tripped = !is_llm_mistake && (failure_count >= max_failures || exhausted);
-    let schema_correction = if is_cleared_echo
-        && vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error).is_none()
-    {
+    let schema_correction = if is_cleared_echo && policy_correction.is_none() {
         if matches!(tool_name, tool_names::EXEC_COMMAND | tool_names::UNIFIED_EXEC | "command_session") {
             format!(
                 "Do not echo the history stub '{{\"cleared\":\"tool_input\"}}'. Provide real arguments matching the declared schema for '{tool_name}' (exec_command requires \"cmd\"; \"command\" is accepted as an alias)."
@@ -190,15 +188,16 @@ pub(crate) fn handle_preflight_failure(
     } else {
         preflight_schema_correction(tool_name, error)
     };
-    let next_action = if exhausted {
+    let next_action = if let Some(correction) = policy_correction {
+        correction
+    } else if exhausted {
         "Automatic validation recovery stopped. Resume with corrected arguments on fresh user input."
     } else if circuit_tripped && ctx.is_planning_active() {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize exactly one complete <proposed_plan> from the evidence already gathered."
     } else if circuit_tripped {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize a plain-text response reporting the failure to the user."
     } else {
-        vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error)
-            .unwrap_or("Correct the arguments using schema_correction, then retry this tool once.")
+        "Correct the arguments using schema_correction, then retry this tool once."
     };
     let failure_kind = if circuit_tripped {
         "preflight_circuit_breaker"
@@ -228,7 +227,7 @@ pub(crate) fn handle_preflight_failure(
         "failure_count": failure_count,
         "schema_correction": schema_correction,
         "next_action": next_action,
-        "retryable": !circuit_tripped,
+        "retryable": policy_correction.is_none() && !circuit_tripped,
     });
     if let Some((fallback_tool, fallback_args)) = fallback {
         if let Some(object) = payload.as_object_mut() {

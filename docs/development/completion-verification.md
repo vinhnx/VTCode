@@ -42,6 +42,13 @@ retention never makes a check fresh after another code edit.
 
 Qualifying model-run checks can satisfy completion. Adopted tracker verification
 commands remain mandatory; a different passing checker cannot replace them.
+Recognized planning and security preflight denials are non-retryable and retain
+policy guidance, including at the denial circuit limit. They do not consume the
+argument-correction allowance or authorize schema repair. A permitted alternative
+remains subject to normal admission checks.
+Approved-plan handoff creates its tracker through registry execution so required
+checks are adopted before implementation begins. Markdown code spans remain in
+the displayed plan while executable verifier identities omit the surrounding backticks.
 Requirements and observed checks match using the execution kernel's pipeline
 normalization, while dispatch retains the original required command for policy
 checks. Eligible declared custom checks count as verification rather than

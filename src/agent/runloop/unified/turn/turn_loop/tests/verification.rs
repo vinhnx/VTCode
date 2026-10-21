@@ -494,6 +494,150 @@ async fn blocked_anti_blind_recovery_publishes_one_actionable_handoff() {
 struct RetainedCompletionProvider {
     calls: Arc<AtomicUsize>,
     streaming: bool,
+    requests: Arc<Mutex<Vec<uni::LLMRequest>>>,
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn recovery_sequence_keeps_one_draft_and_one_physical_checker() {
+    use std::os::unix::fs::PermissionsExt;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut backing = TestTurnProcessingBacking::new(16).await;
+    backing.set_provider(Box::new(RetainedCompletionProvider {
+        calls: calls.clone(),
+        streaming: false,
+        requests: requests.clone(),
+    }));
+    let registry;
+    let mut history = vec![uni::Message::user(
+        "Complete locally; report external unavailability.".into(),
+    )];
+    history.push(uni::Message::turn_scoped_system(format!(
+        "{}\nRetained example",
+        vtcode_core::prompts::FEW_SHOT_SECTION_HEADER,
+    )));
+    {
+        let mut ctx = backing.turn_processing_context();
+        registry = ctx.tool_registry.clone();
+        registry.allow_all_tools().await.unwrap();
+        let root = registry.workspace_root();
+        fs::write(root.join("rustc"), "#!/bin/sh\nprintf 'check\\n' >> checker-runs\nprintf 'verified\\n'\n").unwrap();
+        fs::set_permissions(root.join("rustc"), fs::Permissions::from_mode(0o700)).unwrap();
+        let mut commands = registry.commands_config();
+        commands.allow_list.push("./rustc --version".into());
+        registry.apply_commands_config(&commands);
+        history.push(uni::Message::assistant_with_tools(
+            String::new(),
+            vec![uni::ToolCall::function(
+                "denied".into(),
+                tool_names::EXEC_COMMAND.into(),
+                r#"{"cmd":"denied"}"#.into(),
+            )],
+        ));
+        super::super::super::tool_outcomes::handlers::handle_preflight_failure(
+            &mut ctx,
+            "denied",
+            tool_names::EXEC_COMMAND,
+            "Command security check failed: command injection",
+            Some(&json!({"cmd":"denied"})),
+            None,
+        );
+        history.extend(ctx.working_history.clone());
+        registry
+            .execute_tool(
+                tool_names::TASK_TRACKER,
+                json!({
+                    "action":"create", "items":[{"description":"Local check", "status":"completed",
+                    "verify":["./rustc --version"]}]
+                }),
+            )
+            .await
+            .unwrap();
+        registry.restore_completion_verification_debt();
+    }
+    let expired = crate::agent::runloop::unified::turn::tool_outcomes::handlers::PREFLIGHT_CIRCUIT_RECOVERY_DIRECTIVE;
+    history.push(uni::Message::system(expired.into()));
+    // Deterministic external outage evidence: the fixture never needs a live network.
+    history.push(uni::Message::assistant_with_tools(
+        String::new(),
+        vec![uni::ToolCall::function(
+            "external".into(),
+            "web_fetch".into(),
+            r#"{"url":"https://example.invalid"}"#.into(),
+        )],
+    ));
+    history.push(uni::Message::tool_response(
+        "external".into(),
+        "External service unavailable; retry allowance exhausted.".into(),
+    ));
+    history.push(uni::Message::user(format!(
+        "{} Finish using retained local evidence.",
+        crate::agent::runloop::unified::turn::session_loop::VERIFICATION_AUTO_RECOVERY_PREFIX,
+    )));
+    let timer = registry
+        .execute_tool("exec_command", json!({"cmd":"sleep 0.1", "yield_time_ms":1}))
+        .await
+        .unwrap();
+    let timer_id = timer["session_id"].as_str().unwrap().to_owned();
+    let terminal = if timer.get("exit_code").is_some() {
+        timer
+    } else {
+        registry
+            .execute_tool("write_stdin", json!({"session_id":timer_id,"chars":"","yield_time_ms":1000}))
+            .await
+            .unwrap()
+    };
+    assert_eq!(terminal["exit_code"], 0);
+    let outcome = run_turn_loop(&mut history, backing.turn_loop_context()).await.unwrap();
+    assert!(matches!(outcome.result, TurnLoopResult::Completed { .. }));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(fs::read_to_string(registry.workspace_root().join("checker-runs")).unwrap(), "check\n");
+    assert_eq!(
+        history
+            .iter()
+            .filter(|m| m.phase == Some(uni::AssistantPhase::FinalAnswer))
+            .count(),
+        1
+    );
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(!requests[0].messages.iter().any(|m| m.content.as_text() == expired));
+    assert!(history.iter().any(|m| m.content.as_text() == expired), "projection must preserve canonical history");
+    assert_eq!(
+        requests[0]
+            .messages
+            .iter()
+            .filter(|m| m.content.as_text().contains(vtcode_core::prompts::FEW_SHOT_SECTION_HEADER,))
+            .count(),
+        1
+    );
+    let projected_bytes: usize = requests[0].messages.iter().map(|m| m.content.as_text().len()).sum();
+    assert!(projected_bytes < 32_768, "bounded fixture projection: {projected_bytes}");
+    use crate::agent::runloop::unified::turn::background_completion::{
+        PendingBackgroundCompletions, background_completion_from_exec_session,
+    };
+    use vtcode_core::tools::exec_session::ExecSessionCompletionEvent;
+    let mut pending = PendingBackgroundCompletions::default();
+    pending.observe_terminal_exec_results(&registry);
+    // Deliver the already observed timer only after the final answer.
+    let event = |session_id: String, exit_code| {
+        background_completion_from_exec_session(ExecSessionCompletionEvent {
+            session_id: session_id.into(),
+            command: "timer".into(),
+            managed_background: false,
+            termination_requested: false,
+            exit_code,
+        })
+        .unwrap()
+    };
+    pending.push(event(timer_id, 0));
+    assert!(!pending.should_schedule_continuation(false, false));
+    assert!(pending.take_transient_note().is_none());
+    pending.push(event("independent-failure".into(), 7));
+    assert!(pending.should_schedule_continuation(false, false));
+    assert!(pending.take_transient_note().unwrap().contains("exit_code=7"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[async_trait::async_trait]
@@ -506,6 +650,7 @@ impl uni::LLMProvider for RetainedCompletionProvider {
     }
     async fn generate(&self, request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.requests.lock().unwrap().push(request.clone());
         Ok(uni::LLMResponse {
             content: Some("WebMCP inspection is complete.".into()),
             model: request.model,
@@ -541,7 +686,11 @@ async fn retained_completion_runs_missing_checks_and_publishes_once_without_mode
     for streaming in [false, true] {
         let calls = Arc::new(AtomicUsize::new(0));
         let mut backing = TestTurnProcessingBacking::new(8).await;
-        backing.set_provider(Box::new(RetainedCompletionProvider { calls: calls.clone(), streaming }));
+        backing.set_provider(Box::new(RetainedCompletionProvider {
+            calls: calls.clone(),
+            streaming,
+            requests: Arc::new(Mutex::new(Vec::new())),
+        }));
         let harness_path = backing.enable_harness_emitter();
         {
             let ctx = backing.turn_processing_context();

@@ -132,12 +132,23 @@ async fn explicit_build_and_auto_approval_selections_handoff_persisted_plan_with
                 && target.skip_confirmations == expected_skip_confirmations
                 && target.execution_context == PlanExecutionContext::Current
         ));
+        let entries: Vec<_> = fs::read_dir(workspace.path())
+            .expect("read workspace after approval handoff")
+            .map(|entry| entry.expect("read workspace entry").file_name())
+            .collect();
         assert!(
-            fs::read_dir(workspace.path())
-                .expect("read workspace after approval handoff")
-                .all(|entry| entry.expect("read workspace entry").file_name() == ".vtcode"),
-            "approval handoff must remain execution-pending and must not write implementation files"
+            entries.iter().all(|name| name == ".vtcode" || name == "vtcode.toml"),
+            "approval handoff must remain execution-pending and must not write implementation files: {entries:?}"
         );
+        // Registry admission can initialize runtime configuration, which is
+        // distinct from implementation file writes.
+        vtcode_core::config::ConfigManager::load_from_file(workspace.path().join("vtcode.toml"))
+            .expect("load runtime configuration");
+        assert_eq!(
+            tool_registry.get_tool_policy(tool_names::TASK_TRACKER).await,
+            vtcode_core::tool_policy::ToolPolicy::Allow,
+        );
+        assert!(tool_registry.tracker_adopted_for_request());
     }
 }
 

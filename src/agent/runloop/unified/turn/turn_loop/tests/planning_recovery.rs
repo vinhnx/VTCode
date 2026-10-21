@@ -265,15 +265,39 @@ async fn planning_recovery_repaired_plan_persists_before_approval_publication() 
     backing.mark_interview_denied_for_test();
     backing.activate_tool_free_recovery_for_test("Planning research guard reached.");
     let harness = backing.enable_harness_emitter();
-    let requests = install_script(&mut backing, &[Reply::InvalidDraft, Reply::RepairedDraft]);
+    let requests = install_script(&mut backing, &[Reply::Empty, Reply::InvalidDraft, Reply::RepairedDraft]);
     let mut history = retained_history();
     let mut renderer = AnsiRenderer::stdout();
     let mut ctx = backing.turn_loop_context();
     ctx.renderer = &mut renderer;
     let outcome = run_turn_loop(&mut history, ctx).await.expect("valid repaired planning handoff");
-    assert_tool_free(&requests, 2);
+    assert_tool_free(&requests, 3);
     assert!(!outcome.plan_approved_execution_pending, "recovery must wait for separate plan approval");
     let events = events(&harness);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, ThreadEvent::PlanApprovalRequested(_)))
+            .count(),
+        1
+    );
+    let saved = checkpoints(&harness);
+    let ready_snapshot = saved.last().expect("persisted repaired plan");
+    assert_eq!(ready_snapshot.requests_used, 3);
+    assert!(ready_snapshot.research_closed);
+    assert_eq!(ready_snapshot.outcome, PlanningOutcome::AwaitingApproval);
+    for (requests_used, response_class) in [
+        (1, PlanningResponseClass::EmptyContent),
+        (2, PlanningResponseClass::MalformedPlan),
+        (3, PlanningResponseClass::ValidPlan),
+    ] {
+        assert!(
+            saved
+                .iter()
+                .any(|snapshot| snapshot.requests_used == requests_used
+                    && snapshot.response_class == Some(response_class))
+        );
+    }
     assert!(!events.iter().any(|event| matches!(event, ThreadEvent::PlanApprovalResolved(_))));
     let ready = events
         .iter()

@@ -3981,6 +3981,7 @@ async fn placeholder_policy_failure_keeps_policy_correction_and_single_prefix() 
         .collect();
     assert_eq!(replies.len(), 1);
     let payload: serde_json::Value = serde_json::from_str(&replies[0].content.as_text()).unwrap();
+    assert_eq!(payload["retryable"], false);
     assert!(!payload["schema_correction"].as_str().unwrap().contains("Do not echo"));
     assert_eq!(
         payload["error"]
@@ -3990,6 +3991,69 @@ async fn placeholder_policy_failure_keeps_policy_correction_and_single_prefix() 
             .count(),
         1
     );
+}
+
+#[tokio::test]
+async fn policy_preflight_denials_are_non_retryable_without_poisoning_permitted_calls() {
+    for (error, at_limit) in [
+        ("Command security check failed: command injection", false),
+        ("tool denied by planning workflow", false),
+        ("Command security check failed: command injection", true),
+        ("tool denied by planning workflow", true),
+    ] {
+        let mut backing = TestContextBacking::new(20).await;
+        backing.select_build_primary_agent();
+        let mut tracker = LoopTracker::new();
+        let mut files = BTreeSet::new();
+        let mut ctx = backing.turn_processing_context();
+        let attempts = if at_limit {
+            max_consecutive_blocked_tool_calls_per_turn(&ctx)
+        } else {
+            1
+        };
+        for index in 0..attempts {
+            super::super::handle_preflight_failure(
+                &mut ctx,
+                &format!("denied-{index}"),
+                tool_names::EXEC_COMMAND,
+                error,
+                Some(&json!({"cmd":"denied"})),
+                None,
+            );
+            let payload: serde_json::Value =
+                serde_json::from_str(&ctx.working_history.last().unwrap().content.as_text()).unwrap();
+            assert_eq!(payload["retryable"], false);
+            assert!(payload["next_action"].as_str().unwrap().contains("Do not retry"));
+            assert!(!payload["next_action"].as_str().unwrap().contains("malformed"));
+            assert_eq!(payload["diagnosis"]["next_action"], payload["next_action"]);
+            assert!(
+                !payload["schema_correction"]
+                    .as_str()
+                    .unwrap()
+                    .contains("matching the declared schema")
+            );
+            assert!(ctx.session_stats.preflight_recovery.is_clear());
+        }
+        if at_limit {
+            continue;
+        }
+        let mut outcomes = ToolOutcomeContext {
+            ctx: &mut ctx,
+            repeated_tool_attempts: &mut tracker,
+            turn_modified_files: &mut files,
+        };
+        handle_single_tool_call(
+            &mut outcomes,
+            "permitted",
+            tool_names::EXEC_COMMAND,
+            json!({"cmd":"rustc --version", "yield_time_ms":10000}),
+        )
+        .await
+        .unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_str(&outcomes.ctx.working_history.last().unwrap().content.as_text()).unwrap();
+        assert_eq!(payload["exit_code"], 0);
+    }
 }
 
 #[tokio::test]

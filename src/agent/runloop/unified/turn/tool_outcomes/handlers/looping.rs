@@ -18,7 +18,16 @@ use crate::agent::runloop::unified::tool_reads::{is_read_file_style_call, read_f
 use crate::agent::runloop::unified::turn::tool_outcomes::read_extent::{LIMIT_KEYS, OFFSET_KEYS};
 
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
-    value.trim().chars().take(max_chars).collect()
+    let value = value.trim();
+    let mut chars = value.chars();
+    let mut prefix: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        // A readable prefix alone merges distinct commands, paths, and queries.
+        // Keep the key bounded without discarding the full value's identity.
+        prefix.push('#');
+        prefix.push_str(&vtcode_commons::utils::calculate_sha256(value.as_bytes()));
+    }
+    prefix
 }
 
 fn compact_loop_text(value: &str, max_chars: usize) -> String {
@@ -322,11 +331,63 @@ mod tests {
     use vtcode_core::config::constants::tools as tool_names;
 
     use super::{
-        read_file_has_limit_arg, read_file_has_offset_arg, read_file_limit_value, read_file_offset_value,
-        read_file_raw_flag, read_file_slice_suffix, shell_failure_error_signature,
+        compact_loop_key_part, read_file_has_limit_arg, read_file_has_offset_arg, read_file_limit_value,
+        read_file_offset_value, read_file_raw_flag, read_file_slice_suffix, shell_failure_error_signature,
+        shell_run_signature,
     };
     use crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus;
     use crate::agent::runloop::unified::turn::tool_outcomes::handlers::low_signal_family_key;
+
+    #[test]
+    fn compact_loop_keys_preserve_boundaries_and_unicode_suffix_identity() {
+        assert_eq!(compact_loop_key_part("  界abc  ", 4), "界abc");
+        let first = compact_loop_key_part("界abc左", 4);
+        let second = compact_loop_key_part("界abc右", 4);
+        assert_ne!(first, second);
+        assert!(first.starts_with("界abc#"));
+        assert_eq!(first.chars().count(), 4 + 1 + 64);
+        assert_eq!(first, compact_loop_key_part("  界abc左  ", 4));
+    }
+
+    #[test]
+    fn long_command_suffix_changes_reset_the_shell_streak() {
+        use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+
+        let prefix = format!("rg -n {}", "x".repeat(220));
+        let first_args = json!({"cmd": format!("{prefix} first.rs")});
+        let second_args = json!({"cmd": format!("{prefix} second.rs")});
+        let first = shell_run_signature(tool_names::EXEC_COMMAND, &first_args).unwrap();
+        let second = shell_run_signature(tool_names::EXEC_COMMAND, &second_args).unwrap();
+        assert_ne!(first, second);
+        assert_ne!(
+            low_signal_family_key(tool_names::EXEC_COMMAND, &first_args),
+            low_signal_family_key(tool_names::EXEC_COMMAND, &second_args)
+        );
+        let mut state = HarnessTurnState::new(TurnRunId("run-1".into()), TurnId("turn-1".into()), 120, 10, 1);
+        assert_eq!(state.record_shell_command_run(first.clone()), 1);
+        assert_eq!(state.record_shell_command_run(first), 2);
+        assert_eq!(state.record_shell_command_run(second.clone()), 1);
+        assert_eq!(state.record_shell_command_run(second), 2);
+    }
+
+    #[test]
+    fn long_path_and_search_pattern_suffixes_remain_distinct_loop_families() {
+        let prefix = format!("src/{}/", "a".repeat(130));
+        let first = json!({"path": format!("{prefix}first.rs")});
+        let second = json!({"path": format!("{prefix}second.rs")});
+        for tool in [tool_names::READ_FILE, tool_names::UNIFIED_FILE] {
+            assert_ne!(low_signal_family_key(tool, &first), low_signal_family_key(tool, &second));
+            let dotted = json!({"path": format!("./{prefix}first.rs")});
+            assert_eq!(low_signal_family_key(tool, &first), low_signal_family_key(tool, &dotted));
+        }
+        let query_prefix = "q".repeat(90);
+        let first_query = json!({"action":"grep", "pattern":format!("{query_prefix}left"), "path":"src"});
+        let second_query = json!({"action":"grep", "pattern":format!("{query_prefix}right"), "path":"src"});
+        assert_ne!(
+            low_signal_family_key(tool_names::UNIFIED_SEARCH, &first_query),
+            low_signal_family_key(tool_names::UNIFIED_SEARCH, &second_query)
+        );
+    }
 
     #[test]
     fn read_file_offset_value_accepts_alias_keys() {

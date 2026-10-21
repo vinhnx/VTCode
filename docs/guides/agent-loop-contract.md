@@ -403,6 +403,14 @@ the pipeline's exit status belongs to the tail command and the model would other
 when it tripped, and transcript block reasons are truncated (~600 chars) with a pointer to the handoff file, which
 retains the full reason.
 
+Loop-family and repeated-shell keys retain a readable prefix plus a digest of the full normalized value when it
+exceeds the prefix limit. Commands, paths, and search patterns that differ only after that limit must remain distinct;
+genuine repeats still advance the same streak. These keys control loop detection, not execution authorization.
+
+Recognized planning/security preflight denials return `retryable: false` with policy guidance even at the denial
+circuit limit. Correctable arguments retain their bounded recovery allowance; policy denials cannot initiate schema
+repair or replenish that allowance. Permitted alternatives still pass normal admission.
+
 The assistant text-response safety cap distinguishes finished work from a stalled loop. When the cap fires after the
 harness promoted the latest commentary to a final answer and the anti-blind checkpoint is clear (and planning is not
 active), the turn ends `Completed` — the model had concluded and the loop merely re-prompted past its answer. The cap

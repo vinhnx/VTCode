@@ -221,6 +221,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preflight_diagnosis_keeps_policy_guidance_at_the_circuit_limit() {
+        for circuit_tripped in [false, true] {
+            for (error, alternative) in [
+                ("Command security check failed: command injection", "simpler literal command"),
+                ("tool denied by planning workflow", "command -v"),
+            ] {
+                let diagnosis = deterministic_preflight_diagnosis(tool_names::EXEC_COMMAND, error, circuit_tripped);
+                assert!(diagnosis.likely_cause.contains("policy"));
+                assert!(diagnosis.next_action.contains("Do not retry"));
+                assert!(diagnosis.next_action.contains(alternative));
+                assert!(!diagnosis.next_action.contains("malformed"));
+                assert!(!diagnosis.next_action.contains("declared schema"));
+            }
+            let malformed = deterministic_preflight_diagnosis(
+                tool_names::EXEC_COMMAND,
+                "Missing required argument: cmd",
+                circuit_tripped,
+            );
+            if circuit_tripped {
+                assert!(malformed.next_action.contains("tools are disabled"));
+                assert!(!malformed.next_action.contains("retry once"));
+            } else {
+                assert!(malformed.next_action.contains("declared schema, then retry once"));
+            }
+        }
+    }
+
+    #[test]
     fn revision_suffix_preserves_bounded_corrective_action_and_is_idempotent() {
         let action = format!("{} Verify exact target before writing.", "x".repeat(270));
         let diagnosis = ToolFailureDiagnosis::new("exit 1", "unknown", &action)

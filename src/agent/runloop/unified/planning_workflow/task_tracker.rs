@@ -414,17 +414,16 @@ pub(crate) async fn create_task_tracker_from_active_plan(
     }
     let item_count = items.len();
 
-    let tool = tool_registry
-        .get_tool(tools::TASK_TRACKER)
-        .context("task_tracker is unavailable; approved-plan execution is blocked")?;
     let args = serde_json::json!({
         "action": "create",
         "title": descriptive_tracker_title(&plan, &plan_file, &items),
         "items": items,
     });
 
-    let result = tool
-        .execute(args)
+    // Registry execution adopts the checklist and its required verifier
+    // identities before the approved execution turn can run other checks.
+    let result = tool_registry
+        .execute_tool(tools::TASK_TRACKER, args)
         .await
         .context("task_tracker failed during approved-plan handoff")?;
     if result.get("status").and_then(|value| value.as_str()) == Some("error") {

@@ -39,10 +39,12 @@ pub(crate) fn deterministic_preflight_diagnosis(
     let policy_correction = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error);
     let tool_name = bounded_field(tool_name);
     let error = bounded_field(error);
-    let next_action = if circuit_tripped {
+    let next_action = if let Some(correction) = policy_correction {
+        correction
+    } else if circuit_tripped {
         "Stop retrying this malformed call; tools are disabled for the next pass."
     } else {
-        policy_correction.unwrap_or("Correct the arguments using the declared schema, then retry once.")
+        "Correct the arguments using the declared schema, then retry once."
     };
     ToolFailureDiagnosis::new(
         format!("Tool preflight validation failed for '{tool_name}': {error}"),
