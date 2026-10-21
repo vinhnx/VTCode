@@ -33,6 +33,26 @@ use vtcode_config::constants::execution::{LOOP_THROTTLE_MAX_MS, LOOP_THROTTLE_RE
 /// MIN_READONLY_IDENTICAL_LIMIT (currently 2).
 const LOOP_HARD_BLOCK_REPEAT_COUNT: usize = 5;
 
+fn loop_detection_block_payload(tool_name: &str, display_name: &str, repeat_count: usize, limit: usize) -> Value {
+    let error = ToolExecutionError::new(
+        tool_name.to_owned(),
+        ToolErrorType::PolicyViolation,
+        agent_execution::loop_detection_block_message(display_name, repeat_count as u64, None),
+    );
+    let mut payload = error.to_json_value();
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert("loop_detected".into(), json!(true));
+        obj.insert("repeat_count".into(), json!(repeat_count));
+        obj.insert("limit".into(), json!(limit));
+        obj.insert("tool".into(), json!(display_name));
+        obj.insert(
+            "next_action".into(),
+            json!("Identical calls to this tool are blocked. Use the data already in the conversation history; for different information, change the arguments or use another tool."),
+        );
+    }
+    payload
+}
+
 impl ToolRegistry {
     fn annotate_timeout_error_payload(
         payload: &mut Value,
@@ -714,6 +734,12 @@ impl ToolRegistry {
         } else {
             self.execution_history.detect_loop(&tool_name, args)
         };
+        let repeat_recovery_generation =
+            if loop_limit > 0 && loop_result.detected && loop_result.repeat_count >= loop_limit {
+                self.completion_verifier_repeat_recovery_generation(&tool_name, args)
+            } else {
+                None
+            };
         if loop_result.detected && loop_result.repeat_count > 1 {
             let delay_ms = (LOOP_THROTTLE_REGISTRY_BASE_MS * loop_result.repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
             if delay_ms > 0 {
@@ -727,7 +753,7 @@ impl ToolRegistry {
                 "Loop detected: agent calling same tool with identical parameters {} times",
                 loop_result.repeat_count
             );
-            if loop_result.repeat_count >= loop_limit {
+            if loop_result.repeat_count >= loop_limit && repeat_recovery_generation.is_none() {
                 // Hard block: when the model has been repeating the same call far
                 // beyond the limit, stop returning cached results and return an
                 // error.  Returning a cached result at high repeat counts causes
@@ -769,22 +795,8 @@ impl ToolRegistry {
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }
 
-                let error = ToolExecutionError::new(
-                    tool_name_owned.clone(),
-                    ToolErrorType::PolicyViolation,
-                    agent_execution::loop_detection_block_message(&display_name, loop_result.repeat_count as u64, None),
-                );
-                let mut payload = error.to_json_value();
-                if let Some(obj) = payload.as_object_mut() {
-                    obj.insert("loop_detected".into(), json!(true));
-                    obj.insert("repeat_count".into(), json!(loop_result.repeat_count));
-                    obj.insert("limit".into(), json!(loop_limit));
-                    obj.insert("tool".into(), json!(display_name));
-                    obj.insert(
-                        "next_action".into(),
-                        json!("Identical calls to this tool are blocked. Use the data already in the conversation history; for different information, change the arguments or use another tool."),
-                    );
-                }
+                let payload =
+                    loop_detection_block_payload(&tool_name_owned, &display_name, loop_result.repeat_count, loop_limit);
 
                 record_failure(
                     tool_name_owned,
@@ -1102,6 +1114,26 @@ impl ToolRegistry {
                 );
                 return Err(anyhow!(error_msg).context("tool denied by middleware"));
             }
+        }
+
+        if let Some(generation) = repeat_recovery_generation
+            && !self.consume_completion_verifier_repeat_recovery(&tool_name, &args, generation)
+        {
+            let payload =
+                loop_detection_block_payload(&tool_name_owned, &display_name, loop_result.repeat_count, loop_limit);
+            record_failure(
+                tool_name_owned,
+                is_mcp_tool,
+                mcp_provider.clone(),
+                args_for_recording,
+                "Tool call blocked due to repeated identical invocations".to_string(),
+                timeout_category_label.clone(),
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                None,
+                false,
+            );
+            return Ok(payload);
         }
 
         // Preserve registered approval/sandbox wrappers. The nonce changes any

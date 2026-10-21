@@ -15,6 +15,7 @@ struct VerifierEvidence {
     identity: u64,
     generation: u64,
     command: String,
+    attempt_active: bool,
     session_id: Option<String>,
     exit_code: Option<i64>,
 }
@@ -38,11 +39,13 @@ pub(super) struct CompletionVerification {
     evidence: VecDeque<VerifierEvidence>,
     required_commands: Vec<String>,
     pending_mutation_sessions: HashSet<String>,
+    repeat_recovery_admissions: HashSet<String>,
 }
 
 impl CompletionVerification {
     fn mutate(&mut self) {
         self.generation = self.generation.saturating_add(1);
+        self.repeat_recovery_admissions.clear();
     }
 
     fn launch(&mut self, command: String) -> u64 {
@@ -53,6 +56,7 @@ impl CompletionVerification {
             identity: self.next_identity,
             generation: self.generation,
             command,
+            attempt_active: true,
             session_id: None,
             exit_code: None,
         });
@@ -107,6 +111,7 @@ impl CompletionVerification {
                 .iter()
                 .any(|key| output.get(key).and_then(Value::as_bool) == Some(true))
         {
+            evidence.attempt_active = false;
             evidence.session_id = None;
             evidence.exit_code = None;
             self.prune_optional_evidence();
@@ -120,12 +125,48 @@ impl CompletionVerification {
             return;
         }
         if let Some(exit_code) = output.get("exit_code").and_then(Value::as_i64) {
+            evidence.attempt_active = false;
             evidence.exit_code = Some(exit_code);
             evidence.session_id = None;
         } else if let Some(session_id) = command_args::session_id_text(output) {
+            evidence.attempt_active = true;
             evidence.session_id = Some(session_id.to_owned());
+        } else {
+            evidence.attempt_active = false;
+            evidence.session_id = None;
+            evidence.exit_code = None;
         }
         self.prune_optional_evidence();
+    }
+
+    fn repeated_required_command_recovery_generation(&self, command: &str) -> Option<u64> {
+        let command = executed_command_identity(command);
+        let is_missing_required_command = self
+            .required_commands
+            .iter()
+            .any(|required| executed_command_identity(required) == command && !self.command_passed(required));
+        if !is_missing_required_command || self.repeat_recovery_admissions.contains(&command) {
+            return None;
+        }
+
+        let has_current_attempt = self.evidence.iter().any(|entry| {
+            entry.generation == self.generation
+                && self.required_commands.iter().any(|required| {
+                    let required = executed_command_identity(required);
+                    required == command
+                        && command_covers_required(&entry.command, &required)
+                        && (entry.attempt_active || entry.session_id.is_some() || entry.exit_code.is_some())
+                })
+        });
+        (!has_current_attempt).then_some(self.generation)
+    }
+
+    fn consume_repeated_required_command_recovery(&mut self, command: &str, generation: u64) -> bool {
+        let command = executed_command_identity(command);
+        if self.generation != generation || self.repeated_required_command_recovery_generation(&command).is_none() {
+            return false;
+        }
+        self.repeat_recovery_admissions.insert(command)
     }
 
     fn command_passed(&self, command: &str) -> bool {
@@ -413,6 +454,37 @@ impl ToolRegistry {
         Some(self.harness_context.completion_verification.lock().launch(command))
     }
 
+    /// Snapshot the generation for the one repeat-limit retry of an exact missing tracker check.
+    pub(super) fn completion_verifier_repeat_recovery_generation(&self, name: &str, args: &Value) -> Option<u64> {
+        if !tool_intent::is_command_tool(crate::tools::names::canonical_tool_name(name)) {
+            return None;
+        }
+        let command = self.completion_verifier_command(args)?;
+        self.harness_context
+            .completion_verification
+            .lock()
+            .repeated_required_command_recovery_generation(&command)
+    }
+
+    /// Consume the retry only after the regular execution pipeline admits the command.
+    pub(super) fn consume_completion_verifier_repeat_recovery(
+        &self,
+        name: &str,
+        args: &Value,
+        generation: u64,
+    ) -> bool {
+        if !tool_intent::is_command_tool(crate::tools::names::canonical_tool_name(name)) {
+            return false;
+        }
+        let Some(command) = self.completion_verifier_command(args) else {
+            return false;
+        };
+        self.harness_context
+            .completion_verification
+            .lock()
+            .consume_repeated_required_command_recovery(&command, generation)
+    }
+
     /// Share verifier accounting with the pacing gate; this grants no execution permission.
     pub fn is_completion_verifier_call(&self, name: &str, args: &Value) -> bool {
         tool_intent::is_command_tool(crate::tools::names::canonical_tool_name(name))
@@ -508,8 +580,9 @@ impl ToolRegistry {
         match result {
             Ok(output) if !is_session_cleanup(args) => state.observe(identity, output),
             _ => {
-                // Lost, denied, cancelled, or cleaned-up sessions carry no verdict.
+                // Lost, failed, denied, cancelled, or cleaned-up attempts carry no verdict.
                 if let Some(entry) = state.evidence.iter_mut().find(|entry| entry.identity == identity) {
+                    entry.attempt_active = false;
                     entry.session_id = None;
                     entry.exit_code = None;
                 }

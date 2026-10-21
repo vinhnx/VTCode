@@ -123,6 +123,82 @@ fn completion_verification_all_required_tracker_checks_must_pass() {
 }
 
 #[test]
+fn repeated_required_check_recovery_is_exact_bounded_and_generation_scoped() {
+    let mut state = CompletionVerification::default();
+    state.mutate();
+    state.required_commands = vec!["cargo check".into()];
+    let first_generation = state.generation;
+
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), Some(first_generation));
+    assert_eq!(
+        state.repeated_required_command_recovery_generation("cargo check --locked"),
+        None,
+        "the exception applies only to the exact required command"
+    );
+
+    let active = state.launch("cargo check".into());
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+    state.observe(active, &json!({"session_id":"check-running"}));
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+    state.observe(active, &json!({"exit_code":1}));
+    assert!(state.pending(), "a terminal failure does not satisfy the required check");
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+
+    state.mutate();
+    let second_generation = state.generation;
+    assert!(second_generation > first_generation);
+    assert!(!state.consume_repeated_required_command_recovery("cargo check", first_generation));
+    assert!(state.consume_repeated_required_command_recovery("cargo check", second_generation));
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+    state.required_commands.clear();
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+    state.required_commands.push("cargo check".into());
+    assert_eq!(
+        state.repeated_required_command_recovery_generation("cargo check"),
+        None,
+        "tracker requirement updates do not replenish a generation's spent admission"
+    );
+
+    state.mutate();
+    let third_generation = state.generation;
+    assert_eq!(
+        state.repeated_required_command_recovery_generation("cargo check"),
+        Some(third_generation),
+        "a new mutation generation opens one fresh admission"
+    );
+    let passing = state.launch("cargo check".into());
+    state.observe(passing, &json!({"exit_code":0}));
+    assert!(!state.pending());
+    assert_eq!(state.repeated_required_command_recovery_generation("cargo check"), None);
+}
+
+#[tokio::test]
+async fn failed_verifier_execution_releases_attempt_without_passing_or_reopening_retry() {
+    let dir = tempfile::tempdir().unwrap();
+    let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
+    registry.restore_completion_verification_debt();
+    registry.set_required_completion_verifiers(vec!["cargo check".into()]);
+    let args = json!({"cmd":"cargo check"});
+
+    let launch = registry.begin_completion_verifier(&args).expect("required check is tracked");
+    registry.observe_completion_verifier(Some(launch), &args, &Err(anyhow::anyhow!("execution failed")));
+    assert!(registry.completion_verification_pending(), "an execution error has no passing terminal verdict");
+    let generation = registry
+        .completion_verifier_repeat_recovery_generation(tools::EXEC_COMMAND, &args)
+        .expect("a failed attempt with no live session permits the one bounded recovery");
+    assert!(registry.consume_completion_verifier_repeat_recovery(tools::EXEC_COMMAND, &args, generation));
+
+    let retry = registry.begin_completion_verifier(&args).expect("recovery attempt is tracked");
+    registry.observe_completion_verifier(Some(retry), &args, &Err(anyhow::anyhow!("recovery failed")));
+    assert!(registry.completion_verification_pending(), "the failed recovery cannot clear the gate");
+    assert_eq!(
+        registry.completion_verifier_repeat_recovery_generation(tools::EXEC_COMMAND, &args),
+        None,
+        "the failed recovery cannot reopen its one-use allowance"
+    );
+}
+
+#[test]
 fn completion_verification_bounds_superseded_chain_evidence_per_requirement() {
     let mut state = CompletionVerification::default();
     state.mutate();
@@ -1019,26 +1095,67 @@ async fn inspection_accounting_preserves_generation_but_concrete_changes_invalid
 
 #[cfg(unix)]
 #[tokio::test]
-async fn required_inspection_repetition_limit_rejects_instead_of_replaying_a_verdict() {
+async fn repeated_required_check_gets_one_fresh_execution_per_mutation_generation() {
     let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("fixture.txt"), "original\n").unwrap();
+    std::fs::write(dir.path().join("fixture.rs"), "initial fixture\n").unwrap();
     let registry = ToolRegistry::new(dir.path().to_path_buf()).await;
     registry.allow_all_tools().await.unwrap();
     registry.execution_history.set_loop_detection_limits(5, 2);
-    let command = "grep -n original fixture.txt";
+    let command = "cat fixture.rs";
     let args = json!({"cmd":command});
     for _ in 0..2 {
         let result = registry.execute_tool(tools::EXEC_COMMAND, args.clone()).await.unwrap();
         assert_eq!(result["exit_code"], 0);
     }
-    registry.restore_completion_verification_debt();
-    registry.set_required_completion_verifiers(vec![command.into()]);
-    let result = registry.execute_tool(tools::EXEC_COMMAND, args).await.unwrap();
-    assert_eq!(result["loop_detected"], true, "{result}");
-    assert!(result["error"]["message"].as_str().unwrap().contains("Loop detection"), "{result}");
-    assert!(result.get("exit_code").is_none());
-    assert!(!registry.completion_verifier_passed(command));
+
+    let write = registry
+        .execute_tool(tools::WRITE_FILE, json!({"path":"fixture.rs", "content":"updated fixture\n", "overwrite":true}))
+        .await
+        .unwrap();
+    assert!(write.get("error").is_none(), "{write}");
     assert!(registry.completion_verification_pending());
+    registry.set_required_completion_verifiers(vec![command.into()]);
+
+    let fresh = registry.execute_tool(tools::EXEC_COMMAND, args.clone()).await.unwrap();
+    assert_eq!(fresh["exit_code"], 0, "{fresh}");
+    assert!(fresh.to_string().contains("updated fixture"), "the run must observe current contents: {fresh}");
+    assert_ne!(fresh["reused_recent_result"], true, "required checks must execute instead of reusing output");
+    assert!(registry.completion_verifier_passed(command));
+    assert!(!registry.completion_verification_pending());
+    {
+        let state = registry.harness_context.completion_verification.lock();
+        let evidence = state
+            .evidence
+            .iter()
+            .rev()
+            .find(|entry| entry.command == command)
+            .expect("the terminal execution must record verifier evidence");
+        assert_eq!(evidence.generation, state.generation);
+        assert_eq!(evidence.exit_code, Some(0));
+    }
+
+    let repeated = registry.execute_tool(tools::EXEC_COMMAND, args.clone()).await.unwrap();
+    assert_eq!(repeated["loop_detected"], true, "{repeated}");
+    assert!(repeated.get("exit_code").is_none(), "further identical calls stay blocked");
+
+    let write = registry
+        .execute_tool(
+            tools::WRITE_FILE,
+            json!({"path":"fixture.rs", "content":"second mutation fixture\n", "overwrite":true}),
+        )
+        .await
+        .unwrap();
+    assert!(write.get("error").is_none(), "{write}");
+    assert!(registry.completion_verification_pending());
+    let after_mutation = registry.execute_tool(tools::EXEC_COMMAND, args).await.unwrap();
+    assert_eq!(after_mutation["exit_code"], 0, "{after_mutation}");
+    assert!(
+        after_mutation.to_string().contains("second mutation fixture"),
+        "the new generation must execute the required check again: {after_mutation}"
+    );
+    assert_ne!(after_mutation["reused_recent_result"], true);
+    assert!(registry.completion_verifier_passed(command));
+    assert!(!registry.completion_verification_pending());
 }
 
 #[tokio::test]

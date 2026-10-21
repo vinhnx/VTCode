@@ -87,6 +87,16 @@ including entries cached before tracker adoption, so actual execution supplies
 the verdict. Passing current-generation checks remain reusable as verification
 evidence without executing them again merely for a completion summary.
 
+At the identical-call repeat limit, the registry admits one fresh execution of
+an exact missing required command per mutation generation when no current-
+generation attempt, terminal verdict, or owned checker session already exists.
+The retry still passes through the ordinary approval, safety, sandbox, timeout,
+and output controls, and the allowance is consumed only when execution is
+admitted. Further identical calls remain subject to the usual loop guard. A
+failed, denied, cancelled, lost, or yielded result does not satisfy the check;
+resume an owned yielded session through its existing session controls. A new
+mutation generation permits one fresh attempt for the still-missing command.
+
 A yielded command has no verdict. Interactive and headless verification resume an
 owned session covering the requested check in the current mutation generation before
 starting another command, including a check inside a qualifying `&&` chain.
