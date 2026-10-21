@@ -1796,6 +1796,7 @@ async fn measure_system_prompt_size_respects_max_budget_setting() {
 fn planning_guidance_bounds_recovery_and_separates_scope_checks() {
     assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("one synthesis and two corrections"));
     assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("continuations and resume"));
+    assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("Within execution budgets"));
     assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.contains("User answers never approve implementation"));
     assert!(PLANNING_WORKFLOW_PLAN_QUALITY_LINE.contains("scope checks never replace content verification"));
     assert!(PLANNING_WORKFLOW_PLAN_POLICY_LINE.len() <= 470, "keep shipped planning guidance bounded");

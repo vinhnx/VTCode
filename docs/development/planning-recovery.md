@@ -9,7 +9,10 @@ model claims and human diagnostic wording cannot select these outcomes.
 `plan.delta` optionally carries a complete boxed recovery checkpoint. Older events omit it. The canonical session drain
 acknowledges checkpoint writes before model admission; every retry dispatch consumes the same allowance, including
 provider history/continuation repair and transport fallback. A cycle allows three requests: one synthesis and two
-corrections. Automatic continuations and resume never reset that count. Event cap rewrites retain the latest complete
+corrections. Each headless correction also requires remaining configured turns, time, tokens, and cost budget;
+unused recovery allowance never extends those limits. Empty, reasoning-only, malformed, tool-call, and truncated
+synthesis responses share this decision, with tools disabled throughout correction. Automatic continuations and resume
+never reset that count. Event cap rewrites retain the latest complete
 checkpoint, so evicting old turns cannot replenish recovery. Older sessions without a recovery checkpoint retain
 public progress and ask for input before another request; they cannot prove an unused allowance.
 
@@ -21,7 +24,10 @@ text before replay, so another task cannot silently receive an unrelated approva
 Resumed synthesis restores the saved public evidence, draft, and validator report into the fresh conversation;
 the saved request counter alone is insufficient context for a corrective request. Synthesis explicitly disables tools.
 
-Public tool evidence and drafts are bounded and redacted. Private reasoning is classified only by presence. Draft
+Public tool evidence is redacted before retention, with the truncation marker included in each byte limit:
+2 KiB per item, 12 KiB total, and eight items, retaining chronological order among the newest evidence.
+An empty evidence batch preserves saved evidence. Public drafts are also bounded and redacted. Private reasoning is
+classified only by presence. Draft
 ranking retains the structurally strongest available plan; approval-only commentary cannot overwrite it. Requests
 repair this retained draft against validator-owned defects. Artifact validation and persistence precede approval.
 
@@ -35,7 +41,8 @@ same labeled options in a structured diagnostic. Persistence and queue errors st
 in-memory evidence; cancellation never grants another request.
 
 Option labels are stable action values. Recommendation markers and list numbering are display-only; submitting
-an option returns its declared label unchanged so Retry, clarification, and model selection reach their runtime handlers.
+an option returns its declared label unchanged so Retry, clarification, and model selection reach their runtime
+handlers.
 
 A clarification can supply missing facts directly. The separate explicit “Research missing facts” choice permits
 one targeted read-only research batch for a nonempty clarification, subject to the existing tool, time, and

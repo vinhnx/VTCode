@@ -345,7 +345,8 @@ After a research guard closes tools, one synthesis request and at most two corre
 allowance. Empty content, private reasoning without final content, native tool-call violations, truncated output,
 malformed plans, and provider failures all use the same allowance. Automatic continuations and session resume retain
 consumed requests and cannot reopen research. Transport retries also consume this allowance. Private reasoning never
-becomes a plan or final response.
+becomes a plan or final response. Headless corrections require both unused recovery allowance and remaining
+configured execution budget; the three-request allowance does not extend turn, time, token, or cost limits.
 
 The runtime retains the latest request, bounded public evidence, best structured draft, and validator report in the
 canonical session event log. A repair targets that draft and its specific defects. Approval-only prose cannot replace

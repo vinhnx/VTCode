@@ -333,7 +333,7 @@ for line in clean_output.lines() {
 
 | Runtime state | Human action |
 | --- | --- |
-| Synthesizing or repairing | Wait for a validated draft; the shared automatic limit is three requests. |
+| Synthesizing or repairing | Wait for a validated draft; the shared automatic limit is three requests, subject to remaining execution budget. |
 | Awaiting input | Retry with retained evidence, add clarification, or choose a model. |
 | Awaiting approval | Review and explicitly approve the persisted plan before implementation. |
 

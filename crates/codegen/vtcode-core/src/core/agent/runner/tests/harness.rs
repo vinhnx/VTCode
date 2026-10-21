@@ -8,68 +8,162 @@ use super::*;
 const COMPLETE_HEADLESS_PLAN: &str = "<proposed_plan>\n## Summary\nUpdate the fixture greeting.\n\n## Implementation Steps\n1. Update greeting -> files: [fixture.txt] -> verify: [rg -n 'greeting' fixture.txt]\n\n## Validation\nThe greeting appears once.\n\n## Assumptions\nKeep unrelated contents unchanged.\n</proposed_plan>";
 
 #[tokio::test]
-async fn headless_planning_resume_supplies_saved_evidence_and_draft_without_research() {
+async fn headless_planning_mixed_failures_exhaust_allowance_or_turns_without_replay() {
     use crate::core::agent::events::SessionStoreSink;
     use crate::exec::events::{
         PlanDeltaEvent,
         planning::{PlanningOutcome, PlanningRecoverySnapshot},
     };
-    let temp = TempDir::new().unwrap();
-    let session = "planning-saved-context";
-    let mut cfg = VTCodeConfig::default();
-    cfg.automation.full_auto.max_turns = 4;
-    let mut runner = Box::pin(make_runner(&temp, cfg, session)).await;
-    runner.enable_planning();
-    let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
-    let snapshot = PlanningRecoverySnapshot {
-        request_id: Some("task-1".into()),
-        outcome: PlanningOutcome::Repairing,
-        research_closed: true,
-        requests_used: 2,
-        latest_request: "Plan a greeting".into(),
-        evidence: vec!["Saved source evidence: unique-greeting-42".into()],
-        best_draft: Some(COMPLETE_HEADLESS_PLAN.into()),
-        best_draft_defects: Some(0),
-        validation_report: Some("Preserve the greeting check and emit the complete draft.".into()),
-        ..Default::default()
-    };
-    store
-        .persist_checkpoint(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
-            thread_id: session.into(),
-            turn_id: "turn-1".into(),
-            item_id: "planning-recovery".into(),
-            delta: String::new(),
-            recovery: Some(Box::new(snapshot)),
-        })))
-        .await
-        .unwrap();
-    store.close().await.unwrap();
-    let provider =
-        RecordingQueuedProvider::with_name("queued-test-provider", vec![text_response(COMPLETE_HEADLESS_PLAN)]);
-    let observer = provider.clone();
-    runner.provider_client = Box::new(provider);
-    let result = Box::pin(runner.execute_task(&task("Plan a greeting", "task-1"), &[]))
-        .await
-        .unwrap();
-    assert!(result.outcome.is_success());
-    let requests = observer.recorded_requests();
-    assert_eq!(requests.len(), 1, "resume keeps only the remaining correction allowance");
-    assert!(matches!(requests[0].tool_choice, Some(ToolChoice::None)));
-    assert!(requests[0].tools.is_none());
-    let context = requests[0]
-        .messages
-        .iter()
-        .map(|m| m.content.as_text().into_owned())
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(context.contains("unique-greeting-42"), "saved evidence must reach the provider");
-    assert!(context.contains("Update the fixture greeting"), "saved draft must reach the provider");
-    assert!(context.contains("Preserve the greeting check"));
-    let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
-    let saved = store.planning_recovery().await.unwrap().unwrap();
-    assert_eq!(saved.requests_used, 3);
-    assert_eq!(saved.outcome, PlanningOutcome::AwaitingApproval);
-    store.close().await.unwrap();
+    for max_turns in [2, 5] {
+        let temp = TempDir::new().unwrap();
+        let session = "planning-mixed";
+        let mut cfg = VTCodeConfig::default();
+        cfg.automation.full_auto.max_turns = max_turns;
+        let mut runner = Box::pin(make_runner(&temp, cfg, session)).await;
+        runner.enable_planning();
+        let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
+        store
+            .persist_checkpoint(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                thread_id: session.into(),
+                turn_id: "turn-0".into(),
+                item_id: "planning-recovery".into(),
+                delta: String::new(),
+                recovery: Some(Box::new(PlanningRecoverySnapshot {
+                    request_id: Some("task-1".into()),
+                    research_closed: true,
+                    outcome: PlanningOutcome::Synthesizing,
+                    ..Default::default()
+                })),
+            })))
+            .await
+            .unwrap();
+        store.close().await.unwrap();
+        let provider = RecordingQueuedProvider::with_name(
+            "queued-test-provider",
+            vec![
+                text_response(""),
+                text_response("Please approve this incomplete draft."),
+                tool_call_response(tools::EXEC_COMMAND, json!({"cmd":"touch must-not-execute"})),
+                text_response(COMPLETE_HEADLESS_PLAN),
+            ],
+        );
+        let observer = provider.clone();
+        runner.provider_client = Box::new(provider);
+        let input = task("Plan a greeting", "task-1");
+        let result = Box::pin(runner.execute_task(&input, &[])).await.unwrap();
+        assert!(!result.outcome.is_success());
+        let expected = max_turns.min(3);
+        assert_eq!(observer.recorded_requests().len(), expected);
+        assert!(
+            observer
+                .recorded_requests()
+                .iter()
+                .all(|request| request.tools.is_none() && matches!(request.tool_choice, Some(ToolChoice::None)))
+        );
+        let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
+        let saved = store.planning_recovery().await.unwrap().unwrap();
+        assert_eq!(usize::from(saved.requests_used), expected);
+        assert_eq!(saved.outcome, PlanningOutcome::AwaitingInput);
+        store.close().await.unwrap();
+        let resumed = Box::pin(runner.execute_task(&input, &[])).await.unwrap();
+        assert!(!resumed.outcome.is_success());
+        assert_eq!(observer.recorded_requests().len(), expected);
+        assert!(!workspace_root(&temp).join("must-not-execute").exists());
+    }
+}
+
+#[tokio::test]
+async fn headless_planning_corrects_each_response_shape_with_research_closed() {
+    let mut reasoning = text_response("");
+    reasoning.reasoning = Some("private reasoning".into());
+    let mut truncated = text_response(COMPLETE_HEADLESS_PLAN);
+    truncated.finish_reason = FinishReason::Length;
+    for (case, failure) in [
+        text_response(""),
+        text_response("Approve this incomplete draft."),
+        reasoning,
+        truncated,
+        tool_call_response(tools::EXEC_COMMAND, json!({"cmd":"touch must-not-execute"})),
+        text_response("```tool:command_session\n{\"command\":\"touch must-not-execute\"}\n```"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        use crate::core::agent::events::SessionStoreSink;
+        use crate::exec::events::{
+            PlanDeltaEvent,
+            planning::{PlanningOutcome, PlanningRecoverySnapshot},
+        };
+        let temp = TempDir::new().unwrap();
+        let session = "planning-saved-context";
+        let mut cfg = VTCodeConfig::default();
+        cfg.automation.full_auto.max_turns = 4;
+        let mut runner = Box::pin(make_runner(&temp, cfg, session)).await;
+        runner.enable_planning();
+        let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
+        let snapshot = PlanningRecoverySnapshot {
+            request_id: Some("task-1".into()),
+            outcome: PlanningOutcome::Repairing,
+            research_closed: true,
+            requests_used: 1,
+            latest_request: "Plan a greeting".into(),
+            evidence: (0..8)
+                .map(|index| format!("Saved source evidence: unique-greeting-42-{index}"))
+                .collect(),
+            best_draft: Some(COMPLETE_HEADLESS_PLAN.into()),
+            best_draft_defects: Some(0),
+            validation_report: Some("Preserve the greeting check and emit the complete draft.".into()),
+            ..Default::default()
+        };
+        store
+            .persist_checkpoint(&ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+                thread_id: session.into(),
+                turn_id: "turn-1".into(),
+                item_id: "planning-recovery".into(),
+                delta: String::new(),
+                recovery: Some(Box::new(snapshot)),
+            })))
+            .await
+            .unwrap();
+        store.close().await.unwrap();
+        let provider = RecordingQueuedProvider::with_name(
+            "queued-test-provider",
+            vec![failure, text_response(COMPLETE_HEADLESS_PLAN)],
+        );
+        let observer = provider.clone();
+        runner.provider_client = Box::new(provider);
+        let result = Box::pin(runner.execute_task(&task("Plan a greeting", "task-1"), &[]))
+            .await
+            .unwrap();
+        assert!(result.outcome.is_success(), "case {case}: {:?}, {}", result.outcome, result.summary);
+        let requests = observer.recorded_requests();
+        assert_eq!(requests.len(), 2, "resume uses only the remaining correction allowance");
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.tools.is_none() && matches!(request.tool_choice, Some(ToolChoice::None)))
+        );
+        assert!(matches!(requests[0].tool_choice, Some(ToolChoice::None)));
+        assert!(requests[0].tools.is_none());
+        let context = requests[0]
+            .messages
+            .iter()
+            .map(|m| m.content.as_text().into_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(context.contains("unique-greeting-42"), "saved evidence must reach the provider");
+        assert!(context.contains("Update the fixture greeting"), "saved draft must reach the provider");
+        assert!(context.contains("Preserve the greeting check"));
+        let store = SessionStoreSink::open(&workspace_root(&temp), session).await.unwrap();
+        let saved = store.planning_recovery().await.unwrap().unwrap();
+        assert_eq!(saved.requests_used, 3);
+        assert_eq!(saved.outcome, PlanningOutcome::AwaitingApproval);
+        assert_eq!(saved.evidence.len(), 8, "approval must preserve bounded saved evidence");
+        assert!(saved.evidence.iter().all(|item| item.len() <= 2048));
+        assert!(saved.evidence.iter().map(String::len).sum::<usize>() <= 12 * 1024);
+        store.close().await.unwrap();
+        assert!(!workspace_root(&temp).join("must-not-execute").exists());
+    }
 }
 
 #[tokio::test]
@@ -214,7 +308,7 @@ async fn headless_planning_reserves_the_last_turn_for_synthesis_and_rejects_more
                 .unwrap()
                 .content
                 .as_text()
-                .contains("final planning turn")
+                .contains("tool-free planning synthesis")
         );
         assert_eq!(result.turns_executed, 2);
         assert_eq!(result.outcome == TaskOutcome::Success, succeeds, "case {case}: {:?}", result.outcome);
@@ -232,7 +326,7 @@ async fn headless_planning_reserves_the_last_turn_for_synthesis_and_rejects_more
 }
 
 #[tokio::test]
-async fn headless_planning_rewrites_a_truncated_plan_once_without_more_tools() {
+async fn headless_planning_rewrites_truncated_plans_within_shared_allowance_without_tools() {
     for truncate_rewrite in [false, true] {
         let temp = TempDir::new().unwrap();
         let mut cfg = VTCodeConfig::default();
@@ -248,14 +342,26 @@ async fn headless_planning_rewrites_a_truncated_plan_once_without_more_tools() {
         } else {
             text_response(plan)
         };
-        let provider = RecordingQueuedProvider::with_name("queued-test-provider", vec![truncated, final_response]);
+        let provider = RecordingQueuedProvider::with_name(
+            "queued-test-provider",
+            if truncate_rewrite {
+                vec![
+                    truncated,
+                    final_response.clone(),
+                    final_response.clone(),
+                    final_response,
+                ]
+            } else {
+                vec![truncated, final_response]
+            },
+        );
         let observer = provider.clone();
         runner.provider_client = Box::new(provider);
         let result = Box::pin(runner.execute_task(&task("Return a plan", "planning-length"), &[]))
             .await
             .unwrap();
         let requests = observer.recorded_requests();
-        assert_eq!(requests.len(), 2, "only one rewrite is allowed");
+        assert_eq!(requests.len(), if truncate_rewrite { 4 } else { 2 });
         assert_eq!(requests[0].max_tokens, Some(4096), "planning needs the existing synthesis output allowance");
         assert!(requests[0].tools.as_ref().is_some_and(|tools| !tools.is_empty()));
         assert!(requests[1].tools.as_ref().is_none_or(|tools| tools.is_empty()));
@@ -270,7 +376,7 @@ async fn headless_planning_rewrites_a_truncated_plan_once_without_more_tools() {
                 .contains("shorten detail")
         );
         assert_eq!(result.outcome == TaskOutcome::Success, !truncate_rewrite);
-        assert_eq!(result.turns_executed, 2);
+        assert_eq!(result.turns_executed, if truncate_rewrite { 4 } else { 2 });
         let terminal = result
             .thread_events
             .iter()

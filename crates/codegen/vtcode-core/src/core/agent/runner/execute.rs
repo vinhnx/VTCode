@@ -757,7 +757,7 @@ impl AgentRunner {
                     headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
                         &self.session_id, turn + 1).await?;
                     runtime.state.add_synthetic_user_message(
-                        "This is the final planning turn within the configured budget. Return a concise, complete plan now using only evidence already collected. Fit the entire plan within the response token limit; shorten detail rather than repeating a truncated draft. Make no tool calls. State missing evidence explicitly; do not claim implementation or verification.".to_string(),
+                        "This is a tool-free planning synthesis within the configured budget. Return a concise, complete plan now using only evidence already collected. Fit the entire plan within the response token limit; shorten detail rather than repeating a truncated draft. Make no tool calls. State missing evidence explicitly; do not claim implementation or verification.".to_string(),
                     );
                 }
                 let context_budget = crate::compaction::effective_context_budget(
@@ -1221,59 +1221,55 @@ impl AgentRunner {
                     headless_planning::retain_draft(&mut planning_recovery, response.content_text());
                 }
 
-                // A provider may ignore an empty tool catalog or emit textual
-                // tool markup. The reserved synthesis turn cannot dispatch it.
-                if planning_synthesis_turn && effective_tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
-                    planning_failure_detail = Some("The tool-free planning synthesis returned forbidden tool calls.".to_owned());
-                    runtime.state.outcome = TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
-                    break;
-                }
+                // All correctable response shapes share the persisted allowance.
+                // The outer loop still enforces turn, time, token, and cost budgets.
+                let planning_text_only = effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty());
                 if self.tool_registry.is_planning_active()
-                    && matches!(response.finish_reason, crate::llm::provider::FinishReason::Length)
-                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
-                {
-                    if planning_synthesis_turn {
-                        planning_failure_detail = Some("Planning response exceeded the output token limit during final synthesis.".to_owned());
-                        runtime.state.outcome = TaskOutcome::failed(
-                            "Planning response exceeded the output token limit during final synthesis".to_string(),
-                            vec![],
-                            None,
-                            None,
-                        );
-                        break;
-                    }
-                    // Rewrite once within the existing turn/output budgets.
-                    // Never accept completion keywords from a truncated plan.
-                    planning_synthesis_required = true;
-                    headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
-                        &task.description, &provider_name, &turn_model);
-                    planning_recovery.outcome = PlanningOutcome::Synthesizing;
-                    headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
-                        &self.session_id, turn + 1).await?;
-                    continue;
-                }
-
-                if self.tool_registry.is_planning_active()
-                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
-                    && !response.content_text().trim().is_empty()
+                    && (planning_synthesis_turn || planning_text_only)
                 {
                     let report = validate_plan_content(response.content_text());
-                    if !report.is_ready() {
-                        let feedback = report.repair_feedback();
-                        if planning_recovery.best_draft.is_none() {
-                            planning_recovery.validation_report = Some(headless_planning::bounded_public_text(&feedback, 4096));
-                        }
-                        planning_failure_detail = Some("The response did not contain a complete validated plan.".to_owned());
+                    let failure = if !planning_text_only {
+                        Some("The tool-free planning synthesis returned forbidden tool calls.")
+                    } else if response.finish_reason == crate::llm::provider::FinishReason::Length {
+                        Some("Planning response exceeded the output token limit during synthesis.")
+                    } else if !report.is_ready() {
+                        Some("The response did not contain a complete validated plan.")
+                    } else {
+                        None
+                    };
+                    if let Some(detail) = failure {
+                        planning_failure_detail = Some(detail.to_owned());
+                        planning_synthesis_required = true;
                         runtime.state.is_completed = false;
-                        runtime.state.outcome = TaskOutcome::failed("Planning needs your input; the draft did not validate.".to_owned(), vec![], None, None);
+                        headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
+                            &task.description, &provider_name, &turn_model);
+                        if planning_recovery.best_draft.is_none() {
+                            planning_recovery.validation_report = Some(headless_planning::bounded_public_text(
+                                &report.repair_feedback(), 4096));
+                        }
+                        headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
+                            &self.session_id, turn + 1).await?;
+                        if planning_recovery.requests_used < PlanningRecoverySnapshot::MAX_REQUESTS
+                            && turn + 1 < self.max_turns
+                        {
+                            runtime.state.add_synthetic_user_message(format!(
+                                "Correct the planning response using retained evidence only. {detail} Validator feedback: {}. Make no tool calls.",
+                                planning_recovery.validation_report.as_deref().unwrap_or("Return a complete validated plan")
+                            ));
+                            continue;
+                        }
+                        runtime.state.outcome = if turn + 1 >= self.max_turns {
+                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1)
+                        } else {
+                            TaskOutcome::failed(detail.to_owned(), vec![], None, None)
+                        };
                         break;
                     }
                     match persist_plan_draft(&self.tool_registry.planning_workflow_state(), response.content_text()).await {
-                        Ok(persisted) => {
+                        Ok(_) => {
                             headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
                                 &task.description, &provider_name, &turn_model);
                             planning_recovery.outcome = PlanningOutcome::AwaitingApproval;
-                            planning_recovery.evidence.push(format!("Saved plan: {}", persisted.plan_file.display()));
                             headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
                                 &self.session_id, turn + 1).await?;
                         }
@@ -1475,7 +1471,10 @@ impl AgentRunner {
                     && effective_tool_calls.as_ref().is_none_or(|tool_calls| tool_calls.is_empty())
                     && !response.content_text().trim().is_empty()
                 {
-                    if check_for_response_loop(response.content_text(), &mut runtime.state) {
+                    // A validated persisted plan may repeat a previously truncated draft.
+                    // Its successful repair is progress, even when the public text matches.
+                    if planning_recovery.outcome != PlanningOutcome::AwaitingApproval
+                        && check_for_response_loop(response.content_text(), &mut runtime.state) {
                         self.record_diagnostic(&mut event_recorder, &Diagnostic {
                             severity: DiagnosticSeverity::Warning, code: "agent.response_loop".into(),
                             summary: "Repeated assistant responses stopped this task.".into(),

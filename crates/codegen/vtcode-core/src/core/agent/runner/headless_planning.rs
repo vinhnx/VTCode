@@ -15,7 +15,13 @@ pub(super) fn request_fingerprint(task: &crate::core::agent::task::Task) -> u64 
 }
 
 pub(super) fn bounded_public_text(text: &str, bytes: usize) -> String {
-    truncate_byte_budget(&redact_secrets(text.to_owned()), bytes, "\n[truncated]")
+    let text = redact_secrets(text.to_owned());
+    if text.len() <= bytes {
+        return text;
+    }
+    let marker = "\n[truncated]";
+    let marker = marker.get(..bytes.min(marker.len())).unwrap_or("");
+    truncate_byte_budget(&text, bytes.saturating_sub(marker.len()), marker)
 }
 
 /// Close research once, retaining public tool evidence and useful draft content.
@@ -104,7 +110,7 @@ pub(super) fn awaiting_input_diagnostic(
         agent_details: serde_json::json!({
             "outcome": "awaiting_input", "category": snapshot.response_class,
             "provider": snapshot.provider, "model": snapshot.model,
-            "requests_used": snapshot.requests_used, "remaining_allowance": 0,
+            "requests_used": snapshot.requests_used, "remaining_allowance": PlanningRecoverySnapshot::MAX_REQUESTS.saturating_sub(snapshot.requests_used),
             "cycle": snapshot.cycle, "failure": bounded_public_text(failure, 2048),
             "validator_defects": snapshot.validation_report, "evidence_items": snapshot.evidence.len(),
             "retained_draft": snapshot.best_draft.is_some(),
@@ -122,6 +128,52 @@ pub(super) fn awaiting_input_diagnostic(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn public_text_respects_exact_byte_budgets_after_redaction() {
+        for budget in [0, 1, 5, 11, 12, 13, 2047, 2048, 2049] {
+            for text in ["a".repeat(2050), "界".repeat(800)] {
+                let retained = bounded_public_text(&text, budget);
+                assert!(retained.len() <= budget, "budget {budget}: {}", retained.len());
+            }
+        }
+        for size in [2047, 2048, 2049] {
+            let text = "x".repeat(size);
+            let retained = bounded_public_text(&text, 2048);
+            assert_eq!(retained.len(), size.min(2048));
+            if size <= 2048 {
+                assert_eq!(retained, text);
+            }
+        }
+        let secret = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz";
+        let redacted = redact_secrets(secret.to_owned());
+        assert_ne!(redacted, secret);
+        assert_eq!(bounded_public_text(secret, redacted.len()), redacted);
+    }
+
+    #[test]
+    fn evidence_evicts_oldest_with_item_and_aggregate_bounds_and_survives_empty_history() {
+        let history: Vec<_> = (0..10)
+            .map(|index| Message::tool_response(format!("call-{index}"), format!("item-{index}:{}", "x".repeat(2700))))
+            .collect();
+        let mut snapshot = PlanningRecoverySnapshot::default();
+        retain_progress(&mut snapshot, &history, "request", "provider", "model");
+        assert_eq!(snapshot.evidence.len(), 6);
+        assert!(snapshot.evidence.first().unwrap().starts_with("item-4:"));
+        assert!(snapshot.evidence.last().unwrap().starts_with("item-9:"));
+        assert!(snapshot.evidence.iter().all(|item| item.len() <= 2048));
+        assert!(snapshot.evidence.iter().map(String::len).sum::<usize>() <= 12 * 1024);
+        let saved = snapshot.evidence.clone();
+        retain_progress(&mut snapshot, &[], "request", "provider", "model");
+        assert_eq!(snapshot.evidence, saved);
+        let short: Vec<_> = (0..10)
+            .map(|index| Message::tool_response(format!("call-{index}"), format!("item-{index}")))
+            .collect();
+        retain_progress(&mut snapshot, &short, "request", "provider", "model");
+        assert_eq!(snapshot.evidence.len(), 8);
+        assert_eq!(snapshot.evidence[0], "item-2");
+        assert_eq!(snapshot.evidence[7], "item-9");
+    }
 
     #[test]
     fn request_identity_includes_input_beyond_the_display_budget_and_instructions() {
