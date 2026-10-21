@@ -2064,3 +2064,21 @@ fn fast_service_tier_rebuilt_client_payloads_follow_configuration() {
         }
     }
 }
+
+#[test]
+fn websocket_prompt_cache_ttl_matches_http_streaming_and_non_streaming() {
+    let mut provider = OpenAIProvider::new("fixture-key".into());
+    provider.prompt_cache_settings.prompt_cache_ttl = Some(vtcode_config::core::prompt_cache::PromptCacheTtl::H12);
+    for stream in [false, true] {
+        let request = LLMRequest {
+            model: vtcode_config::constants::models::openai::GPT_6_LUNA.into(),
+            messages: vec![ProviderMessage::user("hello".into())].into(),
+            stream,
+            ..Default::default()
+        };
+        let payload = provider.convert_to_openai_responses_format(&request).unwrap();
+        let prepared = prepare_websocket_event(&payload, None, false).unwrap();
+        assert_eq!(prepared.event.get("prompt_cache_options"), Some(&json!({"ttl": "12h"})));
+        assert_eq!(prepared.event.get("prompt_cache_options"), payload.get("prompt_cache_options"));
+    }
+}

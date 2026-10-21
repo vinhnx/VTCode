@@ -63,6 +63,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cache_gap_advisories_follow_both_requested_lifetime_boundaries() {
+        use vtcode_config::core::{PromptCacheTtl, PromptCachingConfig};
+        let config = PromptCachingConfig::default();
+        for (ttl, expected_seconds) in [(PromptCacheTtl::M30, 1_800), (PromptCacheTtl::H12, 43_200)] {
+            let threshold =
+                Duration::from_secs(config.gap_threshold_secs_for_route("openai", "gpt-6-luna", Some(ttl)).unwrap());
+            assert_eq!(threshold.as_secs(), expected_seconds);
+            let before = RequestGapTracker {
+                last_request_at: Some(Instant::now().checked_sub(Duration::from_secs(expected_seconds - 1)).unwrap()),
+            };
+            assert_eq!(before.cache_gap_exceeds(threshold), None);
+            let after = RequestGapTracker {
+                last_request_at: Some(Instant::now().checked_sub(Duration::from_secs(expected_seconds + 1)).unwrap()),
+            };
+            assert!(after.cache_gap_exceeds(threshold).is_some());
+        }
+    }
+
+    #[test]
     fn cache_gap_exceeds_is_none_without_a_prior_request() {
         let tracker = RequestGapTracker::default();
         assert_eq!(tracker.cache_gap_exceeds(Duration::from_millis(1)), None);

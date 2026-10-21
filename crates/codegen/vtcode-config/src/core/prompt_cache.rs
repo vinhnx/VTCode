@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use vtcode_commons::VtCodePaths;
 
-/// Known native models supporting explicit breakpoints and the 30-minute TTL.
+/// Known native models supporting explicit breakpoints and configurable cache lifetimes.
 /// Reject migration-only aliases: parsing an older model as a newer replacement
 /// does not establish support for the older model's wire request.
 #[must_use]
@@ -24,6 +24,48 @@ pub fn supports_openai_explicit_prompt_cache(model: &str) -> bool {
                 | ModelId::GPT61Sol
                 | ModelId::GPT6Luna
         )
+}
+
+/// Requested minimum lifetime for Responses prompt-cache writes.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub enum PromptCacheTtl {
+    #[default]
+    #[serde(rename = "30m")]
+    M30,
+    #[serde(rename = "12h")]
+    H12,
+}
+
+impl PromptCacheTtl {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::M30 => "30m",
+            Self::H12 => "12h",
+        }
+    }
+
+    pub const fn seconds(self) -> u64 {
+        match self {
+            Self::M30 => 1_800,
+            Self::H12 => 43_200,
+        }
+    }
+}
+
+/// Resolve explicit configuration, then catalog policy, then the default lifetime.
+pub fn resolved_openai_prompt_cache_ttl(configured: Option<PromptCacheTtl>, model: &str) -> PromptCacheTtl {
+    configured
+        .or_else(|| {
+            crate::models::model_catalog_entry("openai", model)
+                .and_then(|entry| entry.prompt_cache_ttl)
+                .and_then(|ttl| match ttl {
+                    "30m" => Some(PromptCacheTtl::M30),
+                    "12h" => Some(PromptCacheTtl::H12),
+                    _ => None,
+                })
+        })
+        .unwrap_or_default()
 }
 
 /// Global prompt caching configuration loaded from vtcode.toml
@@ -138,29 +180,45 @@ impl PromptCachingConfig {
         self.gap_threshold_secs_for_model(provider_name, "")
     }
 
-    /// Model-aware advisory threshold, not a guarantee of server-side expiry.
-    /// GPT-5.6+ uses a minimum 30-minute TTL even when legacy 24h retention is configured.
-    pub fn gap_threshold_secs_for_model(&self, provider_name: &str, model: &str) -> Option<u64> {
-        if !self.gap_warning_enabled || !self.is_provider_enabled(provider_name) {
+    /// Prefer the lifetime emitted by the route; otherwise preserve model-aware baseline advisories.
+    pub fn gap_threshold_secs_for_route(
+        &self,
+        provider: &str,
+        model: &str,
+        ttl: Option<PromptCacheTtl>,
+    ) -> Option<u64> {
+        if !self.gap_warning_enabled
+            || !self.enabled
+            || !(self.is_provider_enabled(provider) || (ttl.is_some() && self.providers.openai.enabled))
+        {
             return None;
         }
-
-        let provider = provider_name.to_ascii_lowercase();
-        let modern_openai = provider == "openai" && supports_openai_explicit_prompt_cache(model);
         if let Some(threshold) = self.gap_warning_threshold_secs {
             return Some(threshold);
         }
+        if let Some(ttl) = ttl {
+            return Some(ttl.seconds());
+        }
 
-        Some(match provider.as_str() {
+        Some(match provider.to_ascii_lowercase().as_str() {
             "anthropic" | "minimax" => prompt_cache::ANTHROPIC_CACHE_GAP_WARNING_SECONDS,
             "openai"
-                if modern_openai || self.providers.openai.prompt_cache_retention == Some(PromptCacheRetention::H24) =>
+                if supports_openai_explicit_prompt_cache(model)
+                    || self.providers.openai.prompt_cache_retention == Some(PromptCacheRetention::H24) =>
             {
                 30 * 60
             }
             "openai" => prompt_cache::OPENAI_CACHE_GAP_WARNING_SECONDS,
             _ => prompt_cache::DEFAULT_CACHE_GAP_WARNING_SECONDS,
         })
+    }
+
+    /// Model-aware advisory threshold for callers without resolved route capabilities.
+    /// Runtime callers should pass the effective lifetime to the route-aware resolver.
+    pub fn gap_threshold_secs_for_model(&self, provider_name: &str, model: &str) -> Option<u64> {
+        let ttl = (provider_name.eq_ignore_ascii_case("openai") && supports_openai_explicit_prompt_cache(model))
+            .then(|| resolved_openai_prompt_cache_ttl(self.providers.openai.prompt_cache_ttl, model));
+        self.gap_threshold_secs_for_route(provider_name, model, ttl)
     }
 }
 
@@ -260,6 +318,10 @@ pub struct OpenAIPromptCacheSettings {
     /// caching window or request the explicit in-memory policy.
     #[serde(default)]
     pub prompt_cache_retention: Option<PromptCacheRetention>,
+
+    /// Optional Responses minimum write lifetime; defaults to catalog policy or 30m.
+    #[serde(default)]
+    pub prompt_cache_ttl: Option<PromptCacheTtl>,
 }
 
 impl Default for OpenAIPromptCacheSettings {
@@ -272,6 +334,7 @@ impl Default for OpenAIPromptCacheSettings {
             auxiliary_explicit_cache: false,
             prompt_cache_key_mode: default_openai_prompt_cache_key_mode(),
             prompt_cache_retention: None,
+            prompt_cache_ttl: None,
         }
     }
 }
@@ -1094,5 +1157,58 @@ gap_warning_threshold_secs = 120
         let example = fs::read_to_string(workspace_root.join("vtcode.toml.example")).expect("vtcode.toml.example");
         let config: crate::VTCodeConfig = toml::from_str(&example).expect("example config should parse");
         config.validate().expect("example config should validate");
+    }
+}
+
+#[cfg(test)]
+mod ttl_tests {
+    use super::*;
+
+    #[test]
+    fn prompt_cache_ttl_parsing_and_default() {
+        assert_eq!(OpenAIPromptCacheSettings::default().prompt_cache_ttl, None);
+        for (wire, expected) in [("30m", PromptCacheTtl::M30), ("12h", PromptCacheTtl::H12)] {
+            let parsed: OpenAIPromptCacheSettings = toml::from_str(&format!("prompt_cache_ttl = \"{wire}\"")).unwrap();
+            assert_eq!(parsed.prompt_cache_ttl, Some(expected));
+            assert_eq!(expected.as_str(), wire);
+        }
+        assert!(toml::from_str::<OpenAIPromptCacheSettings>("prompt_cache_ttl = \"24h\"").is_err());
+    }
+
+    #[test]
+    fn prompt_cache_gap_route_fallback_preserves_model_baselines() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.providers.openai.prompt_cache_ttl = Some(PromptCacheTtl::H12);
+        for (provider, model, expected) in [
+            ("openai", "gpt-6-luna", Some(1_800)),
+            ("OPENAI", "gpt-6-luna", Some(1_800)),
+            ("openai", "gpt-5.1-mini", Some(600)),
+            ("merge-gateway", "gpt-6-luna", Some(300)),
+            ("custom", "gpt-6-luna", None),
+        ] {
+            assert_eq!(cfg.gap_threshold_secs_for_route(provider, model, None), expected, "{provider}/{model}");
+        }
+        assert_eq!(cfg.gap_threshold_secs_for_route("openai", "gpt-6-luna", Some(PromptCacheTtl::H12)), Some(43_200));
+        cfg.providers.openai.prompt_cache_retention = Some(PromptCacheRetention::H24);
+        assert_eq!(cfg.gap_threshold_secs_for_route("openai", "gpt-5.1-mini", None), Some(1_800));
+        cfg.gap_warning_threshold_secs = Some(77);
+        assert_eq!(cfg.gap_threshold_secs_for_route("openai", "gpt-6-luna", None), Some(77));
+        cfg.providers.openai.enabled = false;
+        assert_eq!(cfg.gap_threshold_secs_for_route("openai", "gpt-6-luna", None), None);
+    }
+
+    #[test]
+    fn prompt_cache_ttl_gap_thresholds_follow_effective_route() {
+        let mut cfg = PromptCachingConfig::default();
+        for (ttl, seconds) in [(PromptCacheTtl::M30, 1_800), (PromptCacheTtl::H12, 43_200)] {
+            cfg.providers.openai.prompt_cache_ttl = Some(ttl);
+            assert_eq!(cfg.gap_threshold_secs_for_model("openai", "gpt-6-luna"), Some(seconds));
+            assert_eq!(cfg.gap_threshold_secs_for_route("custom", "opaque-model", Some(ttl)), Some(seconds));
+        }
+        assert_eq!(cfg.gap_threshold_secs_for_route("custom", "opaque-model", None), None);
+        cfg.gap_warning_threshold_secs = Some(77);
+        assert_eq!(cfg.gap_threshold_secs_for_route("custom", "opaque-model", Some(PromptCacheTtl::H12)), Some(77));
+        cfg.providers.openai.enabled = false;
+        assert_eq!(cfg.gap_threshold_secs_for_route("custom", "opaque-model", Some(PromptCacheTtl::H12)), None);
     }
 }

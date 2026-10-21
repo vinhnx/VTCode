@@ -765,6 +765,7 @@ fn custom_providers_fields_round_trip_through_toml() {
         supports_parallel_tool_calls: Some(false),
         supports_context_caching: Some(true),
         supports_responses_compaction: Some(false),
+        supports_prompt_cache_options: None,
         supports_context_edits: Some(true),
         api_key_env: "MYCORP_API_KEY".to_string(),
         auth: None,
@@ -790,6 +791,7 @@ fn custom_providers_fields_round_trip_through_toml() {
                 supports_parallel_tool_calls: None,
                 supports_context_caching: None,
                 supports_responses_compaction: None,
+                supports_prompt_cache_options: None,
                 supports_context_edits: None,
             },
         )]),
@@ -839,6 +841,7 @@ fn custom_providers_fields_round_trip_through_toml() {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
         }
     );
@@ -895,6 +898,7 @@ supports_parallel_tool_calls = true
             supports_parallel_tool_calls: Some(true),
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
         }
     );
@@ -1678,4 +1682,18 @@ fn explicit_agent_table_wins_over_legacy_top_level_alias_in_same_file() {
         let manager = ConfigManager::load_from_workspace(workspace.path()).expect("load mixed config");
         assert_eq!(manager.config().agent.provider, "openai");
     });
+}
+
+#[test]
+fn loader_loads_prompt_cache_ttl_and_rejects_invalid_values() {
+    use crate::core::PromptCacheTtl;
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("vtcode.toml");
+    for (wire, expected) in [("30m", PromptCacheTtl::M30), ("12h", PromptCacheTtl::H12)] {
+        fs::write(&path, format!("[prompt_cache.providers.openai]\nprompt_cache_ttl = \"{wire}\"\n")).unwrap();
+        let manager = ConfigManager::load_from_file(&path).unwrap();
+        assert_eq!(manager.config().prompt_cache.providers.openai.prompt_cache_ttl, Some(expected));
+    }
+    fs::write(&path, "[prompt_cache.providers.openai]\nprompt_cache_ttl = \"24h\"\n").unwrap();
+    assert!(ConfigManager::load_from_file(&path).is_err());
 }

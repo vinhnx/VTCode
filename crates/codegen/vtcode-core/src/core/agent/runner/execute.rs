@@ -1041,7 +1041,7 @@ impl AgentRunner {
                 if let Some(threshold) = self
                     .config()
                     .prompt_cache
-                    .gap_threshold_secs_for_model(&provider_name, &turn_model)
+                    .gap_threshold_secs_for_route(&provider_name, &turn_model, self.provider_client.requested_prompt_cache_ttl(&turn_model))
                 {
                     let threshold = std::time::Duration::from_secs(threshold);
                     if runtime.state.stats.total_usage.cached_input_tokens > 0

@@ -96,6 +96,20 @@ impl provider::LLMProvider for OpenAIProvider {
         !models::openai::TOOL_UNAVAILABLE_MODELS.contains(&requested)
     }
 
+    fn requested_prompt_cache_ttl(&self, model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        (self.prompt_cache_hints_enabled
+            && !self.is_chatgpt_backend()
+            && !matches!(self.responses_api_state(model), super::super::types::ResponsesApiState::Disabled)
+            && ((self.is_native_openai_api() && super::super::request_builder::supports_prompt_cache_options(model))
+                || self.prompt_cache_options_models.iter().any(|configured| configured == model)))
+        .then(|| {
+            vtcode_config::core::prompt_cache::resolved_openai_prompt_cache_ttl(
+                self.prompt_cache_settings.prompt_cache_ttl,
+                model,
+            )
+        })
+    }
+
     fn supports_responses_compaction(&self, model: &str) -> bool {
         if self.is_chatgpt_backend() {
             return false;

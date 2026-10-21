@@ -117,6 +117,9 @@ pub struct CustomProviderProfileConfig {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supports_responses_compaction: Option<bool>,
+    /// Explicit compatibility opt-in for Responses prompt_cache_options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_prompt_cache_options: Option<bool>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supports_context_edits: Option<bool>,
@@ -203,6 +206,8 @@ pub struct ResolvedCustomProviderProfile {
     pub supports_parallel_tool_calls: Option<bool>,
     pub supports_context_caching: Option<bool>,
     pub supports_responses_compaction: Option<bool>,
+    /// Explicit compatibility opt-in for Responses prompt_cache_options.
+    pub supports_prompt_cache_options: Option<bool>,
     pub supports_context_edits: Option<bool>,
 }
 
@@ -236,6 +241,9 @@ impl ResolvedCustomProviderProfile {
                 .supports_parallel_tool_calls
                 .or(defaults.supports_parallel_tool_calls),
             supports_context_caching: profile.supports_context_caching.or(defaults.supports_context_caching),
+            supports_prompt_cache_options: profile
+                .supports_prompt_cache_options
+                .or(defaults.supports_prompt_cache_options),
             supports_responses_compaction: profile
                 .supports_responses_compaction
                 .or(defaults.supports_responses_compaction),
@@ -366,6 +374,9 @@ pub struct CustomProviderConfig {
     /// Optional support for responses compaction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supports_responses_compaction: Option<bool>,
+    /// Explicit compatibility opt-in for Responses prompt_cache_options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_prompt_cache_options: Option<bool>,
 
     /// Optional support for context edits.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -501,6 +512,7 @@ impl CustomProviderConfig {
             supports_parallel_tool_calls: self.supports_parallel_tool_calls,
             supports_context_caching: self.supports_context_caching,
             supports_responses_compaction: self.supports_responses_compaction,
+            supports_prompt_cache_options: self.supports_prompt_cache_options,
             supports_context_edits: self.supports_context_edits,
         }
     }
@@ -674,6 +686,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -709,6 +722,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -744,6 +758,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: Some(CustomProviderCommandAuthConfig {
@@ -785,6 +800,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: Some(CustomProviderCommandAuthConfig {
@@ -826,6 +842,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: "MYCORP_API_KEY".to_string(),
             auth: None,
@@ -861,6 +878,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -896,6 +914,7 @@ mod tests {
                 supports_parallel_tool_calls: None,
                 supports_context_caching: None,
                 supports_responses_compaction: None,
+                supports_prompt_cache_options: None,
                 supports_context_edits: None,
             },
         );
@@ -921,6 +940,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -956,6 +976,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: "ATLASCLOUD_API_KEY".to_string(),
             auth: None,
@@ -1028,6 +1049,7 @@ mod tests {
                 supports_parallel_tool_calls: None,
                 supports_context_caching: None,
                 supports_responses_compaction: None,
+                supports_prompt_cache_options: None,
                 supports_context_edits: None,
             },
         );
@@ -1053,6 +1075,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -1082,6 +1105,7 @@ mod tests {
                 supports_parallel_tool_calls: None,
                 supports_context_caching: None,
                 supports_responses_compaction: None,
+                supports_prompt_cache_options: None,
                 supports_context_edits: None,
             }
         );
@@ -1111,6 +1135,7 @@ mod tests {
                 supports_parallel_tool_calls: None,
                 supports_context_caching: None,
                 supports_responses_compaction: None,
+                supports_prompt_cache_options: None,
                 supports_context_edits: None,
             },
         );
@@ -1136,6 +1161,7 @@ mod tests {
             supports_parallel_tool_calls: Some(true),
             supports_context_caching: Some(false),
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: None,
             api_key_env: String::new(),
             auth: None,
@@ -1187,5 +1213,34 @@ api_format = "openai-chatty"
         .expect_err("invalid api_format should fail");
 
         assert!(err.to_string().contains("openai-chatty"));
+    }
+}
+
+#[cfg(test)]
+mod prompt_cache_options_tests {
+    use super::*;
+
+    #[test]
+    fn prompt_cache_options_capability_inherits_and_preserves_false() {
+        let defaults = CustomProviderProfileConfig {
+            supports_prompt_cache_options: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(
+            ResolvedCustomProviderProfile::from_layers(&defaults, None).supports_prompt_cache_options,
+            Some(true)
+        );
+        let profile = CustomProviderProfileConfig {
+            supports_prompt_cache_options: Some(false),
+            ..Default::default()
+        };
+        assert_eq!(
+            ResolvedCustomProviderProfile::from_layers(&defaults, Some(&profile)).supports_prompt_cache_options,
+            Some(false)
+        );
+        assert_eq!(
+            ResolvedCustomProviderProfile::from_layers(&Default::default(), None).supports_prompt_cache_options,
+            None
+        );
     }
 }

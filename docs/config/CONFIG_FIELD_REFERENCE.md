@@ -289,6 +289,8 @@ python3 scripts/generate_config_field_reference.py
 | `custom_providers[].profiles.*.top_k` | `integer \| null` | no | `-` | Optional top-k override (>= 0). |
 | `custom_providers[].profiles.*.top_p` | `null \| number` | no | `-` | Optional nucleus-sampling override (0.0-1.0). |
 | `custom_providers[].reasoning_effort` | `ReasoningEffortLevel \| null` | no | `-` | Optional reasoning effort default for models without a profile override. |
+| `custom_providers[].supports_prompt_cache_options` | `boolean \| null` | no | `null` | Explicit opt-in for Responses cache TTL options; absent disables support. |
+| `custom_providers[].profiles.*.supports_prompt_cache_options` | `boolean \| null` | no | `null` | Overrides provider capability, preserving explicit `false`. |
 | `custom_providers[].supports_context_caching` | `boolean \| null` | no | `-` | Optional support for context caching. |
 | `custom_providers[].supports_context_edits` | `boolean \| null` | no | `-` | Optional support for context edits. |
 | `custom_providers[].supports_parallel_tool_calls` | `boolean \| null` | no | `-` | Optional support for parallel tool calls. |
@@ -622,6 +624,7 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.providers.openai.idle_expiration_seconds` | `integer` | no | `3600` | - |
 | `prompt_cache.providers.openai.min_prefix_tokens` | `integer` | no | `1024` | - |
 | `prompt_cache.providers.openai.prompt_cache_key_mode` | `string` | no | `"session"` | Strategy for generating OpenAI `prompt_cache_key`. Session-scoped keys derive one stable key per VT Code conversation. |
+| `prompt_cache.providers.openai.prompt_cache_ttl` | `string \| null` | no | `null` | Eligible Responses minimum lifetime: `30m` or `12h`; explicit value > catalog > `30m`. |
 | `prompt_cache.providers.openai.prompt_cache_retention` | `PromptCacheRetention \| null` | no | `null` | Optional prompt cache retention policy to pass directly into OpenAI Responses API. Supported values are "in_memory" and "24h". If set, VT Code will include `prompt_cache_retention` in the request body to extend the model-side prompt caching window or request the explicit in-memory policy. |
 | `prompt_cache.providers.openai.surface_metrics` | `boolean` | no | `true` | - |
 | `prompt_cache.providers.openrouter.enabled` | `boolean` | no | `true` | - |

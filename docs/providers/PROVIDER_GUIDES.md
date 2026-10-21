@@ -76,6 +76,7 @@ include:
 - `supports_vision`
 - `supports_structured_output`
 - `supports_parallel_tool_calls`
+- `supports_prompt_cache_options` — opt-in support for `prompt_cache_options.ttl` on `openai-responses` routes
 - `supports_context_caching`
 - `supports_responses_compaction`
 - `supports_context_edits`
@@ -124,6 +125,17 @@ accept sampling only while reasoning effort resolves to `none` (pinned values ar
 `gpt-5`/`gpt-5-mini`/`gpt-5-nano` never receive sampling parameters, and `gpt-6-astra`, `gpt-6-sol`, and `gpt-6-luna`
 never receive sampling parameters (`temperature`/`top_p` are unsupported by the GPT-6 family). Prefer neutral model IDs
 on gateways if you need pinned values on such names.
+
+### Custom Responses cache lifetime
+
+Set `supports_prompt_cache_options = true` in the custom provider defaults or an exact model profile only when the
+endpoint accepts OpenAI Responses cache options. Profiles override provider defaults, including explicit `false`;
+absence disables this capability. The flag does not enable it on `openai-chat`, `auto`, or Anthropic routes.
+Select the lifetime globally with `prompt_cache.providers.openai.prompt_cache_ttl = "12h"` (default: `"30m"`).
+Both the global prompt-cache switch and the OpenAI provider cache switch must remain enabled. This opt-in does
+not enable native-only comparison diagnostics or explicit breakpoints. Endpoint errors are surfaced without a
+silent TTL downgrade. Check the endpoint's pricing before enabling longer writes; see the
+[prompt-caching guide](../tools/PROMPT_CACHING_GUIDE.md#openai).
 
 ### Validate the configuration
 

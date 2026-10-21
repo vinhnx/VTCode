@@ -35,6 +35,7 @@ enabled = true
 surface_metrics = true
 auxiliary_explicit_cache = false # opt-in experiment on supported native models
 prompt_cache_key_mode = "session" # session | off
+# prompt_cache_ttl = "12h" # opt-in; 30m is the default
 ```
 
 - `enabled` — controls VT Code's explicit cache hints and comparison diagnostics together with the global flag.
@@ -52,7 +53,17 @@ prompt_cache_key_mode = "session" # session | off
   them to request caching or set server expiry. GPT-5.6 and later require at least 1,024 visible input tokens in a
   reusable prefix. Short prompts need no padding; measure total cost before adding context.
 - `prompt_cache_retention` is opt-in for older supported Responses models (`"in_memory"` or `"24h"`). GPT-5.6/GPT-6
-  use `prompt_cache_options.ttl: "30m"` instead; their TTL is not extended by configuring legacy 24h retention.
+  use `prompt_cache_options.ttl` instead; their TTL is not extended by configuring legacy 24h retention.
+- `prompt_cache_ttl` accepts `"30m"` and `"12h"`. Explicit configuration takes precedence over the model catalog,
+  then defaults to `"30m"`. It applies to eligible native GPT-5.6+ Responses requests and explicitly opted-in custom
+  `openai-responses` routes. Chat Completions, ChatGPT subscriptions, and other endpoints omit the new options.
+  Existing explicit breakpoints inherit the request lifetime; VT Code does not expose per-breakpoint TTL overrides.
+  Cache-gap advisories follow the effective lifetime (1,800 or 43,200 seconds), unless an explicit warning threshold
+  is configured. The lifetime is a minimum for cache-read eligibility, not a deletion deadline or a latency guarantee.
+  According to the [official OpenAI guide](https://developers.openai.com/api/docs/guides/prompt-caching),
+  30-minute writes cost 1.25× ordinary input and 12-hour writes cost 2.5×; these are total write rates.
+  Read pricing is independent of the lifetime. Third-party pricing and compatibility depend on the endpoint.
+  Provider rejection remains visible; VT Code does not silently downgrade the requested lifetime.
 - Native GPT-5.6/GPT-6 requests keep implicit caching and use at most **three** explicit write slots. A supplied
   stable system prompt moves into the first developer `input_text` block with a breakpoint, without duplication.
   The remaining slots mark recent stable history boundaries. This preserves an instruction anchor when history

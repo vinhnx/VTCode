@@ -24,6 +24,7 @@ use vtcode_config::core::{
 };
 use vtcode_config::{OpenAIAuthConfig, auth::OpenAIChatGptSessionRefresher};
 
+mod cache_ttl;
 mod cache_usage;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -3076,8 +3077,8 @@ fn responses_payload_includes_prompt_cache_retention_for_native_openai() {
 #[test]
 fn responses_payload_defaults_gpt56_cache_ttl_to_30m() {
     // No retention configured: GPT-5.6-family Responses requests must still
-    // declare `prompt_cache_options.ttl` explicitly ("30m" is currently the
-    // only accepted value) instead of relying on the implicit default alone.
+    // declare `prompt_cache_options.ttl` explicitly with the default "30m"
+    // instead of relying on the implicit default alone.
     // Asymmetric pair: LUNA (gpt56) gets the default, CODEX (non-gpt56) does not.
     let provider = native_openai_provider(models::openai::GPT_5_6_LUNA);
     let payload = responses_payload_for(models::openai::GPT_5_6_LUNA, &provider);

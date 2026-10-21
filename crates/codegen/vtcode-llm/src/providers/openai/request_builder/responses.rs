@@ -25,11 +25,6 @@ use rig::providers::openai::responses_api::{
 use serde_json::{Value, json};
 use vtcode_config::models::Provider as ModelProvider;
 
-/// Default `prompt_cache_options.ttl` for GPT-5.6-family Responses requests.
-/// Currently the only value OpenAI accepts; sent explicitly so cache intent
-/// does not rely on the implicit default alone.
-const DEFAULT_GPT56_PROMPT_CACHE_TTL: &str = "30m";
-
 fn push_unique_include(include_values: &mut Vec<String>, field: &str) {
     let field = field.trim();
     if field.is_empty() || include_values.iter().any(|value| value == field) {
@@ -187,25 +182,10 @@ fn build_responses_request_from_history(
         typed_parameters.prompt_cache_key = Some(prompt_cache_key.to_string());
     }
 
-    let cache_ttl = vtcode_config::models::model_catalog_entry("openai", &request.model)
-        .and_then(|entry| entry.prompt_cache_ttl)
-        .and_then(|ttl| trimmed_non_empty(Some(ttl)));
-    // GPT-5.6+ uses `prompt_cache_options.ttl` ("30m" is currently the only
-    // supported value); the legacy `prompt_cache_retention` field is
-    // deprecated for these models. No catalog entry sets a TTL today, so
-    // default GPT-5.6-family Responses requests to "30m" to document caching
-    // intent explicitly instead of relying on the implicit default alone.
-    let cache_ttl = cache_ttl.or_else(|| {
-        (super::supports_prompt_cache_options(&request.model)
-            && ctx.include_prompt_cache_retention
-            && ctx.is_responses_api_model)
-            .then_some(DEFAULT_GPT56_PROMPT_CACHE_TTL)
-    });
-    if let Some(ttl) = cache_ttl
-        && ctx.include_prompt_cache_retention
-        && ctx.is_responses_api_model
-    {
-        openai_request["prompt_cache_options"] = json!({ "ttl": ttl });
+    if ctx.supports_prompt_cache_options {
+        let ttl =
+            vtcode_config::core::prompt_cache::resolved_openai_prompt_cache_ttl(ctx.prompt_cache_ttl, &request.model);
+        openai_request["prompt_cache_options"] = json!({ "ttl": ttl.as_str() });
     } else if ctx.include_prompt_cache_retention
         && ctx.is_responses_api_model
         && let Some(retention) = trimmed_non_empty(ctx.prompt_cache_retention)

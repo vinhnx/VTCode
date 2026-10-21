@@ -93,7 +93,14 @@ impl CustomProviderBackendRouter {
             custom_provider_auth.clone(),
             Some(supported_models.clone()),
         )
-        .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses));
+        .with_api_format_override(Some(CustomProviderApiFormat::OpenAIResponses))
+        .with_prompt_cache_options_models(
+            supported_models
+                .iter()
+                .filter(|model| custom_config.resolved_profile(model).supports_prompt_cache_options == Some(true))
+                .cloned()
+                .collect(),
+        );
         let anthropic = AnthropicProvider::from_config(
             api_key,
             Some(default_model.clone()),
@@ -225,6 +232,11 @@ impl LLMProvider for CustomProviderBackendRouter {
             profile.supports_structured_output,
             self.backend_for_model(model).supports_structured_output(resolved),
         )
+    }
+
+    fn requested_prompt_cache_ttl(&self, model: &str) -> Option<vtcode_config::core::prompt_cache::PromptCacheTtl> {
+        self.backend_for_model(model)
+            .requested_prompt_cache_ttl(self.resolved_model(model))
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {
@@ -724,6 +736,7 @@ mod tests {
             supports_parallel_tool_calls: None,
             supports_context_caching: None,
             supports_responses_compaction: None,
+            supports_prompt_cache_options: None,
             supports_context_edits: Some(true),
             api_key_env: "ANTHROPIC_CUSTOM_API_KEY".to_string(),
             auth: None,

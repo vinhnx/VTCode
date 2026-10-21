@@ -314,6 +314,7 @@ supports_vision = false
 supports_structured_output = true
 supports_parallel_tool_calls = true
 supports_context_caching = false
+supports_prompt_cache_options = false # explicit opt-in for openai-responses cache TTL
 supports_responses_compaction = true
 supports_context_edits = false
 ```

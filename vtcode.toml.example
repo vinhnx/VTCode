@@ -80,3 +80,8 @@ exec_command = "prompt"
 write_stdin = "prompt"
 apply_patch = "prompt"
 code_search = "allow"
+
+# Optional OpenAI Responses minimum cache lifetime (30m by default).
+# 12h writes cost 2.5x ordinary input; 30m writes cost 1.25x.
+[prompt_cache.providers.openai]
+# prompt_cache_ttl = "12h"

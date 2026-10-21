@@ -19,3 +19,26 @@ pub fn vtcode_config_schema_pretty() -> Result<String> {
     let value = vtcode_config_schema_json()?;
     serde_json::to_string_pretty(&value).context("failed to serialize vtcode-config schema to pretty JSON string")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_exposes_prompt_cache_ttl_and_custom_capability() {
+        let schema = vtcode_config_schema_json().unwrap();
+        assert_eq!(schema.pointer("/$defs/PromptCacheTtl/enum"), Some(&serde_json::json!(["30m", "12h"])));
+        for definition in ["CustomProviderConfig", "CustomProviderProfileConfig"] {
+            assert!(
+                schema
+                    .pointer(&format!("/$defs/{definition}/properties/supports_prompt_cache_options"))
+                    .is_some()
+            );
+        }
+        assert!(
+            schema
+                .pointer("/$defs/OpenAIPromptCacheSettings/properties/prompt_cache_ttl")
+                .is_some()
+        );
+    }
+}

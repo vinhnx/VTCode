@@ -1010,10 +1010,13 @@ pub(crate) async fn run_turn_loop(
         // Cache-gap advisory (Phase E1): warn once per gap when the user
         // paused long enough for the provider prompt cache to have expired,
         // so this request may unexpectedly re-pay full input cost.
-        if let Some(threshold) = turn_processing_ctx
-            .vt_cfg
-            .and_then(|cfg| cfg.prompt_cache.gap_threshold_secs_for_model(&provider_name, &active_model))
-        {
+        if let Some(threshold) = turn_processing_ctx.vt_cfg.and_then(|cfg| {
+            cfg.prompt_cache.gap_threshold_secs_for_route(
+                &provider_name,
+                &active_model,
+                turn_processing_ctx.provider_client.requested_prompt_cache_ttl(&active_model),
+            )
+        }) {
             let threshold = Duration::from_secs(threshold);
             if turn_processing_ctx.session_stats.total_usage().cached_input_tokens > 0
                 && let Some(elapsed) = turn_processing_ctx.session_stats.cache_gap_exceeds(threshold)

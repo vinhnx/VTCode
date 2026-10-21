@@ -556,6 +556,9 @@ cache_friendly_prompt_shaping = true
     # Optional: server-side prompt cache retention for OpenAI Responses API
     # Supported values: "in_memory" or "24h" (leave commented out for default behavior)
     # prompt_cache_retention = "24h"
+    # Optional minimum lifetime on eligible Responses routes: "30m" (default) or "12h".
+    # 12h cache writes cost 2.5x ordinary input, versus 1.25x for 30m.
+    # prompt_cache_ttl = "12h"
 
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]

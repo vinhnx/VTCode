@@ -44,6 +44,8 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub prompt_cache_key: Option<&'a str>,
     pub include_prompt_cache_retention: bool,
     pub prompt_cache_retention: Option<&'a str>,
+    pub supports_prompt_cache_options: bool,
+    pub prompt_cache_ttl: Option<vtcode_config::core::prompt_cache::PromptCacheTtl>,
     /// Emit explicit `prompt_cache_breakpoint` markers on the stable prefix.
     /// Only native api.openai.com honors them: third-party
     /// Responses-compatible endpoints (e.g. Merge Gateway via a base-URL
