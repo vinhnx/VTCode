@@ -5,6 +5,33 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.5 - 2026-10-22
+
+### Highlights
+
+#### Bug Fixes
+
+- Derive crates.io publish order from the workspace graph (b0d4fd1a)
+
+#### Documentation
+
+- Merge modes section and tighten structure (2ffc14e5)
+- Reword community section (eebe548d)
+
+#### Features
+
+- Present diagnostic evidence on a muted code surface (3bb998d9)
+- Improve runtime tools, progress, and caching (8070f776)
+- Migrate search to DuckDuckGo (a54d998a)
+
+### Other Changes
+
+#### Refactors
+
+- Adopt flexible borrowing and API style checks (770f6b55)
+- Borrow optional inputs across provider and runloop helpers (6ffeec3a)
+- Unify success response handling (c0be3a48)
+
 ## 0.180.4 - 2026-10-22
 
 ### Highlights
