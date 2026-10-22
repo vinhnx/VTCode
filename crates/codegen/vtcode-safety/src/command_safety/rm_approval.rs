@@ -13,6 +13,17 @@ use std::process::Command;
 
 use super::dangerous_commands::{unwrap_command_prefix, unwrap_command_prefix_with_context};
 
+/// One recursive-`rm` operand and the directory it resolves against.
+///
+/// `base` is `None` when the directory context is unknown. An unknown base
+/// keeps the operand unresolved, so it stays reviewable instead of silently
+/// resolving against the wrong directory.
+#[derive(Debug, PartialEq, Eq)]
+struct RmTarget {
+    operand: String,
+    base: Option<PathBuf>,
+}
+
 /// Returns whether a recursive `rm` command requires approval based on its
 /// target and the command working directory.
 ///
@@ -21,30 +32,148 @@ use super::dangerous_commands::{unwrap_command_prefix, unwrap_command_prefix_wit
 /// mount data or target resolution is unavailable, the function fails closed.
 /// Shell or wrapper directory changes make relative target resolution uncertain and
 /// therefore require approval for recursive deletes.
-pub fn recursive_rm_targets_require_approval_in_directory(command: &[String], working_directory: &Path) -> bool {
-    if !contains_recursive_rm(command) {
-        return false;
-    }
-    let mount_points = mounted_filesystem_mount_points();
-    recursive_rm_targets_require_approval_with_mount_points(command, working_directory, mount_points.as_deref())
-}
-
-fn recursive_rm_targets_require_approval_with_mount_points(
+///
+/// `command` is the requested argv. `script` is the shell script the command
+/// executes: a compound command such as `cd /Volumes/Backup && rm --recursive
+/// Photos` keeps its structure only in the script text, so both views are
+/// analyzed and a non-`rm` first token cannot hide a recursive delete.
+pub fn recursive_rm_targets_require_approval_in_directory(
     command: &[String],
+    script: Option<&str>,
     working_directory: &Path,
-    mount_points: Option<&[PathBuf]>,
 ) -> bool {
-    if !contains_recursive_rm(command) {
+    let targets = recursive_rm_targets(command, script, Some(working_directory));
+    if targets.is_empty() {
         return false;
     }
-
-    let Some(mount_points) = mount_points else {
+    let Some(mount_points) = mounted_filesystem_mount_points() else {
         // Without a mount table, recursive deletes cannot be proven to avoid
         // mounted filesystems. Keep the decision on the approval path.
         return true;
     };
 
-    recursive_rm_targets_are_sensitive(command, working_directory, mount_points)
+    rm_targets_are_sensitive(&targets, &normalized_mount_points(&mount_points))
+}
+
+/// Collect every recursive-`rm` operand in a command and in the shell script
+/// the command executes.
+fn recursive_rm_targets(command: &[String], script: Option<&str>, base: Option<&Path>) -> Vec<RmTarget> {
+    let mut targets = Vec::new();
+    collect_argv_rm_targets(command, base, &mut targets);
+    if let Some(script) = script
+        && script_mentions_rm(script)
+    {
+        collect_script_rm_targets(script, base, &mut targets);
+    }
+    targets
+}
+
+/// Cheap pre-filter: a script without the `rm` token cannot delete through
+/// `rm`, so it never needs the grammar pass.
+fn script_mentions_rm(script: &str) -> bool {
+    script.contains("rm")
+}
+
+/// Collect recursive-`rm` operands from one argv vector.
+fn collect_argv_rm_targets(command: &[String], base: Option<&Path>, targets: &mut Vec<RmTarget>) {
+    let Some(unwrapped) = unwrap_command_prefix_with_context(command) else {
+        return;
+    };
+    // A wrapper that changes the directory invalidates the relative base.
+    let base = base.filter(|_| !unwrapped.changes_directory);
+    let command = unwrapped.command;
+
+    if let Some(script) = shell_script_argument(command) {
+        collect_script_rm_targets(script, base, targets);
+        return;
+    }
+
+    let Some(executable) = command.first() else {
+        return;
+    };
+    let executable = Path::new(executable)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(executable);
+    if executable != "rm" {
+        return;
+    }
+
+    let Some(arguments) = command.get(1..) else {
+        return;
+    };
+    let parsed = parse_rm_arguments(arguments);
+    if !parsed.recursive {
+        return;
+    }
+    for operand in parsed.targets {
+        targets.push(RmTarget {
+            operand: operand.to_owned(),
+            base: base.map(Path::to_path_buf),
+        });
+    }
+}
+
+/// Extract the script argument of an explicit shell invocation.
+fn shell_script_argument(command: &[String]) -> Option<&str> {
+    let executable = command.first()?;
+    let executable = Path::new(executable)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(executable);
+    if !matches!(executable, "bash" | "sh" | "zsh") {
+        return None;
+    }
+    let flag = command.get(1)?;
+    if !matches!(flag.as_str(), "-c" | "-lc" | "-ilc") {
+        return None;
+    }
+    command.get(2).map(String::as_str)
+}
+
+/// Collect recursive-`rm` operands from a shell script.
+fn collect_script_rm_targets(script: &str, base: Option<&Path>, targets: &mut Vec<RmTarget>) {
+    let Some(commands) = parse_rm_shell_commands(script) else {
+        // A malformed script cannot be proven to delete only ordinary paths.
+        // Keep the delete reviewable instead of failing open.
+        targets.push(RmTarget { operand: String::new(), base: None });
+        return;
+    };
+    // Flattened commands do not retain control flow or subshell scope, so a
+    // directory change anywhere in the script invalidates the shared base.
+    let base = base.filter(|_| !commands.iter().any(|nested| changes_shell_directory(nested)));
+    for nested in &commands {
+        collect_argv_rm_targets(nested, base, targets);
+    }
+}
+
+/// Whether any collected operand can reach a mounted filesystem.
+fn rm_targets_are_sensitive(targets: &[RmTarget], mount_points: &[PathBuf]) -> bool {
+    targets.iter().any(|target| rm_target_is_sensitive(target, mount_points))
+}
+
+fn rm_target_is_sensitive(target: &RmTarget, mount_points: &[PathBuf]) -> bool {
+    let Some(resolved) = resolve_target_path(&target.operand, target.base.as_deref()) else {
+        // A shell expansion or inaccessible working directory can hide a
+        // mounted target, so unresolved recursive targets require review.
+        return true;
+    };
+
+    is_known_mount_layout_target(&resolved)
+        || mount_points
+            .iter()
+            .any(|mount_point| is_mount_root_or_top_level_target(&resolved, mount_point))
+}
+
+/// Canonicalize mount points so target comparison ignores symlinked paths.
+fn normalized_mount_points(mount_points: &[PathBuf]) -> Vec<PathBuf> {
+    mount_points
+        .iter()
+        .map(|mount_point| {
+            vtcode_commons::paths::canonicalize(mount_point)
+                .unwrap_or_else(|_| vtcode_commons::paths::normalize_path(mount_point))
+        })
+        .collect()
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -86,121 +215,6 @@ fn parse_rm_arguments(arguments: &[String]) -> RmArguments<'_> {
     parsed
 }
 
-fn contains_recursive_rm(command: &[String]) -> bool {
-    let Some(command) = unwrap_command_prefix(command) else {
-        return false;
-    };
-    let Some(executable) = command.first() else {
-        return false;
-    };
-
-    let executable = Path::new(executable)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(executable);
-    if matches!(executable, "bash" | "sh" | "zsh") {
-        let Some(flag) = command.get(1).map(String::as_str) else {
-            return false;
-        };
-        let Some(script) = command.get(2) else {
-            return false;
-        };
-        if matches!(flag, "-c" | "-lc" | "-ilc") {
-            return parse_rm_shell_commands(script)
-                .is_none_or(|commands| commands.iter().any(|nested| contains_recursive_rm(nested)));
-        }
-    }
-
-    if executable != "rm" {
-        return false;
-    }
-
-    command.get(1..).is_some_and(|arguments| {
-        let parsed = parse_rm_arguments(arguments);
-        parsed.recursive && !parsed.targets.is_empty()
-    })
-}
-
-fn recursive_rm_targets_are_sensitive(command: &[String], working_directory: &Path, mount_points: &[PathBuf]) -> bool {
-    recursive_rm_targets_are_sensitive_in_context(command, Some(working_directory), mount_points)
-}
-
-fn recursive_rm_targets_are_sensitive_in_context(
-    command: &[String],
-    working_directory: Option<&Path>,
-    mount_points: &[PathBuf],
-) -> bool {
-    let Some(unwrapped) = unwrap_command_prefix_with_context(command) else {
-        return false;
-    };
-    let working_directory = working_directory.filter(|_| !unwrapped.changes_directory);
-    let command = unwrapped.command;
-    let Some(executable) = command.first() else {
-        return false;
-    };
-
-    let executable = Path::new(executable)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(executable);
-    if matches!(executable, "bash" | "sh" | "zsh") {
-        let Some(flag) = command.get(1).map(String::as_str) else {
-            return false;
-        };
-        let Some(script) = command.get(2) else {
-            return false;
-        };
-        if matches!(flag, "-c" | "-lc" | "-ilc") {
-            let Some(commands) = parse_rm_shell_commands(script) else {
-                return true;
-            };
-            // Flattened commands do not retain control flow or subshell scope.
-            // A directory change anywhere in the script invalidates its base.
-            let working_directory =
-                working_directory.filter(|_| !commands.iter().any(|nested| changes_shell_directory(nested)));
-            return commands
-                .iter()
-                .any(|nested| recursive_rm_targets_are_sensitive_in_context(nested, working_directory, mount_points));
-        }
-    }
-
-    if executable != "rm" {
-        return false;
-    }
-
-    let Some(arguments) = command.get(1..) else {
-        return false;
-    };
-    let parsed = parse_rm_arguments(arguments);
-    if !parsed.recursive {
-        return false;
-    }
-    if parsed.targets.is_empty() {
-        return false;
-    }
-
-    let normalized_mount_points = mount_points
-        .iter()
-        .map(|mount_point| {
-            vtcode_commons::paths::canonicalize(mount_point)
-                .unwrap_or_else(|_| vtcode_commons::paths::normalize_path(mount_point))
-        })
-        .collect::<Vec<_>>();
-
-    parsed.targets.into_iter().any(|target| {
-        let Some(target) = resolve_target_path(target, working_directory) else {
-            // A shell expansion or inaccessible working directory can hide a
-            // mounted target, so unresolved recursive targets require review.
-            return true;
-        };
-
-        is_known_mount_layout_target(&target)
-            || normalized_mount_points
-                .iter()
-                .any(|mount_point| is_mount_root_or_top_level_target(&target, mount_point))
-    })
-}
-
 fn parse_rm_shell_commands(script: &str) -> Option<Vec<Vec<String>>> {
     // AST extraction preserves source quotes. Decode each word once at this
     // boundary so nested shell scripts and quoted options retain argv semantics.
@@ -223,26 +237,15 @@ fn parse_rm_shell_commands(script: &str) -> Option<Vec<Vec<String>>> {
         .collect()
 }
 
+/// Whether a command changes the shell's working directory.
+///
+/// The shared prefix unwrapping already resolves runner and builtin prefixes,
+/// so the executable that decides the directory change is the first word.
 fn changes_shell_directory(command: &[String]) -> bool {
-    let Some(mut command) = unwrap_command_prefix(command) else {
+    let Some(command) = unwrap_command_prefix(command) else {
         return false;
     };
-    while let Some((executable, arguments)) = command.split_first() {
-        match executable.as_str() {
-            "cd" | "pushd" | "popd" => return true,
-            "builtin" | "command" => {
-                command = arguments;
-                while let Some((argument, arguments)) = command.split_first() {
-                    if !argument.starts_with('-') {
-                        break;
-                    }
-                    command = arguments;
-                }
-            }
-            _ => return false,
-        }
-    }
-    false
+    matches!(command.first().map(String::as_str), Some("cd" | "pushd" | "popd"))
 }
 
 fn resolve_target_path(target: &str, working_directory: Option<&Path>) -> Option<PathBuf> {
@@ -431,6 +434,35 @@ mod tests {
         args.iter().map(|argument| (*argument).to_owned()).collect()
     }
 
+    /// Approval decision with injected mount points, mirroring the production
+    /// path without touching the host mount table.
+    fn approval_with_mount_points(
+        command: &[String],
+        script: Option<&str>,
+        working_directory: &Path,
+        mount_points: Option<&[PathBuf]>,
+    ) -> bool {
+        let targets = recursive_rm_targets(command, script, Some(working_directory));
+        if targets.is_empty() {
+            return false;
+        }
+        let Some(mount_points) = mount_points else {
+            return true;
+        };
+        rm_targets_are_sensitive(&targets, &normalized_mount_points(mount_points))
+    }
+
+    /// Sensitivity of a command's recursive-`rm` targets against injected
+    /// mount points.
+    fn recursive_rm_targets_are_sensitive(
+        command: &[String],
+        working_directory: &Path,
+        mount_points: &[PathBuf],
+    ) -> bool {
+        let targets = recursive_rm_targets(command, None, Some(working_directory));
+        rm_targets_are_sensitive(&targets, &normalized_mount_points(mount_points))
+    }
+
     #[test]
     fn rm_parser_reads_recursive_options_and_end_of_options_targets() {
         for args in [
@@ -544,11 +576,7 @@ mod tests {
             "rm --recursive Photos; cd /Volumes/Backup",
         ] {
             assert!(
-                recursive_rm_targets_require_approval_with_mount_points(
-                    &command(&["bash", "-lc", script]),
-                    project.path(),
-                    Some(&mounts),
-                ),
+                approval_with_mount_points(&command(&["bash", "-lc", script]), None, project.path(), Some(&mounts),),
                 "relative recursive target needs approval with uncertain directory: {script}"
             );
         }
@@ -562,11 +590,7 @@ mod tests {
             absolute_cleanup.as_str(),
         ] {
             assert!(
-                !recursive_rm_targets_require_approval_with_mount_points(
-                    &command(&["bash", "-lc", script]),
-                    project.path(),
-                    Some(&mounts),
-                ),
+                !approval_with_mount_points(&command(&["bash", "-lc", script]), None, project.path(), Some(&mounts),),
                 "known ordinary targets or nonrecursive deletes should retain their classification: {script}"
             );
         }
@@ -592,7 +616,7 @@ mod tests {
         ] {
             assert!(!super::super::command_might_be_dangerous(&invocation));
             assert!(
-                recursive_rm_targets_require_approval_with_mount_points(&invocation, project.path(), Some(&mounts)),
+                approval_with_mount_points(&invocation, None, project.path(), Some(&mounts)),
                 "a directory-changing wrapper must invalidate relative target context: {invocation:?}"
             );
         }
@@ -610,7 +634,7 @@ mod tests {
             ]),
         ] {
             assert!(
-                !recursive_rm_targets_require_approval_with_mount_points(&invocation, project.path(), Some(&mounts)),
+                !approval_with_mount_points(&invocation, None, project.path(), Some(&mounts)),
                 "ordinary wrappers and absolute project targets retain their classification: {invocation:?}"
             );
         }
@@ -620,7 +644,7 @@ mod tests {
     fn recursive_rm_with_unresolved_targets_fails_closed() {
         let command = command(&["rm", "--recursive", "$TARGET"]);
         assert!(recursive_rm_targets_are_sensitive(&command, Path::new("/tmp"), &[]));
-        assert!(recursive_rm_targets_require_approval_with_mount_points(&command, Path::new("/tmp"), Some(&[])));
+        assert!(approval_with_mount_points(&command, None, Path::new("/tmp"), Some(&[])));
     }
 
     #[test]
@@ -631,17 +655,13 @@ mod tests {
         let command = command(&["rm", "--recursive", "build/cache"]);
         let mount_points = [PathBuf::from("/"), PathBuf::from("/custom/archive")];
 
-        assert!(!recursive_rm_targets_require_approval_with_mount_points(
-            &command,
-            temp_dir.path(),
-            Some(&mount_points)
-        ));
+        assert!(!approval_with_mount_points(&command, None, temp_dir.path(), Some(&mount_points)));
     }
 
     #[test]
     fn recursive_rm_requires_approval_when_mount_data_is_unavailable() {
         let command = command(&["rm", "--recursive", "build/cache"]);
-        assert!(recursive_rm_targets_require_approval_with_mount_points(&command, Path::new("/tmp/project"), None));
+        assert!(approval_with_mount_points(&command, None, Path::new("/tmp/project"), None));
     }
 
     #[test]
@@ -652,5 +672,110 @@ mod tests {
         assert!(parse_bsd_mount_output("/dev/disk3 on /Volumes/My\\040Drive (apfs, local)\n").is_some());
         assert!(parse_linux_mount_info("malformed\n").is_none());
         assert!(parse_bsd_mount_output("malformed\n").is_none());
+    }
+
+    /// A compound command string is tokenized before it reaches the safety
+    /// layer, so the shell structure only survives in the script text. The
+    /// script view must still find the recursive delete behind a non-`rm`
+    /// first token.
+    #[test]
+    fn compound_command_scripts_cannot_hide_a_recursive_delete() {
+        let project = tempfile::tempdir().expect("project directory");
+        let mounts = [PathBuf::from("/Volumes/Backup")];
+        let compound = command(&["cd", "/Volumes/Backup", "&&", "rm", "--recursive", "Photos"]);
+
+        // The tokenized argv alone carries no shell structure.
+        assert!(
+            !approval_with_mount_points(&compound, None, project.path(), Some(&mounts)),
+            "the argv view alone cannot classify a compound command"
+        );
+        // The script view recovers the delete and keeps it reviewable.
+        assert!(
+            approval_with_mount_points(
+                &compound,
+                Some("cd /Volumes/Backup && rm --recursive Photos"),
+                project.path(),
+                Some(&mounts)
+            ),
+            "a compound command must not hide a mounted recursive delete"
+        );
+
+        // Asymmetric boundary: the same compound shape without a recursive
+        // delete stays unclassified, and a relative delete in an ordinary
+        // project directory stays unclassified.
+        assert!(!approval_with_mount_points(
+            &command(&["cd", "/Volumes/Backup", "&&", "rm", "Photos"]),
+            Some("cd /Volumes/Backup && rm Photos"),
+            project.path(),
+            Some(&mounts)
+        ));
+        assert!(!approval_with_mount_points(
+            &command(&["rm", "--recursive", "build"]),
+            Some("rm --recursive build"),
+            project.path(),
+            Some(&mounts)
+        ));
+    }
+
+    /// A shell builtin that runs the next word must not hide the delete.
+    #[test]
+    fn builtin_prefix_cannot_hide_a_recursive_delete() {
+        let project = tempfile::tempdir().expect("project directory");
+        let mounts = [PathBuf::from("/Volumes/Backup")];
+        for invocation in [
+            command(&["command", "rm", "--recursive", "/Volumes/Backup/Photos"]),
+            command(&["builtin", "rm", "--recursive", "/Volumes/Backup/Photos"]),
+            command(&["command", "--", "rm", "--recursive", "/Volumes/Backup/Photos"]),
+        ] {
+            assert!(
+                approval_with_mount_points(&invocation, None, project.path(), Some(&mounts)),
+                "a builtin prefix must not hide a mounted recursive delete: {invocation:?}"
+            );
+        }
+
+        // A lookup is not a delete.
+        assert!(!approval_with_mount_points(&command(&["command", "-v", "rm"]), None, project.path(), Some(&mounts)));
+    }
+
+    /// The script view must not turn ordinary commands into approvals.
+    #[test]
+    fn script_view_keeps_ordinary_commands_unclassified() {
+        let project = tempfile::tempdir().expect("project directory");
+        let mounts = [PathBuf::from("/Volumes/Backup"), PathBuf::from("/")];
+
+        for script in [
+            "ls -la",
+            "cargo fmt --all",
+            "echo 'rm -rf /'",
+            "grep -r rm src",
+            "rm build/cache",
+            "rm -f build/cache",
+        ] {
+            assert!(
+                !approval_with_mount_points(
+                    &command(&["sh", "-c", script]),
+                    Some(script),
+                    project.path(),
+                    Some(&mounts),
+                ),
+                "ordinary command must not require approval: {script}"
+            );
+        }
+    }
+
+    /// A malformed script cannot be proven to delete only ordinary paths, so
+    /// it stays on the approval path instead of failing open.
+    #[test]
+    fn malformed_recursive_script_fails_closed() {
+        let project = tempfile::tempdir().expect("project directory");
+        let mounts = [PathBuf::from("/Volumes/Backup")];
+        let malformed = "rm --recursive 'unterminated";
+
+        assert!(approval_with_mount_points(
+            &command(&["sh", "-c", malformed]),
+            Some(malformed),
+            project.path(),
+            Some(&mounts),
+        ));
     }
 }

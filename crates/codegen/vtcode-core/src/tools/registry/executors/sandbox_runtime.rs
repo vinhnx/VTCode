@@ -65,12 +65,17 @@ pub(super) fn build_shell_execution_plan(
     workspace_root: &Path,
     working_directory: &Path,
     requested_command: &[String],
+    shell_script: Option<&str>,
     sandbox_permissions: SandboxPermissions,
     additional_permissions: Option<&AdditionalPermissions>,
 ) -> Result<ShellExecutionPlan> {
     let mut approval_reasons = Vec::new();
     let requires_code_boundary_approval = crate::command_safety::command_requires_approval(requested_command);
-    if crate::command_safety::recursive_rm_targets_require_approval_in_directory(requested_command, working_directory) {
+    if crate::command_safety::recursive_rm_targets_require_approval_in_directory(
+        requested_command,
+        shell_script,
+        working_directory,
+    ) {
         push_unique_reason(&mut approval_reasons, "Recursive rm targets a mounted filesystem and requires approval.");
     }
     if crate::command_safety::command_might_be_dangerous(requested_command) {
@@ -605,24 +610,18 @@ pub(super) fn sandbox_policy_with_additional_permissions(
     }
 }
 
+/// Apply the sandbox policy that `build_shell_execution_plan` already resolved.
+///
+/// The plan is computed once per command by the caller: rebuilding it here
+/// repeated the safety classification (including the mount-table lookup) for
+/// the same command.
 pub(super) fn apply_runtime_sandbox_to_command(
     command: Vec<String>,
     requested_command: &[String],
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
     working_dir: &Path,
-    sandbox_permissions: SandboxPermissions,
-    additional_permissions: Option<&AdditionalPermissions>,
+    sandbox_policy: Option<SandboxPolicy>,
 ) -> Result<Vec<String>> {
-    let plan = build_shell_execution_plan(
-        sandbox_config,
-        workspace_root,
-        working_dir,
-        requested_command,
-        sandbox_permissions,
-        additional_permissions,
-    )?;
-    let Some(policy) = plan.sandbox_policy else {
+    let Some(policy) = sandbox_policy else {
         return Ok(command);
     };
     if matches!(policy, SandboxPolicy::ExternalSandbox { .. }) {

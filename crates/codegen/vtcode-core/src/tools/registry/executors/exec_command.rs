@@ -20,6 +20,12 @@ pub(super) struct PreparedExecCommand {
     pub(super) requested_command: Vec<String>,
     pub(super) display_command: String,
     pub(super) requested_command_display: String,
+    /// The shell script the command executes.
+    ///
+    /// A compound command such as `cd /Volumes/Backup && rm --recursive Photos`
+    /// keeps its shell structure only here: the tokenized argv alone cannot
+    /// express the operator, so safety checks need the script text.
+    pub(super) shell_script: String,
 }
 
 pub(super) fn parse_command_parts(
@@ -166,7 +172,7 @@ fn normalized_shell_name(shell: &str) -> String {
         .to_lowercase()
 }
 
-fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
+fn build_shell_command_string(raw: Option<&str>, parts: &[String]) -> String {
     let fallback = || shell_words::join(parts.iter().map(|s| s.as_str()));
 
     let Some(raw) = raw else {
@@ -187,6 +193,22 @@ fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str)
     } else {
         format!("{raw} {suffix}")
     }
+}
+
+/// The shell script a command executes.
+///
+/// `raw_command` is the command string the caller provided and `parts` its
+/// tokenized form. The script keeps the caller's shell structure, which the
+/// tokenized argv alone cannot express. The explicit `raw_command` payload
+/// field wins over the `command` string, so the approval path and the
+/// execution path classify the same script.
+pub(super) fn shell_script_text(
+    payload: &serde_json::Map<String, Value>,
+    raw_command: Option<&str>,
+    parts: &[String],
+) -> String {
+    let raw = payload.get("raw_command").and_then(|value| value.as_str()).or(raw_command);
+    build_shell_command_string(raw, parts)
 }
 
 fn shell_command_flag(shell_program: &str, normalized_shell: &str) -> String {
@@ -221,15 +243,9 @@ pub(super) fn prepare_exec_command(
     let normalized_shell = normalized_shell_name(shell_program);
     let existing_shell = command.first().map(|existing| normalized_shell_name(existing));
 
+    let command_string = shell_script_text(payload, auto_raw_command.as_deref(), &command);
+
     if existing_shell != Some(normalized_shell.clone()) {
-        let raw_command = payload
-            .get("raw_command")
-            .and_then(|value| value.as_str())
-            .map(|value| value.to_string())
-            .or(auto_raw_command);
-
-        let command_string = build_shell_command_string(raw_command.as_deref(), &command, shell_program);
-
         let mut shell_invocation = Vec::with_capacity(4);
         shell_invocation.push(shell_program.to_string());
 
@@ -238,7 +254,7 @@ pub(super) fn prepare_exec_command(
         }
 
         shell_invocation.push(shell_command_flag(shell_program, &normalized_shell));
-        shell_invocation.push(command_string);
+        shell_invocation.push(command_string.clone());
         command = shell_invocation;
     }
 
@@ -247,6 +263,7 @@ pub(super) fn prepare_exec_command(
         requested_command_display: command_display_for_shell(&requested_command, shell_program),
         command,
         requested_command,
+        shell_script: command_string,
     }
 }
 

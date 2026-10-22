@@ -278,11 +278,12 @@ impl ToolRegistry {
             return Ok(None);
         };
 
-        let (requested_command, _) = parse_command_parts(
+        let (requested_command, raw_command) = parse_command_parts(
             payload,
             "shell run request requires a command",
             "shell run request command cannot be empty",
         )?;
+        let shell_script = shell_script_text(payload, raw_command.as_deref(), &requested_command);
         let sandbox_request = self.resolve_exec_sandbox_request(payload).await?;
         let sandbox_config = self.sandbox_config();
         let plan = build_shell_execution_plan(
@@ -290,6 +291,7 @@ impl ToolRegistry {
             self.workspace_root(),
             &sandbox_request.working_dir_path,
             &requested_command,
+            Some(&shell_script),
             sandbox_request.sandbox_permissions,
             sandbox_request.additional_permissions.as_ref(),
         )?;
@@ -372,6 +374,7 @@ impl ToolRegistry {
             self.workspace_root(),
             &sandbox_request.working_dir_path,
             &prepared_command.requested_command,
+            Some(&prepared_command.shell_script),
             sandbox_request.sandbox_permissions,
             sandbox_request.additional_permissions.as_ref(),
         )?;
@@ -379,11 +382,8 @@ impl ToolRegistry {
         prepared_command.command = apply_runtime_sandbox_to_command(
             prepared_command.command,
             &prepared_command.requested_command,
-            &sandbox_config,
-            self.workspace_root(),
             &sandbox_request.working_dir_path,
-            sandbox_request.sandbox_permissions,
-            sandbox_request.additional_permissions.as_ref(),
+            sandbox_plan.sandbox_policy,
         )?;
 
         let rows = match backend {

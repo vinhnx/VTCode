@@ -114,6 +114,16 @@ pub(super) struct UnwrappedCommand<'a> {
     pub(super) changes_directory: bool,
 }
 
+/// Programs that run another program given as their next argument.
+///
+/// Unwrapping them keeps a destructive command visible to the dangerous
+/// detector and to the mounted-target approval, which would otherwise only
+/// see the runner (`nohup rm -rf …`).
+const PROGRAM_RUNNERS: &[&str] = &["builtin", "command", "exec", "nohup", "setsid", "time"];
+
+/// Options that make `command`/`builtin` print a path instead of running it.
+const LOOKUP_ONLY_OPTIONS: &[&str] = &["-p", "-v", "-V"];
+
 pub(super) fn unwrap_command_prefix(command: &[String]) -> Option<&[String]> {
     unwrap_command_prefix_with_context(command).map(|unwrapped| unwrapped.command)
 }
@@ -170,9 +180,28 @@ pub(super) fn unwrap_command_prefix_with_context(mut command: &[String]) -> Opti
                     }
                 }
             }
+            name if PROGRAM_RUNNERS.contains(&name) => {
+                let (options, program) = split_runner_options(command.get(1..)?);
+                if matches!(name, "builtin" | "command")
+                    && options.iter().any(|option| LOOKUP_ONLY_OPTIONS.contains(&option.as_str()))
+                {
+                    // `command -v prog` prints the path instead of running it.
+                    return Some(UnwrappedCommand { command, changes_directory });
+                }
+                command = program;
+            }
             _ => return Some(UnwrappedCommand { command, changes_directory }),
         }
     }
+}
+
+/// Split a runner's leading options from the program it runs.
+fn split_runner_options(arguments: &[String]) -> (&[String], &[String]) {
+    let mut index = 0;
+    while index < arguments.len() && arguments[index].starts_with('-') {
+        index += 1;
+    }
+    arguments.split_at(index)
 }
 
 fn is_inline_code_execution(command: &[String]) -> bool {
@@ -747,6 +776,56 @@ mod tests {
     fn rm_without_flags_is_safe() {
         let cmd = vec!["rm".to_string()];
         assert!(!is_dangerous_to_call_with_exec(&cmd));
+    }
+
+    /// A launcher runs another program; the destructive command behind it must
+    /// stay visible to the detector.
+    #[test]
+    fn launcher_prefixes_cannot_hide_a_destructive_command() {
+        for runner in ["nohup", "setsid", "time", "exec", "command", "builtin"] {
+            for destructive in [
+                vec!["rm", "-rf", "/"],
+                vec!["rm", "-f", "file.txt"],
+                vec!["git", "reset", "--hard", "HEAD~1"],
+                vec!["dd", "if=/dev/zero", "of=/dev/sda"],
+            ] {
+                let mut command = vec![runner.to_string()];
+                command.extend(destructive.iter().map(|word| (*word).to_string()));
+                assert!(
+                    command_might_be_dangerous(&command),
+                    "{runner} must not hide a destructive command: {command:?}"
+                );
+            }
+        }
+    }
+
+    /// A lookup prints a path instead of running the program, so it must not
+    /// be classified as if the program had run.
+    #[test]
+    fn command_lookup_options_do_not_run_the_program() {
+        for command in [
+            vec!["command", "-v", "rm"],
+            vec!["command", "-V", "rm"],
+            vec!["builtin", "-p", "rm"],
+        ] {
+            let command: Vec<String> = command.into_iter().map(str::to_owned).collect();
+            assert!(
+                !command_might_be_dangerous(&command),
+                "a path lookup must not be classified as the program: {command:?}"
+            );
+        }
+    }
+
+    /// Runner options are skipped so the program they run is still found.
+    #[test]
+    fn runner_options_are_skipped_before_the_program() {
+        for command in [
+            vec!["nohup", "--", "rm", "-rf", "/"],
+            vec!["time", "-p", "rm", "-rf", "/"],
+        ] {
+            let command: Vec<String> = command.into_iter().map(str::to_owned).collect();
+            assert!(command_might_be_dangerous(&command), "runner options must not hide the program: {command:?}");
+        }
     }
 
     #[test]
