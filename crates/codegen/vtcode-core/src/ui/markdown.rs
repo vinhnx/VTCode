@@ -2,6 +2,8 @@ use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 
+pub use vtcode_commons::ui_protocol::CodeBlockWeight;
+
 // When TUI is enabled, use vtcode-ui's richer types (with internal methods).
 #[cfg(feature = "tui")]
 pub use vtcode_ui::tui::ui::markdown::{
@@ -59,19 +61,11 @@ pub fn render_markdown_to_lines_with_options(
     render_options: RenderMarkdownOptions,
 ) -> Vec<MarkdownLine> {
     let tui_theme_styles = crate::ui::tui_compat::tui_theme_styles_from_core(theme_styles);
-    let tui_highlight_cfg = highlight_config.map(|cfg| vtcode_ui::tui::TuiSyntaxHighlightingConfig {
-        enabled: cfg.enabled,
-        theme: cfg.theme.clone(),
-        cache_themes: cfg.cache_themes,
-        max_file_size_mb: cfg.max_file_size_mb,
-        enabled_languages: cfg.enabled_languages.clone(),
-        highlight_timeout_ms: cfg.highlight_timeout_ms,
-    });
     vtcode_ui::tui::ui::markdown::render_markdown_to_lines_with_options(
         source,
         base_style,
         &tui_theme_styles,
-        tui_highlight_cfg.as_ref(),
+        highlight_config,
         render_options,
     )
 }

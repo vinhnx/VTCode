@@ -161,6 +161,7 @@ pub fn to_tui_appearance(config: &VTCodeConfig) -> SessionAppearanceConfig {
         show_transcript_review_shortcut_guide: config.ui.transcript_review.show_shortcut_guide,
         show_transcript_review_close_button: config.ui.transcript_review.show_close_button,
         diff_preview_mode: config.ui.diff_preview_mode,
+        syntax_highlighting: config.syntax_highlighting.clone(),
         customization: Default::default(),
     }
 }

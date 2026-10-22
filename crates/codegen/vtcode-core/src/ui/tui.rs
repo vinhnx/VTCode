@@ -377,6 +377,8 @@ mod headless {
         pub show_transcript_review_shortcut_guide: bool,
         pub show_transcript_review_close_button: bool,
         pub diff_preview_mode: vtcode_commons::ui_protocol::DiffPreviewMode,
+        /// Syntax highlighting for the code surfaces the TUI renders itself.
+        pub syntax_highlighting: vtcode_config::loader::SyntaxHighlightingConfig,
         pub customization: (),
     }
 

@@ -30,6 +30,7 @@ fn render_markdown_with_table_width(markdown: &str, table_max_width: usize) -> V
             preserve_code_indentation: false,
             disable_code_block_table_reparse: false,
             table_max_width: Some(table_max_width),
+            code_block_weight: CodeBlockWeight::Primary,
         },
     )
 }
@@ -426,6 +427,7 @@ fn test_table_code_block_reparse_guard_can_disable_table_reparse() {
         preserve_code_indentation: false,
         disable_code_block_table_reparse: true,
         table_max_width: None,
+        code_block_weight: CodeBlockWeight::Primary,
     };
     let lines =
         render_markdown_to_lines_with_options(markdown, Style::default(), &theme::active_styles(), None, options);
@@ -552,6 +554,132 @@ fn test_markdown_code_block_without_language_skips_line_numbers() {
         .find(|line| line.contains("fn main() {}"))
         .expect("code line exists");
     assert!(!code_line.contains("  1  "));
+}
+
+#[test]
+fn muted_code_block_recedes_toward_the_theme_background() {
+    let markdown = "```rust\nfn main() { let answer = 42; }\n```\n";
+    let theme_styles = theme::active_styles();
+    let highlight_config = SyntaxHighlightingConfig::default();
+
+    let primary = render_markdown_to_lines_with_options(
+        markdown,
+        Style::default(),
+        &theme_styles,
+        Some(&highlight_config),
+        RenderMarkdownOptions {
+            code_block_weight: CodeBlockWeight::Primary,
+            ..Default::default()
+        },
+    );
+    let muted = render_markdown_to_lines_with_options(
+        markdown,
+        Style::default(),
+        &theme_styles,
+        Some(&highlight_config),
+        RenderMarkdownOptions {
+            code_block_weight: CodeBlockWeight::Muted,
+            ..Default::default()
+        },
+    );
+
+    let primary_colors = code_foreground_colors(&primary);
+    let muted_colors = code_foreground_colors(&muted);
+    assert!(!primary_colors.is_empty(), "the code block must render foreground colors");
+    assert_eq!(primary_colors.len(), muted_colors.len(), "muting must not change the segment count");
+    let anstyle::Color::Rgb(background) = theme_styles.background else {
+        return;
+    };
+    for (primary, muted) in primary_colors.iter().zip(muted_colors.iter()) {
+        assert_ne!(primary, muted, "muted code must recede from the primary palette");
+        let (anstyle::Color::Rgb(primary_rgb), anstyle::Color::Rgb(muted_rgb)) = (*primary, *muted) else {
+            continue;
+        };
+        assert!(
+            crate::theme::contrast_ratio(muted_rgb, background) < crate::theme::contrast_ratio(primary_rgb, background),
+            "muted code must move toward the background"
+        );
+    }
+}
+
+#[test]
+fn muted_code_block_keeps_the_theme_contrast_floor() {
+    let markdown = "```rust\nfn main() { let answer = 42; }\n```\n";
+    let theme_styles = theme::active_styles();
+    let min_contrast = crate::theme::get_minimum_contrast();
+
+    let muted = render_markdown_to_lines_with_options(
+        markdown,
+        Style::default(),
+        &theme_styles,
+        Some(&SyntaxHighlightingConfig::default()),
+        RenderMarkdownOptions {
+            code_block_weight: CodeBlockWeight::Muted,
+            ..Default::default()
+        },
+    );
+
+    let anstyle::Color::Rgb(background) = theme_styles.background else {
+        return;
+    };
+    // Every segment of a muted code line — the gutter and the body — must
+    // clear the floor; the gutter is new chrome in the muted block.
+    for line in muted.iter().filter(|line| {
+        line.segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect::<String>()
+            .contains("fn main()")
+    }) {
+        for segment in &line.segments {
+            let Some(anstyle::Color::Rgb(rgb)) = segment.style.get_fg_color() else {
+                continue;
+            };
+            assert!(
+                crate::theme::contrast_ratio(rgb, background) >= min_contrast,
+                "muted code must stay legible: {rgb:?} on {background:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn muted_code_block_keeps_syntax_highlighting_distinguishable() {
+    let markdown = "```rust\nfn main() { let answer = 42; }\n```\n";
+    let theme_styles = theme::active_styles();
+    let highlight_config = SyntaxHighlightingConfig::default();
+
+    let muted = render_markdown_to_lines_with_options(
+        markdown,
+        Style::default(),
+        &theme_styles,
+        Some(&highlight_config),
+        RenderMarkdownOptions {
+            code_block_weight: CodeBlockWeight::Muted,
+            ..Default::default()
+        },
+    );
+
+    let distinct = code_foreground_colors(&muted)
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    assert!(distinct.len() >= 2, "muted code must stay syntax highlighted, got {distinct:?}");
+}
+
+/// Foreground colors of the code body of the first code line (gutter excluded).
+fn code_foreground_colors(lines: &[MarkdownLine]) -> Vec<anstyle::Color> {
+    lines
+        .iter()
+        .filter(|line| {
+            line.segments
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect::<String>()
+                .contains("fn main()")
+        })
+        .flat_map(|line| line.segments.iter().skip(1))
+        .filter_map(|segment| segment.style.get_fg_color())
+        .collect()
 }
 
 #[test]

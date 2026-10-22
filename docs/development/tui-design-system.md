@@ -26,6 +26,21 @@ between the agent and the TUI).
 Do **not** assemble `InlineListItem { .. }` literals in command/UI code; call the factories and tweak with
 `with_search_value` / `with_badge` when needed.
 
+## Code surface
+
+Fenced code is a first-class surface, not prose:
+
+- **Primary** — plain code uses the theme foreground at full intensity; a block with a matching grammar uses the
+  syntax-theme token colors. The default for agent-facing content.
+- **Muted** — secondary surfaces (evidence behind a disclosure): the code foreground is receded toward the theme
+  background and the line-number gutter stays neutral chrome. Syntax highlighting is preserved, so the tokens stay
+  distinguishable while the block recedes behind its summary.
+
+Chrome and code that must recede without becoming unreadable stop at the theme's contrast floor: the color moves
+toward the background only as far as the minimum contrast ratio allows (`theme::recede_toward_background`). Never use
+a faint/dim text attribute for this — several terminals attenuate it to near-invisible, and ratatui only ever *inserts*
+modifiers.
+
 ## Interaction contract
 
 - Filter-aware lists: printables type into the filter; Esc clears, then backs/closes.

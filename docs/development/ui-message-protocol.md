@@ -128,6 +128,7 @@ walkthrough.
 `Diagnostic` carries the canonical exec-event payload through both protocols.
 The session replaces an incident by `correlation_id`, retains its complete payload,
 and renders its summary for every severity. Click or F8 toggles details locally;
+an informational incident keeps a machine-readable payload out of the transcript;
 Transcript Review retains the complete details. The existing Markdown renderer
 owns wrapping and plan-wrapper removal. See [diagnostics](diagnostics.md) for
 redaction, canonical persistence, headless behavior, and the producer audit.

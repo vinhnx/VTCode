@@ -5,8 +5,8 @@
 | Surface | Behavior |
 | --- | --- |
 | `AnsiRenderer::diagnostic` | Redacts, persists through the installed callback, and displays a canonical diagnostic |
-| Human transcript | Always shows the severity summary and actions; click or F8 toggles details |
-| Transcript Review / headless | Retains full labeled operational details |
+| Human transcript | Always shows the severity summary and actions; click or F8 toggles prose and actionable details |
+| Transcript Review / headless | Retains full labeled operational details, including machine-readable payloads an informational incident does not disclose |
 | Legacy Error / Warning | Uses the shared adapter; summaries remain visible when diagnostics are collapsed |
 
 See the [diagnostic contract](../development/diagnostics.md).

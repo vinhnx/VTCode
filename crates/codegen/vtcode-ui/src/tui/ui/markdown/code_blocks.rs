@@ -1,6 +1,5 @@
 use super::parsing::{flush_current_line, push_blank_line};
-use super::{CODE_LINE_NUMBER_MIN_WIDTH, MarkdownLine, MarkdownSegment, RenderMarkdownOptions};
-use crate::tui::config::loader::SyntaxHighlightingConfig;
+use super::{CODE_LINE_NUMBER_MIN_WIDTH, CodeBlockWeight, MarkdownLine, MarkdownSegment, RenderMarkdownOptions};
 use crate::tui::ui::syntax_highlight;
 use crate::tui::ui::theme::ThemeStyles;
 use crate::tui::utils::diff_styles::{
@@ -17,8 +16,24 @@ use vtcode_commons::diff_paths::{
     parse_diff_marker_path,
 };
 use vtcode_commons::diff_preview::{DiffDisplayKind, DiffDisplayLine, annotate_word_level_diffs};
+use vtcode_config::loader::SyntaxHighlightingConfig;
 
 const DIFF_SUMMARY_PREFIX: &str = "• Diff ";
+
+/// Share of the theme background mixed into a muted code foreground.
+///
+/// Muted code keeps its hue, so syntax-highlighted tokens stay
+/// distinguishable while only their intensity drops. The blend is lighter
+/// than the line-number gutter blend, because the code body is content and the
+/// gutter is chrome. Both stop at the theme's contrast floor.
+const MUTED_CODE_BLEND_RATIO: f32 = 0.25;
+
+/// Share of the theme background mixed into a muted line-number gutter.
+///
+/// The same share the primary gutter blends by; unlike the primary gutter it
+/// stops at the theme's contrast floor, so the result can sit slightly
+/// brighter than a primary block's gutter when the blend would cross it.
+const MUTED_GUTTER_BLEND_RATIO: f32 = 0.35;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CodeBlockState {
@@ -116,6 +131,7 @@ fn render_code_block_state(
         env.base_style,
         &prefix,
         env.render_options.preserve_code_indentation,
+        env.render_options.code_block_weight,
     )
 }
 
@@ -151,6 +167,7 @@ fn highlight_code_block(
     base_style: Style,
     prefix_segments: &[MarkdownSegment],
     preserve_code_indentation: bool,
+    code_block_weight: CodeBlockWeight,
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
 
@@ -167,8 +184,8 @@ fn highlight_code_block(
         let source_lines: Vec<&str> = code_to_display.lines().collect();
         let line_count = source_line_count(code_to_display);
         let number_width = line_number_width(line_count);
-        let gutter_style = line_number_style(theme_styles, base_style);
-        let code_style = code_block_style(theme_styles, base_style);
+        let gutter_style = code_gutter_style(theme_styles, base_style, code_block_weight);
+        let code_style = code_block_style(theme_styles, base_style, code_block_weight);
         let mut line_number = 1usize;
         for (index, src) in source_lines.iter().enumerate() {
             let Some(segments) = highlighted.get(index) else {
@@ -192,7 +209,7 @@ fn highlight_code_block(
                         line.push_segment(code_style, text);
                     } else {
                         in_leading_whitespace = false;
-                        line.push_segment(*style, text);
+                        line.push_segment(apply_code_weight(*style, theme_styles, code_block_weight), text);
                     }
                 }
             }
@@ -205,7 +222,8 @@ fn highlight_code_block(
     let mut line_number = 1usize;
     let line_count = source_line_count(code_to_display);
     let number_width = line_number_width(line_count);
-    let gutter_style = line_number_style(theme_styles, base_style);
+    let gutter_style = code_gutter_style(theme_styles, base_style, code_block_weight);
+    let code_style = code_block_style(theme_styles, base_style, code_block_weight);
 
     for raw_line in LinesWithEndings::from(code_to_display) {
         let trimmed = raw_line.trim_end_matches('\n');
@@ -221,7 +239,7 @@ fn highlight_code_block(
             if is_omitted {
                 line.push_segment(gutter_style, trimmed);
             } else {
-                line.push_segment(code_block_style(theme_styles, base_style), trimmed);
+                line.push_segment(code_style, trimmed);
             }
         }
         lines.push(line);
@@ -334,7 +352,9 @@ pub(crate) fn render_diff_code_block_with_context(
     style_context: crate::tui::utils::diff_styles::DiffRenderStyleContext,
 ) -> Vec<MarkdownLine> {
     let mut lines = Vec::new();
-    let context_style = code_block_style(theme_styles, base_style);
+    // Diffs carry their own semantic palette (add/delete tints and chips), so
+    // they keep the primary code weight even on muted surfaces.
+    let context_style = code_block_style(theme_styles, base_style, CodeBlockWeight::Primary);
     let metadata_style = Style::new()
         .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlack)))
         .effects(Effects::DIMMED);
@@ -602,6 +622,31 @@ fn line_number_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
     style
 }
 
+/// Gutter style for a code block at the given visual weight.
+fn code_gutter_style(theme_styles: &ThemeStyles, base_style: Style, weight: CodeBlockWeight) -> Style {
+    match weight {
+        CodeBlockWeight::Primary => line_number_style(theme_styles, base_style),
+        CodeBlockWeight::Muted => muted_line_number_style(theme_styles),
+    }
+}
+
+/// Gutter style for a muted code surface.
+///
+/// The gutter is chrome, so it stays neutral: a muted block introduces the
+/// code with the theme foreground rather than the severity color of the
+/// surrounding incident, which would read as part of the code. It recedes by
+/// the same share as the primary gutter and stops at the theme's contrast
+/// floor, so the numbers stay readable on light and dark backgrounds alike.
+fn muted_line_number_style(theme_styles: &ThemeStyles) -> Style {
+    let receded = crate::theme::recede_toward_background(
+        theme_styles.foreground,
+        theme_styles.background,
+        MUTED_GUTTER_BLEND_RATIO,
+        crate::theme::get_minimum_contrast(),
+    );
+    Style::new().fg_color(Some(receded))
+}
+
 /// Format the gutter text for a line. Returns `(gutter_text, source_line_advance)`.
 fn format_gutter_text(line_num: usize, width: usize, line_text: &str) -> (String, usize) {
     if let Some(omitted) = parse_omitted_line_count(line_text) {
@@ -706,7 +751,7 @@ fn is_diff_language(language: Option<&str>) -> bool {
     language.is_some_and(|lang| matches!(lang.to_ascii_lowercase().as_str(), "diff" | "patch" | "udiff" | "git"))
 }
 
-fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
+fn code_block_style(theme_styles: &ThemeStyles, base_style: Style, weight: CodeBlockWeight) -> Style {
     let base_fg = base_style.get_fg_color();
     let theme_fg = theme_styles.output.get_fg_color();
     let fg = if base_style.get_effects().contains(Effects::DIMMED) {
@@ -721,7 +766,30 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
         // Ensure code text always has a visible foreground color
         style = style.fg_color(Some(theme_styles.foreground));
     }
-    style
+    apply_code_weight(style, theme_styles, weight)
+}
+
+/// Recede a code foreground toward the theme background.
+///
+/// Muted code keeps its hue so syntax-highlighted tokens stay
+/// distinguishable; only the intensity drops. The recede never crosses the
+/// theme's contrast floor, so evidence stays readable on light and dark
+/// backgrounds alike. The result is an explicit color rather than a faint/dim
+/// attribute, so it is identical on every terminal.
+fn apply_code_weight(style: Style, theme_styles: &ThemeStyles, weight: CodeBlockWeight) -> Style {
+    if weight != CodeBlockWeight::Muted {
+        return style;
+    }
+    let Some(foreground) = style.get_fg_color() else {
+        return style;
+    };
+    let receded = crate::theme::recede_toward_background(
+        foreground,
+        theme_styles.background,
+        MUTED_CODE_BLEND_RATIO,
+        crate::theme::get_minimum_contrast(),
+    );
+    style.fg_color(Some(receded))
 }
 
 pub(crate) fn normalize_code_indentation(code: &str, language: Option<&str>, preserve_indentation: bool) -> String {

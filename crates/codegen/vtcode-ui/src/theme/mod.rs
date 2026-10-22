@@ -5,7 +5,7 @@
 //! Shared theme registry and runtime state for VT Code UI crates.
 
 mod color_math;
-pub(crate) use color_math::contrast_ratio;
+pub(crate) use color_math::{contrast_ratio, recede_toward_background};
 mod registry;
 mod runtime;
 mod scheme;

@@ -1707,12 +1707,12 @@ fn diagnostic_details_affordance_click_expands_through_the_production_event_path
     use ratatui::backend::TestBackend;
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
 
-    // Production payload shape from `handle_mcp_updates` (mcp.catalog_ready).
+    // Prose evidence keeps the in-place disclosure.
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Info,
         code: "mcp.catalog_ready".into(),
         summary: "MCP tools are ready. Use /mcp tools to inspect the catalog.".into(),
-        agent_details: r#"{"phase":"ready:2_registered","error":null}"#.into(),
+        agent_details: "Catalog refresh completed for the configured servers.".into(),
         correlation_id: "mcp:catalog".into(),
         actions: Vec::new(),
     };
@@ -1772,5 +1772,47 @@ fn diagnostic_details_affordance_click_expands_through_the_production_event_path
     assert!(
         !session.core.lines[0].diagnostic.as_ref().unwrap().expanded,
         "the summary row must preserve selection behavior and not toggle details"
+    );
+}
+
+#[test]
+fn diagnostic_structured_payload_has_no_transcript_disclosure_affordance() {
+    use ratatui::backend::TestBackend;
+    use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
+
+    // Production payload shape from `handle_mcp_updates` (mcp.catalog_ready).
+    let diagnostic = Diagnostic {
+        severity: DiagnosticSeverity::Info,
+        code: "mcp.catalog_ready".into(),
+        summary: "MCP tools are ready. Use /mcp tools to inspect the catalog.".into(),
+        agent_details: r#"{"phase":"ready:2_registered","error":null}"#.into(),
+        correlation_id: "mcp:catalog".into(),
+        actions: Vec::new(),
+    };
+
+    let mut session = build_session();
+    session.core.upsert_diagnostic(diagnostic);
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test terminal");
+    terminal.draw(|frame| session.render(frame)).expect("render diagnostic");
+    let buffer = terminal.backend().buffer();
+    let rendered = (0..buffer.area.height)
+        .map(|row| {
+            (0..buffer.area.width)
+                .map(|col| buffer[(col, row)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        !rendered.contains("Details"),
+        "a structured payload stays out of the transcript, so it has no affordance: {rendered}"
+    );
+    assert!(
+        !rendered.contains("ready:2_registered"),
+        "a structured payload stays out of the transcript: {rendered}"
+    );
+    assert!(
+        !session.core.lines[0].diagnostic.as_ref().unwrap().expanded,
+        "a structured payload cannot be expanded in the transcript"
     );
 }

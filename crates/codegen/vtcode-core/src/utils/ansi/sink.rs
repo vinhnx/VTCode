@@ -6,7 +6,7 @@ use crate::utils::transcript;
 
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::markdown::{
-    MarkdownLine, MarkdownSegment, RenderMarkdownOptions, render_markdown_to_lines_with_options,
+    CodeBlockWeight, MarkdownLine, MarkdownSegment, RenderMarkdownOptions, render_markdown_to_lines_with_options,
 };
 use crate::ui::theme;
 use crate::ui::tui::{
@@ -254,6 +254,7 @@ impl InlineSink {
                 preserve_code_indentation,
                 disable_code_block_table_reparse: false,
                 table_max_width,
+                code_block_weight: CodeBlockWeight::Primary,
             },
         );
         if preserve_blank_lines {

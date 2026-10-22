@@ -25,6 +25,8 @@ credentials or private reasoning into details in the first place.
 
 The transcript retains one source per incident. The summary and available actions
 remain visible while details are collapsed. Click its Details control or press F8 to toggle the latest diagnostic in place.
+F8 owns the latest incident that carries details; an incident whose payload the
+transcript does not disclose is skipped rather than retargeting an older one.
 Summary and evidence clicks preserve text selection and link interaction. Expansion affects presentation only;
 it emits no input, changes no model history, and grants no plan approval.
 Transcript Review always retains the complete details, including when the main
@@ -34,6 +36,27 @@ also retains operational details rather than labeling diagnostics as thinking.
 The existing Markdown renderer handles code, paths, plan
 wrapper removal, wrapping, and resizing. Headless text includes the summary,
 available actions, and a labeled `Details:` section.
+
+## Transcript presentation
+
+| Element            | Presentation                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Summary            | Incident severity color; the loudest element on the row.                                                                 |
+| Disclosure control | Muted chrome: the theme foreground receded toward the background, never the severity color, never a faint/dim attribute. |
+| Fenced evidence    | The code surface: syntax highlighted, receded toward the background, with a neutral line-number gutter.                  |
+| Prose evidence     | The incident severity color, as prose.                                                                                   |
+
+Machine-readable payloads (a JSON status object, for example) are noise in an
+informational notice: the transcript keeps the incident summary, discloses no
+payload, and offers no disclosure control for it; Transcript Review retains the
+complete payload and renders it on the code surface. A warning or an error is
+actionable, so its payload stays disclosed in the transcript behind the control.
+Prose evidence is always disclosed in place.
+
+Evidence code keeps the syntax palette that matches the terminal theme. The
+`syntax_highlighting.enabled` and `syntax_highlighting.enabled_languages`
+settings govern it (an explicit opt-out disables evidence highlighting), while
+`syntax_highlighting.theme` governs highlighted tool output.
 
 Legacy `AnsiRenderer` Error, ToolError, and Warning output passes through the
 shared adapter. Direct inline-handle Error/Warning appends and pasted/batched

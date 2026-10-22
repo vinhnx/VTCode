@@ -106,6 +106,44 @@ pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f32) -> RgbColor {
     RgbColor(blend(color.0, target.0), blend(color.1, target.1), blend(color.2, target.2))
 }
 
+/// Granularity of the dimming search, as a fraction of the blend range.
+const DIM_STEPS: u32 = 20;
+
+/// Recede a color toward the background, keeping the result readable.
+///
+/// The result is the requested share of the background mix, or the dimmest
+/// tint that still clears the contrast floor when the share would go too far.
+/// Light and dark themes therefore both keep a legible surface instead of
+/// washing the text out. Palette colors that are not plain RGB are returned
+/// unchanged: the recipe needs true-color luminance math.
+pub(crate) fn recede_toward_background(
+    base: anstyle::Color,
+    background: anstyle::Color,
+    ratio: f32,
+    min_contrast: f32,
+) -> anstyle::Color {
+    let (anstyle::Color::Rgb(base_rgb), anstyle::Color::Rgb(background_rgb)) = (base, background) else {
+        return base;
+    };
+    let candidate = mix(base_rgb, background_rgb, ratio);
+    if contrast_ratio(candidate, background_rgb) >= min_contrast {
+        return candidate.into();
+    }
+    // The requested share would go too far: take the dimmest tint that still
+    // clears the floor.
+    let mut dimmed = base_rgb;
+    for step in 1..=DIM_STEPS {
+        let step_ratio = step as f32 / DIM_STEPS as f32;
+        let step_candidate = mix(base_rgb, background_rgb, step_ratio);
+        if contrast_ratio(step_candidate, background_rgb) >= min_contrast {
+            dimmed = step_candidate;
+        } else {
+            break;
+        }
+    }
+    dimmed.into()
+}
+
 pub(crate) fn lighten(color: RgbColor, ratio: f32) -> RgbColor {
     mix(
         color,

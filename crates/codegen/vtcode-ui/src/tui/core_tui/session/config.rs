@@ -131,6 +131,13 @@ pub struct AppearanceConfig {
     #[serde(default)]
     pub diff_preview_mode: DiffPreviewMode,
 
+    /// Syntax highlighting for the code surfaces the TUI renders itself
+    /// (diagnostic evidence bodies). The code palette follows the active UI
+    /// theme; this decides whether highlighting happens and which languages
+    /// are eligible.
+    #[serde(default)]
+    pub syntax_highlighting: vtcode_config::loader::SyntaxHighlightingConfig,
+
     /// Customization settings
     pub customization: CustomizationConfig,
 }
@@ -165,6 +172,7 @@ impl Default for AppearanceConfig {
             show_transcript_review_shortcut_guide: default_transcript_review_control(),
             show_transcript_review_close_button: default_transcript_review_control(),
             diff_preview_mode: DiffPreviewMode::Inline,
+            syntax_highlighting: vtcode_config::loader::SyntaxHighlightingConfig::default(),
             customization: CustomizationConfig::default(),
         }
     }

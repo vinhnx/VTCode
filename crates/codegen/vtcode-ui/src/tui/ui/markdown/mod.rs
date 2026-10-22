@@ -5,7 +5,6 @@ mod links;
 mod parsing;
 mod tables;
 
-use crate::tui::config::loader::SyntaxHighlightingConfig;
 use crate::tui::ui::theme::{self, ThemeStyles};
 use anstyle::Style;
 use code_blocks::{CodeBlockRenderEnv, CodeBlockState, finalize_unclosed_code_block, handle_code_block_event};
@@ -16,11 +15,13 @@ use parsing::{
 use pulldown_cmark::{Event, Options, Parser};
 use tables::TableBuffer;
 use unicode_width::UnicodeWidthStr;
+use vtcode_config::loader::SyntaxHighlightingConfig;
 
 pub(crate) use code_blocks::render_diff_content_segments;
 pub use code_blocks::{
     HighlightedSegment, highlight_code_to_ansi, highlight_code_to_segments, highlight_line_for_diff,
 };
+pub use vtcode_commons::ui_protocol::CodeBlockWeight;
 
 pub(crate) const LIST_INDENT_WIDTH: usize = 2;
 pub(crate) const CODE_LINE_NUMBER_MIN_WIDTH: usize = 3;
@@ -100,6 +101,27 @@ pub struct RenderMarkdownOptions {
     /// labeled records when the grid becomes too cramped. Headerless tables
     /// retain their grid layout and scale columns to fit.
     pub table_max_width: Option<usize>,
+    /// Visual weight applied to fenced code blocks. Secondary surfaces use
+    /// [`CodeBlockWeight::Muted`] so evidence recedes behind its summary.
+    pub code_block_weight: CodeBlockWeight,
+}
+
+/// Highlight configuration for TUI-rendered markdown code blocks.
+///
+/// The TUI owns the code palette: the syntax theme that matches the active UI
+/// theme keeps code legible against the terminal background, so the palette
+/// follows the UI theme rather than a fixed name. The user's configuration
+/// still decides whether highlighting happens at all and which languages are
+/// eligible.
+pub fn theme_matched_highlight_config(user: &SyntaxHighlightingConfig) -> SyntaxHighlightingConfig {
+    SyntaxHighlightingConfig {
+        enabled: user.enabled,
+        theme: crate::tui::ui::syntax_highlight::get_active_syntax_theme().to_string(),
+        cache_themes: user.cache_themes,
+        max_file_size_mb: user.max_file_size_mb,
+        enabled_languages: user.enabled_languages.clone(),
+        highlight_timeout_ms: user.highlight_timeout_ms,
+    }
 }
 
 /// Render markdown text to styled lines that can be written to the terminal renderer.

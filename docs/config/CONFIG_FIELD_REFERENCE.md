@@ -774,7 +774,7 @@ python3 scripts/generate_config_field_reference.py
 | `syntax_highlighting.enabled_languages[]` | `string` | no | `-` | - |
 | `syntax_highlighting.highlight_timeout_ms` | `integer` | no | `5000` | Performance settings - highlight timeout in milliseconds |
 | `syntax_highlighting.max_file_size_mb` | `integer` | no | `10` | Maximum file size for syntax highlighting (in MB) |
-| `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for syntax highlighting |
+| `syntax_highlighting.theme` | `string` | no | `"base16-ocean.dark"` | Theme to use for highlighting tool output; TUI-rendered diagnostic evidence keeps the syntax palette that matches the terminal theme so code stays legible on both light and dark schemes |
 | `telemetry.atif_enabled` | `boolean` | no | `false` | Enable ATIF (Agent Trajectory Interchange Format) trajectory export. When enabled, sessions write an `atif-trajectory.json` alongside the existing `.jsonl` trajectory log. |
 | `telemetry.bottleneck_tracing` | `boolean` | no | `false` | Emit bottleneck traces for slow paths |
 | `telemetry.dashboards_enabled` | `boolean` | no | `true` | Enable real-time dashboards |

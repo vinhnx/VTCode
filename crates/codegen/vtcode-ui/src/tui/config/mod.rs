@@ -306,41 +306,6 @@ impl Default for ContextConfig {
     }
 }
 
-/// Configuration for syntax highlighting in code blocks.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SyntaxHighlightingConfig {
-    pub enabled: bool,
-    pub theme: String,
-    pub cache_themes: bool,
-    pub max_file_size_mb: usize,
-    pub enabled_languages: Vec<String>,
-    pub highlight_timeout_ms: u64,
-}
-
-impl Default for SyntaxHighlightingConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            theme: "base16-ocean.dark".to_string(),
-            cache_themes: true,
-            max_file_size_mb: 5,
-            enabled_languages: vec![
-                "rust".to_string(),
-                "python".to_string(),
-                "javascript".to_string(),
-                "typescript".to_string(),
-                "go".to_string(),
-                "bash".to_string(),
-                "json".to_string(),
-                "yaml".to_string(),
-                "toml".to_string(),
-                "markdown".to_string(),
-            ],
-            highlight_timeout_ms: 300,
-        }
-    }
-}
-
 /// Pseudo-terminal (PTY) configuration for shell sessions.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PtyConfig {

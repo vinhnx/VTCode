@@ -117,7 +117,7 @@ fn append_message(handle: &InlineHandle, kind: InlineMessageKind, text: impl Int
 /// feedback instead of a silent blank block.
 fn append_markdown_message(handle: &InlineHandle, kind: InlineMessageKind, markdown: &str) -> bool {
     use std::sync::Arc;
-    use vtcode_core::ui::markdown::{RenderMarkdownOptions, render_markdown_to_lines_with_options};
+    use vtcode_core::ui::markdown::{CodeBlockWeight, RenderMarkdownOptions, render_markdown_to_lines_with_options};
     use vtcode_core::ui::theme;
     use vtcode_core::ui::tui::{InlineSegment, convert_style};
     use vtcode_core::utils::ansi::MessageStyle;
@@ -143,6 +143,7 @@ fn append_markdown_message(handle: &InlineHandle, kind: InlineMessageKind, markd
             preserve_code_indentation: true,
             disable_code_block_table_reparse: false,
             table_max_width: None,
+            code_block_weight: CodeBlockWeight::Primary,
         },
     );
 
