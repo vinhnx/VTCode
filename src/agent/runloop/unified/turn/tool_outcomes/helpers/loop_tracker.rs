@@ -32,6 +32,13 @@ pub(crate) const PLANNING_TOTAL_LOW_SIGNAL_THRESHOLD: u8 = 10;
 /// so this fires only for churn uninterrupted by productive work.
 pub(crate) const EXECUTION_TOTAL_LOW_SIGNAL_THRESHOLD: u8 = 12;
 
+/// First verifier wait window, in seconds.
+const VERIFIER_WAIT_BASE_SECS: u64 = 1;
+/// Longest verifier wait window, in seconds.
+const VERIFIER_WAIT_MAX_SECS: u64 = 8;
+/// Largest doubling step, so the schedule is 1s, 2s, 4s, 8s, 8s, …
+const VERIFIER_WAIT_MAX_SHIFT: u32 = 3;
+
 /// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<String, (usize, Instant)>,
@@ -76,6 +83,10 @@ pub(crate) struct LoopTracker {
     pub auto_verification_executed: bool,
     /// Live verifier identity for this turn; a running response is not a verdict.
     pub pending_verifier_session_id: Option<String>,
+    /// Consecutive waits issued against `pending_verifier_session_id`.
+    /// Drives the growing wait window so a long-running verifier needs a
+    /// handful of polls instead of one per second.
+    pub verifier_wait_polls: u32,
     /// Feedback for an observed terminal verifier failure, never a lost result.
     pub(super) verifier_failed_notice_pending: bool,
     /// Counter for consecutive read/search operations without action or synthesis
@@ -128,6 +139,7 @@ impl LoopTracker {
             verification_auto_recovery_attempts: 0,
             auto_verification_executed: false,
             pending_verifier_session_id: None,
+            verifier_wait_polls: 0,
             verifier_failed_notice_pending: false,
             consecutive_navigations: 0,
             navigation_loop_recoveries: 0,
@@ -471,6 +483,25 @@ impl LoopTracker {
     pub(crate) fn record_auto_verification_executed(&mut self) {
         self.auto_verification_executed = true;
         self.record_required_verifier_progress(None);
+    }
+
+    /// The wait window for the next poll of the pending verifier session.
+    ///
+    /// The wait returns as soon as the session produces output, so a longer
+    /// window does not delay completion detection — it only avoids one tool
+    /// call per second while a long verifier is still running. The window
+    /// doubles up to the cap, and resets when the verifier session changes.
+    pub(crate) fn next_verifier_wait_timeout_secs(&mut self) -> u64 {
+        let shift = self.verifier_wait_polls.min(VERIFIER_WAIT_MAX_SHIFT);
+        self.verifier_wait_polls = self.verifier_wait_polls.saturating_add(1);
+        VERIFIER_WAIT_BASE_SECS
+            .saturating_mul(1u64 << shift)
+            .min(VERIFIER_WAIT_MAX_SECS)
+    }
+
+    /// Reset the wait window when the pending verifier session changes.
+    pub(crate) fn reset_verifier_wait_polls(&mut self) {
+        self.verifier_wait_polls = 0;
     }
 
     pub(crate) fn mark_verification_complete(&mut self) {

@@ -6,6 +6,21 @@ mod verification_recovery;
 mod verifier_sessions;
 
 #[test]
+fn verifier_wait_window_grows_and_resets_with_the_session() {
+    let mut tracker = LoopTracker::new();
+
+    // The window doubles up to the cap, so a long verifier needs a handful of
+    // polls instead of one per second.
+    let windows: Vec<u64> = (0..6).map(|_| tracker.next_verifier_wait_timeout_secs()).collect();
+    assert_eq!(windows, vec![1, 2, 4, 8, 8, 8]);
+    assert!(windows.windows(2).all(|pair| pair[1] >= pair[0]), "the wait window must never shrink: {windows:?}");
+
+    // A new verifier session starts a fresh window.
+    tracker.reset_verifier_wait_polls();
+    assert_eq!(tracker.next_verifier_wait_timeout_secs(), 1);
+}
+
+#[test]
 fn unrelated_successful_checks_cannot_refill_required_verifier_progress() {
     let mut tracker = LoopTracker::new();
     for attempt in 1..=BLIND_EDITING_THRESHOLD {

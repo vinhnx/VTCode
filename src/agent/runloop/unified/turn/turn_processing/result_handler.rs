@@ -282,18 +282,28 @@ pub(crate) async fn execute_harness_auto_verification(
 
     // A fresh internal turn may still own the previous turn's verifier. Reuse
     // a current-generation execution covering this check, never archived handles.
+    let previous_verifier_session = repeated_tool_attempts.pending_verifier_session_id.clone();
     repeated_tool_attempts.pending_verifier_session_id =
         ctx.tool_registry.pending_completion_verifier_session(&command);
+    if repeated_tool_attempts.pending_verifier_session_id != previous_verifier_session {
+        // A different (or finished) verifier starts a fresh wait window.
+        repeated_tool_attempts.reset_verifier_wait_polls();
+    }
 
     if let Some(reason) = ctx.verification_execution_blocker(repeated_tool_attempts) {
         return Ok(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { reason: Some(reason) }));
     }
     let pending_session = repeated_tool_attempts.pending_verifier_session_id.clone();
     let (tool_name, args) = match pending_session {
-        Some(session_id) => (
-            tool_names::WRITE_STDIN,
-            serde_json::json!({"session_id": session_id, "action": "wait", "wait_timeout_seconds": 1, "max_output_tokens": 4000}),
-        ),
+        Some(session_id) => {
+            // The wait returns as soon as the verifier produces output, so a
+            // growing window cuts redundant polls without delaying detection.
+            let wait_timeout_seconds = repeated_tool_attempts.next_verifier_wait_timeout_secs();
+            (
+                tool_names::WRITE_STDIN,
+                serde_json::json!({"session_id": session_id, "action": "wait", "wait_timeout_seconds": wait_timeout_seconds, "max_output_tokens": 4000}),
+            )
+        }
         None => (
             tool_names::EXEC_COMMAND,
             serde_json::json!({"cmd": command, "yield_time_ms": 1000, "max_output_tokens": 4000}),
