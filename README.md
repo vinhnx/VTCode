@@ -275,8 +275,7 @@ issue. Details: [security policy](./docs/SECURITY.md).
 
 ## Community and support
 
-VT Code is created and maintained by [@vinhnx](https://github.com/vinhnx), with help from everyone in the grid below.
-Whether you write code, fix docs, or just try a release and tell me what broke, you are welcome here.
+VT Code is created and maintained by Vinh Nguyen, with help from the community. Whether you write code, fix docs, or just try a release and tell me what broke, feel free to contribute. You can also fork the repository and customize it for your own use. If you have suggestions or improvements, don't hesitate to share them.
 
 - [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell me,
   and include `vtcode trajectory` output if you can.
