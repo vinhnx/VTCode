@@ -46,6 +46,35 @@ pub fn estimate_tokens(text: &str) -> usize {
     }
 }
 
+/// Format a token count with a compact decimal suffix for transcript labels.
+///
+/// Counts below one thousand stay exact. Larger counts are rounded to one
+/// decimal place using `k`, `M`, or `B` suffixes.
+pub fn format_token_count(tokens: usize) -> String {
+    let (divisor, suffix) = match tokens {
+        999_500_000.. => (1_000_000_000, "B"),
+        999_500.. => (1_000_000, "M"),
+        1_000.. => (1_000, "k"),
+        _ => return tokens.to_string(),
+    };
+
+    let whole = tokens / divisor;
+    let decimal_step = divisor / 10;
+    // Divide into tenths before rounding; multiplying a billion-scale
+    // remainder by ten would overflow on 32-bit targets.
+    let tenths = (tokens % divisor + decimal_step / 2) / decimal_step;
+    let (whole, tenths) = if tenths >= 10 {
+        (whole.saturating_add(1), 0)
+    } else {
+        (whole, tenths)
+    };
+    if tenths == 0 {
+        format!("{whole}{suffix}")
+    } else {
+        format!("{whole}.{tenths}{suffix}")
+    }
+}
+
 /// Truncate `text` to at most `max_tokens` tokens.
 ///
 /// Decodes the truncated token sequence back to text so the result is always
@@ -118,5 +147,18 @@ mod tests {
         let json = r#"{"name":"test","value":123,"nested":{"key":"value"}}"#;
         let count = estimate_tokens(json);
         assert!((10..=40).contains(&count), "json count={count}");
+    }
+
+    #[test]
+    fn token_count_format_is_compact_and_rounds_across_suffix_boundaries() {
+        assert_eq!(format_token_count(999), "999");
+        assert_eq!(format_token_count(1_000), "1k");
+        assert_eq!(format_token_count(1_050), "1.1k");
+        assert_eq!(format_token_count(6_100), "6.1k");
+        assert_eq!(format_token_count(999_500), "1M");
+        assert_eq!(format_token_count(15_600_000), "15.6M");
+        assert_eq!(format_token_count(999_500_000), "1B");
+        assert_eq!(format_token_count(1_550_000_000), "1.6B");
+        assert_eq!(format_token_count(1_549_999_999), "1.5B");
     }
 }

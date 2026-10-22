@@ -39,7 +39,7 @@ pub(super) fn web_fetch_error_response(url: &str, max_bytes: usize, timeout_secs
     {
         return error.to_json_value();
     }
-    let message = err.to_string();
+    let message = format!("{err:#}");
     let (category, http_status, next_action) = classify_web_fetch_error(&message);
 
     let mut payload = json!({
@@ -119,11 +119,11 @@ pub(super) fn classify_web_fetch_error(message: &str) -> (&'static str, Option<u
             "The server returned a non-text content type (e.g., image or PDF). The web_fetch tool only handles text/HTML/JSON. Try web_search instead, or use a different tool to read the resource.",
         );
     }
-    if lower.contains("blocked") || lower.contains("sensitive") {
+    if lower.contains("blocked") || lower.contains("sensitive") || lower.contains("denied by policy") {
         return (
             "policy_blocked",
             None,
-            "The URL is denied by policy. Stop this fetch; do not bypass the denial through Python, shell commands, or another route. Report the limitation.",
+            "The URL is denied by policy. Stop this fetch and report the applicable reason. Ask the user to review web_fetch approval and domain restrictions; do not bypass the denial through Python, shell commands, another search provider, or another route.",
         );
     }
     (

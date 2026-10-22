@@ -2,7 +2,8 @@
 
 The inline and fullscreen interfaces show one temporary progress row as soon as a request is accepted. The row
 follows actual work: initialization, context preparation, checkpoint saving, model wait, processing, response reception,
-retry backoff, permission checks, approval waits, and admitted tool execution. Individual tool rows and queued prompts
+retry backoff, permission checks, approval waits, admitted tool execution, and context compaction with its estimated
+input-token count. Individual tool rows and queued prompts
 keep their existing presentation. Progress appears once: the footer uses the same phase label and elapsed seconds
 only when the current layout cannot show the transcript progress row. Git status stays static even when the branch
 name contains an activity word such as `blocked`. While that row is visible, the footer retains
@@ -34,9 +35,18 @@ The UI deduplicates phase updates against the displayed operation. Copilot runti
 tool execution or approval waits; when they settle, the request caller restores model progress before more text.
 Experimental tool-output probes use the `Checking tool output...` phase, including their generation fallback.
 `InlineHandle::replace_progress_phase` retains the prior phase for scoped work without starting another operation.
-Probe completion restores only the matching operation; cancellation clears it, and a replacement owner keeps its phase.
+Compaction and probe completion use `InlineHandle::restore_progress_phase` to restore the matching operation and
+scoped phase atomically. A replacement operation or newer phase keeps its feedback. If compaction begins without an
+active operation, its owning guard starts and finishes one.
 Keyboard and paste handlers only emit input events. They do not create provisional operations: a submission can
 be consumed by a local command, overlay, or focused process before the runtime accepts a request.
+
+Manual `/compact`, automatic compaction, recovery compaction, and model-switch compaction share this row and its
+phase-local elapsed clock. Narrow rows use a shorter label to retain the estimate and timer. Success reports, for
+example, `Context compacted · 1m 14s · local · ↓ 6.1k tokens`; already-compact history has a distinct completion line.
+Input sizes and savings are local tokenizer estimates. Provider replay details, including encrypted native
+compaction state, make those estimates unavailable. Failures show a bounded, sanitized reason in the transcript
+and retain sanitized diagnostic details in the debug log.
 
 Progress is presentation state. It does not grant permissions, set `ActivityState`, change input ownership, or enter
 conversation history, exports, canonical events, or provider requests. The transcript widget reserves one row outside

@@ -1,5 +1,6 @@
 use super::*;
 use ratatui::{buffer::Buffer, style::Modifier, widgets::Paragraph};
+use std::time::Instant;
 use vtcode_commons::ui_protocol::{ProgressOperation, ProgressPhase, ProgressUpdate};
 
 #[derive(Clone, Copy)]
@@ -22,7 +23,7 @@ impl TransientProgress {
             ProgressUpdate::Begin { operation, phase } if operation.id() > self.latest_id => {
                 self.latest_id = operation.id();
                 self.active = Some(ActiveProgress { operation, phase, feedback_observed: false });
-                self.elapsed_secs = operation.started_at().elapsed().as_secs();
+                self.elapsed_secs = phase.elapsed_secs(operation, Instant::now());
                 true
             }
             ProgressUpdate::Phase { operation, phase }
@@ -33,7 +34,7 @@ impl TransientProgress {
                 if let Some(current) = self.active.as_mut() {
                     current.phase = phase;
                 }
-                self.elapsed_secs = operation.started_at().elapsed().as_secs();
+                self.elapsed_secs = phase.elapsed_secs(operation, Instant::now());
                 true
             }
             ProgressUpdate::Finish { operation }
@@ -53,7 +54,7 @@ impl TransientProgress {
         if !phase.is_animated() {
             return false;
         }
-        let elapsed_secs = operation.started_at().elapsed().as_secs();
+        let elapsed_secs = phase.elapsed_secs(operation, Instant::now());
         if elapsed_secs == self.elapsed_secs {
             return false;
         }
@@ -71,6 +72,11 @@ impl TransientProgress {
 
     pub(crate) fn text(&self) -> Option<String> {
         self.active.map(|current| current.phase.format(self.elapsed_secs))
+    }
+
+    pub(crate) fn text_for_width(&self, width: usize) -> Option<String> {
+        self.active
+            .map(|current| current.phase.format_for_width(self.elapsed_secs, width))
     }
 }
 
@@ -123,7 +129,9 @@ impl Session {
             return;
         }
         self.set_progress_area(Some(area));
-        let Some(text) = self.progress.text() else { return };
+        let Some(text) = self.progress.text_for_width(usize::from(area.width)) else {
+            return;
+        };
         let feedback_columns = measure_text_width(&text).min(area.width);
         let style = self.styles.default_style().add_modifier(Modifier::DIM);
         let mut spans = if self.progress.is_animated() && self.appearance.should_animate_progress_status() {

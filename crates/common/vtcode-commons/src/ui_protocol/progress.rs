@@ -41,6 +41,10 @@ pub enum ProgressPhase {
     WaitingForApproval,
     RunningTools,
     CheckingToolOutput,
+    Compacting {
+        estimated_input_tokens: Option<usize>,
+        started_at: Instant,
+    },
 }
 
 impl ProgressPhase {
@@ -57,6 +61,7 @@ impl ProgressPhase {
             Self::WaitingForApproval => "Waiting for approval",
             Self::RunningTools => "Running tools",
             Self::CheckingToolOutput => "Checking tool output...",
+            Self::Compacting { .. } => "Compacting context",
         }
     }
 
@@ -64,11 +69,57 @@ impl ProgressPhase {
         self != Self::WaitingForApproval
     }
 
+    /// Elapsed whole seconds for this phase, using a phase-local clock only
+    /// when the operation is being shown as compaction progress.
+    pub fn elapsed_secs(self, operation: ProgressOperation, now: Instant) -> u64 {
+        let started_at = match self {
+            Self::Compacting { started_at, .. } => started_at,
+            _ => operation.started_at(),
+        };
+        now.saturating_duration_since(started_at).as_secs()
+    }
+
     pub fn format(self, elapsed_secs: u64) -> String {
+        if let Self::Compacting { estimated_input_tokens, .. } = self {
+            let estimate = estimated_input_tokens
+                .map(|tokens| format!(" · ~{} input tokens", crate::format_token_count(tokens)))
+                .unwrap_or_default();
+            return if elapsed_secs == 0 {
+                format!("{}{}", self.label(), estimate)
+            } else {
+                format!("{}{} · {elapsed_secs}s", self.label(), estimate)
+            };
+        }
         if elapsed_secs == 0 {
             self.label().to_string()
         } else {
             format!("{} · {elapsed_secs}s", self.label())
+        }
+    }
+
+    /// Format a phase for a bounded transcript row, preserving the most useful
+    /// compaction details when the full label would be truncated.
+    pub fn format_for_width(self, elapsed_secs: u64, width: usize) -> String {
+        let formatted = self.format(elapsed_secs);
+        if formatted.chars().count() <= width {
+            return formatted;
+        }
+
+        let Self::Compacting { estimated_input_tokens, .. } = self else {
+            return formatted;
+        };
+        let compact = match estimated_input_tokens {
+            Some(tokens) => format!("Compact ~{} · {elapsed_secs}s", crate::format_token_count(tokens)),
+            None => format!("Compact · {elapsed_secs}s"),
+        };
+        if compact.chars().count() <= width {
+            return compact;
+        }
+        // A longer timer must not switch back to the detailed label and hide
+        // both metrics on the same narrow row.
+        match estimated_input_tokens {
+            Some(tokens) => format!("Compact ~{} {elapsed_secs}s", crate::format_token_count(tokens)),
+            None => compact,
         }
     }
 }
@@ -86,4 +137,21 @@ pub enum ProgressUpdate {
     Finish {
         operation: ProgressOperation,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn compaction_phase_uses_its_own_elapsed_clock() {
+        let operation = ProgressOperation::start();
+        let started_at = operation.started_at() + Duration::from_secs(10);
+        let phase = ProgressPhase::Compacting { estimated_input_tokens: Some(12_000), started_at };
+        let now = started_at + Duration::from_secs(74);
+
+        assert_eq!(phase.elapsed_secs(operation, now), 74);
+        assert_eq!(ProgressPhase::WaitingForModel.elapsed_secs(operation, now), 84);
+    }
 }

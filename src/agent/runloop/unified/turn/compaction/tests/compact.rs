@@ -200,6 +200,7 @@ async fn manual_compaction_clears_previous_response_chain() {
     let temp = tempdir().expect("tempdir");
     let provider = ProviderCompactionProvider;
     let mut history = test_history();
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("provider-stub", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
@@ -224,7 +225,48 @@ async fn manual_compaction_clears_previous_response_chain() {
     .expect("history should compact");
 
     assert_eq!(outcome.mode, vtcode_core::exec::events::CompactionMode::Provider);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     assert_eq!(session_stats.previous_response_id_for("provider-stub", "stub-model"), None);
+}
+
+#[tokio::test]
+async fn native_compaction_replay_state_makes_token_estimates_unavailable() {
+    let temp = tempdir().expect("tempdir");
+    let plain_history = test_history();
+    let expected_plain_tokens: usize = plain_history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(super::super::estimate_history_tokens(&plain_history), Some(expected_plain_tokens));
+    assert_eq!(super::super::estimate_history_tokens(&[]), Some(0));
+    let detail = json!({"type": "compaction", "encrypted_content": "opaque-provider-state"});
+    for detail in [detail.clone(), serde_json::Value::String(detail.to_string())] {
+        let mut history = plain_history.clone();
+        let marker = Message::assistant(String::new()).with_reasoning_details(Some(vec![detail]));
+        history.push(marker.clone());
+        let mut session_stats = SessionStats::default();
+        let mut context_manager = test_context_manager();
+        let outcome = manual_compact_history_in_place(
+            CompactionContext::new(
+                &ProviderCompactionProvider,
+                "stub-model",
+                "session-opaque",
+                "thread-opaque",
+                temp.path(),
+                Some(&VTCodeConfig::default()),
+                None,
+                None,
+            ),
+            CompactionState::new(&mut history, &mut session_stats, &mut context_manager),
+            &ManualCompactionOptions::default(),
+            false,
+        )
+        .await
+        .expect("native compaction succeeds")
+        .expect("history should compact");
+        assert!(history.contains(&marker), "native replay state must remain intact");
+        assert_eq!(outcome.estimated_tokens_before, None);
+        assert_eq!(outcome.estimated_tokens_after, None);
+    }
 }
 
 #[tokio::test]

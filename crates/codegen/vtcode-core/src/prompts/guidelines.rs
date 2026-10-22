@@ -20,6 +20,7 @@ const SOURCE_INSPECTION_GUIDANCE: &str =
     "- Inspect relevant source, edit a bounded region, refresh after mismatch, then verify.";
 const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
+const WEB_SEARCH_GUIDANCE: &str = "- `web_search` returns Octen excerpts; full-page `web_fetch` needs separate approval. Missing keys: `/secret add octen` or `OCTEN_API_KEY`; never prompt from a tool call.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
 const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";
@@ -111,6 +112,7 @@ struct ToolPresence {
     exec: bool,
     write_stdin: bool,
     code_search: bool,
+    web_search: bool,
     read_file: bool,
     grep_file: bool,
     list_files: bool,
@@ -131,6 +133,7 @@ impl ToolPresence {
             exec: false,
             write_stdin: false,
             code_search: false,
+            web_search: false,
             read_file: false,
             grep_file: false,
             list_files: false,
@@ -146,6 +149,7 @@ impl ToolPresence {
                 TOOL_EXEC_COMMAND => presence.exec = true,
                 TOOL_WRITE_STDIN => presence.write_stdin = true,
                 TOOL_CODE_SEARCH => presence.code_search = true,
+                "web_search" => presence.web_search = true,
                 TOOL_READ_FILE => presence.read_file = true,
                 TOOL_GREP_FILE => presence.grep_file = true,
                 TOOL_LIST_FILES => presence.list_files = true,
@@ -254,6 +258,9 @@ pub(crate) fn generate_tool_guidelines_for_profile(
     }
     if presence.matrix {
         lines.push(MATRIX_GUIDANCE.to_owned());
+    }
+    if presence.web_search {
+        lines.push(WEB_SEARCH_GUIDANCE.to_owned());
     }
     lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_string());
     if let Some(mode_line) = capability_mode_line(capability_level, has_exec, has_apply_patch) {
@@ -554,6 +561,9 @@ fn generate_runtime_tool_guidelines_for_profile(
     let has_task_tracker = presence.task_tracker;
 
     let mut lines = vec!["- Planning workflow active: stay within the read-safe tool list.".to_string()];
+    if presence.web_search {
+        lines.push(WEB_SEARCH_GUIDANCE.to_owned());
+    }
     lines.push(OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE.to_string());
     if let Some(browse_guidance) =
         browse_tool_guidance(has_exec, has_search, has_list_files, has_read_file, shell_profile)
@@ -769,6 +779,17 @@ mod tests {
         }
         append_prompt_block(&mut prompt, guidance.trim_start_matches('\n'));
         prompt
+    }
+
+    #[test]
+    fn octen_guidance_is_present_only_with_search_and_stays_bounded() {
+        let enabled = guidelines_for(&["web_search".to_owned()], None);
+        let disabled = guidelines_for(&[], None);
+        assert!(enabled.contains("Octen excerpts"));
+        assert!(enabled.contains("separate approval"));
+        assert!(enabled.contains("/secret add octen"));
+        assert!(!disabled.contains("Octen"));
+        assert!(enabled.len().saturating_sub(disabled.len()) < 250);
     }
 
     #[test]

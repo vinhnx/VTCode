@@ -584,6 +584,49 @@ fn progress_approval_and_accessibility_fallbacks_keep_static_labels() {
 }
 
 #[test]
+fn compaction_progress_keeps_estimate_and_elapsed_visible_with_reduced_motion() {
+    let mut session = Session::new(InlineTheme::default(), None, 12);
+    session.appearance.reduce_motion_mode = true;
+    let operation = ProgressOperation::start();
+    session.handle_command(InlineCommand::UpdateProgress(ProgressUpdate::Begin {
+        operation,
+        phase: ProgressPhase::Compacting {
+            estimated_input_tokens: Some(12_345),
+            started_at: Instant::now(),
+        },
+    }));
+    session.progress.elapsed_secs = 74;
+
+    let wide_area = Rect::new(0, 0, 80, 1);
+    let mut wide = Buffer::empty(wide_area);
+    session.render_progress(wide_area, &mut wide);
+    let wide_text = rendered_text(&wide);
+    assert!(wide_text.contains("Compacting context"), "{wide_text}");
+    assert!(wide_text.contains("~12.3k input tokens"), "{wide_text}");
+    assert!(wide_text.contains("74s"), "{wide_text}");
+
+    for elapsed_secs in [74, 99, 100, 1_000, 3_600] {
+        session.progress.elapsed_secs = elapsed_secs;
+        let narrow_area = Rect::new(0, 0, 20, 1);
+        let mut narrow = Buffer::empty(narrow_area);
+        session.render_progress(narrow_area, &mut narrow);
+        let narrow_text = rendered_text(&narrow);
+        assert_eq!(narrow_text.chars().count(), 20);
+        assert!(narrow_text.contains("Compact"), "{narrow_text}");
+        assert!(narrow_text.contains("12.3k"), "{narrow_text}");
+        assert!(narrow_text.contains(&format!("{elapsed_secs}s")), "{narrow_text}");
+    }
+    assert_eq!(
+        ProgressPhase::Compacting {
+            estimated_input_tokens: None,
+            started_at: Instant::now()
+        }
+        .format(4),
+        "Compacting context · 4s"
+    );
+}
+
+#[test]
 fn progress_rejects_stale_updates_and_late_restart() {
     let old = ProgressOperation::start();
     let new = ProgressOperation::start();

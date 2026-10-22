@@ -1,98 +1,92 @@
-//! Async progress UI for context compaction.
-//!
-//! The compaction engine (`vtcode-core::compaction` + `turn::compaction`) runs
-//! as a single awaited future. Without a concurrent status task the UI freezes
-//! until the engine returns, then prints one post-hoc line. This module keeps
-//! the two in sync: the guard starts a `PlaceholderSpinner` ("Compacting
-//! context...") plus a lightweight elapsed updater, brackets the engine await,
-//! and formats the terminal `Context compacted · {duration}` line from the
-//! engine's authoritative outcome.
+//! Transcript progress and compact completion summaries for context compaction.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use vtcode_ui::tui::app::InlineHandle;
+use vtcode_commons::ui_protocol::{ProgressPhase, ProgressUpdate};
+use vtcode_ui::tui::app::{InlineHandle, ProgressGuard};
 
 use crate::agent::runloop::unified::palettes::format_duration_label;
-use crate::agent::runloop::unified::status_line::InputStatusState;
-use crate::agent::runloop::unified::ui_interaction::{PlaceholderSpinner, start_loading_status};
-
-/// Spinner message shown while the engine runs.
-const COMPACTING_MESSAGE: &str = "Compacting context...";
-
-/// How often the elapsed suffix refreshes. Matches the spinner tick granularity
-/// without spamming the status channel.
-const ELAPSED_TICK_MS: u64 = 200;
+use vtcode_commons::format_token_count;
 
 /// RAII guard bracketing one compaction pass.
 ///
-/// The background task only writes status text; the engine future owns the real
-/// work. Dropping (or `finish`) aborts the ticker and restores input status so
-/// the final `renderer.line()` is the single source of truth.
-#[must_use = "drop the guard only after the engine await so the spinner stays in sync"]
+/// A scoped phase keeps the current operation ID and restores its previous
+/// phase. If no operation is active, the guard owns a new operation whose drop
+/// finishes the transcript row.
+#[must_use = "keep the guard alive until the compaction future settles"]
 pub(crate) struct CompactionProgressGuard {
-    spinner: Arc<PlaceholderSpinner>,
-    start: Instant,
-    updater: Option<tokio::task::JoinHandle<()>>,
+    handle: InlineHandle,
+    operation: vtcode_commons::ui_protocol::ProgressOperation,
+    started_at: Instant,
+    phase: ProgressPhase,
+    previous_phase: Option<ProgressPhase>,
+    owned_progress: Option<ProgressGuard>,
 }
 
 impl CompactionProgressGuard {
-    /// Show `Compacting context...` async while the caller awaits the engine.
-    pub(crate) fn start(handle: &InlineHandle, input_status: &InputStatusState) -> Self {
-        let spinner = Arc::new(start_loading_status(handle, input_status, COMPACTING_MESSAGE));
-        let start = Instant::now();
-        let spinner_clone = Arc::clone(&spinner);
-        let updater = tokio::task::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_millis(ELAPSED_TICK_MS));
-            loop {
-                interval.tick().await;
-                let elapsed = start.elapsed();
-                spinner_clone.update_message(format!("Compacting context... ({})", format_duration_label(elapsed)));
-            }
-        });
-        Self { spinner, start, updater: Some(updater) }
+    /// Show the estimated input size while the caller awaits the engine.
+    pub(crate) fn start(handle: &InlineHandle, estimated_input_tokens: Option<usize>) -> Self {
+        let started_at = Instant::now();
+        let phase = ProgressPhase::Compacting { estimated_input_tokens, started_at };
+        if let Some(ProgressUpdate::Phase { operation, phase: previous_phase }) = handle.replace_progress_phase(phase) {
+            return Self {
+                handle: handle.clone(),
+                operation,
+                started_at,
+                phase,
+                previous_phase: Some(previous_phase),
+                owned_progress: None,
+            };
+        }
+
+        let owned_progress = handle.begin_progress(phase);
+        let operation = owned_progress.operation();
+        Self {
+            handle: handle.clone(),
+            operation,
+            started_at,
+            phase,
+            previous_phase: None,
+            owned_progress: Some(owned_progress),
+        }
     }
 
     /// Elapsed time since the guard started.
     pub(crate) fn elapsed(&self) -> Duration {
-        self.start.elapsed()
+        self.started_at.elapsed()
     }
 
-    /// Stop the ticker and restore input status. The caller then emits the
-    /// authoritative final line derived from the engine outcome.
-    pub(crate) fn finish(mut self) -> Duration {
-        let elapsed = self.elapsed();
-        if let Some(updater) = self.updater.take() {
-            updater.abort();
-        }
-        self.spinner.finish();
-        elapsed
+    /// Finish the scoped phase and return its elapsed time.
+    pub(crate) fn finish(self) -> Duration {
+        self.elapsed()
     }
 }
 
 impl Drop for CompactionProgressGuard {
     fn drop(&mut self) {
-        if let Some(updater) = self.updater.take() {
-            updater.abort();
+        if self.owned_progress.is_none()
+            && let Some(previous_phase) = self.previous_phase
+        {
+            self.handle.restore_progress_phase(self.operation, self.phase, previous_phase);
         }
-        self.spinner.finish();
     }
 }
 
-/// Final line for a successful pass: `Context compacted · 1m 34s (...)`.
+/// Final line for a successful pass with estimated token savings.
 pub(crate) fn format_compacted_summary(
-    original_len: usize,
-    compacted_len: usize,
+    estimated_tokens_before: Option<usize>,
+    estimated_tokens_after: Option<usize>,
     mode: &str,
     elapsed: Duration,
 ) -> String {
-    format!(
-        "Context compacted · {} ({} -> {} context items, {} compaction). Prompt cache reuse may be lower on the next request.",
-        format_duration_label(elapsed),
-        original_len,
-        compacted_len,
-        mode
-    )
+    let token_change = match (estimated_tokens_before, estimated_tokens_after) {
+        (Some(before), Some(after)) if before >= after => {
+            format!("↓ {} tokens", format_token_count(before - after))
+        }
+        (Some(before), Some(after)) => format!("↑ {} tokens", format_token_count(after - before)),
+        _ => "token savings unavailable".to_string(),
+    };
+    format!("Context compacted · {} · {mode} · {token_change}", format_duration_label(elapsed))
 }
 
 /// Final line when history was already compact.
@@ -122,55 +116,4 @@ pub(crate) fn format_compaction_failed(elapsed: Duration, error: &anyhow::Error)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn compacted_summary_includes_counts_mode_and_duration() {
-        let label = format_compacted_summary(86, 12, "local", Duration::from_secs(94));
-        assert!(label.starts_with("Context compacted · "));
-        assert!(label.contains("86 -> 12"));
-        assert!(label.contains("local"));
-        assert!(label.contains("1m 34s"));
-    }
-
-    #[test]
-    fn already_compact_includes_duration() {
-        let label = format_already_compact(Duration::from_secs(3));
-        assert!(label.contains("already compact"));
-        assert!(label.contains("3s"));
-    }
-
-    #[test]
-    fn failed_label_includes_duration() {
-        let error = anyhow::anyhow!("Unknown parameter: 'stream'. Body: {{\"error\":\"duplicate\"}}")
-            .context("Failed to compact history via provider-native compaction");
-        let label = format_compaction_failed(Duration::from_secs(5), &error);
-        assert!(label.contains("compaction failed"));
-        assert!(label.contains("5s"));
-        assert!(label.contains("History preserved"));
-        assert!(label.contains("Unknown parameter: 'stream'"));
-        assert!(!label.contains("duplicate"));
-    }
-
-    #[test]
-    fn failed_label_bounds_untrusted_unicode_diagnostics() {
-        let error = anyhow::anyhow!("bad response\n{}", "故障".repeat(1000));
-        let label = format_compaction_failed(Duration::from_secs(1), &error);
-        assert!(!label.contains('\n'));
-        assert!(label.chars().count() < 650);
-        assert!(label.contains("..."));
-    }
-
-    #[test]
-    fn compaction_debug_details_preserve_chain_and_redact_secrets() {
-        let secret = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";
-        let error = anyhow::anyhow!("provider rejected api_key={secret}").context("Compaction request failed");
-        let details = format_compaction_error_details(&error);
-        assert!(details.contains("Compaction request failed"));
-        assert!(details.contains("provider rejected"));
-        assert!(!details.contains(secret));
-        let label = format_compaction_failed(Duration::from_secs(1), &error);
-        assert!(!label.contains(secret));
-    }
-}
+mod tests;

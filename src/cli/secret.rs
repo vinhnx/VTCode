@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::terminal::enable_raw_mode;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::str::FromStr;
 use unicode_width::UnicodeWidthChar;
 use vtcode_config::VTCodeConfig;
 use vtcode_config::api_keys::{
-    CredentialSource, clear_credential_with_mode, load_stored_credential_with_mode, resolve_credential_with_mode,
-    store_credential_with_mode,
+    CredentialSource, OCTEN_API_KEY_ENV, OCTEN_PROVIDER, clear_credential_with_mode, load_stored_credential_with_mode,
+    resolve_credential_with_mode, resolve_octen_credential_with_mode, store_credential_with_mode,
 };
 use vtcode_config::auth::AuthCredentialsStoreMode;
 use vtcode_config::workspace_env::{read_workspace_env_value, remove_workspace_env_value, workspace_env_path};
@@ -53,6 +53,18 @@ fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> R
         anyhow::bail!("Provider name cannot be empty.");
     }
 
+    if provider_name == OCTEN_PROVIDER {
+        if key_name.is_some_and(|key| !key.trim().eq_ignore_ascii_case(OCTEN_API_KEY_ENV)) {
+            anyhow::bail!("Octen uses the fixed credential name {OCTEN_API_KEY_ENV}.");
+        }
+        return Ok(SecretTarget {
+            provider_name,
+            label: "Octen".to_owned(),
+            env_key: OCTEN_API_KEY_ENV.to_owned(),
+            local: false,
+            managed_auth: false,
+        });
+    }
     if let Ok(provider) = Provider::from_str(&provider_name) {
         let env_key = key_name
             .filter(|key| !key.trim().is_empty())
@@ -110,6 +122,9 @@ fn all_secret_targets(config: &VTCodeConfig) -> Vec<SecretTarget> {
             .iter()
             .filter_map(|provider| secret_target(config, &provider.name, None).ok()),
     );
+    if let Ok(octen) = secret_target(config, OCTEN_PROVIDER, None) {
+        targets.push(octen);
+    }
     targets
 }
 
@@ -134,6 +149,8 @@ fn render_secret_status_table(
             Some(CredentialSource::Local)
         } else if target.managed_auth {
             Some(CredentialSource::ManagedAuth)
+        } else if target.provider_name == OCTEN_PROVIDER {
+            resolve_octen_credential_with_mode(storage_mode)?.map(|resolved| resolved.source)
         } else {
             resolve_credential_with_mode(&target.provider_name, &target.env_key, Some(workspace), storage_mode)?
                 .map(|resolved| resolved.source)
@@ -189,6 +206,11 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     println!("Key will NOT be stored in vtcode.toml or workspace environment files.");
     println!();
 
+    if target.provider_name == OCTEN_PROVIDER && !io::stdin().is_terminal() {
+        anyhow::bail!(
+            "Octen key setup requires a terminal for masked input; use /secret add octen or set OCTEN_API_KEY in the environment."
+        );
+    }
     let key = if io::stdin().is_terminal() {
         prompt_hidden_input(&format!("{} API key: ", label))?
     } else {
@@ -207,10 +229,9 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     }
 
     store_credential_with_mode(&target.provider_name, env_key, &key, storage_mode)?;
-
     // Purge stale entry from workspace .env so it doesn't shadow the
     // keyring entry (env var takes priority in get_api_key resolution).
-    if !env_key.is_empty() {
+    if target.provider_name != OCTEN_PROVIDER && !env_key.is_empty() {
         if read_workspace_env_value(workspace, env_key)?.is_some() {
             remove_workspace_env_value(workspace, env_key)?;
             println!("Removed stale {env_key} from workspace .env to avoid conflicts.");
@@ -232,9 +253,19 @@ async fn handle_delete(target: SecretTarget, workspace: &Path, storage_mode: Aut
     let env_key = target.env_key.as_str();
 
     let stored = load_stored_credential_with_mode(&target.provider_name, env_key, storage_mode)?;
-    let workspace_value = read_workspace_env_value(workspace, env_key)?;
+    let workspace_value = if target.provider_name == OCTEN_PROVIDER {
+        None
+    } else {
+        read_workspace_env_value(workspace, env_key)?
+    };
     if stored.is_none() && workspace_value.is_none() {
         println!("No stored API key found for {label}.");
+        if target.provider_name == OCTEN_PROVIDER
+            && resolve_octen_credential_with_mode(storage_mode)?
+                .is_some_and(|resolved| resolved.source == CredentialSource::Env)
+        {
+            println!("OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.");
+        }
         return Ok(());
     }
 
@@ -267,6 +298,12 @@ async fn handle_delete(target: SecretTarget, workspace: &Path, storage_mode: Aut
         println!("API key for {label} removed from workspace environment.");
     }
     println!("The change takes effect immediately.");
+    if target.provider_name == OCTEN_PROVIDER
+        && resolve_octen_credential_with_mode(storage_mode)?
+            .is_some_and(|resolved| resolved.source == CredentialSource::Env)
+    {
+        println!("OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.");
+    }
     Ok(())
 }
 
@@ -368,7 +405,14 @@ fn prompt_hidden_input(prompt: &str) -> Result<String> {
         anyhow::bail!("Cannot prompt for hidden input: stdin is not a terminal");
     }
 
-    let _raw = enable_raw_mode().with_context(|| "Failed to enable raw mode for secret input")?;
+    enable_raw_mode().with_context(|| "Failed to enable raw mode for secret input")?;
+    struct RawModeGuard;
+    impl Drop for RawModeGuard {
+        fn drop(&mut self) {
+            let _ = disable_raw_mode();
+        }
+    }
+    let _raw = RawModeGuard;
 
     {
         let mut stdout = io::stdout();
@@ -396,6 +440,7 @@ fn prompt_hidden_input(prompt: &str) -> Result<String> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum KeyAction {
     Continue,
     Submit,
@@ -403,15 +448,19 @@ enum KeyAction {
 }
 
 fn handle_key(event: Event, buffer: &mut String) -> Result<KeyAction> {
+    handle_key_with_writer(event, buffer, &mut io::stdout())
+}
+
+fn handle_key_with_writer(event: Event, buffer: &mut String, stdout: &mut impl Write) -> Result<KeyAction> {
     let Event::Key(key) = event else {
         return Ok(KeyAction::Continue);
     };
     if key.kind != KeyEventKind::Press {
         return Ok(KeyAction::Continue);
     }
-    let mut stdout = io::stdout();
     match key.code {
         KeyCode::Enter => Ok(KeyAction::Submit),
+        KeyCode::Esc => Ok(KeyAction::Abort),
         KeyCode::Char('c') if key.modifiers.contains(event::KeyModifiers::CONTROL) => Ok(KeyAction::Abort),
         KeyCode::Char('d') if key.modifiers.contains(event::KeyModifiers::CONTROL) => Ok(KeyAction::Submit),
         KeyCode::Char('u') if key.modifiers.contains(event::KeyModifiers::CONTROL) => {
@@ -452,5 +501,40 @@ fn handle_key(event: Event, buffer: &mut String) -> Result<KeyAction> {
             Ok(KeyAction::Continue)
         }
         _ => Ok(KeyAction::Continue),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn octen_cli_target_uses_search_identity() {
+        let config = VTCodeConfig::default();
+        let target = secret_target(&config, "Octen", None).expect("target");
+        assert_eq!(target.provider_name, OCTEN_PROVIDER);
+        assert_eq!(target.env_key, OCTEN_API_KEY_ENV);
+        assert!(!target.managed_auth);
+        assert!(!target.local);
+        assert!(secret_target(&config, "octen", Some("OTHER_KEY")).is_err());
+        assert!(all_secret_targets(&config).iter().any(|target| target.provider_name == "octen"));
+    }
+
+    #[test]
+    fn secret_input_masks_characters_and_escape_cancels_without_submission() {
+        let mut buffer = String::new();
+        let mut displayed = Vec::new();
+        for character in "private-key-42".chars() {
+            let event = Event::Key(event::KeyEvent::new(KeyCode::Char(character), event::KeyModifiers::NONE));
+            assert_eq!(
+                handle_key_with_writer(event, &mut buffer, &mut displayed).expect("keypress"),
+                KeyAction::Continue
+            );
+        }
+        assert_eq!(buffer, "private-key-42");
+        assert_eq!(displayed, b"**************");
+        let escape = Event::Key(event::KeyEvent::new(KeyCode::Esc, event::KeyModifiers::NONE));
+        assert_eq!(handle_key_with_writer(escape, &mut buffer, &mut displayed).expect("escape"), KeyAction::Abort);
+        assert_eq!(displayed, b"**************");
     }
 }

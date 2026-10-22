@@ -23,6 +23,10 @@ use super::registration::ToolRegistration;
 pub struct ToolConfigSnapshot {
     /// Settings for the `web_search` tool (provider, cooldown, cache, cap).
     pub web_search: WebSearchConfig,
+    /// Fail closed for web tools when the workspace config cannot be loaded.
+    pub web_config_load_failed: bool,
+    /// Credential backend mode shared with /secret.
+    pub credential_storage_mode: vtcode_auth::AuthCredentialsStoreMode,
     /// Settings for the `web_fetch` tool (mode, allow/block lists, https).
     pub web_fetch: WebFetchConfig,
 }

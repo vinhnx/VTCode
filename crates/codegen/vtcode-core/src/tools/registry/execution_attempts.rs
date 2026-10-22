@@ -156,11 +156,16 @@ impl ToolRegistry {
         );
         retry_policy.jitter = policy.retry_jitter.clamp(0.0, 1.0);
 
-        let max_attempts = if tool_name == crate::config::constants::tools::WEB_FETCH {
-            retry_policy.max_attempts.clamp(1, 2)
-        } else {
-            retry_policy.max_attempts.max(1)
-        };
+        let max_attempts =
+            if matches!(tool_name.as_str(), crate::config::constants::tools::WEB_SEARCH | "search_web" | "websearch") {
+                // Paid search attempts require an explicit new call, even when a
+                // caller enables generic retries. Preserve the same rule for aliases.
+                1
+            } else if tool_name == crate::config::constants::tools::WEB_FETCH {
+                retry_policy.max_attempts.clamp(1, 2)
+            } else {
+                retry_policy.max_attempts.max(1)
+            };
         let fetch_deadline = (tool_name == crate::config::constants::tools::WEB_FETCH)
             .then(crate::tools::web_fetch::request_budget::RequestBudget::current)
             .flatten()

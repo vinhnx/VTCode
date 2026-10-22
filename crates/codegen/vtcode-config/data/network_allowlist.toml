@@ -272,7 +272,7 @@ notes    = "Google SERP results; cost-effective"
 name     = "SerpAPI"
 domain   = "serpapi.com"
 protocol = "https"
-notes    = "Multi-engine: Google, Bing, DuckDuckGo"
+notes    = "Multi-engine metasearch"
 
 [[search.web]]
 name     = "ValueSERP"
@@ -303,13 +303,6 @@ name     = "Kagi"
 domain   = "kagi.com"
 protocol = "https"
 notes    = "High signal-to-noise, ad-free"
-
-# No full web search API — Instant Answers only; for full SERP use via SerpAPI wrapper
-[[search.web]]
-name     = "DuckDuckGo"
-domain   = "api.duckduckgo.com"
-protocol = "https"
-notes    = "Instant Answers API; privacy-first, no tracking"
 
 # ============================================================
 # SEARCH — SPECIALIZED / VERTICAL

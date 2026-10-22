@@ -238,13 +238,17 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
 }
 
 // ---------------------------------------------------------------------------
-// WEB SEARCH (built-in, query -> ranked results, keyless DuckDuckGo only)
+// WEB SEARCH (built-in, query -> ranked results, Octen excerpts)
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let web_search =
-        WebSearchTool::with_config(tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default());
+    let web_search = WebSearchTool::with_config_and_storage(
+        tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default(),
+        tool_config()
+            .map(|snapshot| snapshot.credential_storage_mode)
+            .unwrap_or_default(),
+    );
     let web_search_for_factory = web_search.clone();
     let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
     ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
@@ -255,7 +259,9 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query (a topic, question, or keywords)."
+                    "description": "The search query (a topic, question, or keywords).",
+                    "minLength": 1,
+                    "maxLength": 500
                 },
                 "max_results": {
                     "type": "integer",

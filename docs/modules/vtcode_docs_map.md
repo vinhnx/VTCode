@@ -274,6 +274,10 @@ below based on the topic area.
   - **Content**: Model Profiles and Provider APIs
   - **User Questions**: "What can you tell me about Model Profiles and Provider APIs?"
 
+- **File**: `docs/development/web-search.md`
+  - **Content**: Octen search integration
+  - **User Questions**: "What can you tell me about Octen search integration?"
+
 - **File**: `docs/development/performance-hasher-policy.md`
   - **Content**: Performance Hasher Policy
   - **Topics**: Default, When `rustc_hash` Is Allowed, When It Is Not Allowed, Migration Gate
@@ -1998,9 +2002,10 @@ below based on the topic area.
     work?", "How does Dynamic Configuration Files work?"
 
 - **File**: `docs/tools/web_search.md`
-  - **Content**: Web Search Tool
-  - **Topics**: Usage, Output, Configuration, Guard Rails, Related Tools
-  - **User Questions**: "What can you tell me about Web Search Tool?", "How does Usage work?", "How does Output work?"
+  - **Content**: Web search
+  - **Topics**: Secure setup, Arguments and results, Configuration and migration, Cost and pilot rationale
+  - **User Questions**: "What can you tell me about Web search?", "How does Secure setup work?", "How does Arguments and
+    results work?"
 
 ### User Workflows & Commands
 

@@ -640,3 +640,13 @@ list_files = true
 # Native Claude fast mode uses premium pricing. Switching speeds invalidates prompt-cache reuse.
 # [provider.anthropic]
 # speed = "fast"  # standard or fast; unset uses standard, incompatible routes keep the preference dormant
+
+# Ranked excerpts only; full-page web_fetch remains separately authorized.
+# Configure the key with /secret add octen (never store it here).
+[tools.web_search]
+provider = "octen"
+max_results = 8
+timeout_secs = 20
+cooldown_ms = 3000
+cache_ttl_secs = 300
+session_max_requests = 12

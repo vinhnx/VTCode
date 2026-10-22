@@ -464,6 +464,27 @@ impl InlineHandle {
         Some(previous)
     }
 
+    /// Restore scoped feedback only while the original operation and phase
+    /// still own it. Match and update under one lock so replacements cannot
+    /// inherit a stale phase between an ownership check and the update.
+    pub fn restore_progress_phase(
+        &self,
+        operation: vtcode_commons::ui_protocol::ProgressOperation,
+        expected_phase: vtcode_commons::ui_protocol::ProgressPhase,
+        previous_phase: vtcode_commons::ui_protocol::ProgressPhase,
+    ) -> bool {
+        let Ok(mut current) = self.progress_operation.lock() else {
+            return false;
+        };
+        let Some(current) = current.as_mut() else { return false };
+        if current.operation != operation || current.phase != expected_phase {
+            return false;
+        }
+        current.phase = previous_phase;
+        self.update_progress(vtcode_commons::ui_protocol::ProgressUpdate::Phase { operation, phase: previous_phase });
+        true
+    }
+
     pub fn record_tool_output(&self, lines: Vec<String>) -> ToolOutputId {
         let id = self.next_tool_output_id.fetch_add(1, Ordering::Relaxed);
         self.send_command(InlineCommand::RecordToolOutput { id, lines });

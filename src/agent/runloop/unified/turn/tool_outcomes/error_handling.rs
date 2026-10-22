@@ -34,6 +34,11 @@ pub(super) fn is_blocked_or_denied_failure(error: &str) -> bool {
 /// suggest concrete fixes instead of just reporting a generic denial.
 pub(crate) fn tool_denial_diagnostic(tool_name: &str) -> Option<serde_json::Value> {
     match tool_name {
+        tool_names::WEB_FETCH => Some(serde_json::json!({
+            "cause": "The web_fetch request was denied by the active permission or approval policy.",
+            "impact": "Full-page retrieval was not authorized. Search excerpts do not grant fetch permission.",
+            "next_action": "Report the denial and ask the user to review web_fetch approval, [tools.policies], and domain restrictions. Preserve network safety checks; do not bypass the denial using another search provider, shell commands, or another route."
+        })),
         tool_names::RUN_PTY_CMD | tool_names::UNIFIED_EXEC | tool_names::EXEC_COMMAND | "unified_exec" => {
             Some(serde_json::json!({
                 "cause": format!("The '{tool_name}' tool (shell command execution) is denied by tool policy configuration."),
@@ -563,6 +568,22 @@ mod tests {
         assert!(diagnostic.get("fix").is_some(), "exec_command diagnostic should still have a fix field");
         let files = diagnostic["fix"]["files"].to_string();
         assert!(files.contains("run_pty_cmd"), "diagnostic must name the configured shell policy alias");
+    }
+
+    #[test]
+    fn web_fetch_denial_keeps_separate_approval_boundary() {
+        let error = ToolExecutionError::policy_violation("web_fetch", "Domain approval declined by user");
+        let payload = build_structured_error_content(&error, None, None, "execution");
+        assert!(
+            payload["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("Domain approval declined by user")
+        );
+        let action = payload["diagnostic"]["next_action"].as_str().unwrap();
+        assert!(action.contains("web_fetch approval"));
+        assert!(action.contains("domain restrictions"));
+        assert!(action.contains("do not bypass"));
     }
 
     #[test]

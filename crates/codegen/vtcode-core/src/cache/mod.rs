@@ -233,93 +233,43 @@ where
 
     /// Remove expired entries based on TTL
     fn remove_expired_entries_inner(inner: &mut UnifiedCacheInner<K, V>) {
-        let expired_keys: Vec<K> = inner
-            .entries
-            .iter()
-            .filter_map(|(k, v)| if v.is_expired(inner.ttl) { Some(k.clone()) } else { None })
-            .collect();
-
-        for key in expired_keys {
-            Self::remove_inner(inner, &key);
-        }
-    }
-
-    /// Evict one entry based on the eviction policy
-    fn evict_one_inner(inner: &mut UnifiedCacheInner<K, V>) {
-        if inner.entries.is_empty() {
-            return;
-        }
-
-        let key_to_remove = match inner.eviction_policy {
-            EvictionPolicy::Lru => Self::find_lru_entry_inner(inner),
-            EvictionPolicy::Lfu => Self::find_lfu_entry_inner(inner),
-            EvictionPolicy::Fifo => Self::find_fifo_entry_inner(inner),
-            EvictionPolicy::TtlOnly => Self::find_oldest_entry_inner(inner),
-        };
-
-        if let Some(key) = key_to_remove {
-            Self::remove_inner(inner, &key);
-            inner.stats.evictions += 1;
-        }
+        let UnifiedCacheInner { entries, ttl, stats, .. } = inner;
+        entries.retain(|_, entry| {
+            if entry.is_expired(*ttl) {
+                stats.total_memory_bytes = stats.total_memory_bytes.saturating_sub(entry.size_bytes);
+                false
+            } else {
+                true
+            }
+        });
+        stats.current_size = entries.len();
     }
 
     /// Batch-evict `count` entries based on the eviction policy.
     /// Performs a single O(n log n) sort instead of `count` × O(n) linear scans.
-    fn evict_batch_inner(inner: &mut UnifiedCacheInner<K, V>, count: usize) {
-        if inner.entries.is_empty() {
-            return;
+    /// Returns the number of evicted entries, cloning only their keys.
+    fn evict_batch_inner(inner: &mut UnifiedCacheInner<K, V>, count: usize) -> usize {
+        if count == 0 || inner.entries.is_empty() {
+            return 0;
         }
 
-        let keys_to_remove: Vec<K> = match inner.eviction_policy {
-            EvictionPolicy::Lru => {
-                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.last_accessed)).collect();
-                entries.sort_by_key(|(_, ts)| *ts);
-                entries.into_iter().take(count).map(|(k, _)| k).collect()
+        let keys_to_remove: Vec<K> = {
+            let mut entries: Vec<_> = inner.entries.iter().collect();
+            match inner.eviction_policy {
+                EvictionPolicy::Lru => entries.sort_by_key(|(_, entry)| entry.last_accessed),
+                EvictionPolicy::Lfu => entries.sort_by_key(|(_, entry)| entry.access_count),
+                EvictionPolicy::Fifo | EvictionPolicy::TtlOnly => {
+                    entries.sort_by_key(|(_, entry)| entry.created_at);
+                }
             }
-            EvictionPolicy::Lfu => {
-                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.access_count)).collect();
-                entries.sort_by_key(|(_, c)| *c);
-                entries.into_iter().take(count).map(|(k, _)| k).collect()
-            }
-            EvictionPolicy::Fifo | EvictionPolicy::TtlOnly => {
-                let mut entries: Vec<_> = inner.entries.iter().map(|(k, e)| (k.clone(), e.created_at)).collect();
-                entries.sort_by_key(|(_, ts)| *ts);
-                entries.into_iter().take(count).map(|(k, _)| k).collect()
-            }
+            entries.into_iter().take(count).map(|(key, _)| key.clone()).collect()
         };
 
         for key in &keys_to_remove {
             Self::remove_inner(inner, key);
         }
         inner.stats.evictions += keys_to_remove.len() as u64;
-    }
-
-    fn find_lru_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
-        inner
-            .entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_accessed)
-            .map(|(k, _)| k.clone())
-    }
-
-    fn find_lfu_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
-        inner
-            .entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.access_count)
-            .map(|(k, _)| k.clone())
-    }
-
-    fn find_fifo_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
-        inner
-            .entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.created_at)
-            .map(|(k, _)| k.clone())
-    }
-
-    fn find_oldest_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
-        Self::find_fifo_entry_inner(inner)
+        keys_to_remove.len()
     }
 
     fn remove_inner(inner: &mut UnifiedCacheInner<K, V>, key: &K) {
@@ -455,8 +405,11 @@ where
     ///
     /// When memory pressure increases:
     /// 1. Remove all expired entries first
-    /// 2. Evict least useful entries until target percentage reached
-    /// 3. Use access count and age for ranking
+    /// 2. Evict according to the configured policy until the live entry count
+    ///    reaches `floor(live_count * (100 - percent) / 100)`.
+    ///
+    /// Percentages are clamped to 100. The return count includes expired entries;
+    /// expiration does not increment the eviction statistic.
     pub fn evict_under_pressure(&self, target_reduction_percent: u32) -> usize {
         let Ok(mut inner) = self.inner.write() else {
             return 0;
@@ -474,18 +427,11 @@ where
         let current_size = inner.entries.len();
         let target_size = (current_size * (100 - target_percent) as usize) / 100;
 
-        // Evict until we reach target
-        let mut evicted_count = expired_removed;
-        while inner.entries.len() > target_size && !inner.entries.is_empty() {
-            Self::evict_one_inner(&mut inner);
-            evicted_count += 1;
-        }
-
-        evicted_count
+        expired_removed + Self::evict_batch_inner(&mut inner, current_size - target_size)
     }
 
-    /// Clear a percentage of least-used entries (for aggressive cleanup under critical pressure)
-    /// Returns number of entries removed
+    /// Evict `floor(entry_count * percent / 100)` entries using the configured policy.
+    /// Percentages are clamped to 100. Returns the number of entries removed.
     pub fn clear_least_used(&self, percent_to_clear: u32) -> usize {
         let Ok(mut inner) = self.inner.write() else {
             return 0;
@@ -494,16 +440,7 @@ where
         let percent = std::cmp::min(100, percent_to_clear);
         let entries_to_remove = (inner.entries.len() * percent as usize) / 100;
 
-        let mut removed = 0usize;
-        for _ in 0..entries_to_remove {
-            if inner.entries.is_empty() {
-                break;
-            }
-            Self::evict_one_inner(&mut inner);
-            removed += 1;
-        }
-
-        removed
+        Self::evict_batch_inner(&mut inner, entries_to_remove)
     }
 
     /// Get entries sorted by "usefulness" (access count and recency)
@@ -620,6 +557,9 @@ where
         self.inner.stats()
     }
 }
+
+#[cfg(test)]
+mod eviction_tests;
 
 #[cfg(test)]
 mod tests {

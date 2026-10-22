@@ -57,6 +57,38 @@ async fn register_probe(registry: &ToolRegistry, failures_before_success: usize)
     Ok(calls)
 }
 
+#[tokio::test]
+async fn octen_web_search_and_aliases_never_use_generic_automatic_retries() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let calls = Arc::new(AtomicUsize::new(0));
+    registry
+        .register_tool(
+            ToolRegistration::from_tool_instance(
+                tools::WEB_SEARCH,
+                CapabilityLevel::Basic,
+                AttemptProbe {
+                    calls: Arc::clone(&calls),
+                    failures_before_success: usize::MAX,
+                },
+            )
+            .with_aliases(["search_web", "websearch"]),
+        )
+        .await?;
+    registry.allow_all_tools().await?;
+    for (index, name) in [tools::WEB_SEARCH, "search_web", "websearch"].iter().enumerate() {
+        let outcome = registry
+            .execute_public_tool_request(
+                ToolExecutionRequest::new(*name, json!({"query":"rust"})).with_policy(retry_policy(5)),
+            )
+            .await;
+        assert!(!outcome.is_success());
+        assert_eq!(outcome.attempts, 1);
+        assert_eq!(calls.load(Ordering::SeqCst), index + 1);
+    }
+    Ok(())
+}
+
 fn retry_policy(max_retries: usize) -> ExecutionPolicySnapshot {
     ExecutionPolicySnapshot {
         max_retries,

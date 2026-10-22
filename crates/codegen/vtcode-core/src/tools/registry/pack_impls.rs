@@ -266,6 +266,42 @@ impl ToolPack for SearchPack {
 // Web Pack
 // ===========================================================================
 
+/// Keep config failure independent of approval so permissive sessions cannot
+/// send requests using default network restrictions or a different credential mode.
+#[derive(Clone)]
+struct ConfiguredWebTool<T> {
+    inner: T,
+    config_load_failed: bool,
+}
+
+impl<T> ConfiguredWebTool<T> {
+    fn new(inner: T, config: &ToolConfigSnapshot) -> Self {
+        Self {
+            inner,
+            config_load_failed: config.web_config_load_failed,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: crate::tools::traits::Tool> crate::tools::traits::Tool for ConfiguredWebTool<T> {
+    async fn execute(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+        if self.config_load_failed {
+            return Err(super::ToolExecutionError::policy_violation(self.name(),
+                "Web tools are disabled because workspace configuration could not be loaded. Fix vtcode.toml before retrying. Removed web search providers duckduckgo/youcom must migrate to [tools.web_search] provider = \"octen\" and /secret add octen or OCTEN_API_KEY."
+            ).into());
+        }
+        self.inner.execute(args).await
+    }
+
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn description(&self) -> &str {
+        self.inner.description()
+    }
+}
+
 #[derive(Default)]
 pub struct WebPack;
 
@@ -281,15 +317,18 @@ impl ToolPack for WebPack {
         _plan_state: &PlanningWorkflowState,
         tool_config: &ToolConfigSnapshot,
     ) {
-        let web_fetch = WebFetchTool::from_config(&tool_config.web_fetch);
+        let web_fetch = ConfiguredWebTool::new(WebFetchTool::from_config(&tool_config.web_fetch), tool_config);
         let web_fetch_for_factory = web_fetch.clone();
         let web_fetch_factory = native_cgp_tool_factory(move || web_fetch_for_factory.clone());
 
-        let web_search = WebSearchTool::with_config(tool_config.web_search.clone());
+        let web_search = ConfiguredWebTool::new(
+            WebSearchTool::with_config_and_storage(tool_config.web_search.clone(), tool_config.credential_storage_mode),
+            tool_config,
+        );
         let web_search_for_factory = web_search.clone();
         let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
 
-        let defuddle = DefuddleTool::new();
+        let defuddle = ConfiguredWebTool::new(DefuddleTool::new(), tool_config);
         let defuddle_for_factory = defuddle.clone();
         let defuddle_factory = native_cgp_tool_factory(move || defuddle_for_factory.clone());
 
@@ -308,7 +347,9 @@ impl ToolPack for WebPack {
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "The search query (a topic, question, or keywords)."
+                            "description": "The search query (a topic, question, or keywords).",
+                            "minLength": 1,
+                            "maxLength": 500
                         },
                         "max_results": {
                             "type": "integer",

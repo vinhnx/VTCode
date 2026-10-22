@@ -56,7 +56,8 @@ impl Drop for ProbeStatus<'_> {
             if stopped(self.stop) {
                 self.handle.update_progress(ProgressUpdate::Finish { operation });
             } else {
-                self.handle.set_progress_phase(phase);
+                self.handle
+                    .restore_progress_phase(operation, ProgressPhase::CheckingToolOutput, phase);
             }
         }
         if stopped(self.stop) {

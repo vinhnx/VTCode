@@ -767,6 +767,24 @@ fn every_error_response_has_next_action() {
 }
 
 #[test]
+fn contextual_policy_denial_preserves_reason_and_approval_guidance() {
+    let err =
+        anyhow::anyhow!("domain docs.example is blocked by configured allowlist").context("request validation failed");
+    let response = web_fetch_error_response("https://docs.example/guide", 1000, 5, &err);
+    assert_eq!(response["error_type"], "policy_blocked");
+    assert!(
+        response["error"]
+            .as_str()
+            .unwrap()
+            .contains("domain docs.example is blocked by configured allowlist")
+    );
+    let action = response["next_action"].as_str().unwrap();
+    assert!(action.contains("web_fetch approval and domain restrictions"));
+    assert!(action.contains("do not bypass"));
+    assert!(response.get("http_status").is_none());
+}
+
+#[test]
 fn extract_http_status_delegates_to_classify_helpers() {
     // The local function delegates to `classify_helpers::extract_http_status`,
     // which is the canonical parser. These cases mirror the helpers'

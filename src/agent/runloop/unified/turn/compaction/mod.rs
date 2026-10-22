@@ -62,8 +62,22 @@ struct CompactionEnvelopeMode {
 pub(crate) struct CompactionOutcome {
     pub original_len: usize,
     pub compacted_len: usize,
+    pub estimated_tokens_before: Option<usize>,
+    pub estimated_tokens_after: Option<usize>,
     pub mode: vtcode_core::exec::events::CompactionMode,
     pub history_artifact_path: Option<String>,
+}
+
+/// Provider replay details (including encrypted native compaction state) are
+/// not counted by the local message tokenizer, so their size is unavailable.
+pub(crate) fn estimate_history_tokens(history: &[Message]) -> Option<usize> {
+    history.iter().try_fold(0usize, |total, message| {
+        if message.reasoning_details.as_ref().is_some_and(|details| !details.is_empty()) {
+            None
+        } else {
+            total.checked_add(message.estimate_tokens())
+        }
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -575,6 +589,7 @@ async fn apply_compacted_history(
     } = state;
 
     let original_len = original_history.len();
+    let estimated_tokens_before = estimate_history_tokens(history);
     if let Some(lifecycle_hooks) = lifecycle_hooks {
         let outcome = lifecycle_hooks
             .run_pre_compact(plan.trigger, compaction_mode, original_len, compacted.len(), None)
@@ -615,6 +630,7 @@ async fn apply_compacted_history(
     }
     let history_artifact_path = envelope.as_ref().and_then(|item| item.history_artifact_path.clone());
     let compacted_len = compacted.len();
+    let estimated_tokens_after = estimate_history_tokens(&compacted);
     // Recovery and model-switch compaction carry different segment reasons,
     // but every committed compaction starts a fresh cache-health streak.
     session_stats.record_compaction_boundary();
@@ -669,6 +685,8 @@ async fn apply_compacted_history(
     Ok(CompactionOutcome {
         original_len,
         compacted_len,
+        estimated_tokens_before,
+        estimated_tokens_after,
         mode: compaction_mode,
         history_artifact_path,
     })
@@ -721,6 +739,7 @@ async fn compact_history_before_index_in_place(
     }
 
     let original_len = history.len();
+    let estimated_tokens_before = estimate_history_tokens(history);
     let mut prefix = history[..preserve_from_index].to_vec();
     let suffix = history[preserve_from_index..].to_vec();
     let Some(prefix_outcome) = compact_history_segment_in_place_with_boundary(
@@ -750,6 +769,7 @@ async fn compact_history_before_index_in_place(
     history.extend(suffix);
 
     let compacted_len = history.len();
+    let estimated_tokens_after = estimate_history_tokens(history);
     let history_artifact_path = prefix_outcome.history_artifact_path.clone();
     if let Some(harness_emitter) = harness_emitter {
         let event = compact_boundary_event(
@@ -769,6 +789,8 @@ async fn compact_history_before_index_in_place(
     Ok(Some(CompactionOutcome {
         original_len,
         compacted_len,
+        estimated_tokens_before,
+        estimated_tokens_after,
         mode: prefix_outcome.mode,
         history_artifact_path,
     }))
@@ -789,6 +811,7 @@ pub(crate) async fn compact_history_from_index_in_place(
     if start_index >= history.len() {
         return Ok(None);
     }
+    let estimated_tokens_before = estimate_history_tokens(history);
     let context = CompactionContext::new(provider, model, session_id, session_id, workspace_root, vt_cfg, None, None);
 
     if start_index == 0 {
@@ -831,10 +854,13 @@ pub(crate) async fn compact_history_from_index_in_place(
     history.clear();
     history.extend(prefix);
     history.extend(suffix);
+    let estimated_tokens_after = estimate_history_tokens(history);
 
     Ok(Some(CompactionOutcome {
         original_len: start_index + suffix_outcome.original_len,
         compacted_len: start_index + suffix_outcome.compacted_len,
+        estimated_tokens_before,
+        estimated_tokens_after,
         mode: suffix_outcome.mode,
         history_artifact_path: suffix_outcome.history_artifact_path,
     }))
@@ -910,6 +936,8 @@ pub(crate) async fn maybe_auto_compact_history(
     else {
         return Ok(None);
     };
+    let estimated_tokens_before = estimate_history_tokens(history);
+    let estimated_tokens_after = estimate_history_tokens(&compacted_history);
 
     // Binary-specific post-step: reset response-chain and token tracking, then
     // emit the canonical `thread.compact_boundary` event.
@@ -940,6 +968,8 @@ pub(crate) async fn maybe_auto_compact_history(
     Ok(Some(CompactionOutcome {
         original_len: outcome.original_len,
         compacted_len: outcome.compacted_len,
+        estimated_tokens_before,
+        estimated_tokens_after,
         mode: outcome.mode,
         history_artifact_path: outcome.history_artifact_path,
     }))

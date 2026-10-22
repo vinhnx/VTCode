@@ -117,7 +117,7 @@ pub use stop_hints::{STOP_HINT_COMPACT, STOP_HINT_INLINE, with_stop_hint};
 pub use styling::{ColorPalette, DiffColorPalette, render_styled};
 pub use task_guard::TaskGuard;
 pub use telemetry::{NoopTelemetry, TelemetrySink};
-pub use tokens::{estimate_tokens, truncate_to_tokens};
+pub use tokens::{estimate_tokens, format_token_count, truncate_to_tokens};
 pub use unicode::{UNICODE_MONITOR, UnicodeMonitor, UnicodeValidationContext};
 pub use validation::{EmptyCollectionError, NonEmptySlice, NonEmptyString, NonEmptyVec};
 pub use vtcode_paths::{

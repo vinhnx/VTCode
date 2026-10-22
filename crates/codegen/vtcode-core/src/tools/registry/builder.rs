@@ -51,8 +51,8 @@ struct WorkspaceToolConfig {
 }
 
 /// Load the config needed by tool registration in one parse. Falls back to
-/// defaults on any load/parse error so a malformed config never blocks tool
-/// registration.
+/// defaults for non-web settings on load/parse errors. Web tools stay registered
+/// for discovery but fail closed rather than using default network permissions.
 fn load_workspace_tool_config(workspace_root: &Path) -> WorkspaceToolConfig {
     match ConfigManager::load_from_workspace(workspace_root) {
         Ok(manager) => workspace_tool_config_from_loaded(manager.config()),
@@ -60,10 +60,17 @@ fn load_workspace_tool_config(workspace_root: &Path) -> WorkspaceToolConfig {
             tracing::warn!(
                 workspace = %workspace_root.display(),
                 error = %err,
-                "Failed to load workspace config for tool registry; using defaults"
+                "Failed to load workspace config for tool registry; disabling web tools"
             );
-            WorkspaceToolConfig::default()
+            unavailable_web_config()
         }
+    }
+}
+
+fn unavailable_web_config() -> WorkspaceToolConfig {
+    WorkspaceToolConfig {
+        tool: ToolConfigSnapshot { web_config_load_failed: true, ..Default::default() },
+        ..Default::default()
     }
 }
 
@@ -74,6 +81,8 @@ fn workspace_tool_config_from_loaded(config: &vtcode_config::loader::VTCodeConfi
     WorkspaceToolConfig {
         tool: ToolConfigSnapshot {
             web_search: config.tools.web_search.clone(),
+            web_config_load_failed: false,
+            credential_storage_mode: config.agent.credential_storage_mode,
             web_fetch: config.tools.web_fetch.clone(),
         },
         spooler: spooler_config_from_dynamic_context(&config.context.dynamic),
@@ -161,8 +170,8 @@ impl ToolRegistry {
             match tokio::task::spawn_blocking(move || load_workspace_tool_config(&config_workspace)).await {
                 Ok(config) => config,
                 Err(error) => {
-                    tracing::warn!(%error, "Workspace tool config task panicked; using defaults");
-                    WorkspaceToolConfig::default()
+                    tracing::warn!(%error, "Workspace tool config task panicked; disabling web tools");
+                    unavailable_web_config()
                 }
             };
         Self::build_with_snapshot(workspace_root, pty_config, policy_manager, initialize_policy, workspace_config).await
@@ -283,6 +292,77 @@ impl ToolRegistry {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn removed_search_provider_disables_web_tools_even_when_approved() {
+        for provider in ["duckduckgo", "youcom"] {
+            let temp = tempdir().unwrap();
+            std::fs::write(
+                temp.path().join("vtcode.toml"),
+                format!(
+                    r#"
+[workspace]
+use_root_config = true
+[tools.web_search]
+provider = "{provider}"
+[tools.web_fetch]
+mode = "whitelist"
+allowed_domains = ["only.example.com"]
+"#
+                ),
+            )
+            .unwrap();
+            let snapshot = load_workspace_tool_config(temp.path());
+            assert!(snapshot.tool.web_config_load_failed);
+            let registry = ToolRegistry::new(temp.path().to_path_buf()).await;
+            registry.allow_all_tools().await.unwrap();
+            for name in ["web_search", "web_fetch", "defuddle_fetch"] {
+                let registration = registry.inventory.get_registration(name).unwrap();
+                let super::super::ToolHandler::TraitObject(tool) = registration.handler() else {
+                    panic!("native web tool")
+                };
+                // Empty args are safe even if the guard regresses: each underlying
+                // web tool rejects them before credential resolution or network I/O.
+                let error = tool.execute(serde_json::json!({})).await.unwrap_err();
+                assert!(error.to_string().contains("workspace configuration could not be loaded"), "{name}: {error}");
+                assert!(error.to_string().contains("provider = \"octen\""));
+            }
+            let registration = registry.inventory.get_registration("web_fetch").unwrap();
+            let factory = registration.native_cgp_factory().unwrap();
+            let native =
+                factory(&registration, temp.path().to_path_buf(), super::super::cgp_facade::CgpRuntimeMode::Ci);
+            let result = native
+                .execute(serde_json::json!({"url":"http://127.0.0.1:1", "prompt":"read"}))
+                .await;
+            let message = match result {
+                Ok(output) => output.to_string(),
+                Err(error) => format!("{error:#}"),
+            };
+            assert!(message.contains("workspace configuration could not be loaded"), "{message}");
+            let output = registry
+                .execute_tool(
+                    "fetch_url",
+                    serde_json::json!({
+                        "url":"http://127.0.0.1:1", "prompt":"read"
+                    }),
+                )
+                .await
+                .unwrap();
+            let error = super::super::ToolExecutionError::from_tool_output(&output).unwrap();
+            assert!(error.message.contains("workspace configuration could not be loaded"));
+            assert!(!error.retryable);
+        }
+    }
+
+    #[test]
+    fn octen_registry_snapshot_preserves_configured_credential_mode() {
+        let mut config = vtcode_config::VTCodeConfig::default();
+        config.agent.credential_storage_mode = vtcode_auth::AuthCredentialsStoreMode::File;
+        let snapshot = workspace_tool_config_from_loaded(&config);
+        assert_eq!(snapshot.tool.credential_storage_mode, vtcode_auth::AuthCredentialsStoreMode::File);
+        assert!(!snapshot.tool.web_config_load_failed);
+        assert_eq!(snapshot.tool.web_search.provider, vtcode_config::WebSearchProvider::Octen);
+    }
 
     #[tokio::test]
     async fn tool_registry_uses_workspace_dynamic_context_for_output_spooler() {

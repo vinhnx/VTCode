@@ -218,6 +218,7 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
 
     let mut history = tool_heavy_history(ROOMY_HISTORY_CYCLES);
     let original_len = history.len();
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
@@ -246,6 +247,9 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
     .expect("history should compact");
 
     assert_eq!(outcome.original_len, original_len);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     // The history exceeds the continuity tail, so auto-compaction must strictly
     // shrink the message count (never report growth as success).
     assert!(
@@ -311,6 +315,7 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
     let mut history = vec![Message::user("keep this prefix".to_string())];
     history.extend(tool_heavy_history(ROOMY_HISTORY_CYCLES));
     let original_len = history.len();
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let preserved_prefix = history[..1].to_vec();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
@@ -338,6 +343,9 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
 
     assert_eq!(&history[..1], preserved_prefix.as_slice());
     assert_eq!(outcome.original_len, original_len);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     // The suffix exceeds the continuity tail, so it compacts to a summary
     // plus tail instead of being kept verbatim.
     assert!(
@@ -380,6 +388,7 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     history.push(Message::user("current-turn".to_string()));
     history.push(Message::assistant("".to_string()));
     history.push(Message::tool_response("call-current".to_string(), "{\"ok\":true}".to_string()));
+    let estimated_tokens_before: usize = history.iter().map(Message::estimate_tokens).sum();
     let preserved_suffix = history[prefix_len..].to_vec();
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp-recovery"), &[]);
@@ -410,6 +419,9 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     .expect("history should compact");
 
     assert_eq!(history[history.len() - preserved_suffix.len()..], preserved_suffix);
+    let estimated_tokens_after: usize = history.iter().map(Message::estimate_tokens).sum();
+    assert_eq!(outcome.estimated_tokens_before, Some(estimated_tokens_before));
+    assert_eq!(outcome.estimated_tokens_after, Some(estimated_tokens_after));
     assert!(
         outcome.compacted_len < outcome.original_len,
         "expected shrink, got {} -> {}",

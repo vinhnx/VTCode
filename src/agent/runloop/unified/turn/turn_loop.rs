@@ -742,11 +742,10 @@ pub(crate) async fn run_turn_loop(
         let recovery_compaction_requested = ctx.harness_state.take_post_tool_compaction_pending();
         if recovery_compaction_requested {
             let context_capacity_failure = ctx.harness_state.post_tool_context_capacity_failure();
-            // Async UI stays in sync: spinner ticks while the engine compacts the
-            // older prefix; the final line is rendered from the engine outcome.
+            // The transcript row stays owned while recovery compacts the older prefix.
             let progress = crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
                 ctx.handle,
-                ctx.input_status_state,
+                crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(working_history),
             );
             let recovery_result = compact_before_tool_enabled_retry(RecoveryCompactionRequest {
                 history: working_history,
@@ -771,14 +770,18 @@ pub(crate) async fn run_turn_loop(
                 Ok(Some(outcome)) => {
                     repeated_tool_attempts.clear_navigation_evidence();
                     let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-                        outcome.original_len,
-                        outcome.compacted_len,
+                        outcome.estimated_tokens_before,
+                        outcome.estimated_tokens_after,
                         outcome.mode.as_str(),
                         recovery_elapsed,
                     );
                     let _ = ctx.renderer.line(MessageStyle::Info, &label);
                 }
                 Ok(None) if context_capacity_failure => {
+                    let _ = ctx.renderer.line(
+                        MessageStyle::Warning,
+                        "Recovery compaction found no reducible history; the current history was preserved.",
+                    );
                     ctx.harness_state.mark_post_tool_context_compaction_failed();
                     ensure_post_tool_resume_directive(working_history);
                     result = TurnLoopResult::Blocked {
@@ -788,14 +791,6 @@ pub(crate) async fn run_turn_loop(
                 }
                 Ok(None) => {}
                 Err(err) => {
-                    if context_capacity_failure {
-                        ctx.harness_state.mark_post_tool_context_compaction_failed();
-                        ensure_post_tool_resume_directive(working_history);
-                        result = TurnLoopResult::Blocked {
-                            reason: Some(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.to_string()),
-                        };
-                        break;
-                    }
                     tracing::warn!(
                         error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err),
                         "Post-tool recovery compaction failed; preserving the existing history for the bounded retry"
@@ -804,6 +799,15 @@ pub(crate) async fn run_turn_loop(
                         recovery_elapsed,
                         &err,
                     );
+                    if context_capacity_failure {
+                        let _ = ctx.renderer.line(MessageStyle::Error, &prefix);
+                        ctx.harness_state.mark_post_tool_context_compaction_failed();
+                        ensure_post_tool_resume_directive(working_history);
+                        result = TurnLoopResult::Blocked {
+                            reason: Some(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.to_string()),
+                        };
+                        break;
+                    }
                     let _ = ctx.renderer.line(
                         MessageStyle::Warning,
                         &format!("{prefix} Continuing with full history for the bounded retry."),
@@ -817,10 +821,10 @@ pub(crate) async fn run_turn_loop(
                 prompt_tokens = ctx.context_manager.current_token_usage(),
                 "Resolved per-turn context budget denominator"
             );
-            // Async UI: only show the spinner when compaction will actually run.
+            // Only show the progress row when compaction is likely to run.
             // `maybe_auto_compact_history` returns `None` fast below threshold,
-            // when disabled, or when suppressed; starting a spinner
-            // unconditionally would flicker every turn.
+            // when disabled, or when suppressed; starting a progress row
+            // unconditionally would flicker on every turn.
             let auto_start = Instant::now();
             let auto_compaction_allowed = vt_cfg.is_some_and(|cfg| cfg.agent.harness.auto_compaction_enabled)
                 && ctx.session_stats.auto_compact_suppressed == vtcode_core::compaction::SUPPRESS_NONE;
@@ -835,7 +839,7 @@ pub(crate) async fn run_turn_loop(
             let auto_progress = auto_likely.then(|| {
                 crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
                     ctx.handle,
-                    ctx.input_status_state,
+                    crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(working_history),
                 )
             });
             let auto_result = crate::agent::runloop::unified::turn::compaction::maybe_auto_compact_history(
@@ -871,8 +875,8 @@ pub(crate) async fn run_turn_loop(
                         "Applied local fallback compaction before the next turn request"
                     );
                     let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-                        outcome.original_len,
-                        outcome.compacted_len,
+                        outcome.estimated_tokens_before,
+                        outcome.estimated_tokens_after,
                         outcome.mode.as_str(),
                         auto_elapsed,
                     );
@@ -883,7 +887,15 @@ pub(crate) async fn run_turn_loop(
                 }
                 Ok(None) => {}
                 Err(err) => {
-                    tracing::warn!(error = %err, "Local fallback compaction failed");
+                    tracing::warn!(
+                        error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err),
+                        "Automatic context compaction failed; continuing with full history"
+                    );
+                    let label =
+                        crate::agent::runloop::unified::turn::compaction::format_compaction_failed(auto_elapsed, &err);
+                    let _ = ctx
+                        .renderer
+                        .line(MessageStyle::Warning, &format!("{label} Continuing with full history."));
                 }
             }
         }

@@ -19,21 +19,3 @@ gpui-kit
 --
 
 computer use https://developers.openai.com/api/docs/guides/tools-computer-use
-
----
-
-check tool 'web_fetch' failed: The 'web_fetch' tool reported a execution failure
-(Blocked by policy): tool denied by policy
-Web fetch is blocked by policy. Let me research the correct badge format
-via web search instead.
-
-check and change DDG search engine to a different one if web fetch continues to be blocked by policy.
-
-⚠ No results were returned. DuckDuckGo may have rate-limited the request or
-matched nothing. Try a different query, or wait a few seconds and try again
-
-try: https://api-docs.deepseek.com/guides/search/
-
----
-
-improve compaction UI/UX in the transcript run loop, since it could be a long-running process. improve feedback loop and synce with compaction engine. add progress indicators and better error handling to enhance user experience. ref: "· Compacting conversation… (1m 14s · ↓ 6.1k tokens)". When done, show a short summary of the compaction results.
