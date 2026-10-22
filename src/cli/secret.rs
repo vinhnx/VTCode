@@ -7,8 +7,8 @@ use std::str::FromStr;
 use unicode_width::UnicodeWidthChar;
 use vtcode_config::VTCodeConfig;
 use vtcode_config::api_keys::{
-    CredentialSource, OCTEN_API_KEY_ENV, OCTEN_PROVIDER, clear_credential_with_mode, load_stored_credential_with_mode,
-    resolve_credential_with_mode, resolve_octen_credential_with_mode, store_credential_with_mode,
+    CredentialSource, clear_credential_with_mode, load_stored_credential_with_mode, resolve_credential_with_mode,
+    store_credential_with_mode,
 };
 use vtcode_config::auth::AuthCredentialsStoreMode;
 use vtcode_config::workspace_env::{read_workspace_env_value, remove_workspace_env_value, workspace_env_path};
@@ -53,18 +53,6 @@ fn secret_target(config: &VTCodeConfig, name: &str, key_name: Option<&str>) -> R
         anyhow::bail!("Provider name cannot be empty.");
     }
 
-    if provider_name == OCTEN_PROVIDER {
-        if key_name.is_some_and(|key| !key.trim().eq_ignore_ascii_case(OCTEN_API_KEY_ENV)) {
-            anyhow::bail!("Octen uses the fixed credential name {OCTEN_API_KEY_ENV}.");
-        }
-        return Ok(SecretTarget {
-            provider_name,
-            label: "Octen".to_owned(),
-            env_key: OCTEN_API_KEY_ENV.to_owned(),
-            local: false,
-            managed_auth: false,
-        });
-    }
     if let Ok(provider) = Provider::from_str(&provider_name) {
         let env_key = key_name
             .filter(|key| !key.trim().is_empty())
@@ -122,9 +110,6 @@ fn all_secret_targets(config: &VTCodeConfig) -> Vec<SecretTarget> {
             .iter()
             .filter_map(|provider| secret_target(config, &provider.name, None).ok()),
     );
-    if let Ok(octen) = secret_target(config, OCTEN_PROVIDER, None) {
-        targets.push(octen);
-    }
     targets
 }
 
@@ -149,8 +134,6 @@ fn render_secret_status_table(
             Some(CredentialSource::Local)
         } else if target.managed_auth {
             Some(CredentialSource::ManagedAuth)
-        } else if target.provider_name == OCTEN_PROVIDER {
-            resolve_octen_credential_with_mode(storage_mode)?.map(|resolved| resolved.source)
         } else {
             resolve_credential_with_mode(&target.provider_name, &target.env_key, Some(workspace), storage_mode)?
                 .map(|resolved| resolved.source)
@@ -206,11 +189,6 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     println!("Key will NOT be stored in vtcode.toml or workspace environment files.");
     println!();
 
-    if target.provider_name == OCTEN_PROVIDER && !io::stdin().is_terminal() {
-        anyhow::bail!(
-            "Octen key setup requires a terminal for masked input; use /secret add octen or set OCTEN_API_KEY in the environment."
-        );
-    }
     let key = if io::stdin().is_terminal() {
         prompt_hidden_input(&format!("{} API key: ", label))?
     } else {
@@ -229,9 +207,10 @@ async fn handle_add(target: SecretTarget, workspace: &Path, storage_mode: AuthCr
     }
 
     store_credential_with_mode(&target.provider_name, env_key, &key, storage_mode)?;
+
     // Purge stale entry from workspace .env so it doesn't shadow the
     // keyring entry (env var takes priority in get_api_key resolution).
-    if target.provider_name != OCTEN_PROVIDER && !env_key.is_empty() {
+    if !env_key.is_empty() {
         if read_workspace_env_value(workspace, env_key)?.is_some() {
             remove_workspace_env_value(workspace, env_key)?;
             println!("Removed stale {env_key} from workspace .env to avoid conflicts.");
@@ -253,19 +232,9 @@ async fn handle_delete(target: SecretTarget, workspace: &Path, storage_mode: Aut
     let env_key = target.env_key.as_str();
 
     let stored = load_stored_credential_with_mode(&target.provider_name, env_key, storage_mode)?;
-    let workspace_value = if target.provider_name == OCTEN_PROVIDER {
-        None
-    } else {
-        read_workspace_env_value(workspace, env_key)?
-    };
+    let workspace_value = read_workspace_env_value(workspace, env_key)?;
     if stored.is_none() && workspace_value.is_none() {
         println!("No stored API key found for {label}.");
-        if target.provider_name == OCTEN_PROVIDER
-            && resolve_octen_credential_with_mode(storage_mode)?
-                .is_some_and(|resolved| resolved.source == CredentialSource::Env)
-        {
-            println!("OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.");
-        }
         return Ok(());
     }
 
@@ -298,12 +267,6 @@ async fn handle_delete(target: SecretTarget, workspace: &Path, storage_mode: Aut
         println!("API key for {label} removed from workspace environment.");
     }
     println!("The change takes effect immediately.");
-    if target.provider_name == OCTEN_PROVIDER
-        && resolve_octen_credential_with_mode(storage_mode)?
-            .is_some_and(|resolved| resolved.source == CredentialSource::Env)
-    {
-        println!("OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.");
-    }
     Ok(())
 }
 
@@ -507,18 +470,6 @@ fn handle_key_with_writer(event: Event, buffer: &mut String, stdout: &mut impl W
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn octen_cli_target_uses_search_identity() {
-        let config = VTCodeConfig::default();
-        let target = secret_target(&config, "Octen", None).expect("target");
-        assert_eq!(target.provider_name, OCTEN_PROVIDER);
-        assert_eq!(target.env_key, OCTEN_API_KEY_ENV);
-        assert!(!target.managed_auth);
-        assert!(!target.local);
-        assert!(secret_target(&config, "octen", Some("OTHER_KEY")).is_err());
-        assert!(all_secret_targets(&config).iter().any(|target| target.provider_name == "octen"));
-    }
 
     #[test]
     fn secret_input_masks_characters_and_escape_cancels_without_submission() {

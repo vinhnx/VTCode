@@ -28,6 +28,7 @@ pub(super) async fn handle_policy_denied<S: UiSession + ?Sized>(
     ctrl_c_notify: &std::sync::Arc<tokio::sync::Notify>,
     session: &mut S,
     skip_confirmations: bool,
+    tool_call_id: Option<&str>,
     harness_emitter: Option<&HarnessEventEmitter>,
 ) -> Result<Option<ToolPermissionFlow>> {
     if skip_confirmations {
@@ -36,7 +37,7 @@ pub(super) async fn handle_policy_denied<S: UiSession + ?Sized>(
 
     let diagnostic = tool_denial_diagnostic(tool_name);
     let permission_start = std::time::Instant::now();
-    emit_permission_requested(harness_emitter, tool_name);
+    emit_permission_requested(harness_emitter, tool_name, tool_call_id);
     let decision = match prompt_policy_denied_tool(
         tool_name,
         tool_args,
@@ -52,7 +53,7 @@ pub(super) async fn handle_policy_denied<S: UiSession + ?Sized>(
         Ok(d) => d,
         Err(e) => {
             let wait_ms = permission_start.elapsed().as_millis() as u64;
-            emit_permission_resolved(harness_emitter, tool_name, PermissionDecision::Cancelled, wait_ms);
+            emit_permission_resolved(harness_emitter, tool_name, tool_call_id, PermissionDecision::Cancelled, wait_ms);
             return Err(e);
         }
     };
@@ -60,6 +61,7 @@ pub(super) async fn handle_policy_denied<S: UiSession + ?Sized>(
     emit_permission_resolved(
         harness_emitter,
         tool_name,
+        tool_call_id,
         super::permission_events::map_hitl_to_permission_decision(&decision),
         wait_ms,
     );

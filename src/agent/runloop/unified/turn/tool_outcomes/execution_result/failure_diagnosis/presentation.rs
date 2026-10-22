@@ -56,14 +56,33 @@ fn concise_diagnosis_line(tool_name: &str, diagnosis: &ToolFailureDiagnosis) -> 
     format!("Tool '{display_tool_name}' failed: {observed_headline}")
 }
 
+fn diagnostic_correlation_id(
+    turn_id: &str,
+    tool_call_id: Option<&str>,
+    tool_name: &str,
+    diagnosis: &ToolFailureDiagnosis,
+) -> String {
+    use std::hash::{Hash, Hasher};
+
+    let mut identity = std::collections::hash_map::DefaultHasher::new();
+    if let Some(tool_call_id) = tool_call_id.filter(|id| !id.trim().is_empty()) {
+        (turn_id, tool_name, tool_call_id, &diagnosis.observed).hash(&mut identity);
+    } else {
+        // Preserve the legacy identity for callers that do not have a provider
+        // call ID, so existing persisted diagnostics remain update-compatible.
+        (turn_id, tool_name, &diagnosis.observed).hash(&mut identity);
+    }
+    format!("tool-diagnosis:{:016x}", identity.finish())
+}
+
 pub(crate) fn render_diagnosis(
     renderer: &mut vtcode_core::utils::ansi::AnsiRenderer,
     _harness_emitter: Option<&crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
     turn_id: &str,
+    tool_call_id: Option<&str>,
     tool_name: &str,
     diagnosis: &ToolFailureDiagnosis,
 ) {
-    use std::hash::{Hash, Hasher};
     use vtcode_commons::diagnostics::{Diagnostic, DiagnosticSeverity};
     // Empty search results are ordinary tool outcomes, not operational failures.
     if diagnosis.no_matches {
@@ -72,14 +91,12 @@ pub(crate) fn render_diagnosis(
         }
         return;
     }
-    let mut identity = std::collections::hash_map::DefaultHasher::new();
-    (turn_id, tool_name, &diagnosis.observed).hash(&mut identity);
     let diagnostic = Diagnostic {
         severity: DiagnosticSeverity::Warning,
         code: "tool.execution_failed".into(),
         summary: format!("Tool '{}' failed. Expand Details for recovery steps.", bounded_field(tool_name)),
         agent_details: diagnosis.render_text(tool_name),
-        correlation_id: format!("tool-diagnosis:{:016x}", identity.finish()),
+        correlation_id: diagnostic_correlation_id(turn_id, tool_call_id, tool_name, diagnosis),
         actions: Vec::new(),
     };
     // The renderer's canonical callback owns the event; do not emit a second incident.
@@ -88,8 +105,20 @@ pub(crate) fn render_diagnosis(
     }
 }
 
-pub(crate) fn render_and_emit(ctx: &mut TurnProcessingContext<'_>, tool_name: &str, diagnosis: &ToolFailureDiagnosis) {
-    render_diagnosis(ctx.renderer, ctx.harness_emitter, &ctx.harness_state.turn_id.0, tool_name, diagnosis);
+pub(crate) fn render_and_emit(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: Option<&str>,
+    tool_name: &str,
+    diagnosis: &ToolFailureDiagnosis,
+) {
+    render_diagnosis(
+        ctx.renderer,
+        ctx.harness_emitter,
+        &ctx.harness_state.turn_id.0,
+        tool_call_id,
+        tool_name,
+        diagnosis,
+    );
 }
 
 #[cfg(test)]
@@ -167,5 +196,26 @@ mod tests {
         let long_line = concise_diagnosis_line("exec_command", &long);
         assert!(long_line.chars().count() <= "Tool 'exec_command' failed: ".len() + 160);
         assert!(!long_line.contains("Likely cause"), "no verbose fields leak: {long_line}");
+    }
+
+    #[test]
+    fn diagnostic_identity_separates_concurrent_tool_calls() {
+        let first = ToolFailureDiagnosis::new("same failure", "same cause", "same action");
+        let second = first.clone();
+
+        let first_id = diagnostic_correlation_id("turn-1", Some("call-a"), "web_fetch", &first);
+        let second_id = diagnostic_correlation_id("turn-1", Some("call-b"), "web_fetch", &second);
+        assert_ne!(first_id, second_id, "distinct tool calls must retain distinct diagnostics");
+
+        let repeated_id = diagnostic_correlation_id("turn-1", Some("call-a"), "web_fetch", &second);
+        assert_eq!(first_id, repeated_id, "updates for one tool call must replace its own diagnostic");
+    }
+
+    #[test]
+    fn diagnostic_identity_preserves_legacy_no_call_id_shape() {
+        let diagnosis = ToolFailureDiagnosis::new("same failure", "same cause", "same action");
+        let missing_id = diagnostic_correlation_id("turn-1", None, "web_fetch", &diagnosis);
+        let blank_id = diagnostic_correlation_id("turn-1", Some("  "), "web_fetch", &diagnosis);
+        assert_eq!(missing_id, blank_id, "blank IDs must use the legacy identity");
     }
 }

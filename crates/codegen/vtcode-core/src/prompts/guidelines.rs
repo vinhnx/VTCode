@@ -20,7 +20,7 @@ const SOURCE_INSPECTION_GUIDANCE: &str =
     "- Inspect relevant source, edit a bounded region, refresh after mismatch, then verify.";
 const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
-const WEB_SEARCH_GUIDANCE: &str = "- `web_search` returns Octen excerpts; full-page `web_fetch` needs separate approval. Missing keys: `/secret add octen` or `OCTEN_API_KEY`; never prompt from a tool call.";
+const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once.";
 const TOOL_START_PLANNING: &str = tools::START_PLANNING;
 
 const OPTIONAL_MARKDOWN_VALIDATION_GUIDANCE: &str = "- `verify: [skip Markdown lint if unavailable]`: report skipped; review diff/links without installing tools. Lint errors remain failures.";
@@ -782,13 +782,15 @@ mod tests {
     }
 
     #[test]
-    fn octen_guidance_is_present_only_with_search_and_stays_bounded() {
+    fn duckduckgo_guidance_is_present_only_with_search_and_stays_bounded() {
         let enabled = guidelines_for(&["web_search".to_owned()], None);
         let disabled = guidelines_for(&[], None);
-        assert!(enabled.contains("Octen excerpts"));
+        assert!(enabled.contains("keyless DuckDuckGo"));
         assert!(enabled.contains("separate approval"));
-        assert!(enabled.contains("/secret add octen"));
-        assert!(!disabled.contains("Octen"));
+        assert!(enabled.contains("antiban_blocked"));
+        assert!(enabled.contains("retryable: false"));
+        assert!(enabled.contains("retry_after_ms"));
+        assert!(!disabled.contains("DuckDuckGo results"));
         assert!(enabled.len().saturating_sub(disabled.len()) < 250);
     }
 

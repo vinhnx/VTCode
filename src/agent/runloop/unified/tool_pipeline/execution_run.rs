@@ -56,6 +56,22 @@ fn structured_failure(tool_name: &str, error: &anyhow::Error) -> ToolExecutionEr
     ToolExecutionError::from_anyhow(tool_name, error, 0, false, false, Some("unified_runloop"))
 }
 
+fn annotate_tool_status_with_call_id(mut status: ToolExecutionStatus, tool_call_id: &str) -> ToolExecutionStatus {
+    if tool_call_id.trim().is_empty() {
+        return status;
+    }
+
+    let error = match &mut status {
+        ToolExecutionStatus::Failure { error } | ToolExecutionStatus::Timeout { error } => error,
+        ToolExecutionStatus::Success { .. } | ToolExecutionStatus::Cancelled => return status,
+    };
+    let debug_context = error.debug_context.get_or_insert_with(Default::default);
+    if debug_context.invocation_id.is_none() {
+        debug_context.invocation_id = Some(tool_call_id.to_owned());
+    }
+    status
+}
+
 fn excludes_wait_from_turn_clock(tool_name: &str, args: &Value) -> bool {
     tool_name == tools::REQUEST_USER_INPUT
         || (tool_intent::canonical_command_session_tool_name(tool_name)
@@ -82,9 +98,13 @@ pub(crate) async fn run_tool_call(
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let requested_name = call.tool_name().unwrap_or(call.call_type.as_str());
     if call.function.is_none() {
-        let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-            error: structured_failure_from_message("tool", "Tool call missing function"),
-        });
+        let status = annotate_tool_status_with_call_id(
+            ToolExecutionStatus::Failure {
+                error: structured_failure_from_message("tool", "Tool call missing function"),
+            },
+            &call.id,
+        );
+        let outcome = ToolPipelineOutcome::from_status(status);
         emit_tool_outcome_observation(ctx.harness_emitter, requested_name, &outcome);
         return Ok(outcome);
     }
@@ -92,9 +112,11 @@ pub(crate) async fn run_tool_call(
     let args_val = match call.execution_arguments() {
         Ok(args) => args,
         Err(err) => {
-            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                error: structured_failure("tool", &anyhow!(err)),
-            });
+            let status = annotate_tool_status_with_call_id(
+                ToolExecutionStatus::Failure { error: structured_failure("tool", &anyhow!(err)) },
+                &call.id,
+            );
+            let outcome = ToolPipelineOutcome::from_status(status);
             emit_tool_outcome_observation(ctx.harness_emitter, requested_name, &outcome);
             return Ok(outcome);
         }
@@ -198,6 +220,7 @@ pub(crate) async fn run_tool_call_with_args(
     );
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
     let finish_with_status = |status: ToolExecutionStatus, tool_execution_started: bool, args: &Value| {
+        let status = annotate_tool_status_with_call_id(status, tool_call_id);
         let mut outcome = ToolPipelineOutcome::from_status(status);
         if outcome.total_duration.is_zero() {
             outcome.total_duration = invocation_started_at.elapsed();
@@ -423,6 +446,7 @@ pub(crate) async fn run_tool_call_with_args(
         if outcome.total_duration.is_zero() {
             outcome.total_duration = invocation_started_at.elapsed();
         }
+        outcome.status = annotate_tool_status_with_call_id(outcome.status, tool_call_id);
         emit_tool_completion_for_status(
             harness_emitter,
             tool_started_emitted,
@@ -486,9 +510,11 @@ pub(crate) async fn run_tool_call_with_args(
     {
         Ok(status) => status,
         Err(error) => {
-            let mut outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                error: structured_failure(name, &error),
-            });
+            let status = annotate_tool_status_with_call_id(
+                ToolExecutionStatus::Failure { error: structured_failure(name, &error) },
+                tool_call_id,
+            );
+            let mut outcome = ToolPipelineOutcome::from_status(status);
             outcome.total_duration = invocation_started_at.elapsed();
             emit_tool_completion_for_status(
                 harness_emitter,
@@ -505,6 +531,7 @@ pub(crate) async fn run_tool_call_with_args(
         }
     };
 
+    let execution_status = annotate_tool_status_with_call_id(execution_status, tool_call_id);
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(execution_status);
     if pipeline_outcome.total_duration.is_zero() {
         pipeline_outcome.total_duration = invocation_started_at.elapsed();
@@ -523,8 +550,11 @@ pub(crate) async fn run_tool_call_with_args(
     )
     .await
     {
-        let mut outcome =
-            ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: structured_failure(name, &error) });
+        let status = annotate_tool_status_with_call_id(
+            ToolExecutionStatus::Failure { error: structured_failure(name, &error) },
+            tool_call_id,
+        );
+        let mut outcome = ToolPipelineOutcome::from_status(status);
         outcome.total_duration = invocation_started_at.elapsed();
         emit_tool_outcome_observation(harness_emitter, name, &outcome);
         return Err(error);
@@ -814,7 +844,7 @@ mod tests {
     };
     use serde_json::json;
     use vtcode_commons::canonicalize;
-    use vtcode_core::tools::registry::ExecSettlementMode;
+    use vtcode_core::tools::registry::{ExecSettlementMode, ToolErrorType, ToolExecutionError};
     use vtcode_core::{config::constants::tools, tools::ToolInvocationId};
 
     #[test]
@@ -900,5 +930,25 @@ mod tests {
 
         assert_eq!(resolved, invocation_id);
         assert_eq!(harness_id, raw_id);
+    }
+
+    #[test]
+    fn terminal_tool_errors_keep_call_id_for_harness_diagnostics() {
+        let status = super::annotate_tool_status_with_call_id(
+            super::ToolExecutionStatus::Failure {
+                error: ToolExecutionError::new("web_fetch", ToolErrorType::PolicyViolation, "denied by policy"),
+            },
+            "toolu_call_1",
+        );
+
+        let error = status.error().expect("failure status should carry an error");
+        assert_eq!(
+            error
+                .debug_context
+                .as_ref()
+                .and_then(|context| context.invocation_id.as_deref()),
+            Some("toolu_call_1")
+        );
+        assert_eq!(error.to_json_value()["error"]["debug_context"]["invocation_id"], "toolu_call_1");
     }
 }

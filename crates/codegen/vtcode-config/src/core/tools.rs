@@ -148,16 +148,30 @@ pub enum WebFetchMode {
     Whitelist,
 }
 
-/// Built-in web search backend. Removed providers fail with migration guidance.
+/// Web search provider identifier.
+///
+/// VT Code only targets the keyless DuckDuckGo HTML endpoint for web
+/// search, so the provider enum is intentionally minimal. `Auto` defers to
+/// the DDG default and is the recommended choice.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum WebSearchProvider {
-    /// Compatibility alias for Octen.
-    Auto,
-    /// Octen Search API; requires `/secret add octen` or `OCTEN_API_KEY`.
+    /// Default; same as `Duckduckgo` for now (kept for back-compat).
     #[default]
-    Octen,
+    Auto,
+    /// Keyless DuckDuckGo HTML scraping (`https://html.duckduckgo.com/html/`).
+    Duckduckgo,
+}
+
+impl WebSearchProvider {
+    /// Return the canonical runtime backend identifier.
+    #[must_use]
+    pub const fn backend_id(self) -> &'static str {
+        match self {
+            Self::Auto | Self::Duckduckgo => "duckduckgo",
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for WebSearchProvider {
@@ -165,20 +179,29 @@ impl<'de> Deserialize<'de> for WebSearchProvider {
         let value = String::deserialize(deserializer)?;
         match value.as_str() {
             "auto" => Ok(Self::Auto),
-            "octen" => Ok(Self::Octen),
-            "duckduckgo" | "youcom" => Err(serde::de::Error::custom(format!(
-                "web search provider '{value}' was removed; set [tools.web_search] provider = \"octen\" and configure /secret add octen or OCTEN_API_KEY"
-            ))),
-            _ => Err(serde::de::Error::unknown_variant(&value, &["octen", "auto"])),
+            "duckduckgo" => Ok(Self::Duckduckgo),
+            _ => Err(serde::de::Error::unknown_variant(&value, &["auto", "duckduckgo"])),
         }
     }
 }
 
-/// Search limits retain bounded paid usage, cooldown, and successful-result caching.
+/// Web Search tool configuration.
+///
+/// VT Code only uses the keyless DuckDuckGo HTML endpoint. The defaults
+/// below are tuned to be polite to that endpoint and to keep the agent
+/// responsive under constrained network conditions:
+/// - `cooldown_ms`: minimum gap between consecutive live requests on the
+///   same tool instance (avoids bursty hammering that triggers the DDG
+///   anti-bot challenge).
+/// - `cache_ttl_secs`: how long successful results are served from memory
+///   before a fresh request is made.
+/// - `session_max_requests`: hard cap on outbound requests per tool
+///   instance (defends against runaway loops).
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct WebSearchConfig {
-    /// Octen search backend. `auto` is a compatibility alias for `octen`.
+    /// Provider selection. The built-in backend is the keyless DuckDuckGo
+    /// HTML endpoint; `auto` is retained as a compatibility alias.
     #[serde(default)]
     pub provider: WebSearchProvider,
 
@@ -202,7 +225,7 @@ pub struct WebSearchConfig {
     pub cache_ttl_secs: u64,
 
     /// Hard cap on outbound network requests per tool instance. Defaults
-    /// to 12 to bound paid usage and runaway loops.
+    /// to 12 as a conservative VTCode budget; this is not a DuckDuckGo quota.
     #[serde(default = "default_web_search_session_max_requests")]
     pub session_max_requests: u32,
 }
@@ -625,7 +648,7 @@ suspend_tui = false
 default_policy = "prompt"
 
 [web_search]
-provider = "octen"
+provider = "duckduckgo"
 max_results = 12
 timeout_secs = 25
 cooldown_ms = 1500
@@ -635,7 +658,7 @@ session_max_requests = 5
         )
         .expect("tools config should parse");
 
-        assert_eq!(config.web_search.provider, WebSearchProvider::Octen);
+        assert_eq!(config.web_search.provider, WebSearchProvider::Duckduckgo);
         assert_eq!(config.web_search.max_results, 12);
         assert_eq!(config.web_search.timeout_secs, 25);
         assert_eq!(config.web_search.cooldown_ms, 1500);
@@ -646,7 +669,7 @@ session_max_requests = 5
     #[test]
     fn web_search_config_defaults_are_polite() {
         let config = WebSearchConfig::default();
-        assert_eq!(config.provider, WebSearchProvider::Octen);
+        assert_eq!(config.provider, WebSearchProvider::Auto);
         assert_eq!(config.max_results, 8);
         assert_eq!(config.timeout_secs, 20);
         assert!(config.cooldown_ms >= 1_000);
@@ -658,20 +681,24 @@ session_max_requests = 5
     fn web_search_provider_serializes_lowercase() {
         // Serde rename_all = "snake_case" means enum variants serialize
         // lowercase, matching the LLM-facing schema strings.
-        let json = serde_json::to_value(WebSearchProvider::Octen).unwrap();
-        assert_eq!(json, serde_json::json!("octen"));
+        let json = serde_json::to_value(WebSearchProvider::Duckduckgo).unwrap();
+        assert_eq!(json, serde_json::json!("duckduckgo"));
     }
 
     #[test]
-    fn web_search_auto_is_compatible_and_removed_providers_explain_migration() {
-        assert_eq!(serde_json::from_str::<WebSearchProvider>("\"auto\"").unwrap(), WebSearchProvider::Auto);
-        for removed in ["duckduckgo", "youcom"] {
-            let error = serde_json::from_value::<WebSearchProvider>(serde_json::json!(removed))
-                .unwrap_err()
-                .to_string();
-            assert!(error.contains("was removed"));
-            assert!(error.contains("/secret add octen"));
-        }
+    fn web_search_provider_backend_id_is_canonical() {
+        assert_eq!(WebSearchProvider::Auto.backend_id(), "duckduckgo");
+        assert_eq!(WebSearchProvider::Auto.backend_id(), WebSearchProvider::Duckduckgo.backend_id());
+    }
+
+    #[test]
+    fn web_search_unsupported_provider_uses_generic_error() {
+        let error = serde_json::from_value::<WebSearchProvider>(serde_json::json!("unsupported-provider"))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unknown variant"));
+        assert!(error.contains("auto"));
+        assert!(error.contains("duckduckgo"));
     }
 
     #[test]

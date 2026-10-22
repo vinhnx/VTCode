@@ -288,7 +288,10 @@ impl<T: crate::tools::traits::Tool> crate::tools::traits::Tool for ConfiguredWeb
     async fn execute(&self, args: serde_json::Value) -> anyhow::Result<serde_json::Value> {
         if self.config_load_failed {
             return Err(super::ToolExecutionError::policy_violation(self.name(),
-                "Web tools are disabled because workspace configuration could not be loaded. Fix vtcode.toml before retrying. Removed web search providers duckduckgo/youcom must migrate to [tools.web_search] provider = \"octen\" and /secret add octen or OCTEN_API_KEY."
+                format!(
+                    "Web tools are disabled because workspace configuration could not be loaded. Fix vtcode.toml before retrying. Use [tools.web_search] provider = \"{}\".",
+                    vtcode_config::WebSearchProvider::Auto.backend_id(),
+                )
             ).into());
         }
         self.inner.execute(args).await
@@ -321,10 +324,8 @@ impl ToolPack for WebPack {
         let web_fetch_for_factory = web_fetch.clone();
         let web_fetch_factory = native_cgp_tool_factory(move || web_fetch_for_factory.clone());
 
-        let web_search = ConfiguredWebTool::new(
-            WebSearchTool::with_config_and_storage(tool_config.web_search.clone(), tool_config.credential_storage_mode),
-            tool_config,
-        );
+        let web_search =
+            ConfiguredWebTool::new(WebSearchTool::with_config(tool_config.web_search.clone()), tool_config);
         let web_search_for_factory = web_search.clone();
         let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
 
@@ -347,7 +348,7 @@ impl ToolPack for WebPack {
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "The search query (a topic, question, or keywords).",
+                            "description": "A nonblank search query (a topic, question, or keywords), up to 500 characters.",
                             "minLength": 1,
                             "maxLength": 500
                         },

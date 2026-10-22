@@ -190,6 +190,10 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Diff Preview Architecture?", "How does Turn aggregation, event
     fields, and themes work?", "How does Readability: wrap and expand work?"
 
+- **File**: `docs/development/web-search.md`
+  - **Content**: DuckDuckGo web search integration
+  - **User Questions**: "What can you tell me about DuckDuckGo web search integration?"
+
 - **File**: `docs/development/matrix-orchestration.md`
   - **Content**: Durable local matrix orchestration
   - **Topics**: Define and control a matrix, Resource reservations and workspace access, Execution and final
@@ -273,10 +277,6 @@ below based on the topic area.
 - **File**: `docs/development/model-profiles.md`
   - **Content**: Model Profiles and Provider APIs
   - **User Questions**: "What can you tell me about Model Profiles and Provider APIs?"
-
-- **File**: `docs/development/web-search.md`
-  - **Content**: Octen search integration
-  - **User Questions**: "What can you tell me about Octen search integration?"
 
 - **File**: `docs/development/performance-hasher-policy.md`
   - **Content**: Performance Hasher Policy
@@ -2002,10 +2002,9 @@ below based on the topic area.
     work?", "How does Dynamic Configuration Files work?"
 
 - **File**: `docs/tools/web_search.md`
-  - **Content**: Web search
-  - **Topics**: Secure setup, Arguments and results, Configuration and migration, Cost and pilot rationale
-  - **User Questions**: "What can you tell me about Web search?", "How does Secure setup work?", "How does Arguments and
-    results work?"
+  - **Content**: Web Search Tool
+  - **Topics**: Usage, Output, Configuration, Guard Rails, Related Tools
+  - **User Questions**: "What can you tell me about Web Search Tool?", "How does Usage work?", "How does Output work?"
 
 ### User Workflows & Commands
 

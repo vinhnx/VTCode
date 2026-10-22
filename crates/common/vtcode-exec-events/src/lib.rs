@@ -28,7 +28,7 @@ pub mod planning;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.19.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.20.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -1328,6 +1328,9 @@ pub enum PermissionDecision {
 pub struct PermissionRequestedEvent {
     /// Name of the tool that requires permission.
     pub tool_name: String,
+    /// Identifier of the tool invocation that requested permission, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1335,6 +1338,9 @@ pub struct PermissionRequestedEvent {
 pub struct PermissionResolvedEvent {
     /// Name of the tool that was permitted or denied.
     pub tool_name: String,
+    /// Identifier of the tool invocation whose permission was resolved, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
     /// User's decision on the permission prompt.
     pub decision: PermissionDecision,
     /// Wall-clock time the prompt was visible, in milliseconds.

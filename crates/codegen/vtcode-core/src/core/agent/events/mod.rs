@@ -1297,6 +1297,7 @@ impl ExecEventRecorder {
     pub fn permission_requested(&mut self, tool_name: &str) {
         self.record(ThreadEvent::PermissionRequested(crate::exec::events::PermissionRequestedEvent {
             tool_name: tool_name.to_string(),
+            tool_call_id: None,
         }));
     }
 
@@ -1308,6 +1309,7 @@ impl ExecEventRecorder {
     ) {
         self.record(ThreadEvent::PermissionResolved(crate::exec::events::PermissionResolvedEvent {
             tool_name: tool_name.to_string(),
+            tool_call_id: None,
             decision,
             wait_ms,
         }));

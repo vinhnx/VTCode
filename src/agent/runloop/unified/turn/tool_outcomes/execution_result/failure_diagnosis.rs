@@ -760,6 +760,37 @@ mod tests {
     }
 
     #[test]
+    fn web_fetch_tool_policy_denial_names_tool_boundary() {
+        let error = ToolExecutionError::new(
+            tool_names::WEB_FETCH,
+            vtcode_core::tools::registry::ToolErrorType::PolicyViolation,
+            "tool denied by policy: Tool 'web_fetch' execution denied by policy",
+        );
+
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+
+        assert!(diagnosis.likely_cause.contains("web_fetch tool"));
+        assert!(diagnosis.likely_cause.contains("before URL validation"));
+        assert!(diagnosis.next_action.contains("web_fetch approval"));
+        assert!(diagnosis.next_action.contains("do not bypass"));
+    }
+
+    #[test]
+    fn web_fetch_domain_denial_names_url_boundary() {
+        let error = ToolExecutionError::new(
+            tool_names::WEB_FETCH,
+            vtcode_core::tools::registry::ToolErrorType::PermissionDenied,
+            "Domain 'github.com' is not in the whitelist. Only explicitly allowed domains are permitted.",
+        );
+
+        let diagnosis = deterministic_error_diagnosis(&error, "execution");
+
+        assert!(diagnosis.likely_cause.contains("domain or network safety policy"));
+        assert!(diagnosis.next_action.contains("allowed_domains/mode"));
+        assert!(diagnosis.next_action.contains("approved URL"));
+    }
+
+    #[test]
     fn code_search_unavailable_does_not_suggest_identical_retry() {
         let unavailable = ToolExecutionError::new(
             "code_search",

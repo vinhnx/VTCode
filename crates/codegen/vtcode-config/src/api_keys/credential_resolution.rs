@@ -145,24 +145,15 @@ pub fn store_credential_with_mode(
     let Some(identity) = credential_identity(provider, key_name)? else {
         return Ok(None);
     };
-    let storage = CustomApiKeyStorage::for_identity(identity.clone())?;
-    storage.store(secret, storage_mode).with_context(|| {
-        format!(
-            "failed to persist credential for provider '{}' and key '{}' securely",
-            identity.provider(),
-            identity.key_name()
-        )
-    })?;
-    if identity.provider() == super::OCTEN_PROVIDER {
-        anyhow::ensure!(
-            storage
-                .load(storage_mode)
-                .context("failed to verify stored Octen credential")?
-                .as_deref()
-                == Some(secret.trim()),
-            "secure storage read-back did not confirm the saved Octen credential"
-        );
-    }
+    CustomApiKeyStorage::for_identity(identity.clone())?
+        .store(secret, storage_mode)
+        .with_context(|| {
+            format!(
+                "failed to persist credential for provider '{}' and key '{}' securely",
+                identity.provider(),
+                identity.key_name()
+            )
+        })?;
     Ok(Some(identity))
 }
 
@@ -180,8 +171,7 @@ pub fn clear_credential_with_mode(
         return Ok(None);
     };
     let default_key_name = api_key_env_var(provider);
-    let clear_legacy =
-        identity.provider() != super::OCTEN_PROVIDER && identity.uses_default_key_name(&default_key_name);
+    let clear_legacy = identity.uses_default_key_name(&default_key_name);
     CustomApiKeyStorage::for_identity(identity.clone())?
         .clear_with_legacy_fallback(storage_mode, clear_legacy)
         .with_context(|| {
@@ -348,8 +338,7 @@ pub fn load_stored_credential_with_mode(
         return Ok(None);
     };
     let default_key_name = api_key_env_var(provider);
-    let allow_legacy =
-        identity.provider() != super::OCTEN_PROVIDER && identity.uses_default_key_name(&default_key_name);
+    let allow_legacy = identity.uses_default_key_name(&default_key_name);
     let storage = CustomApiKeyStorage::for_identity(identity)?;
     // The auth layer handles keyring-to-file fallback internally when the
     // configured mode permits it. Provider-only storage is a legacy fallback

@@ -2,9 +2,22 @@
 
 Operational failures use `Diagnostic`, the canonical payload carried by an existing
 `ThreadEvent` reasoning item with stage `diagnosis`. This stage contains operational
-evidence, never private model reasoning. Event schema 0.19.0 adds an optional boxed
+evidence, never private model reasoning. Event schema 0.19.0 introduced an optional boxed
 `diagnostic`; old sessions without it remain readable. ATIF exports preserve the
 complete payload in step metadata.
+
+Event schema 0.20.0 adds optional `tool_call_id` fields to permission requested/resolved
+events so concurrent prompts can be correlated with their tool invocation. Older event
+payloads without the fields remain readable.
+
+Tool failure diagnostics include the provider `tool_call_id` in their incident identity
+when available, so concurrent identical failures remain separate. Calls without an ID
+retain the legacy identity shape for replay compatibility.
+
+Web-fetch policy diagnostics distinguish a tool-level denial from a URL or domain safety
+denial. Tool-level failures point to the active `web_fetch` permission policy; URL-level
+failures point to the allowed-domain and network-safety settings. Both retain the
+fail-closed instruction and never suggest bypassing safeguards.
 
 | Field | Contract |
 | --- | --- |

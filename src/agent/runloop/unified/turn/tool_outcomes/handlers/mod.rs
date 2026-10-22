@@ -247,7 +247,7 @@ pub(crate) fn handle_preflight_failure(
         object.insert("diagnosis".to_string(), diagnosis.to_value());
     }
     ctx.push_rejected_tool_response(tool_call_id, Some(tool_name), arguments, payload.to_string());
-    super::execution_result::render_and_emit(ctx, tool_name, &diagnosis);
+    super::execution_result::render_and_emit(ctx, Some(tool_call_id), tool_name, &diagnosis);
 
     if exhausted {
         return Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
@@ -343,7 +343,7 @@ pub(crate) fn drain_preflight_circuit_responses(
             object.insert("diagnosis".to_string(), diagnosis.to_value());
         }
         ctx.push_rejected_tool_response(tool_call.call_id(), Some(tool_name), tool_call.args(), payload.to_string());
-        super::execution_result::render_and_emit(ctx, tool_name, &diagnosis);
+        super::execution_result::render_and_emit(ctx, Some(tool_call.call_id()), tool_name, &diagnosis);
     }
 }
 

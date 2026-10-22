@@ -58,7 +58,7 @@ async fn register_probe(registry: &ToolRegistry, failures_before_success: usize)
 }
 
 #[tokio::test]
-async fn octen_web_search_and_aliases_never_use_generic_automatic_retries() -> Result<()> {
+async fn web_search_and_aliases_never_use_generic_automatic_retries() -> Result<()> {
     let workspace = TempDir::new()?;
     let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
     let calls = Arc::new(AtomicUsize::new(0));
@@ -492,6 +492,54 @@ async fn denied_fetch_does_not_consume_the_origins_network_attempts() -> Result<
 }
 
 #[tokio::test]
+async fn policy_evaluation_does_not_leave_a_stale_approval_after_execution() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let calls = http_probe(&registry, 200, 0, 0, false).await?;
+    registry
+        .set_tool_policy(tools::WEB_FETCH, crate::tool_policy::ToolPolicy::Allow)
+        .await?;
+
+    let approved = registry
+        .execute_public_tool_request(fetch_request("https://example.com/approved"))
+        .await;
+    assert!(approved.is_success(), "initial allowed fetch failed: {:?}", approved.error);
+
+    registry
+        .set_tool_policy(tools::WEB_FETCH, crate::tool_policy::ToolPolicy::Prompt)
+        .await?;
+    let pending = registry
+        .execute_public_tool_request(fetch_request("https://example.com/requires-approval"))
+        .await;
+    assert!(!pending.is_success(), "a policy prompt must not consume a stale approval");
+    assert_eq!(pending.error.unwrap().error_type, ToolErrorType::PolicyViolation);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn restrictive_policy_change_revokes_explicit_pending_approval() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let calls = http_probe(&registry, 200, 0, 0, false).await?;
+    registry
+        .set_tool_policy(tools::WEB_FETCH, crate::tool_policy::ToolPolicy::Prompt)
+        .await?;
+    registry.mark_tool_preapproved(tools::WEB_FETCH).await;
+    registry
+        .set_tool_policy(tools::WEB_FETCH, crate::tool_policy::ToolPolicy::Deny)
+        .await?;
+
+    let denied = registry
+        .execute_public_tool_request(fetch_request("https://example.com/revoked"))
+        .await;
+    assert!(!denied.is_success(), "a denied policy must revoke a pending approval");
+    assert_eq!(denied.error.unwrap().error_type, ToolErrorType::PolicyViolation);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    Ok(())
+}
+
+#[tokio::test]
 async fn concurrent_rate_limited_calls_share_the_origin_budget() -> Result<()> {
     let workspace = TempDir::new()?;
     let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
@@ -568,6 +616,31 @@ async fn concurrent_fetch_invocations_cannot_share_one_shot_approval() -> Result
     assert!(first.is_success());
     assert!(!second.is_success());
     assert_eq!(second.attempts, 1);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn concurrent_fetch_invocations_consume_independent_approvals() -> Result<()> {
+    let workspace = TempDir::new()?;
+    let registry = ToolRegistry::new(workspace.path().to_path_buf()).await;
+    let calls = http_probe(&registry, 200, 0, 0, false).await?;
+    registry
+        .set_tool_policy(tools::WEB_FETCH, crate::tool_policy::ToolPolicy::Prompt)
+        .await?;
+    registry.mark_tool_preapproved(tools::WEB_FETCH).await;
+    registry.mark_tool_preapproved(tools::WEB_FETCH).await;
+
+    let (first, second) = tokio::join!(
+        registry.execute_public_tool_request(fetch_request("https://example.com/approved-a")),
+        registry.execute_public_tool_request(fetch_request("https://example.com/approved-b")),
+    );
+    assert!(first.is_success(), "first approved fetch failed: {:?}", first.error);
+    assert!(second.is_success(), "second approved fetch failed: {:?}", second.error);
+    let denied = registry
+        .execute_public_tool_request(fetch_request("https://example.com/unapproved"))
+        .await;
+    assert!(!denied.is_success(), "a third fetch must still require its own approval");
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     Ok(())
 }

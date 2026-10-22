@@ -6,9 +6,7 @@ use crate::agent::runloop::unified::session_setup::configured_anthropic_config;
 use anyhow::Result;
 use vtcode_auth::AuthCredentialsStoreMode;
 use vtcode_config::VTCodeConfig;
-use vtcode_config::api_keys::{
-    CredentialSource, OCTEN_API_KEY_ENV, OCTEN_PROVIDER, resolve_octen_credential_with_mode,
-};
+use vtcode_config::api_keys::CredentialSource;
 use vtcode_config::workspace_env::workspace_env_path;
 use vtcode_core::config::models::Provider;
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
@@ -103,19 +101,6 @@ fn resolve_secret_target(
     if provider_name.is_empty() {
         return Err("Provider name cannot be empty.".to_string());
     }
-    if provider_name == OCTEN_PROVIDER {
-        if key_name.is_some_and(|key| !key.trim().eq_ignore_ascii_case(OCTEN_API_KEY_ENV)) {
-            return Err(format!("Octen uses the fixed credential name {OCTEN_API_KEY_ENV}."));
-        }
-        return Ok(SecretTarget {
-            provider_name,
-            label: "Octen".to_owned(),
-            provider: None,
-            env_key: OCTEN_API_KEY_ENV.to_owned(),
-            local: false,
-            managed_auth: false,
-        });
-    }
     if let Ok(provider) = Provider::from_str(&provider_name) {
         return Ok(SecretTarget {
             provider_name: provider_name.clone(),
@@ -175,9 +160,6 @@ fn all_secret_targets(vt_cfg: Option<&VTCodeConfig>) -> Vec<SecretTarget> {
                 .filter_map(|provider| resolve_secret_target(Some(cfg), &provider.name, None).ok()),
         );
     }
-    if let Ok(octen) = resolve_secret_target(None, OCTEN_PROVIDER, None) {
-        targets.push(octen);
-    }
     targets
 }
 
@@ -188,9 +170,6 @@ fn should_show_secret_items(
 ) -> bool {
     if target.local || target.managed_auth || target.env_key.is_empty() {
         return false;
-    }
-    if target.provider_name == OCTEN_PROVIDER {
-        return true;
     }
     !matches!(
         vtcode_config::api_keys::resolve_credential_with_mode(
@@ -326,9 +305,7 @@ async fn handle_add_secret(ctx: &mut SlashCommandContext<'_>, target: SecretTarg
             ctx.renderer
                 .line(MessageStyle::Info, &format!("API key for {label} stored in secure storage."))?;
             ctx.renderer.line(MessageStyle::Output, "The key will be used automatically.")?;
-            if target.provider_name != OCTEN_PROVIDER
-                && vtcode_config::read_workspace_env_value(&ctx.config.workspace, env_key)?.is_some()
-            {
+            if vtcode_config::read_workspace_env_value(&ctx.config.workspace, env_key)?.is_some() {
                 vtcode_config::remove_workspace_env_value(&ctx.config.workspace, env_key)?;
                 ctx.renderer.line(
                     MessageStyle::Info,
@@ -429,15 +406,6 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, target: SecretT
         Ok(None) => {
             ctx.renderer
                 .line(MessageStyle::Info, &format!("No stored API key found for {label}."))?;
-            if target.provider_name == OCTEN_PROVIDER
-                && resolve_octen_credential_with_mode(storage_mode(ctx))?
-                    .is_some_and(|credential| credential.source == CredentialSource::Env)
-            {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.",
-                )?;
-            }
             return Ok(SlashCommandControl::Continue);
         }
         Ok(Some(_)) => {}
@@ -471,15 +439,6 @@ async fn handle_delete_secret(ctx: &mut SlashCommandContext<'_>, target: SecretT
                 .line(MessageStyle::Info, &format!("API key for {label} deleted from secure storage."))?;
             ctx.renderer
                 .line(MessageStyle::Output, "The change takes effect immediately.")?;
-            if target.provider_name == OCTEN_PROVIDER
-                && resolve_octen_credential_with_mode(storage_mode(ctx))?
-                    .is_some_and(|credential| credential.source == CredentialSource::Env)
-            {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "OCTEN_API_KEY still supplies an environment override; unset it to disable Octen credentials.",
-                )?;
-            }
             if let Err(err) = reload_provider_client_if_matching(ctx, &target, CredentialReadback::Resolved) {
                 ctx.renderer.line(MessageStyle::Warning, &err)?;
             }
@@ -500,9 +459,6 @@ fn reload_provider_client_if_matching(
     target: &SecretTarget,
     readback: CredentialReadback,
 ) -> Result<(), String> {
-    if target.provider_name == OCTEN_PROVIDER {
-        return Ok(());
-    }
     let current_provider = ctx.config.provider.trim().to_lowercase();
     if !target.provider_name.eq_ignore_ascii_case(&current_provider) {
         return Ok(());
@@ -762,8 +718,6 @@ fn render_secret_status_table(
             Some(CredentialSource::Local)
         } else if target.managed_auth {
             Some(CredentialSource::ManagedAuth)
-        } else if target.provider_name == OCTEN_PROVIDER {
-            resolve_octen_credential_with_mode(storage_mode)?.map(|resolved| resolved.source)
         } else {
             vtcode_config::api_keys::resolve_credential_with_mode(
                 &target.provider_name,
@@ -836,21 +790,4 @@ fn list_item(title: &str, subtitle: &str, action: String, search: &str) -> Inlin
         Some(InlineListSelection::ConfigAction(action)),
     )
     .with_search_value(search.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn octen_is_a_fixed_search_secret_without_llm_authentication() {
-        let target = resolve_secret_target(None, " Octen ", None).expect("Octen target");
-        assert_eq!(target.provider_name, "octen");
-        assert_eq!(target.env_key, "OCTEN_API_KEY");
-        assert!(target.provider.is_none());
-        assert!(!target.local);
-        assert!(!target.managed_auth);
-        assert!(resolve_secret_target(None, "octen", Some("OTHER_KEY")).is_err());
-        assert!(all_secret_targets(None).iter().any(|target| target.provider_name == "octen"));
-    }
 }

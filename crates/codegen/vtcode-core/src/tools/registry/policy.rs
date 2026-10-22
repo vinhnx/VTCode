@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -101,7 +101,10 @@ use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource,
 #[derive(Default)]
 pub(super) struct ToolPolicyGateway {
     tool_policy: Arc<Mutex<Option<ToolPolicyManager>>>,
-    preapproved_tools: Arc<Mutex<FxHashSet<String>>>,
+    // A separate permission decision can approve each concurrent invocation of
+    // the same tool. Keep one token per approval so one call cannot consume the
+    // approval granted to another call.
+    preapproved_tools: Arc<Mutex<FxHashMap<String, usize>>>,
     full_auto_allowlist: Arc<Mutex<Option<FxHashSet<String>>>>,
     full_auto_catalogue_config: Arc<Mutex<Option<SessionToolsConfig>>>,
     full_auto_catalogue_lifecycle: Arc<Mutex<()>>,
@@ -134,7 +137,7 @@ impl ToolPolicyGateway {
     fn from_policy_manager(tool_policy: Option<ToolPolicyManager>) -> Self {
         Self {
             tool_policy: Arc::new(Mutex::new(tool_policy)),
-            preapproved_tools: Arc::new(Mutex::new(FxHashSet::default())),
+            preapproved_tools: Arc::new(Mutex::new(FxHashMap::default())),
             full_auto_allowlist: Arc::new(Mutex::new(None)),
             full_auto_catalogue_config: Arc::new(Mutex::new(None)),
             full_auto_catalogue_lifecycle: Arc::new(Mutex::new(())),
@@ -265,16 +268,28 @@ impl ToolPolicyGateway {
     pub async fn set_policy_manager(&self, manager: ToolPolicyManager) {
         self.revision.fetch_add(1, Ordering::AcqRel);
         *self.tool_policy.lock().await = Some(manager);
+        // Hydration replaces the policy source. Any approval granted while
+        // the first-paint metadata defaults were active must be re-evaluated
+        // against the hydrated policy instead of crossing that boundary.
+        self.revoke_all_preapprovals().await;
     }
 
     pub async fn set_tool_policy(&self, tool_name: &str, policy: ToolPolicy) -> Result<()> {
         self.revision.fetch_add(1, Ordering::AcqRel);
         let canonical = canonical_tool_name(tool_name);
-        if let Some(ref mut manager) = *self.tool_policy.lock().await {
+        let restrictive = matches!(&policy, ToolPolicy::Deny | ToolPolicy::Prompt);
+        let result = if let Some(ref mut manager) = *self.tool_policy.lock().await {
             manager.set_policy(canonical, policy).await
         } else {
             Err(anyhow!(ERR_POLICY_MANAGER_NOT_INITIALIZED))
+        };
+        if result.is_ok() && restrictive {
+            // A one-shot approval is tied to the policy that was in effect when
+            // it was granted. Restrictive changes must revoke pending tokens so
+            // an already-approved call cannot bypass the new policy.
+            self.revoke_preapprovals(canonical).await;
         }
+        result
     }
 
     pub async fn add_approval_cache_key(&self, approval_key: &str) -> Result<()> {
@@ -459,33 +474,25 @@ impl ToolPolicyGateway {
             if let Some(policy_manager) = self.tool_policy.lock().await.as_mut() {
                 match policy_manager.get_policy(normalized) {
                     ToolPolicy::Deny => return Ok(ToolPermissionDecision::Deny),
-                    ToolPolicy::Allow => {
-                        self.preapproved_tools.lock().await.insert(normalized.to_string());
-                        return Ok(ToolPermissionDecision::Allow);
-                    }
+                    ToolPolicy::Allow => return Ok(ToolPermissionDecision::Allow),
                     ToolPolicy::Prompt => {
                         return Ok(ToolPermissionDecision::Prompt);
                     }
                 }
             }
 
-            self.preapproved_tools.lock().await.insert(normalized.to_string());
             return Ok(ToolPermissionDecision::Allow);
         }
 
         if let Some(policy_manager) = self.tool_policy.lock().await.as_mut() {
             match policy_manager.get_policy(normalized) {
-                ToolPolicy::Allow => {
-                    self.preapproved_tools.lock().await.insert(normalized.to_string());
-                    Ok(ToolPermissionDecision::Allow)
-                }
+                ToolPolicy::Allow => Ok(ToolPermissionDecision::Allow),
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
                     if Self::should_auto_approve_by_risk(normalized)
                         || ToolPolicyManager::is_auto_allow_tool(normalized)
                     {
                         policy_manager.set_policy(normalized, ToolPolicy::Allow).await?;
-                        self.preapproved_tools.lock().await.insert(normalized.to_string());
                         Ok(ToolPermissionDecision::Allow)
                     } else {
                         Ok(ToolPermissionDecision::Prompt)
@@ -494,10 +501,7 @@ impl ToolPolicyGateway {
             }
         } else {
             Ok(match default_permission {
-                ToolPolicy::Allow => {
-                    self.preapproved_tools.lock().await.insert(normalized.to_string());
-                    ToolPermissionDecision::Allow
-                }
+                ToolPolicy::Allow => ToolPermissionDecision::Allow,
                 ToolPolicy::Deny => ToolPermissionDecision::Deny,
                 ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
             })
@@ -523,7 +527,16 @@ impl ToolPolicyGateway {
     pub async fn take_preapproved(&self, name: &str) -> bool {
         let canonical = canonical_tool_name(name);
         let mut preapproved = self.preapproved_tools.lock().await;
-        let was_preapproved = preapproved.remove(canonical);
+        let was_preapproved = match preapproved.get_mut(canonical) {
+            Some(count) if *count > 0 => {
+                *count -= 1;
+                true
+            }
+            _ => false,
+        };
+        if was_preapproved && preapproved.get(canonical).is_some_and(|count| *count == 0) {
+            preapproved.remove(canonical);
+        }
         tracing::trace!(
             "take_preapproved: tool='{}', canonical='{}', was_preapproved={}, remaining={:?}",
             name,
@@ -538,13 +551,27 @@ impl ToolPolicyGateway {
         let canonical = canonical_tool_name(name);
         let canonical_owned = canonical.to_owned();
         let mut preapproved = self.preapproved_tools.lock().await;
-        preapproved.insert(canonical_owned.clone());
+        let count = preapproved.entry(canonical_owned.clone()).or_default();
+        *count = count.saturating_add(1);
         tracing::trace!(
             "preapprove: tool='{}', canonical='{}', preapproved_tools={:?}",
             name,
             canonical_owned,
             *preapproved
         );
+    }
+
+    async fn revoke_preapprovals(&self, name: &str) {
+        let canonical = canonical_tool_name(name);
+        let mut preapproved = self.preapproved_tools.lock().await;
+        preapproved.remove(canonical);
+        tracing::trace!(tool = %canonical, "Revoked pending one-shot approvals after restrictive policy change");
+    }
+
+    async fn revoke_all_preapprovals(&self) {
+        let mut preapproved = self.preapproved_tools.lock().await;
+        preapproved.clear();
+        tracing::trace!("Revoked pending one-shot approvals after policy manager replacement");
     }
 
     pub async fn should_execute_tool(&self, name: &str) -> Result<ToolExecutionDecision> {
@@ -746,5 +773,25 @@ mod tests {
             matches!(decision, ToolPermissionDecision::Deny),
             "non-workflow tools must stay denied outside the allow-list"
         );
+    }
+
+    #[tokio::test]
+    async fn replacing_policy_manager_revokes_first_paint_approvals() {
+        let temp = tempfile::tempdir().expect("temp workspace");
+        let config_path = temp.path().join("tool-policy.json");
+        std::fs::write(
+            &config_path,
+            serde_json::to_vec_pretty(&ToolPolicyConfig::default()).expect("policy config json"),
+        )
+        .expect("policy config file");
+        let manager = ToolPolicyManager::new_with_config_path(config_path)
+            .await
+            .expect("policy manager");
+        let gateway = ToolPolicyGateway::without_persistence();
+        gateway.preapprove(tools::WEB_FETCH).await;
+
+        gateway.set_policy_manager(manager).await;
+
+        assert!(!gateway.take_preapproved(tools::WEB_FETCH).await);
     }
 }

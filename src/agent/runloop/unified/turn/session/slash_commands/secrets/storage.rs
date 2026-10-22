@@ -22,10 +22,6 @@ impl SecretStorage {
     }
 
     pub(super) fn load_resolved(&self, provider: &str, key_name: &str, workspace: &Path) -> Result<Option<String>> {
-        if provider == vtcode_config::api_keys::OCTEN_PROVIDER {
-            return vtcode_config::api_keys::resolve_octen_credential_with_mode(self.mode)
-                .map(|resolved| resolved.and_then(|credential| credential.secret));
-        }
         resolve_credential_with_mode(provider, key_name, Some(workspace), self.mode)
             .with_context(|| format!("failed to resolve {provider} credential"))
             .map(|resolved| resolved.and_then(|credential| credential.secret))
@@ -44,8 +40,7 @@ impl SecretStorage {
 
         store_credential_with_mode(provider, key_name, value, self.mode)
             .with_context(|| format!("failed to store {provider} credential"))
-            .map(|_| ())?;
-        Ok(())
+            .map(|_| ())
     }
 
     pub(super) fn clear(&self, provider: &str, key_name: &str) -> Result<()> {

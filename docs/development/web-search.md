@@ -1,22 +1,47 @@
-# Octen search integration
+# DuckDuckGo web search integration
 
-The built-in search implementation lives in `vtcode-core/src/tools/web_search/`. The fixed Octen endpoint returns
-ranked highlights mapped to the existing title/URL/snippet result contract. `full_content.enable` is explicitly
-false. Separate `web_fetch` approval and domain/network controls remain authoritative for page retrieval.
+The built-in `web_search` implementation lives in
+`crates/codegen/vtcode-core/src/tools/web_search/mod.rs`. It uses the keyless
+DuckDuckGo HTML endpoint and maps ranked result links into the stable
+`title`/`url`/`snippet` contract. No search API key or interactive secret is
+required. Full-page retrieval remains the separate `web_fetch` tool and still
+uses its own approval, domain, and network-safety checks.
 
-Credential resolution is shared with `/secret` through `vtcode_config::api_keys::resolve_octen_credential_with_mode`:
-nonblank environment override, then scoped secure storage. Registry snapshots carry the configured storage mode;
-keys are resolved on each uncached call, with no LLM authentication or paid key validation.
+The provider configuration accepts `auto` (the default compatibility alias)
+and `duckduckgo`. Removed provider values fail during configuration loading
+with the generic supported-values error instead of silently selecting another
+backend. Both configuration values report the canonical runtime backend ID
+`duckduckgo`; the network allowlist includes `html.duckduckgo.com` for the
+HTML endpoint.
 
-The state lock atomically admits requests against cooldown and session cap immediately before dispatch. Failed or
-cancelled sends retain their reservation. Request preparation and credential errors consume none. Only nonempty
-successes enter the TTL cache. Redirects are refused; streamed response bytes are bounded before JSON parsing.
-External error bodies are never emitted. Local HTTP fixtures cover wire shape, statuses, redirect refusal, bounded
-reads, cancellation accounting, and failure caching. See [usage, migration, pricing and pilot](../tools/web_search.md).
+DuckDuckGo does not publish a dependable numeric quota for its HTML endpoint.
+The 3-second cooldown, 5-minute successful-result cache, 12-request session
+budget, and 1 MiB response-body limit are conservative VTCode safeguards, not
+claims about a vendor quota. They remain configurable and are scoped to the
+tool instance; cache hits do not consume cooldown or session budget.
 
-Low-level registry construction keeps web tools disabled when workspace configuration cannot be loaded, including
-removed-provider migration errors. Explicit approval cannot replace missing network restrictions or storage-mode
-configuration. Repair the configuration before constructing a new registry.
+Each tool instance admits requests under one lock, checking the cooldown and
+session cap before reserving the outbound attempt. Successful payloads,
+including an explicit no-result response, are cached for the configured TTL;
+cache hits consume neither cooldown nor session quota. There are no automatic
+provider retries or fallbacks. HTTP 202, 403, and 429 responses, plus
+challenge-shaped HTML, are returned as `antiban_blocked` errors with
+`retryable: false` and are never cached. Timeout and 5xx failures carry
+`retryable: true` for at most one explicit retry after `next_action`.
 
-Octen writes are verified in the shared credential-storage boundary, including CLI and interactive migrations,
-before workspace `.env` cleanup. This keeps all saving paths under the same read-back contract.
+Cooldown and session-cap responses carry the canonical `provider`, stable
+`error_type` (`cooldown` or `session_cap`), `retryable`, and `next_action`;
+cooldowns also report a positive `retry_after_ms`, while a session cap reports
+`request_budget_remaining: 0`. Agents should not retry an anti-bot response
+immediately from the same network or session. They should use `web_fetch` for
+a known result URL under its separate approval and domain rules, or ask the
+user about a future alternate backend.
+
+The response reader rejects bodies over 1 MiB before parsing. The streaming
+HTML parser limits results to 20, truncates titles and snippets, and accepts
+only HTTP(S) result URLs with a host. Parser, URL-validation, body-limit,
+challenge, cache, cooldown, cap, and concurrent-admission behavior are covered
+by the `vtcode-core` web-search tests.
+
+See the [web search tool reference](../tools/web_search.md) for configuration
+and agent-facing output details.

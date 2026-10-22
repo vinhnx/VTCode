@@ -812,7 +812,6 @@ async fn resolve_auto_permission(
     .await
     {
         Ok(AutoPermissionReviewDecision::Allow { stage }) => {
-            tool_registry.mark_tool_preapproved(tool_name).await;
             stats.record_auto_permission_allow();
             tracing::trace!(tool = %tool_name, stage, "auto permission review approved tool");
             Ok(AutoPermissionPermissionOutcome::Allow)
@@ -1112,6 +1111,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
             ctrl_c_notify,
             session,
             skip_confirmations,
+            tool_call_id,
             harness_emitter,
         )
         .await?
@@ -1318,7 +1318,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         };
         match outcome {
             AutoPermissionPermissionOutcome::Allow => {
-                return Ok(ToolPermissionFlow::Approved { updated_args: hook_rewritten_args });
+                return Ok(approve_tool_permission_no_cache(tool_registry, tool_name, hook_rewritten_args).await);
             }
             AutoPermissionPermissionOutcome::Block => return Ok(ToolPermissionFlow::Denied),
             AutoPermissionPermissionOutcome::PromptFallback => {
@@ -1430,7 +1430,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
 
     let final_justification = justification.or(extracted_justification.as_ref());
     let permission_start = Instant::now();
-    emit_permission_requested(harness_emitter, tool_name);
+    emit_permission_requested(harness_emitter, tool_name, tool_call_id);
     let decision = match prompt_tool_permission(
         &display_labels.prompt_label,
         tool_name,
@@ -1454,7 +1454,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
         Ok(d) => d,
         Err(e) => {
             let wait_ms = permission_start.elapsed().as_millis() as u64;
-            emit_permission_resolved(harness_emitter, tool_name, PermissionDecision::Cancelled, wait_ms);
+            emit_permission_resolved(harness_emitter, tool_name, tool_call_id, PermissionDecision::Cancelled, wait_ms);
             return Err(e);
         }
     };
@@ -1462,6 +1462,7 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     emit_permission_resolved(
         harness_emitter,
         tool_name,
+        tool_call_id,
         permission_events::map_hitl_to_permission_decision(&decision),
         wait_ms,
     );

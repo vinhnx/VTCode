@@ -263,6 +263,12 @@ protocol = "https"
 notes    = "Privacy-first; no user tracking"
 
 [[search.web]]
+name     = "DuckDuckGo"
+domain   = "html.duckduckgo.com"
+protocol = "https"
+notes    = "Keyless HTML search; may be rate-limited or anti-bot challenged"
+
+[[search.web]]
 name     = "Serper"
 domain   = "google.serper.dev"
 protocol = "https"
@@ -293,16 +299,17 @@ protocol = "https"
 notes    = "Microsoft Azure Cognitive Search"
 
 [[search.web]]
-name     = "You.com"
-domain   = "api.you.com"
-protocol = "https"
-notes    = "LLM-native search results"
-
-[[search.web]]
 name     = "Kagi"
 domain   = "kagi.com"
 protocol = "https"
 notes    = "High signal-to-noise, ad-free"
+
+# No full web search API — Instant Answers only; for full SERP use via SerpAPI wrapper
+[[search.web]]
+name     = "DuckDuckGo"
+domain   = "api.duckduckgo.com"
+protocol = "https"
+notes    = "Instant Answers API; privacy-first, no tracking"
 
 # ============================================================
 # SEARCH — SPECIALIZED / VERTICAL

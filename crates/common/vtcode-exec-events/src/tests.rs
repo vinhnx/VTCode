@@ -82,6 +82,32 @@ fn thread_event_round_trip() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn permission_events_preserve_optional_tool_call_ids() -> Result<(), Box<dyn Error>> {
+    let event = ThreadEvent::PermissionResolved(PermissionResolvedEvent {
+        tool_name: "web_fetch".to_string(),
+        tool_call_id: Some("call-123".to_string()),
+        decision: PermissionDecision::Allow,
+        wait_ms: 2,
+    });
+
+    let json = serde_json::to_value(&event)?;
+    assert_eq!(json["tool_call_id"], "call-123");
+    let restored: ThreadEvent = serde_json::from_value(json)?;
+    assert_eq!(restored, event);
+
+    let legacy = serde_json::json!({
+        "type": "permission.requested",
+        "tool_name": "web_fetch"
+    });
+    let parsed: ThreadEvent = serde_json::from_value(legacy)?;
+    let ThreadEvent::PermissionRequested(requested) = parsed else {
+        panic!("expected permission.requested");
+    };
+    assert_eq!(requested.tool_call_id, None);
+    Ok(())
+}
+
+#[test]
 fn turn_blocked_event_round_trip() -> Result<(), Box<dyn Error>> {
     let event = ThreadEvent::TurnBlocked(Box::new(TurnBlockedEvent {
         completed_at: None,

@@ -1,80 +1,102 @@
-# Web search
+# Web Search Tool
 
-`web_search` uses the Octen Search API to return ranked **excerpts**. It never requests full page content. Reading a
-result with `web_fetch` remains subject to separate approval, domain restrictions, and network safety checks.
-Changing the search provider does not resolve a fetch policy denial.
+The `web_search` tool performs web searches and returns ranked results (title, URL, snippet) inline. The only built-in
+provider is keyless DuckDuckGo HTML search, selected by default through `auto` or explicitly with `duckduckgo`:
 
-## Secure setup
+- **`duckduckgo`** — keyless DuckDuckGo HTML endpoint, no API key required. Best-effort; may be rate-limited
+  or anti-bot challenged.
 
-Run `/secret add octen` in the interactive session and paste the key into the masked prompt. Keys are stored using
-`agent.credential_storage_mode` (OS keyring or encrypted file), with verified read-back. No paid validation request
-is sent when saving. Escape cancels without replacing the previous key; blank input is rejected.
+DuckDuckGo does not publish a dependable numeric quota for this HTML endpoint. Its responses can depend on
+request fingerprints and headers, so VTCode's limits are local safeguards rather than vendor guarantees: the
+default 3-second cooldown, 5-minute result cache, 12-request session budget, and 1 MiB response-body cap.
 
-Use `/secret status octen` to see availability and source, and `/secret delete octen` to remove the saved key.
-A nonblank `OCTEN_API_KEY` environment override takes precedence over secure storage. Deleting a stored key does not
-remove that override; the command explains when it still supplies credentials. Changes apply to the next uncached
-search without restarting. Keys do not belong in `vtcode.toml`, command arguments, or conversation messages.
+## Usage
 
-Missing keys produce a structured `setup_error` pointing to `/secret add octen` or `OCTEN_API_KEY`. Tool calls and
-headless runs never open a credential prompt. Secure-storage errors are reported separately from missing keys.
-Octen is a search service, separate from the LLM provider/model registry.
-
-## Arguments and results
-
-```json
-{ "query": "Rust ownership reference", "max_results": 5 }
-```
-
-`query` must contain 1–500 characters after trimming. `max_results` defaults to 8 and is clamped to 1–20.
+The tool accepts a `query` string and optional `max_results`:
 
 ```json
 {
-  "query": "Rust ownership reference",
-  "provider": "octen",
-  "count": 1,
+  "query": "Rust async performance tips"
+}
+```
+
+Optional parameters:
+
+| Field         | Type      | Default        | Description                                 |
+| ------------- | --------- | -------------- | ------------------------------------------- |
+| `query`       | `string`  | —              | Nonblank search query, up to 500 characters |
+| `max_results` | `integer` | config default | Cap returned results (max 20)               |
+
+## Output
+
+```json
+{
+  "query": "Rust async performance tips",
+  "provider": "duckduckgo",
+  "count": 5,
   "cached": false,
   "results": [
-    { "title": "Ownership", "url": "https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html", "snippet": "An excerpt from the result highlight." }
+    { "title": "...", "url": "https://...", "snippet": "..." }
   ]
 }
 ```
 
-Octen highlights become snippets (at most 400 characters plus an ellipsis); titles are limited to 200 characters
-plus an ellipsis. Results preserve rank and reject non-HTTP(S), missing-host, or credential-bearing URLs.
-Successful nonempty results are cached; empty results and failures are not. Malformed responses, API errors,
-rejected account access, rate limits, timeouts, network failures, redirects, and oversized bodies are distinguished.
-Upstream error bodies and transport details are omitted to protect credentials.
+The `provider` field reports the backend as `"duckduckgo"`.
 
-## Configuration and migration
+### Errors and anti-bot responses
+
+Admission and provider failures use a stable structured contract. For example, a cooldown response includes
+`error_type: "cooldown"`, `retryable: true`, `retry_after_ms`, `provider`, and `next_action`; an exhausted
+session includes `error_type: "session_cap"`, `retryable: false`, `request_budget_remaining: 0`, and
+`next_action`.
+
+HTTP 202, 403, or 429 responses, and HTML containing a challenge or CAPTCHA, are reported as
+`error_type: "antiban_blocked"` with `retryable: false`. Do not retry those responses immediately from the
+same network or session. Use a known result URL with `web_fetch` under its separate approval and domain rules,
+or ask the user whether to configure another backend in a future provider extension. Ordinary timeout and 5xx
+failures are marked retryable for at most one explicit retry after the supplied `next_action`; the tool does not
+automatically retry DuckDuckGo requests.
+
+## Configuration
+
+Configure via `vtcode.toml` under `[tools.web_search]`:
 
 ```toml
 [tools.web_search]
-provider = "octen"
-max_results = 8
+# Provider: "auto" (default; aliases the keyless DuckDuckGo backend), "duckduckgo"
+# (keyless)
+provider = "duckduckgo"
+
+# Default results per call (hard cap: 20)
+max_results = 5
+
+# Request timeout in seconds (max: 60)
 timeout_secs = 20
+
+# Minimum gap between requests in milliseconds (default: 3000)
 cooldown_ms = 3000
+
+# How long results are cached in seconds (default: 300)
 cache_ttl_secs = 300
+
+# Session-wide request cap (default: 12)
 session_max_requests = 12
 ```
 
-`auto` remains a compatibility alias for Octen. Explicit `duckduckgo` and `youcom` settings fail with migration
-guidance: change the provider to `octen` and configure an Octen key. Legacy search integrations are removed;
-historical user credentials are not deleted. If low-level registry setup cannot load the configuration, web tools
-remain disabled even when approved; repair the configuration before starting a new registry.
+Anti-bot challenges and non-success responses are reported as structured errors rather than cached as empty results.
 
-Requests use the fixed `https://api.octen.ai/search` endpoint with `x-api-key`. Redirects are disabled and response
-reads are bounded to 1 MB. Timeout is clamped to 1–60 seconds. There are no automatic retries or fallback providers.
-Every outbound attempt, including failures and cancellations, consumes session quota; missing credentials and cache
-hits consume none. Concurrent calls share atomic cooldown/cap admission. The existing cooldown, cache TTL, and cap
-defaults remain unchanged.
+## Guard Rails
 
-## Cost and pilot rationale
+- **Cooldown** — prevents hammering the endpoint (default 3s between requests)
+- **Result cache** — identical queries served from memory (default 5min TTL, no network call)
+- **Session cap** — limits total outbound requests per session (default 12)
+- **Timeout** — per-request timeout (default 20s, max 60s)
+- **Results cap** — max 20 results per call
 
-On 2026-10-22, [Octen pricing](https://octen.ai/pricing) advertised a promotional $1 per 1,000 web searches. Pricing
-can change; consult the current page. Vendor latency and search benchmark claims are selection context, not VT Code
-validation or evidence of coding-query quality.
+The cooldown, cache, session budget, and body cap are VTCode policy controls; none should be interpreted as a
+published DuckDuckGo quota.
 
-A small acceptance pilot uses at most five coding-documentation queries (Rust ownership, Tokio cancellation,
-reqwest redirects, Serde enum compatibility, and Cargo locked builds). Record observed latency, retrieval of useful
-primary sources, and failures. Run only with existing credentials; do not create accounts or purchase credits.
-Without credentials, live quality and latency remain unverified. See the [API contract](https://docs.octen.ai/api-reference/search).
+## Related Tools
+
+- `web_fetch` — fetch full page content from a specific URL; pass `format="markdown"` for defuddle-style
+  cleaned-markdown extraction (consolidates the former `defuddle_fetch` tool)

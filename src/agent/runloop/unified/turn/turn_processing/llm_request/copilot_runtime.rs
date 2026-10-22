@@ -422,6 +422,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                     renderer,
                     self.harness_emitter,
                     &self.harness_state.turn_id.0,
+                    Some(request.tool_call_id.as_str()),
                     &canonical_tool_name,
                     &diagnosis,
                 );
@@ -442,6 +443,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                     renderer,
                     self.harness_emitter,
                     &self.harness_state.turn_id.0,
+                    Some(request.tool_call_id.as_str()),
                     &canonical_tool_name,
                     &diagnosis,
                 );
@@ -459,6 +461,7 @@ impl<'a> CopilotRuntimeHost<'a> {
                     renderer,
                     self.harness_emitter,
                     &self.harness_state.turn_id.0,
+                    Some(request.tool_call_id.as_str()),
                     &canonical_tool_name,
                     &diagnosis,
                 );

@@ -780,6 +780,10 @@ async fn pre_tool_use_hook_rewrite_survives_forwarded_hook_phase() {
 async fn active_agent_auto_rule_enters_classifier_review() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    registry
+        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Prompt)
+        .await
+        .expect("set prompt policy");
     let mut session = create_headless_session();
     let handle = session.clone_inline_handle();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
@@ -819,6 +823,10 @@ async fn active_agent_auto_rule_enters_classifier_review() {
     .expect("permission flow");
 
     assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
+    registry
+        .execute_tool(tools::UNIFIED_EXEC, json!({"action": "run", "command": "echo hi"}))
+        .await
+        .expect("an auto-approved call must reach execution");
     assert_eq!(
         provider.responses.lock().expect("responses lock").len(),
         0,

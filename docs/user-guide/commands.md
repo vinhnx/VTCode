@@ -631,11 +631,3 @@ after closing VT Code.
 - Shell commands are filtered by allow/deny lists and can be extended via `VTCODE_<AGENT>_COMMANDS_*` environment
   variables.
 - Use `vtcode update --check` regularly to stay informed about new features and security updates.
-
-## Octen search credentials
-
-`/secret add octen` opens masked input and saves to the configured secure credential backend without a paid API
-validation call. `/secret status octen` reports availability and source; `/secret delete octen` removes only the
-saved key. A nonblank `OCTEN_API_KEY` environment override wins and remains active after stored-key deletion.
-Escape cancels add/replace without changing the previous key. Keys take effect on the next uncached search.
-Headless search returns setup guidance instead of prompting. See [web search](../tools/web_search.md).

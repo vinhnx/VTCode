@@ -99,4 +99,4 @@ Entry point for VT Code contributor workflows.
 
 - [Checkpoint file storage](filesnap-checkpoints.md): filesnap storage, legacy compatibility, and restore boundaries.
 
-- [Octen web search integration](web-search.md): credentials, bounded requests, and fetch approval separation.
+- [DuckDuckGo web search integration](web-search.md): keyless search, request guard rails, parsing, and fetch approval boundaries.

@@ -287,7 +287,7 @@ async fn handle_success<'a>(
     // the model-facing response attempt so UI/rendering failures cannot
     // suppress the durable diagnosis item or change its ordering.
     if let Some(diagnosis) = diagnosis.as_ref() {
-        render_and_emit(t_ctx.ctx, tool_name, diagnosis);
+        render_and_emit(t_ctx.ctx, Some(&tool_call_id), tool_name, diagnosis);
     }
     response_result?;
     // Skip signature recording for loop-detected stubs: a loop-detected result is
@@ -413,6 +413,7 @@ async fn handle_failure<'a>(
     }
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "execution").await;
+    let diagnostic_tool_call_id = tool_call_id.clone();
     finalize_failed_tool_response(
         t_ctx,
         tool_call_id,
@@ -424,7 +425,7 @@ async fn handle_failure<'a>(
         batch_spinner,
     )
     .await;
-    render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
+    render_and_emit(t_ctx.ctx, Some(&diagnostic_tool_call_id), tool_name, &diagnosis);
 
     if blocked_or_denied_failure {
         t_ctx.ctx.harness_state.record_denied_tool_call();
@@ -491,6 +492,7 @@ async fn handle_timeout(
     record_recovery_tool_error(t_ctx.ctx, tool_name, error, RecoveryErrorType::Timeout).await;
 
     let diagnosis = diagnose_error(t_ctx.ctx, tool_name, args_val, error, "timeout").await;
+    let diagnostic_tool_call_id = tool_call_id.clone();
     finalize_failed_tool_response(
         t_ctx,
         tool_call_id,
@@ -502,7 +504,7 @@ async fn handle_timeout(
         batch_spinner,
     )
     .await;
-    render_and_emit(t_ctx.ctx, tool_name, &diagnosis);
+    render_and_emit(t_ctx.ctx, Some(&diagnostic_tool_call_id), tool_name, &diagnosis);
 
     Ok(())
 }

@@ -82,7 +82,6 @@ fn workspace_tool_config_from_loaded(config: &vtcode_config::loader::VTCodeConfi
         tool: ToolConfigSnapshot {
             web_search: config.tools.web_search.clone(),
             web_config_load_failed: false,
-            credential_storage_mode: config.agent.credential_storage_mode,
             web_fetch: config.tools.web_fetch.clone(),
         },
         spooler: spooler_config_from_dynamic_context(&config.context.dynamic),
@@ -294,8 +293,8 @@ mod tests {
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn removed_search_provider_disables_web_tools_even_when_approved() {
-        for provider in ["duckduckgo", "youcom"] {
+    async fn unsupported_search_provider_disables_web_tools_even_when_approved() {
+        for provider in ["unsupported-provider"] {
             let temp = tempdir().unwrap();
             std::fs::write(
                 temp.path().join("vtcode.toml"),
@@ -325,7 +324,9 @@ allowed_domains = ["only.example.com"]
                 // web tool rejects them before credential resolution or network I/O.
                 let error = tool.execute(serde_json::json!({})).await.unwrap_err();
                 assert!(error.to_string().contains("workspace configuration could not be loaded"), "{name}: {error}");
-                assert!(error.to_string().contains("provider = \"octen\""));
+                let expected_provider =
+                    format!("provider = \"{}\"", vtcode_config::WebSearchProvider::Auto.backend_id());
+                assert!(error.to_string().contains(&expected_provider));
             }
             let registration = registry.inventory.get_registration("web_fetch").unwrap();
             let factory = registration.native_cgp_factory().unwrap();
@@ -352,16 +353,6 @@ allowed_domains = ["only.example.com"]
             assert!(error.message.contains("workspace configuration could not be loaded"));
             assert!(!error.retryable);
         }
-    }
-
-    #[test]
-    fn octen_registry_snapshot_preserves_configured_credential_mode() {
-        let mut config = vtcode_config::VTCodeConfig::default();
-        config.agent.credential_storage_mode = vtcode_auth::AuthCredentialsStoreMode::File;
-        let snapshot = workspace_tool_config_from_loaded(&config);
-        assert_eq!(snapshot.tool.credential_storage_mode, vtcode_auth::AuthCredentialsStoreMode::File);
-        assert!(!snapshot.tool.web_config_load_failed);
-        assert_eq!(snapshot.tool.web_search.provider, vtcode_config::WebSearchProvider::Octen);
     }
 
     #[tokio::test]

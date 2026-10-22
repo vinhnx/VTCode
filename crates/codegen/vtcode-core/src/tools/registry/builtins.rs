@@ -238,17 +238,13 @@ fn register_web_fetch(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegist
 }
 
 // ---------------------------------------------------------------------------
-// WEB SEARCH (built-in, query -> ranked results, Octen excerpts)
+// WEB SEARCH (built-in, query -> ranked results, keyless DuckDuckGo)
 // ---------------------------------------------------------------------------
 
 #[distributed_slice(BUILTIN_TOOLS)]
 fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegistration {
-    let web_search = WebSearchTool::with_config_and_storage(
-        tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default(),
-        tool_config()
-            .map(|snapshot| snapshot.credential_storage_mode)
-            .unwrap_or_default(),
-    );
+    let web_search =
+        WebSearchTool::with_config(tool_config().map(|snapshot| snapshot.web_search.clone()).unwrap_or_default());
     let web_search_for_factory = web_search.clone();
     let web_search_factory = native_cgp_tool_factory(move || web_search_for_factory.clone());
     ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
@@ -259,7 +255,7 @@ fn register_web_search(_plan_state: Option<&PlanningWorkflowState>) -> ToolRegis
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query (a topic, question, or keywords).",
+                    "description": "A nonblank search query (a topic, question, or keywords), up to 500 characters.",
                     "minLength": 1,
                     "maxLength": 500
                 },
@@ -665,6 +661,8 @@ mod tests {
 
         assert_eq!(schema["required"], json!(["query"]));
         assert_eq!(schema["additionalProperties"], json!(false));
+        assert_eq!(schema["properties"]["query"]["minLength"], json!(1));
+        assert_eq!(schema["properties"]["query"]["maxLength"], json!(500));
         let mut property_names = schema["properties"]
             .as_object()
             .expect("properties")

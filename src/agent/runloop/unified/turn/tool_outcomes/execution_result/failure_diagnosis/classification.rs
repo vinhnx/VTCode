@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 use vtcode_commons::ErrorCategory;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::hypothesis::{MismatchEvidence, MismatchKind, classify_mismatch};
 use vtcode_core::tools::names::is_apply_patch_shell_collision_command;
 use vtcode_core::tools::registry::ToolExecutionError;
@@ -49,6 +50,41 @@ pub(crate) fn policy_denial_next_action(correction: &str, circuit_tripped: bool,
             "{correction} Tools are disabled for the next pass — synthesize a plain-text response reporting the blocker to the user."
         )
     }
+}
+
+fn web_fetch_policy_guidance(error_message: &str) -> Option<(&'static str, &'static str)> {
+    let lower = error_message.to_ascii_lowercase();
+    let domain_boundary = [
+        "domain",
+        "allowlist",
+        "whitelist",
+        "private network",
+        "local/private",
+        "url is denied",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+
+    if domain_boundary {
+        return Some((
+            "The URL was rejected by web_fetch's domain or network safety policy.",
+            "Ask the user to approve the target domain or update web_fetch allowed_domains/mode, then retry only with an approved URL; do not bypass URL safety checks.",
+        ));
+    }
+
+    let tool_boundary = [
+        "tool denied by policy",
+        "execution denied by policy",
+        "tool policy",
+        "permission denied",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+
+    tool_boundary.then_some((
+        "The web_fetch tool is denied by the active tool permission policy before URL validation.",
+        "Request web_fetch approval or review the active web_fetch tool policy, then retry only after it is allowed; do not bypass policy or URL safety checks.",
+    ))
 }
 
 pub(crate) fn deterministic_preflight_diagnosis(
@@ -210,6 +246,15 @@ pub(crate) fn deterministic_error_diagnosis(error: &ToolExecutionError, failure_
             "Do not retry the identical query/path. Drop file_types, broaden path, or use exec_command rg for literal text. Revise the hypothesis from the bounded evidence before retrying.",
         )
         .with_revision_guidance(mismatch_kind);
+    }
+    if matches!(error.tool_name.as_str(), tool_names::WEB_FETCH | tool_names::FETCH_URL)
+        && matches!(
+            error.category,
+            ErrorCategory::PermissionDenied | ErrorCategory::PolicyViolation | ErrorCategory::PlanningPolicyViolation
+        )
+        && let Some((likely_cause, next_action)) = web_fetch_policy_guidance(&error_message)
+    {
+        return ToolFailureDiagnosis::new(observed, likely_cause, next_action);
     }
     let likely_cause = match error.category {
         ErrorCategory::Authentication => "The provider rejected the configured credentials or authentication state.",

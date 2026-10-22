@@ -281,7 +281,13 @@ impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
     pub async fn preflight_tool_permission(&self, name: &str) -> Result<bool> {
         match self.evaluate_tool_policy(name).await? {
-            ToolPermissionDecision::Allow => Ok(true),
+            ToolPermissionDecision::Allow => {
+                // `evaluate_tool_policy` is side-effect free. This legacy
+                // preflight API explicitly reserves one execution approval for
+                // callers that will execute immediately after the check.
+                self.mark_tool_preapproved(name).await;
+                Ok(true)
+            }
             ToolPermissionDecision::Deny => Ok(false),
             ToolPermissionDecision::Prompt => Ok(true),
         }
@@ -370,10 +376,7 @@ impl ToolRegistry {
                 .unwrap_or(ToolPolicy::Prompt)
         };
         match mcp_decision {
-            ToolPolicy::Allow => {
-                self.policy_gateway.preapprove(full_name).await;
-                Ok(ToolPermissionDecision::Allow)
-            }
+            ToolPolicy::Allow => Ok(ToolPermissionDecision::Allow),
             ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
             ToolPolicy::Prompt => Ok(ToolPermissionDecision::Prompt),
         }
