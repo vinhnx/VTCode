@@ -35,7 +35,6 @@ impl<'a> InlineInterruptCoordinator<'a> {
         notice_displayed: &mut bool,
         renderer: &mut AnsiRenderer,
         handle: &InlineHandle,
-        _default_placeholder: &Option<String>,
         queue: &mut InlineQueueState<'_>,
     ) -> Result<bool> {
         if self.state.is_cancel_requested() {

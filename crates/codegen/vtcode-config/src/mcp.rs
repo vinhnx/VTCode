@@ -357,7 +357,7 @@ impl McpAllowListConfig {
             return true;
         }
 
-        self.resolve_match(provider, tool_name, |rules| &rules.tools)
+        self.resolve_match(provider, tool_name, |rules| rules.tools.as_deref())
     }
 
     /// Determine whether a resource is permitted for the given provider
@@ -367,7 +367,7 @@ impl McpAllowListConfig {
             return true;
         }
 
-        self.resolve_match(provider, resource, |rules| &rules.resources)
+        self.resolve_match(provider, resource, |rules| rules.resources.as_deref())
     }
 
     /// Determine whether a prompt is permitted for the given provider
@@ -377,7 +377,7 @@ impl McpAllowListConfig {
             return true;
         }
 
-        self.resolve_match(provider, prompt, |rules| &rules.prompts)
+        self.resolve_match(provider, prompt, |rules| rules.prompts.as_deref())
     }
 
     /// Determine whether a logging channel is permitted
@@ -424,7 +424,7 @@ impl McpAllowListConfig {
 
     fn resolve_match<'a, F>(&'a self, provider: &str, candidate: &str, accessor: F) -> bool
     where
-        F: Fn(&'a McpAllowListRules) -> &'a Option<Vec<String>>,
+        F: Fn(&'a McpAllowListRules) -> Option<&'a [String]>,
     {
         if let Some(rules) = self.providers.get(provider)
             && let Some(patterns) = accessor(rules)

@@ -103,7 +103,7 @@ pub(crate) struct SettingsApplyOutcome {
 
 pub(crate) fn create_settings_palette_state(
     workspace: &Path,
-    vt_snapshot: &Option<VTCodeConfig>,
+    vt_snapshot: Option<&VTCodeConfig>,
 ) -> Result<SettingsPaletteState> {
     let manager = crate::main_helpers::load_workspace_config(workspace)?;
     let has_config_file = manager.config_path().is_some();
@@ -115,7 +115,7 @@ pub(crate) fn create_settings_palette_state(
     let draft = if has_config_file {
         manager.config().clone()
     } else {
-        vt_snapshot.clone().unwrap_or_else(|| manager.config().clone())
+        vt_snapshot.cloned().unwrap_or_else(|| manager.config().clone())
     };
 
     let source_label = (!has_config_file).then(no_config_source_label);
@@ -848,7 +848,7 @@ mod tests {
         std::fs::write(&override_path, "agent.provider = \"openai\"\n").expect("override config");
 
         let _guard = OverrideGuard::set(Some(override_path.clone()));
-        let state = create_settings_palette_state(&workspace, &None);
+        let state = create_settings_palette_state(&workspace, None);
 
         let state = state.expect("settings state with override");
         assert_eq!(
@@ -1623,7 +1623,7 @@ api_key_env = "TRUSTED_API_KEY"
             .with_system_config_paths(Vec::new());
 
         with_config_defaults_provider_for_test(Arc::new(provider), || {
-            let mut state = create_settings_palette_state(workspace, &None).expect("settings state");
+            let mut state = create_settings_palette_state(workspace, None).expect("settings state");
             assert_eq!(
                 canonicalize(&state.source_path).expect("canonical source path"),
                 canonicalize(&workspace_path).expect("canonical workspace path")
@@ -1685,7 +1685,7 @@ api_key_env = "TRUSTED_API_KEY"
         std::fs::write(&source_path, "[workspace]\nuse_root_config = true\n\n[agent]\ntheme = \"ansi\"\n")
             .expect("workspace config should be written");
 
-        let state = create_settings_palette_state(temp.path(), &None).expect("settings state should load");
+        let state = create_settings_palette_state(temp.path(), None).expect("settings state should load");
 
         assert_eq!(
             canonicalize(&state.source_path).expect("canonical state source path"),
@@ -1706,7 +1706,7 @@ api_key_env = "TRUSTED_API_KEY"
             .with_system_config_paths(Vec::new());
 
         with_config_defaults_provider_for_test(Arc::new(provider), || {
-            let mut state = create_settings_palette_state(workspace, &None).expect("settings state should load");
+            let mut state = create_settings_palette_state(workspace, None).expect("settings state should load");
             let initial_provider = state.draft.agent.provider.clone();
 
             std::fs::create_dir_all(fallback_path.parent().expect("fallback parent")).expect("fallback dir");

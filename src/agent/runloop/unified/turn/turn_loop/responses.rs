@@ -469,8 +469,8 @@ pub(super) fn completed_turn_requires_final_response(result: &TurnLoopResult, pr
 /// so mid-turn `start_planning` is exempt from the final-response guard
 /// before that switch is applied to `pending_primary_agent`.
 pub(super) fn is_primary_agent_handoff(
-    pending_primary_agent: &Option<String>,
-    pending_plan_execution_target: &Option<crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget>,
+    pending_primary_agent: Option<&str>,
+    pending_plan_execution_target: Option<&crate::agent::runloop::unified::planning_workflow::PlanExecutionTarget>,
     deferred_plan_entry_switch: bool,
 ) -> bool {
     pending_primary_agent.is_some() || pending_plan_execution_target.is_some() || deferred_plan_entry_switch

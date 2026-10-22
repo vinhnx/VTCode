@@ -128,7 +128,7 @@ fn split_runtime_context_section(prompt: &str) -> Option<(String, String)> {
 
 pub(crate) fn build_system_prompt(
     request: &LLMRequest,
-    cache_control: &Option<CacheControl>,
+    cache_control: Option<&CacheControl>,
     breakpoints_remaining: usize,
     history_system_placement: HistorySystemPlacement,
 ) -> SystemPromptBuildResult {
@@ -156,7 +156,7 @@ pub(crate) fn build_system_prompt(
 
         if !stable_prefix.is_empty() {
             if should_cache_stable_prefix {
-                if let Some(cc) = cache_control.as_ref() {
+                if let Some(cc) = cache_control {
                     blocks.push(json!({
                         "type": "text",
                         "text": stable_prefix,
@@ -185,7 +185,7 @@ pub(crate) fn build_system_prompt(
 
     let should_cache = cache_control.is_some() && breakpoints_remaining > 0;
 
-    if should_cache && let Some(cc) = cache_control.as_ref() {
+    if should_cache && let Some(cc) = cache_control {
         let block = json!({
             "type": "text",
             "text": final_system_prompt.trim(),

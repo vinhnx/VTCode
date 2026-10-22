@@ -189,7 +189,7 @@ async fn capability_driven_compaction_triggers_for_three_families_at_small_and_l
                 let mut history = tool_heavy_history(ROOMY_HISTORY_CYCLES);
                 let mut stats = SessionStats::default();
                 let mut manager = test_context_manager();
-                manager.update_token_usage(&Some(Usage {
+                manager.update_token_usage(Some(&Usage {
                     prompt_tokens: prompt_tokens as u32,
                     total_tokens: prompt_tokens as u32,
                     ..Usage::default()

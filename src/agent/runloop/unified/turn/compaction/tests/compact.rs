@@ -10,7 +10,7 @@ async fn manual_compaction_succeeds_without_server_side_support() {
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 900,
         completion_tokens: 10,
         total_tokens: 910,

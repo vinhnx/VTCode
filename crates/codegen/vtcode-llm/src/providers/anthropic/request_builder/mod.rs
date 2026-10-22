@@ -95,7 +95,7 @@ pub(crate) fn convert_to_anthropic_format(
     let mut breakpoints_remaining = max_breakpoints;
 
     let tools_breakpoints_before = breakpoints_remaining;
-    let mut tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining)?;
+    let mut tools = build_tools(request, tools_cache_control.as_ref(), &mut breakpoints_remaining)?;
     let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
     // Inject the Anthropic server-side advisor tool when enabled and the executor
@@ -117,7 +117,7 @@ pub(crate) fn convert_to_anthropic_format(
         mut system_value,
         breakpoints_used,
         has_uncached_runtime_context,
-    } = build_system_prompt(request, &system_cache_control, breakpoints_remaining, history_system_placement);
+    } = build_system_prompt(request, system_cache_control.as_ref(), breakpoints_remaining, history_system_placement);
     breakpoints_remaining = breakpoints_remaining.saturating_sub(breakpoints_used);
 
     // When the advisor tool is active, append a system-prompt block guiding the
@@ -196,7 +196,7 @@ pub(crate) fn convert_to_anthropic_format(
     let messages = build_messages(
         request,
         messages_to_process,
-        &messages_cache_control,
+        messages_cache_control.as_ref(),
         ctx.prompt_cache_settings,
         &mut breakpoints_remaining,
         ctx.model,

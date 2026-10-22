@@ -79,7 +79,7 @@ async fn show_settings_at_path_from_context_with_reset(
 
     let workspace_path = ctx.config.workspace.clone();
     let vt_snapshot = ctx.vt_cfg.clone();
-    let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
+    let mut settings_state = create_settings_palette_state(&workspace_path, vt_snapshot.as_ref())?;
     settings_state.view_path = view_path.map(resolve_settings_view_path);
     if reset_confirmation {
         settings_state.view_path = Some("__settings_reset_confirmation".to_string());

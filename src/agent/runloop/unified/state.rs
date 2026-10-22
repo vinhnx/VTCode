@@ -217,7 +217,7 @@ impl SessionStats {
         self.tools.iter().cloned().collect()
     }
 
-    pub(crate) fn record_usage(&mut self, provider: &str, usage: &Option<vtcode_core::llm::provider::Usage>) {
+    pub(crate) fn record_usage(&mut self, provider: &str, usage: Option<&vtcode_core::llm::provider::Usage>) {
         let Some(usage) = usage else {
             return;
         };
@@ -227,7 +227,7 @@ impl SessionStats {
     pub(crate) fn record_probe_attempt(
         &mut self,
         provider: &str,
-        usage: &Option<vtcode_core::llm::provider::Usage>,
+        usage: Option<&vtcode_core::llm::provider::Usage>,
         cost: Option<usage_cost::SessionCostEstimate>,
     ) {
         // Auxiliary usage contributes to session totals, never cache health.
@@ -280,9 +280,9 @@ impl SessionStats {
     pub(crate) fn record_cache_turn_health(
         &mut self,
         provider: &str,
-        usage: &Option<vtcode_core::llm::provider::Usage>,
+        usage: Option<&vtcode_core::llm::provider::Usage>,
     ) -> Option<String> {
-        let usage = usage.as_ref()?;
+        let usage = usage?;
         let normalized = usage_cost::normalized_turn_usage(provider, usage);
         self.prompt_cache_health.record_turn(&normalized).map(|alert| alert.message())
     }
@@ -674,20 +674,20 @@ mod tests {
         for _ in 0..3 {
             stats.record_probe_attempt(
                 "openai",
-                &usage,
+                usage.as_ref(),
                 usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
             );
         }
         assert_eq!(stats.total_usage().input_tokens, 6144);
         assert!((stats.total_cost_usd().unwrap() - 0.0006144).abs() < 1e-12);
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_some());
-        stats.record_probe_attempt("openai", &None, None);
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_some());
+        stats.record_probe_attempt("openai", None, None);
         assert!(stats.total_cost_usd().is_none());
         stats.record_probe_attempt(
             "openai",
-            &usage,
+            usage.as_ref(),
             usage.as_ref().map(vtcode_core::llm::usage_cost::estimate_decisions_cost),
         );
         assert!(stats.total_cost_usd().is_none());
@@ -706,17 +706,17 @@ mod tests {
             })
         };
         for sample in [usage(12_645, 0, 12_642), usage(12_669, 5_710, 5_575)] {
-            stats.record_usage("openai", &sample);
-            assert!(stats.record_cache_turn_health("openai", &sample).is_none());
+            stats.record_usage("openai", sample.as_ref());
+            assert!(stats.record_cache_turn_health("openai", sample.as_ref()).is_none());
         }
         stats.begin_request_segment(SegmentBoundaryReason::Compaction);
         let sample = usage(12_740, 0, 5_212);
-        stats.record_usage("openai", &sample);
-        assert!(stats.record_cache_turn_health("openai", &sample).is_none());
+        stats.record_usage("openai", sample.as_ref());
+        assert!(stats.record_cache_turn_health("openai", sample.as_ref()).is_none());
         assert_eq!(stats.total_usage().input_tokens, 38_054);
         assert_eq!(stats.total_usage().cached_input_tokens, 5_710);
-        assert!(stats.record_cache_turn_health("openai", &sample).is_none());
-        assert!(stats.record_cache_turn_health("openai", &sample).is_some());
+        assert!(stats.record_cache_turn_health("openai", sample.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", sample.as_ref()).is_some());
     }
 
     #[test]

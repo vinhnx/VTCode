@@ -1,7 +1,7 @@
 use crate::agent::runloop::ui_list;
 use crate::agent::runloop::ui_list::Tone;
 use anyhow::{Result, anyhow};
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::Duration;
 use vtcode_commons::modal_hints::truncate_modal_text;
 use vtcode_core::subagents::{BackgroundSubprocessEntry, SubagentStatusEntry};
@@ -349,9 +349,11 @@ pub(super) async fn show_active_agent_inspector(
                 return Ok(SlashCommandControl::Continue);
             }
             InspectorActionKind::Inspect => {
-                if let Some(path) =
-                    selection_path(action.selection.as_ref(), THREAD_TRANSCRIPT_PREFIX, &current_entry.transcript_path)
-                {
+                if let Some(path) = selection_path(
+                    action.selection.as_ref(),
+                    THREAD_TRANSCRIPT_PREFIX,
+                    current_entry.transcript_path.as_deref(),
+                ) {
                     return launch_editor_path(ctx, path).await;
                 }
                 if selection_config_action(action.selection.as_ref(), THREAD_CANCEL_PREFIX).is_some()
@@ -488,13 +490,15 @@ pub(super) async fn show_background_subprocess_inspector(
                 if let Some(path) = selection_path(
                     action.selection.as_ref(),
                     SUBPROCESS_TRANSCRIPT_PREFIX,
-                    &current_entry.transcript_path,
+                    current_entry.transcript_path.as_deref(),
                 ) {
                     return launch_editor_path(ctx, path).await;
                 }
-                if let Some(path) =
-                    selection_path(action.selection.as_ref(), SUBPROCESS_ARCHIVE_PREFIX, &current_entry.archive_path)
-                {
+                if let Some(path) = selection_path(
+                    action.selection.as_ref(),
+                    SUBPROCESS_ARCHIVE_PREFIX,
+                    current_entry.archive_path.as_deref(),
+                ) {
                     return launch_editor_path(ctx, path).await;
                 }
                 if selection_config_action(action.selection.as_ref(), SUBPROCESS_STOP_PREFIX).is_some()
@@ -679,9 +683,9 @@ fn selection_config_action<'a>(selection: Option<&'a InlineListSelection>, prefi
     }
 }
 
-fn selection_path(selection: Option<&InlineListSelection>, prefix: &str, path: &Option<PathBuf>) -> Option<String> {
+fn selection_path(selection: Option<&InlineListSelection>, prefix: &str, path: Option<&Path>) -> Option<String> {
     selection_config_action(selection, prefix)
-        .and(path.as_ref())
+        .and(path)
         .map(|path| path.display().to_string())
 }
 

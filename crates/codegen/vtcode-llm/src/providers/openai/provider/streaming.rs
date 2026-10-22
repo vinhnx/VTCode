@@ -277,7 +277,7 @@ impl OpenAIProvider {
                 };
                 headers::apply_turn_metadata(
                     headers::apply_client_request_id(builder, &client_request_id),
-                    &request.metadata,
+                    request.metadata.as_ref(),
                 )
                 .json(payload)
             })
@@ -296,7 +296,7 @@ impl OpenAIProvider {
             );
             // Downgrade once; classify a failed retry through the caller's usual fallback path.
             let (response, request_id) = self
-                .retry_without_service_tier(url, &request.metadata, payload, responses)
+                .retry_without_service_tier(url, request.metadata.as_ref(), payload, responses)
                 .await?;
             return Ok(StreamingHttpResponse::from_response(response, request_id).await);
         }

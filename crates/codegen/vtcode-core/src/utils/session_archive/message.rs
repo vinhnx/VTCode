@@ -65,14 +65,8 @@ fn boxed_non_empty_vec<T>(value: Option<Vec<T>>) -> Option<Box<Vec<T>>> {
     value.and_then(|value| (!value.is_empty()).then_some(Box::new(value)))
 }
 
-#[expect(
-    clippy::box_collection,
-    reason = "Intentional compatibility, platform, test, or API-shape suppression."
-)]
-fn clone_non_empty_boxed_string(value: &Option<Box<String>>) -> Option<String> {
-    value
-        .as_deref()
-        .and_then(|value| (!value.is_empty()).then_some(value.to_owned()))
+fn clone_non_empty_string(value: Option<&str>) -> Option<String> {
+    value.filter(|value| !value.is_empty()).map(str::to_owned)
 }
 
 fn deserialize_boxed_metadata_opt<'de, D>(
@@ -84,12 +78,8 @@ where
     crate::core::message_metadata::MessageMetadata::deserialize(deserializer).map(|m| Some(Box::new(m)))
 }
 
-#[expect(
-    clippy::box_collection,
-    reason = "Intentional compatibility, platform, test, or API-shape suppression."
-)]
-fn clone_non_empty_boxed_vec<T: Clone>(value: &Option<Box<Vec<T>>>) -> Option<Vec<T>> {
-    value.as_deref().and_then(|value| (!value.is_empty()).then_some(value.clone()))
+fn clone_non_empty_vec<T: Clone>(value: Option<&[T]>) -> Option<Vec<T>> {
+    value.filter(|value| !value.is_empty()).map(<[T]>::to_vec)
 }
 
 #[expect(
@@ -172,14 +162,56 @@ impl From<&SessionMessage> for Message {
         Self {
             role: message.role,
             content: message.content.clone(),
-            reasoning: clone_non_empty_boxed_string(&message.reasoning),
-            reasoning_details: clone_non_empty_boxed_vec(&message.reasoning_details),
-            tool_calls: clone_non_empty_boxed_vec(&message.tool_calls),
-            tool_call_id: clone_non_empty_boxed_string(&message.tool_call_id),
+            reasoning: clone_non_empty_string(message.reasoning.as_deref().map(String::as_str)),
+            reasoning_details: clone_non_empty_vec(message.reasoning_details.as_deref().map(Vec::as_slice)),
+            tool_calls: clone_non_empty_vec(message.tool_calls.as_deref().map(Vec::as_slice)),
+            tool_call_id: clone_non_empty_string(message.tool_call_id.as_deref().map(String::as_str)),
             phase: message.phase,
-            origin_tool: clone_non_empty_boxed_string(&message.origin_tool),
+            origin_tool: clone_non_empty_string(message.origin_tool.as_deref().map(String::as_str)),
             metadata: message.metadata.as_deref().cloned(),
             clear_at: message.clear_at,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SessionMessage;
+    use crate::llm::provider::Message;
+
+    #[test]
+    fn borrowed_archive_conversion_preserves_sparse_metadata_boundaries() {
+        let mut archived = SessionMessage::from(&Message::assistant("body".to_string()));
+        archived.reasoning = Some(Box::new(String::new()));
+        archived.reasoning_details = Some(Box::new(Vec::new()));
+        archived.tool_calls = Some(Box::new(Vec::new()));
+        archived.tool_call_id = Some(Box::new(String::new()));
+        archived.origin_tool = Some(Box::new(String::new()));
+        let empty = Message::from(&archived);
+        assert!(empty.reasoning.is_none());
+        assert!(empty.reasoning_details.is_none());
+        assert!(empty.tool_calls.is_none());
+        assert!(empty.tool_call_id.is_none());
+        assert!(empty.origin_tool.is_none());
+
+        archived.reasoning = Some(Box::new(" \t".to_string()));
+        archived.reasoning_details = Some(Box::new(vec![
+            serde_json::json!({"text": "second"}),
+            serde_json::json!({"text": "first"}),
+        ]));
+        archived.tool_call_id = Some(Box::new("call-7".to_string()));
+        archived.origin_tool = Some(Box::new("read_file".to_string()));
+        let restored = Message::from(&archived);
+        assert_eq!(restored.reasoning.as_deref(), Some(" \t"));
+        assert_eq!(
+            restored.reasoning_details,
+            Some(vec![
+                serde_json::json!({"text": "second"}),
+                serde_json::json!({"text": "first"})
+            ])
+        );
+        assert_eq!(restored.tool_call_id.as_deref(), Some("call-7"));
+        assert_eq!(restored.origin_tool.as_deref(), Some("read_file"));
+        assert!(restored.tool_calls.is_none());
     }
 }

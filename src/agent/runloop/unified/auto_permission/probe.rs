@@ -154,7 +154,7 @@ pub(crate) async fn probe_tool_output(
         .await;
         let usage = result.as_ref().ok().and_then(|response| response.usage.clone());
         let cost = usage.as_ref().map(usage_cost::estimate_decisions_cost);
-        runtime.stats.record_probe_attempt(provider.name(), &usage, cost);
+        runtime.stats.record_probe_attempt(provider.name(), usage.as_ref(), cost);
         tracing::info!(
             endpoint = "decisions",
             outcome = match result.as_ref() {
@@ -213,7 +213,7 @@ pub(crate) async fn probe_tool_output(
                 &usage_cost::normalized_turn_usage(provider.name(), usage),
             )
         });
-        runtime.stats.record_probe_attempt(provider.name(), &usage, cost);
+        runtime.stats.record_probe_attempt(provider.name(), usage.as_ref(), cost);
         tracing::info!(
             endpoint = "generation",
             outcome = match result.as_ref() {

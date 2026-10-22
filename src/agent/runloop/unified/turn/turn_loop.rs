@@ -1195,18 +1195,20 @@ pub(crate) async fn run_turn_loop(
         // that will serve the request. Configuration may contain an alias or
         // an inferred route, while the provider trait is authoritative. The
         // per-iteration `provider_name` binding is that provider's identity.
-        accumulate_turn_usage(&provider_name, &mut turn_usage, &response_usage);
-        turn_processing_ctx.session_stats.record_usage(&provider_name, &response_usage);
+        accumulate_turn_usage(&provider_name, &mut turn_usage, response_usage.as_ref());
+        turn_processing_ctx
+            .session_stats
+            .record_usage(&provider_name, response_usage.as_ref());
         // Record prompt pressure immediately so mid-turn readers (e.g. the
         // plan-approval modal's `Context: N% used` subtitle) see the current
         // response's prompt tokens instead of the previous turn's stale value.
         // The later `update_token_usage` before continue/break is idempotent.
-        turn_processing_ctx.context_manager.update_token_usage(&response_usage);
+        turn_processing_ctx.context_manager.update_token_usage(response_usage.as_ref());
         // SEV-style prompt-cache health: a sustained hit-rate collapse warns
         // once per session instead of silently re-paying full input cost.
         if let Some(message) = turn_processing_ctx
             .session_stats
-            .record_cache_turn_health(&provider_name, &response_usage)
+            .record_cache_turn_health(&provider_name, response_usage.as_ref())
         {
             tracing::warn!("{message}");
             let _ = turn_processing_ctx.renderer.line(MessageStyle::Warning, &message);
@@ -1233,9 +1235,11 @@ pub(crate) async fn run_turn_loop(
                         turn_processing_ctx
                             .session_stats
                             .mark_budget_limit_reached(max, estimate.raw_usd);
-                        turn_processing_ctx.context_manager.update_token_usage(&response_usage);
+                        turn_processing_ctx.context_manager.update_token_usage(response_usage.as_ref());
                         #[cfg(debug_assertions)]
-                        turn_processing_ctx.context_manager.validate_token_tracking(&response_usage);
+                        turn_processing_ctx
+                            .context_manager
+                            .validate_token_tracking(response_usage.as_ref());
                         // In planning mode, preserve the session and use the same
                         // user-facing recovery fallback as post-tool failures.
                         // Returning a model-only directive here would leave no
@@ -1607,9 +1611,9 @@ pub(crate) async fn run_turn_loop(
             }
         };
         // Record token usage before continuing or breaking
-        ctx.context_manager.update_token_usage(&response_usage);
+        ctx.context_manager.update_token_usage(response_usage.as_ref());
         #[cfg(debug_assertions)]
-        ctx.context_manager.validate_token_tracking(&response_usage);
+        ctx.context_manager.validate_token_tracking(response_usage.as_ref());
 
         match turn_outcome {
             TurnHandlerOutcome::Continue => continue,
@@ -1754,8 +1758,11 @@ pub(crate) async fn run_turn_loop(
     // must be exempt like an explicit `SwitchPrimaryAgent("plan")`.
     let deferred_plan_entry_switch = ctx.plan_session.take_plan_entry_agent_switch()
         && !matches!(result, TurnLoopResult::Cancelled | TurnLoopResult::Exit);
-    let primary_agent_handoff =
-        is_primary_agent_handoff(&pending_primary_agent, &pending_plan_execution_target, deferred_plan_entry_switch);
+    let primary_agent_handoff = is_primary_agent_handoff(
+        pending_primary_agent.as_deref(),
+        pending_plan_execution_target.as_ref(),
+        deferred_plan_entry_switch,
+    );
     let final_response_was_fallback = if completed_turn_requires_final_response(&result, primary_agent_handoff) {
         ensure_completed_turn_response(&mut ctx, working_history, turn_history_start_len)?
     } else {

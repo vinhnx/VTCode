@@ -33,14 +33,14 @@ impl CacheFingerprint {
     ) -> Self {
         Self {
             model: model.to_string(),
-            system_hash: hash_json(&system.map(|s| json!(s))),
-            tool_hash: hash_json(&tools.map(|t| json!(t))),
+            system_hash: hash_json(system.map(|s| json!(s)).as_ref()),
+            tool_hash: hash_json(tools.map(|t| json!(t)).as_ref()),
             prefix_len,
         }
     }
 }
 
-fn hash_json(value: &Option<Value>) -> u64 {
+fn hash_json(value: Option<&Value>) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     match value {
         Some(v) => {
@@ -149,6 +149,19 @@ pub(super) fn is_stale_cache_error(status: u16, body: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optional_json_hash_keeps_absence_distinct_from_null_and_empty_values() {
+        let null = Value::Null;
+        let empty_object = json!({});
+        let empty_array = json!([]);
+        let absent_hash = hash_json(None);
+        let null_hash = hash_json(Some(&null));
+        assert_ne!(absent_hash, null_hash);
+        assert_ne!(absent_hash, hash_json(Some(&empty_object)));
+        assert_ne!(null_hash, hash_json(Some(&empty_array)));
+        assert_ne!(hash_json(Some(&empty_object)), hash_json(Some(&empty_array)));
+    }
     use crate::providers::gemini::wire::models::Part;
 
     fn content(role: &str, text: &str) -> Content {

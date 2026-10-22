@@ -342,7 +342,6 @@ pub(super) async fn run_interaction_loop_impl(
             handle: ctx.handle,
             interrupts,
             ctrl_c_notice_displayed: state.ctrl_c_notice_displayed,
-            default_placeholder: ctx.default_placeholder,
             queued_inputs: state.queued_inputs,
             prefer_latest_queued_input_once: state.prefer_latest_queued_input_once,
             model_picker_state: state.model_picker_state,

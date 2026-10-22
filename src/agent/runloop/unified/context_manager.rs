@@ -103,7 +103,7 @@ impl ContextManager {
     /// We prioritize prompt-side pressure as the compaction signal:
     /// - `prompt_tokens` when available
     /// - fallback to `total_tokens - completion_tokens`
-    pub(crate) fn update_token_usage(&mut self, usage: &Option<uni::Usage>) {
+    pub(crate) fn update_token_usage(&mut self, usage: Option<&uni::Usage>) {
         if let Some(usage) = usage {
             let prompt_tokens = usage.prompt_tokens as usize;
             let completion_tokens = usage.completion_tokens as usize;
@@ -126,7 +126,7 @@ impl ContextManager {
     /// Validate that ContextManager token tracking matches provider-reported usage
     /// Logs a warning if delta > 5% to catch tracking inconsistencies
     #[cfg(debug_assertions)]
-    pub(crate) fn validate_token_tracking(&self, provider_usage: &Option<uni::Usage>) {
+    pub(crate) fn validate_token_tracking(&self, provider_usage: Option<&uni::Usage>) {
         if let Some(usage) = provider_usage {
             let provider_prompt = if usage.prompt_tokens > 0 {
                 usage.prompt_tokens as usize

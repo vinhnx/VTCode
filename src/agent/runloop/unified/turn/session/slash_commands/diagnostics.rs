@@ -32,7 +32,7 @@ struct CheckupRemediation {
 }
 
 /// Compute the optimizations that are currently applicable for the active config.
-fn compute_checkup_remediations(vt_cfg: &Option<VTCodeConfig>) -> Vec<CheckupRemediation> {
+fn compute_checkup_remediations(vt_cfg: Option<&VTCodeConfig>) -> Vec<CheckupRemediation> {
     let Some(cfg) = vt_cfg else {
         return Vec::new();
     };
@@ -272,7 +272,7 @@ fn show_checkup_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         .with_search_value("back close cancel".to_string()),
     ];
 
-    for remediation in compute_checkup_remediations(ctx.vt_cfg) {
+    for remediation in compute_checkup_remediations(ctx.vt_cfg.as_ref()) {
         items.push(
             ui_list::action(
                 remediation.title,
@@ -310,19 +310,19 @@ mod tests {
         cfg.automation.full_auto.enabled = true;
         cfg.tools.default_policy = ToolPolicy::Allow;
         // lifecycle defaults to empty
-        let items = compute_checkup_remediations(&Some(cfg));
+        let items = compute_checkup_remediations(Some(&cfg));
         assert!(items.is_empty(), "unexpected: {items:?}");
     }
 
     #[test]
     fn none_config_yields_no_remediations() {
-        assert!(compute_checkup_remediations(&None).is_empty());
+        assert!(compute_checkup_remediations(None).is_empty());
     }
 
     #[test]
     fn reports_all_three_when_unoptimized() {
         let cfg = cfg_with_hooks();
-        let ids: Vec<&str> = compute_checkup_remediations(&Some(cfg)).iter().map(|r| r.id).collect();
+        let ids: Vec<&str> = compute_checkup_remediations(Some(&cfg)).iter().map(|r| r.id).collect();
         assert!(ids.contains(&"enable_auto_mode"));
         assert!(ids.contains(&"disable_slow_hooks"));
         assert!(ids.contains(&"preapprove_readonly"));

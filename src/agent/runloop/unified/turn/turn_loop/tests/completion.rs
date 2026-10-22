@@ -1,13 +1,28 @@
 use super::*;
 
 #[test]
+fn absent_turn_usage_preserves_all_known_counters() {
+    let mut total = HarnessUsage {
+        input_tokens: 137,
+        cached_input_tokens: 31,
+        cache_creation_tokens: 19,
+        output_tokens: 43,
+    };
+    accumulate_turn_usage("anthropic", &mut total, None);
+    assert_eq!(total.input_tokens, 137);
+    assert_eq!(total.cached_input_tokens, 31);
+    assert_eq!(total.cache_creation_tokens, 19);
+    assert_eq!(total.output_tokens, 43);
+}
+
+#[test]
 fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     let mut total = HarnessUsage::default();
 
     accumulate_turn_usage(
         "openai",
         &mut total,
-        &Some(uni::Usage {
+        Some(&uni::Usage {
             prompt_tokens: 100,
             completion_tokens: 20,
             total_tokens: 120,
@@ -20,7 +35,7 @@ fn accumulate_turn_usage_merges_prompt_completion_and_cached_tokens() {
     accumulate_turn_usage(
         "openai",
         &mut total,
-        &Some(uni::Usage {
+        Some(&uni::Usage {
             prompt_tokens: 40,
             completion_tokens: 10,
             total_tokens: 50,
@@ -44,7 +59,7 @@ fn accumulate_turn_usage_normalizes_anthropic_exclusive_input() {
     accumulate_turn_usage(
         "anthropic",
         &mut total,
-        &Some(uni::Usage {
+        Some(&uni::Usage {
             prompt_tokens: 100,
             completion_tokens: 20,
             total_tokens: 120,

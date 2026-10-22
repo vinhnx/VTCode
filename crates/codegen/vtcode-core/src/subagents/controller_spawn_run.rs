@@ -81,7 +81,7 @@ impl SubagentController {
         let prompt = self.prepare_delegation_prompt(
             &spec,
             &delegation,
-            &request.message,
+            request.message.as_deref(),
             &request.items,
             "spawn_agent",
             "spawning the subagent",
@@ -129,7 +129,7 @@ impl SubagentController {
         let prompt = self.prepare_delegation_prompt(
             &spec,
             &delegation,
-            &request.message,
+            request.message.as_deref(),
             &request.items,
             "spawn_background_subprocess",
             "launching the background subprocess",
@@ -898,7 +898,7 @@ impl SubagentController {
         &self,
         spec: &SubagentSpec,
         delegation: &PreparedDelegationContext,
-        message: &Option<String>,
+        message: Option<&str>,
         items: &[SubagentInputItem],
         tool_name: &'static str,
         launch_phrase: &'static str,
@@ -929,7 +929,7 @@ impl SubagentController {
                 spec.name
             );
         }
-        let prompt = request_prompt(message.as_deref(), items)
+        let prompt = request_prompt(message, items)
             .or_else(|| spec.initial_prompt.clone())
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| anyhow!("{tool_name} requires a task message or items"))?;

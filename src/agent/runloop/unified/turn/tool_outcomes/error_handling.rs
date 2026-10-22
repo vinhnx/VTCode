@@ -112,7 +112,7 @@ fn push_error_truncation_flag(payload: &mut serde_json::Value, error_truncated: 
     }
 }
 
-fn fallback_args_preview_and_inline(fallback_tool_args: &Option<serde_json::Value>) -> (Option<String>, bool) {
+fn fallback_args_preview_and_inline(fallback_tool_args: Option<&serde_json::Value>) -> (Option<String>, bool) {
     let Some(args) = fallback_tool_args else {
         return (None, false);
     };
@@ -255,7 +255,7 @@ pub(crate) fn build_error_content(
 ) -> serde_json::Value {
     let (error_text, error_truncated) = truncate_text_for_model(&error_msg, MAX_ERROR_MESSAGE_CHARS);
     let (error_class, is_recoverable, next_action) = failure_guidance(&error_msg, failure_kind);
-    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
+    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(fallback_tool_args.as_ref());
 
     if let Some(tool) = fallback_tool {
         let mut payload = serde_json::json!({
@@ -298,7 +298,7 @@ pub(super) fn build_structured_error_content(
 ) -> serde_json::Value {
     let (error_summary, error_truncated) = truncate_text_for_model(&error.user_message(), MAX_ERROR_MESSAGE_CHARS);
     let (error_class, is_recoverable, default_next_action) = structured_failure_guidance(error, failure_kind);
-    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
+    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(fallback_tool_args.as_ref());
     let retry_summary = error.retry_summary();
     let next_action = error
         .recovery_suggestions

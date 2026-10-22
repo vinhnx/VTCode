@@ -29,7 +29,6 @@ struct InlineEventLoop<'a> {
     handle: &'a InlineHandle,
     interrupts: InlineInterruptCoordinator<'a>,
     ctrl_c_notice_displayed: &'a mut bool,
-    default_placeholder: &'a Option<String>,
     queue: InlineQueueState<'a>,
     model_picker_state: &'a mut Option<ModelPickerState>,
     palette_state: &'a mut Option<ActivePalette>,
@@ -72,7 +71,6 @@ impl<'a> InlineEventLoop<'a> {
             handle,
             interrupts,
             ctrl_c_notice_displayed,
-            default_placeholder,
             queued_inputs,
             prefer_latest_queued_input_once,
             model_picker_state,
@@ -109,7 +107,6 @@ impl<'a> InlineEventLoop<'a> {
             handle,
             interrupts,
             ctrl_c_notice_displayed,
-            default_placeholder,
             queue: InlineQueueState::new(handle, queued_inputs, prefer_latest_queued_input_once),
             model_picker_state,
             palette_state,
@@ -330,7 +327,6 @@ impl<'a> InlineEventLoop<'a> {
             self.ctrl_c_notice_displayed,
             self.renderer,
             self.handle,
-            self.default_placeholder,
             &mut self.queue,
         )?;
         self.queue.flush_sync();
@@ -400,7 +396,6 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub handle: &'a InlineHandle,
     pub interrupts: InlineInterruptCoordinator<'a>,
     pub ctrl_c_notice_displayed: &'a mut bool,
-    pub default_placeholder: &'a Option<String>,
     pub queued_inputs: &'a mut VecDeque<QueuedInput>,
     pub prefer_latest_queued_input_once: &'a mut bool,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
@@ -620,7 +615,6 @@ mod tests {
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
         let mut ctrl_c_notice_displayed = false;
-        let default_placeholder = None;
         let mut queued_inputs = VecDeque::new();
         let mut prefer_latest_queued_input_once = false;
         let mut model_picker_state = None;
@@ -641,7 +635,6 @@ mod tests {
             handle: &handle,
             interrupts,
             ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
-            default_placeholder: &default_placeholder,
             queued_inputs: &mut queued_inputs,
             prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
             model_picker_state: &mut model_picker_state,
@@ -700,7 +693,6 @@ mod tests {
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
         let mut ctrl_c_notice_displayed = false;
-        let default_placeholder = None;
         let mut queued_inputs = VecDeque::new();
         let mut prefer_latest_queued_input_once = false;
         let mut model_picker_state = None;
@@ -721,7 +713,6 @@ mod tests {
             handle: &handle,
             interrupts,
             ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,
-            default_placeholder: &default_placeholder,
             queued_inputs: &mut queued_inputs,
             prefer_latest_queued_input_once: &mut prefer_latest_queued_input_once,
             model_picker_state: &mut model_picker_state,

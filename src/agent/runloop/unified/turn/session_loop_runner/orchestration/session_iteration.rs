@@ -317,7 +317,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         initialization_wait!(async {
             match tokio::time::timeout(
                 Duration::from_secs(2),
-                run_session_start_hooks(&ui_setup.lifecycle_hooks, &mut ui_setup.renderer, &mut session_state),
+                run_session_start_hooks(ui_setup.lifecycle_hooks.as_ref(), &mut ui_setup.renderer, &mut session_state),
             )
             .await
             {
@@ -334,7 +334,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         });
     } else {
         initialization_wait!(run_session_start_hooks(
-            &ui_setup.lifecycle_hooks,
+            ui_setup.lifecycle_hooks.as_ref(),
             &mut ui_setup.renderer,
             &mut session_state
         ));

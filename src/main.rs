@@ -397,7 +397,7 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     let PreparedRun { args, startup, print_mode } = prepared;
     let startup_policy = startup::command_startup_policy(&args);
 
-    configure_debug_session_routing(&args, &startup, &print_mode).await;
+    configure_debug_session_routing(&args, &startup, print_mode.as_deref()).await;
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = initialize_tracing().await.unwrap_or_default();

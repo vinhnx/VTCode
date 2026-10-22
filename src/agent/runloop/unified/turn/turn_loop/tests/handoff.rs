@@ -143,14 +143,14 @@ fn deferred_plan_entry_switch_counts_as_primary_agent_handoff() {
     let none: Option<String> = None;
     let plan = Some("plan".to_string());
     let target = PlanExecutionTarget::build(PlanExecutionContext::Current, false);
-    assert!(is_primary_agent_handoff(&plan, &None, false));
+    assert!(is_primary_agent_handoff(plan.as_deref(), None, false));
     assert!(
-        is_primary_agent_handoff(&none, &None, true),
+        is_primary_agent_handoff(none.as_deref(), None, true),
         "deferred plan entry must exempt the final-response guard"
     );
-    assert!(!is_primary_agent_handoff(&none, &None, false));
+    assert!(!is_primary_agent_handoff(none.as_deref(), None, false));
     // A stronger handoff already owns the boundary even without the switch.
-    assert!(is_primary_agent_handoff(&none, &Some(target), false));
+    assert!(is_primary_agent_handoff(none.as_deref(), Some(&target), false));
 }
 
 #[test]

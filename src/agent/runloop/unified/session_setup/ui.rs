@@ -648,11 +648,11 @@ fn render_full_auto_allowlist_banner(
 /// Execute session-start lifecycle hooks after hydration so they observe a
 /// fully initialized tool registry.
 pub(crate) async fn run_session_start_hooks(
-    lifecycle_hooks: &Option<LifecycleHookEngine>,
+    lifecycle_hooks: Option<&LifecycleHookEngine>,
     renderer: &mut AnsiRenderer,
     session_state: &mut SessionState,
 ) -> Result<()> {
-    let Some(hooks) = lifecycle_hooks.as_ref() else {
+    let Some(hooks) = lifecycle_hooks else {
         return Ok(());
     };
     match hooks.run_session_start().await {

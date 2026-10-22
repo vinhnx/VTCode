@@ -351,7 +351,7 @@ impl CompanionService {
                     TaskState::Completed => "exec and canonical thread completed".into(),
                     TaskState::Cancelled => "task cancelled; child reaped".into(),
                     _ => public_text(
-                        &projection.failure_progress(&outcome, cleanup_ok, reap_ok),
+                        &projection.failure_progress(outcome.as_ref(), cleanup_ok, reap_ok),
                         2048,
                         &mut task.snapshot.evidence_truncated,
                     ),
@@ -455,7 +455,7 @@ impl EventProjection {
 
     fn failure_progress(
         &self,
-        outcome: &Option<std::io::Result<std::process::ExitStatus>>,
+        outcome: Option<&std::io::Result<std::process::ExitStatus>>,
         cleanup_ok: bool,
         reap_ok: bool,
     ) -> String {

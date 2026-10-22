@@ -317,17 +317,20 @@ impl Reducer {
         self.model.revision = revision;
         self.model.completeness.evicted_turns = evicted_turns;
         let selected = self.model.task_id.clone();
-        let in_scope = |task: &Option<String>| self.model.scope == ExplanationScope::Session || *task == selected;
-        self.model.goals.retain(|e| in_scope(&e.task_id));
-        self.model.plan_evolution.retain(|e| in_scope(&e.task_id));
-        self.model.failures.retain(|e| in_scope(&e.task_id));
-        self.model.token_breakdowns.retain(|entry| in_scope(&entry.fact.task_id));
+        let in_scope =
+            |task: Option<&str>| self.model.scope == ExplanationScope::Session || task == selected.as_deref();
+        self.model.goals.retain(|e| in_scope(e.task_id.as_deref()));
+        self.model.plan_evolution.retain(|e| in_scope(e.task_id.as_deref()));
+        self.model.failures.retain(|e| in_scope(e.task_id.as_deref()));
+        self.model
+            .token_breakdowns
+            .retain(|entry| in_scope(entry.fact.task_id.as_deref()));
         if self.model.status == "unavailable" {
             self.model.status = self.statuses.get(&selected).cloned().unwrap_or_else(|| "unavailable".into());
         }
         if self.model.usage.is_none() {
             for (task, usage) in &self.usages {
-                if in_scope(task) {
+                if in_scope(task.as_deref()) {
                     self.model.usage.get_or_insert_default().add(usage);
                 }
             }
@@ -335,10 +338,7 @@ impl Reducer {
         let mut items: Vec<_> = self
             .items
             .into_values()
-            .filter(|state| {
-                let task = state.item.context.as_ref().map(|c| c.task_id.clone());
-                self.model.scope == ExplanationScope::Session || task == selected
-            })
+            .filter(|state| in_scope(state.item.context.as_ref().map(|context| context.task_id.as_str())))
             .collect();
         items.sort_by_key(|s| s.position);
         let outputs: HashMap<_, _> = items

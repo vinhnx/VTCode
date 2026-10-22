@@ -230,10 +230,10 @@ impl StepFunProvider {
     }
 
     fn model_behavior_flag(
-        model_behavior: &Option<ModelConfig>,
+        model_behavior: Option<&ModelConfig>,
         select: impl Fn(&ModelConfig) -> Option<bool>,
     ) -> bool {
-        model_behavior.as_ref().and_then(select).unwrap_or(false)
+        model_behavior.and_then(select).unwrap_or(false)
     }
 
     /// Builds the `/responses` request payload.
@@ -721,13 +721,13 @@ impl LLMProvider for StepFunProvider {
 
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() { &self.model } else { model };
-        Self::model_behavior_flag(&self.model_behavior, |behavior| behavior.model_supports_reasoning)
+        Self::model_behavior_flag(self.model_behavior.as_ref(), |behavior| behavior.model_supports_reasoning)
             || Self::reasoning_enabled(requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() { &self.model } else { model };
-        Self::model_behavior_flag(&self.model_behavior, |behavior| behavior.model_supports_reasoning_effort)
+        Self::model_behavior_flag(self.model_behavior.as_ref(), |behavior| behavior.model_supports_reasoning_effort)
             || Self::reasoning_enabled(requested)
     }
 

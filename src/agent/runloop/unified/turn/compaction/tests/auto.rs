@@ -57,7 +57,7 @@ async fn interactive_compaction_forks_matching_parent_prompt_and_ordered_tools()
             7,
         );
         let mut manager = test_context_manager();
-        manager.update_token_usage(&Some(Usage {
+        manager.update_token_usage(Some(&Usage {
             prompt_tokens: 900,
             completion_tokens: 10,
             total_tokens: 910,
@@ -141,8 +141,8 @@ async fn successful_manual_recovery_and_model_switch_compaction_reset_cache_stre
             cache_creation_tokens: Some(5212),
             ..Default::default()
         });
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
         let mut context = test_context_manager();
         compact_history_in_place_with_events(
             CompactionContext::new(
@@ -161,9 +161,9 @@ async fn successful_manual_recovery_and_model_switch_compaction_reset_cache_stre
         .await
         .unwrap()
         .expect("successful compaction");
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none(), "{trigger:?}");
-        assert!(stats.record_cache_turn_health("openai", &usage).is_none());
-        assert!(stats.record_cache_turn_health("openai", &usage).is_some());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none(), "{trigger:?}");
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_none());
+        assert!(stats.record_cache_turn_health("openai", usage.as_ref()).is_some());
     }
 }
 
@@ -221,7 +221,7 @@ async fn auto_compaction_replaces_history_and_clears_response_chain() {
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp_123"), &[]);
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 900,
         completion_tokens: 10,
         total_tokens: 910,
@@ -270,7 +270,7 @@ async fn auto_compaction_uses_the_effective_session_safety_ceiling() {
     let original_len = history.len();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 496_000,
         completion_tokens: 10,
         total_tokens: 496_010,
@@ -314,7 +314,7 @@ async fn targeted_compaction_preserves_prefix_and_replaces_suffix() {
     let preserved_prefix = history[..1].to_vec();
     let mut session_stats = SessionStats::default();
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 900,
         completion_tokens: 10,
         total_tokens: 910,
@@ -384,7 +384,7 @@ async fn recovery_compaction_preserves_current_turn_suffix_and_emits_event() {
     let mut session_stats = SessionStats::default();
     session_stats.set_previous_response_chain("stub-roomy", "stub-model", Some("resp-recovery"), &[]);
     let mut context_manager = test_context_manager();
-    context_manager.update_token_usage(&Some(Usage {
+    context_manager.update_token_usage(Some(&Usage {
         prompt_tokens: 950,
         completion_tokens: 10,
         total_tokens: 960,

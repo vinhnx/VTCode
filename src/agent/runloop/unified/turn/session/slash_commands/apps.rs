@@ -326,7 +326,7 @@ pub(crate) async fn handle_configure_editor(ctx: &mut SlashCommandContext<'_>) -
     if open_file_opener_settings {
         let workspace_path = ctx.config.workspace.clone();
         let vt_snapshot = ctx.vt_cfg.clone();
-        let mut settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
+        let mut settings_state = create_settings_palette_state(&workspace_path, vt_snapshot.as_ref())?;
         settings_state.view_path = Some(resolve_settings_view_path(FILE_OPENER_SETTINGS_PATH));
         if show_settings_palette(ctx.renderer, &settings_state, None)? {
             *ctx.palette_state = Some(ActivePalette::Settings { state: Box::new(settings_state), esc_armed: false });

@@ -651,14 +651,14 @@ fn companion_bounds_canonical_failure_details_and_distinguishes_supervisor_failu
     assert!(task.progress.len() <= 1050);
     assert!(task.evidence_truncated);
     let outcome = Some(Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "task deadline exceeded")));
-    let deadline = projection.failure_progress(&outcome, true, true);
+    let deadline = projection.failure_progress(outcome.as_ref(), true, true);
     assert!(deadline.contains("task deadline exceeded"));
-    let cleanup = EventProjection::default().failure_progress(&None, false, false);
+    let cleanup = EventProjection::default().failure_progress(None, false, false);
     assert!(cleanup.contains("owned process cleanup failed"));
     assert!(cleanup.contains("child reap could not be confirmed"));
     let mut completed_projection = EventProjection::default();
     completed_projection.observe(&mut snapshot(), event(completed()));
-    assert_eq!(completed_projection.failure_progress(&None, false, true), "owned process cleanup failed");
+    assert_eq!(completed_projection.failure_progress(None, false, true), "owned process cleanup failed");
 }
 
 #[cfg(unix)]

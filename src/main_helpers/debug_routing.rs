@@ -7,7 +7,7 @@ use vtcode_core::utils::session_archive::{
 
 use super::{build_command_debug_session_id, configure_runtime_debug_context};
 
-fn resolve_mode_hint(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) -> &'static str {
+fn resolve_mode_hint(args: &Cli, startup: &StartupContext, print_mode: Option<&str>) -> &'static str {
     if startup.session_resume.is_some() {
         "resume"
     } else if print_mode.is_some() {
@@ -33,7 +33,7 @@ fn resolve_mode_hint(args: &Cli, startup: &StartupContext, print_mode: &Option<S
     }
 }
 
-fn interactive_archive_backed_session(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) -> bool {
+fn interactive_archive_backed_session(args: &Cli, startup: &StartupContext, print_mode: Option<&str>) -> bool {
     startup.session_resume.is_some()
         || matches!(args.command, Some(Commands::Chat) | Some(Commands::ChatVerbose))
         || (args.command.is_none() && print_mode.is_none() && startup.automation_prompt.is_none())
@@ -56,11 +56,7 @@ async fn reserve_fresh_archive_session_id(startup: &StartupContext) -> Option<St
     }
 }
 
-async fn resolve_archive_session_id(
-    args: &Cli,
-    startup: &StartupContext,
-    print_mode: &Option<String>,
-) -> Option<String> {
+async fn resolve_archive_session_id(args: &Cli, startup: &StartupContext, print_mode: Option<&str>) -> Option<String> {
     if interactive_archive_backed_session(args, startup, print_mode) {
         if let Some(mode) = startup.session_resume.as_ref() {
             match mode {
@@ -109,7 +105,7 @@ async fn resolve_archive_session_id(
     }
 }
 
-pub(crate) async fn configure_debug_session_routing(args: &Cli, startup: &StartupContext, print_mode: &Option<String>) {
+pub(crate) async fn configure_debug_session_routing(args: &Cli, startup: &StartupContext, print_mode: Option<&str>) {
     let command_debug_session_id = build_command_debug_session_id(resolve_mode_hint(args, startup, print_mode));
 
     if let Some(session_id) = resolve_archive_session_id(args, startup, print_mode).await {
@@ -184,7 +180,7 @@ mod tests {
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        runtime.block_on(configure_debug_session_routing(&args, &startup, &None));
+        runtime.block_on(configure_debug_session_routing(&args, &startup, None));
 
         assert_eq!(runtime_archive_session_id().as_deref(), Some("session-123"));
     }
@@ -211,7 +207,7 @@ mod tests {
 
         configure_runtime_debug_context("seed".to_string(), Some("seed".to_string()));
         let runtime = tokio::runtime::Runtime::new().expect("runtime");
-        runtime.block_on(configure_debug_session_routing(&args, &startup, &None));
+        runtime.block_on(configure_debug_session_routing(&args, &startup, None));
 
         assert_eq!(runtime_archive_session_id().as_deref(), Some("session-456"));
     }

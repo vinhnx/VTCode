@@ -77,7 +77,17 @@ parameter types even where ordinary direct calls benefit from deref coercions. O
 coercions automatically; use `as_deref()`, or map an already borrowed container with `Vec::as_slice` / `PathBuf::as_path`.
 
 Private helper migrations cover tool-catalog names, allowlist banners, command summaries, provider option adapters,
-image serialization, skill metadata keywords, ACP terminal location display, and live PTY header matching.
+image serialization, skill metadata keywords, ACP terminal location display, live PTY header matching, and runloop usage
+accounting. Usage consumers accept `Option<&Usage>`; owned provider responses pass `response.usage.as_ref()`, while
+standalone measurements pass `Some(&usage)`. Session totals, cache health, and prompt-pressure tracking retain their
+separate responsibilities.
+
+Provider request builders borrow optional JSON metadata, cache controls, and model behavior. Absent metadata stays
+distinct from an explicit JSON `null`; cache fingerprints keep their original encoding. Runloop hook, settings,
+handoff, diagnostic, debug-routing, and output-preview helpers borrow inner values. Archive conversion borrows strings
+and slices while preserving empty-field normalization and whitespace-only text. Explanation projection reuses one
+borrowed task-scope predicate instead of cloning a task ID for each candidate item. Interrupt notification no longer
+carries an unused default-placeholder argument through the event driver.
 
 Retry policies/decisions/steps, execution/permission decisions, and the audited consuming builders now warn when discarded.
 Consume their result or explicitly discard it when that is intentional. The metadata builder's derived `Default` still
@@ -93,9 +103,12 @@ not a formal proof that every public function is pure or that every possible sty
 
 Keep container-shaped signatures when an external callback/trait requires them (for example `PartialEq<String>`,
 dialoguer validators, and Serde field serialization adapters). Keep owned vectors/maps and references to them when
-their actual container identity or ownership is part of the operation. Existing shared snapshots, lifecycle engines,
-configuration snapshots, and usage-accounting option adapters are retained in this pass to preserve their established
-cross-module contracts; they are not templates for new immutable input APIs.
+their actual container identity or ownership is part of the operation. Structural runloop contexts retain references
+to caller-owned optional slots: `effective_vt_cfg` reborrows an optional mutable configuration reference, while
+`TurnLoopContext` forwards the owned optional placeholder slot into UI contexts and clones it for input restoration.
+Teardown contexts likewise borrow optional owned resources and snapshots. These context layouts are not templates for
+standalone immutable input helpers. Existing getter/CGP trait return types such as `Option<&PathBuf>` remain compatible;
+this parameter audit does not change the ownership contracts of those return values.
 
 The live binary spool hint formatter already accepts `&str`; it now has `must_use`. The detached
 `src/agent/runloop/tool_output/spool.rs` is not in the module tree and is left unchanged rather than adding an unused API.
@@ -104,6 +117,7 @@ Focused regressions exercise optional/literal strings, array and subslice tool c
 absence, empty input, Unix `arg0` borrowing, and optional borrowed working directories. Existing provider, process,
 borrowed-path memory-envelope, and rendering tests cover the migrated call sites. Transport dump tests wait for successful
 child completion under a timeout before reading output, with a partial-write regression; shell-based tests are Unix-only.
+Provider regressions distinguish absence from JSON `null`, and archive conversion covers empty and asymmetric metadata.
 Annotation/import/derive changes rely on compilation and existing behavioral tests.
 
 Run sequentially when sharing `target/`:
