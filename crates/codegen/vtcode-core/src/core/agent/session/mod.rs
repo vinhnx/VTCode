@@ -5,10 +5,9 @@ use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::core::pending_actions::PendingActions;
 use crate::core::state_schema::SchemaVersion;
 use crate::exec::events::Usage;
-use crate::llm::provider::{Message, ResponsesContinuationState, responses_continuation_key};
+use crate::llm::provider::{Message, ResponsesContinuationState, ResponsesContinuationStore};
 use crate::llm::providers::gemini::wire::{Content, FunctionResponse, Part};
 use crate::llm::request_gap::RequestGapTracker;
-use hashbrown::HashMap;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -87,7 +86,7 @@ pub struct AgentSessionState {
     pub stagnant_turns: usize,
     pub last_processed_message_idx: usize,
     /// Responses-style continuation state keyed by normalized provider/model pairs.
-    pub previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
+    pub previous_response_chains: ResponsesContinuationStore,
     /// Agent-local recent error diagnostics for interrupted or repeated tool failures.
     pub error_recovery: Arc<Mutex<ErrorRecoveryState>>,
     /// Pending tool actions that have been issued but not yet returned.
@@ -189,7 +188,7 @@ impl AgentSessionState {
             progress_hashes: VecDeque::with_capacity(16),
             stagnant_turns: 0,
             last_processed_message_idx: 0,
-            previous_response_chains: HashMap::new(),
+            previous_response_chains: ResponsesContinuationStore::default(),
             error_recovery: Arc::new(Mutex::new(ErrorRecoveryState::default())),
             pending_actions: PendingActions::new(100),
             consecutive_idle_turns: 0,
@@ -299,7 +298,7 @@ impl AgentSessionState {
     }
 
     pub fn previous_response_chain_for(&self, provider: &str, model: &str) -> Option<&ResponsesContinuationState> {
-        responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
+        self.previous_response_chains.get(provider, model)
     }
 
     pub fn set_previous_response_chain(
@@ -323,22 +322,11 @@ impl AgentSessionState {
         response_id: Option<&str>,
         messages: Arc<Vec<Message>>,
     ) {
-        let Some(key) = responses_continuation_key(provider, model) else {
-            return;
-        };
-        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
-            self.previous_response_chains.remove(&key);
-            return;
-        };
-
-        self.previous_response_chains
-            .insert(key, ResponsesContinuationState { response_id: response_id.to_string(), messages });
+        self.previous_response_chains.set(provider, model, response_id, messages);
     }
 
     pub fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
-        if let Some(key) = responses_continuation_key(provider, model) {
-            self.previous_response_chains.remove(&key);
-        }
+        self.previous_response_chains.clear_for(provider, model);
     }
 
     pub fn clear_previous_response_chain(&mut self) {

@@ -16,7 +16,7 @@ mod request_envelope;
 pub(crate) use request_envelope::RequestSegmentTransition;
 use request_envelope::{RequestEnvelopeIdentity, ToolCatalogObservabilityIdentity};
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::core::agent::request_envelope::SessionRequestEnvelope;
 use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::llm::provider::{
-    Message, PromptCacheProfile, ResponsesContinuationState, ToolDefinition, responses_continuation_key,
+    Message, PromptCacheProfile, ResponsesContinuationState, ResponsesContinuationStore, ToolDefinition,
 };
 use vtcode_core::llm::request_gap::RequestGapTracker;
 use vtcode_core::llm::usage_cost;
@@ -113,7 +113,7 @@ pub(crate) struct SessionStats {
     /// or none ran this episode.
     last_verification_failure: Option<VerificationFailureSummary>,
     /// Responses-style continuation state keyed by normalized provider/model pairs.
-    previous_response_chains: HashMap<(String, String), ResponsesContinuationState>,
+    previous_response_chains: ResponsesContinuationStore,
     prompt_cache_profile: Option<PromptCacheProfile>,
     prompt_cache_lineage_id: Option<String>,
     stream_timeout_advisory_emitted: bool,
@@ -440,7 +440,7 @@ impl SessionStats {
         provider: &str,
         model: &str,
     ) -> Option<&ResponsesContinuationState> {
-        responses_continuation_key(provider, model).and_then(|key| self.previous_response_chains.get(&key))
+        self.previous_response_chains.get(provider, model)
     }
 
     #[allow(
@@ -464,22 +464,11 @@ impl SessionStats {
         response_id: Option<&str>,
         messages: Arc<Vec<Message>>,
     ) {
-        let Some(key) = responses_continuation_key(provider, model) else {
-            return;
-        };
-        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
-            self.previous_response_chains.remove(&key);
-            return;
-        };
-
-        self.previous_response_chains
-            .insert(key, ResponsesContinuationState { response_id: response_id.to_string(), messages });
+        self.previous_response_chains.set(provider, model, response_id, messages);
     }
 
     pub(crate) fn clear_previous_response_chain_for(&mut self, provider: &str, model: &str) {
-        if let Some(key) = responses_continuation_key(provider, model) {
-            self.previous_response_chains.remove(&key);
-        }
+        self.previous_response_chains.clear_for(provider, model);
     }
 
     pub(crate) fn clear_previous_response_chain(&mut self) {

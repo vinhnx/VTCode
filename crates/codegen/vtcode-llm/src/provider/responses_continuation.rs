@@ -1,5 +1,6 @@
 use super::Message;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -8,6 +9,81 @@ pub struct ResponsesContinuationState<M = Message> {
     /// Full request history at the time the chain was recorded. Shared via
     /// `Arc` so recording a chain after each turn is O(1), not O(history).
     pub messages: Arc<Vec<M>>,
+}
+
+/// Session-scoped store of provider continuation chains.
+///
+/// One owner for the chain key, response-id, and history semantics so the
+/// interactive runloop and the headless runner cannot drift apart.
+#[derive(Debug, Default, Clone)]
+pub struct ResponsesContinuationStore {
+    chains: HashMap<(String, String), ResponsesContinuationState>,
+}
+
+impl ResponsesContinuationStore {
+    /// The recorded chain for a provider and model, if any.
+    pub fn get(&self, provider: &str, model: &str) -> Option<&ResponsesContinuationState> {
+        responses_continuation_key(provider, model).and_then(|key| self.chains.get(&key))
+    }
+
+    /// Record a chain, or drop the existing one when the response id is empty.
+    pub fn set(&mut self, provider: &str, model: &str, response_id: Option<&str>, messages: Arc<Vec<Message>>) {
+        let Some(key) = responses_continuation_key(provider, model) else {
+            return;
+        };
+        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
+            self.chains.remove(&key);
+            return;
+        };
+
+        self.chains
+            .insert(key, ResponsesContinuationState { response_id: response_id.to_string(), messages });
+    }
+
+    /// Drop the chain recorded for one provider and model.
+    pub fn clear_for(&mut self, provider: &str, model: &str) {
+        if let Some(key) = responses_continuation_key(provider, model) {
+            self.chains.remove(&key);
+        }
+    }
+
+    /// Drop every recorded chain.
+    pub fn clear(&mut self) {
+        self.chains.clear();
+    }
+
+    /// Whether no chain is recorded.
+    pub fn is_empty(&self) -> bool {
+        self.chains.is_empty()
+    }
+
+    /// Prepare request messages for a continuation-aware provider.
+    ///
+    /// A stale chain that the provider rejects is dropped here so the next
+    /// request starts from the full history.
+    pub fn prepare_request_messages<'a>(
+        &mut self,
+        provider_name: &str,
+        provider_supports_responses_compaction: bool,
+        model: &str,
+        messages: &'a [Message],
+    ) -> (Cow<'a, [Message]>, Option<String>) {
+        let key = responses_continuation_key(provider_name, model);
+        let continuation = key.as_ref().and_then(|key| self.chains.get(key));
+        let prepared = prepare_responses_continuation_request(
+            provider_name,
+            provider_supports_responses_compaction,
+            messages,
+            continuation,
+        );
+        if prepared.clear_stale_chain
+            && let Some(key) = key
+        {
+            self.chains.remove(&key);
+        }
+
+        (prepared.messages, prepared.previous_response_id)
+    }
 }
 
 pub struct PreparedResponsesRequest<'a, M: Clone = Message> {
@@ -97,11 +173,73 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        ResponsesContinuationState, prepare_openai_responses_request, prepare_responses_continuation_request,
-        records_responses_continuation_state, responses_continuation_key,
+        ResponsesContinuationState, ResponsesContinuationStore, prepare_openai_responses_request,
+        prepare_responses_continuation_request, records_responses_continuation_state, responses_continuation_key,
     };
     use crate::provider::Message;
     use std::borrow::Cow;
+    use std::sync::Arc;
+
+    #[test]
+    fn continuation_store_records_reads_and_clears_one_chain_at_a_time() {
+        let mut store = ResponsesContinuationStore::default();
+        let openai_messages = Arc::new(vec![Message::user("openai hello".to_string())]);
+        let gemini_messages = Arc::new(vec![Message::user("gemini hello".to_string())]);
+
+        store.set("openai", "gpt-5.6-sol", Some("resp_openai"), Arc::clone(&openai_messages));
+        store.set("gemini", "gemini-2.5-pro", Some("resp_gemini"), Arc::clone(&gemini_messages));
+
+        assert_eq!(store.get("openai", "gpt-5.6-sol").map(|chain| chain.response_id.as_str()), Some("resp_openai"));
+        assert_eq!(store.get("gemini", "gemini-2.5-pro").map(|chain| chain.response_id.as_str()), Some("resp_gemini"));
+        assert!(store.get("openai", "gpt-5.6-terra").is_none());
+        assert!(!store.is_empty());
+
+        store.clear_for("openai", "gpt-5.6-sol");
+        assert!(store.get("openai", "gpt-5.6-sol").is_none());
+        assert_eq!(store.get("gemini", "gemini-2.5-pro").map(|chain| chain.response_id.as_str()), Some("resp_gemini"));
+
+        store.clear();
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn continuation_store_normalizes_the_provider_and_drops_an_empty_response_id() {
+        let mut store = ResponsesContinuationStore::default();
+        store.set("OpenAI", "gpt-5.6-sol", Some("resp_1"), Arc::new(vec![Message::user("hi".to_string())]));
+
+        // The provider key is normalized, so a differently-cased lookup finds it.
+        assert!(store.get("openai", "gpt-5.6-sol").is_some());
+        assert!(store.get("OPENAI", "gpt-5.6-sol").is_some());
+
+        // An empty response id drops the recorded chain instead of storing it.
+        store.set("openai", "gpt-5.6-sol", Some("   "), Arc::new(vec![]));
+        assert!(store.get("openai", "gpt-5.6-sol").is_none());
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn continuation_store_prepares_provider_specific_requests() {
+        let mut store = ResponsesContinuationStore::default();
+        let prior = vec![Message::user("hello".to_string())];
+        let current = vec![
+            Message::user("hello".to_string()),
+            Message::user("continue".to_string()),
+        ];
+
+        store.set("gemini", "gemini-2.5-pro", Some("resp_gemini"), Arc::new(prior.clone()));
+        let (messages, previous_response_id) =
+            store.prepare_request_messages("gemini", false, "gemini-2.5-pro", &current);
+
+        assert_eq!(previous_response_id.as_deref(), Some("resp_gemini"));
+        assert!(matches!(messages, Cow::Borrowed(_)));
+        assert_eq!(messages.as_ref(), current.as_slice());
+
+        // OpenAI stays stateless: the recorded chain never becomes a previous id.
+        store.set("openai", "gpt-5.6-sol", Some("resp_openai"), Arc::new(prior.clone()));
+        let (messages, previous_response_id) = store.prepare_request_messages("openai", false, "gpt-5.6-sol", &current);
+        assert_eq!(previous_response_id, None);
+        assert_eq!(messages.as_ref(), current.as_slice());
+    }
 
     #[test]
     fn continuation_key_requires_non_empty_provider_and_model() {

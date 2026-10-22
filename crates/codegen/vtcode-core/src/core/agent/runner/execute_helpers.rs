@@ -6,7 +6,7 @@
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::TaskOutcome;
-use crate::llm::provider::{FinishReason, Message, MessageRole, ResponsesContinuationState};
+use crate::llm::provider::{FinishReason, Message, MessageRole};
 use vtcode_exec_events::Usage;
 
 /// Record the terminal turn event (TurnCompleted or TurnFailed) based on outcome.
@@ -126,25 +126,11 @@ pub(super) fn stop_reason_from_finish_reason(finish_reason: &FinishReason) -> St
 
 /// Prepare request messages for responses-style continuation.
 pub(super) fn prepare_responses_request_messages<'a>(
-    previous_chains: &mut hashbrown::HashMap<(String, String), ResponsesContinuationState>,
+    previous_chains: &mut crate::llm::provider::ResponsesContinuationStore,
     provider_name: &str,
     provider_supports_responses_compaction: bool,
     model: &str,
     messages: &'a [Message],
 ) -> (std::borrow::Cow<'a, [Message]>, Option<String>) {
-    let key = crate::llm::provider::responses_continuation_key(provider_name, model);
-    let continuation = key.as_ref().and_then(|k| previous_chains.get(k));
-    let prepared = crate::llm::provider::prepare_responses_continuation_request(
-        provider_name,
-        provider_supports_responses_compaction,
-        messages,
-        continuation,
-    );
-    if prepared.clear_stale_chain
-        && let Some(key) = key
-    {
-        previous_chains.remove(&key);
-    }
-
-    (prepared.messages, prepared.previous_response_id)
+    previous_chains.prepare_request_messages(provider_name, provider_supports_responses_compaction, model, messages)
 }
