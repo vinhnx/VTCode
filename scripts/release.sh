@@ -1027,8 +1027,11 @@ main() {
 			# No success yet — the typical `--skip-release` resume while CI
 			# still builds. Wait for the newest active run instead of
 			# aborting into a macOS-only release.
+			# gh 2.102.0 quirk: server-side `--branch`/`--event` filters
+			# return `[]` with `--json` (see find_ci_run_for_version), so
+			# filter locally in jq instead.
 			local active_run=""
-			active_run=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 5 --json databaseId,status --jq '.[] | select(.status == "in_progress" or .status == "queued") | .databaseId' 2>/dev/null | head -1 || true)
+			active_run=$(gh run list --workflow build-linux-windows.yml --limit 5 --json databaseId,status,headBranch,event --jq '.[] | select((.status == "in_progress" or .status == "queued") and .headBranch == "main" and .event == "workflow_dispatch") | .databaseId' 2>/dev/null | head -1 || true)
 			if [[ -n "$active_run" ]]; then
 				print_info "CI run $active_run still in progress; waiting for completion..."
 				# `gh run watch` blocks until the run completes and exits
@@ -1112,6 +1115,14 @@ main() {
 			rm -rf "$ci_artifacts_dir"
 		else
 			print_warning "No CI workflow run found - will use macOS binaries only"
+			# Surface what actually exists so a silent filter/API failure is
+			# diagnosable: the newest runs of this workflow with their
+			# conclusions (no --branch/--event filters — see the gh quirk
+			# documented in release-assets.sh find_ci_run_for_version).
+			gh run list --workflow build-linux-windows.yml --limit 5 \
+				--json databaseId,status,conclusion,createdAt,headBranch,event \
+				--jq '.[] | "  run \(.databaseId): status=\(.status) conclusion=\(.conclusion) branch=\(.headBranch) event=\(.event)"' \
+				2>/dev/null || true
 		fi
 
 		# Required target coverage for the legacy updater bridge. Every listed

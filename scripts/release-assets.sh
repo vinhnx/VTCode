@@ -274,6 +274,12 @@ ci_run_has_version_artifact() {
 # names misses and the release aborts with "Missing required release archive".
 # Filtering candidates by the version embedded in their artifact names skips
 # stale runs and finds the right one.
+#
+# gh 2.102.0 quirk (verified 2026-10-22): `gh run list --json ...` combined
+# with the server-side `--branch` or `--event` filters returns `[]` even when
+# matching runs exist (the same rows appear in plain-text output and in
+# `--json` without those filters). Filter `--branch main --event
+# workflow_dispatch` locally in `--jq` instead of passing them server-side.
 find_ci_run_for_version() {
     if [[ $# -lt 1 || $# -gt 2 ]]; then
         echo "usage: find_ci_run_for_version <version> [max-runs]" >&2
@@ -288,10 +294,9 @@ find_ci_run_for_version() {
             printf '%s\n' "$candidate"
             return 0
         fi
-    done < <(gh run list --workflow build-linux-windows.yml --branch main \
-        --event workflow_dispatch --limit "$max_runs" \
-        --json databaseId,conclusion \
-        --jq '.[] | select(.conclusion == "success") | .databaseId' 2>/dev/null)
+    done < <(gh run list --workflow build-linux-windows.yml --limit "$max_runs" \
+        --json databaseId,conclusion,headBranch,event \
+        --jq '.[] | select(.conclusion == "success" and .headBranch == "main" and .event == "workflow_dispatch") | .databaseId' 2>/dev/null)
     return 1
 }
 
