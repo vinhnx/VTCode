@@ -345,8 +345,9 @@ below based on the topic area.
 
 - **File**: `docs/development/diagnostics.md`
   - **Content**: Runtime diagnostics
-  - **Topics**: Producer review
-  - **User Questions**: "What can you tell me about Runtime diagnostics?", "How does Producer review work?"
+  - **Topics**: Transcript presentation, Producer review
+  - **User Questions**: "What can you tell me about Runtime diagnostics?", "How does Transcript presentation work?",
+    "How does Producer review work?"
 
 - **File**: `docs/development/rust-error-handling-reference.md`
   - **Content**: Rust Error Handling — Reference Notes
@@ -402,7 +403,7 @@ below based on the topic area.
 
 - **File**: `docs/development/tui-design-system.md`
   - **Content**: TUI design system
-  - **Topics**: Modules, Row contract, Interaction contract, Accessibility, When adding a modal
+  - **Topics**: Modules, Row contract, Code surface, Interaction contract, Accessibility
   - **User Questions**: "What can you tell me about TUI design system?", "How does Modules work?", "How does Row
     contract work?"
 

@@ -33,7 +33,7 @@ Plan, build, and review with hosted or local models, sandboxed tools, and resuma
     - [3. Run your first task](#3-run-your-first-task)
   - [Usage](#usage)
     - [Interactive](#interactive)
-    - [Headless](#headless)
+    - [Modes](#modes)
     - [Automation](#automation)
     - [Sessions](#sessions)
   - [Documentation](#documentation)
@@ -167,22 +167,18 @@ changes, decisions, and verification without another model call; see the
 [explanation options](./docs/user-guide/commands.md#execution-explanations) and the
 [interactive guide](./docs/user-guide/interactive-mode.md) for controls.
 
-### Headless
+### Modes
 
-`ask` is tool-free, `exec` runs the full tool loop, and `review` inspects uncommitted changes:
+- **`ask`** is tool-free: it prints one reply and exits.
+- **`exec`** runs the full tool loop. It requires `[automation.full_auto]` and `full_auto` workspace trust.
+  Interactive terminals prompt for trust; non-TTY runs need `VTCODE_TRUST_WORKSPACE=full-auto`. Tool allow-lists,
+  explicit denies, and execution policy still apply.
+- **`review`** inspects uncommitted changes.
 
-```bash
-vtcode ask "explain Rc vs Arc"
-vtcode exec "refactor main.rs"
-vtcode review
-```
+See [exec mode](./docs/user-guide/exec-mode.md) and [full automation](./docs/guides/full-automation.md) for
+configuration and output details.
 
 ### Automation
-
-`exec` runs the full tool loop and requires `[automation.full_auto]` plus `full_auto` workspace trust. Interactive
-terminals prompt for trust. Non-TTY runs require `VTCODE_TRUST_WORKSPACE=full-auto`; tool allow-lists, explicit denies,
-and execution policy still apply. See [exec mode](./docs/user-guide/exec-mode.md) and
-[full automation](./docs/guides/full-automation.md) for configuration and output details.
 
 Recurring work uses [scheduled tasks](./docs/user-guide/scheduled-tasks.md), durable prompt jobs on the same exec
 runtime:
@@ -377,7 +373,7 @@ VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors
 
 ---
 
-![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
 
 </div>
 
