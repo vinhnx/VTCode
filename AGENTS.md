@@ -14,7 +14,7 @@ Keep this file concise and under 150 lines. Root guidance belongs here; detailed
 ## Rules
 
 - Conventional Commits (`type(scope): subject`).
-- 4-space indentation, `snake_case` fns, `PascalCase` types, `anyhow::Result<T>` + `.with_context()`.
+- 4-space indentation, `snake_case` fns, `PascalCase` types, `anyhow::Result<T>` + `.with_context()`. Follow the [Rust style adoption matrix](docs/development/rust-style-guide.md) for flexible borrows, targeted `must_use`, API conventions, and exceptions.
 - CI sets `RUSTFLAGS: "-D warnings"` and uses `--locked`. Match locally with `cargo check --locked` when relevant.
 - Keep changes surgical: identify the production, test, and documentation files owned by the current increment before editing. Preserve existing APIs and unrelated work; inspect generated/hook-added changes, stage explicit reviewed paths rather than the whole worktree, and check the staged diff and final status for each scoped commit.
 - Prefer direct single-agent execution. Do not impose orchestrator/worker or other multi-agent topologies: forced delegation burns usage limits and usually yields worse results. Delegate only when independent/parallel work or context isolation clearly helps.

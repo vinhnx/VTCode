@@ -409,7 +409,7 @@ fn resolve_skill_resource_path(skill_root: &Path, resource_path: &str) -> anyhow
     Ok(canonical_path)
 }
 
-fn extract_metadata_keywords(metadata: &Option<SkillManifestMetadata>) -> Vec<String> {
+fn extract_metadata_keywords(metadata: Option<&SkillManifestMetadata>) -> Vec<String> {
     let Some(meta) = metadata else {
         return Vec::new();
     };
@@ -638,7 +638,7 @@ impl Tool for ListSkillsTool {
 
         for skill_meta in discovery.skills.iter().filter(|skill| skill.manifest.is_some()) {
             let manifest = skill_meta.manifest.as_ref().expect("filtered to skills with manifests");
-            let keywords = extract_metadata_keywords(&manifest.metadata);
+            let keywords = extract_metadata_keywords(manifest.metadata.as_ref());
             if !matches_skill_filters(
                 manifest.name.as_str(),
                 manifest.description.as_str(),

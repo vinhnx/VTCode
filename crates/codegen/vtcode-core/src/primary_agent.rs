@@ -378,7 +378,6 @@ pub fn active_primary_agent_permissions(agent: &ActivePrimaryAgent) -> &AgentPer
     &agent.permissions
 }
 
-#[must_use]
 pub fn evaluate_active_primary_agent_permissions(
     config: &VTCodeConfig,
     agent: &ActivePrimaryAgent,

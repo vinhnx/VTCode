@@ -156,7 +156,7 @@ impl MetricsCollector {
     /// This helper method is used by both `McpCircuitBreaker` and `ToolCircuitBreaker`
     /// to avoid code duplication.
     pub fn record_circuit_breaker_metrics(
-        metrics: &Option<Arc<MetricsCollector>>,
+        metrics: Option<&MetricsCollector>,
         half_open: bool,
         denial: bool,
         circuit_open: bool,

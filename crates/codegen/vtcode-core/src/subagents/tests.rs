@@ -191,7 +191,7 @@ fn request_prompt_prefers_message() {
         message: Some("hello".to_string()),
         ..SpawnAgentRequest::default()
     };
-    assert_eq!(request_prompt(&request.message, &request.items).as_deref(), Some("hello"));
+    assert_eq!(request_prompt(request.message.as_deref(), &request.items).as_deref(), Some("hello"));
 }
 
 #[test]

@@ -218,8 +218,8 @@ fn render_expanded_tool_summary_data(
 
     renderer.line_with_override_style(MessageStyle::Info, AnsiStyle::new(), &line)?;
 
-    render_continuation_lines(renderer, &wrapped_run_segments, main_color, &palette)?;
-    render_command_line(renderer, &data.command_line, &palette)?;
+    render_continuation_lines(renderer, wrapped_run_segments.as_deref(), main_color, &palette)?;
+    render_command_line(renderer, data.command_line.as_deref(), &palette)?;
     render_details(renderer, &data.details)?;
 
     Ok(())
@@ -403,7 +403,7 @@ fn render_bullet_line(
 
 fn render_continuation_lines(
     renderer: &mut AnsiRenderer,
-    wrapped_run_segments: &Option<Vec<String>>,
+    wrapped_run_segments: Option<&[String]>,
     main_color: Color,
     palette: &ColorPalette,
 ) -> Result<()> {
@@ -427,11 +427,7 @@ fn render_continuation_lines(
     Ok(())
 }
 
-fn render_command_line(
-    renderer: &mut AnsiRenderer,
-    command_line: &Option<String>,
-    palette: &ColorPalette,
-) -> Result<()> {
+fn render_command_line(renderer: &mut AnsiRenderer, command_line: Option<&str>, palette: &ColorPalette) -> Result<()> {
     if let Some(command_line) = command_line {
         let mut styled = String::with_capacity(64);
         crate::agent::runloop::tool_output::push_tree_prefix(&mut styled, palette);

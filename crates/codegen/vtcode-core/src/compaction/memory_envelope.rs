@@ -270,13 +270,16 @@ fn merge_grounded_facts(
     clippy::too_many_arguments,
     reason = "Intentional compatibility, platform, or test-only suppression."
 )]
+/// Builds an owned envelope; the optional history path is borrowed for display
+/// and is not opened by this function.
+#[must_use]
 pub fn build_session_memory_envelope(
     session_id: &str,
     workspace_root: &Path,
     original_history: &[Message],
     touched_files: &[String],
     summary: String,
-    history_artifact_path: Option<&PathBuf>,
+    history_artifact_path: Option<&Path>,
     prior_envelope: Option<&SessionMemoryEnvelope>,
     task_snapshot: &TaskTrackerSnapshot,
     envelope_update: Option<&SessionMemoryEnvelopeUpdate>,
@@ -475,7 +478,7 @@ pub fn persist_memory_envelope_with_update(
         original_history,
         touched_files,
         extract_compaction_summary(compacted, original_history),
-        history_artifact_path.as_ref(),
+        history_artifact_path.as_deref(),
         prior,
         &task_snapshot,
         envelope_update,
@@ -565,7 +568,7 @@ pub async fn persist_memory_envelope_async_with_update(
         original_history,
         touched_files,
         extract_compaction_summary(compacted, original_history),
-        history_artifact_path.as_ref(),
+        history_artifact_path.as_deref(),
         prior,
         &task_snapshot,
         envelope_update,

@@ -317,6 +317,7 @@ impl Agent {
 }
 
 /// Builder pattern for creating agents with custom configuration
+#[must_use = "build the agent before discarding the builder"]
 pub struct AgentBuilder {
     config: AgentConfig,
 }

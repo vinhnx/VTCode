@@ -312,6 +312,7 @@ pub struct FinalMetrics {
 /// observation time) or [`process_event_at`](Self::process_event_at)
 /// (deterministic timestamps for tests). Call [`finish`](Self::finish) to
 /// produce the final trajectory.
+#[must_use = "finish the trajectory before discarding the builder"]
 pub struct AtifTrajectoryBuilder {
     completed_at: Option<String>,
     agent: AtifAgent,
@@ -722,6 +723,7 @@ impl AtifTrajectoryBuilder {
     ///
     /// Pass optional `FinalMetrics` to override the accumulated values.
     /// If `None`, final metrics are derived from observed events.
+    #[must_use]
     pub fn finish(self, override_metrics: Option<FinalMetrics>) -> Trajectory {
         let final_metrics = override_metrics.unwrap_or_else(|| FinalMetrics {
             total_prompt_tokens: Some(self.total_input_tokens),

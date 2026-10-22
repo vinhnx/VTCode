@@ -48,6 +48,7 @@ pub enum SafetyTrustLevel {
 
 impl SafetyTrustLevel {
     #[inline]
+    #[must_use]
     pub const fn can_bypass_approval(self) -> bool {
         matches!(self, Self::Elevated | Self::Full)
     }
@@ -72,6 +73,7 @@ impl SafetyContext {
 
 /// Safety decision for a tool invocation
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[must_use = "safety decisions must be enforced before execution"]
 pub enum SafetyDecision {
     /// Tool execution is allowed without user approval
     Allow,
@@ -84,12 +86,14 @@ pub enum SafetyDecision {
 impl SafetyDecision {
     /// Whether execution can proceed (Allow only)
     #[inline]
+    #[must_use]
     pub fn is_allowed(&self) -> bool {
         matches!(self, SafetyDecision::Allow)
     }
 
     /// Whether execution is blocked (Deny)
     #[inline]
+    #[must_use]
     pub fn is_denied(&self) -> bool {
         matches!(self, SafetyDecision::Deny(_))
     }

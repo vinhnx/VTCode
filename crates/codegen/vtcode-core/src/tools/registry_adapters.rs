@@ -36,6 +36,7 @@ pub enum RegistryEvent {
 /// Builder that wires a [`ToolRegistry`] using [`WorkspacePaths`], telemetry,
 /// and error-reporting hooks supplied by the caller.
 #[cfg(feature = "policies")]
+#[must_use = "build the registry before discarding the builder"]
 pub struct RegistryBuilder<'a, Paths, Telemetry, Reporter, Formatter>
 where
     Paths: WorkspacePaths + ?Sized,

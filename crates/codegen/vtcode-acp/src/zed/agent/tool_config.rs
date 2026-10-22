@@ -10,7 +10,10 @@ use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::command_args;
 use vtcode_core::utils::path::ensure_path_within_workspace;
 
-use super::super::constants::*;
+use super::super::constants::{
+    MAX_TOOL_RESPONSE_CHARS, TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE, TOOL_READ_FILE_INTEGER_RANGE_TEMPLATE,
+    TOOL_READ_FILE_INVALID_INTEGER_TEMPLATE, TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE,
+};
 use super::super::types::{RunTerminalMode, ToolRuntime};
 
 impl ZedAgent {
@@ -168,7 +171,7 @@ impl ZedAgent {
         Ok(Some(normalized))
     }
 
-    pub(super) fn describe_terminal_location(&self, working_dir: Option<&PathBuf>) -> Option<String> {
+    pub(super) fn describe_terminal_location(&self, working_dir: Option<&Path>) -> Option<String> {
         let workspace = &self.config.workspace;
         working_dir.and_then(|path| {
             path.strip_prefix(workspace).ok().map(|relative| {

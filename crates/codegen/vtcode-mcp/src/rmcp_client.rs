@@ -310,7 +310,7 @@ impl RmcpClient {
         };
 
         // Use rmcp_transport helper to create transport with stderr capture
-        let (transport, stderr) = create_stdio_transport_with_stderr(&program, &args, working_dir.as_ref(), &env)?;
+        let (transport, stderr) = create_stdio_transport_with_stderr(&program, &args, working_dir.as_deref(), &env)?;
 
         // Spawn async task to log MCP server stderr
         let stderr_task = if let Some(stderr) = stderr {

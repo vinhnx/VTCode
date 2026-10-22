@@ -445,7 +445,7 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    render_full_auto_allowlist_banner(&mut renderer, full_auto, session_state.full_auto_allowlist.as_ref())?;
+    render_full_auto_allowlist_banner(&mut renderer, full_auto, session_state.full_auto_allowlist.as_deref())?;
 
     handle.set_placeholder(default_placeholder.clone());
 
@@ -620,7 +620,7 @@ fn spawn_agent_palette_and_background_refresh(
 fn render_full_auto_allowlist_banner(
     renderer: &mut AnsiRenderer,
     full_auto: bool,
-    allowlist: Option<&Vec<String>>,
+    allowlist: Option<&[String]>,
 ) -> Result<()> {
     if !full_auto {
         return Ok(());
@@ -692,7 +692,7 @@ pub(crate) fn apply_post_hydration_ui(
     ui_setup.header_context.primary_agent_color = primary_agent_color.clone();
     handle.set_primary_agent(Some(primary_agent_name), primary_agent_color);
 
-    render_full_auto_allowlist_banner(&mut ui_setup.renderer, full_auto, session_state.full_auto_allowlist.as_ref())?;
+    render_full_auto_allowlist_banner(&mut ui_setup.renderer, full_auto, session_state.full_auto_allowlist.as_deref())?;
     maybe_render_system_prompt_budget_warning(&mut ui_setup.renderer, vt_cfg, &session_state.session_bootstrap)?;
 
     // Re-drive shell bindings that were skipped when the registry was still

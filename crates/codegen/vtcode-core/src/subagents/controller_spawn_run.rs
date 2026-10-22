@@ -197,7 +197,7 @@ impl SubagentController {
         let mut request = request;
         sanitize_subagent_input_items(&mut request.items);
 
-        let prompt = request_prompt(&request.message, &request.items)
+        let prompt = request_prompt(request.message.as_deref(), &request.items)
             .or_else(|| spec.initial_prompt.clone())
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| anyhow!("custom subagent spawn requires a task message or items"))?;
@@ -224,7 +224,7 @@ impl SubagentController {
     /// Sends additional input to a running or queued subagent.
     pub async fn send_input(&self, request: SendInputRequest) -> Result<SubagentStatusEntry> {
         self.ensure_ordinary_delegation_allowed()?;
-        let prompt = request_prompt(&request.message, &request.items)
+        let prompt = request_prompt(request.message.as_deref(), &request.items)
             .ok_or_else(|| anyhow!("send_input requires a message or items"))?;
 
         let maybe_restart = {
@@ -929,7 +929,7 @@ impl SubagentController {
                 spec.name
             );
         }
-        let prompt = request_prompt(message, items)
+        let prompt = request_prompt(message.as_deref(), items)
             .or_else(|| spec.initial_prompt.clone())
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| anyhow!("{tool_name} requires a task message or items"))?;

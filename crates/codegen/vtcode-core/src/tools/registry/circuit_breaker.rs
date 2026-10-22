@@ -167,17 +167,17 @@ impl McpCircuitBreaker {
 
     #[inline]
     fn record_half_open_metric(&self) {
-        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, true, false, false);
+        MetricsCollector::record_circuit_breaker_metrics(self.metrics.as_deref(), true, false, false);
     }
 
     #[inline]
     fn record_breaker_denial_metric(&self) {
-        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, true, false);
+        MetricsCollector::record_circuit_breaker_metrics(self.metrics.as_deref(), false, true, false);
     }
 
     #[inline]
     fn record_circuit_open_metric(&self) {
-        MetricsCollector::record_circuit_breaker_metrics(&self.metrics, false, false, true);
+        MetricsCollector::record_circuit_breaker_metrics(self.metrics.as_deref(), false, false, true);
     }
 
     /// Persist current state to disk if path is configured.

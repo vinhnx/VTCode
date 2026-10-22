@@ -45,6 +45,7 @@ pub struct AgentComponentSet {
 ///
 /// The builder exposes hooks for overriding individual components which makes
 /// the agent easier to adapt for open-source scenarios or bespoke deployments.
+#[must_use = "build the agent components before discarding the builder"]
 pub struct AgentComponentBuilder<'config> {
     config: &'config AgentConfig,
     client: Option<AnyClient>,

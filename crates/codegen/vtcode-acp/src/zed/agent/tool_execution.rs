@@ -279,7 +279,7 @@ impl ZedAgent {
             .ok_or_else(|| "command array cannot be empty".to_string())?;
 
         let working_dir = self.resolve_terminal_working_dir(args)?;
-        let location_display = self.describe_terminal_location(working_dir.as_ref());
+        let location_display = self.describe_terminal_location(working_dir.as_deref());
         let command_display = command_parts.join(" ");
 
         let request = acp::CreateTerminalRequest::new(session_id.clone(), program.to_string())

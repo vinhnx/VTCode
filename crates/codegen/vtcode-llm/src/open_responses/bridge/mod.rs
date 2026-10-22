@@ -22,6 +22,7 @@ use vtcode_exec_events::{
 /// Tracks streaming state and maintains the mapping between VT Code item IDs
 /// and Open Responses output item indices.
 #[derive(Debug)]
+#[must_use = "build the response before discarding the builder"]
 pub struct ResponseBuilder {
     response: Response,
     next_output_index: usize,
@@ -87,6 +88,7 @@ impl ResponseBuilder {
     }
 
     /// Consumes the builder and returns the final response.
+    #[must_use]
     pub fn build(self) -> Response {
         self.response
     }

@@ -6,6 +6,7 @@ use std::{collections::HashSet, default::Default};
 /// Decision made by a policy rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
+#[must_use = "execution policy decisions must be enforced"]
 pub enum Decision {
     /// Allow the command to execute.
     Allow,
@@ -35,6 +36,7 @@ impl PrefixRule {
     }
 
     /// Check if a command matches this rule. Zero-token patterns never match.
+    #[must_use]
     pub fn matches(&self, command: &[String]) -> bool {
         matches_prefix(&self.pattern, command)
     }

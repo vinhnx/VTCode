@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use crate::tools::result::{ToolMetadataBuilder, ToolResult};
 
 /// Builder for standardized tool responses
+#[must_use = "build the response before discarding the builder"]
 pub struct ToolResponseBuilder {
     tool_name: String,
     success: bool,
@@ -125,6 +126,7 @@ impl ToolResponseBuilder {
     }
 
     /// Build the legacy JSON Value response
+    #[must_use]
     pub fn build_json(self) -> Value {
         let mut res = json!({
             "success": self.success,
@@ -184,6 +186,7 @@ impl ToolResponseBuilder {
     }
 
     /// Build the modern dual-channel ToolResult
+    #[must_use]
     pub fn build_result(self) -> ToolResult {
         if !self.success {
             return ToolResult::error(self.tool_name, self.error.unwrap_or_else(|| "Unknown error".to_string()));

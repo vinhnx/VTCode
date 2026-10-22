@@ -5,6 +5,7 @@ Entry point for VT Code contributor workflows.
 ## Getting Started
 
 - [Development Setup](./DEVELOPMENT_SETUP.md) - Canonical local setup and quality loop.
+- [Rust Style Guide](./rust-style-guide.md) - Google Rust guidance adoption, enforcement, exceptions, and API migrations.
 - [Architecture Guide](../ARCHITECTURE.md#request-projection-and-context-budgets) - Runtime ownership, request projections,
   context budgets, and staged headless compaction.
 - [Testing Guide](./testing.md) - Test commands, structure, and benchmark coverage, including the startup launch

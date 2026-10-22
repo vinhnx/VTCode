@@ -254,6 +254,7 @@ fn tool_execution_text(error: &ToolExecutionError) -> String {
 /// Callers match on this instead of re-deriving the
 /// `if decision.retryable { sleep(decision.delay.expect(...)) }` pattern.
 #[derive(Debug)]
+#[must_use = "retry steps must be handled before another attempt"]
 pub enum RetryStep {
     /// Wait `delay` then retry; `error` is the failure being retried.
     Backoff {

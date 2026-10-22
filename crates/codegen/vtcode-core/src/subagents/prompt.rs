@@ -207,7 +207,9 @@ fn trim_optional_field(value: Option<String>) -> Option<String> {
 
 // ─── Request Prompt Extraction ──────────────────────────────────────────────
 
-pub fn request_prompt(message: &Option<String>, items: &[SubagentInputItem]) -> Option<String> {
+/// Returns an owned prompt, preferring a nonblank borrowed message over items.
+/// Returns `None` when neither source contains usable text.
+pub fn request_prompt(message: Option<&str>, items: &[SubagentInputItem]) -> Option<String> {
     if let Some(message) = message
         && !message.trim().is_empty()
     {

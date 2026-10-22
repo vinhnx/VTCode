@@ -44,6 +44,7 @@ use vtcode_core::tools::continuation::{
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
+#[must_use]
 pub(crate) fn spooled_output_hint(path: &str) -> String {
     format!(
         "Large output was spooled to \"{path}\". Use exec_command with shell tools such as cat, sed, or rg to inspect details."

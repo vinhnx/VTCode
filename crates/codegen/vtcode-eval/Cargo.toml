@@ -23,3 +23,15 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+# This crate does not inherit the broader workspace lint policy yet. Keep the
+# workspace's API-style checks explicit here without changing unrelated lints.
+[lints.clippy]
+borrowed_box = "warn"
+ptr_arg = "warn"
+should_implement_trait = "warn"
+wrong_self_convention = "warn"
+new_without_default = "warn"
+len_without_is_empty = "warn"
+derivable_impls = "warn"
+unnecessary_unwrap = "warn"

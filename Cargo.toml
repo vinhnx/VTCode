@@ -222,6 +222,16 @@ rust.unstable_features = "warn"
 rust.missing_docs = "warn"
 
 [workspace.lints.clippy]
+# Flexible borrowing and conventional, complete public APIs.
+borrowed_box = "warn"
+ptr_arg = "warn"
+should_implement_trait = "warn"
+wrong_self_convention = "warn"
+new_without_default = "warn"
+len_without_is_empty = "warn"
+derivable_impls = "warn"
+unnecessary_unwrap = "warn"
+
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
 # Slice and indexing operations must make their safety assumptions explicit.
 string_slice = "warn"

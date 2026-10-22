@@ -262,12 +262,12 @@ fn project_provider_config(source: &dyn ProviderConfig) -> crate::factory_types:
     }
 }
 
-fn borrowed_optional_str(value: &Option<String>) -> Option<Cow<'_, str>> {
-    value.as_deref().map(Cow::Borrowed)
+fn borrowed_optional_str(value: Option<&str>) -> Option<Cow<'_, str>> {
+    value.map(Cow::Borrowed)
 }
 
-fn borrowed_optional<T: Clone>(value: &Option<T>) -> Option<Cow<'_, T>> {
-    value.as_ref().map(Cow::Borrowed)
+fn borrowed_optional<T: Clone>(value: Option<&T>) -> Option<Cow<'_, T>> {
+    value.map(Cow::Borrowed)
 }
 
 #[cfg(test)]
@@ -606,39 +606,39 @@ mod tests {
 /// [`ProviderConfig`] implementation for the concrete factory configuration.
 impl ProviderConfig for crate::factory_types::ProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.api_key)
+        borrowed_optional_str(self.api_key.as_deref())
     }
 
     fn base_url(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.base_url)
+        borrowed_optional_str(self.base_url.as_deref())
     }
 
     fn model(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.model)
+        borrowed_optional_str(self.model.as_deref())
     }
 
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
-        borrowed_optional(&self.prompt_cache)
+        borrowed_optional(self.prompt_cache.as_ref())
     }
 
     fn timeouts(&self) -> Option<Cow<'_, TimeoutsConfig>> {
-        borrowed_optional(&self.timeouts)
+        borrowed_optional(self.timeouts.as_ref())
     }
 
     fn openai(&self) -> Option<Cow<'_, OpenAIConfig>> {
-        borrowed_optional(&self.openai)
+        borrowed_optional(self.openai.as_ref())
     }
 
     fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
-        borrowed_optional(&self.anthropic)
+        borrowed_optional(self.anthropic.as_ref())
     }
 
     fn openrouter(&self) -> Option<Cow<'_, OpenRouterConfig>> {
-        borrowed_optional(&self.openrouter)
+        borrowed_optional(self.openrouter.as_ref())
     }
 
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
-        borrowed_optional(&self.model_behavior)
+        borrowed_optional(self.model_behavior.as_ref())
     }
 }
 
@@ -710,38 +710,38 @@ impl OwnedProviderConfig {
 
 impl ProviderConfig for OwnedProviderConfig {
     fn api_key(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.api_key)
+        borrowed_optional_str(self.api_key.as_deref())
     }
 
     fn base_url(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.base_url)
+        borrowed_optional_str(self.base_url.as_deref())
     }
 
     fn model(&self) -> Option<Cow<'_, str>> {
-        borrowed_optional_str(&self.model)
+        borrowed_optional_str(self.model.as_deref())
     }
 
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
-        borrowed_optional(&self.prompt_cache)
+        borrowed_optional(self.prompt_cache.as_ref())
     }
 
     fn timeouts(&self) -> Option<Cow<'_, TimeoutsConfig>> {
-        borrowed_optional(&self.timeouts)
+        borrowed_optional(self.timeouts.as_ref())
     }
 
     fn openai(&self) -> Option<Cow<'_, OpenAIConfig>> {
-        borrowed_optional(&self.openai)
+        borrowed_optional(self.openai.as_ref())
     }
 
     fn anthropic(&self) -> Option<Cow<'_, AnthropicConfig>> {
-        borrowed_optional(&self.anthropic)
+        borrowed_optional(self.anthropic.as_ref())
     }
 
     fn openrouter(&self) -> Option<Cow<'_, OpenRouterConfig>> {
-        borrowed_optional(&self.openrouter)
+        borrowed_optional(self.openrouter.as_ref())
     }
 
     fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
-        borrowed_optional(&self.model_behavior)
+        borrowed_optional(self.model_behavior.as_ref())
     }
 }

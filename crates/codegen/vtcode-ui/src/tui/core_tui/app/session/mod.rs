@@ -591,7 +591,7 @@ impl AppSession {
         {
             anchor_search_start -= 1;
         }
-        let anchor_line = self.find_live_pty_anchor(lines.first(), anchor_search_start);
+        let anchor_line = self.find_live_pty_anchor(lines.first().map(String::as_str), anchor_search_start);
 
         self.tool_output_blocks.push(ToolOutputBlock {
             id,
@@ -632,8 +632,8 @@ impl AppSession {
         }
     }
 
-    fn find_live_pty_anchor(&self, header: Option<&String>, search_start: usize) -> Option<usize> {
-        let header = header.map(|header| normalize_tool_output_header(header))?;
+    fn find_live_pty_anchor(&self, header: Option<&str>, search_start: usize) -> Option<usize> {
+        let header = header.map(normalize_tool_output_header)?;
         let mut index = self.core.lines.len();
         while index > search_start {
             let line_index = index - 1;

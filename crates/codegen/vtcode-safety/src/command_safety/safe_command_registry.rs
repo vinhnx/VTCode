@@ -26,6 +26,7 @@ use hashbrown::HashMap;
 
 /// Result of a command safety check
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use = "command safety decisions must be enforced"]
 pub enum SafetyDecision {
     /// Command is safe to execute
     Allow,

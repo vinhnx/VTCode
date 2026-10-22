@@ -673,6 +673,7 @@ pub struct TemplateStats {
 }
 
 /// Skill template builder for programmatic template creation
+#[must_use = "build the skill template before discarding the builder"]
 pub struct SkillTemplateBuilder {
     name: String,
     template_type: TemplateType,

@@ -143,6 +143,7 @@ impl ToolResult {
     }
 
     /// Add metadata to the result
+    #[must_use]
     pub fn with_metadata(mut self, metadata: ToolMetadata) -> Self {
         // Preserve token counts from construction
         let token_counts = std::mem::take(&mut self.metadata.token_counts);
@@ -152,12 +153,14 @@ impl ToolResult {
     }
 
     /// Add file references to metadata
+    #[must_use]
     pub fn with_files(mut self, files: Vec<PathBuf>) -> Self {
         self.metadata.files = files;
         self
     }
 
     /// Add data to metadata
+    #[must_use]
     pub fn with_data(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.metadata.data.insert(key.into(), value);
         self
@@ -176,6 +179,8 @@ impl ToolResult {
 }
 
 /// Builder for ToolMetadata
+#[must_use = "build the metadata before discarding the builder"]
+#[derive(Default)]
 pub struct ToolMetadataBuilder {
     files: Vec<PathBuf>,
     lines: Vec<usize>,
@@ -184,11 +189,7 @@ pub struct ToolMetadataBuilder {
 
 impl ToolMetadataBuilder {
     pub fn new() -> Self {
-        Self {
-            files: Vec::new(),
-            lines: Vec::new(),
-            data: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn file(mut self, path: PathBuf) -> Self {
@@ -216,6 +217,7 @@ impl ToolMetadataBuilder {
         self
     }
 
+    #[must_use]
     pub fn build(self) -> ToolMetadata {
         ToolMetadata {
             files: self.files,
@@ -223,12 +225,6 @@ impl ToolMetadataBuilder {
             data: self.data,
             token_counts: TokenCounts::default(), // Will be filled by ToolResult
         }
-    }
-}
-
-impl Default for ToolMetadataBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

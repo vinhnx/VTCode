@@ -12,6 +12,7 @@ use crate::tools::tool_intent;
 use vtcode_config::core::permissions::{AgentPermissionsConfig, PermissionDefault, normalize_permission_rule};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "permission decisions must be enforced"]
 pub enum PermissionRuleDecision {
     Allow,
     Auto,
@@ -21,6 +22,7 @@ pub enum PermissionRuleDecision {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "permission decisions must be enforced"]
 pub enum ResolvedPermissionDecision {
     Allow,
     Auto,
