@@ -5,6 +5,50 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.3 - 2026-10-22
+
+### Highlights
+
+#### Bug Fixes
+
+- Show the readiness line once per session (7a98e83f)
+- Bound recovery and separate runtime diagnostics (a5cc9033)
+- Route diagnostic details clicks through the app event path (d3598480)
+- Preserve recovery popup action labels (61bc2459)
+- Fail cross builds when GNU producer fails (acaffcc5)
+- Repair missing tool results before summary (1b9c0a3d)
+- Preserve follow-up provenance across turns (87a2e44b)
+- Allow one fresh required check at the repeat limit (0589fd07)
+- Require approval for recursive mounted-target deletes (145ef2b0)
+- Retain wrapper directory changes for rm approval (76c273c6)
+- Bound verification replay and self-correction (4e8eee1c)
+- Preserve policy denials and bound recovery churn (c2042f72)
+- Bound headless recovery within execution limits (230cf592)
+- Close mounted-target rm approval gaps (6c1f925a)
+- Align policy denial guidance with the armed recovery (9ec05c46)
+
+#### Features
+
+- Add opt-in 12-hour OpenAI prompt caching (8e2255b0)
+
+### Other Changes
+
+#### CI
+
+- Compile cross targets in parallel with the GNU build (e5847beb) (@vinhnx)
+
+#### Performance
+
+- Grow the verifier wait window (9a1938aa)
+
+#### Refactors
+
+- Share the responses continuation store (e4340452)
+
+#### Tests
+
+- Build permission contexts with a builder (28fca1d9)
+
 ## 0.180.2 - 2026-10-20
 
 ### Highlights
