@@ -191,6 +191,17 @@ python3 scripts/tests/test_homebrew_formula.py
 - **Create Release**: Drafts GitHub Release with changelog
 - **Publish**: Publishes to crates.io and Homebrew
 
+Crate publishing runs through `scripts/publish_extracted_crates.sh`. The script lists the crates to publish;
+the order they are published in is derived from the workspace dependency graph (`scripts/publish_order.py`
+resolves `cargo metadata` and topologically sorts the list) because crates.io rejects a crate whose
+workspace dependency is not yet live. Adding a dependency edge therefore cannot silently invalidate the
+release sequence. `--start-from <crate>` resumes a partially completed release and refuses to start when a
+prerequisite of the selected crate is missing from crates.io. The derivation is covered by:
+
+```bash
+python3 scripts/tests/test_publish_order.py
+```
+
 ## Code Quality Tools
 
 ### rustfmt

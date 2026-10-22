@@ -355,6 +355,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Rust Error Handling — Reference Notes?", "How does Source (not
     vendored) work?", "How does Why this matters to VT Code work?"
 
+- **File**: `docs/development/rust-style-guide.md`
+  - **Content**: Rust Style Guide Adoption
+  - **Topics**: Adoption matrix, Rust API migration notes, Audit scope and verification
+  - **User Questions**: "What can you tell me about Rust Style Guide Adoption?", "How does Adoption matrix work?", "How
+    does Rust API migration notes work?"
+
 - **File**: `docs/development/rust-performance-principles.md`
   - **Content**: Rust-Specific Performance Principles for VT Code
   - **Topics**: Core Insight: Rust Is Not Faster Than C/C++ — It Is _Safer While Being Equally Fast_, Destructive Move

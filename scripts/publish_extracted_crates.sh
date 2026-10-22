@@ -18,8 +18,8 @@ Options:
                      performing the real publish. This is the default when the
                      VT_RELEASE_DRY_RUN environment variable is set to 1.
   --start-from CRATE Resume publishing from the provided crate name. Valid
-                     crates: vtcode-diff, vtcode-commons, vtcode-auth, vtcode-exec-events,
-                     vtcode-memory, vtcode-macros, vtcode-config,
+                     crates: vtcode-diff, vtcode-exec-events, vtcode-commons,
+                     vtcode-auth, vtcode-memory, vtcode-macros, vtcode-config,
                      vtcode-indexer, vtcode-bash-runner, vtcode-utility-tool-specs,
                      vtcode-eval, vtcode-safety, vtcode-webmcp, vtcode-a2a, vtcode-llm,
                      vtcode-skills, vtcode-agent-plugins, vtcode-ui, vtcode-mcp, vtcode-core,
@@ -93,11 +93,15 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-CRATES=(
+# Crates published to crates.io. The order they are published in is derived
+# from the workspace dependency graph (see compute_publish_order) instead of
+# being hand-maintained here: a hand-written sequence silently rots whenever a
+# dependency edge is added, and crates.io then rejects the dependent crate.
+PUBLISH_CRATES=(
 	vtcode-diff
+	vtcode-exec-events
 	vtcode-commons
 	vtcode-auth
-	vtcode-exec-events
 	vtcode-memory
 	vtcode-macros
 	vtcode-config
@@ -118,89 +122,71 @@ CRATES=(
 	vtcode
 )
 
-# Validate that all workspace dependencies of crates in the publish list
-# are also in the publish list and appear earlier (topological order). This
-# catches missing crates and out-of-order publishes (e.g. vtcode-webmcp
-# requiring vtcode-safety) before hitting crates.io 400 errors.
-validate_publish_order() {
-	local errors=0
-	local crate_set=""
-	for crate in "${CRATES[@]}"; do
-		crate_set="${crate_set} ${crate}"
-	done
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PUBLISH_ORDER_TOOL="${SCRIPT_DIR}/publish_order.py"
 
-	# Build index map for order checking (bash 3.2 compatible)
-	get_crate_index() {
-		local needle="$1"
-		local idx=0
-		for c in "${CRATES[@]}"; do
-			if [[ "$c" == "$needle" ]]; then
-				echo "$idx"
-				return 0
-			fi
-			idx=$((idx + 1))
-		done
-		echo "999"
+# Cached `cargo metadata --no-deps` output; the workspace graph is read many
+# times per run and metadata resolution is the expensive part.
+WORKSPACE_METADATA_FILE=""
+
+load_workspace_metadata() {
+	if [[ -n "$WORKSPACE_METADATA_FILE" && -s "$WORKSPACE_METADATA_FILE" ]]; then
 		return 0
-	}
-
-	for crate in "${CRATES[@]}"; do
-		# Resolve Cargo.toml path via workspace resolver (handles re-aliased crates like vtcode-commons)
-		local cargo_toml=""
-		if [[ -f "${crate}/Cargo.toml" ]]; then
-			cargo_toml="${crate}/Cargo.toml"
-		else
-			# Fallback: resolve via cargo metadata for crates with non-trivial path layout
-			local manifest_path
-			manifest_path=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); m={p['name']:p['manifest_path'] for p in m['packages']}; print(m.get('${crate}',''))" 2>/dev/null || echo "")
-			if [[ -n "$manifest_path" && -f "$manifest_path" ]]; then
-				cargo_toml="$manifest_path"
-			else
-				continue
-			fi
-		fi
-
-		# Extract vtcode workspace dependencies: handles both `workspace = true` and `path =` forms
-		local deps
-		deps=$(grep -E 'vtcode-[a-z0-9_-]+\s*=' "$cargo_toml" | grep -oE 'vtcode-[a-z0-9_-]+' | sort -u || true)
-
-		for dep in $deps; do
-			# Skip self-dependency
-			if [[ "$dep" == "$crate" ]]; then
-				continue
-			fi
-			if [[ "$crate_set" != *" $dep "* ]]; then
-				# Check if it's actually a workspace member before erroring
-				local dep_manifest=""
-				dep_manifest=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); m={p['name']:p['manifest_path'] for p in m['packages']}; print(m.get('${dep}',''))" 2>/dev/null || echo "")
-				if [[ -n "$dep_manifest" ]]; then
-					echo "ERROR: ${crate} depends on workspace member '${dep}' which is not in the CRATES publish list" >&2
-					errors=$((errors + 1))
-				elif [[ -d "$dep" && -f "$dep/Cargo.toml" ]]; then
-					echo "ERROR: ${crate} depends on workspace member '${dep}' which is not in the CRATES publish list" >&2
-					errors=$((errors + 1))
-				fi
-			else
-				# Dependency is in list — ensure it appears earlier for crates.io resolution
-				local dep_idx
-				dep_idx=$(get_crate_index "$dep")
-				local crate_pos
-				crate_pos=$(get_crate_index "$crate")
-				if [[ $dep_idx -gt $crate_pos ]]; then
-					echo "ERROR: ${crate} depends on '${dep}' which appears later in CRATES (index $dep_idx > $crate_pos). Publish order violates dependency graph; move '${dep}' before '${crate}'." >&2
-					errors=$((errors + 1))
-				fi
-			fi
-		done
-	done
-
-	if [[ $errors -gt 0 ]]; then
-		echo "Found $errors publish-order error(s). Aborting." >&2
-		exit 1
 	fi
+	local metadata_file
+	metadata_file=$(mktemp)
+	if ! cargo metadata --format-version 1 --no-deps >"$metadata_file" 2>/dev/null; then
+		rm -f "$metadata_file"
+		print_error "Unable to read the workspace graph via 'cargo metadata'."
+		return 1
+	fi
+	WORKSPACE_METADATA_FILE="$metadata_file"
+	trap 'rm -f "$WORKSPACE_METADATA_FILE"' EXIT
+	return 0
 }
 
-validate_publish_order
+# Resolve the publish order from the workspace dependency graph. The declared
+# publish list is the set of crates; the order is a property of the graph.
+compute_publish_order() {
+	if ! load_workspace_metadata; then
+		return 1
+	fi
+	local ordered
+	if ! ordered=$(python3 "$PUBLISH_ORDER_TOOL" plan --metadata "$WORKSPACE_METADATA_FILE" --crates "${PUBLISH_CRATES[@]}"); then
+		return 1
+	fi
+	local -a crates=()
+	while IFS= read -r line; do
+		if [[ -n "$line" ]]; then
+			crates+=("$line")
+		fi
+	done <<<"$ordered"
+	if [[ ${#crates[@]} -ne ${#PUBLISH_CRATES[@]} ]]; then
+		print_error "Derived publish order covers ${#crates[@]} of ${#PUBLISH_CRATES[@]} crates — aborting."
+		return 1
+	fi
+	CRATES=("${crates[@]}")
+	return 0
+}
+
+is_version_published() {
+	local crate="$1"
+	local version="$2"
+	local endpoint="https://crates.io/api/v1/crates/${crate}/${version}"
+	if curl --silent --show-error --fail --location --user-agent "vtcode-publish-script" "$endpoint" >/dev/null 2>&1; then
+		return 0
+	fi
+	if cargo info --registry crates-io --quiet "${crate}@${version}" >/dev/null 2>&1; then
+		return 0
+	fi
+	return 1
+}
+
+CRATES=()
+if ! compute_publish_order; then
+	print_error "Aborting: no valid crates.io publish order could be derived from the workspace graph."
+	exit 1
+fi
 
 if [[ -n "$START_FROM" ]]; then
 	found=0
@@ -219,61 +205,37 @@ if [[ -n "$START_FROM" ]]; then
 	fi
 	CRATES=("${filtered[@]}")
 
-	# Validate that all earlier workspace dependencies of the starting crate
-	# have already been published on crates.io. This catches the common mistake
-	# of resuming from a dependent crate before its prerequisites are live.
+	# Validate that all workspace dependencies of the starting crate that are
+	# not part of the remaining sequence have already been published on
+	# crates.io. This catches the common mistake of resuming from a dependent
+	# crate before its prerequisites are live.
 	start_crate="${CRATES[0]}"
-	start_manifest=""
-	if [[ -f "${start_crate}/Cargo.toml" ]]; then
-		start_manifest="${start_crate}/Cargo.toml"
-	else
-		manifest_path=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); m={p['name']:p['manifest_path'] for p in m['packages']}; print(m.get('${start_crate}',''))" 2>/dev/null || echo "")
-		if [[ -n "$manifest_path" && -f "$manifest_path" ]]; then
-			start_manifest="$manifest_path"
-		fi
+	if ! load_workspace_metadata; then
+		exit 1
 	fi
-
-	if [[ -n "$start_manifest" ]]; then
-		start_deps=$(grep -E 'vtcode-[a-z0-9_-]+\s*=' "$start_manifest" | grep -oE 'vtcode-[a-z0-9_-]+' | sort -u || true)
-		for dep in $start_deps; do
-			if [[ "$dep" == "$start_crate" ]]; then
-				continue
-			fi
-			dep_index=0
-			idx=0
-			for c in "${CRATES[@]}"; do
-				if [[ "$c" == "$dep" ]]; then
-					dep_index=$idx
-				fi
-				idx=$((idx + 1))
-			done
-			if [[ $dep_index -ge ${#CRATES[@]} ]]; then
-				if ! is_version_published "$dep" "$CURRENT_VERSION"; then
-					print_error "Cannot start from '${start_crate}' because dependency '${dep}' ${CURRENT_VERSION} has not been published yet." >&2
-					print_info "Publish '${dep}' first (without --start-from), or start from an earlier crate in the sequence." >&2
-					exit 1
-				fi
+	start_deps=$(python3 "$PUBLISH_ORDER_TOOL" deps --metadata "$WORKSPACE_METADATA_FILE" --crates "$start_crate")
+	while IFS=$'\t' read -r _ dep; do
+		if [[ -z "$dep" ]]; then
+			continue
+		fi
+		in_remaining=0
+		for c in "${CRATES[@]}"; do
+			if [[ "$c" == "$dep" ]]; then
+				in_remaining=1
+				break
 			fi
 		done
-	fi
+		if [[ $in_remaining -eq 0 ]] && ! is_version_published "$dep" "$CURRENT_VERSION"; then
+			print_error "Cannot start from '${start_crate}' because dependency '${dep}' ${CURRENT_VERSION} has not been published yet."
+			print_info "Publish '${dep}' first (without --start-from), or start from an earlier crate in the sequence."
+			exit 1
+		fi
+	done <<<"$start_deps"
 fi
 
 run_cmd() {
 	echo "+ $*"
 	eval "$@"
-}
-
-is_version_published() {
-	local crate="$1"
-	local version="$2"
-	local endpoint="https://crates.io/api/v1/crates/${crate}/${version}"
-	if curl --silent --show-error --fail --location --user-agent "vtcode-publish-script" "$endpoint" >/dev/null 2>&1; then
-		return 0
-	fi
-	if cargo info --registry crates-io --quiet "${crate}@${version}" >/dev/null 2>&1; then
-		return 0
-	fi
-	return 1
 }
 
 publish_cmd() {
