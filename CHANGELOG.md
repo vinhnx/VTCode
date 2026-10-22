@@ -11,26 +11,9 @@ All notable changes to vtcode will be documented in this file.
 
 #### Bug Fixes
 
-- Derive crates.io publish order from the workspace graph (b0d4fd1a)
-
-#### Documentation
-
-- Merge modes section and tighten structure (2ffc14e5)
-- Reword community section (eebe548d)
-
-#### Features
-
-- Present diagnostic evidence on a muted code surface (3bb998d9)
-- Improve runtime tools, progress, and caching (8070f776)
-- Migrate search to DuckDuckGo (a54d998a)
+- Work around gh 2.102.0 empty run list with --branch/--event + --json (df2ffba0)
 
 ### Other Changes
-
-#### Refactors
-
-- Adopt flexible borrowing and API style checks (770f6b55)
-- Borrow optional inputs across provider and runloop helpers (6ffeec3a)
-- Unify success response handling (c0be3a48)
 
 ## 0.180.4 - 2026-10-22
 
