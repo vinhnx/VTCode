@@ -31,20 +31,41 @@ pub(super) fn error_mismatch(error: &ToolExecutionError) -> Option<MismatchKind>
     })
 }
 
+/// Compose the model-facing next action for a policy denial.
+///
+/// The policy remedy is preserved. A tripped preflight circuit arms a
+/// tool-free recovery pass, so the guidance must also state that tools are
+/// disabled; otherwise it invites a tool call that cannot run.
+pub(crate) fn policy_denial_next_action(correction: &str, circuit_tripped: bool, planning_active: bool) -> String {
+    if !circuit_tripped {
+        return correction.to_owned();
+    }
+    if planning_active {
+        format!(
+            "{correction} Tools are disabled for the next pass — synthesize exactly one complete <proposed_plan> from the evidence already gathered."
+        )
+    } else {
+        format!(
+            "{correction} Tools are disabled for the next pass — synthesize a plain-text response reporting the blocker to the user."
+        )
+    }
+}
+
 pub(crate) fn deterministic_preflight_diagnosis(
     tool_name: &str,
     error: &str,
     circuit_tripped: bool,
+    planning_active: bool,
 ) -> ToolFailureDiagnosis {
     let policy_correction = vtcode_core::tools::error_messages::agent_execution::preflight_policy_correction(error);
     let tool_name = bounded_field(tool_name);
     let error = bounded_field(error);
     let next_action = if let Some(correction) = policy_correction {
-        correction
+        policy_denial_next_action(correction, circuit_tripped, planning_active)
     } else if circuit_tripped {
-        "Stop retrying this malformed call; tools are disabled for the next pass."
+        "Stop retrying this malformed call; tools are disabled for the next pass.".to_owned()
     } else {
-        "Correct the arguments using the declared schema, then retry once."
+        "Correct the arguments using the declared schema, then retry once.".to_owned()
     };
     ToolFailureDiagnosis::new(
         format!("Tool preflight validation failed for '{tool_name}': {error}"),

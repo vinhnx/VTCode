@@ -29,7 +29,7 @@ use self::auto_permission_probe::push_tool_response_with_auto_permission_probe;
 pub(crate) use self::failure_diagnosis::{
     ToolFailureDiagnosis, bounded_diagnostic_field, bounded_error_evidence, bounded_output_evidence,
     deterministic_error_diagnosis, deterministic_output_diagnosis, deterministic_preflight_diagnosis,
-    escape_untrusted_evidence, render_and_emit, render_diagnosis,
+    escape_untrusted_evidence, policy_denial_next_action, render_and_emit, render_diagnosis,
 };
 use self::failure_diagnosis::{diagnose_error, diagnose_output};
 use self::failure_path::{

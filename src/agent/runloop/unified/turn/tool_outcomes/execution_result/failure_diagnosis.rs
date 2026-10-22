@@ -22,6 +22,7 @@ mod presentation;
 
 pub(crate) use self::classification::{
     deterministic_error_diagnosis, deterministic_output_diagnosis, deterministic_preflight_diagnosis,
+    policy_denial_next_action,
 };
 pub(crate) fn bounded_output_evidence(tool_name: &str, args: &Value, output: &Value) -> String {
     evidence::build_output_evidence(tool_name, args, output)
@@ -227,17 +228,26 @@ mod tests {
                 ("Command security check failed: command injection", "simpler literal command"),
                 ("tool denied by planning workflow", "command -v"),
             ] {
-                let diagnosis = deterministic_preflight_diagnosis(tool_names::EXEC_COMMAND, error, circuit_tripped);
+                let diagnosis =
+                    deterministic_preflight_diagnosis(tool_names::EXEC_COMMAND, error, circuit_tripped, false);
                 assert!(diagnosis.likely_cause.contains("policy"));
                 assert!(diagnosis.next_action.contains("Do not retry"));
                 assert!(diagnosis.next_action.contains(alternative));
                 assert!(!diagnosis.next_action.contains("malformed"));
                 assert!(!diagnosis.next_action.contains("declared schema"));
+                // A tripped circuit arms a tool-free recovery pass, so the
+                // guidance must not invite a tool call that cannot run.
+                assert_eq!(
+                    diagnosis.next_action.contains("Tools are disabled for the next pass"),
+                    circuit_tripped,
+                    "policy guidance must match the armed recovery state: {error}"
+                );
             }
             let malformed = deterministic_preflight_diagnosis(
                 tool_names::EXEC_COMMAND,
                 "Missing required argument: cmd",
                 circuit_tripped,
+                false,
             );
             if circuit_tripped {
                 assert!(malformed.next_action.contains("tools are disabled"));

@@ -189,15 +189,17 @@ pub(crate) fn handle_preflight_failure(
         preflight_schema_correction(tool_name, error)
     };
     let next_action = if let Some(correction) = policy_correction {
-        correction
+        super::execution_result::policy_denial_next_action(correction, circuit_tripped, ctx.is_planning_active())
     } else if exhausted {
-        "Automatic validation recovery stopped. Resume with corrected arguments on fresh user input."
+        "Automatic validation recovery stopped. Resume with corrected arguments on fresh user input.".to_owned()
     } else if circuit_tripped && ctx.is_planning_active() {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize exactly one complete <proposed_plan> from the evidence already gathered."
+            .to_owned()
     } else if circuit_tripped {
         "Stop retrying this malformed call. Tools are disabled for the next pass — synthesize a plain-text response reporting the failure to the user."
+            .to_owned()
     } else {
-        "Correct the arguments using schema_correction, then retry this tool once."
+        "Correct the arguments using schema_correction, then retry this tool once.".to_owned()
     };
     let failure_kind = if circuit_tripped {
         "preflight_circuit_breaker"
@@ -239,6 +241,7 @@ pub(crate) fn handle_preflight_failure(
         tool_name,
         if repeated { "Repeated invalid arguments" } else { error },
         circuit_tripped,
+        ctx.is_planning_active(),
     );
     if let Some(object) = payload.as_object_mut() {
         object.insert("diagnosis".to_string(), diagnosis.to_value());
@@ -329,7 +332,12 @@ pub(crate) fn drain_preflight_circuit_responses(
             },
             "retryable": false,
         });
-        let diagnosis = super::execution_result::deterministic_preflight_diagnosis(tool_name, error, true);
+        let diagnosis = super::execution_result::deterministic_preflight_diagnosis(
+            tool_name,
+            error,
+            true,
+            ctx.is_planning_active(),
+        );
         let mut payload = payload;
         if let Some(object) = payload.as_object_mut() {
             object.insert("diagnosis".to_string(), diagnosis.to_value());

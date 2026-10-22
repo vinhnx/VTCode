@@ -4026,6 +4026,17 @@ async fn policy_preflight_denials_are_non_retryable_without_poisoning_permitted_
             assert!(payload["next_action"].as_str().unwrap().contains("Do not retry"));
             assert!(!payload["next_action"].as_str().unwrap().contains("malformed"));
             assert_eq!(payload["diagnosis"]["next_action"], payload["next_action"]);
+            // The circuit arms a tool-free recovery pass, so the guidance must
+            // say so instead of inviting a tool call that cannot run.
+            let circuit_tripped = at_limit && index + 1 == attempts;
+            assert_eq!(
+                payload["next_action"]
+                    .as_str()
+                    .unwrap()
+                    .contains("Tools are disabled for the next pass"),
+                circuit_tripped,
+                "policy guidance must match the armed recovery state: {error}"
+            );
             assert!(
                 !payload["schema_correction"]
                     .as_str()
