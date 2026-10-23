@@ -76,6 +76,40 @@ pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
     entries
 }
 
+/// Read the current git branch for a workspace, walking up to the repository
+/// root like git does. Detached HEAD yields a short commit hash. Worktrees
+/// (`.git` as a file) follow their `gitdir` pointer. Bounded and read-only.
+pub(super) fn git_branch(workspace: &Path) -> Option<String> {
+    let mut dir = Some(workspace);
+    for _ in 0..10 {
+        let Some(current) = dir else { break };
+        let dot_git = current.join(".git");
+        if dot_git.is_dir() {
+            return parse_branch_head(&dot_git);
+        }
+        if dot_git.is_file() {
+            // Worktree/submodule pointer: `gitdir: <path>`.
+            let pointer = fs::read_to_string(&dot_git).ok()?;
+            let target = pointer.strip_prefix("gitdir:")?.trim();
+            return parse_branch_head(Path::new(target));
+        }
+        dir = current.parent();
+    }
+    None
+}
+
+fn parse_branch_head(git_dir: &Path) -> Option<String> {
+    let head = fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    let head = head.trim();
+    if let Some(reference) = head.strip_prefix("ref: refs/heads/") {
+        return Some(reference.trim().to_string());
+    }
+    if head.len() >= 7 && head.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(head.chars().take(7).collect());
+    }
+    None
+}
+
 /// Read a bounded text preview of one file. Returns `None` for missing,
 /// oversized-binary, or non-UTF-8 files.
 pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
@@ -173,5 +207,41 @@ mod tests {
 
         assert!(read_preview(root, "binary.bin").is_none(), "binary files have no text preview");
         assert!(read_preview(root, "missing.txt").is_none(), "missing files have no preview");
+    }
+
+    #[test]
+    fn git_branch_reads_refs_detached_heads_and_worktrees() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        let git = root.join(".git");
+        fs::create_dir_all(&git).expect("git dir");
+
+        fs::write(git.join("HEAD"), "ref: refs/heads/feature/dark-mode\n").expect("head");
+        assert_eq!(git_branch(root).as_deref(), Some("feature/dark-mode"));
+
+        fs::write(git.join("HEAD"), "0123456789abcdef0123456789abcdef01234567").expect("head");
+        assert_eq!(git_branch(root).as_deref(), Some("0123456"));
+
+        fs::write(git.join("HEAD"), "ref: refs/remotes/origin/main").expect("head");
+        assert_eq!(git_branch(root), None, "non-branch refs are not reported as branches");
+
+        // A subdirectory still finds the repository root.
+        let nested = root.join("crates/deep");
+        fs::create_dir_all(&nested).expect("nested dir");
+        fs::write(git.join("HEAD"), "ref: refs/heads/main\n").expect("head");
+        assert_eq!(git_branch(&nested).as_deref(), Some("main"));
+
+        // Worktree pointer: `.git` is a file pointing at the real git dir.
+        let worktree = temp_workspace();
+        let real_git = worktree.path().join("real-git");
+        fs::create_dir_all(&real_git).expect("git dir");
+        fs::write(real_git.join("HEAD"), "ref: refs/heads/wt\n").expect("head");
+        fs::write(worktree.path().join("code.rs"), b"x").expect("file");
+        fs::write(worktree.path().join(".git"), format!("gitdir: {}\n", real_git.display())).expect("pointer");
+        assert_eq!(git_branch(worktree.path()).as_deref(), Some("wt"));
+
+        // No repository at all.
+        let plain = temp_workspace();
+        assert_eq!(git_branch(plain.path()), None);
     }
 }
