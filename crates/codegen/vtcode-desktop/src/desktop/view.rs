@@ -5,6 +5,7 @@ use std::time::Duration;
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Enter, Textarea, TextareaState};
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::prelude::*;
 use gpui_kit::{
@@ -69,6 +70,7 @@ struct DesktopView {
     status: String,
     error: Option<String>,
     configuration: Option<ConfigurationSnapshot>,
+    service_info: Option<protocol::InitializeResult>,
     interaction: Option<InteractionRequest>,
     interaction_choice_ids: Vec<Option<String>>,
     interaction_answer_texts: Vec<Option<String>>,
@@ -98,6 +100,7 @@ impl DesktopView {
             status: "Choose a workspace to get started".to_string(),
             error: None,
             configuration: None,
+            service_info: None,
             interaction: None,
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
@@ -183,6 +186,7 @@ impl DesktopView {
         self.selected_session_id = None;
         self.transcript.clear();
         self.configuration = None;
+        self.service_info = None;
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
@@ -455,6 +459,8 @@ impl DesktopView {
                 let result = result.unwrap_or(Value::Null);
                 match method.as_str() {
                     protocol::method::INITIALIZE => {
+                        self.service_info =
+                            serde_json::from_value::<protocol::InitializeResult>(result).ok();
                         self.status = "Connected to the local VT Code service".to_string();
                     }
                     protocol::method::CONFIG_DISCOVER => {
@@ -846,6 +852,7 @@ impl DesktopView {
             ThemeMode::Light
         };
         let weak = cx.entity().downgrade();
+        let settings_weak = weak.clone();
         div()
             .w_full()
             .h(px(58.))
@@ -880,8 +887,100 @@ impl DesktopView {
                                     cx.notify();
                                 });
                             }),
+                    )
+                    .child(
+                        Popover::new("settings-popover")
+                            .anchor(gpui_kit::Anchor::BottomRight)
+                            .trigger(Button::new("open-settings").label("Settings").ghost())
+                            .content(move |_, _, cx| {
+                                settings_weak
+                                    .update(cx, |view, cx| view.render_settings(cx))
+                                    .unwrap_or_else(|_| div().into_any_element())
+                            }),
                     ),
             )
+    }
+
+    fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let colors = &theme.colors;
+        let mut panel = div()
+            .w(px(300.))
+            .flex()
+            .flex_col()
+            .gap_3()
+            .text_sm()
+            .child(div().font_semibold().child("Appearance"))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(
+                        Button::new("settings-theme-light")
+                            .label("Light")
+                            .ghost()
+                            .when(self.theme_mode == ThemeMode::Light, |button| button.primary())
+                            .on_click(|_, window, app| {
+                                Theme::change(ThemeMode::Light, Some(window), app);
+                            }),
+                    )
+                    .child(
+                        Button::new("settings-theme-dark")
+                            .label("Dark")
+                            .ghost()
+                            .when(self.theme_mode == ThemeMode::Dark, |button| button.primary())
+                            .on_click(|_, window, app| {
+                                Theme::change(ThemeMode::Dark, Some(window), app);
+                            }),
+                    ),
+            );
+
+        if let Some(configuration) = self.configuration.as_ref() {
+            panel = panel
+                .child(div().font_semibold().child("Provider"))
+                .child(div().text_color(colors.muted_foreground).child(format!(
+                    "{} · {}",
+                    if configuration.provider.is_empty() { "not configured" } else { &configuration.provider },
+                    configuration.model
+                )));
+            if !configuration.credential_setup_command.is_empty() {
+                let command = configuration.credential_setup_command.clone();
+                panel = panel.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_xs()
+                                .font_family(theme.mono_font_family.clone())
+                                .text_color(colors.muted_foreground)
+                                .truncate()
+                                .child(command.clone()),
+                        )
+                        .child(
+                            Button::new("copy-credential-command")
+                                .label("Copy")
+                                .ghost()
+                                .on_click(move |_, _, app| {
+                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
+                                }),
+                        ),
+                );
+            }
+        }
+
+        if let Some(info) = self.service_info.as_ref() {
+            panel = panel
+                .child(div().font_semibold().child("Service"))
+                .child(div().text_color(colors.muted_foreground).child(format!(
+                    "vtcode {} · protocol {}.{}",
+                    info.server_version, info.protocol.major, info.protocol.minor
+                )));
+        }
+        panel.into_any_element()
     }
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {

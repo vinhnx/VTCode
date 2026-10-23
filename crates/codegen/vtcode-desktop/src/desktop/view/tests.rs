@@ -263,6 +263,46 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn settings_popover_copies_the_credential_setup_command(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_DISCOVER.to_string(),
+                    result: Some(json!({
+                        "provider": "ollama",
+                        "model": "gpt-oss:20b",
+                        "authenticated": true,
+                        "credentialSetupCommand": "vtcode login ollama",
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::INITIALIZE.to_string(),
+                    result: Some(json!({
+                        "protocol": { "major": 1, "minor": 0 },
+                        "workspace": std::env::temp_dir().display().to_string(),
+                        "serverVersion": "0.180.5",
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        window.click("copy-credential-command", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     use vtcode_exec_events::{
         FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
