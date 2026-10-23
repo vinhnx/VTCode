@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -160,6 +160,40 @@ pub struct ConfigurationSnapshot {
     pub authenticated: bool,
     /// Existing CLI command users can run to configure credentials.
     pub credential_setup_command: String,
+    /// Human label for the execution policy the service runs under.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<String>,
+    /// Context window of the active model, when the catalog knows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+}
+
+/// One selectable model from the service's catalog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    /// Provider identifier the model runs on.
+    pub provider: String,
+    /// Canonical model identifier.
+    pub id: String,
+    /// Human-friendly display name.
+    pub display_name: String,
+    /// Context window in tokens, when the catalog knows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    /// Whether this is the currently active provider/model.
+    #[serde(default)]
+    pub current: bool,
+}
+
+/// Parameters for selecting a provider and model for the next session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSelectParams {
+    /// Provider identifier.
+    pub provider: String,
+    /// Canonical model identifier.
+    pub model: String,
 }
 
 /// A persisted session available for reload.
@@ -222,6 +256,19 @@ pub struct TurnSubmitParams {
     pub session_id: String,
     /// User prompt.
     pub prompt: String,
+    /// Inline text attachments read by the client, applied as content parts.
+    #[serde(default)]
+    pub attachments: Vec<TurnAttachment>,
+}
+
+/// One client-read text attachment for a submitted turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnAttachment {
+    /// Workspace-relative path used for labeling.
+    pub path: String,
+    /// Bounded file content.
+    pub text: String,
 }
 
 /// Accepted turn response.
@@ -378,6 +425,10 @@ pub mod method {
     pub const INTERACTION_RESPOND: &str = "interaction/respond";
     /// Discover active provider/model setup.
     pub const CONFIG_DISCOVER: &str = "config/discover";
+    /// List selectable models from the service's catalog.
+    pub const CONFIG_MODELS: &str = "config/models";
+    /// Select the provider/model used for the next session.
+    pub const CONFIG_SELECT: &str = "config/select";
     /// Shut down the local service after owned tasks finish.
     pub const SHUTDOWN: &str = "desktop/shutdown";
     /// Stream an authoritative runtime event.
@@ -875,6 +926,57 @@ mod tests {
         assert_eq!(value["interactionId"], "i");
         assert_eq!(value["choiceId"], "choice-opaque");
         assert_eq!(method::SESSION_CREATE, "session/create");
+        Ok(())
+    }
+
+    #[test]
+    fn protocol_1_1_additions_are_optional_and_camel_cased() -> Result<(), Box<dyn Error>> {
+        // A 1.0-era snapshot without the additive fields still deserializes.
+        let snapshot: ConfigurationSnapshot = serde_json::from_value(serde_json::json!({
+            "provider": "ollama",
+            "model": "gpt-oss:20b",
+            "authenticated": true,
+            "credentialSetupCommand": "vtcode login ollama",
+        }))?;
+        assert_eq!(snapshot.sandbox, None);
+        assert_eq!(snapshot.context_window, None);
+
+        let value = serde_json::to_value(ConfigurationSnapshot {
+            provider: "ollama".to_string(),
+            model: "gpt-oss:20b".to_string(),
+            authenticated: true,
+            credential_setup_command: "vtcode login ollama".to_string(),
+            sandbox: Some("Ask before protected actions".to_string()),
+            context_window: Some(131_072),
+        })?;
+        assert_eq!(value["sandbox"], "Ask before protected actions");
+        assert_eq!(value["contextWindow"], 131_072);
+
+        let submit: TurnSubmitParams = serde_json::from_value(serde_json::json!({
+            "sessionId": "s",
+            "prompt": "hi",
+        }))?;
+        assert!(submit.attachments.is_empty(), "attachments default for 1.0 clients");
+
+        let value = serde_json::to_value(TurnSubmitParams {
+            session_id: "s".to_string(),
+            prompt: "hi".to_string(),
+            attachments: vec![TurnAttachment { path: "src/a.rs".to_string(), text: "fn a() {}".to_string() }],
+        })?;
+        assert_eq!(value["attachments"][0]["path"], "src/a.rs");
+
+        let model = serde_json::to_value(ModelInfo {
+            provider: "openai".to_string(),
+            id: "gpt-6-sol".to_string(),
+            display_name: "GPT-6 Sol".to_string(),
+            context_window: Some(400_000),
+            current: true,
+        })?;
+        assert_eq!(model["displayName"], "GPT-6 Sol");
+        assert_eq!(model["contextWindow"], 400_000);
+        assert_eq!(model["current"], true);
+        assert_eq!(method::CONFIG_MODELS, "config/models");
+        assert_eq!(method::CONFIG_SELECT, "config/select");
         Ok(())
     }
 

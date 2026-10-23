@@ -8,6 +8,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{Mutex, Notify, mpsc, oneshot};
 use tokio::task::AbortHandle;
 use tokio::time::timeout;
+use vtcode_config::models::{ModelId, model_catalog_entry};
 use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, generate_session_archive_identifier, history_persistence_enabled,
@@ -15,12 +16,12 @@ use vtcode_core::utils::session_archive::{
 };
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
-    InteractionChoice, InteractionKind, InteractionRegistry, InteractionRequest, InteractionStep, Request, RequestId,
-    SessionSummary, ThreadEventNotification,
+    ConfigurationSnapshot, InteractionChoice, InteractionKind, InteractionRegistry, InteractionRequest,
+    InteractionStep, ModelInfo, ModelSelectParams, Request, RequestId, SessionSummary, ThreadEventNotification,
 };
 use vtcode_ui::tui::app::{
-    HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, SubmittedInput, host_interaction_from_command,
-    host_interaction_response, new_host_session,
+    ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, SubmittedInput,
+    host_interaction_from_command, host_interaction_response, new_host_session,
 };
 
 use crate::agent::agents::{ResumeSession, load_resume_session};
@@ -43,6 +44,9 @@ struct ServerState {
     cancel_requested_turn: Option<String>,
     pending_interactions: std::collections::HashMap<String, PendingInteraction>,
     interaction_registry: InteractionRegistry,
+    /// Provider/model override applied to every session started after a
+    /// `config/select`; the session restarts so the runtime rebuilds cleanly.
+    model_override: Option<ModelSelectParams>,
 }
 
 struct RuntimeSession {
@@ -181,23 +185,35 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
 
     match request.method.as_str() {
         method::CONFIG_DISCOVER => {
-            let agent = &context.startup.agent_config;
-            // Tool-capable startup already ran the shared provider-auth preflight.
-            // Reaching this method means required credentials are available, or
-            // the selected provider does not require a credential (for example,
-            // local Ollama).
-            let authenticated = true;
-            let setup = if agent.provider.trim().is_empty() {
-                "vtcode auth".to_string()
-            } else {
-                format!("vtcode login {}", agent.provider)
+            let agent = active_agent_config(context).await;
+            let snapshot = configuration_snapshot(context, &agent);
+            Ok((serde_json::to_value(snapshot)?, false))
+        }
+        method::CONFIG_MODELS => {
+            let (provider, model) = {
+                let agent = active_agent_config(context).await;
+                (agent.provider.clone(), agent.model.clone())
             };
-            let snapshot = protocol::ConfigurationSnapshot {
-                provider: agent.provider.clone(),
-                model: agent.model.clone(),
-                authenticated,
-                credential_setup_command: setup,
-            };
+            let models = catalog_models(&provider, &model);
+            Ok((serde_json::to_value(models)?, false))
+        }
+        method::CONFIG_SELECT => {
+            let params: ModelSelectParams = parse_params(&request.params)?;
+            ensure_no_active_turn(context).await?;
+            if !catalog_models(&params.provider, &params.model)
+                .iter()
+                .any(|model| model.provider == params.provider && model.id == params.model)
+            {
+                bail!("unknown provider/model selection");
+            }
+            shutdown_current_session(context, false).await;
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = None;
+                state.model_override = Some(params);
+            }
+            let agent = active_agent_config(context).await;
+            let snapshot = configuration_snapshot(context, &agent);
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::SESSION_LIST => {
@@ -290,8 +306,20 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 state.active_turn_id = Some(turn_id.clone());
                 input
             };
+            // Client-read attachments become inline text parts, framed with
+            // their paths so the model can cite them.
+            let attachment_parts = params
+                .attachments
+                .iter()
+                .map(|attachment| ContentPart::Text {
+                    text: format!("--- {} ---\n{}", attachment.path, attachment.text),
+                })
+                .collect::<Vec<_>>();
             if input
-                .send(InlineEvent::Submit(SubmittedInput::new(params.prompt, Vec::new())))
+                .send(InlineEvent::Submit(SubmittedInput::new(
+                    params.prompt,
+                    attachment_parts,
+                )))
                 .is_err()
             {
                 let mut state = context.state.lock().await;
@@ -356,7 +384,7 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
         .spawn(move || forward_host_commands(commands, command_sender))
         .context("failed to start desktop host command bridge")?;
     let (event_sender, event_receiver) = protocol::live_event_channel(protocol::DEFAULT_QUEUE_CAPACITY);
-    let config = context.startup.agent_config.clone();
+    let config = active_agent_config(context).await;
     let vt_config = context.startup.config.clone();
     let skip_confirmations = context.startup.skip_confirmations;
     let primary_agent_explicitly_configured = context.startup.primary_agent_explicitly_configured;
@@ -817,6 +845,69 @@ fn workspace_label(workspace: &Path) -> String {
         .and_then(|part| part.to_str())
         .unwrap_or("workspace")
         .to_string()
+}
+
+/// The startup agent config with any `config/select` override applied.
+async fn active_agent_config(context: &ServiceContext) -> vtcode_core::config::types::AgentConfig {
+    let mut config = context.startup.agent_config.clone();
+    if let Some(selection) = context.state.lock().await.model_override.clone() {
+        config.provider = selection.provider;
+        config.model = selection.model;
+    }
+    config
+}
+
+/// Honest label for the execution policy this service runs under, derived
+/// from the same startup switches that produced it.
+fn sandbox_label(startup: &StartupContext) -> &'static str {
+    if startup.full_auto_requested {
+        "Full auto"
+    } else if startup.skip_confirmations {
+        "Auto-approved commands"
+    } else {
+        "Ask before protected actions"
+    }
+}
+
+fn configuration_snapshot(
+    context: &ServiceContext,
+    agent: &vtcode_core::config::types::AgentConfig,
+) -> ConfigurationSnapshot {
+    // Tool-capable startup already ran the shared provider-auth preflight.
+    // Reaching the config surface means required credentials are available,
+    // or the selected provider does not require a credential.
+    let setup = if agent.provider.trim().is_empty() {
+        "vtcode auth".to_string()
+    } else {
+        format!("vtcode login {}", agent.provider)
+    };
+    ConfigurationSnapshot {
+        provider: agent.provider.clone(),
+        model: agent.model.clone(),
+        authenticated: true,
+        credential_setup_command: setup,
+        sandbox: Some(sandbox_label(&context.startup).to_string()),
+        context_window: model_catalog_entry(&agent.provider, &agent.model)
+            .map(|entry| entry.context_window as u64),
+    }
+}
+
+/// The selectable model catalog, mirroring the TUI picker's source.
+fn catalog_models(active_provider: &str, active_model: &str) -> Vec<ModelInfo> {
+    ModelId::all_models()
+        .into_iter()
+        .map(|model| {
+            let provider = model.provider().as_ref().to_string();
+            let id = model.as_str().to_string();
+            ModelInfo {
+                context_window: model_catalog_entry(&provider, &id).map(|entry| entry.context_window as u64),
+                current: provider == active_provider && id == active_model,
+                display_name: model.display_name().to_string(),
+                provider,
+                id,
+            }
+        })
+        .collect()
 }
 
 fn sanitize_public_error(message: &str) -> String {
