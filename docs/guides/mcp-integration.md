@@ -10,6 +10,10 @@ by the MCP community.
 
 > **Developer Note:** If you're implementing MCP module features or integrating with the core MCP APIs, see the
 > [MCP Integration Guide](../mcp/MCP_INTEGRATION_GUIDE.md) for API reference, code patterns, and implementation status.
+>
+> **Maintainer Note:** If you maintain an external MCP server or client, see the
+> [MCP interop guide](./mcp-interop.md) for what VT Code implements on each side of the protocol and how to test
+> against it.
 
 ## MCP Specification Map
 

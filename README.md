@@ -233,6 +233,7 @@ none are required for the quick start.
 ### Extend and integrate
 
 - [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), and [MCP](./docs/guides/mcp-integration.md)
+- [MCP interop for client and server maintainers](./docs/guides/mcp-interop.md)
 - [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [WebMCP deployment](./docs/reference/webmcp.md)
 - [Companion (experimental)](./docs/user-guide/vtcode-companion.md) and [Memcode](./docs/guides/memcode-mcp.md)
 
@@ -283,6 +284,10 @@ Release binaries and notes: [GitHub releases](https://github.com/vinhnx/VTCode/r
 Contributions are welcome: code, docs, [evals](./docs/guides/eval.md), and bug reports (include `vtcode trajectory`
 output when possible). Before a PR, read the [contribution guide](./docs/CONTRIBUTING.md) for Conventional Commits,
 the local gates, and diff expectations.
+
+Maintainers of other MCP servers or MCP clients: VT Code interops on both sides of the protocol (client and server
+surfaces). See the [MCP interop guide](./docs/guides/mcp-interop.md) for what is implemented, how to register your
+server, how to point your client at VT Code's read-only `search`/`fetch` surface, and how to propose interop fixes.
 
 ## Security
 

@@ -489,6 +489,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about VT Code Companion submission preparation?", "How does Can this be
     submitted now? work?", "How does Practical GitHub and GitHub Pages preparation work?"
 
+- **File**: `docs/development/desktop-workspace.md`
+  - **Content**: VT Code Desktop Workspace
+  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Local service protocol, Scope
+  - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does Build and launch work?", "How
+    does Runtime and session behavior work?"
+
 - **File**: `docs/development/EXECUTION_POLICY.md`
   - **Content**: VT Code Execution Policy
   - **Topics**: Summary, Auto-Allowed Commands, Tool Policies, Key Safety Features, Dangerous Operations (Blocked)
@@ -757,6 +763,13 @@ below based on the topic area.
   - **Topics**: Overview, Architecture, Configuration, Transport Types, Security
   - **User Questions**: "What can you tell me about MCP Integration Guide for VT Code?", "How does Overview work?", "How
     does Architecture work?"
+
+- **File**: `docs/guides/mcp-interop.md`
+  - **Content**: MCP Interop for Client and Server Maintainers
+  - **Topics**: What VT Code implements, Server maintainers: register your MCP server in VT Code, Client maintainers:
+    connect your MCP client to VT Code, Interop conventions VT Code follows, Where to look in the source
+  - **User Questions**: "What can you tell me about MCP Interop for Client and Server Maintainers?", "How does What VT
+    Code implements work?", "How does Server maintainers: register your MCP server in VT Code work?"
 
 - **File**: `docs/guides/memcode-mcp.md`
   - **Content**: Memcode MCP
