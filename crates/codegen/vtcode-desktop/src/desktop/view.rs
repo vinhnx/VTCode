@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::diff::{Diff, DiffState};
 use gpui_kit::component::input::{Enter, Textarea, TextareaState};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -20,6 +21,7 @@ use vtcode_desktop_protocol::{
 };
 
 use super::files::{self, FileEntry, FilePreview};
+use super::inspector::{self, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
@@ -81,6 +83,11 @@ struct DesktopView {
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
     file_preview: Option<FilePreview>,
+    inspector_open: bool,
+    inspector_tab: InspectorTab,
+    changes: ChangesProjection,
+    selected_change: Option<String>,
+    change_viewer: Option<Entity<DiffState>>,
 }
 
 impl DesktopView {
@@ -113,6 +120,11 @@ impl DesktopView {
             theme_mode,
             files: Vec::new(),
             file_preview: None,
+            inspector_open: true,
+            inspector_tab: InspectorTab::default(),
+            changes: ChangesProjection::default(),
+            selected_change: None,
+            change_viewer: None,
         }
     }
 
@@ -200,6 +212,9 @@ impl DesktopView {
         self.status = "Starting local VT Code service…".to_string();
         self.files = files::scan_workspace(&workspace);
         self.file_preview = None;
+        self.changes = ChangesProjection::default();
+        self.selected_change = None;
+        self.change_viewer = None;
 
         match launch_backend(workspace, self.event_tx.clone()) {
             Ok(backend) => {
@@ -723,6 +738,21 @@ impl DesktopView {
         let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".to_string(), card.patch.clone());
         item.diff = Some(card);
         self.transcript.upsert(item);
+        // Change-sets are rare; rebuild the inspector projection eagerly so
+        // renders never parse patches.
+        self.changes = ChangesProjection::rebuild(&self.transcript);
+    }
+
+    /// Open one changed file in the inspector's syntax-highlighted diff view.
+    fn select_change(&mut self, path: String, cx: &mut Context<Self>) {
+        let Some(file) = self.changes.select(&path) else {
+            return;
+        };
+        self.selected_change = Some(path);
+        self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx)));
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Changes;
+        cx.notify();
     }
 
     fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
@@ -740,6 +770,9 @@ impl DesktopView {
 
     fn load_history(&mut self, messages: Vec<SessionHistoryMessage>) {
         self.transcript.clear();
+        self.changes = ChangesProjection::default();
+        self.selected_change = None;
+        self.change_viewer = None;
         for (index, message) in messages.into_iter().enumerate() {
             let title = match message.role.as_str() {
                 "user" => "You".to_string(),
@@ -849,50 +882,6 @@ impl DesktopView {
                 })),
         );
 
-        sidebar = sidebar.child(
-            div()
-                .mt_2()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(div().text_sm().font_semibold().child("Workspace files"))
-                .child(
-                    Button::new("refresh-files")
-                        .label("Refresh")
-                        .ghost()
-                        .disabled(self.workspace.is_none())
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
-                ),
-        );
-        sidebar = sidebar.child(
-            div()
-                .id("file-list")
-                .flex_1()
-                .min_h_0()
-                .w_full()
-                .overflow_y_scroll()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .children(self.files.iter().enumerate().map(|(index, entry)| {
-                    let rel_path = entry.rel_path.clone();
-                    let indent = entry.depth;
-                    let is_dir = entry.is_dir;
-                    let label = if is_dir {
-                        format!("{rel_path}/")
-                    } else {
-                        rel_path.clone()
-                    };
-                    div().w_full().pl(px(12. * indent as f32)).child(
-                        Button::new(format!("file-{index}"))
-                            .label(label)
-                            .ghost()
-                            .disabled(is_dir)
-                            .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
-                    )
-                })),
-        );
-
         sidebar.child(
             div()
                 .mt_auto()
@@ -941,6 +930,20 @@ impl DesktopView {
                     .gap_2()
                     .child(badge(provider.to_string(), theme.colors.accent, theme.colors.accent_foreground))
                     .child(badge(model.to_string(), theme.colors.secondary, theme.colors.secondary_foreground))
+                    .child(
+                        Button::new("toggle-inspector")
+                            .label(if self.inspector_open {
+                                "Hide panel"
+                            } else {
+                                "Show panel"
+                            })
+                            .ghost()
+                            .disabled(self.workspace.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.inspector_open = !this.inspector_open;
+                                cx.notify();
+                            })),
+                    )
                     .child(
                         Button::new("toggle-theme")
                             .label(if self.theme_mode == ThemeMode::Light {
@@ -1134,6 +1137,272 @@ impl DesktopView {
                         )
                     }),
             )
+    }
+
+    /// Right-hand context inspector: derived Changes, Files, and Activity
+    /// views over the same transcript the conversation renders.
+    fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let colors = theme.colors;
+        let panel = div()
+            .w(px(320.))
+            .h_full()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .border_l_1()
+            .border_color(colors.border)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_2()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(colors.border)
+                    .children(InspectorTab::ALL.map(|tab| {
+                        let active = self.inspector_tab == tab;
+                        Button::new(tab.id())
+                            .label(tab.label())
+                            .ghost()
+                            .when(active, |button| button.primary())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.inspector_tab = tab;
+                                cx.notify();
+                            }))
+                    })),
+            );
+
+        let content = match self.inspector_tab {
+            InspectorTab::Changes => self.render_changes_tab(&colors, cx),
+            InspectorTab::Files => self.render_inspector_files_tab(cx),
+            InspectorTab::Activity => self.render_activity_tab(&colors),
+        };
+        panel.child(content).into_any_element()
+    }
+
+    fn render_changes_tab(
+        &mut self,
+        colors: &gpui_kit::component::theme::ThemeColor,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
+
+        if self.changes.is_empty() {
+            return body
+                .p_3()
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child("File changes from this session appear here.")
+                .into_any_element();
+        }
+
+        let (additions, deletions) = self.changes.totals();
+        body = body.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .px_3()
+                .py_2()
+                .text_xs()
+                .text_color(colors.muted_foreground)
+                .child(format!("{} files", self.changes.entries().len()))
+                .child(format!("+{additions} −{deletions}")),
+        );
+
+        body = body.child(
+            div()
+                .id("change-list")
+                .w_full()
+                .max_h(px(220.))
+                .min_h_0()
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .px_2()
+                .pb_2()
+                .children(self.changes.entries().iter().enumerate().map(|(index, entry)| {
+                    let path = entry.path.clone();
+                    let selected = self.selected_change.as_deref() == Some(entry.path.as_str());
+                    let kind_label = match entry.kind {
+                        DiffFileKind::Add => ("A", colors.accent),
+                        DiffFileKind::Delete => ("D", colors.danger),
+                        DiffFileKind::Update => ("M", colors.muted_foreground),
+                    };
+                    div()
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .when(selected, |row| row.bg(colors.secondary))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_semibold()
+                                .w(px(14.))
+                                .text_color(kind_label.1)
+                                .child(kind_label.0),
+                        )
+                        .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted_foreground)
+                                .child(format!("+{} −{}", entry.additions, entry.deletions)),
+                        )
+                        .child(
+                            Button::new(format!("change-row-{index}"))
+                                .label("Open")
+                                .ghost()
+                                .on_click(cx.listener(move |this, _, _, cx| this.select_change(path.clone(), cx))),
+                        )
+                })),
+        );
+
+        // Full syntax-highlighted diff of the selected file.
+        if let (Some(path), Some(viewer)) = (self.selected_change.clone(), self.change_viewer.clone()) {
+            let patch = self.changes.patch_for(&self.transcript, &path);
+            let rel_path = path.clone();
+            let mut viewer_panel = div()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .border_t_1()
+                .border_color(colors.border);
+            let mut header = div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px_3()
+                .py_2()
+                .child(div().flex_1().min_w_0().truncate().text_sm().font_medium().child(path));
+            if let Some(patch) = patch {
+                header = header.child(Button::new("copy-change-patch").label("Copy patch").ghost().on_click(
+                    move |_, _, app| app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string())),
+                ));
+            }
+            header = header.child(
+                Button::new("open-change-file")
+                    .label("Open file")
+                    .ghost()
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
+            );
+            viewer_panel = viewer_panel.child(header).child(
+                div()
+                    .id("change-diff-view")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .child(Diff::new(&viewer).line_number(true)),
+            );
+            body = body.child(viewer_panel);
+        }
+        body.into_any_element()
+    }
+
+    fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
+        body = body.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .px_3()
+                .py_2()
+                .child(div().text_sm().font_semibold().child("Workspace files"))
+                .child(
+                    Button::new("refresh-files")
+                        .label("Refresh")
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
+                ),
+        );
+        body = body.child(
+            div()
+                .id("file-list")
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .px_2()
+                .children(self.files.iter().enumerate().map(|(index, entry)| {
+                    let rel_path = entry.rel_path.clone();
+                    let indent = entry.depth;
+                    let is_dir = entry.is_dir;
+                    let label = if is_dir {
+                        format!("{rel_path}/")
+                    } else {
+                        rel_path.clone()
+                    };
+                    div().w_full().pl(px(12. * indent as f32)).child(
+                        Button::new(format!("file-{index}"))
+                            .label(label)
+                            .ghost()
+                            .disabled(is_dir)
+                            .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
+                    )
+                })),
+        );
+        body.into_any_element()
+    }
+
+    fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
+        let rows = inspector::activity_rows(&self.transcript);
+        let mut body = div()
+            .id("activity-list")
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3();
+        if rows.is_empty() {
+            return body
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child("Tool and command activity appears here.")
+                .into_any_element();
+        }
+        for row in rows {
+            let (dot_color, dot) = if row.status == "failed" {
+                (colors.danger, "✕")
+            } else if row.status == "running" || row.status == "in progress" {
+                (colors.accent, "●")
+            } else {
+                (colors.muted_foreground, "✓")
+            };
+            body = body.child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap_2()
+                    .child(div().text_xs().w(px(14.)).text_color(dot_color).child(dot))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(div().text_sm().truncate().child(row.title.clone()))
+                            .child(div().text_xs().text_color(colors.muted_foreground).child(row.status.clone())),
+                    ),
+            );
+        }
+        body.into_any_element()
     }
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1609,6 +1878,7 @@ impl DesktopView {
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let inspector_visible = self.inspector_open && self.workspace.is_some();
         let mut body = div()
             .size_full()
             .flex()
@@ -1625,7 +1895,8 @@ impl Render for DesktopView {
                     .child(self.render_toolbar(cx))
                     .child(self.render_transcript(cx))
                     .child(self.render_composer(window, cx)),
-            );
+            )
+            .when(inspector_visible, |body| body.child(self.render_inspector(cx)));
         if self.workspace.is_none() {
             body = body.child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(

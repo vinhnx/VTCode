@@ -81,6 +81,16 @@ impl Transcript {
         self.items.get(index)
     }
 
+    /// Rows in chronological order.
+    pub fn items(&self) -> impl DoubleEndedIterator<Item = &TranscriptItem> {
+        self.items.iter()
+    }
+
+    /// Rows newest first, for reverse projections such as the inspector.
+    pub fn items_newest_first(&self) -> impl Iterator<Item = &TranscriptItem> {
+        self.items.iter().rev()
+    }
+
     pub fn list_state(&self) -> ListState {
         self.list.clone()
     }

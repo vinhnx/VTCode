@@ -323,12 +323,65 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
                 .expect("README listed")
         });
         window.render_frame(cx);
+        // The file browser lives in the inspector's Files tab.
+        window.click("inspector-tab-files", cx);
+        window.render_frame(cx);
         window.click(format!("file-{readme_index}"), cx);
         window.render_frame(cx);
         window.click("copy-preview", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("# Notes\n\nhello from the workspace"));
         window.click("close-preview", cx);
         assert!(view.read(cx).file_preview.is_none(), "close dismisses the preview");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{
+        FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
+        ThreadItem, ThreadItemDetails,
+    };
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.workspace = Some(std::env::temp_dir());
+            let patch = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,2 +1,3 @@\n ctx\n-gone\n+here\n+added\n";
+            view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
+                session_id: "session-f".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                    item: ThreadItem {
+                        context: None,
+                        id: "change-9".to_string(),
+                        details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+                            diff_incomplete: Some(false),
+                            changes: vec![FileUpdateChange {
+                                path: "src/app.rs".to_string(),
+                                kind: PatchChangeKind::Update,
+                            }],
+                            status: PatchApplyStatus::Completed,
+                            unified_diff: Some(patch.to_string()),
+                            additions: Some(2),
+                            deletions: Some(1),
+                        })),
+                    },
+                })),
+            });
+            assert_eq!(view.changes.entries().len(), 1);
+            assert_eq!(view.changes.entries()[0].path, "src/app.rs");
+            assert_eq!(view.changes.totals(), (2, 1));
+        });
+        window.render_frame(cx);
+        window.click("change-row-0", cx);
+        {
+            let view = view.read(cx);
+            assert_eq!(view.selected_change.as_deref(), Some("src/app.rs"));
+            assert!(view.change_viewer.is_some(), "selecting a file builds the diff viewer");
+        }
+        window.click("copy-change-patch", cx);
+        assert!(cx.read_from_clipboard().unwrap().text().unwrap().contains("+here"));
     })
     .unwrap();
 }
