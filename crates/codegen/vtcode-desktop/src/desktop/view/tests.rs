@@ -129,6 +129,49 @@ fn send_button_submits_exact_draft_and_clears_it_after_enqueue(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
+fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session-c".to_string());
+            view.composer
+                .update(cx, |state, cx| {
+                    state.set_value("", window, cx);
+                    state.focus(window, cx);
+                });
+        });
+        window.render_frame(cx);
+        // Type the draft so the caret sits after the text, like real input.
+        window.input("Keyboard first", cx);
+
+        // Shift+Enter inserts a newline and never submits.
+        window.press("shift-enter", cx);
+        {
+            let view = view.read(cx);
+            assert!(!view.running, "shift-enter must not submit the draft");
+            assert_eq!(view.composer.read(cx).value(), "Keyboard first\n");
+        }
+
+        // Plain Enter submits through the propagated action.
+        window.press("enter", cx);
+        {
+            let view = view.read(cx);
+            assert!(view.running, "enter must submit the draft");
+            assert_eq!(view.composer.read(cx).value(), "");
+            assert_eq!(view.transcript.get(0).unwrap().text, "Keyboard first\n");
+        }
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected turn request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    assert_eq!(params, json!({ "sessionId": "session-c", "prompt": "Keyboard first\n" }));
+}
+
+#[gpui_kit::test]
 fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let list = cx.update(|cx| {

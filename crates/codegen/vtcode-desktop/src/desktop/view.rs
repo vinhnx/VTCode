@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::input::{Textarea, TextareaState};
+use gpui_kit::component::input::{Enter, Textarea, TextareaState};
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::prelude::*;
 use gpui_kit::{
@@ -102,7 +102,7 @@ impl DesktopView {
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
-            composer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 7)),
+            composer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 7).submit_on_enter(true)),
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
         }
@@ -922,12 +922,22 @@ impl DesktopView {
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let mut panel = div().w_full().flex().flex_col().gap_2().px_8().pb_5().pt_2().child(
-            div().w_full().border_1().border_color(colors.border).rounded_md().p_2().child(
-                Textarea::new(&self.composer)
-                    .accessibility_id("composer")
-                    .aria_label("Message to VT Code")
-                    .h(px(100.)),
-            ),
+            div()
+                .w_full()
+                .border_1()
+                .border_color(colors.border)
+                .rounded_md()
+                .p_2()
+                // The composer submits on plain Enter, so the textarea
+                // propagates the unconsumed `Enter` action up to this wrapper
+                // instead of inserting a newline; Shift+Enter stays a newline.
+                .on_action(cx.listener(|view, _: &Enter, window, cx| view.submit_prompt(window, cx)))
+                .child(
+                    Textarea::new(&self.composer)
+                        .accessibility_id("composer")
+                        .aria_label("Message to VT Code")
+                        .h(px(100.)),
+                ),
         );
 
         if let Some(error) = self.error.as_ref() {
@@ -942,7 +952,7 @@ impl DesktopView {
             div()
                 .text_xs()
                 .text_color(colors.muted_foreground)
-                .child("Enter a task description. Tool access follows your VT Code security settings."),
+                .child("Enter to send, Shift+Enter for a new line. Tool access follows your VT Code security settings."),
         );
         if self.running {
             buttons = buttons.child(
