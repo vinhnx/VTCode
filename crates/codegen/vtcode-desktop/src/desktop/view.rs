@@ -117,6 +117,9 @@ struct DesktopView {
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
+    models: Vec<protocol::ModelInfo>,
+    attachments: Vec<protocol::TurnAttachment>,
+    attachments_picker_open: bool,
 }
 
 impl DesktopView {
@@ -157,6 +160,9 @@ impl DesktopView {
             git_branch: None,
             palette: None,
             palette_groups: Vec::new(),
+            models: Vec::new(),
+            attachments: Vec::new(),
+            attachments_picker_open: false,
         }
     }
 
@@ -248,6 +254,9 @@ impl DesktopView {
         self.changes = ChangesProjection::default();
         self.selected_change = None;
         self.change_viewer = None;
+        self.models.clear();
+        self.attachments.clear();
+        self.attachments_picker_open = false;
 
         match launch_backend(workspace, self.event_tx.clone()) {
             Ok(backend) => {
@@ -262,6 +271,7 @@ impl DesktopView {
                 };
                 let mut sent = send_request(&backend.commands, protocol::method::INITIALIZE, json!(initialize));
                 sent &= send_request(&backend.commands, protocol::method::CONFIG_DISCOVER, json!({}));
+                sent &= send_request(&backend.commands, protocol::method::CONFIG_MODELS, json!({}));
                 sent &= send_request(&backend.commands, protocol::method::SESSION_LIST, json!({}));
                 self.backend = Some(backend);
                 if !sent {
@@ -305,6 +315,93 @@ impl DesktopView {
         self.clear_error();
         if !self.request(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id })) {
             self.error = Some("The local service request queue is full. Try again.".to_string());
+        }
+        cx.notify();
+    }
+
+    /// Pick workspace text files to attach to the next prompt.
+    fn attach_files(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        const MAX_ATTACHMENTS: usize = 5;
+
+        if self.attachments_picker_open || self.workspace.is_none() {
+            return;
+        }
+        self.attachments_picker_open = true;
+        let Some(workspace) = self.workspace.clone() else {
+            self.attachments_picker_open = false;
+            return;
+        };
+        let picked = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: Some("Attach files".into()),
+        });
+        cx.notify();
+        cx.spawn(async move |view, cx| {
+            let result = picked.await;
+            let _updated = view.update(cx, |view, cx| {
+                view.attachments_picker_open = false;
+                let paths = match result {
+                    Ok(Ok(Some(paths))) => paths,
+                    Ok(Ok(None)) => return,
+                    Ok(Err(error)) => {
+                        view.error = Some(format!("Unable to open the file picker: {error}"));
+                        cx.notify();
+                        return;
+                    }
+                    Err(_) => return,
+                };
+                for path in paths {
+                    if view.attachments.len() >= MAX_ATTACHMENTS {
+                        view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
+                        break;
+                    }
+                    let Some(relative) = path
+                        .strip_prefix(&workspace)
+                        .ok()
+                        .map(|relative| relative.display().to_string().replace('\\', "/"))
+                    else {
+                        view.error = Some("Attachments must live inside the workspace.".to_string());
+                        continue;
+                    };
+                    if view.attachments.iter().any(|existing| existing.path == relative) {
+                        continue;
+                    }
+                    match files::read_preview(&workspace, &relative) {
+                        Some(preview) => view.attachments.push(protocol::TurnAttachment {
+                            path: relative,
+                            text: preview.text,
+                        }),
+                        None => {
+                            view.error = Some(format!(
+                                "“{relative}” is missing, binary, or too large to attach."
+                            ));
+                        }
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn remove_attachment(&mut self, path: String, cx: &mut Context<Self>) {
+        self.attachments.retain(|attachment| attachment.path != path);
+        cx.notify();
+    }
+
+    /// Switch the service to another catalog model. The service restarts its
+    /// session; the next prompt starts a fresh one under the new model.
+    fn select_model(&mut self, provider: String, model: String, cx: &mut Context<Self>) {
+        if self.running {
+            return;
+        }
+        self.clear_error();
+        if !self.request(protocol::method::CONFIG_SELECT, json!({ "provider": provider, "model": model })) {
+            self.error = Some("The local service request queue is full. Try again.".to_string());
+        } else {
+            self.status = "Switching model…".to_string();
         }
         cx.notify();
     }
@@ -445,8 +542,13 @@ impl DesktopView {
             return;
         }
         self.clear_error();
-        let sent = self.request(protocol::method::TURN_SUBMIT, json!({ "sessionId": session_id, "prompt": prompt }));
+        let attachments = std::mem::take(&mut self.attachments);
+        let sent = self.request(
+            protocol::method::TURN_SUBMIT,
+            json!({ "sessionId": session_id, "prompt": prompt, "attachments": attachments }),
+        );
         if !sent {
+            self.attachments = attachments;
             self.error = Some("The local service request queue is full. Try again.".to_string());
         } else {
             // The sidebar shows the archive title once the session is listed
@@ -458,11 +560,17 @@ impl DesktopView {
             {
                 entry.title = Some(session_title_from_prompt(&prompt));
             }
+            let echo = if attachments.is_empty() {
+                prompt
+            } else {
+                let paths = attachments.iter().map(|attachment| attachment.path.as_str()).collect::<Vec<_>>();
+                format!("{prompt}\n\nAttached: {}", paths.join(", "))
+            };
             self.transcript.push(TranscriptItem::new(
                 format!("desktop-user-{}", uuid_like_id()),
                 "user".to_string(),
                 "You".to_string(),
-                prompt,
+                echo,
             ));
             self.transcript.follow_latest();
             self.running = true;
@@ -653,6 +761,26 @@ impl DesktopView {
                                 "No provider credentials are configured. In Terminal, run `vtcode auth` or `vtcode login <provider>`, then restart the desktop app.".to_string(),
                             );
                         }
+                    }
+                    protocol::method::CONFIG_MODELS => {
+                        self.models = serde_json::from_value::<Vec<protocol::ModelInfo>>(result).unwrap_or_default();
+                    }
+                    protocol::method::CONFIG_SELECT => {
+                        // The service restarted with the new provider/model and
+                        // no selected session; the next prompt starts a fresh
+                        // session under it.
+                        self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
+                        self.selected_session_id = None;
+                        self.transcript.clear();
+                        self.interaction = None;
+                        self.models.clear();
+                        let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
+                        let model = self
+                            .configuration
+                            .as_ref()
+                            .map(|configuration| configuration.model.clone())
+                            .unwrap_or_default();
+                        self.status = format!("Switched to {model}. Start a new session to use it.");
                     }
                     protocol::method::SESSION_LIST => {
                         let mut refreshed = serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
@@ -1828,7 +1956,39 @@ impl DesktopView {
 
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let mut panel = div().w_full().flex().flex_col().gap_2().px_8().pb_5().pt_2().child(
+        let mut panel = div().w_full().flex().flex_col().gap_2().px_8().pb_5().pt_2();
+        if !self.attachments.is_empty() {
+            panel = panel.child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .children(self.attachments.iter().enumerate().map(|(index, attachment)| {
+                        let path = attachment.path.clone();
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .px_2()
+                            .py_1()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(colors.border)
+                            .text_xs()
+                            .child(attachment.path.clone())
+                            .child(
+                                Button::new(format!("remove-attachment-{index}"))
+                                    .label("×")
+                                    .ghost()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.remove_attachment(path.clone(), cx)
+                                    })),
+                            )
+                    })),
+            );
+        }
+        panel = panel.child(
             div()
                 .w_full()
                 .border_1()
@@ -1855,10 +2015,40 @@ impl DesktopView {
         }
 
         let can_submit = self.selected_session_id.is_some() && !self.running && self.interaction.is_none();
+        let current_model = self
+            .configuration
+            .as_ref()
+            .map(|configuration| configuration.model.clone())
+            .unwrap_or_else(|| "Model".to_string());
+        let model_weak = cx.entity().downgrade();
         let mut buttons = div().w_full().flex().items_center().justify_between().child(
-            div().text_xs().text_color(colors.muted_foreground).child(
-                "Enter to send, Shift+Enter for a new line. Tool access follows your VT Code security settings.",
-            ),
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    Button::new("attach-files")
+                        .label("+ Attach")
+                        .ghost()
+                        .disabled(self.workspace.is_none() || self.attachments_picker_open)
+                        .on_click(cx.listener(|this, _, window, cx| this.attach_files(window, cx))),
+                )
+                .child(
+                    Popover::new("model-popover")
+                        .anchor(gpui_kit::Anchor::BottomLeft)
+                        .trigger(Button::new("pick-model").label(format!("{current_model} ▾")).ghost())
+                        .content(move |_, _, cx| {
+                            model_weak
+                                .update(cx, |view, cx| view.render_model_list(cx))
+                                .unwrap_or_else(|_| div().into_any_element())
+                        }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("Enter to send · Shift+Enter for a new line"),
+                ),
         );
         if self.running {
             buttons = buttons.child(
@@ -1935,6 +2125,48 @@ impl DesktopView {
                     .child(div().truncate().child(provider_model))
                     .child(div().text_color(agent.1).child(agent.0)),
             )
+    }
+
+    /// Selectable model catalog for the composer's Model dropdown.
+    fn render_model_list(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        if self.models.is_empty() {
+            return div()
+                .w(px(320.))
+                .max_h(px(360.))
+                .p_3()
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child("Model catalog unavailable.")
+                .into_any_element();
+        }
+        div()
+            .id("model-list")
+            .w(px(340.))
+            .max_h(px(360.))
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .p_1()
+            .children(self.models.iter().enumerate().map(|(index, model)| {
+                let provider = model.provider.clone();
+                let model_id = model.id.clone();
+                let label = if model.provider.is_empty() {
+                    model.display_name.clone()
+                } else {
+                    format!("{} · {}", model.provider, model.display_name)
+                };
+                Button::new(format!("model-{index}"))
+                    .label(label)
+                    .ghost()
+                    .w_full()
+                    .when(model.current, |button| button.primary())
+                    .disabled(self.running)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select_model(provider.clone(), model_id.clone(), cx);
+                    }))
+            }))
+            .into_any_element()
     }
 
     fn render_interaction(
