@@ -172,6 +172,97 @@ fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.sessions.insert(
+                0,
+                vtcode_desktop_protocol::SessionSummary {
+                    session_id: "session-e".to_string(),
+                    title: None,
+                    workspace: std::env::temp_dir().display().to_string(),
+                    completed: false,
+                    resumable: true,
+                },
+            );
+            view.selected_session_id = Some("session-e".to_string());
+            view.composer.update(cx, |state, cx| {
+                state.set_value("Fix the login timeout\n\nand add a regression test", window, cx);
+            });
+        });
+        window.render_frame(cx);
+        window.click("send-prompt", cx);
+        {
+            let view = view.read(cx);
+            assert_eq!(
+                view.sessions[0].title.as_deref(),
+                Some("Fix the login timeout"),
+                "sidebar entry is named from the first prompt"
+            );
+        }
+
+        // A later archive refresh without a persisted title keeps the local one.
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_LIST.to_string(),
+                    result: Some(serde_json::json!([{
+                        "sessionId": "session-e",
+                        "title": None::<String>,
+                        "workspace": std::env::temp_dir().display().to_string(),
+                        "completed": false,
+                        "resumable": true,
+                    }])),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.sessions[0].title.as_deref(), Some("Fix the login timeout"));
+        });
+
+        // Close is gated on the turn ending, like the button state.
+        view.update(cx, |view, _| {
+            view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
+                session_id: "session-e".to_string(),
+                turn_id: Some("turn-9".to_string()),
+                event: vtcode_exec_events::VersionedThreadEvent::new(
+                    vtcode_exec_events::ThreadEvent::TurnCompleted(vtcode_exec_events::TurnCompletedEvent {
+                        completed_at: None,
+                        usage: vtcode_exec_events::Usage {
+                            input_tokens: 0,
+                            cached_input_tokens: 0,
+                            cache_creation_tokens: 0,
+                            output_tokens: 0,
+                        },
+                        in_progress_exec_sessions: Vec::new(),
+                    }),
+                ),
+            });
+            assert!(!view.running, "turn completion re-enables session controls");
+        });
+
+        window.click("close-session", cx);
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
+        panic!("expected turn request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
+        panic!("expected session list refresh");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected close request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+    assert_eq!(params, json!({ "sessionId": "session-e" }));
+}
+
+#[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     use vtcode_exec_events::{
         FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,

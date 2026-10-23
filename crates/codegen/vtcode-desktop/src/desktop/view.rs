@@ -236,6 +236,20 @@ impl DesktopView {
         cx.notify();
     }
 
+    fn close_session(&mut self, cx: &mut Context<Self>) {
+        if self.running || self.backend.is_none() {
+            return;
+        }
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+        self.clear_error();
+        if !self.request(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id })) {
+            self.error = Some("The local service request queue is full. Try again.".to_string());
+        }
+        cx.notify();
+    }
+
     fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.running || self.interaction.is_some() || self.backend.is_none() {
             return;
@@ -253,6 +267,13 @@ impl DesktopView {
         if !sent {
             self.error = Some("The local service request queue is full. Try again.".to_string());
         } else {
+            // The sidebar shows the archive title once the session is listed
+            // again; until then name it after this first prompt.
+            if let Some(entry) = self.sessions.iter_mut().find(|session| {
+                session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty)
+            }) {
+                entry.title = Some(session_title_from_prompt(&prompt));
+            }
             self.transcript.push(TranscriptItem::new(
                 format!("desktop-user-{}", uuid_like_id()),
                 "user".to_string(),
@@ -449,7 +470,20 @@ impl DesktopView {
                         }
                     }
                     protocol::method::SESSION_LIST => {
-                        self.sessions = serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
+                        let mut refreshed =
+                            serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
+                        // Keep a locally derived title when the archive has
+                        // not persisted its own preview yet.
+                        for session in &mut refreshed {
+                            if session.title.as_deref().is_none_or(str::is_empty) {
+                                session.title = self
+                                    .sessions
+                                    .iter()
+                                    .find(|existing| existing.session_id == session.session_id)
+                                    .and_then(|existing| existing.title.clone());
+                            }
+                        }
+                        self.sessions = refreshed;
                     }
                     protocol::method::SESSION_CREATE => {
                         if let Ok(session) = serde_json::from_value::<SessionSummary>(result) {
@@ -457,6 +491,12 @@ impl DesktopView {
                             self.sessions.insert(0, session);
                             self.transcript.clear();
                         }
+                    }
+                    protocol::method::SESSION_CLOSE => {
+                        self.selected_session_id = None;
+                        self.transcript.clear();
+                        self.interaction = None;
+                        self.status = "Session closed. Start a new session to continue.".to_string();
                     }
                     protocol::method::SESSION_LOAD => {
                         if let Ok(loaded) = serde_json::from_value::<SessionLoadResult>(result) {
@@ -545,6 +585,7 @@ impl DesktopView {
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
                 self.status = "Completed".to_string();
+                self.refresh_sessions_after_turn();
             }
             ThreadEvent::TurnFailed(event) => {
                 self.finish_unverified_turn(&event.message);
@@ -579,12 +620,21 @@ impl DesktopView {
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.status = "Turn ended without verified completion".to_string();
+        self.refresh_sessions_after_turn();
         self.transcript.push(TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
             "Run status".to_string(),
             message.to_string(),
         ));
+    }
+
+    /// Reload the session list once a turn ends so archive-derived titles
+    /// and completion flags replace the local placeholders.
+    fn refresh_sessions_after_turn(&mut self) {
+        if self.backend.is_some() {
+            let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+        }
     }
 
     fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
@@ -719,11 +769,25 @@ impl DesktopView {
         sidebar = sidebar.child(div().text_sm().text_color(theme.colors.muted_foreground).child(workspace));
 
         sidebar = sidebar.child(
-            Button::new("new-session")
-                .label("New session")
-                .primary()
-                .disabled(self.workspace.is_none() || self.running || self.backend.is_none())
-                .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
+            div()
+                .flex()
+                .w_full()
+                .gap_2()
+                .child(
+                    Button::new("new-session")
+                        .label("New session")
+                        .primary()
+                        .flex_1()
+                        .disabled(self.workspace.is_none() || self.running || self.backend.is_none())
+                        .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
+                )
+                .child(
+                    Button::new("close-session")
+                        .label("Close")
+                        .ghost()
+                        .disabled(self.selected_session_id.is_none() || self.running || self.backend.is_none())
+                        .on_click(cx.listener(|this, _, _, cx| this.close_session(cx))),
+                ),
         );
 
         sidebar = sidebar.child(div().mt_2().text_sm().font_semibold().child("Recent sessions"));
@@ -1351,6 +1415,19 @@ fn workspace_picker_options() -> PathPromptOptions {
         multiple: false,
         prompt: Some("Choose workspace".into()),
     }
+}
+
+/// Short single-line sidebar title derived from a session's first prompt,
+/// mirroring the archive's first-prompt preview.
+fn session_title_from_prompt(prompt: &str) -> String {
+    const MAX_TITLE_CHARS: usize = 72;
+    let first_line = prompt.lines().find(|line| !line.trim().is_empty()).unwrap_or_default();
+    let trimmed = first_line.trim();
+    let mut title: String = trimmed.chars().take(MAX_TITLE_CHARS).collect();
+    if trimmed.chars().count() > MAX_TITLE_CHARS {
+        title.push('…');
+    }
+    title
 }
 
 fn uuid_like_id() -> String {
