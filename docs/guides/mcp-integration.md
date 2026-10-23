@@ -28,6 +28,28 @@ protocol detail, jump straight from this guide to the most relevant specificatio
 Keep the specification open while editing `vtcode.toml`; VT Code intentionally mirrors the naming and behavioural
 guarantees defined there.
 
+## Tool result boundary
+
+VT Code returns successful MCP calls in an envelope containing `provider` and `tool`, plus `content`
+when nonempty and `structuredContent` whenever supplied (including an empty object or explicit null).
+Content order, public annotations, text, and media fields are retained. Structured application data is
+preserved without schema enforcement, including application fields named `_meta`.
+
+Protocol `_meta` is omitted at the result, content-block, and embedded-resource envelope levels; it is
+never renamed to `meta` or exposed as a tool result. This follows the visibility boundary described in
+OpenAI's [MCP server guide](https://developers.openai.com/plugins/build/mcp-server#return-useful-results-without-ui).
+An `isError: true` result remains an error with provider/tool context. Its message is the first nonempty
+public text block, or `Unknown MCP tool error` when none exists. Hidden metadata never supplies error text.
+Absent or false error flags remain successful results.
+
+The generic terminal renderer gives displayable `content` precedence. When content produces no rows,
+it formats all application fields in `structuredContent` using the existing JSON formatter, falling back
+to a JSON literal if formatting produces no visible rows (including `{}` and empty or whitespace-only strings).
+Embedded resources show their URI, optional media type, and public text body. Resource links show their URI
+and name. Images and audio show a content marker and media type; binary image/audio/blob payloads are not printed.
+These content rows take precedence over the structured fallback. Rendering never fetches resource URIs or plays audio.
+Configured custom renderer profiles keep their existing behavior.
+
 ## Configuring MCP Providers
 
 ### Core `[mcp]` table

@@ -19,6 +19,7 @@
 ## Rules
 
 - `cli.rs` stays in vtcode-core (depends on `crate::cli::input_hardening`). Re-export facade in vtcode-core (`mcp/mod.rs`) must stay in sync. `rmcp_client` is `pub(crate)` -- not part of the public API. `convert_to_rmcp()` is `pub(crate)` -- internal JSON bridge. Treat discovered server text as bounded untrusted resource content; retain host policy around it and keep enforcement in registration/tool policy.
+- Tool results preserve public content and `structuredContent` exactly; omit protocol `_meta` at result, content-block, and embedded-resource envelopes. Never recursively strip application data or derive error messages from metadata.
 
 ## Gotchas
 

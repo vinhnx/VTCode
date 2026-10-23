@@ -78,46 +78,48 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
 
     if let Some(content) = val.get("content").and_then(|v| v.as_array()) {
         for (idx, item) in content.iter().enumerate() {
-            let mut render_text_content = |text: &str| -> Result<()> {
-                if text.trim().is_empty() {
-                    return Ok(());
-                }
-                if let Ok(json_val) = serde_json::from_str::<Value>(text) {
-                    if content.len() > 1 {
-                        block_lines
-                            .push(PanelContentLine::new(format!("[content {}]", idx + 1), MessageStyle::ToolDetail));
-                    }
-                    collect_formatted_json_lines(&mut block_lines, &json_val)?;
-                } else if text.contains("```") {
-                    collect_text_with_code_blocks(&mut block_lines, text);
-                } else {
-                    for line in text.lines() {
-                        block_lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
-                    }
-                }
-                Ok(())
-            };
-
-            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                render_text_content(text)?;
-            } else if let Some(text) = item.get("type").and_then(|t| {
-                if t.as_str() == Some("text") {
-                    item.get("text").and_then(|v| v.as_str())
-                } else {
-                    None
-                }
-            }) {
-                render_text_content(text)?;
-            } else if item.get("type").and_then(|t| t.as_str()) == Some("image") {
-                block_lines.push(PanelContentLine::new("[image content]", MessageStyle::ToolDetail));
-                if let Some(mime) = item.get("mimeType").and_then(|v| v.as_str()) {
-                    block_lines.push(PanelContentLine::new(format!("type: {mime}"), MessageStyle::ToolDetail));
-                }
-            } else if item.get("type").and_then(|t| t.as_str()) == Some("resource")
-                && let Some(uri) = item.get("uri").and_then(|v| v.as_str())
-            {
-                block_lines.push(PanelContentLine::new(format!("[resource: {uri}]"), MessageStyle::ToolDetail));
+            if let Some(text) = item.get("text").and_then(Value::as_str) {
+                let content_number = (content.len() > 1).then_some(idx + 1);
+                collect_text_content(&mut block_lines, text, content_number)?;
+                continue;
             }
+
+            let details = match item.get("type").and_then(Value::as_str) {
+                Some(kind @ ("image" | "audio")) => {
+                    block_lines.push(PanelContentLine::new(format!("[{kind} content]"), MessageStyle::ToolDetail));
+                    item
+                }
+                Some(kind @ ("resource" | "resource_link")) => {
+                    let resource = item.get("resource").unwrap_or(item);
+                    if let Some(uri) = resource.get("uri").and_then(Value::as_str) {
+                        block_lines.push(PanelContentLine::new(format!("[resource: {uri}]"), MessageStyle::ToolDetail));
+                    }
+                    if kind == "resource_link"
+                        && let Some(name) = resource.get("name").and_then(Value::as_str)
+                    {
+                        block_lines.push(PanelContentLine::new(format!("name: {name}"), MessageStyle::ToolDetail));
+                    }
+                    resource
+                }
+                _ => continue,
+            };
+            if let Some(mime) = details.get("mimeType").and_then(Value::as_str) {
+                block_lines.push(PanelContentLine::new(format!("type: {mime}"), MessageStyle::ToolDetail));
+            }
+            if let Some(text) = details.get("text").and_then(Value::as_str) {
+                collect_text_content(&mut block_lines, text, None)?;
+            }
+        }
+    }
+
+    if block_lines.iter().all(|line| line.rendered.trim().is_empty())
+        && let Some(structured) = val.get("structuredContent")
+    {
+        block_lines.clear();
+        collect_formatted_json_lines(&mut block_lines, structured, &[])?;
+        if block_lines.iter().all(|line| line.rendered.trim().is_empty()) {
+            block_lines.clear();
+            block_lines.push(PanelContentLine::new(structured.to_string(), MessageStyle::ToolDetail));
         }
     }
 
@@ -144,6 +146,25 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
     render_left_border_panel(renderer, block_lines)
 }
 
+fn collect_text_content(lines: &mut Vec<PanelContentLine>, text: &str, content_number: Option<usize>) -> Result<()> {
+    if text.trim().is_empty() {
+        return Ok(());
+    }
+    if let Ok(json_val) = serde_json::from_str::<Value>(text) {
+        if let Some(number) = content_number {
+            lines.push(PanelContentLine::new(format!("[content {number}]"), MessageStyle::ToolDetail));
+        }
+        collect_formatted_json_lines(lines, &json_val, &["model", "_meta", "isError"])?;
+    } else if text.contains("```") {
+        collect_text_with_code_blocks(lines, text);
+    } else {
+        for line in text.lines() {
+            lines.push(PanelContentLine::new(line, MessageStyle::ToolDetail));
+        }
+    }
+    Ok(())
+}
+
 fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) {
     let mut in_code_block = false;
 
@@ -164,13 +185,15 @@ fn collect_text_with_code_blocks(lines: &mut Vec<PanelContentLine>, text: &str) 
     }
 }
 
-fn collect_formatted_json_lines(lines: &mut Vec<PanelContentLine>, json: &Value) -> Result<()> {
-    const SKIP_FIELDS: &[&str] = &["model", "_meta", "isError"];
-
+fn collect_formatted_json_lines(
+    lines: &mut Vec<PanelContentLine>,
+    json: &Value,
+    excluded_fields: &[&str],
+) -> Result<()> {
     match json {
         Value::Object(map) => {
             for (key, value) in map {
-                if SKIP_FIELDS.contains(&key.as_str()) {
+                if excluded_fields.contains(&key.as_str()) {
                     continue;
                 }
 

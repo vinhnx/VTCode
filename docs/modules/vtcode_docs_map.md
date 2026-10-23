@@ -747,10 +747,10 @@ below based on the topic area.
 
 - **File**: `docs/guides/mcp-integration.md`
   - **Content**: MCP Integration Guide
-  - **Topics**: MCP Specification Map, Configuring MCP Providers, Security and validation, Allowlist Behaviour, Testing
-    the Integration
+  - **Topics**: MCP Specification Map, Tool result boundary, Configuring MCP Providers, Security and validation,
+    Allowlist Behaviour
   - **User Questions**: "What can you tell me about MCP Integration Guide?", "How does MCP Specification Map work?",
-    "How does Configuring MCP Providers work?"
+    "How does Tool result boundary work?"
 
 - **File**: `docs/mcp/MCP_INTEGRATION_GUIDE.md`
   - **Content**: MCP Integration Guide for VT Code

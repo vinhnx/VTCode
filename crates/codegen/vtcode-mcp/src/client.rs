@@ -1013,35 +1013,14 @@ impl McpClient {
     }
 
     fn format_tool_result(provider_name: &str, tool_name: &str, result: CallToolResult) -> Result<Value> {
-        // Convert result to JSON to access fields flexibly
-        let result_json = serde_json::to_value(&result)?;
-        let result_obj = result_json.as_object();
-
-        // Check for error - handle both rmcp's is_error field and meta message
-        let is_error = result_obj
-            .and_then(|o| o.get("isError"))
-            .or_else(|| result_obj.and_then(|o| o.get("is_error")))
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-
-        if is_error {
-            let mut message = result_obj
-                .and_then(|o| o.get("_meta"))
-                .or_else(|| result_obj.and_then(|o| o.get("meta")))
-                .and_then(|m| m.get("message"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-
-            // Try to find text content in the content array
-            if message.is_none()
-                && let Some(content) = result_obj.and_then(|o| o.get("content")).and_then(Value::as_array)
-            {
-                message = content
-                    .iter()
-                    .find_map(|block| block.get("text").and_then(Value::as_str).map(str::to_owned));
-            }
-
-            let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_owned());
+        if result.is_error == Some(true) {
+            let message = result
+                .content
+                .iter()
+                .filter_map(|block| block.as_text())
+                .map(|block| block.text.as_str())
+                .find(|text| !text.trim().is_empty())
+                .unwrap_or("Unknown MCP tool error");
             return Err(anyhow!("MCP tool '{tool_name}' on provider '{provider_name}' reported an error: {message}"));
         }
 
@@ -1049,22 +1028,25 @@ impl McpClient {
         drop(payload.insert("provider".into(), Value::String(provider_name.to_string())));
         drop(payload.insert("tool".into(), Value::String(tool_name.to_string())));
 
-        // Add meta if present
-        if let Some(meta) = result_obj
-            .and_then(|o| o.get("_meta"))
-            .or_else(|| result_obj.and_then(|o| o.get("meta")))
-            .and_then(Value::as_object)
-            && !meta.is_empty()
-        {
-            drop(payload.insert("meta".into(), Value::Object(meta.clone())));
+        if !result.content.is_empty() {
+            let mut content = serde_json::to_value(result.content)?;
+            if let Some(blocks) = content.as_array_mut() {
+                for block in blocks {
+                    if let Some(block) = block.as_object_mut() {
+                        // Strip only protocol envelopes, never application data or text.
+                        drop(block.remove("_meta"));
+                        if block.get("type").and_then(Value::as_str) == Some("resource")
+                            && let Some(resource) = block.get_mut("resource").and_then(Value::as_object_mut)
+                        {
+                            drop(resource.remove("_meta"));
+                        }
+                    }
+                }
+            }
+            drop(payload.insert("content".into(), content));
         }
-
-        // Add content if present
-        if let Some(content) = result_obj.and_then(|o| o.get("content"))
-            && !content.is_null()
-            && !content.as_array().map(|a| a.is_empty()).unwrap_or(true)
-        {
-            drop(payload.insert("content".into(), content.clone()));
+        if let Some(structured_content) = result.structured_content {
+            drop(payload.insert("structuredContent".into(), structured_content));
         }
 
         Ok(Value::Object(payload))
@@ -1269,6 +1251,104 @@ mod tests {
             }
             assert_eq!(client.provider_for_tool("shared").as_deref(), Some("alpha"), "order {order:?}");
             assert_eq!(client.provider_for_tool("beta_only").as_deref(), Some("beta"));
+        }
+    }
+    #[test]
+    fn format_tool_result_preserves_result_shapes_and_error_flags() {
+        use serde_json::json;
+
+        let public_text = json!([{"type": "text", "text": "ordinary output"}]);
+        for flag in [None, Some(false)] {
+            for (content, structured) in [
+                (json!([]), None),
+                (public_text.clone(), None),
+                (json!([]), Some(json!({"answer": 42, "_meta": {"public": true}}))),
+                (public_text.clone(), Some(json!([3, {"nested": [false, null]}]))),
+                (json!([]), Some(json!({}))),
+                (json!([]), Some(json!(null))),
+                (json!([]), Some(json!("scalar"))),
+            ] {
+                let mut result: super::CallToolResult = serde_json::from_value(json!({"content": content})).unwrap();
+                result.is_error = flag;
+                result.structured_content = structured.clone();
+                let actual = McpClient::format_tool_result("source", "lookup", result).unwrap();
+                let mut expected = json!({"provider": "source", "tool": "lookup"});
+                if content != json!([]) {
+                    expected["content"] = content;
+                }
+                if let Some(structured) = structured {
+                    expected["structuredContent"] = structured;
+                }
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn format_tool_result_hides_protocol_metadata_only() {
+        use serde_json::json;
+
+        let public_content = json!([
+            {"type": "text", "text": "{\"_meta\":\"public text\"}",
+             "annotations": {"audience": ["user"], "priority": 0.75}},
+            {"type": "image", "data": "aW1hZ2U=", "mimeType": "image/png"},
+            {"type": "audio", "data": "YXVkaW8=", "mimeType": "audio/wav"},
+            {"type": "resource", "resource": {
+                "uri": "file:///public.txt", "mimeType": "text/plain", "text": "public resource"}},
+            {"type": "resource", "resource": {
+                "uri": "file:///public.bin", "mimeType": "application/octet-stream", "blob": "YmxvYg=="}},
+            {"type": "resource_link", "uri": "https://example.com/item", "name": "public link",
+             "description": "description", "size": 17}
+        ]);
+        let mut private_content = public_content.clone();
+        for (index, block) in private_content.as_array_mut().unwrap().iter_mut().enumerate() {
+            block["_meta"] = json!({"message": format!("PRIVATE_BLOCK_{index}")});
+            if block["type"] == "resource" {
+                block["resource"]["_meta"] = json!({"message": format!("PRIVATE_RESOURCE_{index}")});
+            }
+        }
+        let structured = json!({"_meta": {"message": "public application data"},
+                                "nested": [{"_meta": 23}], "order": [9, 2]});
+        let result = serde_json::from_value(json!({
+            "content": private_content, "structuredContent": structured,
+            "_meta": {"message": "PRIVATE_RESULT"}
+        }))
+        .unwrap();
+        let actual = McpClient::format_tool_result("source", "lookup", result).unwrap();
+        assert_eq!(
+            actual,
+            json!({"provider": "source", "tool": "lookup",
+                                 "content": public_content, "structuredContent": structured})
+        );
+        assert!(!actual.to_string().contains("PRIVATE_"));
+    }
+
+    #[test]
+    fn format_tool_result_errors_use_first_nonempty_public_text() {
+        use serde_json::json;
+
+        for (content, expected_message) in [
+            (
+                json!([{ "type": "text", "text": " \n" },
+                    { "type": "image", "data": "aW1hZ2U=", "mimeType": "image/png" },
+                    { "type": "text", "text": "Public failure" },
+                    { "type": "text", "text": "Later failure" }]),
+                "Public failure",
+            ),
+            (json!([]), "Unknown MCP tool error"),
+            (json!([{ "type": "text", "text": "" }]), "Unknown MCP tool error"),
+        ] {
+            let result = serde_json::from_value(json!({
+                "isError": true, "content": content,
+                "structuredContent": {"message": "PRIVATE_STRUCTURED_ERROR"},
+                "_meta": {"message": "PRIVATE_RESULT_ERROR"}
+            }))
+            .unwrap();
+            let error = McpClient::format_tool_result("source", "lookup", result).unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                format!("MCP tool 'lookup' on provider 'source' reported an error: {expected_message}")
+            );
         }
     }
 }
