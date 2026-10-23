@@ -446,7 +446,7 @@ impl HarnessEventEmitter {
             // the turn; only a disconnected consumer is fatal.
             sender
                 .publish(VersionedThreadEvent::new(event))
-                .map_err(|_| anyhow::anyhow!("desktop runtime event consumer disconnected"))?;
+                .map_err(|_disconnected| anyhow::anyhow!("desktop runtime event consumer disconnected"))?;
         }
 
         Ok(())

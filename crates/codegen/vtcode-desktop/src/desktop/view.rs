@@ -278,8 +278,7 @@ impl DesktopView {
                 self.clear_error();
             }
             None => {
-                self.error =
-                    Some(format!("“{rel_path}” is missing, binary, or too large to preview."));
+                self.error = Some(format!("“{rel_path}” is missing, binary, or too large to preview."));
             }
         }
         cx.notify();
@@ -304,9 +303,11 @@ impl DesktopView {
         } else {
             // The sidebar shows the archive title once the session is listed
             // again; until then name it after this first prompt.
-            if let Some(entry) = self.sessions.iter_mut().find(|session| {
-                session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty)
-            }) {
+            if let Some(entry) = self
+                .sessions
+                .iter_mut()
+                .find(|session| session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty))
+            {
                 entry.title = Some(session_title_from_prompt(&prompt));
             }
             self.transcript.push(TranscriptItem::new(
@@ -490,8 +491,7 @@ impl DesktopView {
                 let result = result.unwrap_or(Value::Null);
                 match method.as_str() {
                     protocol::method::INITIALIZE => {
-                        self.service_info =
-                            serde_json::from_value::<protocol::InitializeResult>(result).ok();
+                        self.service_info = serde_json::from_value::<protocol::InitializeResult>(result).ok();
                         self.status = "Connected to the local VT Code service".to_string();
                     }
                     protocol::method::CONFIG_DISCOVER => {
@@ -507,8 +507,7 @@ impl DesktopView {
                         }
                     }
                     protocol::method::SESSION_LIST => {
-                        let mut refreshed =
-                            serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
+                        let mut refreshed = serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
                         // Keep a locally derived title when the archive has
                         // not persisted its own preview yet.
                         for session in &mut refreshed {
@@ -721,12 +720,7 @@ impl DesktopView {
             failed: change.status == vtcode_exec_events::PatchApplyStatus::Failed,
             patch: change.unified_diff.clone().unwrap_or_default(),
         };
-        let mut item = TranscriptItem::new(
-            id,
-            "diff".to_string(),
-            "File changes".to_string(),
-            card.patch.clone(),
-        );
+        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".to_string(), card.patch.clone());
         item.diff = Some(card);
         self.transcript.upsert(item);
     }
@@ -894,9 +888,7 @@ impl DesktopView {
                             .label(label)
                             .ghost()
                             .disabled(is_dir)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.open_file_preview(rel_path.clone(), cx)
-                            })),
+                            .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
                     )
                 })),
         );
@@ -1014,13 +1006,17 @@ impl DesktopView {
             );
 
         if let Some(configuration) = self.configuration.as_ref() {
-            panel = panel
-                .child(div().font_semibold().child("Provider"))
-                .child(div().text_color(colors.muted_foreground).child(format!(
+            panel = panel.child(div().font_semibold().child("Provider")).child(
+                div().text_color(colors.muted_foreground).child(format!(
                     "{} · {}",
-                    if configuration.provider.is_empty() { "not configured" } else { &configuration.provider },
+                    if configuration.provider.is_empty() {
+                        "not configured"
+                    } else {
+                        &configuration.provider
+                    },
                     configuration.model
-                )));
+                )),
+            );
             if !configuration.credential_setup_command.is_empty() {
                 let command = configuration.credential_setup_command.clone();
                 panel = panel.child(
@@ -1038,25 +1034,22 @@ impl DesktopView {
                                 .truncate()
                                 .child(command.clone()),
                         )
-                        .child(
-                            Button::new("copy-credential-command")
-                                .label("Copy")
-                                .ghost()
-                                .on_click(move |_, _, app| {
-                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
-                                }),
-                        ),
+                        .child(Button::new("copy-credential-command").label("Copy").ghost().on_click(
+                            move |_, _, app| {
+                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
+                            },
+                        )),
                 );
             }
         }
 
         if let Some(info) = self.service_info.as_ref() {
-            panel = panel
-                .child(div().font_semibold().child("Service"))
-                .child(div().text_color(colors.muted_foreground).child(format!(
+            panel = panel.child(div().font_semibold().child("Service")).child(
+                div().text_color(colors.muted_foreground).child(format!(
                     "vtcode {} · protocol {}.{}",
                     info.server_version, info.protocol.major, info.protocol.minor
-                )));
+                )),
+            );
         }
         panel.into_any_element()
     }
@@ -1107,25 +1100,15 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
-                            .child(
-                                Button::new("copy-preview")
-                                    .label("Copy")
-                                    .ghost()
-                                    .on_click(move |_, _, app| {
-                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
-                                            text.to_string(),
-                                        ))
-                                    }),
-                            )
-                            .child(
-                                Button::new("close-preview")
-                                    .label("Close")
-                                    .ghost()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.file_preview = None;
-                                        cx.notify();
-                                    })),
-                            ),
+                            .child(Button::new("copy-preview").label("Copy").ghost().on_click(move |_, _, app| {
+                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()))
+                            }))
+                            .child(Button::new("close-preview").label("Close").ghost().on_click(cx.listener(
+                                |this, _, _, cx| {
+                                    this.file_preview = None;
+                                    cx.notify();
+                                },
+                            ))),
                     )
                     .child(
                         div()
@@ -1330,7 +1313,11 @@ impl DesktopView {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(if diff.failed { colors.danger } else { colors.muted_foreground })
+                            .text_color(if diff.failed {
+                                colors.danger
+                            } else {
+                                colors.muted_foreground
+                            })
                             .child(status_label),
                     ),
             )
@@ -1378,12 +1365,7 @@ impl DesktopView {
                     .items_center()
                     .gap_2()
                     .child(div().text_sm().font_family(mono_font.clone()).child(file.path.clone()))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(kind_color)
-                            .child(kind_label),
-                    ),
+                    .child(div().text_xs().text_color(kind_color).child(kind_label)),
             );
         }
         if diff.incomplete {
@@ -1472,10 +1454,9 @@ impl DesktopView {
 
         let can_submit = self.selected_session_id.is_some() && !self.running && self.interaction.is_none();
         let mut buttons = div().w_full().flex().items_center().justify_between().child(
-            div()
-                .text_xs()
-                .text_color(colors.muted_foreground)
-                .child("Enter to send, Shift+Enter for a new line. Tool access follows your VT Code security settings."),
+            div().text_xs().text_color(colors.muted_foreground).child(
+                "Enter to send, Shift+Enter for a new line. Tool access follows your VT Code security settings.",
+            ),
         );
         if self.running {
             buttons = buttons.child(
@@ -1712,9 +1693,7 @@ fn uuid_like_id() -> String {
 fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String, String) {
     use vtcode_exec_events::ThreadItemDetails;
     match details {
-        ThreadItemDetails::ToolInvocation(tool) => {
-            (tool.tool_name.clone(), tool_status_label(&tool.status))
-        }
+        ThreadItemDetails::ToolInvocation(tool) => (tool.tool_name.clone(), tool_status_label(&tool.status)),
         ThreadItemDetails::ToolOutput(output) => ("Tool output".to_string(), tool_status_label(&output.status)),
         ThreadItemDetails::CommandExecution(command) => {
             let mut label = command_status_label(&command.status);

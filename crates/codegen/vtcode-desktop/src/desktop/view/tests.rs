@@ -136,11 +136,10 @@ fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
             view.selected_session_id = Some("session-c".to_string());
-            view.composer
-                .update(cx, |state, cx| {
-                    state.set_value("", window, cx);
-                    state.focus(window, cx);
-                });
+            view.composer.update(cx, |state, cx| {
+                state.set_value("", window, cx);
+                state.focus(window, cx);
+            });
         });
         window.render_frame(cx);
         // Type the draft so the caret sits after the text, like real input.
@@ -228,8 +227,8 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
             view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
                 session_id: "session-e".to_string(),
                 turn_id: Some("turn-9".to_string()),
-                event: vtcode_exec_events::VersionedThreadEvent::new(
-                    vtcode_exec_events::ThreadEvent::TurnCompleted(vtcode_exec_events::TurnCompletedEvent {
+                event: vtcode_exec_events::VersionedThreadEvent::new(vtcode_exec_events::ThreadEvent::TurnCompleted(
+                    vtcode_exec_events::TurnCompletedEvent {
                         completed_at: None,
                         usage: vtcode_exec_events::Usage {
                             input_tokens: 0,
@@ -238,8 +237,8 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                             output_tokens: 0,
                         },
                         in_progress_exec_sessions: Vec::new(),
-                    }),
-                ),
+                    },
+                )),
             });
             assert!(!view.running, "turn completion re-enables session controls");
         });
@@ -305,8 +304,7 @@ fn settings_popover_copies_the_credential_setup_command(cx: &mut TestAppContext)
 #[gpui_kit::test]
 fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
-    std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace")
-        .expect("write file");
+    std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace").expect("write file");
     std::fs::create_dir_all(workspace.path().join("target/debug")).expect("skip dir");
     std::fs::write(workspace.path().join("target/debug/artifact"), b"binary").expect("write artifact");
 
@@ -328,10 +326,7 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         window.click(format!("file-{readme_index}"), cx);
         window.render_frame(cx);
         window.click("copy-preview", cx);
-        assert_eq!(
-            cx.read_from_clipboard().unwrap().text().as_deref(),
-            Some("# Notes\n\nhello from the workspace")
-        );
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("# Notes\n\nhello from the workspace"));
         window.click("close-preview", cx);
         assert!(view.read(cx).file_preview.is_none(), "close dismisses the preview");
     })
@@ -340,11 +335,11 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::{
         FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
         ThreadItem, ThreadItemDetails,
     };
-    use vtcode_desktop_protocol::ThreadEventNotification;
 
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -352,25 +347,23 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
             view.handle_thread_event(ThreadEventNotification {
                 session_id: "session-d".to_string(),
                 turn_id: Some("turn-1".to_string()),
-                event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(
-                    ItemCompletedEvent {
-                        item: ThreadItem {
-                            context: None,
-                            id: "change-1".to_string(),
-                            details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
-                                diff_incomplete: Some(false),
-                                changes: vec![FileUpdateChange {
-                                    path: "src/main.rs".to_string(),
-                                    kind: PatchChangeKind::Update,
-                                }],
-                                status: PatchApplyStatus::Completed,
-                                unified_diff: Some("@@ -1,2 +1,3 @@\n context\n-old line\n+new line\n".to_string()),
-                                additions: Some(1),
-                                deletions: Some(1),
-                            })),
-                        },
+                event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                    item: ThreadItem {
+                        context: None,
+                        id: "change-1".to_string(),
+                        details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+                            diff_incomplete: Some(false),
+                            changes: vec![FileUpdateChange {
+                                path: "src/main.rs".to_string(),
+                                kind: PatchChangeKind::Update,
+                            }],
+                            status: PatchApplyStatus::Completed,
+                            unified_diff: Some("@@ -1,2 +1,3 @@\n context\n-old line\n+new line\n".to_string()),
+                            additions: Some(1),
+                            deletions: Some(1),
+                        })),
                     },
-                )),
+                })),
             });
             let item = view.transcript.get(0).expect("diff row");
             assert_eq!(item.role, "diff");
@@ -388,14 +381,16 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
         window.click("diff-change-1", cx);
         window.click("copy-patch-change-1", cx);
         assert!(
-            cx.read_from_clipboard()
-                .unwrap()
-                .text()
-                .unwrap()
-                .contains("+new line"),
+            cx.read_from_clipboard().unwrap().text().unwrap().contains("+new line"),
             "copy patch must copy the raw unified diff"
         );
-        view.read(cx).transcript.get(0).unwrap().expanded.then_some(()).expect("diff expanded");
+        view.read(cx)
+            .transcript
+            .get(0)
+            .unwrap()
+            .expanded
+            .then_some(())
+            .expect("diff expanded");
 
         // Collapsing again hides the patch view but keeps the card.
         window.click("diff-change-1", cx);

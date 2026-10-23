@@ -211,9 +211,7 @@ fn prune_history_envelopes(workspace: &Path, preserve_session_id: &str, max_age_
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    use vtcode_core::exec::events::{
-        AgentMessageItem, ItemUpdatedEvent, ThreadItem, ThreadItemDetails,
-    };
+    use vtcode_core::exec::events::{AgentMessageItem, ItemUpdatedEvent, ThreadItem, ThreadItemDetails};
 
     #[tokio::test]
     async fn initialize_harness_emits_thread_started_without_retention_side_effects() {
@@ -248,9 +246,7 @@ mod tests {
                     item: ThreadItem {
                         context: None,
                         id: "item-stream".to_string(),
-                        details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                            text: format!("round {round}"),
-                        }),
+                        details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: format!("round {round}") }),
                     },
                 }))
                 .expect("emit must survive a stalled consumer");

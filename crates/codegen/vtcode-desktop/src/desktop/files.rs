@@ -45,10 +45,13 @@ pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
         let Ok(read_dir) = fs::read_dir(&dir) else {
             continue;
         };
-        let mut children: Vec<(fs::DirEntry, bool)> = read_dir.flatten().map(|entry| {
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            (entry, is_dir)
-        }).collect();
+        let mut children: Vec<(fs::DirEntry, bool)> = read_dir
+            .flatten()
+            .map(|entry| {
+                let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+                (entry, is_dir)
+            })
+            .collect();
         children.sort_by_key(|(entry, is_dir)| (!is_dir, entry.file_name()));
         for (entry, is_dir) in children {
             if entries.len() >= MAX_ENTRIES {

@@ -46,7 +46,15 @@ impl TranscriptItem {
     pub fn new(id: String, role: String, title: String, text: String) -> Self {
         let text = SharedString::from(text);
         let markdown = prepare_markdown(&text);
-        Self { id, role, title, text, markdown, expanded: false, diff: None }
+        Self {
+            id,
+            role,
+            title,
+            text,
+            markdown,
+            expanded: false,
+            diff: None,
+        }
     }
 }
 

@@ -40,6 +40,9 @@ owned work and pending interactions.
 
 Session history is discovered from VT Code's existing durable stores. Selecting a previous session explicitly loads its
 bounded text projection and resume state. A restart does not replay a submitted prompt or an approval automatically.
+Until the archive persists its first-prompt preview, the sidebar names a new session from the first submitted prompt and
+keeps that name across session-list refreshes. The session list reloads whenever a turn ends. A Close button deselects
+the current session through `session/close` without starting a replacement.
 The transcript follows new output while it is at the latest position and preserves the reader's position after they
 scroll upward.
 
@@ -49,10 +52,14 @@ scroll upward.
 | --- | --- |
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
+| Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. The Send button submits the same draft. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
+| Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
 | Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. |
 | Follow a link | Explicit activation opens HTTP/HTTPS links. Other URL schemes are blocked, images are not fetched, and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
+| Browse files | The sidebar lists workspace files read-only (breadth-first, at most 400 entries, depth 3, dependency/VCS/hidden directories skipped). Clicking a file opens a preview overlay capped at 64 KiB; binary files are not previewed. |
+| Open settings | The toolbar Settings popover switches Light/Dark, shows the configured provider and model, copies the credential setup command, and shows service and protocol versions. |
 
 The UI drains at most 64 service events per foreground tick so a busy stream yields to input. Row data and GPUI's
 measured list state are maintained together; streaming text, expansion, theme changes, and viewport resizing invalidate
@@ -67,7 +74,11 @@ agent loop or bypass VT Code's approval and execution policy.
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
 server negotiate protocol version `1.0`; incompatible ranges fail explicitly. The protocol crate caps a line at 1 MiB.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
-GUI event bridge holds at most 256 events. Full queues apply backpressure to their producer.
+GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
+snapshots replace the pending snapshot for the same item, consecutive `plan.delta` events for one item merge, and
+ordered events displace stale snapshots before ever being dropped. A slow GUI therefore degrades the stream instead of
+failing a healthy turn; only a disconnected consumer is fatal, and displaced or dropped events are counted and logged
+by the service pump.
 
 | Method | Purpose |
 | --- | --- |

@@ -611,12 +611,8 @@ struct LiveEventQueueInner {
 impl LiveEventQueueInner {
     fn classify(event: &VersionedThreadEvent) -> Option<(String, CoalesceOp)> {
         match event.event() {
-            vtcode_exec_events::ThreadEvent::ItemUpdated(update) => {
-                Some((update.item.id.clone(), CoalesceOp::Replace))
-            }
-            vtcode_exec_events::ThreadEvent::PlanDelta(delta) => {
-                Some((delta.item_id.clone(), CoalesceOp::Merge))
-            }
+            vtcode_exec_events::ThreadEvent::ItemUpdated(update) => Some((update.item.id.clone(), CoalesceOp::Replace)),
+            vtcode_exec_events::ThreadEvent::PlanDelta(delta) => Some((delta.item_id.clone(), CoalesceOp::Merge)),
             _ => None,
         }
     }
@@ -627,7 +623,7 @@ impl LiveEventQueueInner {
         if !self.receiver_alive.load(std::sync::atomic::Ordering::Acquire) {
             return Err(());
         }
-        let mut queue = self.queue.lock().map_err(|_| ())?;
+        let mut queue = self.queue.lock().map_err(|_poisoned| ())?;
         let classified = Self::classify(&event);
         let slot_key = classified.as_ref().map(|(key, _)| key.clone());
         let slot_op = classified.as_ref().map_or(CoalesceOp::Replace, |(_, op)| *op);
@@ -635,7 +631,7 @@ impl LiveEventQueueInner {
             let pending_slot = queue
                 .iter()
                 .position(|slot| slot.key.as_deref() == Some(key.as_str()) && slot.op == op)
-                .map(|index| (index, queue.remove(index).expect("index just located")));
+                .and_then(|index| queue.remove(index).map(|removed| (index, removed)));
             if let Some((index, pending)) = pending_slot {
                 // Re-insert at the removed slot's position so the relative
                 // order of every other queued event is preserved.
@@ -676,10 +672,7 @@ impl LiveEventQueueInner {
     fn merge_plan_deltas(pending: VersionedThreadEvent, next: VersionedThreadEvent) -> VersionedThreadEvent {
         let (pending, next) = (pending.into_event(), next.into_event());
         match (pending, next) {
-            (
-                vtcode_exec_events::ThreadEvent::PlanDelta(older),
-                vtcode_exec_events::ThreadEvent::PlanDelta(newer),
-            ) => {
+            (vtcode_exec_events::ThreadEvent::PlanDelta(older), vtcode_exec_events::ThreadEvent::PlanDelta(newer)) => {
                 let mut merged = newer.clone();
                 let mut text = older.delta;
                 text.push_str(&newer.delta);
@@ -933,7 +926,9 @@ mod tests {
         let (sender, receiver) = live_event_channel(8);
         // Fill the queue past capacity with streaming snapshots and deltas.
         for round in 0..64 {
-            sender.publish(item_update(&format!("item-{}", round % 4), &format!("round {round}"))).expect("publish");
+            sender
+                .publish(item_update(&format!("item-{}", round % 4), &format!("round {round}")))
+                .expect("publish");
             sender.publish(plan_delta("plan", &format!("{round} "))).expect("publish");
         }
         // A lifecycle event must be admitted even while the queue is full.
@@ -946,7 +941,11 @@ mod tests {
             ordered.push(event);
         }
 
-        assert_eq!(ordered.last().expect("drained events"), &turn_completed(), "lifecycle event must survive saturation");
+        assert_eq!(
+            ordered.last().expect("drained events"),
+            &turn_completed(),
+            "lifecycle event must survive saturation"
+        );
         let plan_events: Vec<_> = ordered
             .iter()
             .filter(|event| matches!(event.event(), vtcode_exec_events::ThreadEvent::PlanDelta(_)))
@@ -986,7 +985,10 @@ mod tests {
         let (sender, receiver) = live_event_channel(4);
         sender.publish(item_update("item", "text")).expect("publish with live consumer");
         drop(receiver);
-        assert!(sender.publish(item_update("item", "more")).is_err(), "publishing after the consumer dropped must fail");
+        assert!(
+            sender.publish(item_update("item", "more")).is_err(),
+            "publishing after the consumer dropped must fail"
+        );
     }
 
     #[tokio::test]
@@ -997,7 +999,7 @@ mod tests {
         // A second sender keeps the stream reachable.
         clone.publish(item_update("item", "text")).expect("publish with live clone");
         drop(clone);
-        assert!(matches!(receiver.recv().await, Some(_)));
+        assert!(receiver.recv().await.is_some());
         assert_eq!(receiver.recv().await, None, "drained queue with no senders ends the stream");
     }
 }
