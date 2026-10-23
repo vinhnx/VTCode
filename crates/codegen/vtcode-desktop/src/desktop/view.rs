@@ -973,7 +973,17 @@ impl DesktopView {
                 let (title, status) = describe_activity(details);
                 let payload = serde_json::to_string_pretty(details).unwrap_or_else(|_| "{}".to_string());
                 let text = format!("{status}\n\n{payload}");
-                self.append_or_update_item(id, "tool", &title, &text, true);
+                // Keep the raw aggregated output for the inspector's Output
+                // tab; it updates in place as streaming events arrive.
+                let output = match details {
+                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.clone()),
+                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.clone()),
+                    _ => None,
+                };
+                self.append_or_update_item(id.clone(), "tool", &title, &text, true);
+                if output.is_some() {
+                    self.transcript.set_output(&id, output);
+                }
             }
         }
     }
@@ -1442,6 +1452,7 @@ impl DesktopView {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
             InspectorTab::Activity => self.render_activity_tab(&colors),
+            InspectorTab::Output => self.render_output_tab(cx),
         };
         panel.child(content).into_any_element()
     }
@@ -1620,6 +1631,58 @@ impl DesktopView {
                 })),
         );
         body.into_any_element()
+    }
+
+    /// Live tail of the newest command or tool output, the desktop's
+    /// terminal pane.
+    fn render_output_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let colors = theme.colors;
+        let mono = theme.mono_font_family.clone();
+        let Some(output) = inspector::latest_output(&self.transcript) else {
+            return div()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .p_3()
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child("Command and tool output appears here while a turn runs.")
+                .into_any_element();
+        };
+        let tail = inspector::output_tail(&output.text);
+        div()
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .border_b_1()
+                    .border_color(colors.border)
+                    .child(div().flex_1().min_w_0().truncate().text_sm().font_medium().child(output.title.clone()))
+                    .when(output.running, |header| {
+                        header.child(div().text_xs().text_color(colors.accent).child("● running"))
+                    }),
+            )
+            .child(
+                div()
+                    .id("output-body")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .p_2()
+                    .text_xs()
+                    .font_family(mono)
+                    .child(tail),
+            )
+            .into_any_element()
     }
 
     fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
