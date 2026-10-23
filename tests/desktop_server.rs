@@ -60,6 +60,12 @@ async fn desktop_server_uses_json_only_stdout_and_creates_a_headless_session() {
         json!({
             "jsonrpc": "2.0",
             "id": 3,
+            "method": protocol::method::CONFIG_MODELS,
+            "params": {}
+        }),
+        json!({
+            "jsonrpc": "2.0",
+            "id": 4,
             "method": protocol::method::SHUTDOWN,
             "params": {}
         }),
@@ -99,11 +105,23 @@ async fn desktop_server_uses_json_only_stdout_and_creates_a_headless_session() {
     assert!(
         messages
             .iter()
-            .any(|message| { message["id"] == 2 && message["result"]["sessionId"].as_str().is_some() })
+            .any(|message| message["id"] == 2 && message["result"]["sessionId"].as_str().is_some())
+    );
+    assert!(
+        messages.iter().any(|message| {
+            message["id"] == 3
+                && message["result"].as_array().is_some_and(|models| {
+                    models.len() > 1
+                        && models
+                            .iter()
+                            .any(|model| model["provider"] == "ollama" && model["current"] == true)
+                })
+        }),
+        "config/models should list the catalog with the active ollama model flagged"
     );
     assert!(
         messages
             .iter()
-            .any(|message| message["id"] == 3 && message["result"]["shutdown"] == true)
+            .any(|message| message["id"] == 4 && message["result"]["shutdown"] == true)
     );
 }
