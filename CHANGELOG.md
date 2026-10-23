@@ -5,6 +5,16 @@ All notable changes to vtcode will be documented in this file.
 <!-- markdownlint-disable MD012 MD013 MD024 MD033 -->
 <!-- Rules relaxed for this generated file only: MD012 (a full regeneration leaves one blank line at end-of-file), MD013 (commit subjects are unbounded so entries can exceed 120 columns), MD024 (two tags can normalize to the same version heading), MD033 (commit subjects may contain `<Type>` spellings). -->
 
+## 0.180.6 - 2026-10-24
+
+### Highlights
+
+#### Bug Fixes
+
+- Derive file-search truncation from the total match count instead of page saturation
+
+### Other Changes
+
 ## 0.180.5 - 2026-10-22
 
 ### Highlights
