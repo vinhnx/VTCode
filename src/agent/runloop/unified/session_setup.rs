@@ -23,7 +23,7 @@ pub(crate) use init::{complete_session_registry, hydrate_session_runtime, initia
 pub(crate) use session_mode::active_primary_agent_from_specs_for_mode;
 pub(crate) use shell::initialize_session_shell;
 pub(crate) use signal::{mark_exit_postamble_armed, spawn_signal_handler};
-pub(crate) use types::SessionState;
+pub(crate) use types::{SessionState, SessionUISetup};
 #[cfg(test)]
 pub(crate) use ui::summarize_thread_event_preview;
 pub(crate) use ui::{

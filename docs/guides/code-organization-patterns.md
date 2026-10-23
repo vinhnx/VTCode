@@ -146,6 +146,14 @@ See: `crates/codegen/vtcode-core/src/tools/exec_session.rs`.
 
 ## Refactored Runtime Boundaries
 
+- `src/agent/runloop/unified/turn/turn_loop.rs` retains request-loop policy;
+  its private `compaction.rs` child coordinates request-boundary compaction and
+  `finalization.rs` owns ordered turn outcomes and bounded exec cleanup.
+- `crates/codegen/vtcode-core/src/core/agent/runner/runtime_prompt.rs` owns
+  headless prompt-bundle construction and catalog-aware refresh. Task lifecycle,
+  budgets, and cleanup remain in `execute.rs`; `runner/completion.rs` owns
+  evaluator acceptance and shared pre/post verification assessment. Unchanged provider-visible
+  identities retain the frozen envelope across catalog bookkeeping changes.
 - `src/agent/runloop/unified/turn/session_loop_runner/orchestration/mod.rs` owns session transitions.
   `session_iteration.rs` runs one session (setup, hydration, interaction) and hands its
   `SessionTailContext` to the `session_teardown.rs` child, which runs the exit tail: terminal

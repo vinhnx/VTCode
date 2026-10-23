@@ -111,6 +111,56 @@ impl EvictionFixture {
 }
 
 #[test]
+fn selective_removal_preserves_survivors_and_accounting_without_cloning_keys() {
+    let fixture = EvictionFixture::new(EvictionPolicy::Lru);
+    let mut visited = Vec::new();
+    assert_eq!(
+        fixture.cache.remove_where(|key| {
+            visited.push(key.name);
+            matches!(key.name, "a" | "c")
+        }),
+        2
+    );
+    visited.sort_unstable();
+    assert_eq!(visited, ["a", "b", "c", "d"]);
+    fixture.assert_remaining(&["b", "d"], 64, 0);
+    assert_eq!(*fixture.cache.get(&fixture.key("b")).unwrap(), "b");
+    assert_eq!(*fixture.cache.get(&fixture.key("d")).unwrap(), "d");
+
+    assert_eq!(fixture.cache.remove_where(|key| key.name == "absent"), 0);
+    fixture.assert_remaining(&["b", "d"], 64, 0);
+    assert_eq!(fixture.cache.remove_where(|_| true), 2);
+    fixture.assert_remaining(&[], 0, 0);
+    assert_eq!(fixture.cache.remove_where(|_| panic!("empty cache has no keys")), 0);
+}
+
+#[test]
+fn selective_removal_releases_only_matching_cached_values() {
+    let clones = Arc::new(AtomicUsize::new(0));
+    let key = |name| CloneCountingKey { name, clones: Arc::clone(&clones) };
+    let cache = UnifiedCache::new(4, Duration::from_secs(3600), EvictionPolicy::Lru);
+    let removed = Arc::new("removed value".to_owned());
+    let survivor = Arc::new("surviving value".to_owned());
+    let removed_weak = Arc::downgrade(&removed);
+    let survivor_weak = Arc::downgrade(&survivor);
+    cache.insert_arc(key("remove"), removed, 13);
+    cache.insert_arc(key("keep"), survivor, 29);
+
+    assert_eq!(cache.remove_where(|key| key.name == "remove"), 1);
+    assert!(removed_weak.upgrade().is_none());
+    assert!(survivor_weak.upgrade().is_some());
+    assert_eq!(cache.len(), 1);
+    assert_eq!(cache.total_memory_bytes(), 29);
+    assert_eq!(cache.stats().evictions, 0);
+    assert_eq!(clones.load(Ordering::Relaxed), 0);
+
+    assert_eq!(cache.remove_where(|_| true), 1);
+    assert!(survivor_weak.upgrade().is_none());
+    assert!(cache.is_empty());
+    assert_eq!(cache.total_memory_bytes(), 0);
+}
+
+#[test]
 fn expiration_retains_live_entries_and_accounting_without_cloning_keys() {
     let fixture = EvictionFixture::new(EvictionPolicy::Lru);
     {

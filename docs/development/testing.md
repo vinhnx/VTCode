@@ -510,6 +510,17 @@ Measures:
 3. **End-to-End Tests**: Test complete workflows
 4. **Performance Tests**: Benchmark critical paths
 
+Keep large unit suites in private behavior-focused child modules. Share fixtures through the nearest
+parent test module without widening production visibility or duplicating setup. The runtime-handler
+suite uses `tool_outcomes/handlers/tests/runtime/` for admission, budgets, corrections, history,
+lifecycle, patching, planning, preflight, and read reuse. OpenAI provider tests use
+`providers/openai/provider/tests/` for auth, caching, compaction, files, history, hosted shell,
+request policy, tools, and transport, alongside the existing cache TTL and usage suites.
+
+When moving tests, preserve assertions and fixture lifetimes, adjust relative fixture paths, and
+compare the selected test counts before and after extraction. Prefer stable suite or leaf-name
+filters over exact module paths when the module layout is not itself part of the contract.
+
 ### Test Naming Conventions
 
 ```rust

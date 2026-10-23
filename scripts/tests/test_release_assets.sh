@@ -400,6 +400,74 @@ else
     pass "find_ci_run_for_version missing arg rejected"
 fi
 
+echo "Testing local CI run filtering..."
+
+# Evaluate the actual jq expression against asymmetric rows. The existing
+# version-selection stub returns IDs directly and cannot catch filter drift.
+filtered_artifact_calls="$tmp/filtered-artifact-calls"
+: >"$filtered_artifact_calls"
+# Called indirectly by find_ci_run_for_version from the sourced helper.
+# shellcheck disable=SC2329
+gh() {
+    if [[ "$1" == "run" && "$2" == "list" ]]; then
+        shift 2
+        local filter=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+            --branch|--event)
+                # These server-side filters are intentionally avoided by the
+                # gh JSON-output compatibility path.
+                return 1
+                ;;
+            --jq)
+                filter="$2"
+                shift 2
+                ;;
+            *) shift ;;
+            esac
+        done
+        [[ -n "$filter" ]] || return 1
+        printf '%s\n' '[
+            {"databaseId":500,"conclusion":"success","headBranch":"main","event":"push"},
+            {"databaseId":400,"conclusion":"success","headBranch":"feature","event":"workflow_dispatch"},
+            {"databaseId":300,"conclusion":"failure","headBranch":"main","event":"workflow_dispatch"},
+            {"databaseId":200,"conclusion":"success","headBranch":"main","event":"workflow_dispatch"},
+            {"databaseId":100,"conclusion":"success","headBranch":"main","event":"workflow_dispatch"}
+        ]' | jq -r "$filter"
+        return
+    fi
+    if [[ "$1" == "api" ]]; then
+        local arg url=""
+        for arg in "$@"; do
+            [[ "$arg" == *"/runs/"* ]] && url="$arg"
+        done
+        local rid="${url#*runs/}"
+        rid="${rid%%/*}"
+        printf '%s\n' "$rid" >>"$filtered_artifact_calls"
+        if [[ "$rid" == "200" ]]; then
+            printf 'vtcode-9.9.8-x86_64-unknown-linux-gnu\n'
+        else
+            printf 'vtcode-9.9.9-x86_64-unknown-linux-gnu\n'
+        fi
+        return 0
+    fi
+    return 1
+}
+export -f gh
+
+got=$(find_ci_run_for_version "9.9.9" 20 || true)
+if [[ "$got" == "100" ]]; then
+    pass "local filtering selects only successful main dispatches with the requested artifact version"
+else
+    fail_test "local filtering: expected 100, got '$got'"
+fi
+filtered_calls=$(<"$filtered_artifact_calls")
+if [[ "$filtered_calls" == $'200\n100' ]]; then
+    pass "excluded CI runs cause no artifact API calls"
+else
+    fail_test "unexpected artifact lookup sequence: '$filtered_calls'"
+fi
+
 echo "Testing ensure_release_push_access..."
 
 # Save harness-provided tokens; the fallback path unsets them.

@@ -233,9 +233,19 @@ where
 
     /// Remove expired entries based on TTL
     fn remove_expired_entries_inner(inner: &mut UnifiedCacheInner<K, V>) {
-        let UnifiedCacheInner { entries, ttl, stats, .. } = inner;
-        entries.retain(|_, entry| {
-            if entry.is_expired(*ttl) {
+        let ttl = inner.ttl;
+        Self::remove_entries_where_inner(inner, |_, entry| entry.is_expired(ttl));
+    }
+
+    /// Remove matching entries in place without cloning keys or retaining values.
+    fn remove_entries_where_inner<F>(inner: &mut UnifiedCacheInner<K, V>, mut predicate: F) -> usize
+    where
+        F: FnMut(&K, &CacheEntry<V>) -> bool,
+    {
+        let UnifiedCacheInner { entries, stats, .. } = inner;
+        let previous_size = entries.len();
+        entries.retain(|key, entry| {
+            if predicate(key, entry) {
                 stats.total_memory_bytes = stats.total_memory_bytes.saturating_sub(entry.size_bytes);
                 false
             } else {
@@ -243,6 +253,7 @@ where
             }
         });
         stats.current_size = entries.len();
+        previous_size - entries.len()
     }
 
     /// Batch-evict `count` entries based on the eviction policy.
@@ -358,7 +369,7 @@ where
 
     /// Remove all entries that satisfy a predicate.
     ///
-    /// Returns the number of removed entries.
+    /// Returns the number of removed entries without cloning keys or buffering matches.
     pub fn remove_where<F>(&self, mut predicate: F) -> usize
     where
         F: FnMut(&K) -> bool,
@@ -367,13 +378,7 @@ where
             return 0;
         };
 
-        let keys_to_remove: Vec<K> = inner.entries.keys().filter(|key| predicate(key)).cloned().collect();
-
-        let removed_count = keys_to_remove.len();
-        for key in keys_to_remove {
-            Self::remove_inner(&mut inner, &key);
-        }
-        removed_count
+        Self::remove_entries_where_inner(&mut inner, |key, _| predicate(key))
     }
 
     /// Get total memory used by cache in bytes

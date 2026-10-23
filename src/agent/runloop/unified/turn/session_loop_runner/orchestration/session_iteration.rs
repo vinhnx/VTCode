@@ -2,21 +2,23 @@
 //!
 //! `run_single_agent_loop_unified_impl` owns the unified `loop` plus the state
 //! that outlives a single session (resume handoffs and `/new` restarts).
-//! Everything scoped to one session lives here: critical setup, runtime
-//! hydration, and the interaction loop. The exit tail is handed to
+//! This scope owns the session guards, critical setup and interaction loop.
+//! Private helpers borrow the live state for deferred initialization and
+//! follow-up restoration. The exit tail is handed to
 //! [`session_teardown::run_session_tail`] once the interaction loop ends.
 //!
-//! The body was moved verbatim; the session boundary is now explicit.
-//! `continue` becomes [`ControlFlow::Continue`], `break` and the early
-//! `return Ok(())` exits become [`ControlFlow::Break`], and cross-iteration
-//! locals are written through the borrowed [`SessionLoopState`]. Declarations
-//! and their order are unchanged, so ownership and drop order of the guards and
-//! per-session values are preserved.
+//! Cross-iteration state is written through the borrowed [`SessionLoopState`].
+//! Keep session-owned guards in this scope and preserve their declaration order
+//! when extracting helpers, including canonical persistence finalization before
+//! those guards are dropped on errors.
 
 use std::ops::ControlFlow;
 
 use super::super::{blocked_handoff, harness, verification_recovery};
 use super::*;
+
+mod initialization;
+mod resume;
 
 /// Cross-iteration state owned by the unified loop, borrowed for one session.
 ///
@@ -233,111 +235,26 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         .resume_progress(vtcode_commons::ui_protocol::ProgressPhase::Initializing);
     vtcode_commons::startup_trace::record_phase("session_setup_ui", session_ui_phase);
 
-    macro_rules! initialization_wait {
-        ($future:expr) => {{
-            let state = ui_setup.ctrl_c_state.clone();
-            let notify = ui_setup.ctrl_c_notify.clone();
-            match crate::agent::runloop::unified::stop_requests::await_initialization(&state, &notify, $future).await {
-                Some(result) => harness_try!(result),
-                None => {
-                    crate::agent::runloop::unified::stop_requests::finish_initialization_exit(
-                        &ui_setup.handle,
-                        &mut ui_setup.session,
-                        &state,
-                        crate::agent::runloop::unified::stop_requests::InitializationExitContext {
-                            emitter: harness_emitter.as_ref(),
-                            session_id: &turn_run_id.0,
-                            config: &config,
-                            full_auto,
-                            started: session_started_at,
-                        },
-                    )
-                    .await;
-                    return Ok(ControlFlow::Break(()));
-                }
-            }
-        }};
-    }
-    initialization_wait!(crate::agent::runloop::unified::session_setup::complete_session_registry(
-        &mut session_state,
-        config,
-        vt_cfg.as_ref(),
-        full_auto,
-        primary_agent_explicitly_configured,
-        resume_ref,
-        thread_handle.thread_id().as_str(),
-        session_primary_agent_override.as_deref(),
-    ));
-
-    // Retention walks the session store and may rmtree dozens of dirs.
-    // Scheduled only after first paint is available so a large archive
-    // cannot delay the first frame; still best-effort background.
-    {
-        let workspace = config.workspace.clone();
-        let vt_cfg = vt_cfg.clone();
-        let turn_run_id = turn_run_id.clone();
-        tokio::spawn(async move {
-            harness::run_harness_retention(&workspace, vt_cfg.as_ref(), &turn_run_id).await;
-        });
-    }
-
-    // Deferred hydration runs after the TUI first frame is available.
-    // The interaction loop must not dispatch a model turn until this
-    // completes; setup failures abort with the historical setup error.
-    let session_hydrate_phase = vtcode_commons::startup_trace::phase_started();
-    initialization_wait!(hydrate_session_runtime(
-        &mut session_state,
-        &mut ui_setup.context_manager,
-        config,
-        vt_cfg.as_ref(),
-        full_auto,
-        primary_agent_explicitly_configured,
-        resume_ref,
-        thread_handle.thread_id().as_str(),
-        session_primary_agent_override.as_deref(),
-    ));
-    vtcode_commons::startup_trace::record_phase("session_setup_hydrate", session_hydrate_phase);
-
-    // Re-drive UI surfaces that depend on hydrated session state.
-    let post_hydrate_guard =
-        harness_try!(apply_post_hydration_ui(vt_cfg.as_ref(), full_auto, &session_state, &mut ui_setup,));
-    if let Some(guard) = post_hydrate_guard {
-        // Prefer the post-hydrate refresh task when a controller appeared
-        // after first paint.
-        ui_setup.background_subprocess_task_guard = Some(guard);
-    }
-
-    // Session-start hooks run only after hydration so they observe the
-    // fully initialized tool registry. For `/new` the fresh prompt is
-    // waiting, so bound the total: per-command timeouts default to 60s
-    // and run sequentially, which can park `/new` for 10s+ on a slow
-    // hook. Timeout skips remaining hooks (warn, continue) instead of
-    // aborting the session — startup keeps full budgets.
-    if matches!(session_trigger, SessionStartTrigger::NewSession) {
-        initialization_wait!(async {
-            match tokio::time::timeout(
-                Duration::from_secs(2),
-                run_session_start_hooks(ui_setup.lifecycle_hooks.as_ref(), &mut ui_setup.renderer, &mut session_state),
-            )
-            .await
-            {
-                Ok(result) => {
-                    harness_try!(result);
-                }
-                Err(_elapsed) => {
-                    tracing::warn!(
-                        "session-start hooks timed out on /new fast path; continuing without remaining hooks"
-                    );
-                }
-            }
-            Ok::<(), anyhow::Error>(())
-        });
-    } else {
-        initialization_wait!(run_session_start_hooks(
-            ui_setup.lifecycle_hooks.as_ref(),
-            &mut ui_setup.renderer,
-            &mut session_state
-        ));
+    if let ControlFlow::Break(()) = harness_try!(
+        initialization::complete_session_initialization(
+            &mut session_state,
+            &mut ui_setup,
+            initialization::SessionInitializationContext {
+                config,
+                vt_cfg: vt_cfg.as_ref(),
+                full_auto,
+                primary_agent_explicitly_configured,
+                resume_ref,
+                session_id: thread_handle.thread_id().as_str(),
+                session_primary_agent_override: session_primary_agent_override.as_deref(),
+                session_trigger,
+                harness_emitter: harness_emitter.as_ref(),
+                session_started_at,
+            },
+        )
+        .await
+    ) {
+        return Ok(ControlFlow::Break(()));
     }
 
     drop(initialization_progress);
@@ -442,70 +359,18 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         crate::agent::runloop::unified::turn::context::tracker_continuation_adoption_allowed(&runtime.state.messages),
     );
     tool_registry.restore_completion_verification_from_history(&runtime.state.messages);
-    let durable_session_id = tool_registry.harness_context_snapshot().session_id;
-    if let Some(envelope) = vtcode_core::compaction::memory_envelope::load_latest_memory_envelope_async(
-        config.workspace.as_path(),
-        &durable_session_id,
+    resume::restore_session_follow_ups(
+        &mut runtime,
+        &tool_registry,
+        resume::FollowUpRestoreContext {
+            workspace_root: config.workspace.as_path(),
+            vt_cfg: vt_cfg.as_ref(),
+            resumed: resume_ref.is_some(),
+            ctrl_c_state: &ctrl_c_state,
+            renderer: &mut renderer,
+        },
     )
-    .await
-    {
-        if let Err(error) = runtime.restore_follow_up_state(envelope.pending_intents, envelope.applied_intent_ids) {
-            tracing::warn!(%error, "durable steering queue is full; pending intents were not replayed");
-        }
-    }
-    if resume_ref.is_some()
-        && let Some(pending_prompt) = take_pending_resumed_user_prompt(runtime.state.messages_mut())
-    {
-        let (_, runtime_steering) = runtime.split_mut();
-        if let Err(error) = runtime_steering.try_queue_follow_up_intent(pending_prompt) {
-            tracing::warn!(%error, "Unable to queue resumed user prompt");
-        }
-    } else if resume_ref.is_some() {
-        use crate::agent::runloop::unified::turn::tool_outcomes::helpers as tracker_continue;
-        let auto_continue_enabled = crate::agent::runloop::unified::stop_requests::stop_outcome(&ctrl_c_state)
-            .is_none()
-            && tracker_continue::tracker_auto_continue_enabled(vt_cfg.as_ref());
-        let cross_turn_turns = tracker_continue::tracker_cross_turn_turns(vt_cfg.as_ref());
-        let tracker_adoption_allowed = tool_registry.tracker_adopted_for_request();
-        let incomplete = if auto_continue_enabled && tracker_adoption_allowed && cross_turn_turns > 0 {
-            tracker_continue::incomplete_tracker_items(&tool_registry).await
-        } else {
-            None
-        };
-        if !tool_registry.is_planning_active()
-            && tracker_continue::should_queue_tracker_resume_continuation(
-                auto_continue_enabled,
-                tracker_adoption_allowed,
-                cross_turn_turns,
-                incomplete.as_deref(),
-            )
-        {
-            let incomplete = incomplete.unwrap_or_default();
-            // Resume with open TODO/tracker steps: auto-queue one continuation
-            // turn instead of waiting for the user to type continue.
-            let follow_up = tracker_continue::tracker_continue_follow_up(&incomplete);
-            let directive = tracker_continue::tracker_continue_directive(
-                tracker_continue::TRACKER_RESUME_DIRECTIVE_LABEL,
-                &incomplete,
-            );
-            {
-                let messages = std::sync::Arc::make_mut(&mut runtime.state.messages);
-                messages.push(vtcode_core::llm::provider::Message::system(directive));
-            }
-            let (_, runtime_steering) = runtime.split_mut();
-            match runtime_steering.try_queue_synthetic_follow_up_input(follow_up) {
-                Ok(()) => {
-                    let _ = renderer.line(
-                            MessageStyle::Info,
-                            "[i] Resumed session has incomplete task_tracker steps; auto-continuing without manual `continue`.",
-                        );
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Unable to queue tracker resume continuation");
-                }
-            }
-        }
-    }
+    .await;
     let tool_result_cache = execution.tool_result_cache;
     let tool_permission_cache = execution.tool_permission_cache;
     let permissions_state = execution.permissions_state;

@@ -37,7 +37,6 @@ use super::support::{
     build_withdrawn_turn_changes_note, checkpoint_session_archive_start, checkpoint_unavailable_notice,
     force_reload_workspace_config_for_execution, format_workspace_relative_paths, latest_assistant_result_text,
     prepare_transient_turn_notes, prompt_startup_planning_workflow, remove_transient_system_notes,
-    take_pending_resumed_user_prompt,
 };
 use super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
 use crate::agent::runloop::ResumeSession;
@@ -51,8 +50,7 @@ use crate::agent::runloop::unified::planning_workflow_state::{
 use crate::agent::runloop::unified::postamble::{ExitData, print_exit_summary};
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
 use crate::agent::runloop::unified::session_setup::{
-    SessionState, apply_post_hydration_ui, hydrate_session_runtime, initialize_session_critical, initialize_session_ui,
-    run_session_start_hooks, spawn_signal_handler,
+    SessionState, initialize_session_critical, initialize_session_ui, spawn_signal_handler,
 };
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::status_line::InputStatusState;

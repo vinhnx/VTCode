@@ -32,7 +32,7 @@ use crate::tools::registry::registration::ToolRegistration;
 use crate::tools::registry::{ToolInventory, ToolRegistry, native_cgp_tool_factory};
 use crate::tools::request_user_input::RequestUserInputTool;
 use crate::tools::web_fetch::{WEB_FETCH_DESCRIPTION, WebFetchTool, web_fetch_parameter_schema};
-use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool};
+use crate::tools::web_search::{WEB_SEARCH_DESCRIPTION, WebSearchTool, web_search_parameter_schema};
 use serde_json::json;
 use vtcode_utility_tool_specs::{
     AGENT_DESCRIPTION, EXEC_COMMAND_DESCRIPTION, MCP_DESCRIPTION, SEARCH_TOOLS_DESCRIPTION, WRITE_STDIN_DESCRIPTION,
@@ -343,23 +343,7 @@ impl ToolPack for WebPack {
             ToolRegistration::from_tool_instance(tools::WEB_SEARCH, CapabilityLevel::Basic, web_search)
                 .with_native_cgp_factory(web_search_factory)
                 .with_description(WEB_SEARCH_DESCRIPTION)
-                .with_parameter_schema(json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "A nonblank search query (a topic, question, or keywords), up to 500 characters.",
-                            "minLength": 1,
-                            "maxLength": 500
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (default: 8, max: 20)."
-                        }
-                    },
-                    "required": ["query"],
-                    "additionalProperties": false
-                }))
+                .with_parameter_schema(web_search_parameter_schema())
                 .with_permission(ToolPolicy::Prompt)
                 .with_aliases(["search_web", "websearch"]),
             ToolRegistration::from_tool_instance(tools::DEFUDDLE_FETCH, CapabilityLevel::Basic, defuddle)

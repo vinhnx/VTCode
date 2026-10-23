@@ -7,6 +7,13 @@ DuckDuckGo HTML endpoint and maps ranked result links into the stable
 required. Full-page retrieval remains the separate `web_fetch` tool and still
 uses its own approval, domain, and network-safety checks.
 
+The tool facade owns arguments, session admission, cache state, and response
+classification. Private `parser.rs` owns pure HTML extraction and result URL
+validation; `transport.rs` owns HTTP dispatch, redirect policy, and bounded body
+reading. Their tests live in matching private test modules. Both builtin
+registration paths use `web_search_parameter_schema()` from the facade, and
+`parse_duckduckgo_html` remains available through its existing public path.
+
 The provider configuration accepts `auto` (the default compatibility alias)
 and `duckduckgo`. Removed provider values fail during configuration loading
 with the generic supported-values error instead of silently selecting another
@@ -16,7 +23,7 @@ HTML endpoint.
 
 DuckDuckGo does not publish a dependable numeric quota for its HTML endpoint.
 The 3-second cooldown, 5-minute successful-result cache, 12-request session
-budget, and 1 MiB response-body limit are conservative VTCode safeguards, not
+budget, and 1,000,000-byte response-body limit are conservative VTCode safeguards, not
 claims about a vendor quota. They remain configurable and are scoped to the
 tool instance; cache hits do not consume cooldown or session budget.
 
@@ -37,7 +44,7 @@ immediately from the same network or session. They should use `web_fetch` for
 a known result URL under its separate approval and domain rules, or ask the
 user about a future alternate backend.
 
-The response reader rejects bodies over 1 MiB before parsing. The streaming
+The response reader rejects bodies over 1,000,000 bytes before parsing. The streaming
 HTML parser limits results to 20, truncates titles and snippets, and accepts
 only HTTP(S) result URLs with a host. Parser, URL-validation, body-limit,
 challenge, cache, cooldown, cap, and concurrent-admission behavior are covered

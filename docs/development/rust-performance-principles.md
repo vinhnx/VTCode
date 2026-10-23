@@ -607,6 +607,18 @@ call, per recorded event, per indexed file. The lesson ports directly:
   path of least resistance — the maintainer duty from the article is to make
   the bad shape hard to write, not to catch it in review.
 
+## Cache Invalidation Without Key Clones
+
+`UnifiedCache` shares one in-place removal path for TTL expiration and predicate-based invalidation.
+It visits each entry once, releases matching cache-owned values, and updates live-entry and byte
+accounting without cloning keys or buffering matches. Invalidation and expiration do not increment
+the capacity-eviction counter; policy-ranked eviction still selects its own victims.
+
+The `cache::eviction_tests::selective_removal` regressions count key clones and check asymmetric
+survivor sets, byte totals, empty/no-match/all-match boundaries, and value release through weak
+references. These deterministic checks establish eliminated key clones, not an end-to-end latency
+improvement. Tool-result invalidation regressions cover callers that discard stale filesystem data.
+
 ## Checklist for VT Code Hot Paths
 
 When reviewing or writing a hot path in vtcode:

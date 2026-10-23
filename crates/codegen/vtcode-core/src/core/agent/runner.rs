@@ -39,6 +39,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use vtcode_config::auth::OpenAIChatGptAuthHandle;
 
+mod completion;
 mod config_helpers;
 mod constants;
 mod continuation;
@@ -57,6 +58,7 @@ mod planner_types;
 pub mod prompt_alignment;
 mod replan_helpers;
 mod retry;
+mod runtime_prompt;
 mod summarize;
 mod summary;
 mod task_setup;

@@ -4,10 +4,9 @@
 //!   - Main loop policy and break/continue rules stay in this root.
 //!   - Post-tool recovery, usage accounting, and completion notification helpers live in `turn_loop/` support modules.
 //! - Constraints: Preserve turn-phase transitions and recovery semantics when moving helpers out of the root.
-//! - Verify: `cargo check -p vtcode && cargo test -p vtcode --bin vtcode turn_loop`
+//! - Verify: `cargo nextest run --locked -p vtcode -E 'test(turn_loop)'`
 
 use std::collections::BTreeSet;
-use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -17,14 +16,12 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 use anyhow::Result;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::time::timeout;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::agent::events::{tool_invocation_completed_event, tool_output_completed_event};
 use vtcode_core::core::agent::runtime::RuntimeSteering;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::exec::events::{ToolCallStatus, ToolOutcome, Usage as HarnessUsage};
+use vtcode_core::exec::events::Usage as HarnessUsage;
 use vtcode_core::hooks::LifecycleHookEngine;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry, ToolResultCache};
@@ -32,10 +29,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_ui::tui::app::InlineHeaderContext;
 use vtcode_ui::tui::app::{InlineHandle, InlineSession};
 
-use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, harness_event, turn_blocked_event, turn_completed_event, turn_completed_event_with_sessions,
-    turn_failed_event, turn_started_event,
-};
+use crate::agent::runloop::unified::inline_events::harness::{HarnessEventEmitter, turn_started_event};
 use crate::agent::runloop::unified::planning_workflow::maybe_handle_planning_exit_trigger;
 use crate::agent::runloop::unified::planning_workflow_state::PlanningWorkflowSessionState;
 use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, RunLoopContext, TurnPhase};
@@ -47,6 +41,11 @@ use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     resolve_safety_tool_call_limits,
 };
 
+#[path = "turn_loop/compaction.rs"]
+mod compaction;
+#[path = "turn_loop/finalization.rs"]
+mod finalization;
+use finalization::finalize_turn;
 #[path = "turn_loop/notifications.rs"]
 mod notifications;
 #[path = "turn_loop/post_tool_recovery.rs"]
@@ -88,7 +87,8 @@ mod usage_accounting;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{ANTI_BLIND_EDITING_DIRECTIVE, LoopTracker};
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, error_message_for_user};
-use notifications::emit_turn_outcome_notification;
+#[cfg(test)]
+use post_tool_recovery::POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON;
 #[cfg(test)]
 use post_tool_recovery::PostToolFailureRecovery;
 #[cfg(test)]
@@ -96,15 +96,15 @@ use post_tool_recovery::maybe_recover_after_post_tool_llm_failure;
 #[cfg(test)]
 use post_tool_recovery::normalize_tool_free_recovery_break_outcome;
 use post_tool_recovery::{
-    POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON, PlanRecoveryEventContext, PostToolFailureAction,
-    PostToolRecoveryContext, dispatch_post_tool_failure, ensure_post_tool_resume_directive,
+    PlanRecoveryEventContext, PostToolFailureAction, PostToolRecoveryContext, dispatch_post_tool_failure,
     normalize_tool_free_recovery_break_outcome_with_events,
 };
 #[cfg(test)]
 use recovery_compaction::current_turn_preserve_index;
-use recovery_compaction::{RecoveryCompactionRequest, compact_before_tool_enabled_retry};
 use settings::apply_pending_session_settings;
-use usage_accounting::{accumulate_turn_usage, estimate_session_costs, has_turn_usage, stop_reason_from_finish_reason};
+#[cfg(test)]
+use usage_accounting::has_turn_usage;
+use usage_accounting::{accumulate_turn_usage, estimate_session_costs, stop_reason_from_finish_reason};
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
@@ -125,12 +125,6 @@ const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 4096;
 /// forces the user to nudge "continue". The extra pass only fires when the
 /// model keeps emitting tool calls during a tool-free recovery window.
 const MAX_RECOVERY_RETRIES: u8 = 3;
-/// Outer budget for terminating exec sessions during turn-level Exit/Cancelled
-/// teardown. With `Immediate` PTY mode a healthy close is milliseconds; the cap
-/// only fires on a wedged backend close. On timeout the session-end backstop
-/// re-runs (2 s cap) and the OS reaps any remainder at process exit — never
-/// park the fullscreen TUI waiting for a child.
-const TURN_EXIT_EXEC_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 /// Hard cap on consecutive assistant text-only responses. Without this, the
 /// recovery / continuation logic can loop forever when the model has already
 /// produced a substantive final answer but the system keeps re-prompting it
@@ -733,171 +727,18 @@ pub(crate) async fn run_turn_loop(
             result = TurnLoopResult::Blocked { reason: Some(error.to_string()) };
             break;
         }
-        let harness_snapshot = ctx.tool_registry.harness_context_snapshot();
-        let steering_update = vtcode_core::compaction::memory_envelope::SessionMemoryEnvelopeUpdate {
-            pending_intents: Some(ctx.runtime_steering.pending_follow_up_intents_snapshot()),
-            applied_intent_ids: ctx.runtime_steering.applied_follow_up_intent_ids().iter().cloned().collect(),
-            ..Default::default()
-        };
-        let recovery_compaction_requested = ctx.harness_state.take_post_tool_compaction_pending();
-        if recovery_compaction_requested {
-            let context_capacity_failure = ctx.harness_state.post_tool_context_capacity_failure();
-            // The transcript row stays owned while recovery compacts the older prefix.
-            let progress = crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
-                ctx.handle,
-                crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(working_history),
-            );
-            let recovery_result = compact_before_tool_enabled_retry(RecoveryCompactionRequest {
-                history: working_history,
-                turn_history_start_len: &mut turn_history_start_len,
-                compaction_context: crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
-                    ctx.provider_client.as_ref(),
-                    &active_model,
-                    &harness_snapshot.session_id,
-                    &ctx.harness_state.run_id.0,
-                    &ctx.config.workspace,
-                    vt_cfg,
-                    ctx.lifecycle_hooks,
-                    ctx.harness_emitter,
-                ),
-                session_stats: ctx.session_stats,
-                context_manager: ctx.context_manager,
-                steering_update,
-            })
-            .await;
-            let recovery_elapsed = progress.finish();
-            match recovery_result {
-                Ok(Some(outcome)) => {
-                    repeated_tool_attempts.clear_navigation_evidence();
-                    let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-                        outcome.estimated_tokens_before,
-                        outcome.estimated_tokens_after,
-                        outcome.mode.as_str(),
-                        recovery_elapsed,
-                    );
-                    let _ = ctx.renderer.line(MessageStyle::Info, &label);
-                }
-                Ok(None) if context_capacity_failure => {
-                    let _ = ctx.renderer.line(
-                        MessageStyle::Warning,
-                        "Recovery compaction found no reducible history; the current history was preserved.",
-                    );
-                    ctx.harness_state.mark_post_tool_context_compaction_failed();
-                    ensure_post_tool_resume_directive(working_history);
-                    result = TurnLoopResult::Blocked {
-                        reason: Some(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.to_string()),
-                    };
-                    break;
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    tracing::warn!(
-                        error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err),
-                        "Post-tool recovery compaction failed; preserving the existing history for the bounded retry"
-                    );
-                    let prefix = crate::agent::runloop::unified::turn::compaction::format_compaction_failed(
-                        recovery_elapsed,
-                        &err,
-                    );
-                    if context_capacity_failure {
-                        let _ = ctx.renderer.line(MessageStyle::Error, &prefix);
-                        ctx.harness_state.mark_post_tool_context_compaction_failed();
-                        ensure_post_tool_resume_directive(working_history);
-                        result = TurnLoopResult::Blocked {
-                            reason: Some(POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON.to_string()),
-                        };
-                        break;
-                    }
-                    let _ = ctx.renderer.line(
-                        MessageStyle::Warning,
-                        &format!("{prefix} Continuing with full history for the bounded retry."),
-                    );
-                }
-            }
-        } else {
-            tracing::info!(
-                model = %active_model,
-                context_budget,
-                prompt_tokens = ctx.context_manager.current_token_usage(),
-                "Resolved per-turn context budget denominator"
-            );
-            // Only show the progress row when compaction is likely to run.
-            // `maybe_auto_compact_history` returns `None` fast below threshold,
-            // when disabled, or when suppressed; starting a progress row
-            // unconditionally would flicker on every turn.
-            let auto_start = Instant::now();
-            let auto_compaction_allowed = vt_cfg.is_some_and(|cfg| cfg.agent.harness.auto_compaction_enabled)
-                && ctx.session_stats.auto_compact_suppressed == vtcode_core::compaction::SUPPRESS_NONE;
-            let auto_threshold = crate::agent::runloop::unified::turn::compaction::effective_compaction_threshold(
-                vt_cfg,
-                ctx.provider_client.as_ref(),
-                &active_model,
-            );
-            let auto_likely = auto_compaction_allowed
-                && (ctx.context_manager.compaction_pending()
-                    || auto_threshold.is_some_and(|threshold| ctx.context_manager.current_token_usage() >= threshold));
-            let auto_progress = auto_likely.then(|| {
-                crate::agent::runloop::unified::turn::compaction::CompactionProgressGuard::start(
-                    ctx.handle,
-                    crate::agent::runloop::unified::turn::compaction::estimate_history_tokens(working_history),
-                )
-            });
-            let auto_result = crate::agent::runloop::unified::turn::compaction::maybe_auto_compact_history(
-                crate::agent::runloop::unified::turn::compaction::CompactionContext::new(
-                    ctx.provider_client.as_ref(),
-                    &active_model,
-                    &harness_snapshot.session_id,
-                    &ctx.harness_state.run_id.0,
-                    &ctx.config.workspace,
-                    vt_cfg,
-                    ctx.lifecycle_hooks,
-                    ctx.harness_emitter,
-                ),
-                crate::agent::runloop::unified::turn::compaction::CompactionState::new(
-                    working_history,
-                    ctx.session_stats,
-                    ctx.context_manager,
-                )
-                .with_steering_update(steering_update),
-            )
-            .await;
-            let auto_elapsed = auto_progress
-                .map(|guard| guard.finish())
-                .unwrap_or_else(|| auto_start.elapsed());
-            match auto_result {
-                Ok(Some(outcome)) => {
-                    repeated_tool_attempts.clear_navigation_evidence();
-                    turn_history_start_len = outcome.compacted_len;
-                    tracing::info!(
-                        original_len = outcome.original_len,
-                        compacted_len = outcome.compacted_len,
-                        turn_history_start_len,
-                        "Applied local fallback compaction before the next turn request"
-                    );
-                    let label = crate::agent::runloop::unified::turn::compaction::format_compacted_summary(
-                        outcome.estimated_tokens_before,
-                        outcome.estimated_tokens_after,
-                        outcome.mode.as_str(),
-                        auto_elapsed,
-                    );
-                    let _ = ctx.renderer.line(MessageStyle::Info, &label);
-                    // Continuation: do not break. The loop falls through to the
-                    // next LLM request using the compacted handoff (summary +
-                    // envelope + continuity tail) so the task resumes.
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    tracing::warn!(
-                        error = %crate::agent::runloop::unified::turn::compaction::format_compaction_error_details(&err),
-                        "Automatic context compaction failed; continuing with full history"
-                    );
-                    let label =
-                        crate::agent::runloop::unified::turn::compaction::format_compaction_failed(auto_elapsed, &err);
-                    let _ = ctx
-                        .renderer
-                        .line(MessageStyle::Warning, &format!("{label} Continuing with full history."));
-                }
-            }
+        if let Some(blocked) = compaction::compact_before_request(
+            &mut ctx,
+            working_history,
+            &mut turn_history_start_len,
+            &mut repeated_tool_attempts,
+            &active_model,
+            context_budget,
+        )
+        .await
+        {
+            result = blocked;
+            break;
         }
 
         // Clone validation cache arc to avoid borrow conflict
@@ -1916,192 +1757,6 @@ fn verify_mid_turn_prompt_received(working_history: &[uni::Message], turn_histor
             history_len = working_history.len(),
             "Model switched mid-turn with no fresh user prompt in current turn; compacted context plus resume note retained"
         );
-    }
-}
-
-/// Finalize the turn: terminate sessions if needed, emit outcome events,
-/// and send notifications.
-async fn finalize_turn(
-    ctx: &mut TurnLoopContext<'_>,
-    working_history: &[uni::Message],
-    result: &TurnLoopResult,
-    turn_usage: &HarnessUsage,
-) {
-    use vtcode_commons::program_status::{ProgramState, ProgramStatusUpdate};
-    let state = match result {
-        TurnLoopResult::Completed { .. } => ProgramState::Done,
-        TurnLoopResult::Aborted => ProgramState::Error,
-        TurnLoopResult::Blocked { .. } => ProgramState::Blocked,
-        TurnLoopResult::Cancelled | TurnLoopResult::Exit => ProgramState::Idle,
-    };
-    ctx.handle.program_status(ProgramStatusUpdate::Outcome(state));
-    if let TurnLoopResult::Blocked { reason } = result {
-        let reason_text = reason.as_deref().unwrap_or("turn blocked");
-        let outcome = if reason_text.contains(ASSISTANT_TEXT_RESPONSE_CAP_REASON) {
-            "safety_cap_handoff"
-        } else {
-            "blocked_handoff"
-        };
-        tracing::info!(
-            target: "vtcode.turn.metrics",
-            metric = "turn_handoff",
-            outcome,
-            reason = reason_text,
-            run_id = %ctx.harness_state.run_id.0,
-            turn_id = %ctx.harness_state.turn_id.0,
-            "turn handoff metric"
-        );
-    }
-    if matches!(result, TurnLoopResult::Cancelled) {
-        terminate_exec_sessions_bounded(
-            ctx.tool_registry.terminate_active_exec_sessions_for_exit_async(),
-            "active exec sessions after turn cancellation",
-        )
-        .await;
-    } else if matches!(result, TurnLoopResult::Exit) {
-        terminate_exec_sessions_bounded(
-            ctx.tool_registry.terminate_all_exec_sessions_for_exit_async(),
-            "all exec sessions after turn exit",
-        )
-        .await;
-    }
-    if let Some(emitter) = ctx.harness_emitter {
-        // Exit is a graceful user-initiated action, not a failure
-        let event = match result {
-            TurnLoopResult::Exit => turn_completed_event(turn_usage.clone()),
-            TurnLoopResult::Completed { .. } => {
-                // Capture live exec sessions only for the completed path so
-                // `turn.completed` carries the same bounded id set as
-                // `SnapshotTurnDiagnostics` for cross-turn resume correlation.
-                // Backend-checked, newest first, capped at 4 by the helper.
-                // Stops skip this optional lookup so reader contention cannot
-                // delay accepted exit.
-                let in_progress_ids: Vec<String> = crate::agent::runloop::unified::stop_requests::await_with_stop(
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    ctx.tool_registry
-                        .in_progress_exec_sessions(vtcode_core::exec::events::MAX_IN_PROGRESS_EXEC_SESSIONS),
-                )
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .map(|session| session.id.as_str().to_string())
-                .collect();
-                if in_progress_ids.is_empty() {
-                    turn_completed_event(turn_usage.clone())
-                } else {
-                    turn_completed_event_with_sessions(turn_usage.clone(), in_progress_ids)
-                }
-            }
-            TurnLoopResult::Aborted => {
-                turn_failed_event("turn aborted", has_turn_usage(turn_usage).then_some(turn_usage.clone()))
-            }
-            TurnLoopResult::Cancelled => {
-                turn_failed_event("turn cancelled", has_turn_usage(turn_usage).then_some(turn_usage.clone()))
-            }
-            TurnLoopResult::Blocked { .. } => {
-                turn_failed_event("turn blocked", has_turn_usage(turn_usage).then_some(turn_usage.clone()))
-            }
-        };
-        if let Err(e) = emitter.emit(event) {
-            tracing::debug!(error = %e, "harness turn outcome event emission failed");
-        }
-        if let TurnLoopResult::Blocked { reason } = result {
-            let message = reason.clone().unwrap_or_else(|| "turn blocked".to_string());
-            // Blocked-call fuse telemetry (last tool, enforced caps) captured
-            // at trip time; blocks that did not trip the fuse keep the
-            // previous `None`/zero fields.
-            let fuse_telemetry = ctx.harness_state.take_blocked_tool_recovery_telemetry();
-            let (last_tool, consecutive_cap, total_cap, blocked_streak, blocked_total) = fuse_telemetry
-                .map(|telemetry| {
-                    (
-                        Some(telemetry.last_tool),
-                        telemetry.consecutive_cap,
-                        telemetry.total_cap,
-                        telemetry.blocked_streak,
-                        telemetry.blocked_total,
-                    )
-                })
-                .unwrap_or((
-                    None,
-                    0,
-                    0,
-                    ctx.harness_state.consecutive_blocked_tool_calls,
-                    ctx.harness_state.blocked_tool_calls,
-                ));
-            let blocked_event = vtcode_core::exec::events::TurnBlockedEvent {
-                completed_at: None,
-                message: message.clone(),
-                last_tool,
-                blocked_streak,
-                blocked_total,
-                consecutive_cap,
-                total_cap,
-                recovery_active: ctx.harness_state.is_recovery_active() || ctx.harness_state.recovery_pass_used(),
-                usage: has_turn_usage(turn_usage).then(|| turn_usage.clone()),
-            };
-            if let Err(e) = emitter.emit(turn_blocked_event(blocked_event)) {
-                tracing::debug!(error = %e, "harness turn.blocked event emission failed");
-            }
-            if let Err(e) = emitter.emit(harness_event(
-                vtcode_core::exec::events::HarnessEventKind::TurnBlocked,
-                Some(message),
-                None,
-                None,
-                None,
-            )) {
-                tracing::debug!(error = %e, "harness TurnBlocked event emission failed");
-            }
-        }
-
-        // Close streamed tool-call items whose calls never reached the
-        // pipeline. Entries only survive here when the call was rejected
-        // pre-flight, dropped from a batch, or interrupted by the turn ending;
-        // dispatched calls remove themselves on execution or rejection.
-        for (tool_call_id, streamed) in ctx.harness_state.take_all_streamed_tool_call_item_ids() {
-            let failed = ToolCallStatus::Failed;
-            let raw_id = (!tool_call_id.trim().is_empty()).then_some(tool_call_id.as_str());
-            let _ = emitter.emit(tool_invocation_completed_event(
-                streamed.item_id.clone(),
-                &streamed.tool_name,
-                None,
-                raw_id,
-                failed.clone(),
-                ToolOutcome::Cancelled,
-            ));
-            let _ = emitter.emit(tool_output_completed_event(
-                streamed.item_id,
-                raw_id,
-                failed,
-                None,
-                None,
-                UNDISPATCHED_TOOL_CALL_CLOSURE_TEXT,
-            ));
-        }
-    }
-    let _ = crate::agent::runloop::unified::stop_requests::await_with_stop(
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        emit_turn_outcome_notification(
-            effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
-            working_history,
-            ctx.config.workspace.as_path(),
-            ctx.harness_state,
-            result,
-        ),
-    )
-    .await;
-}
-
-/// Terminate exec sessions during turn-level Exit/Cancelled teardown, bounded
-/// by [`TURN_EXIT_EXEC_SHUTDOWN_TIMEOUT`]. A timeout only skips waiting: the
-/// session-end backstop re-runs the sweep and the OS reaps any remainder at
-/// process exit.
-async fn terminate_exec_sessions_bounded(termination: impl Future<Output = Result<()>>, phase: &str) {
-    match timeout(TURN_EXIT_EXEC_SHUTDOWN_TIMEOUT, termination).await {
-        Ok(Ok(())) => {}
-        Ok(Err(err)) => tracing::warn!(error = %err, "Failed to terminate {phase}"),
-        Err(_elapsed) => tracing::warn!("timed out terminating {phase}; continuing teardown"),
     }
 }
 
