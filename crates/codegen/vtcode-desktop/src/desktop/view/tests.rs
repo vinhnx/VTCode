@@ -303,6 +303,42 @@ fn settings_popover_copies_the_credential_setup_command(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temp workspace");
+    std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace")
+        .expect("write file");
+    std::fs::create_dir_all(workspace.path().join("target/debug")).expect("skip dir");
+    std::fs::write(workspace.path().join("target/debug/artifact"), b"binary").expect("write artifact");
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        let readme_index = view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.refresh_files(cx);
+            assert!(
+                !view.files.iter().any(|entry| entry.rel_path.starts_with("target")),
+                "dependency directories are skipped"
+            );
+            view.files
+                .iter()
+                .position(|entry| entry.rel_path == "README.md")
+                .expect("README listed")
+        });
+        window.render_frame(cx);
+        window.click(format!("file-{readme_index}"), cx);
+        window.render_frame(cx);
+        window.click("copy-preview", cx);
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some("# Notes\n\nhello from the workspace")
+        );
+        window.click("close-preview", cx);
+        assert!(view.read(cx).file_preview.is_none(), "close dismisses the preview");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     use vtcode_exec_events::{
         FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,

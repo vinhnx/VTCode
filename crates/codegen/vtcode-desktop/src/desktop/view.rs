@@ -19,6 +19,7 @@ use vtcode_desktop_protocol::{
     SessionHistoryMessage, SessionLoadResult, SessionSummary, ThreadEventNotification,
 };
 
+use super::files::{self, FileEntry, FilePreview};
 use super::markdown::render_markdown;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
@@ -78,6 +79,8 @@ struct DesktopView {
     composer: Entity<TextareaState>,
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
+    files: Vec<FileEntry>,
+    file_preview: Option<FilePreview>,
 }
 
 impl DesktopView {
@@ -108,6 +111,8 @@ impl DesktopView {
             composer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 7).submit_on_enter(true)),
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
+            files: Vec::new(),
+            file_preview: None,
         }
     }
 
@@ -193,6 +198,8 @@ impl DesktopView {
         self.running = false;
         self.error = None;
         self.status = "Starting local VT Code service…".to_string();
+        self.files = files::scan_workspace(&workspace);
+        self.file_preview = None;
 
         match launch_backend(workspace, self.event_tx.clone()) {
             Ok(backend) => {
@@ -250,6 +257,30 @@ impl DesktopView {
         self.clear_error();
         if !self.request(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id })) {
             self.error = Some("The local service request queue is full. Try again.".to_string());
+        }
+        cx.notify();
+    }
+
+    fn refresh_files(&mut self, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.workspace.clone() {
+            self.files = files::scan_workspace(&workspace);
+            cx.notify();
+        }
+    }
+
+    fn open_file_preview(&mut self, rel_path: String, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        match files::read_preview(&workspace, &rel_path) {
+            Some(preview) => {
+                self.file_preview = Some(preview);
+                self.clear_error();
+            }
+            None => {
+                self.error =
+                    Some(format!("“{rel_path}” is missing, binary, or too large to preview."));
+            }
         }
         cx.notify();
     }
@@ -801,6 +832,7 @@ impl DesktopView {
             div()
                 .id("session-list")
                 .flex_1()
+                .min_h_0()
                 .w_full()
                 .overflow_y_scroll()
                 .flex()
@@ -819,6 +851,52 @@ impl DesktopView {
                             .disabled(self.running || self.backend.is_none())
                             .when(selected, |button| button.primary())
                             .on_click(cx.listener(move |this, _, _, cx| this.load_session(session_id.clone(), cx))),
+                    )
+                })),
+        );
+
+        sidebar = sidebar.child(
+            div()
+                .mt_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(div().text_sm().font_semibold().child("Workspace files"))
+                .child(
+                    Button::new("refresh-files")
+                        .label("Refresh")
+                        .ghost()
+                        .disabled(self.workspace.is_none())
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
+                ),
+        );
+        sidebar = sidebar.child(
+            div()
+                .id("file-list")
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .children(self.files.iter().enumerate().map(|(index, entry)| {
+                    let rel_path = entry.rel_path.clone();
+                    let indent = entry.depth;
+                    let is_dir = entry.is_dir;
+                    let label = if is_dir {
+                        format!("{rel_path}/")
+                    } else {
+                        rel_path.clone()
+                    };
+                    div().w_full().pl(px(12. * indent as f32)).child(
+                        Button::new(format!("file-{index}"))
+                            .label(label)
+                            .ghost()
+                            .disabled(is_dir)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.open_file_preview(rel_path.clone(), cx)
+                            })),
                     )
                 })),
         );
@@ -981,6 +1059,98 @@ impl DesktopView {
                 )));
         }
         panel.into_any_element()
+    }
+
+    fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = cx.theme();
+        let colors = &theme.colors;
+        let Some(preview) = self.file_preview.as_ref() else {
+            return div();
+        };
+        let text = preview.text.clone();
+        let mono = theme.mono_font_family.clone();
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(colors.background.opacity(0.6))
+            .child(
+                div()
+                    .id("file-preview")
+                    .w(px(860.))
+                    .max_h(px(640.))
+                    .flex()
+                    .flex_col()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .shadow_md()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .px_3()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(colors.border)
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .truncate()
+                                    .font_medium()
+                                    .font_family(mono.clone())
+                                    .child(preview.rel_path.clone()),
+                            )
+                            .child(
+                                Button::new("copy-preview")
+                                    .label("Copy")
+                                    .ghost()
+                                    .on_click(move |_, _, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                            text.to_string(),
+                                        ))
+                                    }),
+                            )
+                            .child(
+                                Button::new("close-preview")
+                                    .label("Close")
+                                    .ghost()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.file_preview = None;
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("file-preview-body")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .p_3()
+                            .text_xs()
+                            .font_family(mono)
+                            .child(preview.text.clone()),
+                    )
+                    .when(preview.truncated, |panel| {
+                        panel.child(
+                            div()
+                                .px_3()
+                                .py_2()
+                                .border_t_1()
+                                .border_color(colors.border)
+                                .text_xs()
+                                .text_color(colors.muted_foreground)
+                                .child("Preview truncated at 64 KiB."),
+                        )
+                    }),
+            )
     }
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1485,6 +1655,9 @@ impl Render for DesktopView {
                         .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
                 ),
             );
+        }
+        if self.file_preview.is_some() {
+            body = body.child(self.render_file_preview(cx));
         }
         body
     }

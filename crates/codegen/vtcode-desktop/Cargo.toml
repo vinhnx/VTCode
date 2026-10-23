@@ -29,4 +29,5 @@ vtcode-exec-events = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["test-support"] }
+tempfile = { workspace = true }
 
