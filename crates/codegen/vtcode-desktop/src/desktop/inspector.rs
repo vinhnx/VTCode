@@ -170,9 +170,11 @@ pub(super) fn latest_output(transcript: &Transcript) -> Option<OutputView> {
         Some(OutputView {
             title: item.title.clone(),
             text: output.clone(),
-            running: item.text.lines().next().is_some_and(|status| {
-                status == "running" || status == "in progress" || status == "started"
-            }),
+            running: item
+                .text
+                .lines()
+                .next()
+                .is_some_and(|status| status == "running" || status == "in progress" || status == "started"),
         })
     })
 }

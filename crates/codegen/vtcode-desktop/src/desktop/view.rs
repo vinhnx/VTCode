@@ -25,6 +25,7 @@ use vtcode_desktop_protocol::{
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
+use super::themes;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
 
@@ -58,8 +59,9 @@ pub(crate) fn run() {
         gpui_kit::init(cx);
         cx.bind_keys([KeyBinding::new("cmd-k", OpenCommandPalette, None)]);
         let (window, view) = match gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            let theme_mode = ThemeMode::from(window.appearance());
-            Theme::change(theme_mode, Some(window), cx);
+            // Ciapre is the VT Code desktop default; the saved preference
+            // replaces it once preferences load.
+            let theme_mode = themes::apply_by_id(themes::DEFAULT_THEME_ID, Some(window), cx);
             cx.new(|cx| DesktopView::new(window, cx, theme_mode))
         }) {
             Ok(result) => result,
@@ -121,6 +123,7 @@ struct DesktopView {
     attachments: Vec<protocol::TurnAttachment>,
     attachments_picker_open: bool,
     last_usage: Option<vtcode_exec_events::Usage>,
+    theme_id: String,
 }
 
 impl DesktopView {
@@ -165,6 +168,7 @@ impl DesktopView {
             attachments: Vec::new(),
             attachments_picker_open: false,
             last_usage: None,
+            theme_id: themes::DEFAULT_THEME_ID.to_string(),
         }
     }
 
@@ -371,14 +375,11 @@ impl DesktopView {
                         continue;
                     }
                     match files::read_preview(&workspace, &relative) {
-                        Some(preview) => view.attachments.push(protocol::TurnAttachment {
-                            path: relative,
-                            text: preview.text,
-                        }),
+                        Some(preview) => view
+                            .attachments
+                            .push(protocol::TurnAttachment { path: relative, text: preview.text }),
                         None => {
-                            view.error = Some(format!(
-                                "“{relative}” is missing, binary, or too large to attach."
-                            ));
+                            view.error = Some(format!("“{relative}” is missing, binary, or too large to attach."));
                         }
                     }
                 }
@@ -565,7 +566,10 @@ impl DesktopView {
             let echo = if attachments.is_empty() {
                 prompt
             } else {
-                let paths = attachments.iter().map(|attachment| attachment.path.as_str()).collect::<Vec<_>>();
+                let paths = attachments
+                    .iter()
+                    .map(|attachment| attachment.path.as_str())
+                    .collect::<Vec<_>>();
                 format!("{prompt}\n\nAttached: {}", paths.join(", "))
             };
             self.transcript.push(TranscriptItem::new(
@@ -1249,37 +1253,32 @@ impl DesktopView {
     }
 
     fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let swatches = themes::SYSTEM_SWATCHES
+            .iter()
+            .copied()
+            .chain(themes::all_themes().iter().copied().map(themes::SwatchEntry::Palette));
+        let mut swatch_rows = Vec::new();
+        for entry in swatches {
+            swatch_rows.push(self.render_theme_swatch(entry, cx));
+        }
         let theme = cx.theme();
         let colors = &theme.colors;
         let mut panel = div()
-            .w(px(300.))
+            .w(px(340.))
             .flex()
             .flex_col()
             .gap_3()
             .text_sm()
-            .child(div().font_semibold().child("Appearance"))
+            .child(div().font_semibold().child("Theme"))
             .child(
                 div()
+                    .id("theme-grid")
+                    .max_h(px(300.))
+                    .overflow_y_scroll()
                     .flex()
+                    .flex_wrap()
                     .gap_2()
-                    .child(
-                        Button::new("settings-theme-light")
-                            .label("Light")
-                            .ghost()
-                            .when(self.theme_mode == ThemeMode::Light, |button| button.primary())
-                            .on_click(|_, window, app| {
-                                Theme::change(ThemeMode::Light, Some(window), app);
-                            }),
-                    )
-                    .child(
-                        Button::new("settings-theme-dark")
-                            .label("Dark")
-                            .ghost()
-                            .when(self.theme_mode == ThemeMode::Dark, |button| button.primary())
-                            .on_click(|_, window, app| {
-                                Theme::change(ThemeMode::Dark, Some(window), app);
-                            }),
-                    ),
+                    .children(swatch_rows),
             );
 
         if let Some(configuration) = self.configuration.as_ref() {
@@ -1666,7 +1665,15 @@ impl DesktopView {
                     .py_2()
                     .border_b_1()
                     .border_color(colors.border)
-                    .child(div().flex_1().min_w_0().truncate().text_sm().font_medium().child(output.title.clone()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .font_medium()
+                            .child(output.title.clone()),
+                    )
                     .when(output.running, |header| {
                         header.child(div().text_xs().text_color(colors.accent).child("● running"))
                     }),
@@ -2024,35 +2031,28 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let mut panel = div().w_full().flex().flex_col().gap_2().px_8().pb_5().pt_2();
         if !self.attachments.is_empty() {
-            panel = panel.child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .children(self.attachments.iter().enumerate().map(|(index, attachment)| {
-                        let path = attachment.path.clone();
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .px_2()
-                            .py_1()
-                            .rounded_full()
-                            .border_1()
-                            .border_color(colors.border)
-                            .text_xs()
-                            .child(attachment.path.clone())
-                            .child(
-                                Button::new(format!("remove-attachment-{index}"))
-                                    .label("×")
-                                    .ghost()
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.remove_attachment(path.clone(), cx)
-                                    })),
-                            )
-                    })),
-            );
+            panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(
+                self.attachments.iter().enumerate().map(|(index, attachment)| {
+                    let path = attachment.path.clone();
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .px_2()
+                        .py_1()
+                        .rounded_full()
+                        .border_1()
+                        .border_color(colors.border)
+                        .text_xs()
+                        .child(attachment.path.clone())
+                        .child(
+                            Button::new(format!("remove-attachment-{index}"))
+                                .label("×")
+                                .ghost()
+                                .on_click(cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx))),
+                        )
+                }),
+            ));
         }
         panel = panel.child(
             div()
@@ -2202,6 +2202,62 @@ impl DesktopView {
                     .child(div().truncate().child(provider_model))
                     .child(div().text_color(agent.1).child(agent.0)),
             )
+    }
+
+    /// Apply a theme from the picker and remember the choice.
+    fn apply_theme(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.theme_mode = themes::apply_by_id(&id, Some(window), cx);
+        self.theme_id = id;
+        self.transcript.remeasure();
+        cx.notify();
+    }
+
+    /// One theme entry in the settings picker: a color preview chip that
+    /// applies live on click.
+    fn render_theme_swatch(&self, entry: themes::SwatchEntry, cx: &mut Context<Self>) -> AnyElement {
+        let (background, foreground) = entry.preview();
+        let selected = self.theme_id == entry.id();
+        let id = format!("theme-{}", entry.id());
+        let mut swatch = div()
+            .w(px(104.))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .h(px(40.))
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().colors.border)
+                    .bg(background)
+                    .p_1()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .when_some(entry.accent(), |chip, accent| chip.child(div().h(px(6.)).rounded_sm().bg(accent)))
+                    .child(div().h(px(4.)).w_3_4().rounded_sm().bg(foreground))
+                    .child(div().h(px(4.)).w_1_2().rounded_sm().bg(foreground.opacity(0.6))),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .truncate()
+                    .when(selected, |label| label.font_semibold())
+                    .child(entry.label()),
+            );
+        if selected {
+            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.accent).child("active"));
+        }
+        div()
+            .id(id)
+            .test_support()
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let theme_id = entry.id();
+                this.apply_theme(theme_id, window, cx);
+            }))
+            .child(swatch)
+            .into_any_element()
     }
 
     /// Selectable model catalog for the composer's Model dropdown.

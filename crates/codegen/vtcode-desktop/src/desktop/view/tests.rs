@@ -125,10 +125,7 @@ fn send_button_submits_exact_draft_and_clears_it_after_enqueue(cx: &mut TestAppC
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(
-        params,
-        json!({ "sessionId": "session-b", "prompt": "Review **these** changes", "attachments": [] })
-    );
+    assert_eq!(params, json!({ "sessionId": "session-b", "prompt": "Review **these** changes", "attachments": [] }));
 }
 
 #[gpui_kit::test]
@@ -169,10 +166,7 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(
-        params["attachments"],
-        json!([{ "path": "notes.md", "text": "attached notes" }])
-    );
+    assert_eq!(params["attachments"], json!([{ "path": "notes.md", "text": "attached notes" }]));
 }
 
 #[gpui_kit::test]
@@ -212,10 +206,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
         panic!("expected config select request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
-    assert_eq!(
-        params,
-        json!({ "provider": "anthropic", "model": "claude-sonnet-5" })
-    );
+    assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 
     // The service answers with the new snapshot; the client resets session
     // state and refreshes the catalog.
@@ -289,10 +280,7 @@ fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(
-        params,
-        json!({ "sessionId": "session-c", "prompt": "Keyboard first\n", "attachments": [] })
-    );
+    assert_eq!(params, json!({ "sessionId": "session-c", "prompt": "Keyboard first\n", "attachments": [] }));
 }
 
 #[gpui_kit::test]
@@ -565,6 +553,30 @@ fn context_usage_percent_handles_unknown_and_saturated_windows() {
         output_tokens: 0,
     };
     assert_eq!(context_usage_percent(&huge, 100), Some(100), "saturates at 100");
+}
+
+#[gpui_kit::test]
+fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
+        window.click("theme-github-dark", cx);
+        {
+            let view = view.read(cx);
+            assert_eq!(view.theme_id, "github-dark");
+            assert_eq!(view.theme_mode, ThemeMode::Dark);
+        }
+        window.click("theme-solarized-light", cx);
+        {
+            let view = view.read(cx);
+            assert_eq!(view.theme_id, "solarized-light");
+            assert_eq!(view.theme_mode, ThemeMode::Light);
+        }
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
