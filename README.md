@@ -1,8 +1,6 @@
-# VT Code
-
 <div align="center">
 
-<img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="240" />
+<img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="600" />
 
 **Plan, change, and verify code from your terminal, with every step auditable.**
 
@@ -21,26 +19,35 @@ policy, and review every change.
 
 ## Contents
 
-- [VT Code](#vt-code)
-  - [Contents](#contents)
-  - [Overview](#overview)
-  - [Quick start](#quick-start)
+- [Contents](#contents)
+- [Overview](#overview)
+- [Quick start](#quick-start)
     - [1. Install](#1-install)
     - [2. Configure your project](#2-configure-your-project)
     - [3. Run your first task](#3-run-your-first-task)
-  - [Usage](#usage)
+- [Usage](#usage)
     - [Interactive](#interactive)
     - [Modes](#modes)
     - [Automation](#automation)
     - [Sessions](#sessions)
-  - [Documentation](#documentation)
-  - [Development](#development)
-  - [Contributing](#contributing)
-  - [Security](#security)
-  - [Community](#community)
-  - [Thanks to our contributors](#thanks-to-our-contributors)
-  - [Sponsorship](#sponsorship)
-  - [License](#license)
+- [Documentation](#documentation)
+    - [Get started](#get-started)
+    - [Work in the TUI](#work-in-the-tui)
+    - [Automate](#automate)
+    - [Extend and integrate](#extend-and-integrate)
+    - [Develop and evaluate](#develop-and-evaluate)
+- [Development](#development)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Community](#community)
+- [Thanks to our contributors](#thanks-to-our-contributors)
+    - [Security Advisors](#security-advisors)
+    - [Main Contributor](#main-contributor)
+    - [Core Contributors](#core-contributors)
+    - [Contributors](#contributors)
+    - [Resources](#resources)
+- [Sponsorship](#sponsorship)
+- [License](#license)
 
 ## Overview
 
