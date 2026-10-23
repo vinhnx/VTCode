@@ -15,6 +15,8 @@ pub(super) struct TranscriptItem {
     pub markdown: SharedString,
     pub expanded: bool,
     pub diff: Option<DiffCard>,
+    /// Raw aggregated command/tool output for the Output inspector tab.
+    pub output: Option<String>,
 }
 
 /// Structured payload for a file-change activity row.
@@ -54,6 +56,7 @@ impl TranscriptItem {
             markdown,
             expanded: false,
             diff: None,
+            output: None,
         }
     }
 }
@@ -120,6 +123,16 @@ impl Transcript {
             self.list.remeasure_items(index..index + 1);
         } else {
             self.push(item);
+        }
+    }
+
+    /// Attach or replace raw command output on an existing row.
+    pub fn set_output(&mut self, id: &str, output: Option<String>) {
+        if let Some(index) = self.items.iter().position(|item| item.id == id) {
+            if let Some(item) = self.items.get_mut(index) {
+                item.output = output;
+            }
+            self.list.remeasure_items(index..index + 1);
         }
     }
 

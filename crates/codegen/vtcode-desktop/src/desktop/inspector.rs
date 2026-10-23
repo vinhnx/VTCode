@@ -20,16 +20,18 @@ pub(super) enum InspectorTab {
     Changes,
     Files,
     Activity,
+    Output,
 }
 
 impl InspectorTab {
-    pub(super) const ALL: [Self; 3] = [Self::Changes, Self::Files, Self::Activity];
+    pub(super) const ALL: [Self; 4] = [Self::Changes, Self::Files, Self::Activity, Self::Output];
 
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Changes => "Changes",
             Self::Files => "Files",
             Self::Activity => "Activity",
+            Self::Output => "Output",
         }
     }
 
@@ -39,6 +41,7 @@ impl InspectorTab {
             Self::Changes => "inspector-tab-changes",
             Self::Files => "inspector-tab-files",
             Self::Activity => "inspector-tab-activity",
+            Self::Output => "inspector-tab-output",
         }
     }
 }
@@ -154,6 +157,40 @@ pub(super) fn activity_rows(transcript: &Transcript) -> Vec<ActivityRow> {
         .collect()
 }
 
+/// The newest aggregated command/tool output for the Output tab.
+pub(super) struct OutputView {
+    pub title: String,
+    pub text: String,
+    pub running: bool,
+}
+
+pub(super) fn latest_output(transcript: &Transcript) -> Option<OutputView> {
+    transcript.items_newest_first().find_map(|item| {
+        let output = item.output.as_ref()?;
+        Some(OutputView {
+            title: item.title.clone(),
+            text: output.clone(),
+            running: item.text.lines().next().is_some_and(|status| {
+                status == "running" || status == "in progress" || status == "started"
+            }),
+        })
+    })
+}
+
+/// Cap the rendered output tail so a chatty command stays cheap to draw.
+pub(super) fn output_tail(text: &str) -> String {
+    const MAX_OUTPUT_LINES: usize = 1_000;
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.len() <= MAX_OUTPUT_LINES {
+        return text.to_string();
+    }
+    let Some(skipped) = lines.len().checked_sub(MAX_OUTPUT_LINES) else {
+        return text.to_string();
+    };
+    let tail = lines.iter().skip(skipped).copied().collect::<Vec<_>>().join("\n");
+    format!("… {skipped} earlier lines truncated\n{tail}")
+}
+
 fn change_kind(status: DiffFileStatus) -> DiffFileKind {
     match status {
         DiffFileStatus::Added => DiffFileKind::Add,
@@ -238,5 +275,43 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "read_file");
         assert_eq!(rows[0].status, "completed");
+    }
+
+    #[test]
+    fn latest_output_tracks_the_newest_streaming_command() {
+        let mut transcript = Transcript::default();
+        let mut first = TranscriptItem::new(
+            "cmd-1".to_string(),
+            "tool".to_string(),
+            "cargo build".to_string(),
+            "completed\n\n{}".to_string(),
+        );
+        first.output = Some("old output".to_string());
+        transcript.push(first);
+        let mut second = TranscriptItem::new(
+            "cmd-2".to_string(),
+            "tool".to_string(),
+            "cargo test".to_string(),
+            "in progress\n\n{}".to_string(),
+        );
+        second.output = Some("running output".to_string());
+        transcript.push(second);
+
+        let output = latest_output(&transcript).expect("output projected");
+        assert_eq!(output.title, "cargo test");
+        assert_eq!(output.text, "running output");
+        assert!(output.running, "in-progress status is reflected");
+    }
+
+    #[test]
+    fn output_tail_truncates_long_streams() {
+        let short = "line one\nline two";
+        assert_eq!(output_tail(short), short);
+
+        let long = (0..1_050).map(|index| format!("line {index}")).collect::<Vec<_>>().join("\n");
+        let tail = output_tail(&long);
+        assert!(tail.starts_with("… 50 earlier lines truncated"), "tail notes skipped lines");
+        assert!(tail.ends_with("line 1049"));
+        assert!(tail.lines().count() <= 1_002);
     }
 }
