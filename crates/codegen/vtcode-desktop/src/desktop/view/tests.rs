@@ -180,7 +180,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
+        view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });
             view.workspace = Some(std::env::temp_dir());
             view.selected_session_id = Some("session-old".to_string());
@@ -543,6 +543,28 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         panic!("expected session create request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+}
+
+#[gpui_kit::test]
+fn context_usage_percent_handles_unknown_and_saturated_windows() {
+    use super::context_usage_percent;
+    use vtcode_exec_events::Usage;
+
+    let usage = Usage {
+        input_tokens: 30_000,
+        cached_input_tokens: 10_000,
+        cache_creation_tokens: 5_000,
+        output_tokens: 5_000,
+    };
+    assert_eq!(context_usage_percent(&usage, 200_000), Some(25));
+    assert_eq!(context_usage_percent(&usage, 0), None, "unknown window hides the field");
+    let huge = Usage {
+        input_tokens: u64::MAX,
+        cached_input_tokens: u64::MAX,
+        cache_creation_tokens: 0,
+        output_tokens: 0,
+    };
+    assert_eq!(context_usage_percent(&huge, 100), Some(100), "saturates at 100");
 }
 
 #[gpui_kit::test]

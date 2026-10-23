@@ -120,6 +120,7 @@ struct DesktopView {
     models: Vec<protocol::ModelInfo>,
     attachments: Vec<protocol::TurnAttachment>,
     attachments_picker_open: bool,
+    last_usage: Option<vtcode_exec_events::Usage>,
 }
 
 impl DesktopView {
@@ -163,6 +164,7 @@ impl DesktopView {
             models: Vec::new(),
             attachments: Vec::new(),
             attachments_picker_open: false,
+            last_usage: None,
         }
     }
 
@@ -891,12 +893,13 @@ impl DesktopView {
                 self.active_turn_id = notification.turn_id;
                 self.status = "Running".to_string();
             }
-            ThreadEvent::TurnCompleted(_) => {
+            ThreadEvent::TurnCompleted(event) => {
                 self.running = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
                 self.status = "Completed".to_string();
+                self.last_usage = Some(event.usage.clone());
                 self.refresh_sessions_after_turn();
             }
             ThreadEvent::TurnFailed(event) => {
@@ -2088,6 +2091,11 @@ impl DesktopView {
         let provider_model = configuration
             .map(|config| format!("{} · {}", config.provider, config.model))
             .unwrap_or_else(|| "No provider configured".to_string());
+        let sandbox = configuration.and_then(|config| config.sandbox.clone());
+        let context_percent = configuration
+            .and_then(|config| config.context_window)
+            .zip(self.last_usage.as_ref())
+            .and_then(|(window, usage)| context_usage_percent(usage, window));
         div()
             .id("status-bar")
             .test_support()
@@ -2115,6 +2123,9 @@ impl DesktopView {
                                 .truncate()
                                 .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
                         )
+                    })
+                    .when(sandbox.is_some(), |bar| {
+                        bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
                     }),
             )
             .child(
@@ -2122,6 +2133,9 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .gap_3()
+                    .when(context_percent.is_some(), |bar| {
+                        bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
+                    })
                     .child(div().truncate().child(provider_model))
                     .child(div().text_color(agent.1).child(agent.0)),
             )
@@ -2452,6 +2466,23 @@ fn session_title_from_prompt(prompt: &str) -> String {
         title.push('…');
     }
     title
+}
+
+/// Approximate context utilization after a turn: every token the provider
+/// processed, as a share of the active model's context window. Returns
+/// `None` while either side is unknown, so the status bar hides the field
+/// rather than inventing a number.
+fn context_usage_percent(usage: &vtcode_exec_events::Usage, context_window: u64) -> Option<u8> {
+    if context_window == 0 {
+        return None;
+    }
+    let tokens = usage
+        .input_tokens
+        .saturating_add(usage.cached_input_tokens)
+        .saturating_add(usage.cache_creation_tokens)
+        .saturating_add(usage.output_tokens);
+    let percent = (tokens.saturating_mul(100)).checked_div(context_window)?;
+    u8::try_from(percent).ok().or(Some(100))
 }
 
 fn uuid_like_id() -> String {
