@@ -125,7 +125,129 @@ fn send_button_submits_exact_draft_and_clears_it_after_enqueue(cx: &mut TestAppC
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(params, json!({ "sessionId": "session-b", "prompt": "Review **these** changes" }));
+    assert_eq!(
+        params,
+        json!({ "sessionId": "session-b", "prompt": "Review **these** changes", "attachments": [] })
+    );
+}
+
+#[gpui_kit::test]
+fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("workspace");
+    std::fs::write(workspace.path().join("notes.md"), "attached notes").expect("write");
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.selected_session_id = Some("session-att".to_string());
+            view.attachments.push(vtcode_desktop_protocol::TurnAttachment {
+                path: "notes.md".to_string(),
+                text: "attached notes".to_string(),
+            });
+            view.attachments.push(vtcode_desktop_protocol::TurnAttachment {
+                path: "scratch.txt".to_string(),
+                text: "drop me".to_string(),
+            });
+            view.composer
+                .update(cx, |state, cx| state.set_value("Summarize the attachment", window, cx));
+        });
+        window.render_frame(cx);
+        // Remove the second chip before submitting.
+        window.click("remove-attachment-1", cx);
+        assert_eq!(view.read(cx).attachments.len(), 1);
+
+        window.click("send-prompt", cx);
+        let view = view.read(cx);
+        assert!(view.attachments.is_empty(), "attachments clear after submit");
+        assert!(view.transcript.get(0).unwrap().text.contains("Attached: notes.md"));
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected turn request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+    assert_eq!(
+        params["attachments"],
+        json!([{ "path": "notes.md", "text": "attached notes" }])
+    );
+}
+
+#[gpui_kit::test]
+fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.workspace = Some(std::env::temp_dir());
+            view.selected_session_id = Some("session-old".to_string());
+            view.models = vec![
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "ollama".to_string(),
+                    id: "gpt-oss:20b".to_string(),
+                    display_name: "GPT OSS 20B".to_string(),
+                    context_window: Some(131_072),
+                    current: true,
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "anthropic".to_string(),
+                    id: "claude-sonnet-5".to_string(),
+                    display_name: "Claude Sonnet 5".to_string(),
+                    context_window: Some(200_000),
+                    current: false,
+                },
+            ];
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        window.click("model-1", cx);
+        assert_eq!(view.read(cx).status, "Switching model…");
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected config select request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
+    assert_eq!(
+        params,
+        json!({ "provider": "anthropic", "model": "claude-sonnet-5" })
+    );
+
+    // The service answers with the new snapshot; the client resets session
+    // state and refreshes the catalog.
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_SELECT.to_string(),
+                    result: Some(json!({
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-5",
+                        "authenticated": true,
+                        "credentialSetupCommand": "vtcode login anthropic",
+                        "sandbox": "Ask before protected actions",
+                        "contextWindow": 200_000,
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.selected_session_id, None, "session resets after a model switch");
+            assert_eq!(
+                view.configuration.as_ref().map(|configuration| configuration.model.clone()),
+                Some("claude-sonnet-5".to_string())
+            );
+        });
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
+        panic!("expected catalog refresh");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_MODELS);
 }
 
 #[gpui_kit::test]
@@ -167,7 +289,10 @@ fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    assert_eq!(params, json!({ "sessionId": "session-c", "prompt": "Keyboard first\n" }));
+    assert_eq!(
+        params,
+        json!({ "sessionId": "session-c", "prompt": "Keyboard first\n", "attachments": [] })
+    );
 }
 
 #[gpui_kit::test]
