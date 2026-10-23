@@ -387,6 +387,40 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
 }
 
 #[gpui_kit::test]
+fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.backend = Some(BackendHandle { commands });
+            view.open_command_palette(window, cx);
+            assert!(view.palette.is_some(), "palette state exists");
+            assert_eq!(view.palette_groups[0].0, "Session");
+            assert_eq!(view.palette_groups[0].1[0].label, "New session");
+        });
+        window.render_frame(cx);
+        // Focus after the first render, matching the kit's draw-focus-draw
+        // pattern (the palette installs its input state during render).
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        // Enter matches the palette's Command-context Confirm binding; the
+        // confirm callback itself is deferred by the kit.
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).palette.is_none(), "confirm closes the palette");
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
+        panic!("expected session create request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+}
+
+#[gpui_kit::test]
 fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::{

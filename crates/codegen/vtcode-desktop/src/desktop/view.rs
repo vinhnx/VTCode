@@ -4,13 +4,15 @@ use std::time::Duration;
 
 use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::diff::{Diff, DiffState};
 use gpui_kit::component::input::{Enter, Textarea, TextareaState};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, Context, Entity, PathPromptOptions, Render, TestSupportExt, Window, WindowOptions, div, list, px,
+    AnyElement, App, Context, Entity, KeyBinding, MouseButton, PathPromptOptions, Render, TestSupportExt, Window,
+    WindowOptions, actions, div, list, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -28,9 +30,33 @@ use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAP
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 
+actions!(desktop, [OpenCommandPalette]);
+
+/// One executable entry in the command palette.
+#[derive(Clone, Debug)]
+struct PaletteCommand {
+    label: String,
+    action: PaletteAction,
+}
+
+/// What confirming a palette entry does. Executed through existing methods so
+/// palette and toolbar stay behaviorally identical.
+#[derive(Clone, Debug)]
+enum PaletteAction {
+    NewSession,
+    CloseSession,
+    ChooseWorkspace,
+    RefreshFiles,
+    ToggleInspector,
+    ToggleTheme,
+    LoadSession(String),
+    PreviewFile(String),
+}
+
 pub(crate) fn run() {
     gpui_kit::application().run(|cx: &mut App| {
         gpui_kit::init(cx);
+        cx.bind_keys([KeyBinding::new("cmd-k", OpenCommandPalette, None)]);
         let (window, view) = match gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
             let theme_mode = ThemeMode::from(window.appearance());
             Theme::change(theme_mode, Some(window), cx);
@@ -89,6 +115,8 @@ struct DesktopView {
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
     git_branch: Option<String>,
+    palette: Option<Entity<CommandState>>,
+    palette_groups: Vec<(String, Vec<PaletteCommand>)>,
 }
 
 impl DesktopView {
@@ -127,6 +155,8 @@ impl DesktopView {
             selected_change: None,
             change_viewer: None,
             git_branch: None,
+            palette: None,
+            palette_groups: Vec::new(),
         }
     }
 
@@ -301,6 +331,105 @@ impl DesktopView {
             }
         }
         cx.notify();
+    }
+
+    /// Build and open the ⌘K command palette over the current state.
+    fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        const MAX_SESSION_ENTRIES: usize = 10;
+        const MAX_FILE_ENTRIES: usize = 50;
+
+        let mut groups: Vec<(String, Vec<PaletteCommand>)> = Vec::new();
+        groups.push((
+            "Session".to_string(),
+            vec![
+                command("New session", PaletteAction::NewSession),
+                command("Close session", PaletteAction::CloseSession),
+                command("Switch workspace…", PaletteAction::ChooseWorkspace),
+                command("Refresh workspace files", PaletteAction::RefreshFiles),
+            ],
+        ));
+        groups.push((
+            "View".to_string(),
+            vec![
+                command("Toggle inspector panel", PaletteAction::ToggleInspector),
+                command(
+                    if self.theme_mode == ThemeMode::Light {
+                        "Switch to Dark theme"
+                    } else {
+                        "Switch to Light theme"
+                    },
+                    PaletteAction::ToggleTheme,
+                ),
+            ],
+        ));
+        let sessions: Vec<PaletteCommand> =
+            self.sessions
+                .iter()
+                .take(MAX_SESSION_ENTRIES)
+                .map(|session| {
+                    let label = session.title.clone().unwrap_or_else(|| {
+                        format!("Session {}", session.session_id.chars().take(8).collect::<String>())
+                    });
+                    command(format!("Open session: {label}"), PaletteAction::LoadSession(session.session_id.clone()))
+                })
+                .collect();
+        if !sessions.is_empty() {
+            groups.push(("Recent sessions".to_string(), sessions));
+        }
+        let file_commands: Vec<PaletteCommand> = self
+            .files
+            .iter()
+            .filter(|entry| !entry.is_dir)
+            .take(MAX_FILE_ENTRIES)
+            .map(|entry| {
+                command(format!("Preview file: {}", entry.rel_path), PaletteAction::PreviewFile(entry.rel_path.clone()))
+            })
+            .collect();
+        if !file_commands.is_empty() {
+            groups.push(("Files".to_string(), file_commands));
+        }
+
+        let state = cx.new(|cx| CommandState::new(window, cx));
+        self.palette = Some(state.clone());
+        self.palette_groups = groups;
+        // The palette installs its input state during its first render, so
+        // focusing has to wait for that frame.
+        cx.on_next_frame(window, |this, window, cx| this.focus_palette_state(window, cx));
+        cx.notify();
+    }
+
+    fn focus_palette_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(state) = self.palette.clone() {
+            state.update(cx, |state, cx| state.focus(window, cx));
+        }
+    }
+
+    fn run_palette_action(&mut self, action: PaletteAction, window: &mut Window, cx: &mut Context<Self>) {
+        self.palette = None;
+        self.palette_groups = Vec::new();
+        match action {
+            PaletteAction::NewSession => self.create_session(cx),
+            PaletteAction::CloseSession => self.close_session(cx),
+            PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
+            PaletteAction::RefreshFiles => self.refresh_files(cx),
+            PaletteAction::ToggleInspector => {
+                self.inspector_open = !self.inspector_open;
+                cx.notify();
+            }
+            PaletteAction::ToggleTheme => {
+                let mode = if self.theme_mode == ThemeMode::Light {
+                    ThemeMode::Dark
+                } else {
+                    ThemeMode::Light
+                };
+                Theme::change(mode, Some(window), cx);
+                self.theme_mode = mode;
+                self.transcript.remeasure();
+                cx.notify();
+            }
+            PaletteAction::LoadSession(session_id) => self.load_session(session_id, cx),
+            PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, cx),
+        }
     }
 
     fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1791,7 +1920,11 @@ impl DesktopView {
                     .min_w_0()
                     .child(div().truncate().child(workspace.to_string()))
                     .when(self.git_branch.is_some(), |bar| {
-                        bar.child(div().truncate().child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())))
+                        bar.child(
+                            div()
+                                .truncate()
+                                .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
+                        )
                     }),
             )
             .child(
@@ -1931,6 +2064,68 @@ impl DesktopView {
             this.choose_interaction_option(step_index, choice_id.clone(), window, cx);
         })))
     }
+
+    /// Modal ⌘K palette. The state entity is created on open, never during
+    /// render; confirm and cancel run through the owning view.
+    fn render_command_palette(&self, state: Entity<CommandState>, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let weak = cx.entity().downgrade();
+        let confirm_groups = self.palette_groups.clone();
+        let mut command = Command::new(&state).placeholder("Type a command or search…").max_h(px(360.));
+        for (label, entries) in &self.palette_groups {
+            let mut group = CommandGroup::new().label(label.clone());
+            for entry in entries {
+                group = group.item(CommandItem::new().label(entry.label.clone()));
+            }
+            command = command.group(group);
+        }
+        let confirm_weak = weak.clone();
+        let cancel_weak = weak.clone();
+        let command = command
+            .on_confirm(move |path, _window, cx: &mut App| {
+                let Some(action) = confirm_groups
+                    .get(path.section)
+                    .and_then(|(_, entries)| entries.get(path.row))
+                    .map(|entry| entry.action.clone())
+                else {
+                    return;
+                };
+                let _updated = confirm_weak.update(cx, |view, cx| {
+                    view.run_palette_action(action, _window, cx);
+                });
+            })
+            .on_cancel(move |_window, cx: &mut App| {
+                let _updated = cancel_weak.update(cx, |view, cx| {
+                    view.palette = None;
+                    view.palette_groups = Vec::new();
+                    cx.notify();
+                });
+            });
+
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .justify_center()
+            .pt(px(90.))
+            .bg(colors.background.opacity(0.4))
+            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                let _updated = weak.update(cx, |view, cx| {
+                    view.palette = None;
+                    view.palette_groups = Vec::new();
+                    cx.notify();
+                });
+            })
+            .child(
+                div()
+                    .id("command-palette")
+                    .test_support()
+                    .w(px(560.))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(command),
+            )
+            .into_any_element()
+    }
 }
 
 impl Render for DesktopView {
@@ -1960,6 +2155,7 @@ impl Render for DesktopView {
             .flex_col()
             .bg(colors.background)
             .text_color(colors.foreground)
+            .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
             .child(panes)
             .child(self.render_status_bar(cx));
         if self.workspace.is_none() {
@@ -1975,6 +2171,9 @@ impl Render for DesktopView {
         }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
+        }
+        if let Some(state) = self.palette.clone() {
+            body = body.child(self.render_command_palette(state, cx));
         }
         body
     }
@@ -1995,6 +2194,10 @@ fn badge(text: String, background: gpui_kit::Hsla, foreground: gpui_kit::Hsla) -
         .text_xs()
         .text_color(foreground)
         .child(text)
+}
+
+fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
+    PaletteCommand { label: label.into(), action }
 }
 
 fn workspace_picker_options() -> PathPromptOptions {
