@@ -15,7 +15,6 @@ use vtcode_core::core::agent::session::AgentSessionState;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::exec::events::ThreadCompletionSubtype;
-use vtcode_core::exec::events::VersionedThreadEvent;
 use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::session::SessionId;
@@ -98,7 +97,7 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
     resume: Option<ResumeSession>,
     steering_receiver: &mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
     mut host_session: Option<InlineSession>,
-    event_sender: Option<mpsc::Sender<VersionedThreadEvent>>,
+    event_sender: Option<vtcode_desktop_protocol::LiveEventSender>,
 ) -> Result<()> {
     let terminal_enabled = host_session.is_none();
     let _terminal_cleanup_guard = TerminalCleanupGuard::new(terminal_enabled);

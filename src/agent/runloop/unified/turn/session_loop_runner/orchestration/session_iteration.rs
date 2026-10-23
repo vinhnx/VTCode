@@ -34,7 +34,7 @@ pub(super) struct SessionLoopState<'a> {
     pub(super) next_session_primary_agent: &'a mut Option<String>,
     pub(super) steering_receiver: &'a mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
     pub(super) host_session: &'a mut Option<InlineSession>,
-    pub(super) event_sender: Option<mpsc::Sender<VersionedThreadEvent>>,
+    pub(super) event_sender: Option<vtcode_desktop_protocol::LiveEventSender>,
     pub(super) terminal_enabled: bool,
     pub(super) skip_confirmations: bool,
     pub(super) full_auto: bool,

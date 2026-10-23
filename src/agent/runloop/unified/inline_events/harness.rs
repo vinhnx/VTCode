@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::{OnceCell, mpsc};
+use tokio::sync::OnceCell;
 
 use uuid::Uuid;
 use vtcode_config::OpenResponsesConfig;
@@ -51,7 +51,7 @@ struct HarnessEventEmitterInner {
     open_responses: Mutex<Option<OpenResponsesExporter>>,
     atif: Mutex<Option<AtifExporter>>,
     webmcp_event_hub: Mutex<Option<WebmcpEventHub>>,
-    live_event_sender: Mutex<Option<mpsc::Sender<VersionedThreadEvent>>>,
+    live_event_sender: Mutex<Option<vtcode_desktop_protocol::LiveEventSender>>,
     dispatch_gate: Mutex<()>,
     finalized: AtomicBool,
     finish_result: OnceCell<std::result::Result<(), String>>,
@@ -442,17 +442,18 @@ impl HarnessEventEmitter {
             .map_err(|error| anyhow::anyhow!("live event sender lock poisoned: {error}"))?
             .clone();
         if let Some(sender) = live_event_sender {
-            sender.try_send(VersionedThreadEvent::new(event)).map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => anyhow::anyhow!("desktop runtime event queue is full"),
-                mpsc::error::TrySendError::Closed(_) => anyhow::anyhow!("desktop runtime event consumer disconnected"),
-            })?;
+            // A saturated queue coalesces streaming updates instead of failing
+            // the turn; only a disconnected consumer is fatal.
+            sender
+                .publish(VersionedThreadEvent::new(event))
+                .map_err(|_| anyhow::anyhow!("desktop runtime event consumer disconnected"))?;
         }
 
         Ok(())
     }
 
     /// Attach a bounded live event stream for a non-terminal host.
-    pub(crate) fn attach_live_event_stream(&self, sender: mpsc::Sender<VersionedThreadEvent>) -> Result<()> {
+    pub(crate) fn attach_live_event_stream(&self, sender: vtcode_desktop_protocol::LiveEventSender) -> Result<()> {
         let mut guard = self
             .inner
             .live_event_sender

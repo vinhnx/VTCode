@@ -355,7 +355,7 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
         .name("vtcode-desktop-host-commands".to_string())
         .spawn(move || forward_host_commands(commands, command_sender))
         .context("failed to start desktop host command bridge")?;
-    let (event_sender, event_receiver) = mpsc::channel(protocol::DEFAULT_QUEUE_CAPACITY);
+    let (event_sender, event_receiver) = protocol::live_event_channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let config = context.startup.agent_config.clone();
     let vt_config = context.startup.config.clone();
     let skip_confirmations = context.startup.skip_confirmations;
@@ -409,7 +409,7 @@ fn forward_host_commands(commands: HostCommandReceiver, sender: mpsc::Sender<Inl
 fn spawn_session_pump(
     session_id: String,
     mut commands: mpsc::Receiver<InlineCommand>,
-    mut events: mpsc::Receiver<vtcode_core::exec::events::VersionedThreadEvent>,
+    events: protocol::LiveEventReceiver,
     state: std::sync::Arc<Mutex<ServerState>>,
     notifications: mpsc::Sender<protocol::Notification>,
     turn_finished: std::sync::Arc<Notify>,
@@ -434,19 +434,22 @@ fn spawn_session_pump(
                     }
                     None => commands_open = false,
                 },
-                event = events.recv(), if events_open => match event {
-                    Some(event) => {
-                        if let Err(error) = publish_thread_event(
-                            &session_id,
-                            event,
-                            &state,
-                            &notifications,
-                            &turn_finished,
-                        ).await {
-                            tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish runtime event");
+                event = events.recv(), if events_open => {
+                    report_dropped_events(&events);
+                    match event {
+                        Some(event) => {
+                            if let Err(error) = publish_thread_event(
+                                &session_id,
+                                event,
+                                &state,
+                                &notifications,
+                                &turn_finished,
+                            ).await {
+                                tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish runtime event");
+                            }
                         }
+                        None => events_open = false,
                     }
-                    None => events_open = false,
                 },
             }
         }
@@ -477,6 +480,22 @@ fn spawn_session_pump(
             turn_finished.notify_waiters();
         }
     });
+}
+
+/// Surface live-stream degradation from a saturated coalescing queue.
+///
+/// Displaced snapshots are best-effort previews; dropped ordered events are a
+/// transcript gap the client can heal by reloading the session, so both are
+/// logged rather than failing the producing turn.
+fn report_dropped_events(events: &protocol::LiveEventReceiver) {
+    let stale = events.take_dropped_stale();
+    if stale > 0 {
+        tracing::debug!(target: "vtcode.desktop", stale, "displaced stale streaming snapshots under saturation");
+    }
+    let ordered = events.take_dropped_ordered();
+    if ordered > 0 {
+        tracing::warn!(target: "vtcode.desktop", ordered, "dropped ordered runtime events under saturation; reload the session to resync");
+    }
 }
 
 async fn publish_thread_event(

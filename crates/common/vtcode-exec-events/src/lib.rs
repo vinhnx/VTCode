@@ -51,6 +51,11 @@ impl VersionedThreadEvent {
         }
     }
 
+    /// Returns the nested [`ThreadEvent`] by reference.
+    pub fn event(&self) -> &ThreadEvent {
+        &self.event
+    }
+
     /// Returns the nested [`ThreadEvent`], consuming the wrapper.
     pub fn into_event(self) -> ThreadEvent {
         self.event

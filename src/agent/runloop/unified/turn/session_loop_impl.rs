@@ -3,7 +3,6 @@ use std::io::Write as _;
 use anyhow::Result;
 
 use tokio_util::sync::CancellationToken;
-use vtcode_core::exec::events::VersionedThreadEvent;
 use vtcode_ui::tui::app::InlineSession;
 
 use vtcode_core::config::loader::VTCodeConfig;
@@ -67,7 +66,7 @@ pub(crate) async fn run_single_agent_loop_unified_with_host(
     resume: Option<ResumeSession>,
     mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     session: InlineSession,
-    event_sender: tokio::sync::mpsc::Sender<VersionedThreadEvent>,
+    event_sender: vtcode_desktop_protocol::LiveEventSender,
 ) -> Result<()> {
     session_loop_runner::run_single_agent_loop_unified_impl(
         config,
