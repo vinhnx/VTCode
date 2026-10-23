@@ -4,18 +4,15 @@
 
 <img src="./resources/logo/vt_code_adaptive.svg" alt="VT Code" width="240" />
 
-**An open-source coding agent for your terminal.**
+**Plan, change, and verify code from your terminal, with every step auditable.**
 
-Plan, build, and review with hosted or local models, sandboxed tools, and resumable sessions.
+VT Code is an open-source coding agent for your repository. Choose the model, keep tool calls under
+policy, and review every change.
 
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
 [![Rust](https://img.shields.io/badge/rust-1.98.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-30363D?style=flat-square)](#license)
 
-[![Agent Skills](https://img.shields.io/badge/Agent_Skills-BFB38F?style=flat-square)](https://agentskills.io/)
-[![Agent Client Protocol](https://img.shields.io/badge/Agent_Client_Protocol-383B73?style=flat-square&logo=zedindustries&logoColor=white)](./docs/guides/zed-acp.md)
-[![Model Context Protocol](https://img.shields.io/badge/Model_Context_Protocol-A63333?style=flat-square&logo=modelcontextprotocol&logoColor=white)](./docs/guides/mcp-integration.md)
-[![Agent Plugins](https://img.shields.io/badge/Agent_Plugins-5865F2?style=flat-square)](./docs/guides/agent-plugins.md)
 <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 <!-- markdownlint-disable-next-line MD013 -->
@@ -40,13 +37,9 @@ Plan, build, and review with hosted or local models, sandboxed tools, and resuma
   - [Development](#development)
   - [Contributing](#contributing)
   - [Security](#security)
-  - [Community and support](#community-and-support)
-    - [Security Advisors](#security-advisors)
-    - [Main Contributor](#main-contributor)
-    - [Core Contributors](#core-contributors)
-    - [Contributors](#contributors)
-    - [Resources](#resources)
-    - [Sponsorship](#sponsorship)
+  - [Community](#community)
+  - [Thanks to our contributors](#thanks-to-our-contributors)
+  - [Sponsorship](#sponsorship)
   - [License](#license)
 
 ## Overview
@@ -213,19 +206,36 @@ Guides grouped by task. The full catalog lives in the [documentation index](./do
 [docs overview](./docs/README.md), and the [Wiki](https://github.com/vinhnx/VTCode/wiki). Integrations are optional;
 none are required for the quick start.
 
-<!-- markdownlint-disable MD060 -->
+### Get started
 
-| Goal                 | Guides                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Get started          | [Installation](./docs/installation/README.md) · [Getting started](./docs/user-guide/getting-started.md) · [Providers](./docs/providers/PROVIDER_GUIDES.md) · [OAuth login](./docs/guides/oauth-authentication.md) · [FAQ](./docs/FAQ.md) · [Compatibility](./docs/COMPATIBILITY.md)                                                                                               |
-| Work in the TUI      | [TUI](./docs/user-guide/interactive-mode.md) · [Command reference](./docs/user-guide/commands.md) · [Planning](./docs/guides/planning-workflow.md) · [Turn diffs](./docs/development/diff-preview.md) · [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) · [Safety](./docs/security/SECURITY_MODEL.md)                                                                    |
-| Automate             | [Full automation](./docs/guides/full-automation.md) · [Decisions probe](./docs/guides/decisions-probe.md) · [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) · [Hooks](./docs/guides/hooks-guide.md)                                                                                                                                                                       |
-| Extend and integrate | [Skills](./docs/skills/SKILLS_GUIDE.md) · [Plugins](./docs/guides/agent-plugins.md) · [MCP](./docs/guides/mcp-integration.md) · [Editors (ACP)](./docs/guides/zed-acp.md) · [WebMCP](./docs/user-guide/webmcp.md) · [Companion (experimental)](./docs/user-guide/vtcode-companion.md) · [Memcode](./docs/guides/memcode-mcp.md) · [WebMCP deployment](./docs/reference/webmcp.md) |
-| Develop and evaluate | [Development](./docs/development/README.md) · [Testing](./docs/development/testing.md) · [Evals](./docs/guides/eval.md) · [Architecture](./docs/ARCHITECTURE.md) · [HOVER](./docs/development/hypothesis-revision-validation.md) · [Protocols](./docs/protocols/OPEN_RESPONSES.md) · [Loop engineering](./docs/project/PLAN-loop-engineering.md)                                  |
+- [Installation](./docs/installation/README.md) and [getting started](./docs/user-guide/getting-started.md)
+- [Providers](./docs/providers/PROVIDER_GUIDES.md) and [OAuth login](./docs/guides/oauth-authentication.md)
+- [FAQ](./docs/FAQ.md) and [compatibility](./docs/COMPATIBILITY.md)
 
-<!-- markdownlint-enable MD060 -->
+### Work in the TUI
 
-Elsewhere: [WebMCP app](https://vtcode.vinhnx.chatgpt.site/) · [mirror](https://vinhnx.github.io/VTCode/) ·
+- [Interactive mode](./docs/user-guide/interactive-mode.md) and [command reference](./docs/user-guide/commands.md)
+- [Read-only planning](./docs/guides/planning-workflow.md) and [turn diffs](./docs/development/diff-preview.md)
+- [Configuration](./docs/config/CONFIG_FIELD_REFERENCE.md) and [security model](./docs/security/SECURITY_MODEL.md)
+
+### Automate
+
+- [Full automation](./docs/guides/full-automation.md) and [decisions probe](./docs/guides/decisions-probe.md)
+- [Scheduled tasks](./docs/user-guide/scheduled-tasks.md) and [hooks](./docs/guides/hooks-guide.md)
+
+### Extend and integrate
+
+- [Skills](./docs/skills/SKILLS_GUIDE.md), [plugins](./docs/guides/agent-plugins.md), and [MCP](./docs/guides/mcp-integration.md)
+- [Editors (ACP)](./docs/guides/zed-acp.md), [WebMCP](./docs/user-guide/webmcp.md), and [WebMCP deployment](./docs/reference/webmcp.md)
+- [Companion (experimental)](./docs/user-guide/vtcode-companion.md) and [Memcode](./docs/guides/memcode-mcp.md)
+
+### Develop and evaluate
+
+- [Development](./docs/development/README.md), [testing](./docs/development/testing.md), and [evals](./docs/guides/eval.md)
+- [Architecture](./docs/ARCHITECTURE.md), [HOVER](./docs/development/hypothesis-revision-validation.md), and [protocols](./docs/protocols/OPEN_RESPONSES.md)
+- [Loop engineering](./docs/project/PLAN-loop-engineering.md)
+
+Elsewhere: [WebMCP app](https://vtcode.vinhnx.chatgpt.site/), [mirror](https://vinhnx.github.io/VTCode/), and the
 [Memcode write-up](https://memcode.in/blogs/vt-code-memory-across-threads).
 
 ## Development
@@ -273,11 +283,12 @@ Report vulnerabilities privately via
 [GitHub private vulnerability reporting](https://github.com/vinhnx/VTCode/security/advisories/new); never open a public
 issue. Details: [security policy](./docs/SECURITY.md).
 
-## Community and support
+## Community
 
-VT Code is created and maintained by Vinh Nguyen, with help from the community. Whether you write code, fix docs, or just try a release and tell me what broke, feel free to contribute. You can also fork the repository and customize it for your own use. If you have suggestions or improvements, don't hesitate to share them.
+VT Code is created and maintained by Vinh Nguyen with help from the community. You can contribute code,
+fix docs, or report what broke in a release. You can also fork the repository and adapt it for your own use.
 
-- [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell me,
+- [Report a bug](https://github.com/vinhnx/VTCode/issues/new?template=bug_report.md) - something looks off? Tell us,
   and include `vtcode trajectory` output if you can.
 - [Request a feature](https://github.com/vinhnx/VTCode/issues/new?template=feature_request.md) - describe the workflow
   you wish worked better.
@@ -288,13 +299,15 @@ VT Code is created and maintained by Vinh Nguyen, with help from the community. 
   would genuinely help.
 - [Contributing guide](./docs/CONTRIBUTING.md) - setup, checks, and commit conventions.
 
-New to open source or to Rust? That is completely fine. Pick a good first issue or a docs fix, leave a comment, and I
+New to open source or to Rust? That is completely fine. Pick a good first issue or a docs fix, leave a comment, and we
 will help you scope it and land it. The [Code of Conduct](./docs/CODE_OF_CONDUCT.md) keeps review kind and
 constructive.
 
 Partnerships and private matters: `vinhnguyen2308 [at] gmail [dot] com`.
 
-Thank you to everyone below - you are the reason this project keeps moving.
+## Thanks to our contributors
+
+Thank you to everyone below. You are the reason this project keeps moving.
 
 <details>
 <!-- CONTRIBUTORS-COUNT:START --><summary>View all contributors (28)</summary><!-- CONTRIBUTORS-COUNT:END -->
@@ -349,7 +362,7 @@ Thank you to everyone below - you are the reason this project keeps moving.
 
 </details>
 
-Want to see your avatar here? Every bit counts - a one-line fix, a bug report, or a thoughtful comment. Not sure where
+Want to see your avatar here? Every bit counts: a one-line fix, a bug report, or a thoughtful comment. Not sure where
 to begin? Say hello on a [good first issue](https://github.com/vinhnx/VTCode/labels/good%20first%20issue) and we will
 figure it out together.
 
@@ -359,7 +372,7 @@ figure it out together.
   evals, security, and lessons learned.
 - [Podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [Video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
-### Sponsorship
+## Sponsorship
 
 VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors/vinhnx) keeps it independent.
 
