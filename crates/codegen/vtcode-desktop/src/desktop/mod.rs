@@ -1,4 +1,5 @@
 mod files;
+mod inspector;
 mod markdown;
 mod transcript;
 mod transport;
