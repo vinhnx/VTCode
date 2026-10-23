@@ -172,6 +172,72 @@ fn enter_submits_the_draft_and_shift_enter_keeps_editing(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{
+        FileChangeItem, FileUpdateChange, ItemCompletedEvent, PatchApplyStatus, PatchChangeKind, ThreadEvent,
+        ThreadItem, ThreadItemDetails,
+    };
+    use vtcode_desktop_protocol::ThreadEventNotification;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session-d".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(
+                    ItemCompletedEvent {
+                        item: ThreadItem {
+                            context: None,
+                            id: "change-1".to_string(),
+                            details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+                                diff_incomplete: Some(false),
+                                changes: vec![FileUpdateChange {
+                                    path: "src/main.rs".to_string(),
+                                    kind: PatchChangeKind::Update,
+                                }],
+                                status: PatchApplyStatus::Completed,
+                                unified_diff: Some("@@ -1,2 +1,3 @@\n context\n-old line\n+new line\n".to_string()),
+                                additions: Some(1),
+                                deletions: Some(1),
+                            })),
+                        },
+                    },
+                )),
+            });
+            let item = view.transcript.get(0).expect("diff row");
+            assert_eq!(item.role, "diff");
+            let diff = item.diff.as_ref().expect("structured diff payload");
+            assert_eq!(diff.files.len(), 1);
+            assert_eq!(diff.files[0].path, "src/main.rs");
+            assert_eq!(diff.additions, Some(1));
+            assert_eq!(diff.deletions, Some(1));
+            assert!(!diff.failed);
+            assert!(diff.patch.contains("+new line"));
+        });
+        window.render_frame(cx);
+
+        // Expanding the card exposes the patch text and the copy action.
+        window.click("diff-change-1", cx);
+        window.click("copy-patch-change-1", cx);
+        assert!(
+            cx.read_from_clipboard()
+                .unwrap()
+                .text()
+                .unwrap()
+                .contains("+new line"),
+            "copy patch must copy the raw unified diff"
+        );
+        view.read(cx).transcript.get(0).unwrap().expanded.then_some(()).expect("diff expanded");
+
+        // Collapsing again hides the patch view but keeps the card.
+        window.click("diff-change-1", cx);
+        assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let list = cx.update(|cx| {

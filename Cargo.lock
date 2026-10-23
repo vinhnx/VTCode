@@ -12225,6 +12225,7 @@ dependencies = [
  "tokio",
  "vtcode-commons",
  "vtcode-desktop-protocol",
+ "vtcode-exec-events",
 ]
 
 [[package]]

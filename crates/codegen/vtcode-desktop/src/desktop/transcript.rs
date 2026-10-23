@@ -14,13 +14,39 @@ pub(super) struct TranscriptItem {
     pub text: SharedString,
     pub markdown: SharedString,
     pub expanded: bool,
+    pub diff: Option<DiffCard>,
+}
+
+/// Structured payload for a file-change activity row.
+#[derive(Clone, Debug)]
+pub(super) struct DiffCard {
+    pub files: Vec<DiffFile>,
+    pub additions: Option<u64>,
+    pub deletions: Option<u64>,
+    pub incomplete: bool,
+    pub failed: bool,
+    pub patch: String,
+}
+
+/// One file inside a [`DiffCard`], with its change kind.
+#[derive(Clone, Debug)]
+pub(super) struct DiffFile {
+    pub path: String,
+    pub kind: DiffFileKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum DiffFileKind {
+    Add,
+    Delete,
+    Update,
 }
 
 impl TranscriptItem {
     pub fn new(id: String, role: String, title: String, text: String) -> Self {
         let text = SharedString::from(text);
         let markdown = prepare_markdown(&text);
-        Self { id, role, title, text, markdown, expanded: false }
+        Self { id, role, title, text, markdown, expanded: false, diff: None }
     }
 }
 
@@ -81,6 +107,16 @@ impl Transcript {
 
     pub fn toggle_tool(&mut self, id: &str) {
         if let Some(index) = self.items.iter().position(|item| item.id == id && item.role == "tool") {
+            if let Some(item) = self.items.get_mut(index) {
+                item.expanded = !item.expanded;
+            }
+            self.list.pause_following_tail();
+            self.list.remeasure_items(index..index + 1);
+        }
+    }
+
+    pub fn toggle_diff(&mut self, id: &str) {
+        if let Some(index) = self.items.iter().position(|item| item.id == id && item.role == "diff") {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }

@@ -19,7 +19,7 @@ use vtcode_desktop_protocol::{
 };
 
 use super::markdown::render_markdown;
-use super::transcript::{Transcript, TranscriptItem};
+use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
@@ -532,91 +532,116 @@ impl DesktopView {
     }
 
     fn handle_thread_event(&mut self, notification: ThreadEventNotification) {
-        let versioned = serde_json::to_value(notification.event).unwrap_or(Value::Null);
-        let event = versioned.get("event").cloned().unwrap_or(versioned);
-        let kind = event.get("type").and_then(Value::as_str).unwrap_or_default();
-        match kind {
-            "turn.started" => {
+        use vtcode_exec_events::ThreadEvent;
+        match notification.event.event() {
+            ThreadEvent::TurnStarted(_) => {
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
                 self.status = "Running".to_string();
             }
-            "turn.completed" => {
+            ThreadEvent::TurnCompleted(_) => {
                 self.running = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;
                 self.cancel_request_sent = false;
                 self.status = "Completed".to_string();
             }
-            "turn.failed" | "turn.blocked" => {
-                self.running = false;
-                self.active_turn_id = None;
-                self.cancel_requested = false;
-                self.cancel_request_sent = false;
-                self.status = "Turn ended without verified completion".to_string();
-                if let Some(message) = event.pointer("/message").and_then(Value::as_str) {
-                    self.transcript.push(TranscriptItem::new(
-                        format!("event-{}", uuid_like_id()),
-                        "notice".to_string(),
-                        "Run status".to_string(),
-                        message.to_string(),
-                    ));
-                }
+            ThreadEvent::TurnFailed(event) => {
+                self.finish_unverified_turn(&event.message);
             }
-            "plan.delta" => {
-                let id = event.get("item_id").and_then(Value::as_str).unwrap_or("plan").to_string();
-                let delta = event.get("delta").and_then(Value::as_str).unwrap_or_default();
-                self.append_or_update_item(id, "plan", "Plan", delta, true);
+            ThreadEvent::TurnBlocked(event) => {
+                self.finish_unverified_turn(&event.message);
             }
-            "item.started" | "item.updated" | "item.completed" => {
-                if let Some(item) = event.get("item") {
-                    self.update_runtime_item(item);
-                }
+            ThreadEvent::PlanDelta(delta) => {
+                let id = delta.item_id.clone();
+                let text = delta.delta.clone();
+                self.append_or_update_item(id, "assistant", "Plan", &text, true);
             }
-            "error" => {
-                if let Some(message) = event.pointer("/message").and_then(Value::as_str) {
-                    self.transcript.push(TranscriptItem::new(
-                        format!("runtime-error-{}", uuid_like_id()),
-                        "notice".to_string(),
-                        "Runtime error".to_string(),
-                        message.to_string(),
-                    ));
-                }
+            ThreadEvent::ItemStarted(event) => self.update_runtime_item(&event.item),
+            ThreadEvent::ItemUpdated(event) => self.update_runtime_item(&event.item),
+            ThreadEvent::ItemCompleted(event) => self.update_runtime_item(&event.item),
+            ThreadEvent::Error(event) => {
+                let message = event.message.clone();
+                self.transcript.push(TranscriptItem::new(
+                    format!("runtime-error-{}", uuid_like_id()),
+                    "notice".to_string(),
+                    "Runtime error".to_string(),
+                    message,
+                ));
             }
             _ => {}
         }
     }
 
-    fn update_runtime_item(&mut self, item: &Value) {
-        let id = item.get("id").and_then(Value::as_str).unwrap_or("runtime-item").to_string();
-        let item_type = item.get("type").and_then(Value::as_str).unwrap_or("activity");
-        if item_type == "agent_message" || item_type == "plan" || item_type == "reasoning" || item_type == "decision" {
-            let text = item.get("text").and_then(Value::as_str).unwrap_or_default().to_string();
-            let title = match item_type {
-                "plan" => "Plan",
-                "reasoning" => "Planning update",
-                "decision" => "Decision",
-                _ => "VT Code",
-            };
-            self.append_or_update_item(id, "assistant", title, &text, false);
-            return;
-        }
+    fn finish_unverified_turn(&mut self, message: &str) {
+        self.running = false;
+        self.active_turn_id = None;
+        self.cancel_requested = false;
+        self.cancel_request_sent = false;
+        self.status = "Turn ended without verified completion".to_string();
+        self.transcript.push(TranscriptItem::new(
+            format!("event-{}", uuid_like_id()),
+            "notice".to_string(),
+            "Run status".to_string(),
+            message.to_string(),
+        ));
+    }
 
-        let title = item
-            .get("tool_name")
-            .or_else(|| item.get("command"))
-            .or_else(|| item.get("name"))
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .unwrap_or_else(|| item_type.replace('_', " "));
-        let summary = item
-            .get("status")
-            .and_then(Value::as_str)
-            .unwrap_or("activity")
-            .replace('_', " ");
-        let details = serde_json::to_string_pretty(item).unwrap_or_else(|_| item.to_string());
-        let text = format!("{summary}\n\n{details}");
-        self.append_or_update_item(id, "tool", &title, &text, true);
+    fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
+        use vtcode_exec_events::ThreadItemDetails;
+        let id = item.id.clone();
+        match &item.details {
+            ThreadItemDetails::AgentMessage(message) => {
+                self.append_or_update_item(id, "assistant", "VT Code", &message.text, false);
+            }
+            ThreadItemDetails::Plan(plan) => {
+                self.append_or_update_item(id, "assistant", "Plan", &plan.text, false);
+            }
+            ThreadItemDetails::Reasoning(reasoning) => {
+                self.append_or_update_item(id, "assistant", "Planning update", &reasoning.text, false);
+            }
+            ThreadItemDetails::Decision(decision) => {
+                self.append_or_update_item(id, "assistant", "Decision", &decision.summary, false);
+            }
+            ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
+            details => {
+                let (title, status) = describe_activity(details);
+                let payload = serde_json::to_string_pretty(details).unwrap_or_else(|_| "{}".to_string());
+                let text = format!("{status}\n\n{payload}");
+                self.append_or_update_item(id, "tool", &title, &text, true);
+            }
+        }
+    }
+
+    fn upsert_diff_card(&mut self, id: String, change: &vtcode_exec_events::FileChangeItem) {
+        let files = change
+            .changes
+            .iter()
+            .map(|file| DiffFile {
+                path: file.path.clone(),
+                kind: match file.kind {
+                    vtcode_exec_events::PatchChangeKind::Add => DiffFileKind::Add,
+                    vtcode_exec_events::PatchChangeKind::Delete => DiffFileKind::Delete,
+                    vtcode_exec_events::PatchChangeKind::Update => DiffFileKind::Update,
+                },
+            })
+            .collect();
+        let card = DiffCard {
+            files,
+            additions: change.additions,
+            deletions: change.deletions,
+            incomplete: change.diff_incomplete.unwrap_or(false),
+            failed: change.status == vtcode_exec_events::PatchApplyStatus::Failed,
+            patch: change.unified_diff.clone().unwrap_or_default(),
+        };
+        let mut item = TranscriptItem::new(
+            id,
+            "diff".to_string(),
+            "File changes".to_string(),
+            card.patch.clone(),
+        );
+        item.diff = Some(card);
+        self.transcript.upsert(item);
     }
 
     fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
@@ -852,42 +877,14 @@ impl DesktopView {
     }
 
     fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
         if item.role == "tool" {
-            let id = item.id.clone();
-            let mut panel = div()
-                .w_full()
-                .max_w(px(860.))
-                .border_1()
-                .border_color(colors.border)
-                .rounded_md()
-                .overflow_hidden()
-                .child(
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px_3()
-                        .py_2()
-                        .bg(colors.secondary)
-                        .child(div().font_medium().child(item.title.clone()))
-                        .child(
-                            Button::new(format!("tool-{}", item.id))
-                                .label(if item.expanded { "Hide details" } else { "Show details" })
-                                .ghost()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.transcript.toggle_tool(&id);
-                                    cx.notify();
-                                })),
-                        ),
-                );
-            if item.expanded {
-                panel = panel.child(div().px_3().py_2().text_sm().child(item.text.clone()));
-            }
-            return panel.into_any_element();
+            return self.render_tool_item(item, cx);
+        }
+        if item.role == "diff" {
+            return self.render_diff_item(item, cx);
         }
 
+        let colors = cx.theme().colors;
         let (label, bg) = match item.role.as_str() {
             "user" => ("You", colors.accent.opacity(0.12)),
             "notice" => (item.title.as_str(), colors.warning.opacity(0.12)),
@@ -917,6 +914,199 @@ impl DesktopView {
             );
         card.child(render_markdown(format!("markdown-{}", item.id), item.markdown.clone()))
             .into_any_element()
+    }
+
+    fn render_tool_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let id = item.id.clone();
+        let mut panel = div()
+            .w_full()
+            .max_w(px(860.))
+            .border_1()
+            .border_color(colors.border)
+            .rounded_md()
+            .overflow_hidden()
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_3()
+                    .py_2()
+                    .bg(colors.secondary)
+                    .child(div().font_medium().child(item.title.clone()))
+                    .child(
+                        Button::new(format!("tool-{}", item.id))
+                            .label(if item.expanded { "Hide details" } else { "Show details" })
+                            .ghost()
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.transcript.toggle_tool(&id);
+                                cx.notify();
+                            })),
+                    ),
+            );
+        if item.expanded {
+            panel = panel.child(div().px_3().py_2().text_sm().child(item.text.clone()));
+        }
+        panel.into_any_element()
+    }
+
+    fn render_diff_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let mono_font = cx.theme().mono_font_family.clone();
+        let Some(diff) = item.diff.as_ref() else {
+            return div().into_any_element();
+        };
+        let id = item.id.clone();
+        let mut stats = String::new();
+        if let Some(additions) = diff.additions {
+            stats.push_str(&format!("+{additions} "));
+        }
+        if let Some(deletions) = diff.deletions {
+            stats.push_str(&format!("−{deletions} "));
+        }
+        let status_label = if diff.failed {
+            "patch failed"
+        } else if diff.incomplete {
+            "preview incomplete"
+        } else {
+            "applied"
+        };
+
+        let mut header = div()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px_3()
+            .py_2()
+            .bg(colors.secondary)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().font_medium().child(item.title.clone()))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(stats.trim_end().to_string()),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(if diff.failed { colors.danger } else { colors.muted_foreground })
+                            .child(status_label),
+                    ),
+            )
+            .child(
+                Button::new(format!("diff-{}", item.id))
+                    .label(if item.expanded { "Hide diff" } else { "Show diff" })
+                    .ghost()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.transcript.toggle_diff(&id);
+                        cx.notify();
+                    })),
+            );
+
+        if !diff.patch.is_empty() {
+            let copy_patch = diff.patch.clone();
+            header = header.child(
+                Button::new(format!("copy-patch-{}", item.id))
+                    .label("Copy patch")
+                    .ghost()
+                    .on_click(move |_, _, app| {
+                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()))
+                    }),
+            );
+        }
+
+        let mut panel = div()
+            .w_full()
+            .max_w(px(860.))
+            .border_1()
+            .border_color(colors.border)
+            .rounded_md()
+            .overflow_hidden()
+            .child(header);
+
+        let mut body = div().w_full().flex().flex_col().px_3().py_2().gap_1();
+        for file in &diff.files {
+            let (kind_label, kind_color) = match file.kind {
+                DiffFileKind::Add => ("added", colors.accent),
+                DiffFileKind::Delete => ("deleted", colors.danger),
+                DiffFileKind::Update => ("modified", colors.muted_foreground),
+            };
+            body = body.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(div().text_sm().font_family(mono_font.clone()).child(file.path.clone()))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(kind_color)
+                            .child(kind_label),
+                    ),
+            );
+        }
+        if diff.incomplete {
+            body = body.child(
+                div()
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child("Some file previews were unavailable for this change set."),
+            );
+        }
+
+        if item.expanded && !diff.patch.is_empty() {
+            let (lines, truncated) = classify_diff_lines(&diff.patch);
+            let mut diff_view = div()
+                .id(format!("diff-lines-{}", item.id))
+                .w_full()
+                .flex()
+                .flex_col()
+                .mt_2()
+                .rounded_md()
+                .overflow_hidden()
+                .overflow_x_scroll()
+                .bg(colors.background);
+            for line in &lines {
+                let (line_color, line_bg) = match line.kind {
+                    DiffLineKind::Added => (colors.foreground, colors.accent.opacity(0.12)),
+                    DiffLineKind::Removed => (colors.foreground, colors.danger.opacity(0.12)),
+                    DiffLineKind::Hunk => (colors.muted_foreground, colors.secondary),
+                    DiffLineKind::Header | DiffLineKind::Context => (colors.foreground, colors.background),
+                };
+                diff_view = diff_view.child(
+                    div()
+                        .w_full()
+                        .px_2()
+                        .text_xs()
+                        .font_family(mono_font.clone())
+                        .whitespace_nowrap()
+                        .text_color(line_color)
+                        .bg(line_bg)
+                        .child(line.text.to_string()),
+                );
+            }
+            if truncated {
+                diff_view = diff_view.child(
+                    div()
+                        .w_full()
+                        .px_2()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("Diff truncated after 2,000 lines. Use Copy patch for the full change."),
+                );
+            }
+            body = body.child(diff_view);
+        }
+        panel = panel.child(body);
+        panel.into_any_element()
     }
 
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1167,6 +1357,117 @@ fn uuid_like_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
     NEXT_ID.fetch_add(1, Ordering::Relaxed).to_string()
+}
+
+/// Human title and lifecycle summary for a non-message activity item.
+fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String, String) {
+    use vtcode_exec_events::ThreadItemDetails;
+    match details {
+        ThreadItemDetails::ToolInvocation(tool) => {
+            (tool.tool_name.clone(), tool_status_label(&tool.status))
+        }
+        ThreadItemDetails::ToolOutput(output) => ("Tool output".to_string(), tool_status_label(&output.status)),
+        ThreadItemDetails::CommandExecution(command) => {
+            let mut label = command_status_label(&command.status);
+            if let Some(code) = command.exit_code {
+                if matches!(command.status, vtcode_exec_events::CommandExecutionStatus::Failed) {
+                    label.push_str(&format!(" (exit {code})"));
+                }
+            }
+            (command.command.clone(), label)
+        }
+        ThreadItemDetails::McpToolCall(call) => {
+            let label = match call.status {
+                Some(vtcode_exec_events::McpToolCallStatus::Started) => "started",
+                Some(vtcode_exec_events::McpToolCallStatus::Completed) => "completed",
+                Some(vtcode_exec_events::McpToolCallStatus::Failed) => "failed",
+                None => "activity",
+            }
+            .to_string();
+            (format!("MCP · {}", call.tool_name), label)
+        }
+        ThreadItemDetails::WebSearch(search) => {
+            let label = match search.provider.as_deref() {
+                Some(provider) => format!("web search via {provider}"),
+                None => "web search".to_string(),
+            };
+            (search.query.clone(), label)
+        }
+        ThreadItemDetails::Harness(event) => {
+            let label = event.message.clone().unwrap_or_else(|| "harness activity".to_string());
+            let title = event
+                .command
+                .clone()
+                .or_else(|| event.path.clone())
+                .unwrap_or_else(|| "Harness".to_string());
+            (title, label)
+        }
+        ThreadItemDetails::Error(error) => ("Runtime item error".to_string(), error.message.clone()),
+        ThreadItemDetails::AgentMessage(_)
+        | ThreadItemDetails::Plan(_)
+        | ThreadItemDetails::Reasoning(_)
+        | ThreadItemDetails::Decision(_)
+        | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), "activity".to_string()),
+    }
+}
+
+fn tool_status_label(status: &vtcode_exec_events::ToolCallStatus) -> String {
+    match status {
+        vtcode_exec_events::ToolCallStatus::Completed => "completed",
+        vtcode_exec_events::ToolCallStatus::Failed => "failed",
+        vtcode_exec_events::ToolCallStatus::InProgress => "in progress",
+    }
+    .to_string()
+}
+
+fn command_status_label(status: &vtcode_exec_events::CommandExecutionStatus) -> String {
+    match status {
+        vtcode_exec_events::CommandExecutionStatus::Completed => "completed",
+        vtcode_exec_events::CommandExecutionStatus::Failed => "failed",
+        vtcode_exec_events::CommandExecutionStatus::InProgress => "running",
+    }
+    .to_string()
+}
+
+/// One classified line of a unified diff.
+struct DiffLine<'a> {
+    kind: DiffLineKind,
+    text: &'a str,
+}
+
+enum DiffLineKind {
+    Header,
+    Hunk,
+    Added,
+    Removed,
+    Context,
+}
+
+/// Split a unified diff into classified lines, bounded to keep one transcript
+/// row renderable regardless of patch size.
+fn classify_diff_lines(patch: &str) -> (Vec<DiffLine<'_>>, bool) {
+    const MAX_DIFF_LINES: usize = 2_000;
+    let mut lines = Vec::new();
+    let mut truncated = false;
+    for line in patch.lines() {
+        if lines.len() == MAX_DIFF_LINES {
+            truncated = true;
+            break;
+        }
+        let kind = if line.starts_with("+++") || line.starts_with("---") || line.starts_with("diff ") {
+            DiffLineKind::Header
+        } else if line.starts_with("@@") {
+            DiffLineKind::Hunk
+        } else if line.starts_with('+') {
+            DiffLineKind::Added
+        } else if line.starts_with('-') {
+            DiffLineKind::Removed
+        } else {
+            DiffLineKind::Context
+        };
+        lines.push(DiffLine { kind, text: line });
+    }
+    (lines, truncated)
 }
 
 #[cfg(test)]
