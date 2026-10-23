@@ -3,6 +3,8 @@ use std::io::Write as _;
 use anyhow::Result;
 
 use tokio_util::sync::CancellationToken;
+use vtcode_core::exec::events::VersionedThreadEvent;
+use vtcode_ui::tui::app::InlineSession;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -40,6 +42,44 @@ pub(crate) async fn run_single_agent_loop_unified(
         planning_entry_source,
         resume,
         &mut steering_receiver,
+        None,
+        None,
+    )
+    .await
+}
+
+/// Run the unified agent loop through a host-owned event session.
+///
+/// The session transports user input and presentation commands without
+/// initializing a terminal. Runtime execution, policy, persistence, and
+/// verification remain owned by the unified runloop.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Preserve the unified runloop's established typed startup inputs while replacing only its session and event endpoints."
+)]
+pub(crate) async fn run_single_agent_loop_unified_with_host(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<VTCodeConfig>,
+    skip_confirmations: bool,
+    full_auto: bool,
+    primary_agent_explicitly_configured: bool,
+    planning_entry_source: PlanningEntrySource,
+    resume: Option<ResumeSession>,
+    mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
+    session: InlineSession,
+    event_sender: tokio::sync::mpsc::Sender<VersionedThreadEvent>,
+) -> Result<()> {
+    session_loop_runner::run_single_agent_loop_unified_impl(
+        config,
+        vt_cfg,
+        skip_confirmations,
+        full_auto,
+        primary_agent_explicitly_configured,
+        planning_entry_source,
+        resume,
+        &mut steering_receiver,
+        Some(session),
+        Some(event_sender),
     )
     .await
 }
@@ -53,8 +93,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 struct TerminalCleanupGuard;
 
 impl TerminalCleanupGuard {
-    fn new() -> Self {
-        Self
+    fn new(terminal_enabled: bool) -> Option<Self> {
+        terminal_enabled.then_some(Self)
     }
 }
 

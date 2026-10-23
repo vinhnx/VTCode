@@ -10,7 +10,7 @@
 | --- | --- |
 | Design system | `design/` — color conversion, style bridging, layout, diff, panel primitives |
 | Theme registry | `theme/` — ThemeStyles, runtime state, syntax theme resolution |
-| TUI framework | `tui/` — session, widgets, runner, markdown rendering, config; `utils/transcript.rs` shared token scanners/boundaries + explicit path syntax; `session/text_utils.rs` shared wrapping whitespace cleanup |
+| TUI framework | `tui/` — session, widgets, runner, markdown rendering, config; `session_options::new_host_session` creates a headless bridge with a bounded, backpressured command queue and no terminal setup; `utils/transcript.rs` shared token scanners/boundaries + explicit path syntax; `session/text_utils.rs` shared wrapping whitespace cleanup |
 | Vim editing | `vim/` — modal prompt-editing engine (crate-internal) |
 
 ## Rules

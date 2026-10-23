@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    mpsc::SyncSender,
 };
 
 use chrono::{DateTime, Utc};
@@ -269,6 +270,34 @@ pub enum InlineEvent {
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
 
+#[derive(Clone)]
+pub(crate) enum InlineCommandSender {
+    Unbounded(UnboundedSender<InlineCommand>),
+    Bounded {
+        sender: SyncSender<InlineCommand>,
+        receiver_closed: Arc<AtomicBool>,
+    },
+}
+
+#[derive(Debug)]
+pub(crate) struct InlineCommandSendError;
+
+impl InlineCommandSender {
+    fn send(&self, command: InlineCommand) -> Result<(), InlineCommandSendError> {
+        match self {
+            Self::Unbounded(sender) => sender.send(command).map_err(|_| InlineCommandSendError),
+            Self::Bounded { sender, .. } => sender.send(command).map_err(|_| InlineCommandSendError),
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        match self {
+            Self::Unbounded(sender) => sender.is_closed(),
+            Self::Bounded { receiver_closed, .. } => receiver_closed.load(Ordering::Acquire),
+        }
+    }
+}
+
 impl From<crate::tui::core_tui::types::InlineEvent> for InlineEvent {
     fn from(value: crate::tui::core_tui::types::InlineEvent) -> Self {
         match value {
@@ -323,7 +352,7 @@ struct HandleProgress {
 #[derive(Clone)]
 pub struct InlineHandle {
     diagnostic_observer: vtcode_commons::diagnostics::DiagnosticObserver,
-    pub(crate) sender: UnboundedSender<InlineCommand>,
+    pub(crate) sender: InlineCommandSender,
     message_layout: Arc<InlineLayoutState>,
     deferred_events: Arc<Mutex<VecDeque<InlineEvent>>>,
     transient_activity: Arc<TransientActivitySignal>,
@@ -342,18 +371,30 @@ impl InlineHandle {
     }
 
     pub(crate) fn new(sender: UnboundedSender<InlineCommand>) -> Self {
-        Self::new_with_transient_signal_and_ownership(sender, Arc::new(TransientActivitySignal::default()), false)
+        Self::new_with_transient_signal_and_ownership(
+            InlineCommandSender::Unbounded(sender),
+            Arc::new(TransientActivitySignal::default()),
+            false,
+        )
+    }
+
+    pub(crate) fn new_bounded_host(sender: SyncSender<InlineCommand>, receiver_closed: Arc<AtomicBool>) -> Self {
+        Self::new_with_transient_signal_and_ownership(
+            InlineCommandSender::Bounded { sender, receiver_closed },
+            Arc::new(TransientActivitySignal::default()),
+            false,
+        )
     }
 
     pub(crate) fn new_with_transient_signal(
-        sender: UnboundedSender<InlineCommand>,
+        sender: InlineCommandSender,
         transient_activity: Arc<TransientActivitySignal>,
     ) -> Self {
         Self::new_with_transient_signal_and_ownership(sender, transient_activity, true)
     }
 
     fn new_with_transient_signal_and_ownership(
-        sender: UnboundedSender<InlineCommand>,
+        sender: InlineCommandSender,
         transient_activity: Arc<TransientActivitySignal>,
         ui_owned_transient_activity: bool,
     ) -> Self {

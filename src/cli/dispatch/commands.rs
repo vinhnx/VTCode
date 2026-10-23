@@ -12,6 +12,7 @@ use crate::cli::adapters::{ask_options, skills_options};
 use crate::cli::anthropic_api::handle_anthropic_api_command;
 use crate::cli::app_server::handle_app_server_command;
 use crate::cli::bench_allocator::handle_bench_allocator_command;
+use crate::cli::desktop_server::handle_desktop_server_command;
 use crate::cli::plugins::dispatch_plugins_command;
 use crate::cli::session_store::handle_session_store_command;
 use crate::cli::webmcp;
@@ -51,6 +52,9 @@ pub(crate) async fn dispatch_command(args: &Cli, startup: &StartupContext, comma
         }
         Commands::AppServer { listen } => {
             handle_app_server_command(core_cfg, cfg, &listen).await?;
+        }
+        Commands::DesktopServer => {
+            handle_desktop_server_command(startup).await?;
         }
         Commands::Models { command } => {
             vtcode_core::cli::models_commands::handle_models_command(args, &command).await?;

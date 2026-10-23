@@ -17,6 +17,7 @@ mod companion;
 mod companion_config;
 mod config;
 mod create_project;
+mod desktop_server;
 mod dispatch;
 mod full_auto_primary_agent;
 mod init;

@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 use tokio::task::spawn_blocking;
 use vtcode_config::loader::VTCodeConfig;
 use vtcode_core::core::agent::features::FeatureSet;
-use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent};
+use vtcode_core::exec::events::{ThreadEvent, ThreadStartedEvent, VersionedThreadEvent};
 use vtcode_memory::RetentionPolicy;
 
 use crate::agent::runloop::unified::inline_events::harness::{
@@ -20,6 +20,7 @@ pub(super) async fn initialize_harness(
     vt_cfg: Option<&VTCodeConfig>,
     model: &str,
     turn_run_id: &TurnRunId,
+    live_event_sender: Option<tokio::sync::mpsc::Sender<VersionedThreadEvent>>,
 ) -> Result<Option<HarnessEventEmitter>> {
     let harness_config = vt_cfg.map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
     let legacy_path = harness_config
@@ -31,6 +32,9 @@ pub(super) async fn initialize_harness(
     // Canonical persistence is mandatory. Setup errors propagate instead of
     // silently downgrading the run to an unpersisted session.
     let emitter = HarnessEventEmitter::new_async(workspace, &turn_run_id.0, legacy_path).await?;
+    if let Some(sender) = live_event_sender {
+        emitter.attach_live_event_stream(sender)?;
+    }
 
     let session_derived = vtcode_memory::session_directory(workspace, &turn_run_id.0).join("derived");
     let features = FeatureSet::from_config(vt_cfg);
@@ -212,7 +216,9 @@ mod tests {
     async fn initialize_harness_emits_thread_started_without_retention_side_effects() {
         let temp = TempDir::new().expect("temp dir");
         let turn = TurnRunId("test-harness-init".to_string());
-        let emitter = initialize_harness(temp.path(), None, "gpt-5", &turn).await.expect("emitter");
+        let emitter = initialize_harness(temp.path(), None, "gpt-5", &turn, None)
+            .await
+            .expect("emitter");
         assert!(emitter.is_some(), "canonical emitter is mandatory");
         // Retention is deferred: no session store is required for emitter setup.
         assert!(

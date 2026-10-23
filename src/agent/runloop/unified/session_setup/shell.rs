@@ -61,6 +61,7 @@ pub(crate) struct SessionShell {
     pub default_placeholder: Option<String>,
     pub skip_confirmations: bool,
     pub legacy_key_bindings: HashMap<String, Vec<String>>,
+    pub terminal_enabled: bool,
 }
 
 /// Paint a typeable shell with bootstrap chrome only.
@@ -80,6 +81,7 @@ pub(crate) async fn initialize_session_shell(
         skip_confirmations,
         steering_sender,
         settings_sender,
+        host_session,
     } = options;
 
     let active_styles = theme::active_styles();
@@ -95,7 +97,7 @@ pub(crate) async fn initialize_session_shell(
         .map(|cfg| cfg.ui.inline_viewport_rows)
         .unwrap_or(ui_constants::DEFAULT_INLINE_VIEWPORT_ROWS);
 
-    if !is_tui_mode() {
+    if host_session.is_none() && !is_tui_mode() {
         set_tui_mode(true);
     }
 
@@ -146,6 +148,31 @@ pub(crate) async fn initialize_session_shell(
     let mut user_key_bindings = legacy_key_bindings.clone();
     if let Some(vt_config) = vt_cfg {
         user_key_bindings.extend(vt_config.ui.keybindings.clone());
+    }
+
+    if let Some(mut session) = host_session {
+        let handle = session.clone_inline_handle();
+        if skip_confirmations {
+            session.set_skip_confirmations(true);
+        }
+        vtcode_commons::startup_trace::record_phase("session_setup_shell", shell_phase);
+        return Ok(SessionShell {
+            session,
+            handle,
+            ctrl_c_state,
+            ctrl_c_notify,
+            settings_snapshot,
+            input_activity_counter,
+            pty_counter,
+            settings_event_receiver,
+            settings_sender,
+            editor_open_dispatcher,
+            exec_sessions,
+            default_placeholder,
+            skip_confirmations,
+            legacy_key_bindings,
+            terminal_enabled: false,
+        });
     }
 
     let preview_callback: PreviewCallback = Arc::new(move |selection| match selection {
@@ -231,6 +258,7 @@ pub(crate) async fn initialize_session_shell(
         default_placeholder,
         skip_confirmations,
         legacy_key_bindings,
+        terminal_enabled: true,
     })
 }
 

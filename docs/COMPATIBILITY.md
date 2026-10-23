@@ -5,18 +5,19 @@ VT Code ecosystem.
 
 ## Quick Reference
 
-| Feature               | Linux | macOS | Windows  | WASM    | Notes                                                                                                                                                 |
-| --------------------- | ----- | ----- | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core CLI              | Yes   | Yes   | Yes      | No      | Full terminal agent support                                                                                                                           |
-| TUI Interface         | Yes   | Yes   | Yes      | No      | Requires crossterm                                                                                                                                    |
-| Keyring Auth          | Yes   | Yes   | Yes      | No      | OS-specific backends                                                                                                                                  |
-| MCP Protocol          | Yes   | Yes   | Yes      | No      | Model Context Protocol                                                                                                                                |
-| ACP Client            | Yes   | Yes   | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
-| WebMCP browser bridge | Yes   | Yes   | No       | No      | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
-| File Watching         | Yes   | Yes   | Yes      | No      | notify crate                                                                                                                                          |
-| Desktop Notifications | Yes   | Yes   | Yes      | No      | Optional feature                                                                                                                                      |
-| Bash Runner           | Yes   | Yes   | Improved | No      | Windows uses PowerShell with cross-platform process groups                                                                                            |
-| PTY Sessions          | Yes   | Yes   | Partial  | No      | Limited on Windows                                                                                                                                    |
+| Feature               | Linux | macOS   | Windows  | WASM    | Notes                                                                                                                                                 |
+| --------------------- | ----- | -----   | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core CLI              | Yes   | Yes     | Yes      | No      | Full terminal agent support                                                                                                                           |
+| TUI Interface         | Yes   | Yes     | Yes      | No      | Requires crossterm                                                                                                                                    |
+| Desktop Workspace     | No    | Partial | No       | No      | Local GPUI app for macOS 15+; ad hoc signed only, no Developer ID trust or notarization                                                               |
+| Keyring Auth          | Yes   | Yes     | Yes      | No      | OS-specific backends                                                                                                                                  |
+| MCP Protocol          | Yes   | Yes     | Yes      | No      | Model Context Protocol                                                                                                                                |
+| ACP Client            | Yes   | Yes     | Yes      | Partial | Agent Client Protocol                                                                                                                                 |
+| WebMCP browser bridge | Yes   | Yes     | No       | No      | First-class authenticated bridge; filesystem access requires Unix directory-handle support and the browser client is a separate supported WebMCP page |
+| File Watching         | Yes   | Yes     | Yes      | No      | notify crate                                                                                                                                          |
+| Desktop Notifications | Yes   | Yes     | Yes      | No      | Optional feature                                                                                                                                      |
+| Bash Runner           | Yes   | Yes     | Improved | No      | Windows uses PowerShell with cross-platform process groups                                                                                            |
+| PTY Sessions          | Yes   | Yes     | Partial  | No      | Limited on Windows                                                                                                                                    |
 
 **Legend:** Yes = Fully Supported | Partial = Partial Support | No = Not Supported
 
@@ -47,6 +48,8 @@ All VT Code crates require Rust 1.98.1 or later due to dependencies (ratatui 0.3
 | vtcode-auth               | 0.133.21 | 1.98.1 | 2024    | Yes       | OAuth/PKCE                                                 |
 | vtcode-macros             | 0.133.21 | 1.98.1 | 2024    | Yes       | Proc macros                                                |
 | vtcode-ui                 | 0.133.21 | 1.98.1 | 2024    | Yes       | TUI framework                                              |
+| vtcode-desktop            | 0.180.5  | 1.98.1 | 2024    | No        | macOS GPUI app (publish=false)                             |
+| vtcode-desktop-protocol   | 0.180.5  | 1.98.1 | 2024    | No        | Internal desktop JSON-RPC contract (publish=false)         |
 | vtcode-utility-tool-specs | 0.133.21 | 1.98.1 | 2024    | Yes       | Tool schemas                                               |
 | vtcode-safety             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
 | vtcode-a2a                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
@@ -72,14 +75,15 @@ All VT Code crates require Rust 1.98.1 or later due to dependencies (ratatui 0.3
 
 ### macOS
 
-| Feature               | Status | Dependencies           | Notes                                                                                                                             |
-| --------------------- | ------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Keychain (Keyring)    | Yes    | Security Framework     | Native macOS keychain                                                                                                             |
-| Desktop Notifications | Yes    | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
-| PTY Sessions          | Yes    | `libc`                 | Full Unix PTY support                                                                                                             |
-| File Permissions      | Yes    | `libc`                 | Unix permission model                                                                                                             |
-| Signal Handling       | Yes    | `signal-hook`          | POSIX signals                                                                                                                     |
-| Touch ID Auth         | No     | -                      | Not yet implemented                                                                                                               |
+| Feature               | Status  | Dependencies           | Notes                                                                                                                             |
+| --------------------- | ------  | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Keychain (Keyring)    | Yes     | Security Framework     | Native macOS keychain                                                                                                             |
+| Desktop Notifications | Yes     | `mac-notification-sys` | Native NSUserNotification; sent via the Finder bundle (`com.apple.finder`) to avoid the Apple Events automation permission prompt |
+| PTY Sessions          | Yes     | `libc`                 | Full Unix PTY support                                                                                                             |
+| File Permissions      | Yes     | `libc`                 | Unix permission model                                                                                                             |
+| Signal Handling       | Yes     | `signal-hook`          | POSIX signals                                                                                                                     |
+| Touch ID Auth         | No      | -                      | Not yet implemented                                                                                                               |
+| Desktop Workspace     | Partial | GPUI Kit               | Local app build on macOS 15+; ad hoc signing, no notarization                                                                     |
 
 ### Windows
 

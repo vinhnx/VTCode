@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, mpsc};
 
 use uuid::Uuid;
 use vtcode_config::OpenResponsesConfig;
@@ -51,6 +51,7 @@ struct HarnessEventEmitterInner {
     open_responses: Mutex<Option<OpenResponsesExporter>>,
     atif: Mutex<Option<AtifExporter>>,
     webmcp_event_hub: Mutex<Option<WebmcpEventHub>>,
+    live_event_sender: Mutex<Option<mpsc::Sender<VersionedThreadEvent>>>,
     dispatch_gate: Mutex<()>,
     finalized: AtomicBool,
     finish_result: OnceCell<std::result::Result<(), String>>,
@@ -158,6 +159,7 @@ impl HarnessEventEmitter {
                 open_responses: Mutex::new(None),
                 atif: Mutex::new(None),
                 webmcp_event_hub: Mutex::new(None),
+                live_event_sender: Mutex::new(None),
                 dispatch_gate: Mutex::new(()),
                 finalized: AtomicBool::new(false),
                 finish_result: OnceCell::new(),
@@ -197,6 +199,7 @@ impl HarnessEventEmitter {
                 open_responses: Mutex::new(None),
                 atif: Mutex::new(None),
                 webmcp_event_hub: Mutex::new(None),
+                live_event_sender: Mutex::new(None),
                 dispatch_gate: Mutex::new(()),
                 finalized: AtomicBool::new(false),
                 finish_result: OnceCell::new(),
@@ -432,6 +435,33 @@ impl HarnessEventEmitter {
             }
         }
 
+        let live_event_sender = self
+            .inner
+            .live_event_sender
+            .lock()
+            .map_err(|error| anyhow::anyhow!("live event sender lock poisoned: {error}"))?
+            .clone();
+        if let Some(sender) = live_event_sender {
+            sender.try_send(VersionedThreadEvent::new(event)).map_err(|error| match error {
+                mpsc::error::TrySendError::Full(_) => anyhow::anyhow!("desktop runtime event queue is full"),
+                mpsc::error::TrySendError::Closed(_) => anyhow::anyhow!("desktop runtime event consumer disconnected"),
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Attach a bounded live event stream for a non-terminal host.
+    pub(crate) fn attach_live_event_stream(&self, sender: mpsc::Sender<VersionedThreadEvent>) -> Result<()> {
+        let mut guard = self
+            .inner
+            .live_event_sender
+            .lock()
+            .map_err(|error| anyhow::anyhow!("live event sender lock poisoned: {error}"))?;
+        if guard.is_some() {
+            return Err(anyhow::anyhow!("a live event stream is already attached"));
+        }
+        *guard = Some(sender);
         Ok(())
     }
 

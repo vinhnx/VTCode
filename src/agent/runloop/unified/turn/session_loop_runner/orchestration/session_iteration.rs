@@ -33,6 +33,9 @@ pub(super) struct SessionLoopState<'a> {
     pub(super) pending_session_start_trigger: &'a mut Option<SessionStartTrigger>,
     pub(super) next_session_primary_agent: &'a mut Option<String>,
     pub(super) steering_receiver: &'a mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
+    pub(super) host_session: &'a mut Option<InlineSession>,
+    pub(super) event_sender: Option<mpsc::Sender<VersionedThreadEvent>>,
+    pub(super) terminal_enabled: bool,
     pub(super) skip_confirmations: bool,
     pub(super) full_auto: bool,
     pub(super) primary_agent_explicitly_configured: bool,
@@ -53,6 +56,9 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         pending_session_start_trigger,
         next_session_primary_agent,
         steering_receiver,
+        host_session,
+        event_sender,
+        terminal_enabled,
         skip_confirmations,
         full_auto,
         primary_agent_explicitly_configured,
@@ -127,6 +133,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
                 skip_confirmations,
                 steering_sender: steering_sender_for_shell,
                 settings_sender: settings_sender.clone(),
+                host_session: host_session.take(),
             },
         );
         let critical = initialize_session_critical(
@@ -181,7 +188,8 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
     let harness_config = vt_cfg.as_ref().map(|cfg| cfg.agent.harness.clone()).unwrap_or_default();
     let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
     let harness_emitter =
-        harness::initialize_harness(&config.workspace, vt_cfg.as_ref(), &config.model, &turn_run_id).await?;
+        harness::initialize_harness(&config.workspace, vt_cfg.as_ref(), &config.model, &turn_run_id, event_sender)
+            .await?;
 
     // Once canonical persistence is open, every fallible operation must
     // finalize it before leaving this session iteration. The normal path
@@ -224,6 +232,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
             skip_confirmations,
             steering_sender: None,
             settings_sender: settings_sender.clone(),
+            host_session: None,
         },
     )
     .await;
@@ -388,6 +397,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         ctrl_c_notify.clone(),
         async_mcp_manager.clone(),
         cancel_token.clone(),
+        terminal_enabled,
     );
     let mut session_stats = SessionStats::default();
     session_stats.circuit_breaker = circuit_breaker.clone();
@@ -2443,6 +2453,7 @@ pub(super) async fn run_session_iteration(state: SessionLoopState<'_>) -> Result
         start_code_changes: &start_code_changes,
         agent_touched_paths: &mut agent_touched_paths,
         async_mcp_manager: &async_mcp_manager,
+        terminal_enabled,
         next_session_primary_agent,
         resume_state,
         pending_session_start_trigger,

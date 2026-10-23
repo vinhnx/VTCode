@@ -320,6 +320,7 @@ pub(super) struct SessionTailContext<'a> {
     pub next_session_primary_agent: &'a mut Option<String>,
     pub resume_state: &'a mut Option<ResumeSession>,
     pub pending_session_start_trigger: &'a mut Option<SessionStartTrigger>,
+    pub terminal_enabled: bool,
 }
 
 /// Exit tail for one session: terminal event, the bounded maintenance group,
@@ -364,6 +365,7 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
         next_session_primary_agent,
         resume_state,
         pending_session_start_trigger,
+        terminal_enabled,
     } = context;
 
     // Tell the TUI to tear down at the START of the session tail, not at
@@ -485,12 +487,18 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
     }
     // A timed-out archive or hook must never bypass restoration or suppress
     // the summary. Join the already-stopping TUI only for remaining time.
-    let tui_closed = session
-        .wait_for_exit(deadline.saturating_duration_since(tokio::time::Instant::now()))
-        .await;
+    let tui_closed = if terminal_enabled {
+        session
+            .wait_for_exit(deadline.saturating_duration_since(tokio::time::Instant::now()))
+            .await
+    } else {
+        true
+    };
     tracing::debug!(target: "vtcode.shutdown", boundary = "tui_wait_finished", tui_closed, elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
-    let _ = vtcode_ui::tui::panic_hook::restore_tui_keep_raw_mode();
-    vtcode_ui::tui::panic_hook::finish_deferred_raw_mode_restore();
+    if terminal_enabled {
+        let _ = vtcode_ui::tui::panic_hook::restore_tui_keep_raw_mode();
+        vtcode_ui::tui::panic_hook::finish_deferred_raw_mode_restore();
+    }
     vtcode_core::utils::transcript::clear_inline_handle();
     vtcode_core::ui::set_tui_mode(false);
     tracing::debug!(target: "vtcode.shutdown", boundary = "terminal_restored", elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
@@ -551,33 +559,35 @@ pub(super) async fn run_session_tail(context: SessionTailContext<'_>) -> Result<
         .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
         .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
     let (code_additions, code_deletions) = code_change_delta.map(|d| (d.additions, d.deletions)).unwrap_or((0, 0));
-    if !finalization_succeeded {
+    if terminal_enabled && !finalization_succeeded {
         let _ = vtcode_ui::tui::panic_hook::restore_tui();
     }
-    let session_total_usage = session_stats.total_usage();
-    print_exit_summary(ExitData {
-        app_name: vtcode_core::config::constants::app::DISPLAY_NAME,
-        version: env!("CARGO_PKG_VERSION"),
-        model: &config.model,
-        provider: &provider_label,
-        trust_label,
-        reasoning: &reasoning_label,
-        session_duration: session_started_at.elapsed(),
-        prompt_tokens: session_total_usage.input_tokens,
-        completion_tokens: session_total_usage.output_tokens,
-        cached_tokens: session_total_usage.cached_input_tokens,
-        cache_creation_tokens: session_total_usage.cache_creation_tokens,
-        cache_hit_rate_percent: session_total_usage.cache_hit_rate().map(|rate| rate * 100.0),
-        code_additions,
-        code_deletions,
-        final_response: final_response.as_deref(),
-        resume_identifier,
-        budget_limit: session_stats.budget_limit(),
-        total_cost_usd: session_stats.total_cost_usd(),
-        end_reason_label: session_end_reason.as_str(),
-        first_call_composition: session_stats.first_call_composition(),
-        session_end_reason,
-    });
+    if terminal_enabled {
+        let session_total_usage = session_stats.total_usage();
+        print_exit_summary(ExitData {
+            app_name: vtcode_core::config::constants::app::DISPLAY_NAME,
+            version: env!("CARGO_PKG_VERSION"),
+            model: &config.model,
+            provider: &provider_label,
+            trust_label,
+            reasoning: &reasoning_label,
+            session_duration: session_started_at.elapsed(),
+            prompt_tokens: session_total_usage.input_tokens,
+            completion_tokens: session_total_usage.output_tokens,
+            cached_tokens: session_total_usage.cached_input_tokens,
+            cache_creation_tokens: session_total_usage.cache_creation_tokens,
+            cache_hit_rate_percent: session_total_usage.cache_hit_rate().map(|rate| rate * 100.0),
+            code_additions,
+            code_deletions,
+            final_response: final_response.as_deref(),
+            resume_identifier,
+            budget_limit: session_stats.budget_limit(),
+            total_cost_usd: session_stats.total_cost_usd(),
+            end_reason_label: session_end_reason.as_str(),
+            first_call_composition: session_stats.first_call_composition(),
+            session_end_reason,
+        });
+    }
     tracing::debug!(target: "vtcode.shutdown", boundary = "postamble_finished", accepted_exit_elapsed_ms = ?ctrl_c_state.exit_elapsed_ms(), elapsed_ms = session_tail_started.elapsed().as_millis() as u64);
     if let Some(error) = teardown_error {
         return Err(error);

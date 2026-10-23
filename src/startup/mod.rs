@@ -130,6 +130,7 @@ impl StartupPolicy {
                     StartupCommandKind::Metadata
                 }
                 Some(Commands::AppServer { .. }) => StartupCommandKind::AppServer,
+                Some(Commands::DesktopServer) => StartupCommandKind::ToolCapable,
                 Some(
                     Commands::Chat
                     | Commands::ChatVerbose

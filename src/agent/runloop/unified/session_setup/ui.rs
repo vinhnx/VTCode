@@ -42,7 +42,7 @@ use vtcode_core::ui::{is_tui_mode, set_tui_mode, to_tui_slash_commands};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_core::utils::transcript;
-use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, SlashCommandItem};
+use vtcode_ui::tui::app::{AgentPaletteItem, InlineHandle, InlineSession, SlashCommandItem};
 
 use self::header_context::{HeaderContextInit, initialize_header_context, maybe_render_system_prompt_budget_warning};
 pub(crate) use self::local_agents::refresh_local_agents;
@@ -75,6 +75,9 @@ pub(crate) struct SessionUiLaunchOptions {
     pub skip_confirmations: bool,
     pub steering_sender: Option<UnboundedSender<SteeringMessage>>,
     pub settings_sender: UnboundedSender<crate::agent::runloop::unified::session_settings::SessionSettingsControl>,
+    /// Pre-created host session for non-terminal clients such as the desktop
+    /// JSON-RPC service. `None` selects the normal TUI shell.
+    pub host_session: Option<InlineSession>,
 }
 
 /// Whether transcript file links may open while an agent turn is active.
@@ -112,6 +115,7 @@ pub(crate) async fn initialize_session_ui(
         skip_confirmations: _,
         steering_sender: _,
         settings_sender: _,
+        host_session: _,
     } = options;
     let SessionShell {
         mut session,
@@ -128,6 +132,7 @@ pub(crate) async fn initialize_session_ui(
         default_placeholder,
         skip_confirmations,
         legacy_key_bindings,
+        terminal_enabled,
     } = shell;
     macro_rules! ui_wait {
         ($future:expr) => {{
@@ -215,7 +220,7 @@ pub(crate) async fn initialize_session_ui(
         crate::startup::defer_system_prompt_size_check(vt_cfg, &config.workspace);
     }
 
-    if !is_tui_mode() {
+    if terminal_enabled && !is_tui_mode() {
         set_tui_mode(true);
     }
 
@@ -223,9 +228,13 @@ pub(crate) async fn initialize_session_ui(
     // exec manager and continue wiring session state into the live session.
     // Drain the palette probe after spawn so a silent terminal cannot delay
     // the first frame. Theme/palette settle here before the first model turn.
-    ui_wait!(crate::agent::probe::await_terminal_palette_probe());
+    if terminal_enabled {
+        ui_wait!(crate::agent::probe::await_terminal_palette_probe());
+    }
 
-    set_global_terminal_focused(true);
+    if terminal_enabled {
+        set_global_terminal_focused(true);
+    }
     if skip_confirmations {
         session.set_skip_confirmations(true);
     }

@@ -698,6 +698,10 @@ pub enum Commands {
         listen: String,
     },
 
+    /// Start the local VT Code desktop service over JSON-RPC stdio.
+    #[command(name = "desktop-server")]
+    DesktopServer,
+
     /// Manage models and providers
     Models {
         #[command(subcommand)]

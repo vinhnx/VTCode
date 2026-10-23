@@ -1,0 +1,20 @@
+[package]
+name = "vtcode-desktop-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.98.1"
+authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+description = "Private JSON-RPC protocol shared by VT Code desktop hosts"
+license.workspace = true
+publish = false
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
+vtcode-exec-events = { workspace = true }
+

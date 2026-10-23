@@ -1,0 +1,83 @@
+name: Desktop macOS
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "AGENTS.md"
+      - "crates/codegen/vtcode-desktop/**"
+      - "crates/codegen/vtcode-core/src/cli/**"
+      - "crates/codegen/vtcode-ui/src/tui/**"
+      - "crates/common/vtcode-desktop-protocol/**"
+      - "src/agent/runloop/unified/**"
+      - "src/cli/desktop_server.rs"
+      - "src/cli/dispatch/commands.rs"
+      - "src/cli/mod.rs"
+      - "src/main.rs"
+      - "src/startup/**"
+      - "tests/desktop_server.rs"
+      - "crates/codegen/vtcode-ui/AGENTS.md"
+      - "scripts/package-desktop-macos.sh"
+      - ".github/workflows/desktop-macos.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/codegen/vtcode-desktop/**"
+      - "crates/common/vtcode-desktop-protocol/**"
+      - "src/agent/runloop/unified/**"
+      - "src/cli/desktop_server.rs"
+      - "src/cli/dispatch/commands.rs"
+      - "src/cli/mod.rs"
+      - "src/main.rs"
+      - "src/startup/**"
+      - "tests/desktop_server.rs"
+      - "scripts/package-desktop-macos.sh"
+      - ".github/workflows/desktop-macos.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-package:
+    name: Validate and package VT Code Desktop
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: 1.98.1
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          key: desktop-macos
+
+      - name: Install nextest
+        uses: taiki-e/install-action@fae525311e5e299134b606bf247d465dd0df8190 # v2
+        with:
+          tool: nextest
+
+      - name: Check desktop, protocol, and backend
+        run: cargo check --locked -p vtcode-desktop -p vtcode-desktop-protocol -p vtcode
+
+      - name: Run host, UI, and protocol tests
+        run: cargo nextest run --locked -p vtcode-ui -p vtcode-desktop-protocol
+
+      - name: Test the headless service process
+        run: cargo nextest run --locked -p vtcode --test desktop_server
+
+      - name: Build and verify the app bundle
+        run: scripts/package-desktop-macos.sh "$RUNNER_TEMP/VT Code.app"

@@ -10,6 +10,7 @@ Entry point for VT Code contributor workflows.
   context budgets, and staged headless compaction.
 - [Testing Guide](./testing.md) - Test commands, structure, and benchmark coverage, including the startup launch
   benchmark.
+- [Desktop workspace](./desktop-workspace.md) - Local GPUI app, JSON-RPC service, session lifecycle, and macOS packaging.
 - [TUI design system](./tui-design-system.md) - Canonical list rows, keyboard copy, and group spacing in
   `vtcode-ui::design`.
 - [TUI list search](./tui-list-search.md) - Shared live filter for modal and standalone pickers (labels, descriptions,

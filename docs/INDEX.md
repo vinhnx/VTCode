@@ -39,6 +39,7 @@ Last reviewed: 2026-08-28
 - [MCP Integration Guide](mcp/MCP_INTEGRATION_GUIDE.md) - MCP integration onboarding.
 - [Agent Plugins](guides/agent-plugins.md) - Portable skill + MCP packages, `vtcode plugins` CLI.
 - [Testing Guide](development/testing.md) - Test strategy and commands.
+- [Desktop workspace](development/desktop-workspace.md) - macOS GPUI application, local JSON-RPC service, and packaging.
 
 ## Engineering References
 

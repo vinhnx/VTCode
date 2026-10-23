@@ -47,7 +47,7 @@ use clap::FromArgMatches;
 use colorchoice::ColorChoice as GlobalColorChoice;
 use vtcode_commons::color_policy;
 use vtcode_commons::{VtCodePaths, env_lock};
-use vtcode_core::cli::args::Cli;
+use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_ui::tui::panic_hook;
 
@@ -303,7 +303,19 @@ fn bootstrap_main() -> Result<BootstrapOutcome> {
     let runtime_phase = vtcode_commons::startup_trace::phase_started();
     let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
     runtime_builder.enable_all().thread_name("vtcode-rt-worker");
-    if let Some(workers) = vtcode_commons::runtime_diagnostics::configured_worker_threads() {
+    let configured_workers = vtcode_commons::runtime_diagnostics::configured_worker_threads();
+    if matches!(args.command.as_ref(), Some(Commands::DesktopServer)) {
+        // The unified agent loop has substantially deeper async polling than
+        // the request dispatcher. It runs as a Tokio task here, so give the
+        // desktop server workers the same 8 MiB stack budget as the process
+        // main thread that drives the ordinary interactive loop. Its bounded
+        // host-command bridge can block while the session pump drains its
+        // queue, so reserve a second worker even on a single-core host or when
+        // VTCODE_RUNTIME_WORKERS is set to one.
+        let available_workers = std::thread::available_parallelism().map_or(2, |count| count.get());
+        runtime_builder.worker_threads(desktop_runtime_worker_count(configured_workers, available_workers));
+        runtime_builder.thread_stack_size(8 * 1024 * 1024);
+    } else if let Some(workers) = configured_workers {
         runtime_builder.worker_threads(workers);
     }
     let runtime = runtime_builder.build().context("failed to build Tokio runtime")?;
@@ -496,4 +508,20 @@ async fn run(prepared: PreparedRun) -> Result<()> {
     dispatch_result?;
 
     Ok(())
+}
+
+fn desktop_runtime_worker_count(configured_workers: Option<usize>, available_workers: usize) -> usize {
+    configured_workers.unwrap_or(available_workers).max(2)
+}
+
+#[cfg(test)]
+mod desktop_runtime_tests {
+    use super::desktop_runtime_worker_count;
+
+    #[test]
+    fn desktop_service_keeps_a_worker_available_to_drain_bounded_host_commands() {
+        assert_eq!(desktop_runtime_worker_count(Some(1), 8), 2);
+        assert_eq!(desktop_runtime_worker_count(None, 1), 2);
+        assert_eq!(desktop_runtime_worker_count(Some(4), 2), 4);
+    }
 }

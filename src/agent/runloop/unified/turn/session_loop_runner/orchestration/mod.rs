@@ -15,6 +15,7 @@ use vtcode_core::core::agent::session::AgentSessionState;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::interfaces::session::PlanningEntrySource;
 use vtcode_core::exec::events::ThreadCompletionSubtype;
+use vtcode_core::exec::events::VersionedThreadEvent;
 use vtcode_core::hooks::{SessionEndReason, SessionStartTrigger};
 use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::session::SessionId;
@@ -22,6 +23,7 @@ use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
 use vtcode_core::utils::session_archive::SessionMessage;
 use vtcode_ui::tui::app::ArchivedPromptEntry;
+use vtcode_ui::tui::app::InlineSession;
 
 use super::super::{CancelGuard, TerminalCleanupGuard};
 use super::archive::refresh_runtime_debug_context_for_next_session;
@@ -82,6 +84,10 @@ use session_bootstrap::{
 };
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "These values are the unified runloop's existing startup contract; the host adapter supplies its session and canonical event sender."
+)]
 pub(crate) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     initial_vt_cfg: Option<VTCodeConfig>,
@@ -91,8 +97,11 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
     planning_entry_source: PlanningEntrySource,
     resume: Option<ResumeSession>,
     steering_receiver: &mut Option<mpsc::UnboundedReceiver<SteeringMessage>>,
+    mut host_session: Option<InlineSession>,
+    event_sender: Option<mpsc::Sender<VersionedThreadEvent>>,
 ) -> Result<()> {
-    let _terminal_cleanup_guard = TerminalCleanupGuard::new();
+    let terminal_enabled = host_session.is_none();
+    let _terminal_cleanup_guard = TerminalCleanupGuard::new(terminal_enabled);
 
     let mut config = config.clone();
     let mut session_skip_confirmations = skip_confirmations;
@@ -117,13 +126,20 @@ pub(crate) async fn run_single_agent_loop_unified_impl(
             pending_session_start_trigger: &mut pending_session_start_trigger,
             next_session_primary_agent: &mut next_session_primary_agent,
             steering_receiver: &mut *steering_receiver,
+            host_session: &mut host_session,
+            event_sender: event_sender.clone(),
+            terminal_enabled,
             skip_confirmations,
             full_auto,
             primary_agent_explicitly_configured,
             planning_entry_source,
         };
-        if let ControlFlow::Break(()) = session_iteration::run_session_iteration(state).await? {
-            break;
+        match session_iteration::run_session_iteration(state).await? {
+            ControlFlow::Break(()) => break,
+            ControlFlow::Continue(()) if !terminal_enabled => {
+                anyhow::bail!("the desktop host cannot start a replacement session from this runloop instance")
+            }
+            ControlFlow::Continue(()) => {}
         }
     }
     Ok(())
