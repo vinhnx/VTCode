@@ -88,6 +88,7 @@ struct DesktopView {
     changes: ChangesProjection,
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
+    git_branch: Option<String>,
 }
 
 impl DesktopView {
@@ -125,6 +126,7 @@ impl DesktopView {
             changes: ChangesProjection::default(),
             selected_change: None,
             change_viewer: None,
+            git_branch: None,
         }
     }
 
@@ -211,6 +213,7 @@ impl DesktopView {
         self.error = None;
         self.status = "Starting local VT Code service…".to_string();
         self.files = files::scan_workspace(&workspace);
+        self.git_branch = files::git_branch(&workspace);
         self.file_preview = None;
         self.changes = ChangesProjection::default();
         self.selected_change = None;
@@ -279,6 +282,7 @@ impl DesktopView {
     fn refresh_files(&mut self, cx: &mut Context<Self>) {
         if let Some(workspace) = self.workspace.clone() {
             self.files = files::scan_workspace(&workspace);
+            self.git_branch = files::git_branch(&workspace);
             cx.notify();
         }
     }
@@ -1746,6 +1750,60 @@ impl DesktopView {
         panel.child(buttons)
     }
 
+    /// Full-width bottom bar: workspace, git branch, provider · model, and
+    /// the live turn status.
+    fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let workspace = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("No workspace");
+        let agent = if self.running {
+            ("Agent: running", colors.accent)
+        } else {
+            ("Agent: idle", colors.muted_foreground)
+        };
+        let configuration = self.configuration.as_ref();
+        let provider_model = configuration
+            .map(|config| format!("{} · {}", config.provider, config.model))
+            .unwrap_or_else(|| "No provider configured".to_string());
+        div()
+            .id("status-bar")
+            .test_support()
+            .w_full()
+            .h(px(26.))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .px_3()
+            .border_t_1()
+            .border_color(colors.border)
+            .text_xs()
+            .text_color(colors.muted_foreground)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .min_w_0()
+                    .child(div().truncate().child(workspace.to_string()))
+                    .when(self.git_branch.is_some(), |bar| {
+                        bar.child(div().truncate().child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())))
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(div().truncate().child(provider_model))
+                    .child(div().text_color(agent.1).child(agent.0)),
+            )
+    }
+
     fn render_interaction(
         &self,
         interaction: &InteractionRequest,
@@ -1879,11 +1937,10 @@ impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
-        let mut body = div()
-            .size_full()
+        let panes = div()
+            .flex_1()
+            .min_h_0()
             .flex()
-            .bg(colors.background)
-            .text_color(colors.foreground)
             .child(self.render_sidebar(cx))
             .child(
                 div()
@@ -1896,7 +1953,15 @@ impl Render for DesktopView {
                     .child(self.render_transcript(cx))
                     .child(self.render_composer(window, cx)),
             )
-            .when(inspector_visible, |body| body.child(self.render_inspector(cx)));
+            .when(inspector_visible, |panes| panes.child(self.render_inspector(cx)));
+        let mut body = div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(colors.background)
+            .text_color(colors.foreground)
+            .child(panes)
+            .child(self.render_status_bar(cx));
         if self.workspace.is_none() {
             body = body.child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(
