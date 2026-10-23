@@ -97,7 +97,7 @@ pub struct SessionToolCatalogState {
     cached_filtered: RwLock<Vec<FilteredCacheEntry>>,
     /// Client-side embedding index for tool search. Rebuilt when the tool
     /// catalog epoch changes (tools added/removed, deferred tools expanded).
-    embedding_index: RwLock<Option<ToolEmbeddingIndex>>,
+    embedding_index: RwLock<Option<Arc<ToolEmbeddingIndex>>>,
 }
 
 impl SessionToolCatalogState {
@@ -204,7 +204,7 @@ impl SessionToolCatalogState {
             let index_guard = self.embedding_index.read().await;
             if let Some(ref index) = *index_guard {
                 if index.epoch() == current_epoch {
-                    return Arc::new(index.clone());
+                    return Arc::clone(index);
                 }
             }
         }
@@ -214,10 +214,10 @@ impl SessionToolCatalogState {
         let index = ToolEmbeddingIndex::build(&defs, current_epoch);
         drop(defs);
 
-        let arc_index = Arc::new(index.clone());
+        let arc_index = Arc::new(index);
         {
             let mut index_guard = self.embedding_index.write().await;
-            *index_guard = Some(index);
+            *index_guard = Some(Arc::clone(&arc_index));
         }
 
         arc_index
@@ -499,6 +499,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn embedding_index_reuses_allocation_for_empty_and_populated_catalogs() {
+        for definitions in [
+            vec![],
+            vec![tool_with_desc("orchard_lookup", "Find apple harvest records")],
+        ] {
+            let state = SessionToolCatalogState::new();
+            let tools = Arc::new(RwLock::new(definitions));
+            let first = state.embedding_index(&tools).await;
+            let second = state.embedding_index(&tools).await;
+            let third = state.embedding_index(&tools).await;
+
+            assert_eq!(first.epoch(), 0);
+            assert!(Arc::ptr_eq(&first, &second));
+            assert!(Arc::ptr_eq(&first, &third));
+        }
+    }
+
+    #[tokio::test]
+    async fn embedding_index_refresh_preserves_retained_snapshot() {
+        let state = SessionToolCatalogState::new();
+        let tools = Arc::new(RwLock::new(vec![tool_with_desc("orchard_lookup", "Find apple harvest records")]));
+        let original = state.embedding_index(&tools).await;
+
+        *tools.write().await = vec![tool_with_desc("ocean_monitor", "Inspect coral reef temperatures")];
+        let epoch = state.note_explicit_refresh("test_definitions_changed");
+        let refreshed = state.embedding_index(&tools).await;
+        let reused = state.embedding_index(&tools).await;
+
+        assert_eq!(epoch, 1);
+        assert_eq!(original.epoch(), 0);
+        assert_eq!(refreshed.epoch(), epoch);
+        assert!(!Arc::ptr_eq(&original, &refreshed));
+        assert!(Arc::ptr_eq(&refreshed, &reused));
+
+        let original_results = original.search("apple", 5);
+        assert_eq!(original_results.len(), 1);
+        assert_eq!(original_results[0].name, "orchard_lookup");
+        assert_eq!(original_results[0].description, "Find apple harvest records");
+        assert!(original.search("coral", 5).is_empty());
+
+        let refreshed_results = refreshed.search("coral", 5);
+        assert_eq!(refreshed_results.len(), 1);
+        assert_eq!(refreshed_results[0].name, "ocean_monitor");
+        assert_eq!(refreshed_results[0].description, "Inspect coral reef temperatures");
+        assert!(refreshed.search("apple", 5).is_empty());
+    }
+
+    #[tokio::test]
     async fn local_search_expands_ranked_deferred_tools_at_next_epoch() {
         let state = SessionToolCatalogState::new();
         let deferred = ToolDefinition::function(
@@ -509,11 +557,26 @@ mod tests {
         .with_defer_loading(true);
         let tools = Arc::new(RwLock::new(vec![function_tool(tools::EXEC_COMMAND), deferred]));
 
+        let original_index = state.embedding_index(&tools).await;
         let results = state.search_tools(&tools, "remote issue search", 5).await;
         assert_eq!(results.first().map(|result| result.name.as_str()), Some("remote_issue_search"));
         let references = results.into_iter().map(|result| result.name).collect::<Vec<_>>();
         let epoch = state.note_tool_references(&tools, &references).await;
         assert_eq!(epoch, Some(1));
+
+        let expanded_index = state.embedding_index(&tools).await;
+        let reused_index = state.embedding_index(&tools).await;
+        assert_eq!(original_index.epoch(), 0);
+        assert_eq!(expanded_index.epoch(), 1);
+        assert!(!Arc::ptr_eq(&original_index, &expanded_index));
+        assert!(Arc::ptr_eq(&expanded_index, &reused_index));
+        assert_eq!(
+            expanded_index
+                .search("remote issue search", 5)
+                .first()
+                .map(|result| result.name.as_str()),
+            Some("remote_issue_search")
+        );
 
         let snapshot = state
             .filtered_snapshot_with_stats(&tools, false, true)

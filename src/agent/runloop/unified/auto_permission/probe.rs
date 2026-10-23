@@ -78,11 +78,41 @@ fn choice_request(input: String) -> uni::ChoiceDecisionRequest {
     }
 }
 
-fn warning_for_choice(choice: &str) -> Result<Option<ProbeWarning>> {
-    match choice {
-        "SAFE" => Ok(None),
-        "SUSPECT" => Ok(Some(ProbeWarning { warning: PROBE_WARNING_TEXT.to_owned() })),
-        _ => Err(anyhow!("inconclusive prompt-injection probe")),
+#[derive(Clone, Copy)]
+enum ProbeVerdict {
+    Safe,
+    Suspect,
+    Inconclusive,
+}
+
+struct ProbeAttemptOutcome {
+    log_outcome: &'static str,
+    verdict: Result<ProbeVerdict>,
+}
+
+impl ProbeVerdict {
+    fn from_choice(choice: &str) -> Self {
+        match choice {
+            "SAFE" => Self::Safe,
+            "SUSPECT" => Self::Suspect,
+            _ => Self::Inconclusive,
+        }
+    }
+
+    fn outcome(self) -> &'static str {
+        match self {
+            Self::Safe => "safe",
+            Self::Suspect => "suspect",
+            Self::Inconclusive => "inconclusive",
+        }
+    }
+
+    fn into_warning(self) -> Result<Option<ProbeWarning>> {
+        match self {
+            Self::Safe => Ok(None),
+            Self::Suspect => Ok(Some(ProbeWarning { warning: PROBE_WARNING_TEXT.to_owned() })),
+            Self::Inconclusive => Err(anyhow!("inconclusive prompt-injection probe")),
+        }
     }
 }
 
@@ -155,25 +185,25 @@ pub(crate) async fn probe_tool_output(
         let usage = result.as_ref().ok().and_then(|response| response.usage.clone());
         let cost = usage.as_ref().map(usage_cost::estimate_decisions_cost);
         runtime.stats.record_probe_attempt(provider.name(), usage.as_ref(), cost);
+        let verdict = result
+            .as_ref()
+            .ok()
+            .and_then(|response| response.answer.as_ref())
+            .map(|answer| ProbeVerdict::from_choice(&answer.choice));
         tracing::info!(
             endpoint = "decisions",
-            outcome = match result.as_ref() {
-                Ok(response) => match response.answer.as_ref().map(|answer| answer.choice.as_str()) {
-                    Some("SAFE") => "safe",
-                    Some("SUSPECT") => "suspect",
-                    _ => "inconclusive",
-                },
-                Err(_) => "failed",
+            outcome = match verdict {
+                Some(verdict) => verdict.outcome(),
+                None if result.is_ok() => "inconclusive",
+                None => "failed",
             },
             elapsed_ms = started.elapsed().as_millis(),
             usage_known = usage.is_some(),
             "prompt probe attempt completed"
         );
         ensure_running(runtime.stop)?;
-        if let Ok(response) = result
-            && let Some(answer) = response.answer
-        {
-            return warning_for_choice(&answer.choice);
+        if let Some(verdict) = verdict {
+            return verdict.into_warning();
         }
         tracing::debug!("Decisions probe inconclusive; using one generation fallback");
     }
@@ -214,36 +244,37 @@ pub(crate) async fn probe_tool_output(
             )
         });
         runtime.stats.record_probe_attempt(provider.name(), usage.as_ref(), cost);
+        // Incomplete responses may retry; a completed but invalid label must
+        // remain terminal. Reuse this classification for diagnostics and result.
+        let attempt_outcome = match result {
+            Ok(response)
+                if response.finish_reason != uni::FinishReason::Stop
+                    || response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) =>
+            {
+                ProbeAttemptOutcome {
+                    log_outcome: "inconclusive",
+                    verdict: Err(anyhow!("prompt-injection probe returned an incomplete or tool-call response")),
+                }
+            }
+            Ok(response) => {
+                let verdict = ProbeVerdict::from_choice(&first_upper_token(response.content_text().trim()));
+                ProbeAttemptOutcome {
+                    log_outcome: verdict.outcome(),
+                    verdict: Ok(verdict),
+                }
+            }
+            Err(error) => ProbeAttemptOutcome { log_outcome: "failed", verdict: Err(error) },
+        };
         tracing::info!(
             endpoint = "generation",
-            outcome = match result.as_ref() {
-                Ok(response)
-                    if response.finish_reason != uni::FinishReason::Stop
-                        || response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) =>
-                    "inconclusive",
-                Ok(response) => match first_upper_token(response.content_text().trim()).as_str() {
-                    "SAFE" => "safe",
-                    "SUSPECT" => "suspect",
-                    _ => "inconclusive",
-                },
-                Err(_) => "failed",
-            },
+            outcome = attempt_outcome.log_outcome,
             elapsed_ms = started.elapsed().as_millis(),
             usage_known = usage.is_some(),
             "prompt probe attempt completed"
         );
         ensure_running(runtime.stop)?;
-        let result = result.and_then(|response| {
-            if response.finish_reason != uni::FinishReason::Stop
-                || response.tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())
-            {
-                Err(anyhow!("prompt-injection probe returned an incomplete or tool-call response"))
-            } else {
-                Ok(response)
-            }
-        });
-        match result {
-            Ok(response) => return warning_for_choice(&first_upper_token(response.content_text().trim())),
+        match attempt_outcome.verdict {
+            Ok(verdict) => return verdict.into_warning(),
             Err(error) => match fallback.take() {
                 Some(model) if Instant::now() < deadline => request.model = model,
                 _ => return Err(error),

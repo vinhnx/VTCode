@@ -261,8 +261,7 @@ impl ExecPolicyManager {
     /// Evaluate a command against the full policy stack.
     pub async fn evaluate(&self, command: &[String]) -> PolicyEvaluation {
         let policy = self.policy.read().await;
-        let commands = [command.to_vec()];
-        policy.check_multiple(commands.iter(), &|cmd| self.heuristics_decision(cmd))
+        policy.check_multiple(std::iter::once(command), &|cmd| self.heuristics_decision(cmd))
     }
 
     /// Apply heuristics to determine decision for unknown commands.

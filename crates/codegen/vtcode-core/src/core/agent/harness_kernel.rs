@@ -44,42 +44,22 @@ pub fn filter_tool_definitions_for_mode_with_stability(
     let tools = tools?;
     // Cache-stable catalog: union of planning/execution exposure and no action
     // masking, so planning toggles cannot rewrite the wire tool array.
-    if stable_catalog {
-        // Fast path first, mirroring the arms below: when every tool
+    if stable_catalog || !planning_active {
+        let expose = |tool: &ToolDefinition| {
+            if stable_catalog {
+                should_expose_tool_in_stable_catalog(tool, request_user_input_enabled)
+            } else {
+                should_expose_tool_in_mode(tool, false, request_user_input_enabled)
+            }
+        };
+        // Fast path: when every tool
         // survives, reuse the Arc instead of deep-cloning the catalog (each
         // definition carries its description + JSON schema). No-op filters
         // must not copy shared state.
-        if tools
-            .iter()
-            .all(|tool| should_expose_tool_in_stable_catalog(tool, request_user_input_enabled))
-        {
+        if tools.iter().all(expose) {
             return Some(tools);
         }
-        let filtered: Vec<ToolDefinition> = tools
-            .iter()
-            .filter(|tool| should_expose_tool_in_stable_catalog(tool, request_user_input_enabled))
-            .cloned()
-            .collect();
-        return if filtered.is_empty() {
-            None
-        } else {
-            Some(Arc::new(filtered))
-        };
-    }
-
-    if !planning_active {
-        // No action masking needed; only filter whole tools.
-        if tools
-            .iter()
-            .all(|tool| should_expose_tool_in_mode(tool, false, request_user_input_enabled))
-        {
-            return Some(tools);
-        }
-        let filtered: Vec<ToolDefinition> = tools
-            .iter()
-            .filter(|tool| should_expose_tool_in_mode(tool, false, request_user_input_enabled))
-            .cloned()
-            .collect();
+        let filtered: Vec<ToolDefinition> = tools.iter().filter(|tool| expose(tool)).cloned().collect();
         return if filtered.is_empty() {
             None
         } else {
@@ -379,6 +359,94 @@ mod tests {
         assert!(!names.contains(&tools::APPLY_PATCH));
         assert!(!names.contains(&tools::WRITE_STDIN));
         assert!(!names.contains(&tools::WRITE_FILE));
+    }
+
+    #[test]
+    fn catalog_filters_preserve_exposure_and_actions_for_all_mode_combinations() {
+        let tools = Arc::new(vec![
+            function_tool(tools::CODE_SEARCH),
+            function_tool(tools::REQUEST_USER_INPUT),
+            function_tool(tools::APPLY_PATCH),
+            tool_with_action_enum(tools::UNIFIED_FILE, &["read", "write", "delete"]),
+        ]);
+        for stable in [false, true] {
+            for planning in [false, true] {
+                for input_enabled in [false, true] {
+                    let filtered = filter_tool_definitions_for_mode_with_stability(
+                        Some(Arc::clone(&tools)),
+                        planning,
+                        input_enabled,
+                        stable,
+                    )
+                    .expect("search and file tools remain visible");
+                    let mut expected_names = vec![tools::CODE_SEARCH];
+                    if input_enabled {
+                        expected_names.push(tools::REQUEST_USER_INPUT);
+                    }
+                    if stable || !planning {
+                        expected_names.push(tools::APPLY_PATCH);
+                    }
+                    expected_names.push(tools::UNIFIED_FILE);
+                    let names: Vec<_> = filtered.iter().map(ToolDefinition::function_name).collect();
+                    assert_eq!(names, expected_names);
+                    let parameters = &filtered.last().unwrap().function.as_ref().unwrap().parameters;
+                    let expected_actions = if planning && !stable {
+                        serde_json::json!(["read"])
+                    } else {
+                        serde_json::json!(["read", "write", "delete"])
+                    };
+                    assert_eq!(parameters["properties"]["action"]["enum"], expected_actions);
+                    assert_eq!(Arc::ptr_eq(&tools, &filtered), input_enabled && (stable || !planning));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn catalog_filters_preserve_absent_empty_hidden_and_unchanged_catalogs() {
+        let empty = Arc::new(Vec::new());
+        let hidden = Arc::new(vec![function_tool(tools::REQUEST_USER_INPUT)]);
+        let readonly = Arc::new(vec![function_tool(tools::CODE_SEARCH)]);
+        for stable in [false, true] {
+            for planning in [false, true] {
+                for input_enabled in [false, true] {
+                    assert!(
+                        filter_tool_definitions_for_mode_with_stability(None, planning, input_enabled, stable)
+                            .is_none()
+                    );
+                    let filtered_empty = filter_tool_definitions_for_mode_with_stability(
+                        Some(Arc::clone(&empty)),
+                        planning,
+                        input_enabled,
+                        stable,
+                    );
+                    if stable || !planning {
+                        assert!(Arc::ptr_eq(&empty, &filtered_empty.expect("empty shared catalog")));
+                    } else {
+                        assert!(filtered_empty.is_none());
+                    }
+                    let filtered_hidden = filter_tool_definitions_for_mode_with_stability(
+                        Some(Arc::clone(&hidden)),
+                        planning,
+                        input_enabled,
+                        stable,
+                    );
+                    if input_enabled {
+                        assert!(Arc::ptr_eq(&hidden, &filtered_hidden.expect("input tool enabled")));
+                    } else {
+                        assert!(filtered_hidden.is_none());
+                    }
+                    let filtered_readonly = filter_tool_definitions_for_mode_with_stability(
+                        Some(Arc::clone(&readonly)),
+                        planning,
+                        input_enabled,
+                        stable,
+                    )
+                    .expect("read-only catalog");
+                    assert!(Arc::ptr_eq(&readonly, &filtered_readonly));
+                }
+            }
+        }
     }
 
     #[test]

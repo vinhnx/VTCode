@@ -64,6 +64,7 @@ pub struct ToolEmbeddingIndex {
 #[derive(Debug, Clone)]
 struct ToolIndexEntry {
     name: String,
+    lowercase_name: String,
     description: String,
     /// Pre-computed term frequencies for the lowercased terms extracted from
     /// name + description. Replaces a per-query linear scan of a `Vec<String>`
@@ -71,6 +72,11 @@ struct ToolIndexEntry {
     term_freq: HashMap<String, u32>,
     /// Total term count (document length) for BM25 length normalization.
     term_count: usize,
+}
+
+struct ScoredToolEntry<'a> {
+    entry: &'a ToolIndexEntry,
+    score: f64,
 }
 
 /// BM25 term-frequency saturation parameter.
@@ -114,7 +120,14 @@ impl ToolEmbeddingIndex {
                     *term_freq.entry(term).or_insert(0) += 1;
                     term_count += 1;
                 }
-                Some(ToolIndexEntry { name, description, term_freq, term_count })
+                let lowercase_name = name.to_lowercase();
+                Some(ToolIndexEntry {
+                    name,
+                    lowercase_name,
+                    description,
+                    term_freq,
+                    term_count,
+                })
             })
             .collect();
 
@@ -146,6 +159,9 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
     /// - Inverse document frequency: rare terms score higher
     /// - Field boost: name matches score higher than description matches
     fn search(&self, query: &str, max_results: usize) -> Vec<ToolSearchResult> {
+        if max_results == 0 {
+            return Vec::new();
+        }
         let query_terms: Vec<String> = tokenize(query).collect();
 
         if query_terms.is_empty() || self.entries.is_empty() {
@@ -155,7 +171,7 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
         let n = self.entries.len() as f64;
         let avg_dl = self.avg_dl;
 
-        let mut results: Vec<ToolSearchResult> = self
+        let mut results: Vec<ScoredToolEntry<'_>> = self
             .entries
             .iter()
             .map(|entry| {
@@ -180,7 +196,7 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
                     let tf_component = (tf * (BM25_K1 + 1.0)) / (tf + BM25_K1 * (1.0 - BM25_B + BM25_B * dl / avg_dl));
 
                     // Boost for name matches (name is more important than description)
-                    let name_match_boost = if entry.name.to_lowercase().contains(query_term) {
+                    let name_match_boost = if entry.lowercase_name.contains(query_term) {
                         NAME_MATCH_BOOST
                     } else {
                         1.0
@@ -189,11 +205,7 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
                     score += idf * tf_component * name_match_boost;
                 }
 
-                ToolSearchResult {
-                    name: entry.name.clone(),
-                    description: entry.description.clone(),
-                    score,
-                }
+                ScoredToolEntry { entry, score }
             })
             .filter(|r| r.score > 0.0)
             .collect();
@@ -201,6 +213,13 @@ impl ToolSearchEngine for ToolEmbeddingIndex {
         results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         results.truncate(max_results);
         results
+            .into_iter()
+            .map(|result| ToolSearchResult {
+                name: result.entry.name.clone(),
+                description: result.entry.description.clone(),
+                score: result.score,
+            })
+            .collect()
     }
 
     fn epoch(&self) -> u64 {
@@ -261,6 +280,56 @@ mod tests {
         let index = ToolEmbeddingIndex::build(&tools, 0);
         let results = index.search("tool", 2);
         assert!(results.len() <= 2);
+    }
+
+    #[test]
+    fn search_preserves_exact_scores_case_tie_order_and_limits() {
+        let index = ToolEmbeddingIndex::build(
+            &[
+                tool_with_desc("APPLE", "fruit"),
+                tool_with_desc("orchard", "apple"),
+                tool_with_desc("grove", "apple"),
+                tool_with_desc("weather", "clouds"),
+            ],
+            0,
+        );
+        // Four equal-length documents; apple appears in three. Every matching
+        // document has TF=1 and BM25 normalization=1; only APPLE gets the name boost.
+        let idf = 1.5_f64 / 3.5;
+        for limit in [0, 1, 2, 3, 10] {
+            let results = index.search("APPLE", limit);
+            let expected = ["APPLE", "orchard", "grove"];
+            let names: Vec<_> = results.iter().map(|result| result.name.as_str()).collect();
+            assert_eq!(names, expected[..limit.min(3)]);
+            for (position, result) in results.iter().enumerate() {
+                let expected_score = if position == 0 { idf * 2.0 } else { idf };
+                assert_eq!(result.score.to_bits(), expected_score.to_bits());
+                assert_eq!(result.description, if position == 0 { "fruit" } else { "apple" });
+            }
+        }
+        let repeated = index.search("apple apple", 3);
+        assert_eq!(
+            repeated.iter().map(|result| result.score.to_bits()).collect::<Vec<_>>(),
+            [idf * 4.0, idf * 2.0, idf * 2.0].map(f64::to_bits)
+        );
+        assert!(index.search("missing", 5).is_empty());
+    }
+
+    #[test]
+    fn search_preserves_unicode_name_boost_and_namespace_descriptions() {
+        let mut namespaced = tool_with_desc("orchard", "fruit");
+        namespaced.namespace = Some(crate::llm::provider::ToolNamespace {
+            name: "ÄPFEL".into(),
+            description: "Apfelernte".into(),
+        });
+        let index = ToolEmbeddingIndex::build(&[namespaced, tool_with_desc("ÄPFEL", "Obst")], 0);
+        let results = index.search("äpfel", 5);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].name, "ÄPFEL");
+        assert_eq!(results[0].description, "Obst");
+        assert_eq!(results[1].name, "orchard");
+        assert_eq!(results[1].description, "fruit");
+        assert!(results[0].score > results[1].score);
     }
 
     #[test]

@@ -145,16 +145,19 @@ impl Policy {
         RuleMatch::HeuristicsRuleMatch { decision: Decision::Prompt }
     }
 
-    /// Check multiple commands against the policy.
-    pub fn check_multiple<'a, I, F>(&self, commands: I, heuristics_fallback: &F) -> PolicyEvaluation
+    /// Check multiple commands against the policy, accepting borrowed slices
+    /// as well as references to command vectors without copying arguments.
+    pub fn check_multiple<I, F>(&self, commands: I, heuristics_fallback: &F) -> PolicyEvaluation
     where
-        I: Iterator<Item = &'a Vec<String>>,
+        I: Iterator,
+        I::Item: AsRef<[String]>,
         F: Fn(&[String]) -> Decision,
     {
         let mut matched_rules = Vec::new();
         let mut overall_decision = Decision::Allow;
 
         for command in commands {
+            let command = command.as_ref();
             let rule_match = self.check(command);
 
             // Apply heuristics for non-policy matches
@@ -290,6 +293,34 @@ mod tests {
                 assert_eq!(rule.matches(command), expected, "{pattern:?} vs {command:?}");
             }
         }
+    }
+
+    #[test]
+    fn borrowed_commands_preserve_rule_precedence_and_fallback_arguments() {
+        let mut policy = Policy::empty();
+        let first = PrefixRule::new(vec!["git".into()], Decision::Prompt);
+        policy.add_prefix_rule(&first.pattern, first.decision).unwrap();
+        policy.add_prefix_rule(&["git".into(), "push".into()], Decision::Allow).unwrap();
+        let known = ["git".to_owned(), "push".to_owned()];
+        let unknown = ["custom".to_owned(), "--dangerous".to_owned()];
+        let fallback_calls = std::cell::Cell::new(0);
+        let evaluation = policy.check_multiple([known.as_slice(), unknown.as_slice()].into_iter(), &|command| {
+            assert!(std::ptr::eq(command, unknown.as_slice()), "heuristics must borrow the original argv");
+            fallback_calls.set(fallback_calls.get() + 1);
+            Decision::Forbidden
+        });
+        assert_eq!(fallback_calls.get(), 1);
+        assert_eq!(evaluation.decision, Decision::Forbidden);
+        assert_eq!(
+            evaluation.matched_rules,
+            vec![
+                RuleMatch::PrefixRuleMatch { rule: first, decision: Decision::Prompt },
+                RuleMatch::HeuristicsRuleMatch { decision: Decision::Prompt },
+            ]
+        );
+        let empty = policy.check_multiple(std::iter::empty::<&[String]>(), &|_| panic!("no commands"));
+        assert_eq!(empty.decision, Decision::Allow);
+        assert!(empty.matched_rules.is_empty());
     }
 
     #[test]

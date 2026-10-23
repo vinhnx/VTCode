@@ -16,8 +16,6 @@ const TOOL_GREP_FILE: &str = tools::GREP_FILE;
 const TOOL_APPLY_PATCH: &str = tools::APPLY_PATCH;
 const TOOL_REQUEST_USER_INPUT: &str = tools::REQUEST_USER_INPUT;
 const TOOL_TASK_TRACKER: &str = tools::TASK_TRACKER;
-const SOURCE_INSPECTION_GUIDANCE: &str =
-    "- Inspect relevant source, edit a bounded region, refresh after mismatch, then verify.";
 const PUBLIC_DECISION_GUIDANCE: &str = "- Use optional `record_decision` for consequential choices, rejected approaches, or recovery changes. Give concise public rationale; ordinary reads and commands need no record.";
 const MATRIX_GUIDANCE: &str = "- `matrix`: create persists explicit tasks, checks, resources, and timeouts; start freezes the spec. The coordinator delegates execution and verification to scheduler-owned workers; discovery is idle-only. Replay restores admission before discovery; resume reconciles owned cleanup. status is a projection; pause stops dispatch; user cancel is terminal. Internal failures require reconciliation, not cancellation. Workers retain effective permissions and sandbox gates. Read leases require read-only workers. Report identity is runtime-owned; final success needs durable declared checks for the current generation, never summaries or child completion. Source and declared input changes, including submodule state, invalidate checks. Automatic retry requires replay_safe, confirmed cleanup, and at most one interrupted/timeout retry; other failures need a coordinator decision.";
 const WEB_SEARCH_GUIDANCE: &str = "- web_search uses keyless DuckDuckGo; web_fetch needs separate approval. For `antiban_blocked` or `retryable: false`, do not retry; wait `retry_after_ms` for `cooldown`; retry `network_error`/`upstream_error` once.";
@@ -184,9 +182,6 @@ pub(crate) fn generate_tool_guidelines_with_capabilities(
             }
             let presence = ToolPresence::of(available_tools);
             let mut lines = vec!["\n\n## Active Tools".to_owned()];
-            if presence.apply_patch {
-                lines.push(SOURCE_INSPECTION_GUIDANCE.to_owned());
-            }
             if presence.matrix {
                 lines.push(MATRIX_GUIDANCE.to_owned());
             }
@@ -253,9 +248,6 @@ pub(crate) fn generate_tool_guidelines_for_profile(
     let has_start_planning = presence.start_planning;
 
     let mut lines = Vec::new();
-    if has_apply_patch {
-        lines.push(SOURCE_INSPECTION_GUIDANCE.to_owned());
-    }
     if presence.matrix {
         lines.push(MATRIX_GUIDANCE.to_owned());
     }
@@ -1171,6 +1163,25 @@ mod tests {
     }
 
     #[test]
+    fn edit_guidance_keeps_patch_permissions_without_repeating_universal_inspection() {
+        for profile in [ToolGuidanceProfile::Minimal, ToolGuidanceProfile::Default] {
+            let guidance = generate_tool_guidelines_with_capabilities(
+                &[TOOL_APPLY_PATCH.to_owned()],
+                None,
+                ResolvedShellPromptProfile::UnixLike,
+                profile,
+                false,
+            );
+            assert!(!guidance.contains("Inspect relevant source, edit a bounded region"));
+            assert!(guidance.contains("`apply_patch`"));
+            assert!(guidance.contains("patches small"));
+            assert!(guidance.contains("terminal permission stays authoritative"));
+            assert!(guidance.contains("untrusted"));
+            assert!(vtcode_commons::estimate_tokens(&guidance) < 180);
+        }
+    }
+
+    #[test]
     fn test_edit_workflow_guidance() {
         let tools = vec![TOOL_APPLY_PATCH.to_string()];
         let guidelines = guidelines_for(&tools, None);
@@ -1496,7 +1507,8 @@ mod tests {
         // Raised to 640 for wider-window reuse and code_search unavailable
         // no-retry guardrails (session-20261015 overlapping reads + identical
         // retries).
-        // Source inspection is separate from verification and retained in both densities.
+        // Universal source-inspection guidance lives in Runtime Guidance;
+        // both densities retain patch-specific permission and bounded-diff rules.
         assert!(approx_tokens < 640, "got ~{approx_tokens} tokens");
     }
 
