@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
@@ -11,8 +11,8 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, Context, Entity, KeyBinding, MouseButton, PathPromptOptions, Render, TestSupportExt, Window,
-    WindowOptions, actions, div, list, px,
+    AnyElement, App, Context, CursorStyle, Entity, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, PathPromptOptions, Render, TestSupportExt, Window, WindowOptions, actions, div, list, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -25,11 +25,16 @@ use vtcode_desktop_protocol::{
 use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
+use super::preferences;
 use super::themes;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
+
+/// Pane-width drag bounds, shared with the preferences clamp.
+const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
+const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 
 actions!(desktop, [OpenCommandPalette]);
 
@@ -58,11 +63,17 @@ pub(crate) fn run() {
     gpui_kit::application().run(|cx: &mut App| {
         gpui_kit::init(cx);
         cx.bind_keys([KeyBinding::new("cmd-k", OpenCommandPalette, None)]);
+        // Saved preferences decide the starting theme; Ciapre is the default.
+        let preferences = preferences::Preferences::load();
+        let start_theme = preferences
+            .theme
+            .clone()
+            .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
         let (window, view) = match gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            // Ciapre is the VT Code desktop default; the saved preference
-            // replaces it once preferences load.
-            let theme_mode = themes::apply_by_id(themes::DEFAULT_THEME_ID, Some(window), cx);
-            cx.new(|cx| DesktopView::new(window, cx, theme_mode))
+            let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
+            let view = cx.new(|cx| DesktopView::new(window, cx, theme_mode));
+            view.update(cx, |view, cx| view.load_preferences(window, cx));
+            view
         }) {
             Ok(result) => result,
             Err(error) => {
@@ -70,6 +81,13 @@ pub(crate) fn run() {
                 return;
             }
         };
+        // Reopen the most recent workspace when it still exists.
+        let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
+        if let Some(path) = last_workspace
+            && path.is_dir()
+        {
+            view.update(cx, |view, cx| view.select_workspace(path, cx));
+        }
         let weak_view = view.downgrade();
         cx.spawn(async move |cx| {
             loop {
@@ -124,6 +142,17 @@ struct DesktopView {
     attachments_picker_open: bool,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
+    preferences: preferences::Preferences,
+    sidebar_width: f32,
+    inspector_width: f32,
+    resizing: Option<ResizeEdge>,
+}
+
+/// Which divider is being dragged.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ResizeEdge {
+    Sidebar,
+    Inspector,
 }
 
 impl DesktopView {
@@ -169,7 +198,43 @@ impl DesktopView {
             attachments_picker_open: false,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
+            preferences: preferences::Preferences::load(),
+            sidebar_width: 270.0,
+            inspector_width: 320.0,
+            resizing: None,
         }
+    }
+
+    /// Apply saved preferences: theme, pane widths, and inspector state.
+    fn load_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let preferences = self.preferences.clone();
+        if let Some(theme) = preferences.theme.as_deref() {
+            self.theme_mode = themes::apply_by_id(theme, Some(window), cx);
+            self.theme_id = theme.to_string();
+        }
+        self.sidebar_width = preferences.sidebar_width();
+        self.inspector_width = preferences.inspector_width();
+        self.inspector_open = preferences.inspector_open.unwrap_or(true);
+        cx.notify();
+    }
+
+    /// Persist the current comfort settings.
+    fn save_preferences(&mut self) {
+        self.preferences.theme = Some(self.theme_id.clone());
+        self.preferences.inspector_open = Some(self.inspector_open);
+        self.preferences.set_widths(self.sidebar_width, self.inspector_width);
+        self.preferences.save();
+    }
+
+    /// Remember a workspace as recently used.
+    fn remember_workspace(&mut self, workspace: &Path) {
+        self.preferences.touch_workspace(&workspace.display().to_string());
+        self.preferences.save();
+    }
+
+    /// The saved recent workspaces for the sidebar.
+    fn recent_workspaces(&self) -> Vec<String> {
+        self.preferences.recent_workspaces.clone()
     }
 
     fn choose_workspace(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -242,6 +307,7 @@ impl DesktopView {
 
     fn start_workspace(&mut self, workspace: PathBuf, cx: &mut Context<Self>) {
         self.workspace = Some(workspace.clone());
+        self.remember_workspace(&workspace);
         self.pending_workspace = None;
         self.sessions.clear();
         self.selected_session_id = None;
@@ -1077,10 +1143,34 @@ impl DesktopView {
         self.error = None;
     }
 
+    /// The draggable divider between panes.
+    fn render_resize_handle(&self, edge: ResizeEdge, cx: &mut Context<Self>) -> impl IntoElement {
+        let (id, cursor) = match edge {
+            ResizeEdge::Sidebar => ("resize-sidebar", CursorStyle::ResizeLeftRight),
+            ResizeEdge::Inspector => ("resize-inspector", CursorStyle::ResizeLeftRight),
+        };
+        div()
+            .id(id)
+            .test_support()
+            .w(px(5.))
+            .h_full()
+            .cursor(cursor)
+            .hover(|style| style.bg(cx.theme().colors.accent.opacity(0.4)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
+                    this.resizing = Some(edge);
+                    cx.stop_propagation();
+                    cx.notify();
+                }),
+            )
+    }
+
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut sidebar = div()
-            .w(px(270.))
+            .w(px(self.sidebar_width))
+            .min_w(px(MIN_PANE_WIDTH))
             .h_full()
             .flex()
             .flex_col()
@@ -1131,6 +1221,36 @@ impl DesktopView {
                         .on_click(cx.listener(|this, _, _, cx| this.close_session(cx))),
                 ),
         );
+
+        sidebar = sidebar.child(div().mt_2().text_sm().font_semibold().child("Workspaces"));
+        let recent = self.recent_workspaces();
+        if recent.len() > 1 {
+            sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().enumerate().map(
+                |(index, path)| {
+                    let workspace_path = path.clone();
+                    let current = self
+                        .workspace
+                        .as_ref()
+                        .is_some_and(|selected| selected.display().to_string() == *path);
+                    let label = Path::new(path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(path)
+                        .to_string();
+                    div().w_full().child(
+                        Button::new(format!("workspace-{index}"))
+                            .label(label)
+                            .ghost()
+                            .w_full()
+                            .disabled(self.running)
+                            .when(current, |button| button.primary())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
+                            })),
+                    )
+                },
+            )));
+        }
 
         sidebar = sidebar.child(div().mt_2().text_sm().font_semibold().child("Recent sessions"));
         sidebar = sidebar.child(
@@ -1219,6 +1339,7 @@ impl DesktopView {
                             .disabled(self.workspace.is_none())
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.inspector_open = !this.inspector_open;
+                                this.save_preferences();
                                 cx.notify();
                             })),
                     )
@@ -1418,7 +1539,8 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = theme.colors;
         let panel = div()
-            .w(px(320.))
+            .w(px(self.inspector_width))
+            .min_w(px(MIN_PANE_WIDTH))
             .h_full()
             .min_h_0()
             .flex()
@@ -2209,6 +2331,7 @@ impl DesktopView {
         self.theme_mode = themes::apply_by_id(&id, Some(window), cx);
         self.theme_id = id;
         self.transcript.remeasure();
+        self.save_preferences();
         cx.notify();
     }
 
@@ -2497,11 +2620,37 @@ impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
+        let sidebar = self.render_sidebar(cx).into_any_element();
         let panes = div()
+            .id("pane-root")
             .flex_1()
             .min_h_0()
             .flex()
-            .child(self.render_sidebar(cx))
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
+                let Some(edge) = this.resizing else { return };
+                let width = match edge {
+                    ResizeEdge::Sidebar => f32::from(event.position.x),
+                    ResizeEdge::Inspector => f32::from(window.viewport_size().width) - f32::from(event.position.x),
+                };
+                let clamped = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
+                match edge {
+                    ResizeEdge::Sidebar => this.sidebar_width = clamped,
+                    ResizeEdge::Inspector => this.inspector_width = clamped,
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    if this.resizing.take().is_some() {
+                        this.save_preferences();
+                        cx.notify();
+                    }
+                }),
+            )
+            .child(sidebar)
+            .child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
             .child(
                 div()
                     .flex_1()
@@ -2513,7 +2662,11 @@ impl Render for DesktopView {
                     .child(self.render_transcript(cx))
                     .child(self.render_composer(window, cx)),
             )
-            .when(inspector_visible, |panes| panes.child(self.render_inspector(cx)));
+            .when(inspector_visible, |panes| {
+                panes
+                    .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
+                    .child(self.render_inspector(cx))
+            });
         let mut body = div()
             .size_full()
             .flex()

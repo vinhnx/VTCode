@@ -12218,6 +12218,7 @@ name = "vtcode-desktop"
 version = "0.180.6"
 dependencies = [
  "anyhow",
+ "dirs 7.0.0",
  "gpui-kit",
  "pulldown-cmark",
  "serde",
