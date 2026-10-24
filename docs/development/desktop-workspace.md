@@ -56,18 +56,38 @@ full-width status bar.
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. The Send button submits the same draft. |
+| Attach files | "+ Attach" opens a native multi-select picker limited to workspace text files (at most 5 per prompt, 64 KiB each, binary rejected). Chips above the composer remove items; the transcript echoes attached paths. |
+| Switch models | The composer's Model dropdown lists the service catalog grouped by provider with context windows; selecting one sends `config/select`, which restarts the session for the next prompt. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
 | Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts, and selecting a file opens it in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. |
 | Browse files | The inspector's Files tab lists workspace files read-only (breadth-first, at most 400 entries, depth 3, dependency/VCS/hidden directories skipped). Clicking a file opens a preview overlay capped at 64 KiB; binary files are not previewed. |
 | Follow activity | The inspector's Activity tab projects tool and command statuses for the session, newest last, capped at 300 rows. |
+| Watch command output | The inspector's Output tab shows the newest command/tool output live in mono, tail-capped to the last 1,000 lines, with a running indicator. |
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Open the command palette | ⌘K opens a searchable palette over session commands, view toggles, recent sessions (10), and file previews (50). Enter confirms, Escape or a backdrop click dismisses. |
-| Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the configured provider · model, and the agent running/idle state. |
+| Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. |
+| Switch workspaces | The sidebar's Workspaces section lists recent projects (at most 8) for one-click switching; the most recent workspace reopens on launch when it still exists. |
+| Resize panes | Drag the dividers between panes; sidebar and inspector widths clamp to 180–560px and persist. |
 | Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. |
 | Follow a link | Explicit activation opens HTTP/HTTPS links. Other URL schemes are blocked, images are not fetched, and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
-| Open settings | The toolbar Settings popover switches Light/Dark, shows the configured provider and model, copies the credential setup command, and shows service and protocol versions. |
+| Open settings | The toolbar Settings popover carries a live theme picker (swatches with mini previews, see below), the configured provider and model, a copy button for the credential setup command, and service and protocol versions. |
+
+## Themes
+
+The desktop ships a curated port of the VT Code TUI theme registry — **Ciapre** (the default), Ciapre Dark and
+Ciapre Blue, Solarized Dark/Light/HC, Gruvbox Dark/Light, Dracula, GitHub Dark/Light, Atom One Dark/Light,
+Tomorrow Night, Catppuccin Latte/Mocha, plus the kit's System Light/Dark bases. A theme sets background,
+foreground, accent, danger, and warning; border, muted text, and panel colors are derived from the palette.
+Muted text is binary-searched to the WCAG AA 4.5:1 threshold and filled controls pick white/black text at the
+equal-contrast crossover; both are enforced by tests. The choice persists in preferences.
+
+## Preferences
+
+Comfort settings live in `~/.vtcode/desktop/preferences.json`: the selected theme, recent workspaces (at most 8),
+inspector visibility, and pane widths. A missing or corrupt file falls back to defaults; write failures are ignored.
+The most recent workspace reopens on launch when it still exists.
 
 The UI drains at most 64 service events per foreground tick so a busy stream yields to input. Row data and GPUI's
 measured list state are maintained together; streaming text, expansion, theme changes, and viewport resizing invalidate
@@ -80,7 +100,8 @@ agent loop or bypass VT Code's approval and execution policy.
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.0`; incompatible ranges fail explicitly. The protocol crate caps a line at 1 MiB.
+server negotiate protocol version `1.1` (additive over 1.0; older fields are serde-defaulted); incompatible ranges fail
+explicitly. The protocol crate caps a line at 1 MiB.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
 GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
 snapshots replace the pending snapshot for the same item, consecutive `plan.delta` events for one item merge, and
@@ -91,7 +112,8 @@ by the service pump.
 | Method | Purpose |
 | --- | --- |
 | `desktop/initialize` | Negotiate protocol compatibility and confirm the selected workspace. |
-| `config/discover` | Read active provider, model, and startup credential-preflight status. |
+| `config/discover` | Read active provider, model, sandbox label, and context window. |
+| `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
 | `session/list`, `session/create`, `session/load`, `session/close` | Select, create, and restore durable sessions. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
