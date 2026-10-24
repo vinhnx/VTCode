@@ -171,6 +171,10 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Desire Paths in VT Code?", "How does Philosophy work?", "How does
     Current Paved Paths work?"
 
+- **File**: `docs/development/desktop-component-review.md`
+  - **Content**: Desktop component review
+  - **User Questions**: "What can you tell me about Desktop component review?"
+
 - **File**: `docs/development/README.md`
   - **Content**: Development Guide
   - **Topics**: Getting Started, Security and Execution, Performance and Reliability, Model Management, Maintenance
@@ -491,7 +495,7 @@ below based on the topic area.
 
 - **File**: `docs/development/desktop-workspace.md`
   - **Content**: VT Code Desktop Workspace
-  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Themes, Preferences
+  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Accessibility, Themes
   - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does Build and launch work?", "How
     does Runtime and session behavior work?"
 
