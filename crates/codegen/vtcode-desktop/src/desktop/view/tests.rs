@@ -10,7 +10,13 @@ use super::{DesktopView, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_opt
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
 
+/// Redirect preference writes away from the real user home for GUI tests.
+fn isolate_preferences() -> PathBuf {
+    crate::desktop::preferences::install_test_preferences_path()
+}
+
 fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView>) {
+    drop(isolate_preferences());
     cx.update(gpui_kit::init);
     cx.update(|cx| {
         gpui_kit::open_window(
@@ -553,6 +559,124 @@ fn context_usage_percent_handles_unknown_and_saturated_windows() {
         output_tokens: 0,
     };
     assert_eq!(context_usage_percent(&huge, 100), Some(100), "saturates at 100");
+}
+
+#[gpui_kit::test]
+fn saved_preferences_restore_theme_widths_and_inspector_state(cx: &mut TestAppContext) {
+    let path = isolate_preferences();
+    // Seed a preferences file with a non-default theme and pane widths.
+    std::fs::write(
+        &path,
+        json!({
+            "theme": "gruvbox-dark",
+            "inspectorOpen": false,
+            "sidebarWidth": 230.0,
+            "inspectorWidth": 400.0,
+        })
+        .to_string(),
+    )
+    .expect("seed prefs");
+
+    cx.update(gpui_kit::init);
+    let (window, view) = cx.update(|cx| {
+        gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
+            let theme_mode = ThemeMode::Light;
+            let entity = cx.new(|cx| DesktopView::new(window, cx, theme_mode));
+            entity.update(cx, |view, cx| view.load_preferences(window, cx));
+            entity
+        })
+        .unwrap()
+    });
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            assert_eq!(view.theme_id, "gruvbox-dark");
+            assert_eq!(view.theme_mode, ThemeMode::Dark);
+            assert!(!view.inspector_open);
+            assert!((view.sidebar_width - 230.0).abs() < f32::EPSILON);
+            assert!((view.inspector_width - 400.0).abs() < f32::EPSILON);
+            cx.notify();
+        });
+    })
+    .unwrap();
+    drop(std::fs::remove_file(&path));
+}
+
+#[gpui_kit::test]
+fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
+    use gpui_kit::{InputEvent, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent};
+
+    let dispatch_mouse = |window: &mut gpui_kit::Window, position, event: MousePhase, cx: &mut gpui_kit::App| {
+        match event {
+            MousePhase::Down => {
+                let _ = window.dispatch_event(
+                    MouseDownEvent {
+                        position,
+                        button: MouseButton::Left,
+                        modifiers: Modifiers::default(),
+                        click_count: 1,
+                        first_mouse: false,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+            }
+            MousePhase::Move => {
+                let _ = window.dispatch_event(
+                    MouseMoveEvent {
+                        position,
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+            }
+            MousePhase::Up => {
+                let _ = window.dispatch_event(
+                    MouseUpEvent {
+                        position,
+                        button: MouseButton::Left,
+                        modifiers: Modifiers::default(),
+                        click_count: 1,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+            }
+        }
+        window.render_frame(cx);
+    };
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let handle = window.find("resize-sidebar").bounds();
+        let start = point(handle.center().x, handle.center().y);
+
+        // Press on the divider, drag right by 60px, release.
+        dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Up, cx);
+        let width = view.read(cx).sidebar_width;
+        assert!(width > 300.0 && width < 340.0, "sidebar grew by the drag delta: {width}");
+
+        // Dragging past the bound clamps. Re-find the handle: the first
+        // drag moved it.
+        let handle = window.find("resize-sidebar").bounds();
+        let start = point(handle.center().x, handle.center().y);
+        dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x + px(900.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x + px(900.), start.y), MousePhase::Up, cx);
+        let width = view.read(cx).sidebar_width;
+        assert!((width - super::super::preferences::MAX_PANE_WIDTH).abs() < f32::EPSILON);
+    })
+    .unwrap();
+}
+
+enum MousePhase {
+    Down,
+    Move,
+    Up,
 }
 
 #[gpui_kit::test]
