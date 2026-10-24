@@ -9,12 +9,18 @@
 - `transcript.rs` owns row data and measured `ListState`; notify it of inserts, removals, text changes and expansion.
 - Match `vtcode-exec-events` types for runtime items; never duck-type event JSON. File changes render as
   `DiffCard` rows; diff text is bounded before rendering.
-- `inspector.rs` owns derived projections (changes, activity) over the transcript; rebuild the changes
-  projection on diff upserts, never parse patches during render. Build `DiffState` entities on click only.
+- `inspector.rs` owns derived projections (changes, activity, output) over the transcript; rebuild the
+  changes projection on diff upserts, never parse patches during render. Build `DiffState` entities on click only.
 - The composer submits through `submit_on_enter` plus the propagated `Enter` action on its wrapper;
   `cx.subscribe`-style handlers lack a window, action handlers have one.
 - The ⌘K palette creates its `CommandState` on open and focuses it on the next frame (the kit installs
   its input state during the first render); confirm callbacks are deferred, so tests need `run_until_parked`.
+- `themes.rs` gates every palette behind WCAG AA tests; derive muted text with `aa_muted` and filled-button
+  text with `filled_button_foreground` — never hardcode colors over a theme.
+- `preferences.rs` persists comfort settings to `~/.vtcode/desktop/preferences.json`; missing or corrupt
+  files fall back to defaults, and GUI tests must call `install_test_preferences_path()` first.
+- Rust 2024 RPIT captures `&mut Context` lifetimes: render helpers called in loops must return
+  `AnyElement`, not `impl IntoElement`.
 - `files.rs` bounds the workspace scan (400 entries, depth 3, skip dependency/VCS/hidden dirs),
   previews (64 KiB, no binary), and the git branch walk; the sidebar never blocks on unbounded I/O.
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.

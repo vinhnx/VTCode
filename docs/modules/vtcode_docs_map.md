@@ -491,7 +491,7 @@ below based on the topic area.
 
 - **File**: `docs/development/desktop-workspace.md`
   - **Content**: VT Code Desktop Workspace
-  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Local service protocol, Scope
+  - **Topics**: Build and launch, Runtime and session behavior, UI quick reference, Themes, Preferences
   - **User Questions**: "What can you tell me about VT Code Desktop Workspace?", "How does Build and launch work?", "How
     does Runtime and session behavior work?"
 
