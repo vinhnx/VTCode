@@ -4137,7 +4137,17 @@ impl DesktopView {
         }
 
         if let Some(error) = self.error.as_ref() {
-            panel = panel.child(div().w_full().text_sm().text_color(colors.danger).child(error.clone()));
+            panel = panel.child(
+                div()
+                    .id("composer-error")
+                    .test_support()
+                    .role(gpui_kit::Role::Alert)
+                    .aria_label(error.clone())
+                    .w_full()
+                    .text_sm()
+                    .text_color(colors.danger)
+                    .child(error.clone()),
+            );
         }
         if let Some(interaction) = self.interaction.clone() {
             panel = panel.child(self.render_interaction(&interaction, window, cx));
