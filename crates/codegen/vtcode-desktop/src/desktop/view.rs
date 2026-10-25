@@ -325,7 +325,10 @@ fn show_main_window(cx: &mut App) {
 
 /// Reopening must preserve an existing window's draft, session, and backend.
 fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
-    if let Some(window) = cx.windows().first().copied() {
+    // A dock/Finder reopen should return to the user's focused workspace when
+    // multiple windows exist; keep the first-window fallback for the current
+    // single-window lifecycle when the platform has no active window.
+    if let Some(window) = cx.active_window().or_else(|| cx.windows().first().copied()) {
         window.update(cx, |_, window, _| window.activate_window())?;
         cx.activate(true);
         return Ok(window);

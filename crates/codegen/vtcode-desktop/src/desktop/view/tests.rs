@@ -403,6 +403,29 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn reopening_activates_the_focused_window_when_multiple_are_open(cx: &mut TestAppContext) {
+    let (first_window, _first_view) = open_desktop(cx);
+    let (second_window, _second_view) = open_desktop(cx);
+    assert_ne!(first_window, second_window);
+    assert_eq!(cx.windows().len(), 2);
+
+    cx.update_window(second_window, |_, window, _| window.activate_window())
+        .unwrap();
+    cx.update(|cx| {
+        assert_eq!(cx.active_window(), Some(second_window));
+        assert_eq!(super::open_or_activate_main_window(cx).unwrap(), second_window);
+        assert_eq!(cx.windows().len(), 2, "reopening activates a window instead of duplicating it");
+    });
+
+    cx.update_window(first_window, |_, window, _| window.remove_window()).unwrap();
+    cx.update(|cx| {
+        assert_eq!(cx.windows(), vec![second_window]);
+        assert!(first_window.update(cx, |_, _, _| ()).is_err(), "closed handles reject later updates");
+        second_window.update(cx, |_, window, cx| window.render_frame(cx)).unwrap();
+    });
+}
+
+#[gpui_kit::test]
 fn event_drain_task_is_owned_by_the_desktop_view(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, _, cx| {
