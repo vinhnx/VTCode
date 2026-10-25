@@ -3459,6 +3459,7 @@ fn untracked_review_renders_added_empty_and_spaced_paths_and_reports_omissions(c
 #[gpui_kit::test]
 fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     let patch = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.rs b/b.rs\n--- a/b.rs\n+++ b/b.rs\n@@ -1 +1 @@\n-before\n+after\n";
     let snapshot = |request_id: &str, workspace: &str| BackendEvent::Response {
@@ -3496,6 +3497,15 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert!(view.read(cx).review_open);
         assert_eq!(window.find("diff-review-panel").label(), Some("Working tree review"));
         assert_eq!(window.find("refresh-workspace-review").disabled(), Some(true));
+        let loading = window.find("workspace-review-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Reading Git changes"));
+        assert!(window.find("workspace-review-placeholder-file").visible());
+        cx.set_reduce_motion(false);
+        window.render_frame(cx);
+        assert!(window.find("workspace-review-placeholder-file").visible());
+        cx.set_reduce_motion(true);
+        window.render_frame(cx);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
             panic!("review request")
         };
