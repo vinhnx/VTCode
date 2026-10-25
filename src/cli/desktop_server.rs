@@ -757,41 +757,56 @@ async fn respond_to_interaction(context: &ServiceContext, response: protocol::In
     if answer_texts.is_empty() && response.text.is_some() {
         answer_texts.push(response.text.clone());
     }
-    let (input, event) = {
-        let mut state = context.state.lock().await;
-        let pending = state
-            .pending_interactions
-            .get(&response.interaction_id)
-            .cloned()
-            .ok_or_else(|| anyhow!("interaction is no longer pending"))?;
-        if pending.session_id != response.session_id || pending.turn_id != response.turn_id {
-            bail!("interaction response is stale");
-        }
-        if choice_ids.iter().any(|choice_id| {
-            !pending
-                .view
-                .steps
-                .iter()
-                .any(|step| step.choices.iter().any(|choice| &choice.id == choice_id))
-        }) {
-            bail!("interaction choice is invalid");
-        }
-        if pending.view.steps.len() > 1 && !response.cancelled && choice_ids.len() != pending.view.steps.len() {
-            bail!("every interaction step requires a response");
-        }
-        let event = host_interaction_response(&pending.view, &choice_ids, &answer_texts, response.cancelled)
-            .ok_or_else(|| anyhow!("interaction response is incomplete"))?;
-        state.interaction_registry.resolve(&response)?;
-        state.pending_interactions.remove(&response.interaction_id);
-        let runtime = state
-            .runtime
-            .as_ref()
-            .ok_or_else(|| anyhow!("selected session is not running"))?;
-        (runtime.input.clone(), event)
-    };
+    let mut state = context.state.lock().await;
+    let runtime = state
+        .runtime
+        .as_ref()
+        .ok_or_else(|| anyhow!("selected session is not running"))?;
+    if runtime.session_id != response.session_id {
+        bail!("interaction response is stale");
+    }
+    let input = runtime.input.clone();
+    dispatch_interaction_response(&mut state, &response, &choice_ids, &answer_texts, &input)
+}
+
+fn dispatch_interaction_response(
+    state: &mut ServerState,
+    response: &protocol::InteractionResponse,
+    choice_ids: &[String],
+    answer_texts: &[Option<String>],
+    input: &mpsc::UnboundedSender<InlineEvent>,
+) -> Result<()> {
+    let pending = state
+        .pending_interactions
+        .get(&response.interaction_id)
+        .cloned()
+        .ok_or_else(|| anyhow!("interaction is no longer pending"))?;
+    if pending.session_id != response.session_id || pending.turn_id != response.turn_id {
+        bail!("interaction response is stale");
+    }
+    if choice_ids.iter().any(|choice_id| {
+        !pending
+            .view
+            .steps
+            .iter()
+            .any(|step| step.choices.iter().any(|choice| &choice.id == choice_id))
+    }) {
+        bail!("interaction choice is invalid");
+    }
+    if pending.view.steps.len() > 1 && !response.cancelled && choice_ids.len() != pending.view.steps.len() {
+        bail!("every interaction step requires a response");
+    }
+    let event = host_interaction_response(&pending.view, choice_ids, answer_texts, response.cancelled)
+        .ok_or_else(|| anyhow!("interaction response is incomplete"))?;
+
+    // Keep the interaction retryable unless the runtime accepted the event.
+    state.interaction_registry.validate(response)?;
     input
         .send(event)
-        .map_err(|_error| anyhow!("selected session runtime has stopped"))
+        .map_err(|_error| anyhow!("selected session runtime has stopped"))?;
+    state.interaction_registry.resolve(response)?;
+    state.pending_interactions.remove(&response.interaction_id);
+    Ok(())
 }
 
 async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) {
@@ -1313,6 +1328,67 @@ mod tests {
                 status: ToolCallStatus::Completed,
             })),
         }
+    }
+
+    #[test]
+    fn failed_interaction_delivery_keeps_response_retryable() {
+        let interaction = InteractionRequest {
+            session_id: "session-a".into(),
+            turn_id: "turn-9".into(),
+            interaction_id: "interaction-x".into(),
+            kind: InteractionKind::Question,
+            wizard: false,
+            title: "Confirm action".into(),
+            details: Vec::new(),
+            choices: Vec::new(),
+            steps: Vec::new(),
+            selected_choice_id: None,
+            selected_choice_ids: Vec::new(),
+        };
+        let response = protocol::InteractionResponse {
+            session_id: interaction.session_id.clone(),
+            turn_id: interaction.turn_id.clone(),
+            interaction_id: interaction.interaction_id.clone(),
+            choice_id: None,
+            choice_ids: Vec::new(),
+            text: None,
+            answer_texts: Vec::new(),
+            cancelled: true,
+        };
+        let view = HostInteraction {
+            kind: vtcode_ui::tui::app::HostInteractionKind::Question,
+            wizard: false,
+            title: interaction.title.clone(),
+            details: Vec::new(),
+            steps: Vec::new(),
+            selected_choice_ids: Vec::new(),
+        };
+        let mut state = ServerState::default();
+        state.interaction_registry.insert(&interaction).expect("register interaction");
+        state.pending_interactions.insert(
+            interaction.interaction_id.clone(),
+            PendingInteraction {
+                session_id: interaction.session_id.clone(),
+                turn_id: interaction.turn_id.clone(),
+                view,
+            },
+        );
+
+        let (closed_input, closed_receiver) = mpsc::unbounded_channel();
+        drop(closed_receiver);
+        let error = dispatch_interaction_response(&mut state, &response, &[], &[], &closed_input)
+            .expect_err("closed runtime rejects delivery");
+        assert!(error.to_string().contains("runtime has stopped"));
+        assert!(state.pending_interactions.contains_key(&interaction.interaction_id));
+        assert_eq!(state.interaction_registry.validate(&response), Ok(()));
+
+        let (live_input, mut live_receiver) = mpsc::unbounded_channel();
+        dispatch_interaction_response(&mut state, &response, &[], &[], &live_input).expect("retry reaches runtime");
+        assert!(matches!(live_receiver.try_recv(), Ok(InlineEvent::Transient(_))));
+        assert!(!state.pending_interactions.contains_key(&interaction.interaction_id));
+        assert!(state.interaction_registry.validate(&response).is_err());
+        assert!(dispatch_interaction_response(&mut state, &response, &[], &[], &live_input).is_err());
+        assert!(live_receiver.try_recv().is_err(), "a consumed response must not be delivered twice");
     }
 
     #[cfg(unix)]

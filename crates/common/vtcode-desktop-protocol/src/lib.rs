@@ -740,14 +740,20 @@ impl InteractionRegistry {
         Ok(())
     }
 
-    /// Validate and consume exactly one matching response.
-    pub fn resolve(&mut self, response: &InteractionResponse) -> Result<(), ProtocolError> {
+    /// Validate a response without consuming the pending interaction.
+    pub fn validate(&self, response: &InteractionResponse) -> Result<(), ProtocolError> {
         let Some((session_id, turn_id)) = self.pending.get(&response.interaction_id) else {
             return Err(ProtocolError::UnknownInteraction);
         };
         if session_id != &response.session_id || turn_id != &response.turn_id {
             return Err(ProtocolError::StaleInteraction);
         }
+        Ok(())
+    }
+
+    /// Validate and consume exactly one matching response.
+    pub fn resolve(&mut self, response: &InteractionResponse) -> Result<(), ProtocolError> {
+        self.validate(response)?;
         if self.pending.remove(&response.interaction_id).is_none() {
             return Err(ProtocolError::UnknownInteraction);
         }
@@ -1169,9 +1175,13 @@ mod tests {
             answer_texts: Vec::new(),
             cancelled: false,
         };
+        assert_eq!(registry.validate(&stale), Err(ProtocolError::StaleInteraction));
         assert_eq!(registry.resolve(&stale), Err(ProtocolError::StaleInteraction));
         let valid = InteractionResponse { turn_id: "turn-9".to_string(), ..stale };
+        assert_eq!(registry.validate(&valid), Ok(()));
+        assert_eq!(registry.validate(&valid), Ok(()));
         assert_eq!(registry.resolve(&valid), Ok(()));
+        assert_eq!(registry.validate(&valid), Err(ProtocolError::UnknownInteraction));
         assert_eq!(registry.resolve(&valid), Err(ProtocolError::UnknownInteraction));
     }
 
