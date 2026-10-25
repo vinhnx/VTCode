@@ -2397,6 +2397,49 @@ fn service_launch_failure_exposes_a_retry_path(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{InteractionKind, InteractionRequest};
+
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.interaction = Some(InteractionRequest {
+                session_id: "session".into(),
+                turn_id: "turn".into(),
+                interaction_id: "approval".into(),
+                kind: InteractionKind::Question,
+                wizard: false,
+                title: "Question".into(),
+                details: Vec::new(),
+                choices: Vec::new(),
+                steps: Vec::new(),
+                selected_choice_id: None,
+                selected_choice_ids: Vec::new(),
+            });
+            view.interaction_choice_ids = vec![Some("approve".into())];
+            view.interaction_answer_texts = vec![Some("private answer".into())];
+            view.question_answer
+                .update(cx, |state, cx| state.set_value("private answer", window, cx));
+            view.event_tx
+                .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
+                .unwrap();
+
+            view.drain_events(window, cx);
+
+            assert!(view.interaction.is_none());
+            assert!(view.interaction_choice_ids.is_empty());
+            assert!(view.interaction_answer_texts.is_empty());
+            assert!(view.question_answer.read(cx).value().is_empty());
+            assert!(view.can_reload_cli_settings(), "an exited interaction cannot block reconnection");
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn unexpected_service_exit_replaces_connected_status_and_exposes_recovery(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(1);

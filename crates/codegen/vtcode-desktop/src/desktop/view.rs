@@ -1743,6 +1743,13 @@ impl DesktopView {
         self.try_send_pending_cancel();
     }
 
+    fn clear_pending_interaction(&mut self) {
+        self.interaction = None;
+        self.interaction_choice_ids.clear();
+        self.interaction_answer_texts.clear();
+        self.interaction_step_index = 0;
+    }
+
     fn submit_interaction(
         &mut self,
         choice_ids: Vec<String>,
@@ -1838,6 +1845,9 @@ impl DesktopView {
             match self.event_rx.try_recv() {
                 Ok(event) => {
                     changed = true;
+                    if matches!(&event, BackendEvent::Exited { .. } | BackendEvent::LaunchFailed(_)) {
+                        self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
+                    }
                     self.notify_background_activity(&event, window, cx);
                     self.handle_backend_event(event, cx);
                     self.restore_focus_after_review_close(window, cx);
@@ -2259,6 +2269,7 @@ impl DesktopView {
             }
             BackendEvent::Exited { status, authentication_required } => {
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
+                self.clear_pending_interaction();
                 self.session_request = None;
                 if let Some(draft) = self.first_submission.take() {
                     self.retained_submission = Some(draft);
@@ -2294,6 +2305,7 @@ impl DesktopView {
             }
             BackendEvent::LaunchFailed(error) => {
                 self.fail_workspace_review("The local service could not start.".into());
+                self.clear_pending_interaction();
                 self.session_request = None;
                 if let Some(draft) = self.first_submission.take() {
                     self.retained_submission = Some(draft);
@@ -2634,10 +2646,7 @@ impl DesktopView {
         self.review_return_focus = None;
         self.last_usage = None;
         self.finished_turn_id = None;
-        self.interaction = None;
-        self.interaction_choice_ids.clear();
-        self.interaction_answer_texts.clear();
-        self.interaction_step_index = 0;
+        self.clear_pending_interaction();
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
