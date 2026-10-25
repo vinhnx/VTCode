@@ -3801,10 +3801,8 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         window.render_frame(cx);
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
-        for (id, label) in [
-            ("header-overflow", "Window actions"),
-            ("navigation-overflow", "Navigation actions"),
-        ] {
+        assert!(window.try_find("header-overflow").is_none(), "one shared overflow menu avoids duplicated chrome");
+        for (id, label) in [("navigation-overflow", "Navigation actions")] {
             assert_eq!(window.find(id).label(), Some(label));
             window.click(id, cx);
             window.render_frame(cx);
@@ -3833,7 +3831,8 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         assert!(compact.size.width <= px(960.));
         assert!(compact.size.height <= px(120.), "empty composer height: {:?}", compact.size.height);
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
-        assert_eq!(window.find("composer-settings").label(), Some("Composer settings"));
+        assert_eq!(window.find("open-settings").label(), Some("Settings"));
+        assert!(window.try_find("composer-settings").is_none());
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
         view.update(cx, |view, cx| {
             view.composer
@@ -3858,7 +3857,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
         });
         window.render_frame(cx);
-        window.click("composer-settings", cx);
+        window.click("open-settings", cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })

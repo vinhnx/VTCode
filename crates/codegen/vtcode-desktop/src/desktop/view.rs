@@ -2583,8 +2583,6 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
             .unwrap_or("Workspace");
-        let configuration = self.configuration.as_ref();
-        let provider = configuration.map(|config| config.provider.as_str()).unwrap_or("Provider");
         TitleBar::new()
             .w_full()
             .h(px(48.))
@@ -2611,14 +2609,13 @@ impl DesktopView {
                             })),
                     )
                     .child(brand_logo(22.))
-                    .child(div().text_sm().font_semibold().child("VT Code"))
                     .child(
                         div()
                             .min_w_0()
                             .truncate()
                             .text_sm()
                             .text_color(theme.colors.muted_foreground)
-                            .child(format!("/ {workspace}")),
+                            .child(workspace.to_string()),
                     ),
             )
             .child(
@@ -2627,23 +2624,10 @@ impl DesktopView {
                     .items_center()
                     .gap_2()
                     .child(
-                        desktop_button("search-commands")
-                            .accessibility_label("Search commands")
-                            .icon(IconName::Search)
-                            .ghost()
-                            .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
-                    )
-                    .child(
-                        Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                            .small()
-                            .rounded_full()
-                            .child(provider.to_string()),
-                    )
-                    .child(
                         desktop_button("toggle-inspector")
                             .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
-                            .label(if self.inspector_open {
+                            .icon(IconName::PanelRight)
+                            .accessibility_label(if self.inspector_open {
                                 "Hide panel"
                             } else {
                                 "Show panel"
@@ -2656,11 +2640,12 @@ impl DesktopView {
                         desktop_button("toggle-theme")
                             .small()
                             .icon(IconName::SunMoon)
-                            .label(if self.theme_mode == ThemeMode::Light {
-                                "Dark"
+                            .accessibility_label(if self.theme_mode == ThemeMode::Light {
+                                "Switch to dark appearance"
                             } else {
-                                "Light"
+                                "Switch to light appearance"
                             })
+                            .tooltip("Switch appearance")
                             .ghost()
                             .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),
                     )
@@ -2684,8 +2669,7 @@ impl DesktopView {
                                     .child(speed.clone()),
                             )
                         },
-                    )
-                    .child(self.render_chrome_menu("header-overflow", "Window actions")),
+                    ),
             )
     }
 
@@ -4238,6 +4222,14 @@ impl DesktopView {
             .as_ref()
             .and_then(|config| config.sandbox.as_deref())
             .unwrap_or("Permissions unavailable");
+        let policy_label = self
+            .configuration
+            .as_ref()
+            .and_then(|config| config.session_options.as_ref())
+            .map_or("Permissions", |options| match options.permission_mode {
+                protocol::PermissionMode::Ask => "Ask",
+                protocol::PermissionMode::AutoApproveCommands => "Auto approve",
+            });
         let buttons = div()
             .w_full()
             .min_w_0()
@@ -4271,7 +4263,7 @@ impl DesktopView {
                             .accessibility_label(format!("Execution policy: {policy}"))
                             .tooltip_with_action("Command permissions", &OpenPermissions, Some("VTCodeDesktop"))
                             .icon(IconName::Shield)
-                            .child(div().truncate().child(policy.to_string()))
+                            .child(div().truncate().child(policy_label))
                             .dropdown_caret(true)
                             .ghost()
                             .small()
@@ -4373,7 +4365,6 @@ impl DesktopView {
                 .child(
                     desktop_button("composer-cli-webmcp")
                         .icon(IconName::Terminal)
-                        .label("CLI / WebMCP")
                         .accessibility_label("VT Code CLI and WebMCP documentation")
                         .tooltip("Shared CLI runtime · WebMCP integration")
                         .ghost()
@@ -4382,17 +4373,7 @@ impl DesktopView {
                             cx.open_url("https://github.com/vinhnx/VTCode/blob/main/docs/development/webmcp.md")
                         }),
                 )
-                .child(self.render_mode_button(cx))
-                .child(
-                    desktop_button("composer-settings")
-                        .icon(IconName::Settings2)
-                        .ghost()
-                        .small()
-                        .ml_auto()
-                        .accessibility_label("Composer settings")
-                        .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                        .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
-                ),
+                .child(self.render_mode_button(cx)),
         );
         div().w_full().flex().justify_center().child(
             panel.child(

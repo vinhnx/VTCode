@@ -80,15 +80,7 @@ impl DesktopView {
                             })),
                     )
                     .child(self.render_chrome_menu("navigation-overflow", "Navigation actions"))
-                    .child(div().flex_1())
-                    .child(
-                        desktop_button("nav-settings")
-                            .icon(IconName::Settings2)
-                            .ghost()
-                            .accessibility_label("Settings")
-                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
-                    ),
+                    .child(div().flex_1()),
             )
             .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
             .bg(chrome_background(&colors))

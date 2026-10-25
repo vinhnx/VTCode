@@ -219,6 +219,10 @@ resize handles retain their own cursors.
 
 ### Model picker
 
+Default chrome uses icon actions with accessible names and shortcut tooltips. Search and overflow live in the
+navigation rail; settings lives in the header. The composer shows short mode and permission labels, an icon-only
+CLI/WebMCP link, and the selected model without repeating header actions.
+
 The composer opens a compact model/effort panel above the input; **Search all models…** opens the full search.
 The effort knob uses Kit's slider parts with a pill track, capability dots, and a circular draggable thumb.
 It appears only for advertised provider/model capabilities. Native decrease/increase buttons offer

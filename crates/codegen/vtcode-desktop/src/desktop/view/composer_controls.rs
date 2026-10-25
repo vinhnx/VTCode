@@ -298,7 +298,7 @@ impl DesktopView {
             })
             .unwrap_or("Unavailable");
         desktop_button("composer-mode")
-            .child(div().truncate().child(format!("Mode: {mode}")))
+            .child(div().truncate().child(mode.to_string()))
             .max_w(px(180.))
             .overflow_hidden()
             .accessibility_label(format!("Agent mode: {mode}"))
