@@ -3837,6 +3837,11 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
             view.selected_session_id = Some("Second".into());
         });
         window.render_frame(cx);
+        let navigation = window.find("left-navigation");
+        assert_eq!(navigation.role(), Some(gpui_kit::Role::Navigation));
+        assert_eq!(navigation.label(), Some("VT Code navigation"));
+        assert_eq!(window.find("project-thread-sidebar").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("project-thread-sidebar").label(), Some("Workspace, projects, and recent threads"));
         assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
         assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
         assert_eq!(window.find("session-First").label(), Some("First"));

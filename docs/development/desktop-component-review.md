@@ -71,7 +71,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [settings](https://gpui-kit.com/component/settings) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [sheet](https://gpui-kit.com/component/sheet) | Applied: Settings uses the Root-managed right Sheet for responsive sizing, built-in focus trapping, Escape/outside dismissal, and close behavior; the inspector remains an ordinary workspace pane. |
 | [shimmer](https://gpui-kit.com/component/shimmer) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
-| [sidebar](https://gpui-kit.com/component/sidebar) | Retain keyboard-capable navigation buttons; resolved SidebarMenu rows do not offer equivalent keyboard handling. |
+| [sidebar](https://gpui-kit.com/component/sidebar) | Applied its labeled navigation structure to the rail and workspace/thread panel. Keep VT Code's keyboard-capable Kit Button rows and virtualized session list; Kit SidebarMenu rows are click-only tree items without equivalent keyboard handling. |
 | [skeleton](https://gpui-kit.com/component/skeleton) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
 | [slider](https://gpui-kit.com/component/slider) | Applied to persisted status-bar visibility; disabled/default state remains native. |
 | [speech](https://gpui-kit.com/component/speech) | Deferred: microphone/recognition integration is outside this UI pass. |

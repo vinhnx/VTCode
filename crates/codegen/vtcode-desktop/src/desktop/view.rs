@@ -2655,6 +2655,10 @@ impl DesktopView {
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut sidebar = div()
+            .id("project-thread-sidebar")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Workspace, projects, and recent threads")
             .w(px(self.sidebar_width))
             .min_w(px(MIN_PANE_WIDTH))
             .h_full()
