@@ -869,6 +869,10 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         assert_eq!(window.find("provider-settings-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("cli-preferences-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("cli-configuration-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(
+            window.find("config-target-workspace").label(),
+            Some("Write CLI settings to Workspace configuration (selected)")
+        );
         select_settings_category(window, 4, cx);
         window.render_frame(cx);
         assert_eq!(window.find("local-service-settings-group").role(), Some(gpui_kit::Role::Group));
@@ -1172,9 +1176,13 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         window.within("diff-review-panel").click("review-split", cx);
         window.render_frame(cx);
         assert_eq!(viewer.read(cx).mode(), gpui_kit::component::diff::DiffMode::Split);
+        assert_eq!(window.find("review-split").label(), Some("Split diff view (selected)"));
+        assert_eq!(window.find("review-unified").label(), Some("Unified diff view"));
         window.within("diff-review-panel").click("review-unified", cx);
         window.render_frame(cx);
         assert_eq!(viewer.read(cx).mode(), gpui_kit::component::diff::DiffMode::Unified);
+        assert_eq!(window.find("review-unified").label(), Some("Unified diff view (selected)"));
+        assert_eq!(window.find("review-split").label(), Some("Split diff view"));
         for _ in 0..8 {
             window.press("tab", cx);
             window.render_frame(cx);
@@ -1528,11 +1536,13 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         }
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile (selected)"));
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile"));
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile (selected)"));
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile"));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
         window.within("settings-panel").click("font-ui-1", cx);
@@ -3490,7 +3500,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         );
         assert_eq!(
             window.find(super::opaque_path_element_id("change-row", "src/app.rs")).label(),
-            Some("Review src/app.rs"),
+            Some("Review src/app.rs (selected)"),
             "a newly inserted row must not inherit an existing file's accessibility node"
         );
         assert_eq!(viewer.read(cx).selected_lines(), selection, "unrelated events preserve review selection");
@@ -4297,6 +4307,7 @@ fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext)
 fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
+        view.workspace = Some(PathBuf::from("/project/alpha"));
         view.preferences.recent_workspaces = vec!["/project/alpha".into(), "/project/beta".into()];
         cx.notify();
     });
@@ -4309,8 +4320,8 @@ fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut
         window.render_frame(cx);
 
         assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
-        assert_eq!(window.find(alpha_id).label(), Some("alpha"));
-        assert_eq!(window.find(beta_id).label(), Some("beta"));
+        assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
+        assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
     })
     .unwrap();
 }

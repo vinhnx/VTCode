@@ -105,7 +105,10 @@ impl DesktopView {
                     protocol::ConfigTarget::Project => "config-target-project",
                 })
                 .label(label)
-                .accessibility_label(format!("Write CLI settings to {label} configuration"))
+                .accessibility_label(format!(
+                    "Write CLI settings to {label} configuration{}",
+                    if selected { " (selected)" } else { "" }
+                ))
                 .when(selected, |button| button.primary())
                 .when(!selected, |button| button.ghost())
                 .small()

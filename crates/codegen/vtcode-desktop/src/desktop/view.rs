@@ -3474,7 +3474,10 @@ impl DesktopView {
                         .child(
                             desktop_button(opaque_path_element_id("change-row", &path))
                                 .icon(IconName::ChevronRight)
-                                .accessibility_label(format!("Review {path}"))
+                                .accessibility_label(format!(
+                                    "Review {path}{}",
+                                    if selected { " (selected)" } else { "" }
+                                ))
                                 .tooltip(path.clone())
                                 .ghost()
                                 .small()
@@ -3513,6 +3516,10 @@ impl DesktopView {
                     header = header.child(
                         desktop_button(id)
                             .label(label)
+                            .accessibility_label(format!(
+                                "{label} diff view{}",
+                                if mode == target { " (selected)" } else { "" }
+                            ))
                             .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
