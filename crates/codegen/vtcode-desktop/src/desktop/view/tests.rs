@@ -10,7 +10,7 @@ use gpui_kit::{
 };
 use serde_json::json;
 
-use super::{DesktopView, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_options};
+use super::{DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_options};
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
@@ -4168,6 +4168,24 @@ fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppC
         assert!(window.try_find("session-thread-0").is_none(), "the previous top rows leave the rendered range");
     })
     .unwrap();
+}
+
+#[test]
+fn fixed_virtual_list_geometry_reuses_rows_until_count_or_height_changes() {
+    let mut cache = FixedRowSizeCache::default();
+    let first = cache.get(120, 36.);
+    let same_geometry = cache.get(120, 36.);
+    assert!(std::rc::Rc::ptr_eq(&first, &same_geometry));
+    assert_eq!(first.len(), 120);
+    assert_eq!(first[0].height, px(36.));
+
+    let changed_count = cache.get(121, 36.);
+    assert!(!std::rc::Rc::ptr_eq(&same_geometry, &changed_count));
+    assert_eq!(changed_count.len(), 121);
+
+    let changed_height = cache.get(121, 48.);
+    assert!(!std::rc::Rc::ptr_eq(&changed_count, &changed_height));
+    assert_eq!(changed_height[0].height, px(48.));
 }
 
 #[gpui_kit::test]

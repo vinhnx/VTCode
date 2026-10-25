@@ -45,9 +45,9 @@ use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle, Focusable, KeyBinding,
-    KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions, Render,
-    ScrollHandle, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored,
-    deferred, div, point, px, size,
+    KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions, Pixels,
+    Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions,
+    anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -88,6 +88,24 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
+
+/// Reuse fixed virtual-list geometry until its row count or height changes.
+#[derive(Default)]
+struct FixedRowSizeCache {
+    row_height_bits: u32,
+    sizes: Rc<Vec<Size<Pixels>>>,
+}
+
+impl FixedRowSizeCache {
+    fn get(&mut self, row_count: usize, row_height: f32) -> Rc<Vec<Size<Pixels>>> {
+        let row_height_bits = row_height.to_bits();
+        if self.sizes.len() != row_count || self.row_height_bits != row_height_bits {
+            self.sizes = Rc::new(vec![size(px(0.), px(row_height)); row_count]);
+            self.row_height_bits = row_height_bits;
+        }
+        Rc::clone(&self.sizes)
+    }
+}
 
 fn accessible_group_box(id: &'static str, label: impl Into<gpui_kit::SharedString>, group: GroupBox) -> AnyElement {
     div()
@@ -428,6 +446,8 @@ struct DesktopView {
     settings_tabs_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
+    session_row_sizes: FixedRowSizeCache,
+    activity_row_sizes: FixedRowSizeCache,
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,
@@ -624,6 +644,8 @@ impl DesktopView {
             settings_tabs_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
+            session_row_sizes: FixedRowSizeCache::default(),
+            activity_row_sizes: FixedRowSizeCache::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_navigation_focus: cx.focus_handle().tab_stop(true),
             settings_tab: settings::SettingsTab::Appearance,
@@ -2713,7 +2735,7 @@ impl DesktopView {
         self.resize_pane_to(edge, width)
     }
 
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut sidebar = div()
             .id("project-thread-sidebar")
@@ -2841,7 +2863,7 @@ impl DesktopView {
                         .child(self.sessions.len().to_string()),
                 ),
         );
-        let session_sizes = Rc::new(vec![size(px(0.), px(SESSION_ROW_HEIGHT)); self.sessions.len()]);
+        let session_sizes = self.session_row_sizes.get(self.sessions.len(), SESSION_ROW_HEIGHT);
         let session_primary = theme.colors.primary;
         sidebar = sidebar.child(
             div()
@@ -3785,7 +3807,7 @@ impl DesktopView {
     }
 
     fn render_activity_tab(
-        &self,
+        &mut self,
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -3875,7 +3897,7 @@ impl DesktopView {
                 ),
         );
 
-        let item_sizes = Rc::new(vec![size(px(0.), px(ACTIVITY_ROW_HEIGHT)); rows.len()]);
+        let item_sizes = self.activity_row_sizes.get(rows.len(), ACTIVITY_ROW_HEIGHT);
         let row_colors = *colors;
         body = body.child(
             div()

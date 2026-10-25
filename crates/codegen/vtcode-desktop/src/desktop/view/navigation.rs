@@ -6,7 +6,7 @@ impl DesktopView {
         self.set_inspector_tab(InspectorTab::Utilities, cx);
     }
 
-    pub(super) fn render_navigation(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_navigation(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let expanded = self.sidebar_open || self.navigation_peek;
         let rail_surface = themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;

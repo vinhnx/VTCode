@@ -39,8 +39,10 @@ wait for active work to cancel and its runloop to clean up. Closing the app or d
 owned work and pending interactions.
 
 Session history is discovered from VT Code's existing durable stores. The recent-thread sidebar virtualizes its bounded
-session list and retains a themed scrollbar as history grows. Selecting a previous session explicitly loads its bounded
-text projection and resume state. A restart does not replay a submitted prompt or an approval automatically.
+session list and retains a themed scrollbar as history grows. The sidebar and Activity tab reuse their fixed-row geometry
+until row count or height changes; row content still renders only in the visible range. Selecting a previous session
+explicitly loads its bounded text projection and resume state. A restart does not replay a submitted prompt or an approval
+automatically.
 Until the archive persists its first-prompt preview, the sidebar names a new session from the first submitted prompt and
 keeps that name across session-list refreshes. The session list reloads whenever a turn ends. A Close button deselects
 the current session through `session/close` without starting a replacement.
