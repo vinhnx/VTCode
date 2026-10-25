@@ -47,12 +47,7 @@ impl ZedAgent {
         match (outcome.output, outcome.error) {
             (Some(output), None) => {
                 let content = self.render_local_tool_content(tool_name, &output);
-                let payload = json!({
-                    TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
-                    TOOL_RESPONSE_KEY_TOOL: tool_name,
-                    "result": output.clone(),
-                });
-                ToolExecutionReport::success(content, Vec::new(), payload)
+                ToolExecutionReport::from_local_output(tool_name, output, content, Vec::new())
             }
             (_, Some(error)) => {
                 let message = error.user_message();
