@@ -2746,14 +2746,37 @@ impl DesktopView {
             .when(self.preferences.separate_theme_profiles, |panel| {
                 panel.child(
                     div()
-                        .id("theme-profile-hint")
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(format!("Editing the {active_theme_profile} theme profile"))
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child(format!(
-                            "Editing the {active_theme_profile} profile. Use the header theme control to switch profiles."
-                        )),
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .id("theme-profile-hint")
+                                .role(gpui_kit::Role::Label)
+                                .aria_label(format!("Editing the {active_theme_profile} appearance profile"))
+                                .text_sm()
+                                .child("Editing profile"),
+                        )
+                        .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
+                            let light = mode == ThemeMode::Light;
+                            let id = if light { "light" } else { "dark" };
+                            let label = if light { "Light" } else { "Dark" };
+                            let selected = self.theme_mode == mode;
+                            desktop_button(format!("edit-{id}-profile"))
+                                .label(label)
+                                .accessibility_label(format!(
+                                    "Edit {id} appearance profile{}",
+                                    if selected { " (selected)" } else { "" }
+                                ))
+                                .ghost()
+                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                                .on_click(cx.listener(move |view, _, window, cx| {
+                                    if view.theme_mode != mode {
+                                        view.apply_theme_mode(mode, window, cx);
+                                    }
+                                }))
+                        })),
                 )
             })
             .child(section_label("VISUAL STYLE", colors.muted_foreground))
@@ -4533,6 +4556,10 @@ impl DesktopView {
         } else {
             ThemeMode::Light
         };
+        self.apply_theme_mode(target_mode, window, cx);
+    }
+
+    fn apply_theme_mode(&mut self, target_mode: ThemeMode, window: &mut Window, cx: &mut Context<Self>) {
         let id = if self.preferences.separate_theme_profiles {
             let candidate = match target_mode {
                 ThemeMode::Light => self.preferences.light_theme.as_deref(),

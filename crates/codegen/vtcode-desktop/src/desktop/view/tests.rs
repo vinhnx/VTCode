@@ -1189,33 +1189,29 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
             assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
         }
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile (selected)"));
 
-        window.click("close-settings", cx);
+        window.click("edit-light-profile", cx);
         window.render_frame(cx);
-        window.click("toggle-theme", cx);
-        window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile (selected)"));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
-        window.click("open-settings", cx);
-        window.render_frame(cx);
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
         assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
-        window.click("close-settings", cx);
+        window.click("edit-dark-profile", cx);
         window.render_frame(cx);
-        window.click("toggle-theme", cx);
-        window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
         assert_eq!(cx.theme().font_size, px(16.));
-        window.click("toggle-theme", cx);
+        window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(cx.theme().font_size, px(17.));
 
-        window.click("open-settings", cx);
-        window.render_frame(cx);
         window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-180.))), cx);
         window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(180.))), cx);
         window.click("theme-solarized-light", cx);

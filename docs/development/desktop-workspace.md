@@ -100,7 +100,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Reload CLI settings | Settings → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | Settings → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same Settings dialog: live theme previews, appearance controls, configured provider and model, the credential setup command, and service/protocol versions. |
-| Separate light and dark themes | Appearance stores independent theme selections; the header theme control switches between the saved profiles. The selected profile remains visible in the theme swatches. |
+| Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark buttons and the header theme control switch between saved profiles. The selected profile remains visible in the theme swatches. |
 
 ### Utilities pane
 
@@ -389,6 +389,7 @@ When separate light and dark profiles are enabled, font families and sizes follo
 the active profile along with its theme. Changing typography edits the profile
 shown in Appearance; disabling profile separation keeps the active typography
 as the shared setting.
+Use the Light/Dark buttons inside Appearance to edit either profile while the dialog stays open.
 Existing preference files retain defaults for missing typography fields. Saved
 sizes survive theme selection and are clamped to the supported bounds when loaded.
 Font selections also survive theme switches and restarts. Missing saved fonts
