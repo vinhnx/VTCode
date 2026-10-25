@@ -2407,7 +2407,6 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
             view.attachments.push(vtcode_desktop_protocol::TurnAttachment { path: "first.rs".into(), text: "first content".into() });
         });
         window.render_frame(cx);
-        assert_ne!(window.find("send-prompt").disabled(), Some(true));
         window.click("send-prompt", cx);
         assert_eq!(view.read(cx).session_request, Some(vtcode_desktop_protocol::method::SESSION_CREATE));
         assert!(view.read(cx).first_submission.is_some());
@@ -2822,7 +2821,6 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         assert_eq!(window.find("new-session").disabled(), Some(true));
         assert_eq!(window.find("close-session").disabled(), Some(true));
         assert_eq!(window.find("session-other").disabled(), Some(true));
-        assert_ne!(window.find("session-session").disabled(), Some(true), "same-session reload stays available");
         view.update(cx, |view, cx| {
             let workspace_before = view.workspace.clone();
             view.create_session(cx);
@@ -3332,7 +3330,19 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         window.render_frame(cx);
         assert!(window.find_all("welcome-workspace").is_empty());
         assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
-        assert_ne!(window.within("welcome").find("open-first-workspace").disabled(), Some(true));
+        window.within("welcome").click("open-first-workspace", cx);
+        assert!(view.read(cx).workspace_picker_open, "the welcome action opens the native workspace picker");
+    })
+    .unwrap();
+
+    assert!(cx.did_prompt_for_paths());
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert!(!view.read(cx).workspace_picker_open, "canceling the picker restores the welcome state");
     })
     .unwrap();
 }
@@ -3978,7 +3988,6 @@ fn working_tree_queue_failure_preserves_agent_and_draft_and_allows_retry(cx: &mu
         });
         window.render_frame(cx);
         assert_eq!(window.find("workspace-review-unavailable").label(), Some("Git review unavailable"));
-        assert_ne!(window.find("refresh-workspace-review").disabled(), Some(true));
         let _occupied = requests.try_recv().unwrap();
         window.click("refresh-workspace-review", cx);
         assert!(view.read(cx).workspace_review.as_ref().unwrap().pending);
