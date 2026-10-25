@@ -400,6 +400,19 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn event_drain_task_is_owned_by_the_desktop_view(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| view.start_event_drain(cx));
+    })
+    .unwrap();
+
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert!(view.event_drain_task.is_some());
+    });
+}
+
+#[gpui_kit::test]
 fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppContext) {
     let (closed, view) = open_desktop(cx);
     drop(view);

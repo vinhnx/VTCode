@@ -342,19 +342,7 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
     {
         view.update(cx, |view, cx| view.select_workspace(path, cx));
     }
-    let weak_view = view.downgrade();
-    cx.spawn(async move |cx| {
-        loop {
-            cx.background_executor().timer(Duration::from_millis(24)).await;
-            if weak_view
-                .update_in(cx, |view, window, cx| view.drain_events(window, cx))
-                .is_err()
-            {
-                break;
-            }
-        }
-    })
-    .detach();
+    view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
     Ok(window)
 }
@@ -381,6 +369,7 @@ struct DesktopView {
     backend: Option<BackendHandle>,
     event_rx: Receiver<BackendEvent>,
     event_tx: SyncSender<BackendEvent>,
+    event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
@@ -574,6 +563,7 @@ impl DesktopView {
             backend: None,
             event_rx,
             event_tx,
+            event_drain_task: None,
             sessions: Vec::new(),
             selected_session_id: None,
             active_primary_agent_display: None,
@@ -873,6 +863,24 @@ impl DesktopView {
         } else {
             self.error = Some("The local service request queue is unavailable.".to_string());
         }
+    }
+
+    fn start_event_drain(&mut self, cx: &mut Context<Self>) {
+        if self.event_drain_task.is_some() {
+            return;
+        }
+
+        self.event_drain_task = Some(cx.spawn(async move |weak_view, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_millis(24)).await;
+                if weak_view
+                    .update_in(cx, |view, window, cx| view.drain_events(window, cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
     }
 
     fn session_change_idle(&self) -> bool {
