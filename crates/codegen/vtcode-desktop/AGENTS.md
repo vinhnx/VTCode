@@ -19,10 +19,13 @@
 - `view/composer_controls.rs` owns anchored controls; service validates options. Keep drafts/sources across option changes.
 - Rust 2024 RPIT captures `&mut Context`: render helpers in loops must return `AnyElement`.
 - `files.rs`: scan cap 400/depth 8; skip dep/VCS/hidden dirs; UTF-8 preview cap 64 KiB; bounded git lookup.
-  Accessible header focuses Kit Tree; selection/expansion survive refresh. Keep I/O background/cancellable; reject stale paths,
-  escapes, and truncation; use the shared resolver. Session switches reset projections; model/options retain drafts.
+  Accessible header focuses Kit Tree; selection/expansion survive refresh. Keep I/O
+  background/cancellable; reject stale paths, escapes, and truncation; use the shared resolver.
+  Session switches reset projections; model/options retain drafts.
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.
 - `view/navigation.rs` starts collapsed; Kit buttons own hover callbacks, so use wrappers for reveal handlers.
-- Bound queues/event drains; reject stale events. CLI reload waits for shutdown, refreshes `view/configuration.rs` through the bounded credential-filtered catalog, and keeps same-workspace draft sources.
+- Dynamic navigation rows key element IDs by session identity or opaque workspace identity, never list position.
+- Bound queues/event drains; reject stale events. CLI reload waits for shutdown and refreshes
+  `view/configuration.rs` through the bounded credential-filtered catalog, keeping same-workspace draft sources.
 - Retain submissions until typed acknowledgement or runtime proof; never automatically replay uncertain delivery.
 - `view/workspace_review.rs`: retain Git navigation by path across refresh; history never replays lifecycle/approvals.

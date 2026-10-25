@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
@@ -2437,37 +2438,30 @@ impl DesktopView {
         sidebar = sidebar.child(section_label("PROJECTS", theme.colors.muted_foreground));
         let recent = self.recent_workspaces();
         if !recent.is_empty() {
-            sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().enumerate().map(
-                |(index, path)| {
-                    let workspace_path = path.clone();
-                    let current = self
-                        .workspace
-                        .as_ref()
-                        .is_some_and(|selected| selected.display().to_string() == *path);
-                    let label = Path::new(path)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(path)
-                        .to_string();
-                    div().w_full().child(
-                        desktop_button(format!("workspace-{index}"))
-                            .accessibility_label(format!(
-                                "{label}{}",
-                                if current { " (current workspace)" } else { "" }
-                            ))
-                            .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
-                            .ghost()
-                            .w_full()
-                            .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
-                            .when(current, |button| {
-                                button.bg(theme.colors.secondary).text_color(theme.colors.foreground)
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
-                            })),
-                    )
-                },
-            )));
+            sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().map(|path| {
+                let workspace_path = path.clone();
+                let current = self
+                    .workspace
+                    .as_ref()
+                    .is_some_and(|selected| selected.display().to_string() == *path);
+                let label = Path::new(path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(path)
+                    .to_string();
+                div().w_full().child(
+                    desktop_button(workspace_navigation_element_id(path))
+                        .accessibility_label(format!("{label}{}", if current { " (current workspace)" } else { "" }))
+                        .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
+                        .ghost()
+                        .w_full()
+                        .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
+                        .when(current, |button| button.bg(theme.colors.secondary).text_color(theme.colors.foreground))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
+                        })),
+                )
+            })));
         }
 
         sidebar = sidebar.child(
@@ -2494,14 +2488,15 @@ impl DesktopView {
                 .flex()
                 .flex_col()
                 .gap_1()
-                .children(self.sessions.iter().enumerate().map(|(index, session)| {
+                .children(self.sessions.iter().map(|session| {
                     let session_id = session.session_id.clone();
+                    let element_id = format!("session-{session_id}");
                     let selected = self.selected_session_id.as_deref() == Some(&session.session_id);
                     let label = session.title.clone().unwrap_or_else(|| {
                         format!("Session {}", session.session_id.chars().take(8).collect::<String>())
                     });
                     div().w_full().child(
-                        desktop_button(format!("session-{index}"))
+                        desktop_button(element_id)
                             .accessibility_label(format!("{label}{}", if selected { " (current thread)" } else { "" }))
                             .child(navigation_label(label, IconName::MessageSquare, selected, theme.colors.primary))
                             .ghost()
@@ -5464,6 +5459,13 @@ fn desktop_window_options() -> WindowOptions {
 
 fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
     themes::mix(colors.background, colors.secondary, 0.08)
+}
+
+/// Keep local paths out of accessibility IDs while preserving workspace row identity across sorting.
+fn workspace_navigation_element_id(path: &str) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("workspace-{:016x}", hasher.finish())
 }
 
 /// Native clickable controls share one cursor policy; disabled controls keep the arrow.

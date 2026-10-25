@@ -247,7 +247,8 @@ add keyboard stops. Conversation bodies expose the author and original message t
 technology; expanded tool output is readable separately from its named show/hide action.
 Font selectors announce the current family, and font-size values expose their current pixel size.
 Existing keyboard controls, modal focus containment/restoration, and theme contrast tokens remain shared.
-The conversation stays virtualized: only mounted rows appear in the accessibility tree.
+The conversation stays virtualized: only mounted rows appear in the accessibility tree. Navigation rows keep IDs tied
+to thread or workspace identity so sorting does not transfer an accessibility node to a different item.
 
 ## Themes
 
