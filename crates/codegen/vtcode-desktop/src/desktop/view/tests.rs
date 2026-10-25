@@ -3457,6 +3457,45 @@ fn composer_errors_are_exposed_as_alerts(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::SessionHistoryMessage;
+
+    let (window, view) = open_desktop(cx);
+    let session_id = "archive-session";
+    let prompt = SessionHistoryMessage { role: "user".into(), text: "Question".into() };
+    let answer = SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() };
+    let answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 0);
+    let repeated_answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 1);
+    assert_ne!(answer_id, repeated_answer_id, "repeated archive messages need distinct row identities");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.load_history(session_id, vec![prompt.clone(), answer.clone()]));
+        window.render_frame(cx);
+        assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
+
+        let inserted = SessionHistoryMessage {
+            role: "user".into(),
+            text: "A newer question".into(),
+        };
+        // The snapshot can advance while the original row remains in its projection.
+        view.update(cx, |view, _| {
+            view.load_history(
+                session_id,
+                vec![
+                    inserted,
+                    prompt,
+                    answer,
+                    SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() },
+                ],
+            )
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
+        assert_eq!(window.find(format!("message-body-{repeated_answer_id}")).label(), Some("VT Code: Answer"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn sidebar_service_status_announces_state_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
