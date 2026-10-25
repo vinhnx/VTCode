@@ -14,6 +14,9 @@ for app bundles only.
 Artwork: yellow `V` mark sourced from `vtchat_resources/v2_1/logo_dark.png` (`logo_light.png` is byte-identical),
 downscaled per size.
 
+The desktop welcome view draws the SVG's outline V in the active theme without the filled tile.
+The toolbar, application icon, and transcript retain the original profile artwork.
+
 ## Runtime behavior
 
 VT Code sets both the terminal icon label (`OSC 1`) and window title (`OSC 2`) to the same sanitized status text on

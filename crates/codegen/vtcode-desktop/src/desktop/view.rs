@@ -2590,15 +2590,24 @@ impl DesktopView {
             .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
             .and_then(|session| session.title.as_deref())
             .unwrap_or("New thread");
-        div().w_full().flex().items_center().justify_between().px_8().py_3().child(
-            div()
-                .min_w_0()
-                .flex_1()
-                .text_lg()
-                .font_semibold()
-                .truncate()
-                .child(title.to_string()),
-        )
+        div()
+            .id("thread-header")
+            .test_support()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px_8()
+            .py_3()
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_lg()
+                    .font_semibold()
+                    .truncate()
+                    .child(title.to_string()),
+            )
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
