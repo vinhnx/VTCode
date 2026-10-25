@@ -2441,7 +2441,7 @@ impl DesktopView {
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
                     status = "interrupted".to_string();
                 }
-                let payload = serde_json::to_string_pretty(details).unwrap_or_else(|_| "{}".to_string());
+                let payload = activity_details_payload(details);
                 let text = format!("{status}\n\n{payload}");
                 // Keep the raw aggregated output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
@@ -4436,20 +4436,44 @@ impl DesktopView {
                 .filter(|output| !output.is_empty())
                 .cloned()
                 .unwrap_or_else(|| item.text.clone());
+            let full_output = output.clone();
+            let output_excerpt = inspector::output_tail(&output);
             panel = panel.child(
                 div()
-                    .id(format!("tool-output-{}", item.id))
-                    .role(gpui_kit::Role::Label)
-                    .aria_label(output.clone())
-                    .test_support()
-                    .ml_4()
-                    .pl_3()
-                    .py_2()
-                    .border_l_1()
-                    .border_color(colors.border)
-                    .font_family(cx.theme().mono_font_family.clone())
-                    .text_size(cx.theme().mono_font_size)
-                    .child(output),
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div().flex().justify_end().child(
+                            desktop_button(format!("copy-tool-output-{}", item.id))
+                                .icon(IconName::Copy)
+                                .accessibility_label(format!("Copy full output for {}", item.title))
+                                .tooltip("Copy full captured output")
+                                .ghost()
+                                .xsmall()
+                                .on_click(move |_, window, app| {
+                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                        full_output.to_string(),
+                                    ));
+                                    super::notifications::copied_to_clipboard(window, app);
+                                }),
+                        ),
+                    )
+                    .child(
+                        div()
+                            .id(format!("tool-output-{}", item.id))
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(output_excerpt.clone())
+                            .test_support()
+                            .ml_4()
+                            .pl_3()
+                            .py_2()
+                            .border_l_1()
+                            .border_color(colors.border)
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_size(cx.theme().mono_font_size)
+                            .child(output_excerpt),
+                    ),
             );
         }
         panel.into_any_element()
@@ -6250,6 +6274,27 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
         | ThreadItemDetails::Decision(_)
         | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), "activity".to_string()),
     }
+}
+
+/// Keep tool output in its dedicated field so activity metadata does not retain another full copy.
+fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> String {
+    use vtcode_exec_events::ThreadItemDetails;
+
+    let output_field = match details {
+        ThreadItemDetails::CommandExecution(_) => Some("aggregated_output"),
+        ThreadItemDetails::ToolOutput(_) => Some("output"),
+        _ => None,
+    };
+    let serialized = if let Some(output_field) = output_field {
+        let mut value = serde_json::to_value(details).unwrap_or(Value::Null);
+        if let Some(fields) = value.as_object_mut() {
+            let _removed = fields.remove(output_field);
+        }
+        serde_json::to_string_pretty(&value)
+    } else {
+        serde_json::to_string_pretty(details)
+    };
+    serialized.unwrap_or_else(|_| "{}".to_string())
 }
 
 fn tool_status_label(status: &vtcode_exec_events::ToolCallStatus) -> String {

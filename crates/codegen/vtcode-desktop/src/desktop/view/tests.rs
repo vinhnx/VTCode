@@ -73,6 +73,24 @@ fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
 }
 
 #[test]
+fn activity_details_omit_tool_output_from_the_metadata_copy() {
+    use vtcode_exec_events::{ThreadItemDetails, ToolCallStatus, ToolOutputItem};
+
+    let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+        call_id: "call-1".into(),
+        tool_call_id: Some("provider-call-1".into()),
+        spool_path: Some(".vtcode/tool-outputs/call-1".into()),
+        output: "large captured result".repeat(32),
+        exit_code: Some(0),
+        status: ToolCallStatus::Completed,
+    }));
+    let payload = super::activity_details_payload(&details);
+
+    assert!(payload.contains("call-1"), "tool identity remains available in metadata");
+    assert!(!payload.contains("large captured result"), "the separate output field owns captured text");
+}
+
+#[test]
 fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
     let path = "private/workspace/src/main.rs";
     let file_action = super::PaletteAction::PreviewFile(path.into());
@@ -3959,6 +3977,13 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             let restored_output = crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).unwrap();
             assert_eq!(restored_output.text, output);
             assert!(!restored_output.running);
+            let restored_command = view
+                .restored_activity
+                .iter()
+                .find(|item| item.id == "saved-command")
+                .expect("historical command activity");
+            assert!(!restored_command.text.contains(output), "output is not duplicated in activity metadata");
+            assert_eq!(restored_command.output.as_deref(), Some(output), "full output remains recoverable");
             view.inspector_open = true;
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
         });
@@ -3995,6 +4020,37 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert!(crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).is_none());
         });
     }).unwrap();
+}
+
+#[gpui_kit::test]
+fn output_tab_bounds_rendered_large_output_but_copies_the_full_capture(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let output = format!("command output\n{}", "界".repeat(90_000));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            let mut item =
+                TranscriptItem::new("large-output".into(), "tool".into(), "Large command".into(), "completed".into());
+            item.output = Some(output.clone().into());
+            item.expanded = true;
+            view.transcript.push(item);
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        });
+        window.render_frame(cx);
+
+        let output_body = window.find("output-body");
+        let rendered = output_body.label().unwrap();
+        assert!(rendered.starts_with("… Earlier output truncated"));
+        assert!(rendered.len() <= 135_000, "the accessible output excerpt is byte-bounded");
+        assert!(rendered.ends_with("界"));
+        let tool_body = window.find("tool-output-large-output");
+        let tool_excerpt = tool_body.label().unwrap();
+        assert!(tool_excerpt.starts_with("… Earlier output truncated"));
+        assert!(tool_excerpt.len() <= 135_000, "expanded tool details use the same byte bound");
+
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(output.as_str()));
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -4797,6 +4853,8 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         window.click("tool-build", cx);
         window.render_frame(cx);
         assert_eq!(window.find("tool-output-build").label(), Some("compiler error: missing name"));
+        window.click("copy-tool-output-build", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("compiler error: missing name"));
         view.update(cx, |view, _| {
             view.transcript.upsert(TranscriptItem::new(
                 "read".into(),

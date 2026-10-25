@@ -13,6 +13,9 @@ use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 
 /// Cap so a long-running session cannot grow the projection without bound.
 const MAX_ACTIVITY_ROWS: usize = 300;
+const MAX_OUTPUT_LINES: usize = 1_000;
+const MAX_OUTPUT_BYTES: usize = 128 * 1024;
+const OUTPUT_TRUNCATION_NOTICE: &str = "… Earlier output truncated; showing a bounded tail.\n";
 
 /// Selected inspector view.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -257,14 +260,49 @@ pub(super) fn latest_output(transcript: &Transcript, restored: &[TranscriptItem]
 
 /// Cap the rendered output tail so a chatty command stays cheap to draw.
 pub(super) fn output_tail(text: &SharedString) -> SharedString {
-    const MAX_OUTPUT_LINES: usize = 1_000;
-    let line_count = text.lines().count();
-    if line_count <= MAX_OUTPUT_LINES {
+    if text.len() <= MAX_OUTPUT_BYTES && text.lines().count() <= MAX_OUTPUT_LINES {
         return text.clone();
     }
-    let skipped = line_count - MAX_OUTPUT_LINES;
-    let mut tail = format!("… {skipped} earlier lines truncated\n");
-    for (index, line) in text.lines().skip(skipped).enumerate() {
+
+    let mut lines = Vec::with_capacity(MAX_OUTPUT_LINES);
+    let mut retained_bytes = 0usize;
+    let mut truncated = false;
+    for line in text.lines().rev() {
+        if lines.len() == MAX_OUTPUT_LINES {
+            truncated = true;
+            break;
+        }
+
+        let separator_bytes = usize::from(!lines.is_empty());
+        let available_bytes = MAX_OUTPUT_BYTES.saturating_sub(retained_bytes.saturating_add(separator_bytes));
+        if line.len() <= available_bytes {
+            retained_bytes = retained_bytes.saturating_add(separator_bytes).saturating_add(line.len());
+            lines.push(line);
+            continue;
+        }
+
+        if available_bytes > 0 {
+            let mut start = line.len().saturating_sub(available_bytes);
+            while !line.is_char_boundary(start) {
+                start += 1;
+            }
+            if let Some(suffix) = line.get(start..) {
+                retained_bytes = retained_bytes.saturating_add(separator_bytes).saturating_add(suffix.len());
+                lines.push(suffix);
+            }
+        }
+        truncated = true;
+        break;
+    }
+
+    if !truncated {
+        return text.clone();
+    }
+
+    lines.reverse();
+    let mut tail = String::with_capacity(OUTPUT_TRUNCATION_NOTICE.len().saturating_add(retained_bytes));
+    tail.push_str(OUTPUT_TRUNCATION_NOTICE);
+    for (index, line) in lines.into_iter().enumerate() {
         if index > 0 {
             tail.push('\n');
         }
@@ -473,8 +511,19 @@ mod tests {
             .join("\n")
             .into();
         let tail = output_tail(&long);
-        assert!(tail.starts_with("… 50 earlier lines truncated"), "tail notes skipped lines");
+        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE), "tail notes omitted output");
         assert!(tail.ends_with("line 1049"));
-        assert!(tail.lines().count() <= 1_002);
+        assert_eq!(tail.lines().count(), MAX_OUTPUT_LINES + 1);
+    }
+
+    #[test]
+    fn output_tail_bounds_long_lines_without_splitting_utf8() {
+        let long_line: SharedString = format!("prefix\n{}", "界".repeat(MAX_OUTPUT_BYTES / 3 + 100)).into();
+        let tail = output_tail(&long_line);
+
+        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
+        assert!(tail.len() <= MAX_OUTPUT_BYTES + OUTPUT_TRUNCATION_NOTICE.len());
+        assert!(tail.ends_with("界"));
+        assert!(tail.is_char_boundary(tail.len()));
     }
 }
