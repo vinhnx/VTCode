@@ -89,18 +89,24 @@ impl ZedAgent {
             .await?;
 
         let cancel_active = session.cancel_flag.load(Ordering::Relaxed);
+        let mut permission_granted = false;
         let permission_override = if let (false, Some(descriptor), Ok(args_value)) =
             (cancel_active, tool_descriptor, args_value_result.as_ref())
         {
-            self.request_tool_permission(
-                client,
-                session_id,
-                &initial_call,
-                descriptor,
-                PermissionToolContext::new(&func_ref.name, kind, initial_call.title.as_str()),
-                args_value,
-            )
-            .await?
+            let outcome = self
+                .request_tool_permission(
+                    client,
+                    session_id,
+                    &initial_call,
+                    descriptor,
+                    PermissionToolContext::new(&func_ref.name, kind, initial_call.title.as_str()),
+                    args_value,
+                )
+                .await?;
+            // `None` means the client answered the permission request with an
+            // allow option; the registry policy gate still needs that approval.
+            permission_granted = outcome.is_none();
+            outcome
         } else {
             None
         };
@@ -127,6 +133,7 @@ impl ZedAgent {
                         session_id,
                         call.id.as_str(),
                         &args_value,
+                        permission_granted,
                     )
                     .await
                 }
@@ -199,6 +206,10 @@ impl ZedAgent {
         fields
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Descriptor, ACP call context, arguments, and the permission decision form one dispatch boundary."
+    )]
     async fn execute_descriptor(
         &self,
         descriptor: ToolDescriptor,
@@ -207,6 +218,7 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         call_id: &str,
         args: &Value,
+        permission_granted: bool,
     ) -> ToolExecutionReport {
         if should_route_terminal_via_client(tool_name, args)
             && let Some(report) = self.execute_terminal_via_client(tool_name, client, session_id, args).await
@@ -216,7 +228,7 @@ impl ZedAgent {
 
         match descriptor {
             ToolDescriptor::Acp(tool) => self.execute_acp_tool(tool, client, session_id, args).await,
-            ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id).await,
+            ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id, permission_granted).await,
         }
     }
 
@@ -339,3 +351,6 @@ impl ZedAgent {
 fn should_route_terminal_via_client(tool_name: &str, _args: &Value) -> bool {
     matches!(tool_name, tools::RUN_PTY_CMD | tools::EXEC_COMMAND)
 }
+
+#[cfg(test)]
+mod tests;

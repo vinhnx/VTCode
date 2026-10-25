@@ -388,6 +388,7 @@ async fn local_tool_execution_uses_registry_request_path() {
                 "cmd": "printf sample.txt",
             }),
             "call-local-list",
+            false,
         )
         .await;
 
@@ -403,7 +404,9 @@ async fn local_tool_execution_reports_registry_failure() {
     let temp = TempDir::new().unwrap();
     let agent = build_agent(temp.path()).await;
 
-    let report = agent.execute_local_tool("unknown_tool", &json!({}), "call-local-missing").await;
+    let report = agent
+        .execute_local_tool("unknown_tool", &json!({}), "call-local-missing", false)
+        .await;
 
     assert_eq!(report.status, crate::acp::ToolCallStatus::Failed);
     assert!(report.llm_response.contains("unknown_tool"));
