@@ -4396,7 +4396,15 @@ impl DesktopView {
                         bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
                     })
                     .child(div().truncate().child(provider_model))
-                    .child(div().text_color(agent.1).child(agent.0)),
+                    .child(
+                        div()
+                            .id("agent-status")
+                            .test_support()
+                            .role(gpui_kit::Role::Status)
+                            .aria_label(agent.0)
+                            .text_color(agent.1)
+                            .child(agent.0),
+                    ),
             )
     }
 
