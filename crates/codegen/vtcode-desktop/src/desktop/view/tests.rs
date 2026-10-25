@@ -50,6 +50,15 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
     })
 }
 
+fn file_tree_paths(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Vec<String> {
+    let files_count = view.read(cx).files.len();
+    let tree = view.read(cx).file_tree.clone();
+    let tree = tree.read(cx);
+    (0..files_count)
+        .map_while(|index| tree.entry(index).map(|entry| entry.item().id.to_string()))
+        .collect()
+}
+
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
     cx.get_menus()
         .unwrap()
@@ -727,6 +736,8 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
 fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temp workspace");
     std::fs::write(workspace.path().join("README.md"), "# Notes\n\nhello from the workspace").expect("write file");
+    std::fs::create_dir_all(workspace.path().join("src/nested")).expect("create nested sources");
+    std::fs::write(workspace.path().join("src/nested/mod.rs"), "pub fn nested() {}").expect("write nested source");
     std::fs::create_dir_all(workspace.path().join("target/debug")).expect("skip dir");
     std::fs::write(workspace.path().join("target/debug/artifact"), b"binary").expect("write artifact");
 
@@ -741,18 +752,60 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
-        let readme_index = {
+        {
             let view = view.read(cx);
             assert!(!view.files.iter().any(|entry| entry.rel_path.starts_with("target")));
-            view.files
-                .iter()
-                .position(|entry| entry.rel_path == "README.md")
-                .expect("README listed")
+            assert!(view.files.iter().any(|entry| entry.rel_path == "README.md"));
         };
         window.render_frame(cx);
         window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
-        window.click(format!("file-{readme_index}"), cx);
+        assert_eq!(file_tree_paths(&view, cx), vec!["src", "README.md"]);
+
+        let mut reached_file_focus = false;
+        for _ in 0..32 {
+            window.press("tab", cx);
+            window.render_frame(cx);
+            if window.find("focus-files").focused() == Some(true) {
+                reached_file_focus = true;
+                break;
+            }
+        }
+        assert!(reached_file_focus, "Tab reaches the file-tree focus control");
+        window.press("enter", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        let tree = view.read(cx).file_tree.clone();
+        let selected_path = tree.read(cx).selected_item().map(|item| item.id.to_string());
+        assert_eq!(selected_path.as_deref(), Some("src"));
+        window.press("right", cx);
+        assert!(file_tree_paths(&view, cx).contains(&"src/nested".to_string()));
+        window.press("down", cx);
+        window.press("right", cx);
+        assert!(file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
+        window.press("left", cx);
+        assert!(!file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
+        window.press("right", cx);
+        assert!(file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
+
+        view.update(cx, |view, cx| view.refresh_files(cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
+        let tree = view.read(cx).file_tree.clone();
+        let selected_path = tree.read(cx).selected_item().map(|item| item.id.to_string());
+        assert_eq!(selected_path.as_deref(), Some("src/nested"));
+        window.press("down", cx);
+        let tree = view.read(cx).file_tree.clone();
+        let selected_path = tree.read(cx).selected_item().map(|item| item.id.to_string());
+        assert_eq!(selected_path.as_deref(), Some("src/nested/mod.rs"));
+        window.press("enter", cx);
         assert!(view.read(cx).file_preview.is_none(), "read does not block the UI callback");
     })
     .unwrap();
@@ -760,9 +813,20 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         window.click("copy-preview", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("# Notes\n\nhello from the workspace"));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("pub fn nested() {}"));
         window.click("close-preview", cx);
         assert!(view.read(cx).file_preview.is_none(), "close dismisses the preview");
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.click("workspace-file-README.md", cx);
+        assert!(view.read(cx).file_preview.is_none(), "mouse activation also reads asynchronously");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        let preview = view.read(cx).file_preview.as_ref().map(|preview| preview.text.clone());
+        assert_eq!(preview.as_deref(), Some("# Notes\n\nhello from the workspace"));
     })
     .unwrap();
 }
