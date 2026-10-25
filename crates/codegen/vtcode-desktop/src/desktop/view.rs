@@ -3055,7 +3055,7 @@ impl DesktopView {
                             ))
                             .child(
                                 desktop_button("close-preview")
-                                    .tooltip("Close preview (Escape)")
+                                    .tooltip_with_action("Close preview", &DismissOverlay, Some("VTCodeDesktop"))
                                     .label("Close")
                                     .ghost()
                                     .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
@@ -3412,7 +3412,7 @@ impl DesktopView {
                         desktop_button("review-previous-change")
                             .icon(IconName::ArrowUp)
                             .accessibility_label("Previous change")
-                            .tooltip("Previous change (⇧F7)")
+                            .tooltip_with_action("Previous change", &PreviousReviewChange, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(false, cx))),
@@ -3421,7 +3421,7 @@ impl DesktopView {
                         desktop_button("review-next-change")
                             .icon(IconName::ArrowDown)
                             .accessibility_label("Next change")
-                            .tooltip("Next change (F7)")
+                            .tooltip_with_action("Next change", &NextReviewChange, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
@@ -3552,7 +3552,7 @@ impl DesktopView {
                                         desktop_button("close-diff-review")
                                             .icon(IconName::X)
                                             .accessibility_label("Close diff review")
-                                            .tooltip("Close review (Escape)")
+                                            .tooltip_with_action("Close review", &DismissOverlay, Some("VTCodeDesktop"))
                                             .ghost()
                                             .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
                                     ),
