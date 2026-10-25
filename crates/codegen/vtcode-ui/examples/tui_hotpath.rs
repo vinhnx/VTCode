@@ -96,6 +96,10 @@ fn input_burst(session: &mut AppSession, events: usize) {
 /// 100 by construction; the prod signal from the guide is Max queue *growth*
 /// between runs under steady load (unbounded-queue OOM early warning).
 #[hotpath::measure]
+#[allow(
+    unsafe_code,
+    reason = "hotpath `label =` emits an `#[unsafe(export_name)]` marker so duplicate labels fail to link."
+)]
 fn channel_demo() {
     let (tx, mut rx) = hotpath::channel!(mpsc::unbounded_channel::<u64>(), label = "tui-hotpath-demo");
     for job in 0..100u64 {
@@ -118,6 +122,10 @@ fn channel_demo() {
 /// else. Production locks stay unwrapped (the macro changes the lock type under
 /// `profiling` only); see the audit note in `docs/development/performance.md`.
 #[hotpath::measure]
+#[allow(
+    unsafe_code,
+    reason = "hotpath `label =` emits an `#[unsafe(export_name)]` marker so duplicate labels fail to link."
+)]
 fn mutex_demo() {
     let counter = hotpath::mutex!(std::sync::Mutex::new(0u64), label = "tui-hotpath-demo-mutex");
     for _ in 0..10_000 {
@@ -140,6 +148,10 @@ fn mutex_demo() {
 /// read phase wraps a fresh cursor over the written bytes (`io_unwrap` is
 /// identity when off, so both modes stay type-clean).
 #[hotpath::measure]
+#[allow(
+    unsafe_code,
+    reason = "hotpath `label =` emits an `#[unsafe(export_name)]` marker so duplicate labels fail to link."
+)]
 fn io_demo() {
     use std::io::{Read, Write};
     const LINE: &[u8] = b"line: the quick brown fox jumps over the lazy dog while streaming tool output\n";

@@ -1,0 +1,120 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Merged hotpath Cloud benchmark of the `tui_hotpath` example: native timing
+# plus Callgrind instruction counts in one report. Built with the `x-prod`
+# profile because `[profile.release]` (and `bench`, which inherits it) sets
+# `strip = true`, and Callgrind attribution needs the symbol table.
+# Docs: https://hotpath.rs/ci_integration
+
+jobs:
+  upload:
+    name: benchmark (push)
+    if: github.event_name == 'push'
+    # Instruction counts only compare within one Valgrind build and Rust
+    # toolchain, so the image, the package and the toolchain are pinned.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # the upload authenticates with the job's OIDC token
+    # Shared by both runs, so their reports describe one benchmark. Static
+    # values: job-level `env` cannot read the `runner` context.
+    env:
+      HOTPATH_BENCHMARK: tui_hotpath
+      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.98.1,profile=x-prod,valgrind=3.26.0
+      HOTPATH_OUTPUT_FORMAT: json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.98.1"
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind=1:3.26.0-0ubuntu1
+          valgrind --version
+      - name: Build benchmark
+        run: |
+          cargo build -q --locked --profile x-prod -p vtcode-ui --example tui_hotpath \
+            --features profiling,hotpath-cloud,hotpath-callgrind
+      - name: Run benchmark natively
+        env:
+          HOTPATH_OUTPUT_PATH: ${{ runner.temp }}/native.json
+        run: target/x-prod/examples/tui_hotpath
+      - name: Run benchmark under Callgrind and upload the merged report
+        env:
+          HOTPATH_UPLOAD: fail-on-error
+          HOTPATH_UPLOAD_RESPONSE_PATH: ${{ github.workspace }}/upload.json
+          HOTPATH_OUTPUT_PATH: ${{ runner.temp }}/merged.json
+          HOTPATH_MERGE_REPORT: ${{ runner.temp }}/native.json
+          HOTPATH_CALLGRIND_OUT_FILE: ${{ runner.temp }}/callgrind.out.%p
+        run: |
+          valgrind -q --tool=callgrind --instr-atstart=no \
+            --callgrind-out-file="$HOTPATH_CALLGRIND_OUT_FILE" \
+            target/x-prod/examples/tui_hotpath
+          test -s "$HOTPATH_UPLOAD_RESPONSE_PATH"
+          jq -e '.meta.run == "merged" and (.functions_icount.data | length > 0) and (.functions_timing.data | length > 0)' \
+            "$HOTPATH_OUTPUT_PATH" > /dev/null
+
+  # Runs pull request code (forks included): no `id-token`, no upload. The
+  # merged report is stored as an artifact that `hotpath-relay.yml` uploads.
+  report:
+    name: benchmark (pull request)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      HOTPATH_BENCHMARK: tui_hotpath
+      HOTPATH_USER_METADATA: runner=Linux-X64,toolchain=1.98.1,profile=x-prod,valgrind=3.26.0
+      HOTPATH_OUTPUT_FORMAT: json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          # The pull request's head commit, not the default merge commit.
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: "1.98.1"
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - name: Install valgrind
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind=1:3.26.0-0ubuntu1
+          valgrind --version
+      - name: Build benchmark
+        run: |
+          cargo build -q --locked --profile x-prod -p vtcode-ui --example tui_hotpath \
+            --features profiling,hotpath-cloud,hotpath-callgrind
+      - name: Run benchmark natively
+        env:
+          HOTPATH_OUTPUT_PATH: ${{ runner.temp }}/native.json
+        run: target/x-prod/examples/tui_hotpath
+      - name: Run benchmark under Callgrind and write the merged report
+        env:
+          HOTPATH_OUTPUT_PATH: report.json
+          HOTPATH_MERGE_REPORT: ${{ runner.temp }}/native.json
+          HOTPATH_CALLGRIND_OUT_FILE: ${{ runner.temp }}/callgrind.out.%p
+        run: |
+          valgrind -q --tool=callgrind --instr-atstart=no \
+            --callgrind-out-file="$HOTPATH_CALLGRIND_OUT_FILE" \
+            target/x-prod/examples/tui_hotpath
+          test -s report.json
+          jq -e '.meta.run == "merged" and (.functions_icount.data | length > 0) and (.functions_timing.data | length > 0)' \
+            report.json > /dev/null
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: hotpath-report
+          path: report.json
+          retention-days: 1
+          if-no-files-found: error

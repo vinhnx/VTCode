@@ -361,6 +361,18 @@ TUI invariants found via hotpath (keep these):
   with `header_lines_cache`. Do not rebuild `Paragraph` + `Block::title(...)` every frame.
 - `build_input_render` is fingerprint-cached (size/content_len/cursor/flags).
 
+### hotpath Cloud CI
+
+`.github/workflows/hotpath-benchmark.yml` runs `tui_hotpath` as the `tui_hotpath` hotpath Cloud benchmark in merged
+mode: one `x-prod` build (`--features profiling,hotpath-cloud,hotpath-callgrind`) runs natively for timing and
+allocations, then under Valgrind Callgrind for instruction counts, and one merged report is judged against `main`
+under `hotpath/policy.toml` (instruction counts and allocations judged, timing shown only). Pull requests, forks
+included, store the report as an artifact; `hotpath-relay.yml` uploads it from the default branch. `x-prod` is used
+because `release` (and `bench`, which inherits it) strips symbols, which Callgrind attribution needs. Keep the
+workload deterministic: no wall-clock-dependent branches, no randomness, and identical work on a second run. Rust,
+Valgrind and the runner image are pinned; bump them in a dedicated pull request so `main` uploads a new baseline. See
+the [CI integration docs](https://hotpath.rs/ci_integration).
+
 ## TUI frame metrics
 
 Steady-state TUI jank (frame drops, input lag under streaming tool/PTY load) is diagnosed with an opt-in sampler in
