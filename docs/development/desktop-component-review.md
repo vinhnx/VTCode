@@ -76,7 +76,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [slider](https://gpui-kit.com/component/slider) | Applied to persisted status-bar visibility; disabled/default state remains native. |
 | [speech](https://gpui-kit.com/component/speech) | Deferred: microphone/recognition integration is outside this UI pass. |
 | [spinner](https://gpui-kit.com/component/spinner) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
-| [status-bar](https://gpui-kit.com/component/status-bar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
+| [status-bar](https://gpui-kit.com/component/status-bar) | Applied Kit's left/right regions to the optional workspace and runtime status row; retain VT Code palette colors, the labeled status group, and the live agent-status announcement. |
 | [stepper](https://gpui-kit.com/component/stepper) | Do not invent execution percentages or phases beyond existing runtime events. |
 | [switch](https://gpui-kit.com/component/switch) | Applied: separate light/dark appearance profiles have persisted theme and typography effects with accessible state. |
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |

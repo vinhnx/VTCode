@@ -34,6 +34,7 @@ use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
+use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -4755,62 +4756,67 @@ impl DesktopView {
             .and_then(|config| config.context_window)
             .zip(self.last_usage.as_ref())
             .and_then(|(window, usage)| context_usage_percent(usage, window));
+        let workspace_details = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .min_w_0()
+            .child(div().truncate().child(workspace.to_string()))
+            .when(self.git_branch.is_some(), |bar| {
+                bar.child(
+                    div()
+                        .truncate()
+                        .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
+                )
+            })
+            .when(sandbox.is_some(), |bar| {
+                bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
+            });
+        let runtime_details = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .min_w_0()
+            .when(context_percent.is_some(), |bar| {
+                bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
+            })
+            .child(div().truncate().child(provider_model))
+            .child(
+                div()
+                    .id("agent-status")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(agent.0)
+                    .child(
+                        Marker::new()
+                            .loading(self.running)
+                            .text_xs()
+                            .text_color(agent.1)
+                            .w_auto()
+                            .content(MarkerContent::new().text(agent.0)),
+                    ),
+            );
+
         div()
             .id("status-bar")
             .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Status bar")
             .w_full()
-            .h(px(26.))
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .px_3()
-            .border_t_1()
-            .border_color(colors.border)
-            .text_xs()
-            .text_color(colors.muted_foreground)
+            .flex_shrink_0()
             .child(
-                div()
-                    .flex()
-                    .items_center()
+                StatusBar::new()
+                    .left(workspace_details)
+                    .right(runtime_details)
+                    .w_full()
+                    .h(px(26.))
                     .gap_3()
-                    .min_w_0()
-                    .child(div().truncate().child(workspace.to_string()))
-                    .when(self.git_branch.is_some(), |bar| {
-                        bar.child(
-                            div()
-                                .truncate()
-                                .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
-                        )
-                    })
-                    .when(sandbox.is_some(), |bar| {
-                        bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .when(context_percent.is_some(), |bar| {
-                        bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
-                    })
-                    .child(div().truncate().child(provider_model))
-                    .child(
-                        div()
-                            .id("agent-status")
-                            .test_support()
-                            .role(gpui_kit::Role::Status)
-                            .aria_label(agent.0)
-                            .child(
-                                Marker::new()
-                                    .loading(self.running)
-                                    .text_xs()
-                                    .text_color(agent.1)
-                                    .w_auto()
-                                    .content(MarkerContent::new().text(agent.0)),
-                            ),
-                    ),
+                    .px_3()
+                    .py_0()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .text_xs()
+                    .text_color(colors.muted_foreground),
             )
     }
 

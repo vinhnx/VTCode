@@ -3961,6 +3961,9 @@ fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        let status_bar = window.find("status-bar");
+        assert_eq!(status_bar.role(), Some(gpui_kit::Role::Group));
+        assert_eq!(status_bar.label(), Some("Status bar"));
         let status = window.find("agent-status");
         assert_eq!(status.role(), Some(gpui_kit::Role::Status));
         assert_eq!(status.label(), Some("Agent: idle"));
