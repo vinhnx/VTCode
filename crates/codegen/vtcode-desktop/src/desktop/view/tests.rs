@@ -626,7 +626,8 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
             );
         });
         window.render_frame(cx);
-        window.click("open-settings", cx);
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
         window.render_frame(cx);
         window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-360.))), cx);
         window.click("copy-credential-command", cx);
@@ -1174,7 +1175,8 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.click("open-settings", cx);
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
@@ -3776,6 +3778,9 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
         assert!(!view.read(cx).navigation_peek);
         window.click("toggle-sidebar", cx);
         assert!(view.read(cx).sidebar_open);
+        window.render_frame(cx);
+        assert!(window.try_find("nav-new-thread").is_none(), "the expanded sidebar already has New thread");
+        assert!(window.try_find("new-session").is_some(), "New thread remains available in the expanded sidebar");
         window.press("cmd-b", cx);
         assert!(!view.read(cx).sidebar_open);
     })
@@ -3863,6 +3868,8 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
         assert!(window.try_find("header-overflow").is_none(), "one shared overflow menu avoids duplicated chrome");
+        assert!(window.try_find("nav-search").is_none(), "command search remains available from the shared menu");
+        assert!(window.try_find("open-settings").is_none(), "settings are available from the shared menu");
         let id = "navigation-overflow";
         assert_eq!(window.find(id).label(), Some("Navigation actions"));
         window.click(id, cx);
@@ -3891,9 +3898,10 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         assert!(compact.size.width <= px(960.));
         assert!(compact.size.height <= px(120.), "empty composer height: {:?}", compact.size.height);
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
-        assert_eq!(window.find("open-settings").label(), Some("Settings"));
+        assert!(window.try_find("open-settings").is_none());
         assert!(window.try_find("composer-settings").is_none());
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
+        assert!(window.find("composer-policy-label").bounds().size.width <= px(60.));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
@@ -3917,7 +3925,8 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
         });
         window.render_frame(cx);
-        window.click("open-settings", cx);
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
@@ -4050,7 +4059,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         window.render_frame(cx);
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-actions").is_none(), "thread actions belong in the single header menu");
-        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Open VT Code CLI and WebMCP connection settings"));
+        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Connect VT Code CLI and WebMCP"));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("Keep this draft", window, cx))
@@ -4419,6 +4428,8 @@ fn runtime_option_popups_focus_the_current_choice_and_confirming_it_is_a_noop(cx
             view.configuration = Some(config);
         });
         window.render_frame(cx);
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Auto-approve commands"));
+        assert!(window.find("composer-policy-label").bounds().size.width <= px(40.));
         window.click("composer-mode", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -4451,6 +4462,7 @@ fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
+        assert!(window.find("composer-mode-label").bounds().size.width <= px(60.));
 
         view.update(cx, |view, cx| {
             view.handle_backend_event(
@@ -4463,6 +4475,7 @@ fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Plan"));
+        assert!(window.find("composer-mode-label").bounds().size.width <= px(60.));
         assert_eq!(
             view.read(cx)
                 .configuration

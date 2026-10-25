@@ -2684,14 +2684,6 @@ impl DesktopView {
                             .ghost()
                             .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),
                     )
-                    .child(
-                        desktop_button("open-settings")
-                            .accessibility_label("Settings")
-                            .icon(IconName::Settings2)
-                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
-                    )
                     .when_some(
                         self.configuration
                             .as_ref()
@@ -4261,16 +4253,20 @@ impl DesktopView {
         let policy = self
             .configuration
             .as_ref()
-            .and_then(|config| config.sandbox.as_deref())
+            .and_then(|config| {
+                config.session_options.as_ref().map(|options| match options.permission_mode {
+                    protocol::PermissionMode::Ask => "Ask before protected actions",
+                    protocol::PermissionMode::AutoApproveCommands => "Auto-approve commands",
+                })
+            })
+            .or_else(|| self.configuration.as_ref().and_then(|config| config.sandbox.as_deref()))
             .unwrap_or("Permissions unavailable");
-        let policy_label = self
-            .configuration
-            .as_ref()
-            .and_then(|config| config.session_options.as_ref())
-            .map_or("Permissions", |options| match options.permission_mode {
-                protocol::PermissionMode::Ask => "Ask",
-                protocol::PermissionMode::AutoApproveCommands => "Auto approve",
-            });
+        let policy_label = match policy {
+            "Ask before protected actions" => "Ask",
+            "Auto-approve commands" => "Auto",
+            "Permissions unavailable" => "Policy",
+            policy => policy,
+        };
         let buttons = div()
             .w_full()
             .min_w_0()
@@ -4304,12 +4300,18 @@ impl DesktopView {
                             .accessibility_label(format!("Execution policy: {policy}"))
                             .tooltip_with_action("Command permissions", &OpenPermissions, Some("VTCodeDesktop"))
                             .icon(IconName::Shield)
-                            .child(div().truncate().child(policy_label))
+                            .child(
+                                div()
+                                    .id("composer-policy-label")
+                                    .test_support()
+                                    .truncate()
+                                    .child(policy_label.to_string()),
+                            )
                             .dropdown_caret(true)
                             .ghost()
                             .small()
                             .min_w_0()
-                            .max_w(px(230.))
+                            .max_w(px(112.))
                             .desktop_disabled(!self.can_select_session_options())
                             .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx))),
                     ),
@@ -4356,6 +4358,7 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Choose workspace".into());
+        let webmcp_connected = self.webmcp_status.as_ref().is_some_and(|status| status.running);
         if self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
                 if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
@@ -4404,13 +4407,16 @@ impl DesktopView {
                 .child(
                     desktop_button("composer-cli-webmcp")
                         .icon(IconName::Terminal)
-                        .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
-                            "WebMCP connected"
+                        .accessibility_label(if webmcp_connected {
+                            "WebMCP connected. Open connection settings"
                         } else {
-                            "Connect WebMCP"
+                            "Connect VT Code CLI and WebMCP"
                         })
-                        .accessibility_label("Open VT Code CLI and WebMCP connection settings")
-                        .tooltip("Pair the browser app with this CLI-backed desktop session")
+                        .tooltip(if webmcp_connected {
+                            "Open WebMCP connection settings"
+                        } else {
+                            "Connect the VT Code CLI and browser app"
+                        })
                         .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),

@@ -49,23 +49,17 @@ impl DesktopView {
                                     })),
                             ),
                     )
-                    .child(
-                        desktop_button("nav-new-thread")
-                            .icon(IconName::Plus)
-                            .ghost()
-                            .accessibility_label("New thread")
-                            .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
-                            .desktop_disabled(!self.session_change_allowed(None))
-                            .on_click(cx.listener(|view, _, _, cx| view.create_session(cx))),
-                    )
-                    .child(
-                        desktop_button("nav-search")
-                            .icon(IconName::Search)
-                            .ghost()
-                            .accessibility_label("Search commands")
-                            .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
-                    )
+                    .when(!expanded, |rail| {
+                        rail.child(
+                            desktop_button("nav-new-thread")
+                                .icon(IconName::Plus)
+                                .ghost()
+                                .accessibility_label("New thread")
+                                .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
+                                .desktop_disabled(!self.session_change_allowed(None))
+                                .on_click(cx.listener(|view, _, _, cx| view.create_session(cx))),
+                        )
+                    })
                     .child(
                         desktop_button("nav-utilities")
                             .icon(IconName::GitCompare)

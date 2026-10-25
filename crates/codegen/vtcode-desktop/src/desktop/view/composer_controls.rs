@@ -298,8 +298,14 @@ impl DesktopView {
             })
             .unwrap_or("Unavailable");
         desktop_button("composer-mode")
-            .child(div().truncate().child(mode.to_string()))
-            .max_w(px(180.))
+            .child(
+                div()
+                    .id("composer-mode-label")
+                    .test_support()
+                    .truncate()
+                    .child(mode.to_string()),
+            )
+            .max_w(px(92.))
             .overflow_hidden()
             .accessibility_label(format!("Agent mode: {mode}"))
             .tooltip_with_action("Choose agent mode", &OpenModePicker, Some("VTCodeDesktop"))
