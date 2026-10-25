@@ -5192,6 +5192,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
             view.sidebar_open = false;
             view.inspector_open = false;
             view.open_model_palette(window, cx);
@@ -5212,6 +5213,50 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
         assert!(popup.bottom() <= composer.top(), "popup must remain above the growing composer");
         assert!(popup.top() < initial_popup.top());
         assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
+
+        window.press("escape", cx);
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_font_size(ThemeMode::Light, 24);
+            view.apply_typography(cx);
+            view.open_model_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let enlarged_popup = window.find("command-palette").bounds();
+        assert_eq!(enlarged_popup.size.width, px(24.5 * 24.));
+        assert!(enlarged_popup.left() >= px(12.));
+        assert!(enlarged_popup.right() <= window.viewport_size().width - px(12.));
+
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let quick_popup = window.find("command-palette").bounds();
+        assert_eq!(quick_popup.size.width, px(22. * 24.));
+        assert!(quick_popup.left() >= px(12.));
+        assert!(quick_popup.right() <= window.viewport_size().width - px(12.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn enlarged_model_popup_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 450., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.preferences.set_ui_font_size(ThemeMode::Light, 24);
+            view.apply_typography(cx);
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.open_model_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let popup = window.find("command-palette").bounds();
+        let viewport = window.viewport_size();
+        assert!(popup.left() >= px(12.), "popup left={:?}", popup.left());
+        assert!(popup.right() <= viewport.width - px(12.), "popup right={:?}, viewport={viewport:?}", popup.right());
     })
     .unwrap();
 }

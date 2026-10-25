@@ -4793,14 +4793,14 @@ impl DesktopView {
                     panel = panel.child(
                         div()
                             .absolute()
-                            .top(px(8.))
-                            .right(px(16.))
+                            .top(gpui_kit::rems(0.5))
+                            .right(gpui_kit::rems(1.))
                             .w_0()
                             .h_0()
-                            .child(self.render_command_palette(state, cx)),
+                            .child(self.render_command_palette(state, window, cx)),
                     );
                 } else {
-                    panel = panel.child(self.render_command_palette(state, cx));
+                    panel = panel.child(self.render_command_palette(state, window, cx));
                 }
             }
         }
@@ -5440,8 +5440,21 @@ impl DesktopView {
 
     /// Modal ⌘K palette. The state entity is created on open, never during
     /// render; confirm and cancel run through the owning view.
-    fn render_command_palette(&self, state: Entity<CommandState>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_command_palette(
+        &self,
+        state: Entity<CommandState>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
+        let ui_font_size = cx.theme().font_size;
+        let popup_margin = ui_font_size * 0.75;
+        let viewport_width = window.viewport_size().width;
+        let max_popup_width = if viewport_width > popup_margin * 2. {
+            viewport_width - popup_margin * 2.
+        } else {
+            px(0.)
+        };
         let weak = cx.entity().downgrade();
         let groups = if self.palette_kind == PaletteKind::AddContext {
             self.composer_resource_groups()
@@ -5674,14 +5687,14 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label(title)
-            .w(px(if quick_model {
-                352.
+            .w(gpui_kit::rems(if quick_model {
+                22.
             } else if models {
-                392.
+                24.5
             } else {
-                560.
+                35.
             }))
-            .max_w_full()
+            .max_w(max_popup_width)
             .when(models || quick_model, |panel| {
                 panel
                     .rounded_xl()
@@ -5712,8 +5725,8 @@ impl DesktopView {
                     } else {
                         Anchor::BottomLeft
                     })
-                    .offset(point(px(0.), px(-8.)))
-                    .snap_to_window_with_margin(px(12.))
+                    .offset(point(px(0.), ui_font_size * -0.5))
+                    .snap_to_window_with_margin(popup_margin)
                     .child(panel),
             )
             .priority(2)
@@ -5724,7 +5737,7 @@ impl DesktopView {
             .inset_0()
             .flex()
             .justify_center()
-            .pt(px(90.))
+            .pt(gpui_kit::rems(5.625))
             .bg(colors.background.opacity(0.4))
             .child(panel)
             .into_any_element()
@@ -5866,7 +5879,7 @@ impl Render for DesktopView {
         }
         if !self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
-                body = body.child(self.render_command_palette(state, cx));
+                body = body.child(self.render_command_palette(state, window, cx));
             }
         }
         body
