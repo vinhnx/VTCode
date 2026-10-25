@@ -656,8 +656,12 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert_eq!(window.find("provider-details").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("provider-details").label(), Some("Provider and model configuration"));
+        assert_eq!(window.find("provider-settings-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("cli-preferences-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("cli-configuration-group").role(), Some(gpui_kit::Role::Group));
         select_settings_category(window, 4, cx);
         window.render_frame(cx);
+        assert_eq!(window.find("local-service-settings-group").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("local-service-details").label(), Some("Local service connection details"));
         select_settings_category(window, 3, cx);
         window.render_frame(cx);
@@ -3949,6 +3953,8 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("utilities-pane").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("utilities-workspace-group").role(), Some(gpui_kit::Role::Group));
+        assert!(window.find("utilities-workspace-group").label().is_some());
         assert_eq!(
             window.find("utilities-activity").label(),
             Some("Recent activity: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
@@ -4104,16 +4110,21 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("settings-navigation").label(), Some("Settings categories"));
         assert!(window.try_find("appearance-settings").is_some());
+        assert_eq!(window.find("appearance-visual-style-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("appearance-visual-style-group").label(), Some("Visual style"));
+        assert_eq!(window.find("appearance-typography-group").role(), Some(gpui_kit::Role::Group));
 
         window.press("right", cx);
         window.render_frame(cx);
         assert!(window.try_find("accessibility-settings").is_some());
+        assert_eq!(window.find("accessibility-display-group").role(), Some(gpui_kit::Role::Group));
         window.press("end", cx);
         window.render_frame(cx);
         assert!(window.try_find("connections-settings").is_some());
 
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());
+        assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
         let shortcut = window.find("shortcut-badge-commands");
         assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));
         assert_eq!(shortcut.label(), Some("Shortcut for Search commands: cmd-k"));

@@ -81,10 +81,9 @@ impl ConfigValueKind {
 
 impl DesktopView {
     pub(super) fn render_cli_configuration(&self, cx: &Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
         let snapshot = self.cli_config_settings.as_ref();
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
-        let mut group = GroupBox::new().flex_shrink_0().outline().title("CLI configuration");
+        let mut group = GroupBox::new().flex_shrink_0().fill().title("CLI configuration");
         group = group.child(div().text_sm().child(match snapshot {
             Some(_) => format!("{count} settings · values follow the active CLI config layers"),
             None if self.workspace.is_some() => "Loading shared CLI settings…".into(),
@@ -133,9 +132,8 @@ impl DesktopView {
                 note.push_str(" Some unusually large or numerous settings are omitted from this browser.");
             }
         }
-        group
-            .child(div().text_xs().text_color(colors.muted_foreground).child(note))
-            .into_any_element()
+        group = group.footer(note);
+        accessible_group_box("cli-configuration-group", "CLI configuration", group)
     }
 
     pub(super) fn can_edit_cli_settings(&self) -> bool {

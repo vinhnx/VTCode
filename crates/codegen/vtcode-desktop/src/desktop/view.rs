@@ -80,6 +80,19 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 
+fn accessible_group_box(id: &'static str, label: impl Into<gpui_kit::SharedString>, group: GroupBox) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Group)
+        .aria_label(label)
+        .w_full()
+        .min_w_0()
+        .flex_shrink_0()
+        .child(group.id(format!("{id}-surface")))
+        .into_any_element()
+}
+
 #[derive(Clone, Copy)]
 struct ActivityChartDatum {
     label: &'static str,

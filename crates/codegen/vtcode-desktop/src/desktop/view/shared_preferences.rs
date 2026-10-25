@@ -101,32 +101,55 @@ impl DesktopView {
             .and_then(|configuration| configuration.shared_ui.as_ref());
         let theme = shared.map(|preferences| preferences.theme.clone());
         let follows = self.preferences.follow_cli_theme.unwrap_or(self.preferences.theme.is_none());
-        GroupBox::new().flex_shrink_0().outline().title("CLI preferences")
+        let group = GroupBox::new()
+            .flex_shrink_0()
+            .fill()
+            .title("CLI preferences")
             .child(div().text_sm().child(match theme.as_ref() {
                 Some(theme) => format!("CLI theme: {theme} · {}", if follows { "Following CLI" } else { "Desktop override" }),
                 None => "Connect to the current desktop service to load CLI preferences.".into(),
             }))
-            .child(div().flex().flex_wrap().gap_2()
-                .child(desktop_button("sync-cli-theme").label("Sync current theme to CLI").ghost()
-                    .tooltip_with_action("Sync current theme to CLI", &SyncCliTheme, Some("VTCodeDesktop"))
-                    .desktop_disabled(!self.can_sync_theme_to_cli())
-                    .on_click(cx.listener(|view, _, _, cx| view.sync_theme_to_cli(cx))))
-                .child(desktop_button("reload-cli-settings").label("Reload CLI settings").ghost()
-                    .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
-                    .desktop_disabled(!self.can_reload_cli_settings())
-                    .on_click(cx.listener(|view, _, _, cx| view.reload_cli_settings(cx))))
-                .child(desktop_button("use-cli-theme").label("Use CLI theme").ghost()
-                    .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        let theme = view.configuration.as_ref().and_then(|configuration| configuration.shared_ui.as_ref()).map(|preferences| preferences.theme.clone());
-                        if let Some(theme) = theme.filter(|theme| known_theme(theme)) {
-                            view.preferences.follow_cli_theme = Some(true);
-                            view.apply_theme_state(theme, Some(window), cx);
-                        }
-                    }))))
-            .child(div().text_xs().text_color(cx.theme().colors.muted_foreground)
-                .child("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history."))
-            .into_any_element()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        desktop_button("sync-cli-theme")
+                            .label("Sync current theme to CLI")
+                            .ghost()
+                            .tooltip_with_action("Sync current theme to CLI", &SyncCliTheme, Some("VTCodeDesktop"))
+                            .desktop_disabled(!self.can_sync_theme_to_cli())
+                            .on_click(cx.listener(|view, _, _, cx| view.sync_theme_to_cli(cx))),
+                    )
+                    .child(
+                        desktop_button("reload-cli-settings")
+                            .label("Reload CLI settings")
+                            .ghost()
+                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
+                            .desktop_disabled(!self.can_reload_cli_settings())
+                            .on_click(cx.listener(|view, _, _, cx| view.reload_cli_settings(cx))),
+                    )
+                    .child(
+                        desktop_button("use-cli-theme")
+                            .label("Use CLI theme")
+                            .ghost()
+                            .desktop_disabled(theme.as_deref().is_none_or(|theme| !known_theme(theme)))
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                let theme = view
+                                    .configuration
+                                    .as_ref()
+                                    .and_then(|configuration| configuration.shared_ui.as_ref())
+                                    .map(|preferences| preferences.theme.clone());
+                                if let Some(theme) = theme.filter(|theme| known_theme(theme)) {
+                                    view.preferences.follow_cli_theme = Some(true);
+                                    view.apply_theme_state(theme, Some(window), cx);
+                                }
+                            })),
+                    ),
+            )
+            .footer("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history.");
+        accessible_group_box("cli-preferences-group", "CLI preferences", group)
     }
 
     pub(super) fn import_cli_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {

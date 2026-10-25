@@ -200,7 +200,7 @@ impl DesktopView {
 
         let mut group = GroupBox::new()
             .flex_shrink_0()
-            .outline()
+            .fill()
             .title("Keyboard shortcuts")
             .child(
                 div()
@@ -266,7 +266,7 @@ impl DesktopView {
                     .child("Use cmd, ctrl, or alt with a key. Tab and Shift+Tab move between controls."),
             );
         }
-        group.into_any_element()
+        accessible_group_box("keyboard-shortcuts-group", "Keyboard shortcuts", group)
     }
 
     fn begin_shortcut_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {

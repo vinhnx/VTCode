@@ -27,9 +27,11 @@ impl DesktopView {
             .min_h_0()
             .overflow_y_scroll()
             .p_3()
-            .child(
+            .child(accessible_group_box(
+                "utilities-workspace-group",
+                workspace.clone(),
                 GroupBox::new()
-                    .outline()
+                    .fill()
                     .title(workspace)
                     .child(
                         desktop_button("utilities-changes")
@@ -151,7 +153,7 @@ impl DesktopView {
                                 cx.notify();
                             })),
                     ),
-            )
+            ))
             .into_any_element()
     }
 }

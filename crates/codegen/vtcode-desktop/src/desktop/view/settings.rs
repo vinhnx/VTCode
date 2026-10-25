@@ -171,10 +171,12 @@ impl DesktopView {
             .flex()
             .flex_col()
             .gap_5()
-            .child(
+            .child(accessible_group_box(
+                "appearance-visual-style-group",
+                "Visual style",
                 GroupBox::new()
                     .flex_shrink_0()
-                    .outline()
+                    .fill()
                     .title("Visual style")
                     .child(
                         gpui_kit::component::switch::Switch::new("separate-theme-profiles")
@@ -273,11 +275,13 @@ impl DesktopView {
                             .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
                             .child(Scrollbar::horizontal(&self.theme_scroll)),
                     ),
-            )
-            .child(
+            ))
+            .child(accessible_group_box(
+                "appearance-typography-group",
+                "Typography",
                 GroupBox::new()
                     .flex_shrink_0()
-                    .outline()
+                    .fill()
                     .title("Typography")
                     .child(self.render_font_family(FontTarget::Ui, cx))
                     .child(self.render_font_family(FontTarget::Code, cx))
@@ -288,7 +292,7 @@ impl DesktopView {
                         "```rust\nfn main() { /* VT Code */ }\n```".into(),
                         cx,
                     )),
-            );
+            ));
 
         content = content.child(desktop_button("reset-appearance").label("Reset appearance").ghost().on_click(
             cx.listener(|view, _, window, cx| {
@@ -321,10 +325,12 @@ impl DesktopView {
                     .text_color(cx.theme().colors.muted_foreground)
                     .child("Adjust motion and the amount of persistent interface detail."),
             )
-            .child(
+            .child(accessible_group_box(
+                "accessibility-display-group",
+                "Display",
                 GroupBox::new()
                     .flex_shrink_0()
-                    .outline()
+                    .fill()
                     .title("Display")
                     .child(
                         gpui_kit::component::switch::Switch::new("show-status-bar")
@@ -333,7 +339,7 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
                     )
                     .child(self.render_reduced_motion(cx)),
-            )
+            ))
             .into_any_element()
     }
 
@@ -353,16 +359,15 @@ impl DesktopView {
     fn render_provider_settings(&self, cx: &Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let Some(configuration) = self.configuration.as_ref() else {
-            return GroupBox::new()
-                .flex_shrink_0()
-                .outline()
-                .title("Provider")
-                .child(
+            return accessible_group_box(
+                "provider-settings-group",
+                "Provider settings",
+                GroupBox::new().flex_shrink_0().fill().title("Provider").child(
                     div()
                         .text_color(theme.colors.muted_foreground)
                         .child("Connect to your workspace to view provider and model details."),
-                )
-                .into_any_element();
+                ),
+            );
         };
 
         let provider = if configuration.provider.is_empty() {
@@ -370,7 +375,7 @@ impl DesktopView {
         } else {
             configuration.provider.clone()
         };
-        let mut group = GroupBox::new().flex_shrink_0().outline().title("Provider").child(
+        let mut group = GroupBox::new().flex_shrink_0().fill().title("Provider").child(
             div()
                 .id("provider-details")
                 .test_support()
@@ -410,7 +415,7 @@ impl DesktopView {
                     )),
             );
         }
-        group.into_any_element()
+        accessible_group_box("provider-settings-group", "Provider settings", group)
     }
 
     fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -422,7 +427,9 @@ impl DesktopView {
             .gap_4()
             .child(self.render_webmcp_settings(cx))
             .when_some(self.service_info.as_ref(), |content, info| {
-                content.child(
+                content.child(accessible_group_box(
+                    "local-service-settings-group",
+                    "Local service",
                     GroupBox::new().flex_shrink_0().outline().title("Local service").child(
                         div()
                             .id("local-service-details")
@@ -439,7 +446,7 @@ impl DesktopView {
                                     .item("Protocol", format!("{}.{}", info.protocol.major, info.protocol.minor), 1),
                             ),
                     ),
-                )
+                ))
             })
             .into_any_element()
     }

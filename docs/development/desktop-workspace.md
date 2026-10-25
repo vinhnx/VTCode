@@ -237,6 +237,8 @@ validated write. Credential-bearing branches are excluded, and large catalogs or
 Settings is constrained to the available screen and scrolls rather than compressing its theme/typography
 sections. The code-font preview is a fenced Rust block rendered by the same syntax-aware Markdown path
 as conversations. Kit’s `syntect` feature supplies the highlighter (fences alone do not enable highlighting).
+Primary settings surfaces use themed GroupBox fills and named accessibility groups; explanatory CLI guidance
+uses GroupBox footers so it stays associated with the section without enlarging its control surface.
 Native buttons use a pointing hand when enabled and an arrow when disabled; text and
 resize handles retain their own cursors.
 
