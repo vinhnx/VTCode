@@ -3949,9 +3949,12 @@ impl DesktopView {
                     v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
                         visible_range
                             .map(|index| {
-                                rows.get(index).cloned().map_or_else(
+                                rows.get(index).map_or_else(
                                     || div().into_any_element(),
-                                    |row| Self::render_activity_row(row, row_colors, activity_row_height),
+                                    |row| {
+                                        Self::render_activity_row(row, row_colors, activity_row_height)
+                                            .into_any_element()
+                                    },
                                 )
                             })
                             .collect::<Vec<_>>()
@@ -3964,10 +3967,10 @@ impl DesktopView {
     }
 
     fn render_activity_row(
-        row: ActivityRow,
+        row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,
         row_height: f32,
-    ) -> AnyElement {
+    ) -> impl IntoElement {
         let (status_color, status_icon) = match row.state {
             ActivityState::Failed => (colors.danger, IconName::X),
             ActivityState::Running => (colors.primary, IconName::Activity),
@@ -3975,12 +3978,13 @@ impl DesktopView {
             ActivityState::Completed => (colors.success, IconName::Check),
             ActivityState::Other => (colors.muted_foreground, IconName::Activity),
         };
+        let status = gpui_kit::SharedString::from(row.status.as_str());
         div()
             .id(format!("activity-{}", row.id))
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label(row.title.clone())
-            .aria_description(row.status.clone())
+            .aria_description(status.clone())
             .w_full()
             .h(px(row_height))
             .flex()
@@ -4009,18 +4013,17 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(div().text_sm().font_medium().truncate().child(row.title))
+                    .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
                     .child(
                         div().flex().min_w_0().child(
                             Tag::custom(colors.secondary, colors.foreground, colors.border)
                                 .small()
                                 .rounded_full()
                                 .max_w_full()
-                                .child(div().truncate().child(row.status)),
+                                .child(div().truncate().child(status)),
                         ),
                     ),
             )
-            .into_any_element()
     }
 
     fn sync_transcript_layout(&mut self, cx: &mut Context<Self>) {

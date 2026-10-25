@@ -4755,11 +4755,18 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
-        let rendered_rows = (0..300)
+        let rendered_row_indexes = (0..300)
             .filter(|index| window.try_find(format!("activity-tool-{index}")).is_some())
-            .count();
-        assert!(rendered_rows > 0, "visible tool activity is rendered");
-        assert!(rendered_rows < 300, "off-screen tool activity stays virtualized");
+            .collect::<Vec<_>>();
+        assert!(!rendered_row_indexes.is_empty(), "visible tool activity is rendered");
+        assert!(rendered_row_indexes.len() < 300, "off-screen tool activity stays virtualized");
+        let first_visible = rendered_row_indexes[0];
+        let expected_label = format!("tool {first_visible}");
+        assert_eq!(
+            window.find(format!("activity-tool-{first_visible}")).label(),
+            Some(expected_label.as_str()),
+            "borrowing the row projection preserves its accessible label"
+        );
     })
     .unwrap();
 }
