@@ -47,45 +47,45 @@ mod tests {
 
     use super::DesktopAssets;
 
+    const DESKTOP_ICONS: &[IconName] = &[
+        IconName::Activity,
+        IconName::ArrowDown,
+        IconName::ArrowUp,
+        IconName::Bot,
+        IconName::Check,
+        IconName::ChevronDown,
+        IconName::ChevronLeft,
+        IconName::ChevronRight,
+        IconName::Copy,
+        IconName::Ellipsis,
+        IconName::ExternalLink,
+        IconName::File,
+        IconName::FileCode,
+        IconName::FileText,
+        IconName::Folder,
+        IconName::FolderClosed,
+        IconName::FolderGit2,
+        IconName::FolderOpen,
+        IconName::GitCompare,
+        IconName::Maximize2,
+        IconName::MessageSquare,
+        IconName::Minus,
+        IconName::PanelLeft,
+        IconName::PanelRight,
+        IconName::Plus,
+        IconName::RefreshCw,
+        IconName::Search,
+        IconName::Settings2,
+        IconName::Shield,
+        IconName::Square,
+        IconName::Terminal,
+        IconName::X,
+    ];
+
     #[test]
     fn desktop_assets_include_every_icon_referenced_by_the_ui() {
         let assets = DesktopAssets;
-        let icons = [
-            IconName::Activity,
-            IconName::ArrowDown,
-            IconName::ArrowUp,
-            IconName::Bot,
-            IconName::Check,
-            IconName::ChevronDown,
-            IconName::ChevronLeft,
-            IconName::ChevronRight,
-            IconName::Copy,
-            IconName::Ellipsis,
-            IconName::ExternalLink,
-            IconName::File,
-            IconName::FileCode,
-            IconName::FileText,
-            IconName::Folder,
-            IconName::FolderClosed,
-            IconName::FolderGit2,
-            IconName::FolderOpen,
-            IconName::GitCompare,
-            IconName::Maximize2,
-            IconName::MessageSquare,
-            IconName::Minus,
-            IconName::PanelLeft,
-            IconName::PanelRight,
-            IconName::Plus,
-            IconName::RefreshCw,
-            IconName::Search,
-            IconName::Settings2,
-            IconName::Shield,
-            IconName::Square,
-            IconName::Terminal,
-            IconName::X,
-        ];
-
-        for icon in icons {
+        for icon in DESKTOP_ICONS {
             assert!(
                 assets.load(&icon.path()).expect("load icon asset").is_some(),
                 "desktop asset source must include {}",
@@ -100,7 +100,18 @@ mod tests {
         let names: Vec<_> = paths.iter().map(|path| path.as_ref()).collect();
 
         assert!(names.windows(2).all(|pair| pair[0] <= pair[1]), "asset paths stay sorted");
-        assert!(names.contains(&"icons/bot.svg"));
-        assert!(names.contains(&"icons/file-code.svg"));
+        assert_eq!(names.len(), names.iter().copied().collect::<std::collections::HashSet<_>>().len());
+        for icon in DESKTOP_ICONS {
+            let path = icon.path();
+            assert!(names.contains(&path.as_ref()), "asset listing must include {path}");
+        }
+    }
+
+    #[test]
+    fn desktop_assets_return_none_for_empty_paths_and_errors_for_missing_paths() {
+        let assets = DesktopAssets;
+
+        assert!(assets.load("").expect("load empty path").is_none());
+        assert!(assets.load("icons/not-a-vtcode-icon.svg").is_err());
     }
 }
