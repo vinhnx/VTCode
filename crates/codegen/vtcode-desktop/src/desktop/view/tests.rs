@@ -1634,6 +1634,33 @@ fn pending_attachments_prevent_submitting_an_incomplete_prompt(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
+fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer.update(cx, |state, cx| {
+                state.set_value("/webmcp connect https://vtcode.vinhnx.chatgpt.site", window, cx)
+            });
+            view.submit_prompt(window, cx);
+            assert!(view.settings_open);
+            assert!(!view.running);
+            assert!(view.composer.read(cx).value().is_empty());
+        });
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, params }) = requests.try_recv().ok() else {
+        panic!("connect command should request a browser pairing");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_PAIR);
+    assert_eq!(params["origin"], "https://vtcode.vinhnx.chatgpt.site");
+    assert_eq!(params["replace"], false);
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
 fn retained_submission_restores_exact_content_without_overwriting_a_new_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

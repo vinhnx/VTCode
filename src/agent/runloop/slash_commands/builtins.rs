@@ -435,25 +435,28 @@ fn handle_webmcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<Slas
                 "Headless WebMCP roots are configured with [webmcp].allowed_roots or --allowed-root.",
             )?;
         }
-        "pair" => renderer.line(
+        "pair" | "connect" => renderer.line(
             MessageStyle::Info,
-            "Usage: /webmcp pair [--replace] <exact-browser-origin> (for example, /webmcp pair http://localhost:5173)",
+            "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
         )?,
         "unpair" => return Ok(SlashCommandOutcome::StopWebmcp),
-        pair_args if pair_args.starts_with("pair ") => {
-            let pair_args = pair_args.strip_prefix("pair ").unwrap_or_default();
+        pair_args if pair_args.starts_with("pair ") || pair_args.starts_with("connect ") => {
+            let pair_args = pair_args
+                .strip_prefix("pair ")
+                .or_else(|| pair_args.strip_prefix("connect "))
+                .unwrap_or_default();
             if let Some((origin, replace)) = parse_webmcp_pair_args(pair_args) {
                 return Ok(SlashCommandOutcome::StartWebmcp { origin, replace });
             }
             renderer.line(
                 MessageStyle::Error,
-                "Usage: /webmcp pair [--replace] <exact-browser-origin> (for example, /webmcp pair http://localhost:5173)",
+                "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
             )?;
         }
         _ => {
             renderer.line(
                 MessageStyle::Error,
-                "Usage: /webmcp [help|status|tools|roots|pair [--replace] <origin>|unpair]",
+                "Usage: /webmcp [help|status|tools|roots|connect|pair [--replace] <origin>|unpair]",
             )?;
         }
     }

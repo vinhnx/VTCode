@@ -62,6 +62,7 @@ mod shared_preferences;
 mod shortcuts;
 mod typography;
 mod utilities;
+mod webmcp;
 mod workspace_review;
 use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
@@ -368,6 +369,11 @@ struct DesktopView {
     theme_scroll: ScrollHandle,
     settings_focus: FocusHandle,
     settings_return_focus: Option<FocusHandle>,
+    webmcp_status: Option<protocol::WebmcpBridgeStatus>,
+    webmcp_pairing: Option<protocol::WebmcpPairResult>,
+    webmcp_origin_input: Entity<TextareaState>,
+    webmcp_request_pending: Option<&'static str>,
+    webmcp_notice: Option<String>,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
     config_target: protocol::ConfigTarget,
     config_value_input: Entity<TextareaState>,
@@ -534,6 +540,15 @@ impl DesktopView {
             theme_scroll: ScrollHandle::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_return_focus: None,
+            webmcp_status: None,
+            webmcp_pairing: None,
+            webmcp_origin_input: cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(1, 2)
+                    .placeholder("https://vtcode.vinhnx.chatgpt.site")
+            }),
+            webmcp_request_pending: None,
+            webmcp_notice: None,
             cli_config_settings: None,
             config_target: protocol::ConfigTarget::Workspace,
             config_value_input: cx.new(|cx| TextareaState::new(window, cx).auto_grow(4, 12)),
@@ -1339,6 +1354,9 @@ impl DesktopView {
         if prompt.trim().is_empty() {
             return;
         }
+        if self.maybe_handle_webmcp_command(&prompt, window, cx) {
+            return;
+        }
         let draft = SubmissionDraft {
             prompt,
             attachments: std::mem::take(&mut self.attachments),
@@ -1599,6 +1617,10 @@ impl DesktopView {
                     self.session_request = None;
                 }
                 if let Some(error) = error {
+                    if self.handle_webmcp_error(&method, &error) {
+                        cx.notify();
+                        return;
+                    }
                     if method == protocol::method::COMPOSER_RESOURCES {
                         self.resources_loading = false;
                     }
@@ -1649,6 +1671,7 @@ impl DesktopView {
                                     protocol::method::CONFIG_SETTINGS_READ,
                                     protocol::method::CONFIG_MODELS,
                                     protocol::method::SESSION_LIST,
+                                    protocol::method::WEBMCP_STATUS,
                                 ] {
                                     if !self.request(method, json!({})) {
                                         self.error =
@@ -1683,6 +1706,9 @@ impl DesktopView {
                     }
                     protocol::method::CONFIG_SETTINGS_WRITE => {
                         self.handle_cli_config_write_response(result, cx);
+                    }
+                    protocol::method::WEBMCP_STATUS | protocol::method::WEBMCP_PAIR | protocol::method::WEBMCP_STOP => {
+                        let _handled = self.handle_webmcp_response(&method, result, cx);
                     }
                     protocol::method::CONFIG_MODELS => {
                         self.models = serde_json::from_value::<Vec<protocol::ModelInfo>>(result).unwrap_or_default();
@@ -2703,6 +2729,7 @@ impl DesktopView {
         for entry in swatches {
             swatch_rows.push(self.render_theme_swatch(entry, cx));
         }
+        let webmcp_panel = self.render_webmcp_settings(cx);
         let theme = cx.theme();
         let colors = &theme.colors;
         let active_theme_profile = if self.theme_mode == ThemeMode::Light {
@@ -2937,6 +2964,7 @@ impl DesktopView {
         panel = panel
             .child(self.render_shortcuts(cx))
             .child(self.render_shared_preferences(cx))
+            .child(webmcp_panel)
             .child(self.render_cli_configuration(cx));
         if let Some(info) = self.service_info.as_ref() {
             panel = panel.child(div().font_semibold().child("Service")).child(
@@ -4504,14 +4532,16 @@ impl DesktopView {
                 .child(
                     desktop_button("composer-cli-webmcp")
                         .icon(IconName::Terminal)
-                        .label("CLI / WebMCP")
-                        .accessibility_label("VT Code CLI and WebMCP documentation")
-                        .tooltip("Shared CLI runtime · WebMCP integration")
+                        .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
+                            "WebMCP connected"
+                        } else {
+                            "Connect WebMCP"
+                        })
+                        .accessibility_label("Open VT Code CLI and WebMCP connection settings")
+                        .tooltip("Pair the browser app with this CLI-backed desktop session")
                         .ghost()
                         .small()
-                        .on_click(|_, _, cx| {
-                            cx.open_url("https://github.com/vinhnx/VTCode/blob/main/docs/development/webmcp.md")
-                        }),
+                        .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
                 )
                 .child(self.render_mode_button(cx))
                 .child(

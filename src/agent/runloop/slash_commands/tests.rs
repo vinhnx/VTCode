@@ -587,6 +587,24 @@ async fn webmcp_pair_command_starts_an_active_bridge() {
         SlashCommandOutcome::StartWebmcp { ref origin, replace: false } if origin == "http://localhost:5173"
     ));
 
+    let connect = handle_slash_command("webmcp connect https://vtcode.vinhnx.chatgpt.site", &mut renderer, &workspace)
+        .await
+        .expect("webmcp connect should parse");
+    assert!(matches!(
+        connect,
+        SlashCommandOutcome::StartWebmcp { ref origin, replace: false }
+            if origin == "https://vtcode.vinhnx.chatgpt.site"
+    ));
+
+    let connect_replace =
+        handle_slash_command("webmcp connect --replace http://localhost:5173", &mut renderer, &workspace)
+            .await
+            .expect("webmcp connect replacement should parse");
+    assert!(matches!(
+        connect_replace,
+        SlashCommandOutcome::StartWebmcp { ref origin, replace: true } if origin == "http://localhost:5173"
+    ));
+
     let replacement =
         handle_slash_command("webmcp pair --replace --origin http://localhost:5173", &mut renderer, &workspace)
             .await
@@ -602,6 +620,9 @@ async fn webmcp_pair_command_starts_an_active_bridge() {
         "webmcp pair http://a http://b",
         "webmcp pair --origin --replace",
         "webmcp pair --replace --replace http://localhost:5173",
+        "webmcp connect",
+        "webmcp connect https://a.test https://b.test",
+        "webmcp connect --replace --replace https://a.test",
     ] {
         let outcome = handle_slash_command(rejected, &mut renderer, &workspace)
             .await

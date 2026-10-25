@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 11 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 12 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -643,6 +643,49 @@ pub struct PrimaryAgentChanged {
     pub display_name: Option<String>,
 }
 
+/// WebMCP bridge state exposed to the desktop client without pairing secrets.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebmcpBridgeStatus {
+    /// Whether the listener is running in this desktop service process.
+    pub running: bool,
+    /// Loopback WebSocket endpoint when the listener is running.
+    pub endpoint: Option<String>,
+    /// Exact origins allowed to pair. Empty means the next explicit pair request binds one origin.
+    pub allowed_origins: Vec<String>,
+    /// Selected durable session, if any.
+    pub session_id: Option<String>,
+    /// Whether an active desktop runtime can accept a browser turn now.
+    pub turns_available: bool,
+    /// Canonical workspace used by the bridge.
+    pub workspace: String,
+}
+
+/// Request to issue a one-time WebMCP pairing code for one exact browser origin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebmcpPairParams {
+    /// Exact browser origin, including scheme and optional port, without a path.
+    pub origin: String,
+    /// Revoke existing browser sessions before issuing the replacement code.
+    #[serde(default)]
+    pub replace: bool,
+}
+
+/// One-time pairing material. The code is returned only by the pair operation and is never persisted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebmcpPairResult {
+    /// Loopback WebSocket endpoint for the paired browser.
+    pub endpoint: String,
+    /// Exact origin bound to the pairing code.
+    pub origin: String,
+    /// Short-lived, single-use pairing code.
+    pub pairing_code: String,
+    /// Remaining lifetime of the pairing code.
+    pub expires_in_secs: u64,
+}
+
 /// Known desktop JSON-RPC methods.
 pub mod method {
     /// Initialize and negotiate protocol support.
@@ -689,6 +732,12 @@ pub mod method {
     pub const PRIMARY_AGENT_CHANGED: &str = "session/primaryAgentChanged";
     /// Publish visible turn state.
     pub const TURN_STATUS: &str = "turn/status";
+    /// Read bridge state and the non-secret configured origin list.
+    pub const WEBMCP_STATUS: &str = "webmcp/status";
+    /// Start or reuse the WebMCP bridge and issue an origin-bound pairing code.
+    pub const WEBMCP_PAIR: &str = "webmcp/pair";
+    /// Revoke the bridge's pairings and stop its listener.
+    pub const WEBMCP_STOP: &str = "webmcp/stop";
 }
 
 /// Error raised by protocol framing, negotiation, or identity validation.
@@ -1245,6 +1294,21 @@ mod tests {
         assert_eq!(value["interactionId"], "i");
         assert_eq!(value["choiceId"], "choice-opaque");
         assert_eq!(method::SESSION_CREATE, "session/create");
+
+        let webmcp_pair: WebmcpPairParams = serde_json::from_value(serde_json::json!({
+            "origin": "https://vtcode.vinhnx.chatgpt.site"
+        }))?;
+        assert_eq!(webmcp_pair.origin, "https://vtcode.vinhnx.chatgpt.site");
+        assert!(!webmcp_pair.replace);
+        let webmcp_result = serde_json::to_value(WebmcpPairResult {
+            endpoint: "ws://127.0.0.1:4000/webmcp".into(),
+            origin: "https://vtcode.vinhnx.chatgpt.site".into(),
+            pairing_code: "ephemeral-code".into(),
+            expires_in_secs: 60,
+        })?;
+        assert_eq!(webmcp_result["pairingCode"], "ephemeral-code");
+        assert_eq!(webmcp_result["expiresInSecs"], 60);
+        assert_eq!(method::WEBMCP_PAIR, "webmcp/pair");
         Ok(())
     }
 
