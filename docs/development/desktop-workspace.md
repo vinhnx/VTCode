@@ -395,12 +395,18 @@ save to desktop preferences. Code size controls Markdown code blocks, previews,
 terminal output, and gpui-kit diff typography. Kit diff sizing also follows the
 UI scale. Transcript measurements refresh when typography changes.
 
+Enable **Separate light and dark modes** to save a theme and typography profile
+for each appearance. The header appearance control switches between the saved
+profiles; Settings also has Light and Dark controls for editing either profile.
+Turning the option off keeps the active profile's typography as the shared setting.
+
 | Setting | Behavior |
 | --- | --- |
 | UI font | Native system font by default (SF Pro on macOS); searchable installed-font selector |
 | Code font | SF Mono when installed, otherwise the platform's resolved monospace default; independent selector |
 | UI font size | Base size for controls and conversation text |
 | Code font size | Monospace code surfaces; independent saved preference |
+| Separate light and dark modes | Stores independent themes and typography for each appearance |
 | Reset appearance to defaults | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
 
 Existing preference files retain defaults for missing typography fields. Saved
@@ -412,9 +418,11 @@ new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 The Appearance dialog scrolls to keep controls reachable on smaller windows.
-Custom colors, separate light/dark profiles, motion overrides, font-family pickers,
-translucency, cursor overrides, alternate Dock icons, and font-smoothing overrides
-are not implemented in this increment.
+Legacy preferences without profile fields continue using shared theme and
+typography settings. When separate profiles are disabled, the active profile's
+font choices are copied into the shared settings before per-mode values are
+cleared. Custom colors, translucency, cursor overrides, alternate Dock icons,
+and font-smoothing overrides are not implemented.
 
 ### Component composition and visual hierarchy
 

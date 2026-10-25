@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, StyledExt};
+use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
@@ -24,6 +24,7 @@ use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAli
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
+use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -32,8 +33,9 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, Subscription,
-    SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list, point, px,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
+    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list,
+    point, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -364,6 +366,7 @@ struct DesktopView {
     resources_loaded: bool,
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
     settings_open: bool,
+    theme_scroll: ScrollHandle,
     settings_focus: FocusHandle,
     settings_return_focus: Option<FocusHandle>,
     webmcp_status: Option<protocol::WebmcpBridgeStatus>,
@@ -534,6 +537,7 @@ impl DesktopView {
             resources_loaded: false,
             palette_groups: Vec::new(),
             settings_open: false,
+            theme_scroll: ScrollHandle::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_return_focus: None,
             webmcp_status: None,
@@ -1159,8 +1163,21 @@ impl DesktopView {
             return;
         }
         let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
-        let active_model = self
-            .configuration
+        let active_model = self.active_model_fallback();
+        for model in self.models.iter().chain(active_model.iter()) {
+            let entry = model_palette_command(model, self.model_is_current(&model.provider, &model.id));
+            groups.entry(model.provider.clone()).or_default().push(entry);
+        }
+        let mut groups = groups.into_iter().collect::<Vec<_>>();
+        for (_, entries) in &mut groups {
+            entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
+        }
+        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
+        self.show_palette(PaletteKind::Models, groups, window, cx);
+    }
+
+    fn active_model_fallback(&self) -> Option<protocol::ModelInfo> {
+        self.configuration
             .as_ref()
             .filter(|configuration| {
                 !self
@@ -1174,34 +1191,8 @@ impl DesktopView {
                 display_name: configuration.model.clone(),
                 context_window: configuration.context_window,
                 current: true,
-            });
-        for model in self.models.iter().chain(active_model.iter()) {
-            let context = model
-                .context_window
-                .map(|tokens| format!(" · {tokens} tokens"))
-                .unwrap_or_default();
-            let current = if self.model_is_current(&model.provider, &model.id) {
-                " · Current"
-            } else {
-                ""
-            };
-            let mut entry = command(
-                model.display_name.clone(),
-                PaletteAction::SelectModel {
-                    provider: model.provider.clone(),
-                    model: model.id.clone(),
-                },
-            );
-            entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
-            entry.keywords = vec![model.provider.clone(), model.id.clone()];
-            groups.entry(model.provider.clone()).or_default().push(entry);
-        }
-        let mut groups = groups.into_iter().collect::<Vec<_>>();
-        for (_, entries) in &mut groups {
-            entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
-        }
-        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
-        self.show_palette(PaletteKind::Models, groups, window, cx);
+                recommended_rank: None,
+            })
     }
 
     fn model_is_current(&self, provider: &str, model: &str) -> bool {
@@ -1219,11 +1210,12 @@ impl DesktopView {
             PaletteAction::SelectModel { provider, model } => self.model_is_current(provider, model),
             PaletteAction::SelectSessionOptions(options) => self.session_option_is_current(options),
             PaletteAction::SelectFont { target, family } => {
+                let typography = self.preferences.typography_for(self.theme_mode);
                 let selected = match target {
-                    FontTarget::Ui => &self.preferences.ui_font_family,
-                    FontTarget::Code => &self.preferences.code_font_family,
+                    FontTarget::Ui => typography.ui_font_family,
+                    FontTarget::Code => typography.code_font_family,
                 };
-                family == selected
+                family.as_deref() == selected
             }
             _ => false,
         }
@@ -2719,6 +2711,11 @@ impl DesktopView {
         let webmcp_origin_controls = self.render_webmcp_settings(true, cx);
         let theme = cx.theme();
         let colors = &theme.colors;
+        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
+            "light"
+        } else {
+            "dark"
+        };
         let mut panel = div()
             .id("settings-panel")
             .test_support()
@@ -2763,18 +2760,100 @@ impl DesktopView {
                     .checked(self.preferences.show_status_bar)
                     .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
             )
-            .child(section_label("VISUAL STYLE", colors.muted_foreground))
+            .child(
+                gpui_kit::component::switch::Switch::new("separate-theme-profiles")
+                    .label("Separate light and dark modes")
+                    .checked(self.preferences.separate_theme_profiles)
+                    .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
+            )
+            .when(self.preferences.separate_theme_profiles, |panel| {
+                panel.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            div()
+                                .id("theme-profile-hint")
+                                .role(gpui_kit::Role::Label)
+                                .aria_label(format!("Editing the {active_theme_profile} appearance profile"))
+                                .text_sm()
+                                .child("Editing profile"),
+                        )
+                        .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
+                            let light = mode == ThemeMode::Light;
+                            let id = if light { "light" } else { "dark" };
+                            let label = if light { "Light" } else { "Dark" };
+                            let selected = self.theme_mode == mode;
+                            desktop_button(format!("edit-{id}-profile"))
+                                .label(label)
+                                .accessibility_label(format!(
+                                    "Edit {id} appearance profile{}",
+                                    if selected { " (selected)" } else { "" }
+                                ))
+                                .ghost()
+                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                                .on_click(cx.listener(move |view, _, window, cx| {
+                                    if view.theme_mode != mode {
+                                        view.apply_theme_mode(mode, window, cx);
+                                    }
+                                }))
+                        })),
+                )
+            })
             .child(
                 div()
-                    .id("theme-grid")
-                    .test_support()
-                    .flex_shrink_0()
-                    .max_h(px(220.))
-                    .overflow_y_scroll()
                     .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .children(swatch_rows),
+                    .items_center()
+                    .justify_between()
+                    .child(section_label("VISUAL STYLE", colors.muted_foreground))
+                    .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
+                        let scroll = self.theme_scroll.clone();
+                        desktop_button(if forward { "next-themes" } else { "previous-themes" })
+                            .icon(if forward {
+                                IconName::ChevronRight
+                            } else {
+                                IconName::ChevronLeft
+                            })
+                            .accessibility_label(if forward { "Next themes" } else { "Previous themes" })
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                let mut offset = scroll.offset();
+                                offset.x += px(if forward { -336. } else { 336. });
+                                scroll.set_offset(offset);
+                                cx.notify();
+                            }))
+                    }))),
+            )
+            .child(
+                div()
+                    .id("theme-list")
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Visual themes")
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
+                    .h(px(112.))
+                    .relative()
+                    .child(
+                        div()
+                            .id("theme-scroller")
+                            .lock_scroll_axis()
+                            .size_full()
+                            .overflow_x_scroll()
+                            .track_scroll(&self.theme_scroll)
+                            .flex()
+                            .items_start()
+                            .gap_2()
+                            .children(swatch_rows)
+                            .test_support(),
+                    )
+                    .child(ScrollableMask::new(gpui_kit::Axis::Horizontal, &self.theme_scroll))
+                    .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
+                    .child(Scrollbar::horizontal(&self.theme_scroll)),
             );
 
         panel = panel
@@ -2805,6 +2884,11 @@ impl DesktopView {
                     .label("Reset appearance to defaults")
                     .ghost()
                     .on_click(cx.listener(|view, _, window, cx| {
+                        view.preferences.separate_theme_profiles = false;
+                        view.preferences.light_theme = None;
+                        view.preferences.dark_theme = None;
+                        view.preferences.light_typography = None;
+                        view.preferences.dark_typography = None;
                         view.preferences.ui_font_family = None;
                         view.preferences.code_font_family = None;
                         view.preferences.ui_font_size = None;
@@ -3662,62 +3746,97 @@ impl DesktopView {
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let content = if self.transcript.is_empty() {
-            EmptyState::new()
-                .header(
-                    EmptyHeader::new()
-                        .media(EmptyMedia::new().child(brand_logo(40.)))
-                        .title(EmptyTitle::new().text_3xl().font_semibold().child("What will you build?"))
-                        .description(
-                            EmptyDescription::new()
-                                .text_sm()
-                                .child("Explore your code, make a change, or review your work."),
-                        ),
-                )
-                .size_full()
-                .content(
-                    EmptyContent::new()
-                        .flex_row()
+            let colors = cx.theme().colors;
+            let workspace_name = self
+                .workspace
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned());
+            let prompt = workspace_name
+                .as_ref()
+                .map_or_else(|| "What should we build?".to_owned(), |name| format!("What should we build in {name}?"));
+            let title = EmptyTitle::new()
+                .text_size(gpui_kit::rems(1.75))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .text_color(colors.foreground)
+                .child(
+                    div()
+                        .id("welcome-prompt")
+                        .test_support()
+                        .role(gpui_kit::Role::Heading)
+                        .aria_label(prompt)
+                        .flex()
                         .flex_wrap()
+                        .items_center()
                         .justify_center()
-                        .gap_3()
-                        .child(
-                            desktop_button("welcome-browse-files")
-                                .accessibility_label("Browse files")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Folder)
-                                .label("Explore files")
-                                .desktop_disabled(self.workspace.is_none())
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.inspector_open = true;
-                                    view.inspector_tab = InspectorTab::Files;
-                                    view.save_preferences();
-                                    cx.notify();
-                                })),
+                        .gap_2()
+                        .child(if workspace_name.is_some() {
+                            "What should we build in"
+                        } else {
+                            "What should we build?"
+                        })
+                        .when_some(workspace_name, |title, name| {
+                            title.child(
+                                desktop_button("welcome-workspace")
+                                    .accessibility_label(format!("Change workspace, current: {name}"))
+                                    .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                                    .text()
+                                    .text_color(colors.foreground)
+                                    .h_auto()
+                                    .p_0()
+                                    .min_w_0()
+                                    .max_w_full()
+                                    .desktop_disabled(
+                                        !self.workspace_switch_idle()
+                                            || self.workspace_picker_open
+                                            || self.retained_submission.is_some(),
+                                    )
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_size(gpui_kit::rems(1.75))
+                                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                                            .border_b_1()
+                                            .border_dashed()
+                                            .border_color(colors.muted_foreground)
+                                            .child(format!("{name}?")),
+                                    )
+                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                            )
+                        }),
+                );
+            div()
+                .id("welcome")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label("VT Code welcome")
+                .size_full()
+                .child(
+                    EmptyState::new()
+                        .header(
+                            EmptyHeader::new()
+                                .max_w(px(CONTENT_WIDTH))
+                                .gap_6()
+                                .media(EmptyMedia::new().mb_0().child(brand_logo(40.)))
+                                .title(title),
                         )
-                        .child(
-                            desktop_button("welcome-review-changes")
-                                .accessibility_label("Review changes")
-                                .ghost()
-                                .small()
-                                .icon(IconName::GitCompare)
-                                .label("Review changes")
-                                .desktop_disabled(self.workspace.is_none())
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.inspector_open = true;
-                                    view.inspector_tab = InspectorTab::Changes;
-                                    view.save_preferences();
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            desktop_button("welcome-choose-model")
-                                .label("Choose a model")
-                                .ghost()
-                                .small()
-                                .desktop_disabled(!self.session_change_allowed(None))
-                                .on_click(cx.listener(|view, _, window, cx| view.open_model_palette(window, cx))),
-                        ),
+                        .size_full()
+                        .when(self.workspace.is_none(), |welcome| {
+                            welcome.content(
+                                EmptyContent::new().child(
+                                    desktop_button("open-first-workspace")
+                                        .label("Choose a workspace folder")
+                                        .primary()
+                                        .desktop_disabled(
+                                            self.workspace_picker_open
+                                                || !self.workspace_switch_idle()
+                                                || self.retained_submission.is_some(),
+                                        )
+                                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                                ),
+                            )
+                        }),
                 )
                 .into_any_element()
         } else {
@@ -4539,12 +4658,48 @@ impl DesktopView {
     }
 
     fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let id = if self.theme_mode == ThemeMode::Light {
-            themes::SYSTEM_DARK_ID
+        let target_mode = if self.theme_mode == ThemeMode::Light {
+            ThemeMode::Dark
         } else {
-            themes::SYSTEM_LIGHT_ID
+            ThemeMode::Light
+        };
+        self.apply_theme_mode(target_mode, window, cx);
+    }
+
+    fn apply_theme_mode(&mut self, target_mode: ThemeMode, window: &mut Window, cx: &mut Context<Self>) {
+        let id = if self.preferences.separate_theme_profiles {
+            let candidate = match target_mode {
+                ThemeMode::Light => self.preferences.light_theme.as_deref(),
+                ThemeMode::Dark => self.preferences.dark_theme.as_deref(),
+            };
+            candidate
+                .filter(|id| themes::mode_for_id(id) == Some(target_mode))
+                .unwrap_or_else(|| themes::default_id(target_mode))
+        } else {
+            themes::system_id(target_mode)
         };
         self.apply_theme(id.to_owned(), window, cx);
+    }
+
+    fn toggle_separate_theme_profiles(&mut self, cx: &mut Context<Self>) {
+        let enabled = !self.preferences.separate_theme_profiles;
+        if enabled {
+            let current_theme = self.theme_id.clone();
+            self.preferences.light_theme = Some(if self.theme_mode == ThemeMode::Light {
+                current_theme.clone()
+            } else {
+                themes::default_id(ThemeMode::Light).to_string()
+            });
+            self.preferences.dark_theme = Some(if self.theme_mode == ThemeMode::Dark {
+                current_theme
+            } else {
+                themes::default_id(ThemeMode::Dark).to_string()
+            });
+            self.preferences.follow_cli_theme = Some(false);
+        }
+        self.preferences.set_separate_theme_profiles(enabled, self.theme_mode);
+        self.save_preferences();
+        cx.notify();
     }
 
     /// Apply a theme from the picker and remember the choice.
@@ -4555,6 +4710,17 @@ impl DesktopView {
 
     fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
         self.theme_mode = themes::apply_by_id(&id, window, cx);
+        let id = if themes::mode_for_id(&id) == Some(self.theme_mode) {
+            id
+        } else {
+            themes::default_id(self.theme_mode).to_string()
+        };
+        if self.preferences.separate_theme_profiles {
+            match self.theme_mode {
+                ThemeMode::Light => self.preferences.light_theme = Some(id.clone()),
+                ThemeMode::Dark => self.preferences.dark_theme = Some(id.clone()),
+            }
+        }
         self.theme_id = id;
         self.apply_typography(cx);
         self.transcript.remeasure();
@@ -4563,15 +4729,13 @@ impl DesktopView {
     }
 
     fn apply_typography(&mut self, cx: &mut Context<Self>) {
-        let ui = self.preferences.ui_font_size();
-        let code = self.preferences.code_font_size();
-        let ui_family = typography::resolve_font(
-            self.preferences.ui_font_family.as_deref(),
-            ".SystemUIFont",
-            typography::installed_fonts(cx),
-        );
+        let typography = self.preferences.typography_for(self.theme_mode);
+        let ui = typography.ui_font_size;
+        let code = typography.code_font_size;
+        let ui_family =
+            typography::resolve_font(typography.ui_font_family, ".SystemUIFont", typography::installed_fonts(cx));
         let code_family = typography::resolve_font(
-            self.preferences.code_font_family.as_deref(),
+            typography.code_font_family,
             self.default_code_font.as_str(),
             typography::installed_fonts(cx),
         );
@@ -4638,7 +4802,7 @@ impl DesktopView {
                 "code",
                 "Code font size",
                 "Code, diffs, and terminal output",
-                self.preferences.code_font_size(),
+                self.preferences.typography_for(self.theme_mode).code_font_size,
                 10,
                 24,
             )
@@ -4647,7 +4811,7 @@ impl DesktopView {
                 "ui",
                 "UI font size",
                 "Base size for controls and conversation text",
-                self.preferences.ui_font_size(),
+                self.preferences.typography_for(self.theme_mode).ui_font_size,
                 12,
                 24,
             )
@@ -4680,9 +4844,9 @@ impl DesktopView {
                             .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 let current = if code {
-                                    view.preferences.code_font_size()
+                                    view.preferences.typography_for(view.theme_mode).code_font_size
                                 } else {
-                                    view.preferences.ui_font_size()
+                                    view.preferences.typography_for(view.theme_mode).ui_font_size
                                 };
                                 let next = if delta < 0 {
                                     current.saturating_sub(1)
@@ -4691,9 +4855,9 @@ impl DesktopView {
                                 }
                                 .clamp(minimum, maximum);
                                 if code {
-                                    view.preferences.code_font_size = Some(next);
+                                    view.preferences.set_code_font_size(view.theme_mode, next);
                                 } else {
-                                    view.preferences.ui_font_size = Some(next);
+                                    view.preferences.set_ui_font_size(view.theme_mode, next);
                                 }
                                 view.apply_typography(cx);
                                 view.save_preferences();
@@ -4716,8 +4880,25 @@ impl DesktopView {
     /// applies live on click.
     fn render_theme_swatch(&self, entry: themes::SwatchEntry, cx: &mut Context<Self>) -> AnyElement {
         let (background, foreground) = entry.preview();
-        let selected = self.theme_id == entry.id();
-        let id = format!("theme-{}", entry.id());
+        let entry_id = entry.id();
+        let active = self.theme_id == entry_id;
+        let light_profile = self.preferences.separate_theme_profiles
+            && self.preferences.light_theme.as_deref() == Some(entry_id.as_str());
+        let dark_profile = self.preferences.separate_theme_profiles
+            && self.preferences.dark_theme.as_deref() == Some(entry_id.as_str());
+        let badge = if active {
+            "active"
+        } else if light_profile && dark_profile {
+            "light and dark profiles"
+        } else if light_profile {
+            "light profile"
+        } else if dark_profile {
+            "dark profile"
+        } else {
+            ""
+        };
+        let selected = !badge.is_empty();
+        let id = format!("theme-{entry_id}");
         let mut swatch = div()
             .w_full()
             .flex()
@@ -4746,12 +4927,17 @@ impl DesktopView {
                     .child(entry.label()),
             );
         if selected {
-            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child("active"));
+            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child(badge));
         }
         desktop_button(id)
-            .accessibility_label(format!("{}{}", entry.label(), if selected { " (active)" } else { "" }))
+            .accessibility_label(if selected {
+                format!("{} ({badge})", entry.label())
+            } else {
+                entry.label().to_owned()
+            })
             .ghost()
             .w(px(104.))
+            .flex_shrink_0()
             .h(px(96.))
             .p_2()
             .border_1()
@@ -5116,7 +5302,7 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
-            .child(self.render_thread_header())
+            .when(!self.transcript.is_empty(), |column| column.child(self.render_thread_header()))
             .child(self.render_transcript(cx))
             .child(self.render_composer(window, cx));
         let workspace = div()
@@ -5229,21 +5415,6 @@ impl Render for DesktopView {
             .child(self.render_toolbar(cx))
             .child(panes)
             .when(self.preferences.show_status_bar, |body| body.child(self.render_status_bar(cx)));
-        if self.workspace.is_none() {
-            body = body.child(
-                div().absolute().inset_0().flex().items_center().justify_center().child(
-                    desktop_button("open-first-workspace")
-                        .label("Choose a workspace folder")
-                        .primary()
-                        .desktop_disabled(
-                            self.workspace_picker_open
-                                || !self.workspace_switch_idle()
-                                || self.retained_submission.is_some(),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
-                ),
-            );
-        }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
@@ -5366,6 +5537,24 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
         keywords: Vec::new(),
         action,
     }
+}
+
+fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
+    let context = model
+        .context_window
+        .map(|tokens| format!(" · {tokens} tokens"))
+        .unwrap_or_default();
+    let current = if current { " · Current" } else { "" };
+    let mut entry = command(
+        model.display_name.clone(),
+        PaletteAction::SelectModel {
+            provider: model.provider.clone(),
+            model: model.id.clone(),
+        },
+    );
+    entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
+    entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry
 }
 
 fn workspace_picker_options() -> PathPromptOptions {

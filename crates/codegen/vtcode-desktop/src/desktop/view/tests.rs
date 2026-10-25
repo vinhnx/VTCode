@@ -370,6 +370,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     display_name: "GPT OSS 20B".to_string(),
                     context_window: Some(131_072),
                     current: true,
+                    recommended_rank: None,
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "anthropic".to_string(),
@@ -377,6 +378,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     display_name: "Claude Sonnet 5".to_string(),
                     context_window: Some(200_000),
                     current: false,
+                    recommended_rank: None,
                 },
             ];
         });
@@ -1172,6 +1174,109 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
 }
 
 #[gpui_kit::test]
+fn separate_theme_profiles_restore_theme_and_typography_per_mode(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
+        window.click("separate-theme-profiles", cx);
+        window.render_frame(cx);
+
+        {
+            let preferences = &view.read(cx).preferences;
+            assert!(preferences.separate_theme_profiles);
+            assert_eq!(preferences.dark_theme.as_deref(), Some("ciapre"));
+            assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
+        }
+
+        window.click("edit-light-profile", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
+        assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
+        window.within("settings-panel").click("font-ui-1", cx);
+        window.render_frame(cx);
+        assert_eq!(cx.theme().font_size, px(17.));
+        view.update(cx, |view, cx| view.apply_theme("solarized-light".into(), window, cx));
+
+        window.click("edit-dark-profile", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
+        assert_eq!(view.read(cx).theme_id, "ciapre");
+        assert_eq!(cx.theme().font_size, px(16.));
+
+        window.click("edit-light-profile", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(cx.theme().font_size, px(17.));
+        window.click("close-settings", cx);
+        window.render_frame(cx);
+
+        window.click("toggle-theme", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
+        assert_eq!(view.read(cx).theme_id, "ciapre");
+        window.click("toggle-theme", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(cx.theme().font_size, px(17.));
+
+        let saved = crate::desktop::preferences::Preferences::load();
+        assert!(saved.separate_theme_profiles);
+        assert_eq!(saved.light_theme.as_deref(), Some("solarized-light"));
+        assert_eq!(saved.dark_theme.as_deref(), Some("ciapre"));
+        assert_eq!(saved.typography_for(ThemeMode::Light).ui_font_size, 17);
+        assert_eq!(saved.typography_for(ThemeMode::Dark).ui_font_size, 16);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 760., 700.);
+    cx.update_window(window, |_, window, cx| {
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
+        let strip = window.find("theme-list").bounds();
+        let first = window.find("theme-system-light").bounds();
+        let last = window.find("theme-catppuccin-mocha").bounds();
+        let typography_top = window.find("choose-ui-font").bounds().top();
+        assert_eq!(first.top(), last.top(), "themes occupy a single row");
+        assert!(last.left() > strip.right(), "the list must overflow horizontally");
+        assert_eq!(first.size.width, px(104.), "swatches must not shrink to fit");
+        window.click("next-themes", cx);
+        window.render_frame(cx);
+        assert!(window.find("theme-system-light").bounds().left() < first.left());
+        window.click("previous-themes", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
+
+        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Pixels(point(px(-900.), px(0.))), cx);
+        window.render_frame(cx);
+        let last = window.find("theme-catppuccin-mocha").bounds();
+        assert!(
+            last.left() >= strip.left() && last.right() <= strip.right(),
+            "last swatch {last:?} is outside {strip:?}; scroll offset {:?}",
+            view.read(cx).theme_scroll.offset()
+        );
+        assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
+        window.click("theme-catppuccin-mocha", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "catppuccin-mocha");
+
+        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
+        window.click("theme-system-light", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "system-light");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -1182,13 +1287,13 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
         // The picker leads with the ported gpui-kit rows; dark and light
         // swatches apply live and switch the kit base.
-        click_in_scrolled_grid(window, "theme-grid", "theme-adventure", cx);
+        click_in_scrolled_grid(window, "theme-scroller", "theme-adventure", cx);
         {
             let view = view.read(cx);
             assert_eq!(view.theme_id, "adventure");
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
-        click_in_scrolled_grid(window, "theme-grid", "theme-aurora-light", cx);
+        click_in_scrolled_grid(window, "theme-scroller", "theme-aurora-light", cx);
         {
             let view = view.read(cx);
             assert_eq!(view.theme_id, "aurora-light");
@@ -2459,7 +2564,7 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
+fn welcome_keeps_file_and_model_workflows_in_navigation_and_composer(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -2481,18 +2586,24 @@ fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_sessi
                 display_name: "Other model".into(),
                 context_window: Some(7000),
                 current: false,
+                recommended_rank: None,
             }];
             view.composer
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
         });
         window.render_frame(cx);
-        window.click("welcome-browse-files", cx);
+        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
+            assert!(window.find_all(id).is_empty(), "welcome actions belong in navigation and the composer");
+        }
+        window.click("nav-utilities", cx);
+        window.render_frame(cx);
+        window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
-        window.click("welcome-choose-model", cx);
+        window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
+        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
         assert!(
             window
                 .find("palette-label-0-0")
@@ -2516,6 +2627,133 @@ fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_sessi
 }
 
 #[gpui_kit::test]
+fn composer_model_picker_keeps_a_custom_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("keep-session".into());
+            view.configuration = Some(
+                serde_json::from_value(json!({
+                    "provider": "provider-a", "model": "custom-current-id", "authenticated": true,
+                    "credentialSetupCommand": "", "contextWindow": 123456,
+                }))
+                .unwrap(),
+            );
+            view.models = vec![vtcode_desktop_protocol::ModelInfo {
+                provider: "provider-b".into(),
+                id: "other-id".into(),
+                display_name: "Other model".into(),
+                context_window: Some(7000),
+                current: false,
+                recommended_rank: None,
+            }];
+            view.composer
+                .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
+        assert!(
+            window
+                .find("palette-label-0-0")
+                .label()
+                .unwrap()
+                .contains("123456 tokens · Current")
+        );
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).palette.is_none());
+        assert_eq!(view.read(cx).selected_session_id.as_deref(), Some("keep-session"));
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Keep my draft");
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "the current catalog fallback must not restart the session");
+}
+
+#[gpui_kit::test]
+fn welcome_workspace_prompt_wraps_long_names_and_keeps_the_switch_guard(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
+        });
+        window.render_frame(cx);
+        let welcome = window.find("welcome").bounds();
+        let link = window.find("welcome-workspace");
+        assert_eq!(link.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(link.label(), Some(format!("Change workspace, current: {workspace_name}").as_str()));
+        assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
+        assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
+        assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(
+            window.find("welcome-prompt").label(),
+            Some(format!("What should we build in {workspace_name}?").as_str())
+        );
+        view.update(cx, |view, _| view.workspace_picker_open = true);
+        window.render_frame(cx);
+        assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
+        view.update(cx, |view, _| {
+            view.workspace_picker_open = false;
+            view.workspace = None;
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome-workspace").is_empty());
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
+        assert_ne!(window.within("welcome").find("open-first-workspace").disabled(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
+        assert!(window.find_all("thread-header").is_empty(), "the empty welcome should not add a thread header");
+        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
+            assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
+        }
+        window.click("nav-utilities", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
+        assert!(view.read(cx).selected_session_id.is_none());
+        assert_eq!(window.find("send-prompt").label(), Some("Send message"));
+        view.update(cx, |view, _| {
+            view.workspace = None;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace folder"));
+        view.update(cx, |view, _| {
+            view.workspace = Some(std::env::temp_dir());
+            view.transcript.push(TranscriptItem::new(
+                "first-message".into(),
+                "user".into(),
+                "You".into(),
+                "Inspect this workspace".into(),
+            ));
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome").is_empty());
+        assert_eq!(window.find_all("thread-header").len(), 1);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn model_picker_revalidates_a_deferred_selection_against_the_current_catalog(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -2529,6 +2767,7 @@ fn model_picker_revalidates_a_deferred_selection_against_the_current_catalog(cx:
                 display_name: "Temporary model".into(),
                 context_window: None,
                 current: false,
+                recommended_rank: None,
             }];
             view.open_model_palette(window, cx);
         });
@@ -2639,7 +2878,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         });
         assert_eq!(cx.theme().font_size, px(17.));
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        scroll_settings_to(window, "reset-appearance", cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
@@ -2693,7 +2932,9 @@ fn welcome_review_action_opens_changes_without_creating_a_session(cx: &mut TestA
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("welcome-review-changes", cx);
+        window.click("nav-utilities", cx);
+        window.render_frame(cx);
+        window.within("inspector-tabs").click(0usize, cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
@@ -3697,6 +3938,7 @@ fn composer_model_name_uses_the_active_provider_catalog_entry(cx: &mut TestAppCo
                     display_name: name.into(),
                     context_window: None,
                     current: false,
+                    recommended_rank: None,
                 })
                 .collect();
         });
@@ -3876,10 +4118,12 @@ fn click_in_scrolled_grid(window: &mut gpui_kit::Window, grid: &'static str, id:
     for _ in 0..12 {
         let target = window.find(id).bounds();
         let viewport = window.find(grid).bounds();
-        if target.top() >= viewport.top() && target.bottom() <= viewport.bottom() {
+        if target.left() >= viewport.left() && target.right() <= viewport.right() {
             break;
         }
-        window.scroll(grid, gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-200.))), cx);
+        let direction = if target.left() < viewport.left() { 400. } else { -400. };
+        window.scroll(grid, gpui_kit::ScrollDelta::Pixels(point(px(direction), px(0.))), cx);
+        window.render_frame(cx);
     }
     window.click(id, cx);
 }
@@ -4199,12 +4443,142 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
     .unwrap();
 }
 
+#[gpui_kit::test]
+fn composer_popups_align_above_input_and_preserve_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 900., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(16);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.composer
+                .update(cx, |input, cx| input.set_value("Keep\nthis\ndraft", window, cx));
+        });
+        window.render_frame(cx);
+        for button in ["attach-files", "composer-policy", "composer-mode", "pick-model"] {
+            window.click(button, cx);
+            window.render_frame(cx);
+            let popup = window.find("command-palette").bounds();
+            let composer = window.find("composer-context").bounds();
+            assert!(popup.bottom() <= composer.top(), "{button} popup must stay above the input");
+            if button == "pick-model" {
+                assert!((popup.right() - composer.right()).abs() <= px(1.));
+            } else {
+                assert!((popup.left() - composer.left()).abs() <= px(1.));
+            }
+            assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none());
+            assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "Keep\nthis\ndraft");
+        }
+    })
+    .unwrap();
+}
+
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
     serde_json::from_value(json!({
         "provider": "openai", "model": "gpt-5.6-sol", "authenticated": true, "credentialSetupCommand": "",
         "sandbox": "Ask before protected actions",
         "sessionOptions": {"permissionMode": "ask", "mode": "build", "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast"}
     })).unwrap()
+}
+
+#[gpui_kit::test]
+fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
+        let slider = window.find(("slider", slider_id));
+        assert_eq!(slider.role(), Some(gpui_kit::Role::Slider));
+        assert_eq!(slider.label(), Some("Reasoning effort: medium"));
+
+        view.update(cx, |view, cx| {
+            let slider = view.effort_slider.clone().unwrap();
+            slider.update(cx, |state, cx| state.set_value(2., window, cx));
+        });
+        window.render_frame(cx);
+
+        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
+        assert_eq!(window.find(("slider", slider_id)).label(), Some("Reasoning effort: high"));
+        assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · high"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn compact_model_picker_uses_cli_recommendations_and_selects_the_catalog_route(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.models = vec![
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "anthropic".into(),
+                    id: "claude-sonnet-5".into(),
+                    display_name: "Claude Sonnet 5".into(),
+                    context_window: Some(200_000),
+                    current: false,
+                    recommended_rank: Some(0),
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "google".into(),
+                    id: "gemini-3.8-flash".into(),
+                    display_name: "Gemini 3.8 Flash".into(),
+                    context_window: Some(1_000_000),
+                    current: false,
+                    recommended_rank: Some(3),
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "custom".into(),
+                    id: "not-recommended".into(),
+                    display_name: "Not recommended".into(),
+                    context_window: None,
+                    current: false,
+                    recommended_rank: None,
+                },
+            ];
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert!(window.find("palette-label-0-0").label().unwrap().starts_with("Claude Sonnet 5"));
+        assert!(
+            window
+                .find("palette-label-0-1")
+                .label()
+                .unwrap()
+                .starts_with("Gemini 3.8 Flash")
+        );
+        assert!(window.find("palette-label-1-0").label().unwrap().contains("gpt-5.6-sol"));
+        assert_eq!(window.find("palette-label-2-0").label(), Some("Search all models…"));
+        assert!(window.try_find("palette-label-0-2").is_none(), "uncurated catalog entries stay in full search");
+        assert!(window.find("model-speed-indicator").label().unwrap().contains("ultrafast"));
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected quick model selection request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
+    assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 }
 
 #[gpui_kit::test]
@@ -4283,6 +4657,14 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
             view.configuration = Some(runtime_options_config());
+            view.models = vec![vtcode_desktop_protocol::ModelInfo {
+                provider: "custom".into(),
+                id: "custom-route".into(),
+                display_name: "Custom route".into(),
+                context_window: None,
+                current: false,
+                recommended_rank: None,
+            }];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
@@ -4301,20 +4683,20 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "high");
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.session_request = None;
-            view.open_model_options(window, cx);
-        });
+        view.update(cx, |view, _| view.session_request = None);
+        window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("palette-label-0-0").label(), Some("Search all models…"));
-        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
-        window.within("command-palette").press("enter", cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
+        assert_eq!(window.find("palette-label-1-0").label(), Some("Search all models…"));
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
+        assert!(
+            view.read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .any(|entry| entry.label == "Custom route")
+        );
     })
     .unwrap();
 }

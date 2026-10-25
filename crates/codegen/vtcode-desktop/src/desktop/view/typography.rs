@@ -72,8 +72,8 @@ impl DesktopView {
             return;
         }
         match target {
-            FontTarget::Ui => self.preferences.ui_font_family = family,
-            FontTarget::Code => self.preferences.code_font_family = family,
+            FontTarget::Ui => self.preferences.set_ui_font_family(self.theme_mode, family),
+            FontTarget::Code => self.preferences.set_code_font_family(self.theme_mode, family),
         }
         self.apply_typography(cx);
         self.save_preferences();

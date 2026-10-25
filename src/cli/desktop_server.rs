@@ -1516,14 +1516,20 @@ async fn configuration_snapshot(
 
 /// The selectable model catalog, mirroring the TUI picker's source.
 fn catalog_models(active_provider: &str, active_model: &str) -> Vec<ModelInfo> {
+    let recommended_models = ModelId::fallback_models();
     ModelId::all_models()
         .into_iter()
         .map(|model| {
             let provider = model.provider().as_ref().to_string();
             let id = model.as_str().to_string();
+            let recommended_rank = recommended_models
+                .iter()
+                .position(|recommended| recommended == &model)
+                .and_then(|rank| u8::try_from(rank).ok());
             ModelInfo {
                 context_window: model_catalog_entry(&provider, &id).map(|entry| entry.context_window as u64),
                 current: provider == active_provider && id == active_model,
+                recommended_rank,
                 display_name: model.display_name().to_string(),
                 provider,
                 id,
@@ -1548,6 +1554,23 @@ fn sanitize_public_error(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_catalog_preserves_cli_recommended_model_order() {
+        let recommended = ModelId::fallback_models();
+        let models = catalog_models("custom-provider", "custom-model");
+
+        for (rank, model) in recommended.iter().enumerate() {
+            let expected_provider = model.provider().as_ref().to_string();
+            let expected_id = model.as_str();
+            let actual = models
+                .iter()
+                .find(|entry| entry.provider == expected_provider && entry.id == expected_id)
+                .expect("recommended model is available in catalog");
+            assert_eq!(actual.recommended_rank, Some(u8::try_from(rank).expect("small recommendation rank")));
+        }
+        assert!(models.iter().any(|model| model.recommended_rank.is_none()));
+    }
 
     #[tokio::test]
     async fn webmcp_turns_use_the_selected_desktop_runtime_and_respect_busy_state() {

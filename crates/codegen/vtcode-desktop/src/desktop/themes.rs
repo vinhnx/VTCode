@@ -20,6 +20,28 @@ pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
 pub(super) const SYSTEM_LIGHT_ID: &str = "system-light";
 pub(super) const SYSTEM_DARK_ID: &str = "system-dark";
 
+pub(super) fn mode_for_id(id: &str) -> Option<ThemeMode> {
+    match id {
+        SYSTEM_LIGHT_ID => Some(ThemeMode::Light),
+        SYSTEM_DARK_ID => Some(ThemeMode::Dark),
+        _ => find(id).map(|theme| theme.mode),
+    }
+}
+
+pub(super) fn default_id(mode: ThemeMode) -> &'static str {
+    match mode {
+        ThemeMode::Light => "catppuccin-latte",
+        ThemeMode::Dark => DEFAULT_THEME_ID,
+    }
+}
+
+pub(super) fn system_id(mode: ThemeMode) -> &'static str {
+    match mode {
+        ThemeMode::Light => SYSTEM_LIGHT_ID,
+        ThemeMode::Dark => SYSTEM_DARK_ID,
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct DesktopTheme {
     pub id: &'static str,
@@ -549,6 +571,17 @@ mod tests {
         assert_eq!(ids.len(), count, "theme ids must be unique");
         assert!(find(DEFAULT_THEME_ID).is_some(), "the default theme must exist");
         assert!(find(SYSTEM_LIGHT_ID).is_none() && find(SYSTEM_DARK_ID).is_none());
+    }
+
+    #[test]
+    fn theme_modes_have_valid_defaults_and_system_ids() {
+        for mode in [ThemeMode::Light, ThemeMode::Dark] {
+            assert_eq!(mode_for_id(default_id(mode)), Some(mode));
+            assert_eq!(mode_for_id(system_id(mode)), Some(mode));
+        }
+        assert_eq!(mode_for_id("solarized-light"), Some(ThemeMode::Light));
+        assert_eq!(mode_for_id("ciapre"), Some(ThemeMode::Dark));
+        assert_eq!(mode_for_id("invalid-theme"), None);
     }
 
     #[test]
