@@ -3807,6 +3807,7 @@ impl DesktopView {
             })
             .label(label.clone())
             .accessibility_label(format!("{} {label}", if head.activity_expanded { "Collapse" } else { "Expand" }))
+            .toggled(head.activity_expanded)
             .ghost()
             .small()
             .when(failed > 0, |button| button.text_color(cx.theme().colors.danger))
