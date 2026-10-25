@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
 const MAX_RECENT_WORKSPACES: usize = 8;
@@ -13,11 +14,64 @@ const DEFAULT_INSPECTOR_WIDTH: f32 = 320.0;
 pub(super) const MIN_PANE_WIDTH: f32 = 180.0;
 pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) enum ReducedMotionPreference {
+    #[default]
+    System,
+    On,
+    Off,
+}
+
+impl ReducedMotionPreference {
+    pub(super) const ALL: [Self; 3] = [Self::System, Self::On, Self::Off];
+
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::On => "On",
+            Self::Off => "Off",
+        }
+    }
+
+    pub(super) const fn id(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::On => "on",
+            Self::Off => "off",
+        }
+    }
+}
+
+#[derive(Default)]
+struct SystemMotionBaseline(Option<bool>);
+
+impl Global for SystemMotionBaseline {}
+
+/// Captures the GPUI Kit system setting before any desktop override is applied.
+pub(super) fn system_motion_baseline(cx: &mut App) -> bool {
+    let current = cx.reduce_motion();
+    *cx.default_global::<SystemMotionBaseline>().0.get_or_insert(current)
+}
+
+/// Applies a saved override or returns GPUI to the current OS preference.
+pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_baseline: bool, cx: &mut App) {
+    match preference {
+        ReducedMotionPreference::System => {
+            cx.set_reduce_motion(system_baseline);
+            gpui_kit::base::apply_system_reduce_motion(cx);
+        }
+        ReducedMotionPreference::On => cx.set_reduce_motion(true),
+        ReducedMotionPreference::Off => cx.set_reduce_motion(false),
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub(super) struct Preferences {
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
+    pub reduced_motion: ReducedMotionPreference,
     pub shortcuts: std::collections::BTreeMap<String, String>,
     pub ui_font_family: Option<String>,
     pub code_font_family: Option<String>,
@@ -148,6 +202,19 @@ mod tests {
         assert_eq!((settings.ui_font_size(), settings.code_font_size()), (12, 24));
         let parsed: Preferences = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
         assert_eq!((parsed.ui_font_size(), parsed.code_font_size()), (12, 24));
+    }
+
+    #[test]
+    fn reduced_motion_defaults_to_system_and_persists_explicit_choices() {
+        let defaults: Preferences = serde_json::from_str("{}").unwrap();
+        assert_eq!(defaults.reduced_motion, ReducedMotionPreference::System);
+
+        let selected = Preferences {
+            reduced_motion: ReducedMotionPreference::On,
+            ..defaults
+        };
+        let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
+        assert_eq!(loaded.reduced_motion, ReducedMotionPreference::On);
     }
 
     #[test]
