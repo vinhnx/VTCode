@@ -349,8 +349,7 @@ impl DesktopView {
         super::super::localization::set_language(language);
         // Command rows cache their rendered labels. Drop that projection so a
         // subsequently opened palette reads the newly selected locale.
-        self.palette = None;
-        self.palette_query = "".into();
+        self.clear_palette_state();
         self.preferences.save();
         cx.notify();
     }

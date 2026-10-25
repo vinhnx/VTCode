@@ -5347,6 +5347,31 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        view.update(cx, |view, cx| {
+            assert!(view.effort_slider.is_some());
+            assert_eq!(view._effort_slider_subscriptions.len(), 2);
+            view.close_palette(window, cx);
+            assert!(view.effort_slider.is_none());
+            assert!(view._effort_slider_subscriptions.is_empty());
+            assert!(view.palette.is_none());
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

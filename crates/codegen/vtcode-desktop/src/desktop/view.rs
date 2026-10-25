@@ -435,6 +435,7 @@ struct DesktopView {
     palette_kind: PaletteKind,
     palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    _effort_slider_subscriptions: Vec<Subscription>,
     composer_resources: Vec<protocol::ComposerResource>,
     resources_loading: bool,
     resources_loaded: bool,
@@ -634,6 +635,7 @@ impl DesktopView {
             palette_kind: PaletteKind::Commands,
             palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
+            _effort_slider_subscriptions: Vec::new(),
             composer_resources: Vec::new(),
             resources_loading: false,
             resources_loaded: false,
@@ -1277,10 +1279,7 @@ impl DesktopView {
 
     fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let return_to_settings = matches!(self.palette_kind, PaletteKind::Fonts(_)) && self.palette.is_some();
-        self.palette = None;
-        self.palette_query = gpui_kit::SharedString::default();
-        self.effort_slider = None;
-        self.palette_groups.clear();
+        self.clear_palette_state();
         if let Some(focus) = self.palette_return_focus.take() {
             focus.focus(window, cx);
         } else {
@@ -1290,6 +1289,14 @@ impl DesktopView {
             self.open_settings(window, cx);
         }
         cx.notify();
+    }
+
+    fn clear_palette_state(&mut self) {
+        self.palette = None;
+        self.palette_query = gpui_kit::SharedString::default();
+        self._effort_slider_subscriptions.clear();
+        self.effort_slider = None;
+        self.palette_groups.clear();
     }
 
     fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {

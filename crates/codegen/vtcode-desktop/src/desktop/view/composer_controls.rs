@@ -257,8 +257,8 @@ impl DesktopView {
                 .default_value(selected as f32)
         });
         let palette_id = self.palette.as_ref().map(|state| state.entity_id());
-        cx.observe(&slider, |_, _, cx| cx.notify()).detach();
-        cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
+        let slider_observation = cx.observe(&slider, |_, _, cx| cx.notify());
+        let slider_events = cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
             if let gpui_kit::component::slider::SliderEvent::Release(value) = event {
                 let Some(effort) = effort_at(&levels, value.start()).cloned() else {
                     return;
@@ -286,9 +286,9 @@ impl DesktopView {
                 });
             }
             cx.notify();
-        })
-        .detach();
+        });
         self.effort_slider = Some(slider);
+        self._effort_slider_subscriptions = vec![slider_observation, slider_events];
         cx.notify();
     }
 
