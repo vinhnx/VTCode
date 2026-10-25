@@ -128,10 +128,18 @@ impl DesktopView {
         let busy = self.webmcp_request_pending.is_some();
         let configured_origins = status.map(|status| status.allowed_origins.as_slice()).unwrap_or_default();
         let mut section = div()
-            .id("webmcp-connection")
+            .id(if origin_controls {
+                "webmcp-pairing"
+            } else {
+                "webmcp-status"
+            })
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("WebMCP connection")
+            .aria_label(if origin_controls {
+                "WebMCP browser pairing"
+            } else {
+                "WebMCP connection status"
+            })
             .w_full()
             .min_w_0()
             .flex()
@@ -142,74 +150,86 @@ impl DesktopView {
             .border_color(colors.border)
             .bg(colors.secondary)
             .p_4()
-            .child(div().font_semibold().child("WebMCP connection"))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(colors.muted_foreground)
-                    .child("Connect the browser app to this workspace and the same active VT Code session."),
-            );
-
-        let status_label = match status {
-            Some(status) if status.running && status.turns_available => "Connected · desktop session ready",
-            Some(status) if status.running && status.session_id.is_some() => {
-                "Connected · the selected desktop session cannot accept a turn right now"
-            }
-            Some(status) if status.running => "Connected · select or create a desktop session for agent turns",
-            Some(_) => "Not connected",
-            None if self.webmcp_request_pending.is_some() => "Checking bridge state…",
-            None => "Bridge state unavailable",
-        };
-        section = section.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(div().min_w_0().text_sm().text_color(colors.foreground).child(status_label))
-                .child(
-                    desktop_button("refresh-webmcp-status")
-                        .icon(IconName::RefreshCw)
-                        .accessibility_label("Refresh WebMCP connection status")
-                        .ghost()
-                        .small()
-                        .desktop_disabled(busy)
-                        .on_click(cx.listener(|view, _, _, cx| view.request_webmcp_status_with_notify(cx))),
-                ),
-        );
+            .child(div().font_semibold().child(if origin_controls {
+                "Pair a browser app"
+            } else {
+                "WebMCP connection"
+            }));
 
         if origin_controls {
-            section = section.child(self.render_webmcp_origin_controls(configured_origins, busy, cx));
-        }
+            section = section
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("Pair a browser app with this workspace and the active VT Code session."),
+                )
+                .child(self.render_webmcp_origin_controls(configured_origins, busy, cx));
 
-        if let Some(pairing) = self.webmcp_pairing.as_ref() {
-            let endpoint = pairing.endpoint.clone();
-            let pairing_code = pairing.pairing_code.clone();
-            section = section.child(
-                div()
-                    .id("webmcp-pairing-details")
-                    .test_support()
-                    .w_full()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .rounded_md()
-                    .bg(colors.background)
-                    .p_3()
-                    .child(div().text_sm().font_semibold().child("Pair this browser"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child(format!("{} · expires in {} seconds", pairing.origin, pairing.expires_in_secs)),
-                    )
-                    .child(copy_value_row("WebSocket URL", endpoint.clone(), "copy-webmcp-endpoint", cx))
-                    .child(copy_value_row("One-time code", pairing_code.clone(), "copy-webmcp-code", cx))
-                    .child(div().text_xs().text_color(colors.muted_foreground).child(
-                        "In the browser app, open Settings → Connect to a local VT Code bridge and paste both values.",
-                    )),
-            );
+            if let Some(pairing) = self.webmcp_pairing.as_ref() {
+                let endpoint = pairing.endpoint.clone();
+                let pairing_code = pairing.pairing_code.clone();
+                section = section.child(
+                    div()
+                        .id("webmcp-pairing-details")
+                        .test_support()
+                        .w_full()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .rounded_md()
+                        .bg(colors.background)
+                        .p_3()
+                        .child(div().text_sm().font_semibold().child("Pair this browser"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted_foreground)
+                                .child(format!("{} · expires in {} seconds", pairing.origin, pairing.expires_in_secs)),
+                        )
+                        .child(copy_value_row("WebSocket URL", endpoint.clone(), "copy-webmcp-endpoint", cx))
+                        .child(copy_value_row("One-time code", pairing_code.clone(), "copy-webmcp-code", cx))
+                        .child(div().text_xs().text_color(colors.muted_foreground).child(
+                            "In the browser app, open Settings → Connect to a local VT Code bridge and paste both values.",
+                        )),
+                );
+            }
+        } else {
+            let status_label = match status {
+                Some(status) if status.running && status.turns_available => "Connected · desktop session ready",
+                Some(status) if status.running && status.session_id.is_some() => {
+                    "Connected · the selected desktop session cannot accept a turn right now"
+                }
+                Some(status) if status.running => "Connected · select or create a desktop session for agent turns",
+                Some(_) => "Not connected",
+                None if busy => "Checking bridge state…",
+                None => "Bridge state unavailable",
+            };
+            section = section
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("The browser app shares this workspace and the active VT Code session."),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().min_w_0().text_sm().text_color(colors.foreground).child(status_label))
+                        .child(
+                            desktop_button("refresh-webmcp-status")
+                                .icon(IconName::RefreshCw)
+                                .accessibility_label("Refresh WebMCP connection status")
+                                .ghost()
+                                .small()
+                                .desktop_disabled(busy)
+                                .on_click(cx.listener(|view, _, _, cx| view.request_webmcp_status_with_notify(cx))),
+                        ),
+                );
         }
 
         section.into_any_element()

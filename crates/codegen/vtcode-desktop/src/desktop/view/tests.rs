@@ -2928,6 +2928,29 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
+fn settings_webmcp_sections_keep_accessibility_ids_unique(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.webmcp_pairing = Some(vtcode_desktop_protocol::WebmcpPairResult {
+                endpoint: "ws://127.0.0.1:43719/mcp".into(),
+                origin: "https://example.test".into(),
+                pairing_code: "0123456789abcdef".into(),
+                expires_in_secs: 300,
+            });
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+
+        assert_eq!(window.find_all("webmcp-status").len(), 1);
+        assert_eq!(window.find_all("webmcp-pairing").len(), 1);
+        assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);
+        assert_eq!(window.find_all("webmcp-pairing-details").len(), 1);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn welcome_review_action_opens_changes_without_creating_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
