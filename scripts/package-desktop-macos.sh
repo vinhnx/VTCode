@@ -18,7 +18,7 @@ if [[ ! "${MACOS_MAJOR}" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
     exit 1
 fi
 
-for tool in cargo codesign ditto sips iconutil; do
+for tool in cargo codesign ditto sips iconutil plutil; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'Error: required packaging tool is missing: %s\n' "${tool}" >&2
         exit 1
@@ -86,6 +86,7 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+plutil -lint "${CONTENTS}/Info.plist" >/dev/null
 
 # Ad hoc signatures are for local development; they do not grant Developer ID trust.
 codesign --force --sign - "${CONTENTS}/Helpers/vtcode"
@@ -93,6 +94,8 @@ codesign --force --sign - "${CONTENTS}/MacOS/vtcode-desktop"
 codesign --force --sign - "${STAGED_APP}"
 codesign --verify --deep --strict "${STAGED_APP}"
 ditto "${STAGED_APP}" "${OUTPUT_APP}"
+# Verify the copied artifact that users will actually open.
+codesign --verify --deep --strict "${OUTPUT_APP}"
 
 printf 'Packaged locally signed app: %s\n' "${OUTPUT_APP}"
 printf 'Ad hoc signing does not provide Developer ID trust or notarization.\n'
