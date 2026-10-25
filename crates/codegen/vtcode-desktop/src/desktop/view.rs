@@ -8,6 +8,7 @@ use std::time::Duration;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, Selectable, StyledExt};
 use gpui_kit::component::TitleBar;
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
 };
@@ -16,7 +17,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::description_list::DescriptionList;
-use gpui_kit::component::dialog::{DialogContent, DialogDescription, DialogHeader, DialogTitle};
+use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
 use gpui_kit::component::empty::{
     Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
@@ -1104,7 +1105,9 @@ impl DesktopView {
         if self.review_open {
             self.close_review(window, cx);
         }
-        self.settings_open = false;
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
@@ -1116,6 +1119,9 @@ impl DesktopView {
     }
 
     fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            return;
+        }
         if self.review_open {
             self.close_review(window, cx);
         }
@@ -1129,11 +1135,40 @@ impl DesktopView {
             self.settings_return_focus = window.focused(cx);
         }
         self.settings_open = true;
-        self.settings_navigation_focus.focus(window, cx);
+        let settings_view = cx.entity().clone();
+        let close_view = settings_view.clone();
+        let initial_focus = std::cell::Cell::new(true);
+        let settings_navigation_focus = self.settings_navigation_focus.clone();
+        let sheet_width = window.viewport_size().width.min(px(860.)) - px(24.);
+        window.open_sheet_at(gpui_kit::component::Placement::Right, cx, move |sheet, window, cx| {
+            if initial_focus.replace(false) {
+                settings_navigation_focus.focus(window, cx);
+            }
+            let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(cx));
+            let on_close_view = close_view.clone();
+            sheet
+                .title(DialogTitle::new().text_lg().child("Settings"))
+                .size(sheet_width)
+                .p_0()
+                .child(content)
+                .on_close(move |_, window, cx| {
+                    on_close_view.update(cx, |view, cx| view.handle_settings_sheet_close(window, cx));
+                })
+        });
         cx.notify();
     }
 
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if window.has_active_sheet(cx) {
+            window.close_sheet(cx);
+        }
+        self.finish_settings_close(window, cx);
+    }
+
+    fn finish_settings_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings_open {
+            return;
+        }
         self.settings_open = false;
         if self.shortcuts_editing {
             self.shortcut_inputs = shortcuts::inputs(&self.preferences.shortcuts, window, cx);
@@ -1146,6 +1181,23 @@ impl DesktopView {
             self.focus_composer(window, cx);
         }
         cx.notify();
+    }
+
+    fn handle_settings_sheet_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_none() {
+            self.finish_settings_close(window, cx);
+            return;
+        }
+
+        if !self.config_write_pending {
+            self.config_editor = None;
+            self.config_editor_error = None;
+            self.config_editor_return_focus = None;
+        }
+        let settings_return_focus = self.settings_return_focus.take();
+        self.settings_open = false;
+        self.open_settings(window, cx);
+        self.settings_return_focus = settings_return_focus;
     }
 
     fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
@@ -1344,7 +1396,9 @@ impl DesktopView {
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
-        self.settings_open = false;
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
         self.palette_return_focus = window.focused(cx);
         let state = cx.new(|cx| CommandState::new(window, cx));
         self.palette = Some(state.clone());
@@ -2930,10 +2984,6 @@ impl DesktopView {
                     )
                     .child(self.render_chrome_menu("header-overflow", "Window actions")),
             )
-    }
-
-    fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        self.render_settings_tabs(cx)
     }
 
     fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -5607,39 +5657,10 @@ impl Render for DesktopView {
         if self.review_open {
             body = body.child(self.render_change_review(cx));
         }
-        if self.settings_open {
-            body = body.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .p_8()
-                    .bg(colors.background.opacity(0.85))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|view, _, window, cx| view.close_settings(window, cx)),
-                    )
-                    .child(
-                        div()
-                            .w(px(860.))
-                            .max_w_full()
-                            .h_full()
-                            .min_w_0()
-                            .min_h_0()
-                            .child(self.render_settings(cx))
-                            .focus_trap("settings-trap", &self.settings_focus),
-                    ),
-            );
-        }
         if !self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
                 body = body.child(self.render_command_palette(state, cx));
             }
-        }
-        if self.config_editor.is_some() {
-            body = body.child(self.render_cli_config_editor(cx));
         }
         body
     }

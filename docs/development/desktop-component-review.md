@@ -69,7 +69,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [scrollable](https://gpui-kit.com/component/scrollable) | Applied themed Kit scrollbars to settings and file preview; recent sessions use a virtual list with a Kit scrollbar. |
 | [select](https://gpui-kit.com/component/select) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |
 | [settings](https://gpui-kit.com/component/settings) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
-| [sheet](https://gpui-kit.com/component/sheet) | Appearance is modal; inspector remains an ordinary workspace pane. |
+| [sheet](https://gpui-kit.com/component/sheet) | Applied: Settings uses the Root-managed right Sheet for responsive sizing, built-in focus trapping, Escape/outside dismissal, and close behavior; the inspector remains an ordinary workspace pane. |
 | [shimmer](https://gpui-kit.com/component/shimmer) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
 | [sidebar](https://gpui-kit.com/component/sidebar) | Retain keyboard-capable navigation buttons; resolved SidebarMenu rows do not offer equivalent keyboard handling. |
 | [skeleton](https://gpui-kit.com/component/skeleton) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |

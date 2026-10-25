@@ -185,6 +185,9 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
+        if !self.settings_open {
+            self.open_settings(window, cx);
+        }
         let Some(setting) = self
             .cli_config_settings
             .as_ref()
@@ -212,7 +215,6 @@ impl DesktopView {
             target: self.config_target,
             expected_layer_version: self.target_version(self.config_target),
         });
-        self.settings_open = true;
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| view.config_editor_focus.focus(window, cx));
         cx.notify();

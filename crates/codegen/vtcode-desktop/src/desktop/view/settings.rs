@@ -48,110 +48,79 @@ impl DesktopView {
             SettingsTab::Connections => self.render_connections_settings(cx),
         };
 
-        div()
+        let mut panel = div()
             .id("settings-panel")
             .lock_scroll_axis()
             .track_focus(&self.settings_focus)
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label("Settings")
-            .w(px(860.))
-            .max_w_full()
-            .h_full()
-            .max_h_full()
+            .relative()
+            .w_full()
+            .flex_1()
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .p_6()
+            .text_sm()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
-                DialogContent::new()
-                    .w_full()
-                    .h_full()
-                    .max_h_full()
-                    .min_w_0()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .p_6()
-                    .rounded_xl()
+                div()
+                    .id("settings-navigation")
+                    .test_support()
+                    .track_focus(&self.settings_navigation_focus)
+                    .key_context("VTCodeSettings")
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Settings categories")
+                    .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
                     .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.background)
-                    .shadow_lg()
-                    .text_sm()
-                    .child(
-                        div()
-                            .flex()
-                            .items_start()
-                            .justify_between()
-                            .gap_4()
-                            .child(
-                                DialogHeader::new()
-                                    .child(DialogTitle::new().text_2xl().child("Settings"))
-                                    .child(DialogDescription::new().child("Customize VT Code Desktop")),
-                            )
-                            .child(
-                                desktop_button("close-settings")
-                                    .icon(IconName::X)
-                                    .accessibility_label("Close settings")
-                                    .ghost()
-                                    .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
-                            ),
+                    .border_color(colors.border.opacity(0.))
+                    .focus_visible(|style| style.border_color(colors.ring))
+                    .on_action(
+                        cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)),
                     )
-                    .child(
-                        div()
-                            .id("settings-navigation")
-                            .test_support()
-                            .track_focus(&self.settings_navigation_focus)
-                            .key_context("VTCodeSettings")
-                            .role(gpui_kit::Role::Group)
-                            .aria_label("Settings categories")
-                            .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
-                            .border_1()
-                            .border_color(colors.border.opacity(0.))
-                            .focus_visible(|style| style.border_color(colors.ring))
-                            .on_action(cx.listener(|view, _: &NextSettingsTab, window, cx| {
-                                view.cycle_settings_tab(true, window, cx)
-                            }))
-                            .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
-                                view.cycle_settings_tab(false, window, cx)
-                            }))
-                            .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
-                                view.select_settings_tab(0, window, cx)
-                            }))
-                            .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
-                                view.select_settings_tab(SettingsTab::ALL.len().saturating_sub(1), window, cx)
-                            }))
-                            .child(
-                                TabBar::new("settings-tabs")
-                                    .underline()
-                                    .small()
-                                    .w_full()
-                                    .selected_index(selected_index)
-                                    .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                        view.select_settings_tab(*index, window, cx)
-                                    }))
-                                    .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                            ),
+                    .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
+                        view.cycle_settings_tab(false, window, cx)
+                    }))
+                    .on_action(
+                        cx.listener(|view, _: &FirstSettingsTab, window, cx| view.select_settings_tab(0, window, cx)),
                     )
+                    .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
+                        view.select_settings_tab(SettingsTab::ALL.len().saturating_sub(1), window, cx)
+                    }))
                     .child(
-                        div()
-                            .id("settings-content")
-                            .flex_1()
-                            .min_h_0()
-                            .min_w_0()
-                            .lock_scroll_axis()
-                            .test_support()
-                            .track_scroll(&self.settings_scroll)
-                            .overflow_y_scroll()
-                            .vertical_scrollbar(&self.settings_scroll)
-                            .pr_2()
-                            .child(content),
+                        TabBar::new("settings-tabs")
+                            .underline()
+                            .small()
+                            .w_full()
+                            .selected_index(selected_index)
+                            .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                view.select_settings_tab(*index, window, cx)
+                            }))
+                            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
                     ),
             )
-            .into_any_element()
+            .child(
+                div()
+                    .id("settings-content")
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .lock_scroll_axis()
+                    .test_support()
+                    .track_scroll(&self.settings_scroll)
+                    .overflow_y_scroll()
+                    .vertical_scrollbar(&self.settings_scroll)
+                    .pr_2()
+                    .child(content),
+            );
+        if self.config_editor.is_some() {
+            panel = panel.child(self.render_cli_config_editor(cx));
+        }
+        panel.into_any_element()
     }
 
     fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {

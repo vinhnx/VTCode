@@ -704,6 +704,9 @@ fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppCon
         assert!(view.read(cx).config_editor.is_none());
         assert!(view.read(cx).settings_open);
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).settings_open);
     })
     .unwrap();
 }
@@ -1340,7 +1343,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some("solarized-light"));
 
-        window.click("close-settings", cx);
+        window.within("sheet-content").click("close", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
@@ -1366,6 +1369,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 #[gpui_kit::test]
 fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 760., 700.);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         window.click("open-settings", cx);
         window.render_frame(cx);
@@ -2948,8 +2952,8 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
 fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.settings_open = true;
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
         });
         window.render_frame(cx);
         window.within("settings-panel").click("font-ui-1", cx);
@@ -3008,11 +3012,33 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert!(!view.read(cx).settings_open);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
         assert_eq!(view.read(cx).composer.read(cx).value(), "preserve this draft");
-        window.press("cmd-,", cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_sheet_close_button_restores_the_previous_focus(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("close-settings", cx);
+        window.press("cmd-l", cx);
         window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        assert!(window.within("sheet-content").find("close").visible());
+        window.within("sheet-content").click("close", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.has_active_sheet(cx), "sheet close button did not close the Kit sheet");
         assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
     })
     .unwrap();
 }
@@ -3735,7 +3761,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
 fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| view.settings_open = true);
+        view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 16 pixels"));
         assert_eq!(window.find("font-code-value").label(), Some("Code font size: 14 pixels"));
@@ -4381,15 +4407,30 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
 #[gpui_kit::test]
 fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
-
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        let sheet = window.find("sheet-content").bounds();
         let panel = window.find("settings-panel").bounds();
         let viewport = window.viewport_size();
-        assert!(panel.origin.x >= px(0.) && panel.origin.y >= px(0.));
-        assert!(panel.origin.x + panel.size.width <= viewport.width);
-        assert!(panel.origin.y + panel.size.height <= viewport.height);
+        assert!(
+            sheet.origin.x >= px(0.) && sheet.origin.y >= px(0.),
+            "settings sheet starts outside viewport: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(
+            sheet.origin.x + sheet.size.width <= viewport.width,
+            "settings sheet exceeds viewport width: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(
+            sheet.origin.y + sheet.size.height <= viewport.height,
+            "settings sheet exceeds viewport height: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(panel.size.width <= sheet.size.width);
 
         select_settings_category(window, 2, cx);
         window.render_frame(cx);
