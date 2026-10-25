@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn cache_write_rate_uses_extended_ttl_multiplier() {
-        #[allow(clippy::float_cmp, reason = "exact constants under test")]
+        #[allow(clippy::float_cmp, clippy::float_cmp_const, reason = "exact constants under test")]
         {
             assert_eq!(cache_write_rate(1.0, None, false), DEFAULT_CACHE_WRITE_MULTIPLIER);
             assert_eq!(cache_write_rate(1.0, None, true), EXTENDED_TTL_CACHE_WRITE_MULTIPLIER);

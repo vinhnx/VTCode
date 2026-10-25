@@ -2,7 +2,7 @@
 name = "vtcode-a2a"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Agent2Agent (A2A) Protocol support for VT Code"
 license.workspace = true

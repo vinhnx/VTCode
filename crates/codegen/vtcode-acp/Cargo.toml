@@ -2,7 +2,7 @@
 name = "vtcode-acp"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "ACP bridge and client implementation for VT Code"
 license.workspace = true

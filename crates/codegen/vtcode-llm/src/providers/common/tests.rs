@@ -319,7 +319,6 @@ fn float_to_json_number_keeps_shortest_f32_wire_form() {
 }
 
 #[test]
-#[expect(clippy::float_cmp, reason = "round-trip must be bit-exact")]
 fn float_to_json_number_round_trips_f32_values() {
     for raw in [0.5_f32, 0.25, 0.1, 1.0, 2.0, -0.75, 0.123_456_79] {
         let number = float_to_json_number(raw).expect("finite value");

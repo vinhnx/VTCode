@@ -223,7 +223,7 @@ impl AsyncLineWriter {
 
 fn reserve_bytes(reserved_bytes: &AtomicUsize, bytes: usize, max_bytes: usize) -> bool {
     reserved_bytes
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
             current.checked_add(bytes).filter(|next| *next <= max_bytes)
         })
         .is_ok()

@@ -1090,7 +1090,7 @@ impl ExecSessionManager {
         let Some(counter) = record.foreground_pty_counter.lock().take() else {
             return;
         };
-        let _ = counter.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| current.checked_sub(1));
+        let _ = counter.try_update(Ordering::AcqRel, Ordering::Acquire, |current| current.checked_sub(1));
     }
 
     fn clear_foreground_and_take_pending_request(&self, session_id: &str) -> bool {
