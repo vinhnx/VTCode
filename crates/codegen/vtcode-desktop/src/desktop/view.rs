@@ -2450,7 +2450,7 @@ impl DesktopView {
                     .unwrap_or(path)
                     .to_string();
                 div().w_full().child(
-                    desktop_button(workspace_navigation_element_id(path))
+                    desktop_button(opaque_path_element_id("workspace", path))
                         .accessibility_label(format!("{label}{}", if current { " (current workspace)" } else { "" }))
                         .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
                         .ghost()
@@ -3131,7 +3131,7 @@ impl DesktopView {
                 .gap_1()
                 .px_2()
                 .pb_2()
-                .children(self.changes.entries().iter().enumerate().map(|(index, entry)| {
+                .children(self.changes.entries().iter().map(|entry| {
                     let path = entry.path.clone();
                     let selected = self.selected_change.as_deref() == Some(entry.path.as_str());
                     let kind_label = match entry.kind {
@@ -3164,7 +3164,7 @@ impl DesktopView {
                                 .child(format!("+{} −{}", entry.additions, entry.deletions)),
                         )
                         .child(
-                            desktop_button(format!("change-row-{index}"))
+                            desktop_button(opaque_path_element_id("change-row", &path))
                                 .icon(IconName::ChevronRight)
                                 .accessibility_label(format!("Review {path}"))
                                 .tooltip(path.clone())
@@ -4094,8 +4094,8 @@ impl DesktopView {
             .pb_4()
             .pt_2();
         if !self.attachments.is_empty() {
-            panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(
-                self.attachments.iter().enumerate().map(|(index, attachment)| {
+            panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(self.attachments.iter().map(
+                |attachment| {
                     let path = attachment.path.clone();
                     Attachment::new()
                         .small()
@@ -4111,7 +4111,7 @@ impl DesktopView {
                         )
                         .actions(
                             AttachmentActions::new().child(
-                                desktop_button(format!("remove-attachment-{index}"))
+                                desktop_button(opaque_path_element_id("remove-attachment", &path))
                                     .icon(IconName::X)
                                     .accessibility_label(format!("Remove {}", attachment.path))
                                     .ghost()
@@ -4121,8 +4121,8 @@ impl DesktopView {
                                     ),
                             ),
                         )
-                }),
-            ));
+                },
+            )));
         }
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")
@@ -5461,11 +5461,11 @@ fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_ki
     themes::mix(colors.background, colors.secondary, 0.08)
 }
 
-/// Keep local paths out of accessibility IDs while preserving workspace row identity across sorting.
-fn workspace_navigation_element_id(path: &str) -> String {
+/// Keep local paths out of element IDs while preserving path-based identity across sorting.
+fn opaque_path_element_id(prefix: &str, path: &str) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
-    format!("workspace-{:016x}", hasher.finish())
+    format!("{prefix}-{:016x}", hasher.finish())
 }
 
 /// Native clickable controls share one cursor policy; disabled controls keep the arrow.

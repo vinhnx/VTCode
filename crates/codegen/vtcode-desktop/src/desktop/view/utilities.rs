@@ -120,9 +120,9 @@ impl DesktopView {
                                 .child("Attach workspace files to include them with your next message."),
                         )
                     })
-                    .children(self.attachments.iter().enumerate().map(|(index, attachment)| {
+                    .children(self.attachments.iter().map(|attachment| {
                         let path = attachment.path.clone();
-                        desktop_button(format!("utilities-source-{index}"))
+                        desktop_button(opaque_path_element_id("utilities-source", &path))
                             .ghost()
                             .w_full()
                             .justify_start()
