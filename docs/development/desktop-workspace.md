@@ -415,6 +415,8 @@ The toolbar and welcome logo embed `resources/icons/vtcode-profile-120.png`.
 macOS packaging generates `Contents/Resources/VTCode.icns` from the shared 512px
 artwork and declares it in `Info.plist`. The 1024px Retina slot is upscaled from
 that source; no checkout paths or external image requests are needed at runtime.
+The GPUI Kit asset source includes its default component icons and only the
+additional catalog icons referenced by the desktop UI.
 
 ### Appearance and typography
 

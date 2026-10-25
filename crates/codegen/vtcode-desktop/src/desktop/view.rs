@@ -307,7 +307,7 @@ enum PaletteAction {
 
 pub(crate) fn run() {
     super::localization::initialize(preferences::Preferences::load().ui_language());
-    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    let application = gpui_kit::application().with_assets(super::assets::DesktopAssets);
     let _application = application.on_reopen(show_main_window);
     application.run(|cx: &mut App| {
         gpui_kit::init(cx);

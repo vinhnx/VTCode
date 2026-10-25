@@ -1,3 +1,4 @@
+mod assets;
 mod files;
 mod inspector;
 mod localization;
