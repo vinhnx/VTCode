@@ -4979,6 +4979,25 @@ fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext)
     .unwrap();
 }
 
+#[gpui_kit::test]
+fn settings_sheet_tracks_window_width_after_open(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1_100., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let sheet = window.find("sheet-content").bounds();
+        let viewport = window.viewport_size();
+        assert_eq!(sheet.size.width, viewport.width - px(24.), "sheet width follows the resized viewport");
+    })
+    .unwrap();
+}
+
 #[test]
 fn native_titlebar_is_transparent_and_kit_owns_dragging() {
     let options = super::desktop_window_options();

@@ -1205,11 +1205,13 @@ impl DesktopView {
         let close_view = settings_view.clone();
         let initial_focus = std::cell::Cell::new(true);
         let settings_navigation_focus = self.settings_navigation_focus.clone();
-        let sheet_width = window.viewport_size().width.min(px(860.)) - px(24.);
         window.open_sheet_at(gpui_kit::component::Placement::Right, cx, move |sheet, window, cx| {
             if initial_focus.replace(false) {
                 settings_navigation_focus.focus(window, cx);
             }
+            // The Kit builder runs again as the window resizes; keep the sheet
+            // within the current viewport instead of retaining its opening width.
+            let sheet_width = (window.viewport_size().width.min(px(860.)) - px(24.)).max(px(0.));
             let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(window, cx));
             let on_close_view = close_view.clone();
             sheet
