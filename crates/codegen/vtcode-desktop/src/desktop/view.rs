@@ -44,10 +44,10 @@ use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle, Focusable, KeyBinding,
-    KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions, Pixels,
-    Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions,
-    anchored, deferred, div, point, px, size,
+    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle,
+    Focusable, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction,
+    PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window,
+    WindowOptions, actions, anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -5695,7 +5695,14 @@ impl DesktopView {
             })
             .on_action(|_: &gpui_kit::base::actions::Cancel, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(command)
+            .child(command.with_animation(
+                ("command-palette-content", state.entity_id()),
+                Animation::new(cx.theme().motion_tokens().duration_fast).with_easing({
+                    let easing = cx.theme().motion_tokens().easing_enter.clone();
+                    move |progress| easing.sample(progress).clamp(0., 1.)
+                }),
+                |content, progress| content.opacity(progress),
+            ))
             .focus_trap("command-palette", &self.palette_focus);
         if composer_popup {
             return deferred(

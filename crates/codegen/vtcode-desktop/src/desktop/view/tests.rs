@@ -1278,6 +1278,24 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn command_palette_keeps_dialog_accessible_with_reduced_motion(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        assert_eq!(window.find("command-palette").role(), Some(gpui_kit::Role::Dialog));
+        assert_eq!(window.find("command-palette").label(), Some("Command palette"));
+        assert!(view.read(cx).palette_focus.contains_focused(window, cx));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn context_usage_percent_handles_unknown_and_saturated_windows() {
     use super::context_usage_percent;
     use vtcode_exec_events::Usage;
