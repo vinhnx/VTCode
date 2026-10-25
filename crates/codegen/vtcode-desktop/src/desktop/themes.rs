@@ -364,6 +364,28 @@ pub(super) fn mix(lower: Hsla, upper: Hsla, amount: f32) -> Hsla {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct NavigationSurfaces {
+    pub(super) rail: Hsla,
+    pub(super) panel: Hsla,
+}
+
+/// Give navigation a clear secondary layer without changing shared component tokens.
+pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground: Hsla) -> NavigationSurfaces {
+    if relative_luminance(background) < 0.179 {
+        let recessed = filled_button_foreground(foreground);
+        NavigationSurfaces {
+            rail: mix(background, recessed, 0.35),
+            panel: mix(background, recessed, 0.55),
+        }
+    } else {
+        NavigationSurfaces {
+            rail: secondary,
+            panel: mix(background, secondary, 0.85),
+        }
+    }
+}
+
 /// WCAG contrast ratio between two colors.
 pub(super) fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
     let la = relative_luminance(a);
@@ -470,7 +492,7 @@ mod tests {
             for id in ids {
                 let _mode = apply_by_id(id, None, cx);
                 let colors = cx.theme().colors;
-                let toolbar = mix(colors.background, colors.secondary, 0.08);
+                let toolbar = navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
                 for (label, foreground) in [
                     ("foreground", colors.foreground),
                     ("toolbar control foreground", colors.secondary_foreground),
@@ -478,6 +500,52 @@ mod tests {
                     let ratio = contrast_ratio(foreground, toolbar);
                     assert!(ratio >= 4.5, "{id}: native toolbar {label} contrast {ratio:.2} is below WCAG AA");
                 }
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let surfaces = navigation_surfaces(colors.background, colors.secondary, colors.foreground);
+                let rail = surfaces.rail;
+                let panel = surfaces.panel;
+                let edge = mix(panel, colors.border, 0.85);
+                let workspace_edge = mix(colors.background, colors.border, 0.85);
+                let canvas_panel = contrast_ratio(colors.background, panel);
+                let canvas_edge = contrast_ratio(colors.background, edge);
+                let canvas_shell = contrast_ratio(colors.background, rail);
+                let canvas_workspace_edge = contrast_ratio(colors.background, workspace_edge);
+                let panel_rail = contrast_ratio(panel, rail);
+                let panel_edge = contrast_ratio(panel, edge);
+
+                assert!(
+                    canvas_shell >= 1.02 || canvas_workspace_edge >= 1.08,
+                    "{id}: workspace top/left edge must contrast with the surrounding shell"
+                );
+                assert!(
+                    canvas_panel >= 1.02 || canvas_edge >= 1.08,
+                    "{id}: panel/canvas contrast {canvas_panel:.3}, including border {canvas_edge:.3}"
+                );
+                assert!(
+                    panel_rail >= 1.02 || panel_edge >= 1.08,
+                    "{id}: panel/rail contrast {panel_rail:.3}, including border {panel_edge:.3}"
+                );
+                assert!(
+                    contrast_ratio(colors.foreground, panel) >= 4.5,
+                    "{id}: navigation text must meet WCAG AA on the panel"
+                );
+                assert!(
+                    contrast_ratio(colors.foreground, rail) >= 4.5,
+                    "{id}: navigation text must meet WCAG AA on the rail"
+                );
             }
         });
     }

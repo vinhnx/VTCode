@@ -4,6 +4,7 @@ impl DesktopView {
     pub(super) fn render_navigation(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let expanded = self.sidebar_open || self.navigation_peek;
+        let rail_surface = themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
         div()
             .id("left-navigation")
             .test_support()
@@ -91,7 +92,7 @@ impl DesktopView {
                     ),
             )
             .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
-            .bg(chrome_background(&colors))
+            .bg(rail_surface)
             .into_any_element()
     }
     pub(super) fn render_chrome_menu(&self, id: &'static str, label: &'static str) -> AnyElement {
