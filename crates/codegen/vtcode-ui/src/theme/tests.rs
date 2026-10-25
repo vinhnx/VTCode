@@ -1,6 +1,7 @@
 use anstyle::{Color, RgbColor, Style};
 
 use crate::theme::color_math::contrast_ratio;
+use crate::theme::gpui_kit::terminal_accent;
 use crate::theme::registry::all_theme_definitions;
 use crate::*;
 
@@ -270,6 +271,112 @@ fn style_rgb(style: Style) -> Option<RgbColor> {
     }
 }
 
+/// Catppuccin, Gruvbox, and Solarized rows predate the gpui-kit port: those
+/// ids keep their curated terminal entries, while the ported colors still
+/// back the desktop client.
+fn curated_terminal_entry(id: &str) -> bool {
+    ["catppuccin-", "gruvbox", "solarized"]
+        .iter()
+        .any(|prefix| id.starts_with(prefix))
+}
+
+#[test]
+fn gpui_kit_themes_are_registered_with_upstream_labels() {
+    for (id, dark, colors) in gpui_kit_theme_colors_all() {
+        let label = gpui_kit_theme_label(id).unwrap_or_else(|| panic!("{id} needs a label"));
+        let ported_accent = terminal_accent(colors.accent, colors.background, colors.foreground);
+        assert_eq!(theme_label(id), Some(label), "{id} must be registered in the CLI registry");
+        assert_eq!(is_light_theme(id), !dark, "{id} scheme must follow the upstream mode");
+        assert!(!get_syntax_theme_for_ui_theme(id).is_empty(), "{id} needs a syntax theme");
+        if !curated_terminal_entry(id) {
+            let registered = all_theme_definitions().get(id).unwrap_or_else(|| panic!("{id} missing"));
+            assert_eq!(registered.palette.background, colors.background, "{id}");
+            assert_eq!(registered.palette.primary_accent, ported_accent, "{id} accent text");
+        }
+    }
+    assert!(!is_gpui_kit_theme("ciapre"));
+}
+
+#[test]
+fn gpui_kit_palettes_mirror_the_cli_registry() {
+    for (id, _dark, colors) in gpui_kit_theme_colors_all() {
+        let definition = all_theme_definitions().get(id).unwrap_or_else(|| panic!("{id} missing"));
+        let palette = &definition.palette;
+        // The CLI prints the upstream filled-surface brand color as legible
+        // accent text, so the registered accent is the adapted color.
+        let accent = terminal_accent(colors.accent, colors.background, colors.foreground);
+        if !curated_terminal_entry(id) {
+            assert_eq!(palette.background, colors.background, "{id} background");
+            assert_eq!(palette.foreground, colors.foreground, "{id} foreground");
+            assert_eq!(palette.primary_accent, accent, "{id} accent");
+            assert_eq!(palette.logo_accent, accent, "{id} logo accent");
+            assert_eq!(palette.secondary_accent, colors.secondary, "{id} secondary");
+            assert_eq!(palette.alert, colors.danger, "{id} danger");
+            assert!(
+                contrast_ratio(accent, colors.background) >= 4.5,
+                "{id}: the accent keeps its upstream hue and clears the floor"
+            );
+        }
+        // Semantic tokens run through the shared style pipeline, which enforces
+        // the floor with the foreground fallback; assert rendered colors.
+        let accessibility = ColorAccessibilityConfig::default();
+        let styles = palette.build_styles_with_accessibility(&accessibility);
+        for (name, color) in [
+            ("foreground", style_rgb(styles.output)),
+            ("primary", style_rgb(styles.primary)),
+            ("secondary", style_rgb(styles.secondary)),
+            ("user", style_rgb(styles.user)),
+            ("error", style_rgb(styles.error)),
+            ("warning", style_rgb(styles.warning)),
+            ("info", style_rgb(styles.info)),
+        ] {
+            let color = color.unwrap_or_else(|| panic!("{id}: {name} needs a truecolor token"));
+            let ratio = contrast_ratio(color, palette.background);
+            assert!(
+                ratio >= accessibility.minimum_contrast,
+                "{id}: rendered {name} contrast {ratio:.2} is below the floor"
+            );
+        }
+        assert!(
+            contrast_ratio(colors.accent_contrast, colors.accent) >= 3.0,
+            "{id}: filled accent text must stay legible"
+        );
+        assert!(
+            contrast_ratio(colors.muted, colors.background) >= accessibility.minimum_contrast,
+            "{id}: muted text must stay legible"
+        );
+    }
+}
+
+#[test]
+fn gpui_kit_curated_sets_keep_their_upstream_colors() {
+    let mocha = gpui_kit_theme_colors("catppuccin-mocha").expect("mocha");
+    assert_eq!(mocha.background, RgbColor(0x18, 0x18, 0x25));
+    assert_eq!(mocha.accent, RgbColor(0x89, 0xB4, 0xFA));
+    let gruvbox = gpui_kit_theme_colors("gruvbox-dark").expect("gruvbox");
+    assert_eq!(gruvbox.background, RgbColor(0x1D, 0x20, 0x21));
+    assert_eq!(gruvbox.foreground, RgbColor(0xEB, 0xDB, 0xB2));
+    // The curated registry entries stay hand-tuned for Gruvbox.
+    let curated = all_theme_definitions().get("gruvbox-dark").expect("curated gruvbox");
+    assert_eq!(curated.palette.primary_accent, RgbColor(0xA8, 0x99, 0x84));
+}
+
+#[test]
+fn gpui_kit_multi_variant_sets_resolve_to_their_suite() {
+    assert_eq!(theme_suite_id("tokyo-storm"), Some("tokyo-night"));
+    assert_eq!(theme_suite_label("tokyo-storm"), Some("Tokyo Night"));
+    assert_eq!(theme_suite_id("everforest-light"), Some("everforest"));
+    assert_eq!(theme_suite_id("macos-classic-dark"), Some("macos-classic"));
+    // Single-variant sets stay standalone: no scheme twin is suggested.
+    assert_eq!(theme_suite_id("twilight"), None);
+    assert_eq!(theme_suite_id("asciinema"), None);
+    let suite = available_theme_suites()
+        .into_iter()
+        .find(|suite| suite.id == "tokyo-night")
+        .expect("tokyo suite");
+    assert_eq!(suite.theme_ids, vec!["tokyo-moon", "tokyo-night", "tokyo-storm"]);
+}
+
 #[test]
 fn test_all_themes_sticky_prompt_meets_contrast() {
     use crate::tui::core_tui::{
@@ -364,4 +471,19 @@ fn test_all_themes_ultrafast_header_badge_meets_contrast() {
         }
         assert!(badge.style.sub_modifier.contains(Modifier::DIM));
     }
+}
+
+#[test]
+fn suite_scheme_flip_prefers_the_set_flagship_variant() {
+    // A plain id maps to the plain twin even though `*-hard` / `*-material`
+    // variants sort and read "better".
+    assert_eq!(theme_for_terminal_scheme_change("gruvbox-light", true), "gruvbox-dark");
+    assert_eq!(theme_for_terminal_scheme_change("gruvbox-dark", false), "gruvbox-light");
+    // A qualifier the target scheme does not carry resolves to its plain twin.
+    assert_eq!(theme_for_terminal_scheme_change("gruvbox-material", false), "gruvbox-light");
+    assert_eq!(theme_for_terminal_scheme_change("gruvbox-material-dark", false), "gruvbox-light");
+    assert_eq!(theme_for_terminal_scheme_change("molokai-dark", false), "molokai-light");
+    assert_eq!(theme_for_terminal_scheme_change("molokai-light", true), "molokai-dark");
+    // Sets without a light variant fall back to the default suggestion.
+    assert_eq!(theme_for_terminal_scheme_change("tokyo-night", false), suggest_theme_for_terminal());
 }

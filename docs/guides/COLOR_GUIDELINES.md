@@ -141,23 +141,76 @@ bold_is_bright = true
 
 ## Available Themes
 
-VT Code includes light and dark themes:
+VT Code includes light and dark themes. Run `/theme` to browse them (the picker shows each id and its
+light/dark scheme). The longbridge/gpui-kit theme sets listed below are shared with the GPUI desktop client, so the
+same theme id renders the same palette in the terminal and in the desktop app.
 
-| Theme                | Mode  | Description                  |
-| -------------------- | ----- | ---------------------------- |
-| ciapre               | Dark  | Default warm amber theme     |
-| ciapre-dark          | Dark  | Alternative warm amber theme |
-| ciapre-blue          | Dark  | Blue variant of Ciapre       |
-| ansi-classic         | Dark  | Classic ANSI palette         |
-| vitesse-black        | Dark  | Pure black background        |
-| vitesse-dark         | Dark  | Dark gray background         |
-| vitesse-dark-soft    | Dark  | Softer dark background       |
-| vitesse-light        | Light | White background             |
-| vitesse-light-soft   | Light | Cream background             |
-| catppuccin-latte     | Light | Pastel light theme           |
-| catppuccin-frappe    | Dark  | Muted dark theme             |
-| catppuccin-macchiato | Dark  | Rich dark theme              |
-| catppuccin-mocha     | Dark  | Deep dark theme              |
+| Theme                        | Mode  | Description                       |
+| ---------------------------- | ----- | --------------------------------- |
+| ciapre                       | Dark  | Default warm amber theme          |
+| ciapre-dark                  | Dark  | Alternative warm amber theme      |
+| ciapre-blue                  | Dark  | Blue variant of Ciapre            |
+| ansi-classic                 | Dark  | Classic ANSI palette              |
+| mono                         | Dark  | Monochrome                        |
+| vitesse-black                | Dark  | Pure black background             |
+| vitesse-dark                 | Dark  | Dark gray background              |
+| vitesse-dark-soft            | Dark  | Softer dark background            |
+| vitesse-light                | Light | White background                  |
+| vitesse-light-soft           | Light | Cream background                  |
+| catppuccin-latte             | Light | Pastel light theme                |
+| catppuccin-frappe            | Dark  | Muted dark theme                  |
+| catppuccin-macchiato         | Dark  | Rich dark theme                   |
+| catppuccin-mocha             | Dark  | Deep dark theme                   |
+| solarized-dark               | Dark  | Solarized, expanded background    |
+| solarized-dark-hc            | Dark  | Solarized with higher contrast    |
+| solarized-light              | Light | Solarized light                   |
+| gruvbox-dark                 | Dark  | Gruvbox dark                      |
+| gruvbox-dark-hard            | Dark  | Gruvbox dark, hard background     |
+| gruvbox-light                | Light | Gruvbox light                     |
+| gruvbox-light-hard           | Light | Gruvbox light, hard background    |
+| gruvbox-material             | Dark  | Gruvbox Material                  |
+| gruvbox-material-dark        | Dark  | Gruvbox Material dark             |
+| gruvbox-material-light       | Light | Gruvbox Material light            |
+
+### gpui-kit theme sets
+
+Ported from <https://github.com/longbridge/gpui-kit/tree/main/themes> and shared with the desktop client:
+
+| Theme                      | Mode  | Set           |
+| -------------------------- | ----- | ------------- |
+| adventure                  | Dark  | Adventure     |
+| adventure-time             | Dark  | Adventure     |
+| alduin                     | Dark  | Alduin        |
+| asciinema                  | Dark  | Asciinema     |
+| aurora-light               | Light | Aurora        |
+| ayu-dark                   | Dark  | Ayu           |
+| ayu-light                  | Light | Ayu           |
+| everforest-dark            | Dark  | Everforest    |
+| everforest-light           | Light | Everforest    |
+| fahrenheit                 | Dark  | Fahrenheit    |
+| flexoki-dark               | Dark  | Flexoki       |
+| flexoki-light              | Light | Flexoki       |
+| harper                     | Dark  | Harper        |
+| hybrid-dark                | Dark  | Hybrid        |
+| hybrid-light               | Light | Hybrid        |
+| jellybeans                 | Dark  | Jellybeans    |
+| kibble                     | Dark  | Kibble        |
+| macos-classic-dark         | Dark  | macOS Classic |
+| macos-classic-light        | Light | macOS Classic |
+| mellifluous-dark           | Dark  | Mellifluous   |
+| mellifluous-light          | Light | Mellifluous   |
+| molokai-dark               | Dark  | Molokai       |
+| molokai-light              | Light | Molokai       |
+| spaceduck                  | Dark  | Spaceduck     |
+| tokyo-night                | Dark  | Tokyo         |
+| tokyo-storm                | Dark  | Tokyo         |
+| tokyo-moon                 | Dark  | Tokyo         |
+| twilight                   | Dark  | Twilight      |
+
+Multi-variant sets form a theme suite, so automatic light/dark switching stays inside the set (for example
+`everforest-dark` ⇄ `everforest-light`); sets without a light variant fall back to the default suggestion.
+Upstream `base.*` slots feed the ANSI hues; the brand color keeps its hue and is lifted toward the foreground only
+until it clears the contrast floor as terminal text.
 
 ## Theme Validation
 
@@ -169,8 +222,10 @@ ratio.
 For developers extending VT Code:
 
 ```rust
-use vtcode_core::ui::theme::{
+use vtcode_ui::theme::{
     ColorAccessibilityConfig,
+    gpui_kit_theme_colors,
+    gpui_kit_theme_colors_all,
     set_color_accessibility_config,
     get_minimum_contrast,
     is_bold_bright_mode,

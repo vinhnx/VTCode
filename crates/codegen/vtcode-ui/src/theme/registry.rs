@@ -2,7 +2,10 @@ use anstyle::RgbColor;
 use catppuccin::PALETTE;
 use hashbrown::HashMap;
 use once_cell::sync::Lazy;
+use vtcode_config::constants::ui;
 
+use crate::theme::color_math::contrast_ratio;
+use crate::theme::gpui_kit::{UiThemePalette, terminal_accent, theme_specs};
 use crate::theme::types::{ThemeDefinition, ThemePalette, ThemeSuite};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -878,8 +881,70 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
         },
     );
     register_catppuccin_themes(&mut map);
+    register_gpui_kit_themes(&mut map);
     map
 });
+
+/// Register the longbridge/gpui-kit theme sets from the shared spec table so
+/// the desktop client renders the same palettes. Themes already curated here
+/// keep their hand-tuned entries.
+fn register_gpui_kit_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
+    for spec in theme_specs() {
+        // Catppuccin, Gruvbox, and Solarized rows predate the port with
+        // hand-tuned terminal palettes; keep those curated entries.
+        if ["catppuccin-", "gruvbox", "solarized"]
+            .iter()
+            .any(|prefix| spec.id.starts_with(prefix))
+        {
+            continue;
+        }
+        let accent = terminal_accent(spec.palette.accent, spec.palette.background, spec.palette.foreground);
+        map.insert(
+            spec.id,
+            ThemeDefinition {
+                id: spec.id,
+                label: spec.label,
+                palette: ThemePalette {
+                    primary_accent: accent,
+                    background: spec.palette.background,
+                    foreground: spec.palette.foreground,
+                    secondary_accent: gpui_kit_secondary(&spec.palette),
+                    alert: gpui_kit_alert(&spec.palette),
+                    logo_accent: accent,
+                },
+            },
+        );
+    }
+}
+
+/// Secondary accent from the upstream hue slots: the first candidate that
+/// keeps the intended hue while clearing the accessibility floor.
+fn gpui_kit_secondary(palette: &UiThemePalette) -> RgbColor {
+    pick_readable_accent(&[palette.magenta, palette.cyan, palette.blue], palette)
+}
+
+/// Error accent from the upstream red slot (falling back to the foreground).
+fn gpui_kit_alert(palette: &UiThemePalette) -> RgbColor {
+    pick_readable_accent(&[palette.red], palette)
+}
+
+fn pick_readable_accent(candidates: &[RgbColor], palette: &UiThemePalette) -> RgbColor {
+    let floor = ui::THEME_MIN_CONTRAST_RATIO;
+    if let Some(&readable) = candidates.iter().find(|&&c| contrast_ratio(c, palette.background) >= floor) {
+        return readable;
+    }
+    candidates
+        .iter()
+        .copied()
+        .reduce(|best, candidate| {
+            if contrast_ratio(candidate, palette.background) > contrast_ratio(best, palette.background) {
+                candidate
+            } else {
+                best
+            }
+        })
+        .unwrap_or(palette.foreground)
+}
 
 fn register_catppuccin_themes(map: &mut HashMap<&'static str, ThemeDefinition>) {
     for &flavor_kind in CATPPUCCIN_FLAVORS {
@@ -948,30 +1013,33 @@ pub fn theme_label(theme_id: &str) -> Option<&'static str> {
 }
 
 fn suite_id_for_theme(theme_id: &str) -> Option<&'static str> {
-    if theme_id.starts_with("nord") {
-        Some("nord")
-    } else if theme_id.starts_with("catppuccin-") {
-        Some("catppuccin")
-    } else if theme_id.starts_with("vitesse-") {
-        Some("vitesse")
-    } else if theme_id.starts_with("ciapre-") {
-        Some("ciapre")
-    } else if theme_id == "mono" {
-        Some("mono")
-    } else {
-        None
+    // Multi-variant theme sets group by their upstream (gpui-kit) theme set;
+    // single-theme sets stay standalone so scheme-twin lookup cannot suggest
+    // an unrelated palette.
+    for set in GpuiKitThemeSet::ALL {
+        if set.member_ids().contains(&theme_id) {
+            return Some(set.suite_id());
+        }
+    }
+    match theme_id {
+        "nord" => Some("nord"),
+        "mono" => Some("mono"),
+        _ => None,
     }
 }
 
 fn suite_label(suite_id: &str) -> Option<&'static str> {
-    match suite_id {
-        "nord" => Some("Nord"),
-        "catppuccin" => Some("Catppuccin"),
-        "vitesse" => Some("Vitesse"),
-        "ciapre" => Some("Ciapre"),
+    let fixed = match suite_id {
         "mono" => Some("Mono"),
+        "nord" => Some("Nord"),
         _ => None,
-    }
+    };
+    fixed.or_else(|| {
+        GpuiKitThemeSet::ALL
+            .iter()
+            .find(|set| set.suite_id() == suite_id)
+            .map(|set| set.label())
+    })
 }
 
 /// Return the logical theme suite identifier for a built-in theme.
@@ -984,9 +1052,151 @@ pub fn theme_suite_label(theme_id: &str) -> Option<&'static str> {
     suite_id_for_theme(theme_id).and_then(suite_label)
 }
 
+/// Grouping of the gpui-kit theme variants into selectable theme suites.
+///
+/// A suite is only meaningful when it carries both a light and a dark variant
+/// (or is a deliberately curated family like Ciapre); single-theme sets stay
+/// standalone so scheme-twin selection never suggests an unrelated palette.
+enum GpuiKitThemeSet {
+    Ciapre,
+    Vitesse,
+    Catppuccin,
+    GpuiKit {
+        suite_id: &'static str,
+        label: &'static str,
+        ids: &'static [&'static str],
+    },
+}
+
+impl GpuiKitThemeSet {
+    const ALL: &'static [Self] = &[
+        Self::Ciapre,
+        Self::Vitesse,
+        Self::Catppuccin,
+        Self::GpuiKit {
+            suite_id: "adventure",
+            label: "Adventure",
+            ids: &["adventure", "adventure-time"],
+        },
+        Self::GpuiKit {
+            suite_id: "ayu",
+            label: "Ayu",
+            ids: &["ayu-dark", "ayu-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "everforest",
+            label: "Everforest",
+            ids: &["everforest-dark", "everforest-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "flexoki",
+            label: "Flexoki",
+            ids: &["flexoki-dark", "flexoki-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "gruvbox",
+            label: "Gruvbox",
+            ids: &[
+                "gruvbox-dark",
+                "gruvbox-dark-hard",
+                "gruvbox-light",
+                "gruvbox-light-hard",
+                "gruvbox-material",
+                "gruvbox-material-dark",
+                "gruvbox-material-light",
+            ],
+        },
+        Self::GpuiKit {
+            suite_id: "hybrid",
+            label: "Hybrid",
+            ids: &["hybrid-dark", "hybrid-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "macos-classic",
+            label: "macOS Classic",
+            ids: &["macos-classic-dark", "macos-classic-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "mellifluous",
+            label: "Mellifluous",
+            ids: &["mellifluous-dark", "mellifluous-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "molokai",
+            label: "Molokai",
+            ids: &["molokai-dark", "molokai-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "solarized",
+            label: "Solarized",
+            ids: &["solarized-dark", "solarized-dark-hc", "solarized-light"],
+        },
+        Self::GpuiKit {
+            suite_id: "tokyo-night",
+            label: "Tokyo Night",
+            ids: &["tokyo-moon", "tokyo-night", "tokyo-storm"],
+        },
+    ];
+
+    fn suite_id(&self) -> &'static str {
+        match self {
+            Self::Ciapre => "ciapre",
+            Self::Vitesse => "vitesse",
+            Self::Catppuccin => "catppuccin",
+            Self::GpuiKit { suite_id, .. } => suite_id,
+        }
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Ciapre => "Ciapre",
+            Self::Vitesse => "Vitesse",
+            Self::Catppuccin => "Catppuccin",
+            Self::GpuiKit { label, .. } => label,
+        }
+    }
+
+    fn member_ids(&self) -> &'static [&'static str] {
+        match self {
+            Self::Ciapre => &["ciapre", "ciapre-blue", "ciapre-dark"],
+            Self::Vitesse => &[
+                "vitesse-black",
+                "vitesse-dark",
+                "vitesse-dark-soft",
+                "vitesse-light",
+                "vitesse-light-soft",
+            ],
+            Self::Catppuccin => &[
+                "catppuccin-frappe",
+                "catppuccin-latte",
+                "catppuccin-macchiato",
+                "catppuccin-mocha",
+            ],
+            Self::GpuiKit { ids, .. } => ids,
+        }
+    }
+}
+
 /// Return the built-in theme suites and their member theme identifiers.
 pub fn available_theme_suites() -> Vec<ThemeSuite> {
-    const ORDER: &[&str] = &["ciapre", "vitesse", "catppuccin", "mono", "nord"];
+    const ORDER: &[&str] = &[
+        "ciapre",
+        "vitesse",
+        "catppuccin",
+        "adventure",
+        "ayu",
+        "everforest",
+        "flexoki",
+        "gruvbox",
+        "hybrid",
+        "macos-classic",
+        "mellifluous",
+        "molokai",
+        "solarized",
+        "tokyo-night",
+        "mono",
+        "nord",
+    ];
 
     ORDER
         .iter()

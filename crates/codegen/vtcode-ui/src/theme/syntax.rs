@@ -46,7 +46,6 @@ pub fn get_syntax_theme_for_ui_theme(ui_theme: &str) -> &'static str {
         "homebrew" => "base16-ocean.dark",
         "framer" => "base16-ocean.dark",
         "espresso" => "base16-ocean.dark",
-        "adventure-time" => "base16-ocean.dark",
         "afterglow" => "base16-ocean.dark",
         "apple-classic" => "base16-ocean.dark",
         "apple-system-colors" => "base16-ocean.dark",
@@ -56,6 +55,21 @@ pub fn get_syntax_theme_for_ui_theme(ui_theme: &str) -> &'static str {
         "vitesse-light" | "vitesse-light-soft" => "base16-ocean.light",
         "ciapre" | "ciapre-dark" | "ciapre-blue" => "base16-ocean.dark",
         "vitesse-black" | "vitesse-dark" | "vitesse-dark-soft" => "base16-ocean.dark",
+        // longbridge/gpui-kit ports: dark palettes share the neutral Base16
+        // Ocean Dark ramp, light palettes the Ocean Light ramp.
+        "adventure" | "adventure-time" | "alduin" | "asciinema" | "fahrenheit" | "harper" | "jellybeans" | "kibble"
+        | "spaceduck" | "twilight" | "ayu-dark" | "everforest-dark" | "flexoki-dark" | "hybrid-dark"
+        | "macos-classic-dark" | "mellifluous-dark" | "molokai-dark" | "tokyo-night" | "tokyo-storm" | "tokyo-moon" => {
+            "base16-ocean.dark"
+        }
+        "aurora-light"
+        | "ayu-light"
+        | "everforest-light"
+        | "flexoki-light"
+        | "hybrid-light"
+        | "macos-classic-light"
+        | "mellifluous-light"
+        | "molokai-light" => "base16-ocean.light",
         "mono" | "ansi-classic" => "base16-ocean.dark",
         _ => "base16-ocean.dark",
     }
