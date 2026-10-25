@@ -65,6 +65,10 @@ use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 const CONTENT_WIDTH: f32 = 760.;
+const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
+    "Saved change history is partial. Some historical patches are unavailable.";
+const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
+    "Saved tool history is partial. Some output may be missing or shortened.";
 
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
@@ -302,6 +306,8 @@ struct DesktopView {
     selected_session_id: Option<String>,
     transcript: Transcript,
     restored_activity: Vec<TranscriptItem>,
+    restored_review_history_incomplete: bool,
+    restored_activity_history_incomplete: bool,
     active_turn_id: Option<String>,
     finished_turn_id: Option<String>,
     cancel_requested: bool,
@@ -459,6 +465,8 @@ impl DesktopView {
             selected_session_id: None,
             transcript: Transcript::default(),
             restored_activity: Vec::new(),
+            restored_review_history_incomplete: false,
+            restored_activity_history_incomplete: false,
             active_turn_id: None,
             finished_turn_id: None,
             cancel_requested: false,
@@ -1812,6 +1820,8 @@ impl DesktopView {
                             }
                             let retained_submission = self.retained_submission.take();
                             self.load_history(loaded.messages);
+                            self.restored_review_history_incomplete = loaded.review_history_incomplete;
+                            self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
                             for item in &loaded.review_items {
                                 if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
                                     self.update_runtime_item(item);
@@ -2260,6 +2270,8 @@ impl DesktopView {
     fn reset_session_state(&mut self) {
         self.transcript.clear();
         self.restored_activity.clear();
+        self.restored_review_history_incomplete = false;
+        self.restored_activity_history_incomplete = false;
         self.changes = ChangesProjection::default();
         self.selected_change = None;
         self.change_viewer = None;
@@ -3008,10 +3020,25 @@ impl DesktopView {
             return div()
                 .p_4()
                 .text_sm()
+                .when(self.restored_review_history_incomplete, |container| {
+                    container.child(partial_history_alert(
+                        "review-history-warning",
+                        PARTIAL_REVIEW_HISTORY_MESSAGE,
+                        colors,
+                    ))
+                })
                 .child("Changes are open in the expanded review.")
                 .into_any_element();
         }
         let content = self.render_changes_content(false, colors, cx);
+        let mut content_panel = div().w_full().flex_1().min_h_0().flex().flex_col();
+        if self.restored_review_history_incomplete {
+            content_panel = content_panel.child(div().px_3().pt_2().child(partial_history_alert(
+                "review-history-warning",
+                PARTIAL_REVIEW_HISTORY_MESSAGE,
+                colors,
+            )));
+        }
         div()
             .w_full()
             .flex_1()
@@ -3029,7 +3056,7 @@ impl DesktopView {
                         .on_click(cx.listener(|view, _, window, cx| view.open_workspace_review(window, cx))),
                 ),
             )
-            .child(content)
+            .child(content_panel.child(content))
             .into_any_element()
     }
 
@@ -3439,74 +3466,77 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = theme.colors;
         let mono = theme.mono_font_family.clone();
+        let mut pane = div().w_full().flex_1().min_h_0().flex().flex_col();
+        if self.restored_activity_history_incomplete {
+            pane = pane.child(div().px_3().pt_2().child(partial_history_alert(
+                "activity-history-warning",
+                PARTIAL_ACTIVITY_HISTORY_MESSAGE,
+                &colors,
+            )));
+        }
         let Some(output) = inspector::latest_output(&self.transcript, &self.restored_activity) else {
-            return empty_state(
-                "No output yet",
-                "Command and tool output will appear here while a turn runs.",
-                IconName::Terminal,
-            )
-            .into_any_element();
+            return pane
+                .child(empty_state(
+                    "No output yet",
+                    "Command and tool output will appear here while a turn runs.",
+                    IconName::Terminal,
+                ))
+                .into_any_element();
         };
         let tail = inspector::output_tail(&output.text);
-        div()
-            .w_full()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(colors.border)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_sm()
-                            .font_medium()
-                            .child(output.title.clone()),
-                    )
-                    .when(output.running, |header| {
-                        header.child(
-                            Tag::custom(colors.secondary, colors.foreground, colors.border)
-                                .small()
-                                .child("Running"),
-                        )
-                    })
-                    .child(
-                        desktop_button("copy-output")
-                            .icon(IconName::Copy)
-                            .accessibility_label("Copy output")
-                            .tooltip("Copy captured output")
-                            .ghost()
+        pane.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .py_2()
+                .border_b_1()
+                .border_color(colors.border)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_sm()
+                        .font_medium()
+                        .child(output.title.clone()),
+                )
+                .when(output.running, |header| {
+                    header.child(
+                        Tag::custom(colors.secondary, colors.foreground, colors.border)
                             .small()
-                            .on_click(move |_, _, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()))
-                            }),
-                    ),
-            )
-            .child(
-                div()
-                    .id("output-body")
-                    .test_support()
-                    .role(gpui_kit::Role::Label)
-                    .aria_label(tail.clone())
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .p_2()
-                    .text_xs()
-                    .font_family(mono)
-                    .text_size(theme.mono_font_size)
-                    .child(tail),
-            )
-            .into_any_element()
+                            .child("Running"),
+                    )
+                })
+                .child(
+                    desktop_button("copy-output")
+                        .icon(IconName::Copy)
+                        .accessibility_label("Copy output")
+                        .tooltip("Copy captured output")
+                        .ghost()
+                        .small()
+                        .on_click(move |_, _, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()))
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .id("output-body")
+                .test_support()
+                .role(gpui_kit::Role::Label)
+                .aria_label(tail.clone())
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .p_2()
+                .text_xs()
+                .font_family(mono)
+                .text_size(theme.mono_font_size)
+                .child(tail),
+        )
+        .into_any_element()
     }
 
     fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
@@ -3521,13 +3551,18 @@ impl DesktopView {
             .flex_col()
             .gap_2()
             .p_3();
+        if self.restored_activity_history_incomplete {
+            body =
+                body.child(partial_history_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
+        }
         if rows.is_empty() {
-            return empty_state(
-                "No activity yet",
-                "Follow tool calls and verification as VT Code works.",
-                IconName::Activity,
-            )
-            .into_any_element();
+            return body
+                .child(empty_state(
+                    "No activity yet",
+                    "Follow tool calls and verification as VT Code works.",
+                    IconName::Activity,
+                ))
+                .into_any_element();
         }
         for row in rows {
             let (status_color, status_icon) = match row.state {
@@ -5218,6 +5253,29 @@ fn brand_logo(size: f32) -> impl IntoElement {
         ))
     });
     gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+}
+
+fn partial_history_alert(
+    id: &'static str,
+    message: &'static str,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Alert)
+        .aria_label(message)
+        .w_full()
+        .px_3()
+        .py_2()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.warning)
+        .bg(colors.warning.opacity(0.08))
+        .text_sm()
+        .text_color(colors.warning_foreground)
+        .child(message)
+        .into_any_element()
 }
 
 fn empty_state(title: &'static str, description: impl Into<gpui_kit::SharedString>, icon: IconName) -> EmptyState {
