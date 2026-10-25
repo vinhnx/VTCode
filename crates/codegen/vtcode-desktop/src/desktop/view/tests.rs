@@ -332,12 +332,13 @@ fn attachments_ride_the_turn_request_as_removable_chips(cx: &mut TestAppContext)
                 path: "scratch.txt".to_string(),
                 text: "drop me".to_string(),
             });
+            view.attachments.reverse();
             view.composer
                 .update(cx, |state, cx| state.set_value("Summarize the attachment", window, cx));
         });
         window.render_frame(cx);
-        // Remove the second chip before submitting.
-        window.click("remove-attachment-1", cx);
+        // Stable path IDs still target the same chip after the attachment order changes.
+        window.click(super::opaque_path_element_id("remove-attachment", "scratch.txt"), cx);
         assert_eq!(view.read(cx).attachments.len(), 1);
 
         window.click("send-prompt", cx);
@@ -901,7 +902,7 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
             assert_eq!(view.changes.totals(), (2, 1));
         });
         window.render_frame(cx);
-        window.click("change-row-0", cx);
+        window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
         {
             let view = view.read(cx);
             assert_eq!(view.selected_change.as_deref(), Some("src/app.rs"));
@@ -2711,7 +2712,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
             view.handle_backend_event(notification("edit", "src/app.rs", first), cx);
         });
         window.render_frame(cx);
-        window.click("change-row-0", cx);
+        window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
         let viewer = view.read(cx).change_viewer.as_ref().unwrap().clone();
         viewer.update(cx, |viewer, cx| {
             viewer.set_mode(DiffMode::Split, cx);
@@ -2723,6 +2724,18 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         window.render_frame(cx);
         assert!(view.read(cx).review_open);
         view.update(cx, |view, cx| view.handle_backend_event(notification("other", "docs/app.rs.bak", unrelated), cx));
+        window.render_frame(cx);
+        assert_eq!(
+            window
+                .find(super::opaque_path_element_id("change-row", "docs/app.rs.bak"))
+                .label(),
+            Some("Review docs/app.rs.bak")
+        );
+        assert_eq!(
+            window.find(super::opaque_path_element_id("change-row", "src/app.rs")).label(),
+            Some("Review src/app.rs"),
+            "a newly inserted row must not inherit an existing file's accessibility node"
+        );
         assert_eq!(viewer.read(cx).selected_lines(), selection, "unrelated events preserve review selection");
         // Updating the same item id exercises the streaming/upsert path, not only a new change-set.
         view.update(cx, |view, cx| view.handle_backend_event(notification("edit", "src/app.rs", latest), cx));
@@ -2732,11 +2745,15 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         assert!(viewer.read(cx).selected_lines().is_none(), "new text invalidates an old line selection");
         window.within("diff-review-panel").click("copy-change-patch", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(latest));
-        window.within("diff-review-panel").click("change-row-0", cx);
+        window
+            .within("diff-review-panel")
+            .click(super::opaque_path_element_id("change-row", "docs/app.rs.bak"), cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("docs/app.rs.bak"));
         assert_eq!(view.read(cx).change_viewer.as_ref().unwrap().read(cx).mode(), DiffMode::Split);
-        window.within("diff-review-panel").click("change-row-1", cx);
+        window
+            .within("diff-review-panel")
+            .click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
@@ -2800,7 +2817,7 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         let warning = window.find("review-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some(super::PARTIAL_REVIEW_HISTORY_MESSAGE));
-        window.click("change-row-0", cx);
+        window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
         window.render_frame(cx);
         window.click("copy-change-patch", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch.as_str()));
@@ -3354,8 +3371,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
 #[gpui_kit::test]
 fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let alpha_id = super::workspace_navigation_element_id("/project/alpha");
-    let beta_id = super::workspace_navigation_element_id("/project/beta");
+    let alpha_id = super::opaque_path_element_id("workspace", "/project/alpha");
+    let beta_id = super::opaque_path_element_id("workspace", "/project/beta");
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.workspace = Some(PathBuf::from("/project/alpha"));
@@ -3594,10 +3611,16 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         view.update(cx, |view, _| {
             view.inspector_open = true;
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Utilities;
-            view.attachments = vec![vtcode_desktop_protocol::TurnAttachment {
-                path: "src/main.rs".into(),
-                text: "fn main() {}".into(),
-            }];
+            view.attachments = vec![
+                vtcode_desktop_protocol::TurnAttachment {
+                    path: "src/main.rs".into(),
+                    text: "fn main() {}".into(),
+                },
+                vtcode_desktop_protocol::TurnAttachment {
+                    path: "src/lib.rs".into(),
+                    text: "pub fn run() {}".into(),
+                },
+            ];
             for (id, status) in [
                 ("read", "completed"),
                 ("build", "failed (exit 1)"),
@@ -3621,7 +3644,27 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
             window.find("utilities-changes").label(),
             Some("Session changes: 0 files, 0 additions, 0 deletions")
         );
-        assert_eq!(window.find("utilities-source-0").label(), Some("Preview attached source: src/main.rs"));
+        assert_eq!(
+            window
+                .find(super::opaque_path_element_id("utilities-source", "src/main.rs"))
+                .label(),
+            Some("Preview attached source: src/main.rs")
+        );
+        assert_eq!(
+            window
+                .find(super::opaque_path_element_id("utilities-source", "src/lib.rs"))
+                .label(),
+            Some("Preview attached source: src/lib.rs")
+        );
+        view.update(cx, |view, _| view.attachments.reverse());
+        window.render_frame(cx);
+        assert_eq!(
+            window
+                .find(super::opaque_path_element_id("utilities-source", "src/main.rs"))
+                .label(),
+            Some("Preview attached source: src/main.rs"),
+            "source identity follows its path after reordering"
+        );
         window.click("utilities-activity", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Activity);
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Utilities);
@@ -3632,7 +3675,7 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         window.render_frame(cx);
         window.click("utilities-browse-files", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
-        assert_eq!(view.read(cx).attachments.len(), 1, "navigation preserves the draft sources");
+        assert_eq!(view.read(cx).attachments.len(), 2, "navigation preserves the draft sources");
     })
     .unwrap();
 }

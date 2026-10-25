@@ -24,7 +24,7 @@
   Session switches reset projections; model/options retain drafts.
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.
 - `view/navigation.rs` starts collapsed; Kit buttons own hover callbacks, so use wrappers for reveal handlers.
-- Dynamic navigation rows key element IDs by session identity or opaque workspace identity, never list position.
+- Dynamic navigation, change, and attachment rows key element IDs by session/path identity, never list position.
 - Bound queues/event drains; reject stale events. CLI reload waits for shutdown and refreshes
   `view/configuration.rs` through the bounded credential-filtered catalog, keeping same-workspace draft sources.
 - Retain submissions until typed acknowledgement or runtime proof; never automatically replay uncertain delivery.
