@@ -99,7 +99,8 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Sync theme to CLI | Settings → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | Settings → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
-| Open settings | The toolbar button, application menu, or ⌘, opens the same Settings dialog: a live theme picker (swatches with mini previews, see below), configured provider and model, a copy button for the credential setup command, and service and protocol versions. |
+| Open settings | The toolbar button, application menu, or ⌘, opens the same Settings dialog: live theme previews, appearance controls, configured provider and model, the credential setup command, and service/protocol versions. |
+| Separate light and dark themes | Appearance stores independent theme selections; the header theme control switches between the saved profiles. The selected profile remains visible in the theme swatches. |
 
 ### Utilities pane
 
@@ -275,8 +276,9 @@ it must not install Base's fixed light default over Kit's theme tokens.
 
 ## Preferences
 
-Comfort settings live in `~/.vtcode/desktop/preferences.json`: the selected theme, recent workspaces (at most 8),
-inspector visibility, and pane widths. A missing or corrupt file falls back to defaults; write failures are ignored.
+Comfort settings live in `~/.vtcode/desktop/preferences.json`: the selected theme and optional light/dark theme profiles,
+recent workspaces (at most 8), inspector visibility, and pane widths. A missing or corrupt file falls back to defaults;
+write failures are ignored.
 The most recent workspace reopens on launch when it still exists.
 
 The UI drains at most 64 service events per foreground tick so a busy stream yields to input. Row data and GPUI's
@@ -392,8 +394,8 @@ new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 The Appearance dialog scrolls to keep controls reachable on smaller windows.
-Custom colors, separate light/dark profiles, motion overrides, font-family pickers,
-translucency, cursor overrides, alternate Dock icons, and font-smoothing overrides
+Separate theme profiles retain independent light and dark theme choices; font family and size remain shared between them.
+Custom colors, per-mode typography, sidebar translucency, alternate Dock icons, and native font-smoothing overrides
 are not implemented in this increment.
 
 ### Component composition and visual hierarchy

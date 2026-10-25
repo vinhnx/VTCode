@@ -2687,6 +2687,11 @@ impl DesktopView {
         }
         let theme = cx.theme();
         let colors = &theme.colors;
+        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
+            "light"
+        } else {
+            "dark"
+        };
         let mut panel = div()
             .id("settings-panel")
             .test_support()
@@ -2731,6 +2736,25 @@ impl DesktopView {
                     .checked(self.preferences.show_status_bar)
                     .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
             )
+            .child(
+                gpui_kit::component::switch::Switch::new("separate-theme-profiles")
+                    .label("Separate light and dark modes")
+                    .checked(self.preferences.separate_theme_profiles)
+                    .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
+            )
+            .when(self.preferences.separate_theme_profiles, |panel| {
+                panel.child(
+                    div()
+                        .id("theme-profile-hint")
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(format!("Editing the {active_theme_profile} theme profile"))
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child(format!(
+                            "Editing the {active_theme_profile} profile. Use the header theme control to switch profiles."
+                        )),
+                )
+            })
             .child(section_label("VISUAL STYLE", colors.muted_foreground))
             .child(
                 div()
@@ -2773,6 +2797,9 @@ impl DesktopView {
                     .label("Reset appearance to defaults")
                     .ghost()
                     .on_click(cx.listener(|view, _, window, cx| {
+                        view.preferences.separate_theme_profiles = false;
+                        view.preferences.light_theme = None;
+                        view.preferences.dark_theme = None;
                         view.preferences.ui_font_family = None;
                         view.preferences.code_font_family = None;
                         view.preferences.ui_font_size = None;
@@ -4498,12 +4525,44 @@ impl DesktopView {
     }
 
     fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let id = if self.theme_mode == ThemeMode::Light {
-            themes::SYSTEM_DARK_ID
+        let target_mode = if self.theme_mode == ThemeMode::Light {
+            ThemeMode::Dark
         } else {
-            themes::SYSTEM_LIGHT_ID
+            ThemeMode::Light
+        };
+        let id = if self.preferences.separate_theme_profiles {
+            let candidate = match target_mode {
+                ThemeMode::Light => self.preferences.light_theme.as_deref(),
+                ThemeMode::Dark => self.preferences.dark_theme.as_deref(),
+            };
+            candidate
+                .filter(|id| themes::mode_for_id(id) == Some(target_mode))
+                .unwrap_or_else(|| themes::default_id(target_mode))
+        } else {
+            themes::system_id(target_mode)
         };
         self.apply_theme(id.to_owned(), window, cx);
+    }
+
+    fn toggle_separate_theme_profiles(&mut self, cx: &mut Context<Self>) {
+        let enabled = !self.preferences.separate_theme_profiles;
+        if enabled {
+            let current_theme = self.theme_id.clone();
+            self.preferences.light_theme = Some(if self.theme_mode == ThemeMode::Light {
+                current_theme.clone()
+            } else {
+                themes::default_id(ThemeMode::Light).to_string()
+            });
+            self.preferences.dark_theme = Some(if self.theme_mode == ThemeMode::Dark {
+                current_theme
+            } else {
+                themes::default_id(ThemeMode::Dark).to_string()
+            });
+            self.preferences.follow_cli_theme = Some(false);
+        }
+        self.preferences.separate_theme_profiles = enabled;
+        self.save_preferences();
+        cx.notify();
     }
 
     /// Apply a theme from the picker and remember the choice.
@@ -4514,6 +4573,17 @@ impl DesktopView {
 
     fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
         self.theme_mode = themes::apply_by_id(&id, window, cx);
+        let id = if themes::mode_for_id(&id) == Some(self.theme_mode) {
+            id
+        } else {
+            themes::default_id(self.theme_mode).to_string()
+        };
+        if self.preferences.separate_theme_profiles {
+            match self.theme_mode {
+                ThemeMode::Light => self.preferences.light_theme = Some(id.clone()),
+                ThemeMode::Dark => self.preferences.dark_theme = Some(id.clone()),
+            }
+        }
         self.theme_id = id;
         self.apply_typography(cx);
         self.transcript.remeasure();
@@ -4675,8 +4745,25 @@ impl DesktopView {
     /// applies live on click.
     fn render_theme_swatch(&self, entry: themes::SwatchEntry, cx: &mut Context<Self>) -> AnyElement {
         let (background, foreground) = entry.preview();
-        let selected = self.theme_id == entry.id();
-        let id = format!("theme-{}", entry.id());
+        let entry_id = entry.id();
+        let active = self.theme_id == entry_id;
+        let light_profile = self.preferences.separate_theme_profiles
+            && self.preferences.light_theme.as_deref() == Some(entry_id.as_str());
+        let dark_profile = self.preferences.separate_theme_profiles
+            && self.preferences.dark_theme.as_deref() == Some(entry_id.as_str());
+        let badge = if active {
+            "active"
+        } else if light_profile && dark_profile {
+            "light and dark profiles"
+        } else if light_profile {
+            "light profile"
+        } else if dark_profile {
+            "dark profile"
+        } else {
+            ""
+        };
+        let selected = !badge.is_empty();
+        let id = format!("theme-{entry_id}");
         let mut swatch = div()
             .w_full()
             .flex()
@@ -4705,10 +4792,14 @@ impl DesktopView {
                     .child(entry.label()),
             );
         if selected {
-            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child("active"));
+            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child(badge));
         }
         desktop_button(id)
-            .accessibility_label(format!("{}{}", entry.label(), if selected { " (active)" } else { "" }))
+            .accessibility_label(if selected {
+                format!("{} ({badge})", entry.label())
+            } else {
+                entry.label().to_owned()
+            })
             .ghost()
             .w(px(104.))
             .h(px(96.))

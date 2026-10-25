@@ -79,6 +79,10 @@ pub(super) struct Preferences {
     pub code_font_size: Option<u8>,
     /// Selected theme id.
     pub theme: Option<String>,
+    /// When enabled, the toolbar theme control switches between these saved profiles.
+    pub separate_theme_profiles: bool,
+    pub light_theme: Option<String>,
+    pub dark_theme: Option<String>,
     /// None preserves legacy explicit theme choices; new profiles follow the CLI.
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
@@ -215,6 +219,24 @@ mod tests {
         };
         let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
         assert_eq!(loaded.reduced_motion, ReducedMotionPreference::On);
+    }
+
+    #[test]
+    fn separate_theme_profiles_default_off_and_round_trip_independently() {
+        let defaults: Preferences = serde_json::from_str("{}").unwrap();
+        assert!(!defaults.separate_theme_profiles);
+        assert!(defaults.light_theme.is_none() && defaults.dark_theme.is_none());
+
+        let selected = Preferences {
+            separate_theme_profiles: true,
+            light_theme: Some("solarized-light".into()),
+            dark_theme: Some("ciapre".into()),
+            ..defaults
+        };
+        let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
+        assert!(loaded.separate_theme_profiles);
+        assert_eq!(loaded.light_theme.as_deref(), Some("solarized-light"));
+        assert_eq!(loaded.dark_theme.as_deref(), Some("ciapre"));
     }
 
     #[test]

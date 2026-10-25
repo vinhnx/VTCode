@@ -1173,6 +1173,59 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
 }
 
 #[gpui_kit::test]
+fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        window.click("separate-theme-profiles", cx);
+        window.render_frame(cx);
+
+        {
+            let preferences = &view.read(cx).preferences;
+            assert!(preferences.separate_theme_profiles);
+            assert_eq!(preferences.dark_theme.as_deref(), Some("ciapre"));
+            assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
+        }
+        assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
+
+        window.click("close-settings", cx);
+        window.render_frame(cx);
+        window.click("toggle-theme", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
+        assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
+
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-180.))), cx);
+        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(180.))), cx);
+        window.click("theme-solarized-light", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some("solarized-light"));
+
+        window.click("close-settings", cx);
+        window.render_frame(cx);
+        window.click("toggle-theme", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
+        assert_eq!(view.read(cx).theme_id, "ciapre");
+        window.click("toggle-theme", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
+
+        let saved = crate::desktop::preferences::Preferences::load();
+        assert!(saved.separate_theme_profiles);
+        assert_eq!(saved.light_theme.as_deref(), Some("solarized-light"));
+        assert_eq!(saved.dark_theme.as_deref(), Some("ciapre"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -2614,7 +2667,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         });
         assert_eq!(cx.theme().font_size, px(17.));
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-320.))), cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
