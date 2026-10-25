@@ -952,3 +952,148 @@ Increments 0-2 are conservative and independently valuable even if nothing else 
 - Relaxing result-level `_meta` stripping.
 - Bundling a webview engine into the desktop app before increment 3 is justified.
 - Faithfully implementing `ui/request-display-mode`, `pip`, or `ui/open-link` before there is a surface that can honor them.
+
+---
+
+# Plan revision — TUI and desktop, surface by surface
+
+The plan above was written before the `gpui-kit` and `gpui-kit-design-guides` skills were available. Reading them, plus the pinned 0.8.0 source, changes two conclusions and invalidates one assumption. This section supersedes increment 3 and the TUI non-goal. Read it as the current plan; treat the section above as the reasoning that led here.
+
+## What changed, and why
+
+**1. Degradation has three tiers, not two.** The original plan assumed "renders" or "does not render". The desktop app can do something in between: `TextView::html(id, text)` exists in the pinned kit and parses with `html5ever` into a retained text document. It strips `script`/`style` (both in the `BLOCK_ELEMENTS` skip list at `gpui-base-0.8.0/src/text/format/html.rs:52-53`) and renders block/inline structure, tables, links, and images. That is not an app — no JS, no interactivity, no `postMessage` — but it is far more than a `text/html` dump. It is a legitimate static preview tier that costs very little.
+
+**2. The TUI non-goal was too blunt.** The TUI cannot host an app, and still must not try. But it can do better than a bare `[resource: ui://…]` row: it can show *which* app a tool belongs to, its declared MIME type, and — via increment 1 — the declared CSP domains and permissions, so a user can judge what the app would ask for before trusting it. That is the honest terminal ceiling, and it lives on the TUI's strongest ground: disclosure, not simulation.
+
+**3. Desktop-visual-inspection needs a security gate, not just a component.** `TextView::html` accepting third-party HTML is a real decision. It is text-only and script-inert by construction, so the risk is bounded, but it must be an explicit opt-in with a size cap, not a default path that any server can trigger.
+
+**4. `desktop-component-review.md` already rules.** `text-view` is recorded as *Retain rich Markdown, owned input state, raw copy, and image/security policy.* Introducing an HTML mode is a change to a recorded decision, so it must be appended to that file rather than decided implicitly mid-implementation.
+
+## Shared spine (unchanged, all surfaces)
+
+Increments 0, 1, and 2 stand as written. Both surfaces consume the same three things:
+
+- `McpUiToolMeta` on `McpToolInfo` — the linkage from tool to `ui://` resource.
+- `vtcode mcp resources` / `vtcode mcp app <uri>` — the orientation surface.
+- Gated capability advertisement — nothing advertises until at least one surface can act on the answer.
+
+Everything below is per-surface presentation on top of that spine. No surface gets its own copy of the parsing or the config.
+
+## TUI plan
+
+Goal: **disclosure, never simulation.** The TUI tells the truth about an app and never pretends to run one.
+
+### T0 — Linkage row (part of increment 0)
+
+Handled by increment 0 as written: `[app: ui://…]` replaces `[resource: …]` when the URI is `ui://`, in `src/agent/runloop/tool_output/mcp.rs:92-101`.
+
+Constraint: the renderer is string-in/string-out. Resolve the tool's `McpUiToolMeta` by tool name at render time. Do not widen `ToolOutputItem` in `vtcode-exec-events` for this alone.
+
+### T1 — App disclosure block
+
+When a result is linked to an app, render a short block instead of a single row:
+
+```
+[app: get-time] ui://get-time/mcp-app.html
+type: text/html;profile=mcp-app (4.2 KiB)
+sandbox: csp connect=api.example.com, cdn.jsdelivr.net · permissions=camera
+not rendered: interactive apps require the desktop or browser client
+```
+
+Rules:
+
+- Bounded: truncate domain lists and the URI; never print the HTML body.
+- The `not rendered` line is mandatory and its wording must not imply a failure. The app is fine; the terminal is the limit.
+- Only print CSP/permission detail when increment 1 fetched the resource. Otherwise print the linkage row alone and do not guess.
+
+### T2 — Explicit resource inspect
+
+`vtcode mcp app <uri>` (increment 1) is the TUI's deep view: full metadata, byte count, declared domains, and a `--html` flag to print the source to the pager for inspection. Never execute it.
+
+### TUI acceptance
+
+- Linked app renders the disclosure block; unlinked tool output is byte-identical to today.
+- `$`, backticks, and control characters in a server-originated URI or domain never reach the terminal unescaped — the existing untrusted-text rules apply.
+- No code path in `vtcode-ui` attempts to parse or execute HTML.
+
+**Explicit TUI non-goals:** no iframe, no webview, no JS, no terminal image/HTML emulation, no interactive widgets. A user who needs the app is told which client has it.
+
+## Desktop plan
+
+Goal: **three tiers, chosen by config, with the safety decision written down.**
+
+| Tier | What the user sees | When |
+| --- | --- | --- |
+| `off` | Linkage row, as today's TUI | Default |
+| `static` | Sanitized HTML rendered as text structure via `TextView::html` | Opt-in |
+| `interactive` | Sandboxed webview app | Deferred, separate project |
+
+### D0 — Tier plumbing
+
+Add to `McpUiConfig` (`crates/codegen/vtcode-config/src/mcp.rs:237-265`):
+
+```toml
+[mcp.ui]
+apps = "off"     # off | static | interactive
+```
+
+`off` and `static` do not advertise the extension in `initialize`; only `interactive` does (increment 2). `interactive` is rejected at config load until D3 exists.
+
+### D1 — Static preview (the new tier)
+
+1. New module `crates/codegen/vtcode-desktop/src/desktop/view/mcp_app.rs`.
+2. Render with `TextView::html(...)` using the same `markdown_style(cx)` helper pattern as `desktop/markdown.rs:146`, so the preview inherits theme tokens rather than inventing colors.
+3. Bind it to the `Diff`/card row pattern already used for file changes: a bounded card with a header naming the app and a collapse control. Do not inline an unbounded document into the transcript — `transcript.rs` owns measured rows and must stay bounded.
+4. Gate: only when `apps = static`, only for `text/html;profile=mcp-app`, only under a hard byte cap with an explicit truncation notice.
+
+**Sanitization is the kit's, and must be documented as such.** `html5ever` parsing into a text document means no script execution is possible, because there is no event loop and no DOM — it is a document model, not a browser. State this in the module doc and in `desktop-component-review.md`, and note the residual risk (image sources and link targets are still attacker-influenced, so `is_web_link`-style policy in `markdown.rs` applies).
+
+### D2 — Component review update
+
+Append to `docs/development/desktop-component-review.md`: `text-view` gains an `html` mode used only for MCP app previews, gated by `[mcp.ui].apps`, with the no-script rationale recorded. The skill explicitly forbids re-litigating recorded decisions silently; this records the change instead.
+
+### D3 — Interactive tier (deferred, decision required)
+
+Requires a webview engine. No `wry`, `cef`, or `webkit` dependency exists in the lockfile. This is not a GPUI component question — gpui-kit gives you components, not a browser. Before any code:
+
+- Bundling and licensing review.
+- Sandbox review: the double-iframe proxy model does not map onto a native app the same way it maps onto a web host. A native host must construct its own isolation, and the spec's `sandbox-proxy-ready` handshake assumes web hosts.
+- Decide whether the desktop app is the right home at all, or whether the browser (WebMCP channel) is.
+
+**Recommendation: do not start D3 until increment 1 proves a real server and D1 proves users open the preview.** The desktop gap is not "no renderer" — it is "no evidence of demand".
+
+### Desktop acceptance
+
+- `cargo check --locked -p vtcode-desktop` and `cargo nextest run -p vtcode-desktop` pass.
+- A UI integration test (`#[gpui_kit::test]`, `test-support` is already a dev-dependency) renders the preview for a fixture and asserts the app header and truncation notice — not pixel geometry, which the testing guide calls out as unreliable.
+- With `apps = off`, the desktop transcript is unchanged.
+- Design review checklist run against D1's card before finishing; no raw hex, tokens from `cx.theme()` only.
+
+## Revised sequencing
+
+| # | Increment | Surface | Effort | Reversible |
+| - | --------- | ------- | ------ | ---------- |
+| 0 | `_meta.ui` plumbing + linkage row | shared | ~1 day | Yes |
+| 1 | `mcp resources` / `mcp app <uri>` | shared | ~0.5 day | Yes |
+| 2 | Gated capability advertisement | shared | ~0.5 day | Yes |
+| T1 | App disclosure block | TUI | ~0.5 day | Yes |
+| D0 | `apps` tier config | desktop | ~0.5 day | Yes |
+| D1 | Static HTML preview | desktop | ~2 days | Yes, config-gated |
+| D2 | Component review record | desktop | ~0.5 hour | Yes |
+| 3 | Interactive webview | desktop or browser | weeks | Separate project |
+
+T1 and D0/D1 are independent and can land in either order once the spine exists.
+
+## Challenged assumptions (revised)
+
+1. **"Desktop needs a webview or nothing."** Wrong. `TextView::html` gives a real, cheap static tier that the original plan missed by not checking the pinned source. Corrected here.
+2. **"The TUI can only show a bare URI."** Too pessimistic. Disclosure of CSP and permissions is genuinely useful and is the TUI's correct role.
+3. **"Advertise the extension once any surface renders."** Still false, and now sharper: `static` does **not** advertise, because a text-structure preview cannot honor the app's tool calls. Only `interactive` advertises.
+4. **"HTML rendering is a security regression."** It depends on the renderer. `html5ever`-to-text is inert; a webview is not. Conflating them would have blocked D1 for no reason, and would have understated D3.
+
+## Non-goals (revised)
+
+- ~~Rendering apps in the TUI~~ → **TUI renders disclosure only; still no app surface.**
+- Webview in the desktop app before D3's sandbox and licensing decision.
+- Treating `static` as app support: it cannot round-trip a tool call, so it must not advertise the extension.
+- Any HTML parser outside the pinned kit's `TextView::html`; do not hand-roll sanitization.
