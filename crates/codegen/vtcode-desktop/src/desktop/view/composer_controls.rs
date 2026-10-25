@@ -249,6 +249,7 @@ impl DesktopView {
                         .reasoning_effort
                         .as_ref()
                         .is_none_or(|effort| current.reasoning_effort == *effort)
+                    && options.fast_mode.is_none_or(|enabled| current.fast_mode_enabled == enabled)
             })
     }
 
@@ -344,6 +345,7 @@ pub(super) fn model_options_header(
     config: Option<&ConfigurationSnapshot>,
     slider: Option<&Entity<gpui_kit::component::slider::SliderState>>,
     model_label: Option<&str>,
+    speed_control: Option<AnyElement>,
     cx: &App,
 ) -> AnyElement {
     let options = config.and_then(|config| config.session_options.as_ref());
@@ -407,14 +409,14 @@ pub(super) fn model_options_header(
                 ),
         );
     }
-    if let Some(speed) = options.and_then(|options| options.speed.as_ref()) {
+    if let Some(speed_control) = speed_control {
         panel = panel.child(
             div()
-                .id("model-speed-indicator")
+                .id("model-fast-mode-row")
                 .test_support()
-                .role(gpui_kit::Role::Status)
-                .aria_label(format!("CLI processing speed: {speed}"))
-                .child(Tag::warning().small().child(speed.clone())),
+                .flex()
+                .justify_end()
+                .child(speed_control),
         );
     }
     panel.into_any_element()

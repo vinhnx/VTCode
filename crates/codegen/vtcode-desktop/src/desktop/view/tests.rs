@@ -382,6 +382,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     context_window: Some(131_072),
                     current: true,
                     recommended_rank: None,
+                    capabilities: None,
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "anthropic".to_string(),
@@ -390,13 +391,14 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     context_window: Some(200_000),
                     current: false,
                     recommended_rank: Some(0),
+                    capabilities: None,
                 },
             ];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
         view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -425,7 +427,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
-        assert!(window.find("palette-label-1-0").label().unwrap().contains("200000 tokens"));
+        assert!(window.find("palette-label-1-0").label().unwrap().contains("200K context"));
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -2636,6 +2638,7 @@ fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mu
                 context_window: Some(7000),
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
             view.composer
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
@@ -2643,14 +2646,11 @@ fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mu
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
-        assert!(
-            window
-                .find("palette-label-0-0")
-                .label()
-                .unwrap()
-                .contains("123456 tokens · Current")
-        );
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        let current_model_item = window.find("palette-label-0-0");
+        let current_model_label = current_model_item.label().unwrap();
+        assert!(current_model_label.contains("123.45K context"));
+        assert!(current_model_label.contains("Current"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.within("command-palette").press("enter", cx);
@@ -2681,6 +2681,7 @@ fn model_picker_revalidates_a_deferred_selection_against_the_current_catalog(cx:
                 context_window: None,
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
             view.open_model_palette(window, cx);
         });
@@ -3840,6 +3841,7 @@ fn composer_model_name_uses_the_active_provider_catalog_entry(cx: &mut TestAppCo
                     context_window: None,
                     current: false,
                     recommended_rank: None,
+                    capabilities: None,
                 })
                 .collect();
         });
@@ -4303,6 +4305,7 @@ fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
         let initial_popup = window.find("command-palette").bounds();
+        assert_eq!(initial_popup.size.width, px(392.));
         let composer = window.find("composer-context").bounds();
         assert!(initial_popup.bottom() <= composer.top());
         assert!((initial_popup.right() - composer.right()).abs() <= px(1.));
@@ -4324,7 +4327,7 @@ fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
     serde_json::from_value(json!({
         "provider": "openai", "model": "gpt-5.6-sol", "authenticated": true, "credentialSetupCommand": "",
         "sandbox": "Ask before protected actions",
-        "sessionOptions": {"permissionMode": "ask", "mode": "build", "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast"}
+        "sessionOptions": {"permissionMode": "ask", "mode": "build", "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast", "fastModeSupported": true, "fastModeEnabled": true, "fastModeLabel": "Ultrafast"}
     })).unwrap()
 }
 
@@ -4418,12 +4421,14 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
                 context_window: None,
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        assert_eq!(window.find("command-palette").bounds().size.width, px(352.));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
         assert!(
             !view
@@ -4481,6 +4486,7 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
                     context_window: Some(200_000),
                     current: false,
                     recommended_rank: Some(0),
+                    capabilities: None,
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "google".into(),
@@ -4489,6 +4495,20 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
                     context_window: Some(1_000_000),
                     current: false,
                     recommended_rank: Some(3),
+                    capabilities: Some(vtcode_desktop_protocol::ModelCapabilities {
+                        reasoning: true,
+                        vision: true,
+                        tool_call: true,
+                        structured_output: true,
+                        is_pro: true,
+                        input_modalities: vec![
+                            "text".into(),
+                            "image".into(),
+                            "audio".into(),
+                            "video".into(),
+                            "pdf".into(),
+                        ],
+                    }),
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "custom".into(),
@@ -4497,6 +4517,7 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
                     context_window: None,
                     current: false,
                     recommended_rank: None,
+                    capabilities: None,
                 },
             ];
         });
@@ -4508,19 +4529,16 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
                 .find("palette-label-0-0")
                 .label()
                 .unwrap()
-                .starts_with("Claude Sonnet 5 · anthropic · claude-sonnet-5")
+                .starts_with("Claude Sonnet 5 · anthropic · 200K context")
         );
-        assert!(
-            window
-                .find("palette-label-0-1")
-                .label()
-                .unwrap()
-                .starts_with("Gemini 3.8 Flash · google · gemini-3.8-flash")
-        );
+        let gemini_item = window.find("palette-label-0-1");
+        let gemini_row = gemini_item.label().unwrap();
+        assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
+        assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
         assert!(window.find("palette-label-1-0").label().unwrap().contains("gpt-5.6-sol"));
         assert_eq!(window.find("palette-label-2-0").label(), Some("Search all models…"));
         assert!(window.try_find("palette-label-0-2").is_none(), "uncurated catalog entries stay in full search");
-        assert!(window.find("model-speed-indicator").label().unwrap().contains("ultrafast"));
+        assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.within("command-palette").press("enter", cx);
@@ -4533,6 +4551,59 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
     };
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
     assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
+}
+
+#[gpui_kit::test]
+fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let toggle = window.find("fast-mode-toggle");
+        assert_eq!(toggle.label(), Some("Disable Ultrafast processing"));
+        assert_eq!(toggle.checked(), Some(true));
+        window.click("fast-mode-toggle", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("fast-mode request") else {
+        panic!("expected runtime option request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["fastMode"], false);
+}
+
+#[test]
+fn model_picker_includes_catalog_capabilities_and_search_keywords() {
+    let model = vtcode_desktop_protocol::ModelInfo {
+        provider: "google".into(),
+        id: "gemini-special".into(),
+        display_name: "Gemini Special".into(),
+        context_window: Some(1_000_000),
+        current: false,
+        recommended_rank: None,
+        capabilities: Some(vtcode_desktop_protocol::ModelCapabilities {
+            reasoning: true,
+            vision: true,
+            tool_call: true,
+            structured_output: true,
+            is_pro: true,
+            input_modalities: vec!["text".into(), "audio".into(), "video".into(), "pdf".into()],
+        }),
+    };
+    let command = super::model_palette_command(&model, false);
+    let description = command.description.as_deref().unwrap();
+    assert!(
+        description.contains("Reasoning · Vision · Tools · Structured output · Pro · Audio · Video · PDF · 1M context")
+    );
+    assert!(command.keywords.contains(&"gemini-special".into()));
 }
 
 #[gpui_kit::test]

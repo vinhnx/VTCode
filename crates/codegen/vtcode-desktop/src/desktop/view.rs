@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
+use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, Selectable, StyledExt};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
@@ -1225,6 +1225,7 @@ impl DesktopView {
                 context_window: configuration.context_window,
                 current: true,
                 recommended_rank: None,
+                capabilities: None,
             })
     }
 
@@ -5145,7 +5146,7 @@ impl DesktopView {
         let composer_popup = self.palette_kind.is_composer_popup();
         let title = match self.palette_kind {
             PaletteKind::Models => "Choose a model",
-            PaletteKind::ModelOptions => "Model and reasoning effort",
+            PaletteKind::ModelOptions => "Select model",
             PaletteKind::AddContext => "Add files and more @",
             PaletteKind::Permissions => "Command permissions",
             PaletteKind::Modes => "Agent mode",
@@ -5185,6 +5186,20 @@ impl DesktopView {
         if quick_model {
             let slider = self.effort_slider.clone();
             let configuration = self.configuration.clone();
+            let speed_toggle = configuration.as_ref().and_then(|configuration| {
+                let options = configuration.session_options.as_ref()?;
+                if !options.fast_mode_supported {
+                    return None;
+                }
+                Some((
+                    options.fast_mode_label.clone()?,
+                    options.fast_mode_enabled,
+                    configuration.provider.clone(),
+                    configuration.model.clone(),
+                    self.palette.as_ref().map(|state| state.entity_id()),
+                ))
+            });
+            let speed_toggle_view = weak.clone();
             let label = configuration.as_ref().map(|config| {
                 self.models
                     .iter()
@@ -5193,7 +5208,51 @@ impl DesktopView {
                     .unwrap_or_else(|| config.model.clone())
             });
             command = command.searchable(false).header(move |_, _, cx| {
-                composer_controls::model_options_header(configuration.as_ref(), slider.as_ref(), label.as_deref(), cx)
+                let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
+                    let weak = speed_toggle_view.clone();
+                    let label = label.clone();
+                    let enabled = *enabled;
+                    let provider = provider.clone();
+                    let model = model.clone();
+                    let palette_id = *palette_id;
+                    desktop_button("fast-mode-toggle")
+                        .label(label.clone())
+                        .outline()
+                        .small()
+                        .selected(enabled)
+                        .toggled(enabled)
+                        .accessibility_label(if enabled {
+                            format!("Disable {label} processing")
+                        } else {
+                            format!("Enable {label} processing")
+                        })
+                        .on_click(move |_, window, cx| {
+                            let _updated = weak.update(cx, |view, cx| {
+                                if view.palette_kind != PaletteKind::ModelOptions
+                                    || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
+                                    || !view.model_is_current(&provider, &model)
+                                {
+                                    return;
+                                }
+                                view.close_palette(window, cx);
+                                view.select_session_options(
+                                    protocol::SessionOptionsSelectParams {
+                                        fast_mode: Some(!enabled),
+                                        ..Default::default()
+                                    },
+                                    cx,
+                                );
+                            });
+                        })
+                        .into_any_element()
+                });
+                composer_controls::model_options_header(
+                    configuration.as_ref(),
+                    slider.as_ref(),
+                    label.as_deref(),
+                    speed_control,
+                    cx,
+                )
             });
         }
         for (section_index, (label, entries)) in confirm_groups.iter().enumerate() {
@@ -5275,9 +5334,15 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label(title)
-            .w(px(if models { 440. } else { 560. }))
+            .w(px(if quick_model {
+                352.
+            } else if models {
+                392.
+            } else {
+                560.
+            }))
             .max_w_full()
-            .when(models, |panel| {
+            .when(models || quick_model, |panel| {
                 panel
                     .rounded_xl()
                     .border_1()
@@ -5604,9 +5669,10 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
 fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
     let context = model
         .context_window
-        .map(|tokens| format!(" · {tokens} tokens"))
+        .map(|tokens| format!(" · {} context", format_context_window(tokens)))
         .unwrap_or_default();
     let current = if current { " · Current" } else { "" };
+    let capabilities = model.capabilities.as_ref().map(model_capability_labels).unwrap_or_default();
     let mut entry = command(
         model.display_name.clone(),
         PaletteAction::SelectModel {
@@ -5614,9 +5680,70 @@ fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteC
             model: model.id.clone(),
         },
     );
-    entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
+    let mut details = vec![model.provider.clone()];
+    details.extend(capabilities.iter().cloned());
+    if !context.is_empty() {
+        details.push(context.trim_start_matches(" · ").to_string());
+    }
+    details.push(model.id.clone());
+    if !current.is_empty() {
+        details.push(current.trim_start_matches(" · ").to_string());
+    }
+    entry.description = Some(details.join(" · "));
     entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry.keywords.extend(capabilities);
     entry
+}
+
+fn model_capability_labels(capabilities: &protocol::ModelCapabilities) -> Vec<String> {
+    let mut labels = Vec::new();
+    if capabilities.reasoning {
+        labels.push("Reasoning".into());
+    }
+    if capabilities.vision {
+        labels.push("Vision".into());
+    }
+    if capabilities.tool_call {
+        labels.push("Tools".into());
+    }
+    if capabilities.structured_output {
+        labels.push("Structured output".into());
+    }
+    if capabilities.is_pro {
+        labels.push("Pro".into());
+    }
+    for (modality, label) in [("audio", "Audio"), ("video", "Video"), ("pdf", "PDF")] {
+        if capabilities
+            .input_modalities
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(modality))
+        {
+            labels.push(label.into());
+        }
+    }
+    labels
+}
+
+fn format_context_window(tokens: u64) -> String {
+    if tokens >= 1_000_000 {
+        format_compact_count(tokens, 1_000_000, "M")
+    } else if tokens >= 1_000 {
+        format_compact_count(tokens, 1_000, "K")
+    } else {
+        tokens.to_string()
+    }
+}
+
+fn format_compact_count(value: u64, divisor: u64, suffix: &str) -> String {
+    let whole = value / divisor;
+    let hundredths = (value % divisor) * 100 / divisor;
+    if hundredths == 0 {
+        format!("{whole}{suffix}")
+    } else if hundredths.is_multiple_of(10) {
+        format!("{whole}.{}{suffix}", hundredths / 10)
+    } else {
+        format!("{whole}.{hundredths:02}{suffix}")
+    }
 }
 
 fn workspace_picker_options() -> PathPromptOptions {

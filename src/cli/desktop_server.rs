@@ -1,5 +1,6 @@
 mod composer_resources;
 mod config_settings;
+mod fast_mode_preferences;
 mod session_options;
 mod shared_preferences;
 mod theme_preferences;
@@ -26,7 +27,8 @@ use vtcode_core::utils::session_archive::{
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
     ConfigurationSnapshot, InteractionChoice, InteractionKind, InteractionRegistry, InteractionRequest,
-    InteractionStep, ModelInfo, ModelSelectParams, Request, RequestId, SessionSummary, ThreadEventNotification,
+    InteractionStep, ModelCapabilities, ModelInfo, ModelSelectParams, Request, RequestId, SessionSummary,
+    ThreadEventNotification,
 };
 use vtcode_ui::tui::app::{
     ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, SubmittedInput,
@@ -63,6 +65,8 @@ struct ServerState {
     /// `config/select`; the session restarts so the runtime rebuilds cleanly.
     model_override: Option<ModelSelectParams>,
     session_options: protocol::SessionOptionsSelectParams,
+    /// Recent Desktop changes layered over the process-start CLI config until restart.
+    fast_mode_overrides: std::collections::HashMap<String, bool>,
     theme_override: Option<String>,
     webmcp_event_hub: Option<vtcode_webmcp::WebmcpEventHub>,
 }
@@ -326,11 +330,19 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             let params: protocol::SessionOptionsSelectParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
             let agent = active_agent_config(context).await;
-            session_options::validate(&params, &agent.provider, &agent.model)?;
+            let speed_supported =
+                crate::agent::runloop::unified::fast_mode::supports_fast_mode(&agent, &context.startup.config);
+            session_options::validate(&params, &agent.provider, &agent.model, speed_supported)?;
+            if let Some(enabled) = params.fast_mode {
+                fast_mode_preferences::persist(context.workspace.clone(), agent.clone(), enabled).await?;
+            }
             shutdown_current_session(context, false).await;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
+                if let Some(enabled) = params.fast_mode {
+                    state.fast_mode_overrides.insert(agent.provider.to_ascii_lowercase(), enabled);
+                }
                 session_options::merge(&mut state.session_options, params);
             }
             let agent = active_agent_config(context).await;
@@ -709,7 +721,7 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
         .context("failed to start desktop host command bridge")?;
     let (event_sender, event_receiver) = protocol::live_event_channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let config = active_agent_config(context).await;
-    let mut vt_config = context.startup.config.clone();
+    let mut vt_config = effective_speed_config(context, &config).await;
     vt_config.agent.theme.clone_from(&config.theme);
     let options = context.state.lock().await.session_options.clone();
     let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
@@ -1469,6 +1481,27 @@ async fn active_agent_config(context: &ServiceContext) -> vtcode_core::config::t
     config
 }
 
+async fn effective_speed_config(
+    context: &ServiceContext,
+    agent: &vtcode_core::config::types::AgentConfig,
+) -> vtcode_core::config::loader::VTCodeConfig {
+    let mut config = context.startup.config.clone();
+    let enabled = context
+        .state
+        .lock()
+        .await
+        .fast_mode_overrides
+        .get(&agent.provider.to_ascii_lowercase())
+        .copied();
+    if let Some(enabled) = enabled
+        && crate::agent::runloop::unified::fast_mode::supports_fast_mode(agent, &config)
+    {
+        crate::agent::runloop::unified::fast_mode::set_fast_mode_preference(agent, &mut config, enabled)
+            .expect("supported speed route accepts its fast-mode preference");
+    }
+    config
+}
+
 async fn configuration_snapshot(
     context: &ServiceContext,
     agent: &vtcode_core::config::types::AgentConfig,
@@ -1482,6 +1515,10 @@ async fn configuration_snapshot(
         format!("vtcode login {}", agent.provider)
     };
     let options = context.state.lock().await.session_options.clone();
+    let speed_config = effective_speed_config(context, agent).await;
+    let fast_mode_supported = crate::agent::runloop::unified::fast_mode::supports_fast_mode(agent, &speed_config);
+    let fast_mode_enabled =
+        fast_mode_supported && crate::agent::runloop::unified::fast_mode::fast_mode_selected(agent, &speed_config);
     let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
     ConfigurationSnapshot {
         session_options: Some(protocol::SessionOptionsSnapshot {
@@ -1495,7 +1532,14 @@ async fn configuration_snapshot(
                 .unwrap_or_else(|| context.startup.config.default_primary_agent.clone()),
             reasoning_effort: agent.reasoning_effort.as_str().into(),
             supported_efforts: session_options::supported_efforts(&agent.provider, &agent.model),
-            speed: crate::agent::runloop::effective_speed_label(agent, &context.startup.config).map(str::to_owned),
+            speed: crate::agent::runloop::effective_speed_label(agent, &speed_config).map(str::to_owned),
+            fast_mode_supported,
+            fast_mode_enabled,
+            fast_mode_label: if fast_mode_supported {
+                crate::agent::runloop::unified::fast_mode::fast_mode_label(agent).map(str::to_owned)
+            } else {
+                None
+            },
         }),
         provider: agent.provider.clone(),
         model: agent.model.clone(),
@@ -1526,10 +1570,19 @@ fn catalog_models(active_provider: &str, active_model: &str) -> Vec<ModelInfo> {
                 .iter()
                 .position(|recommended| recommended == &model)
                 .and_then(|rank| u8::try_from(rank).ok());
+            let catalog = model_catalog_entry(&provider, &id);
             ModelInfo {
-                context_window: model_catalog_entry(&provider, &id).map(|entry| entry.context_window as u64),
+                context_window: catalog.map(|entry| entry.context_window as u64),
                 current: provider == active_provider && id == active_model,
                 recommended_rank,
+                capabilities: catalog.map(|entry| ModelCapabilities {
+                    reasoning: entry.reasoning,
+                    vision: entry.vision,
+                    tool_call: entry.tool_call,
+                    structured_output: entry.structured_output,
+                    is_pro: entry.is_pro,
+                    input_modalities: entry.input_modalities.iter().map(|modality| (*modality).to_string()).collect(),
+                }),
                 display_name: model.display_name().to_string(),
                 provider,
                 id,
@@ -1619,6 +1672,14 @@ mod tests {
             assert_eq!(actual.recommended_rank, Some(u8::try_from(rank).expect("small recommendation rank")));
         }
         assert!(models.iter().any(|model| model.recommended_rank.is_none()));
+        let gemini = models
+            .iter()
+            .find(|model| model.provider == "gemini" && model.id == "gemini-3.8-flash")
+            .expect("Gemini model is available in the catalog");
+        let capabilities = gemini.capabilities.as_ref().expect("CLI catalog capabilities are projected");
+        assert!(capabilities.reasoning && capabilities.vision && capabilities.tool_call);
+        assert!(capabilities.structured_output);
+        assert!(capabilities.input_modalities.iter().any(|modality| modality == "audio"));
     }
 
     #[cfg(unix)]

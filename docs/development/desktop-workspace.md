@@ -210,8 +210,9 @@ draft and attached files remain; previous sessions are available in history. Rel
 and is unavailable during active turns, pending submissions, interactions, session changes, or file pickers/reads.
 It also retries a disconnected service after configuration or authentication has been repaired outside the app.
 
-Protocol 1.10 adds live primary-agent display updates while preserving the next-session mode setting. Protocol 1.9
-added searchable settings read/write methods alongside typed built-in theme synchronization. The service
+Protocol 1.13 adds model capability metadata and a CLI-backed fast-processing toggle. Protocol 1.10 adds live
+primary-agent display updates without changing the next-session mode. Protocol 1.9 added searchable settings
+read/write methods alongside typed built-in theme synchronization. The service
 uses the CLI startup loader for provider, model, runtime policy, and agent execution.
 Its non-secret `sharedUi` projection carries the resolved theme and equivalent shortcut overrides.
 **Import CLI shortcuts** uses the CLI key parser, normalizes modifier aliases, and imports the first
@@ -240,12 +241,17 @@ resize handles retain their own cursors.
 
 ### Model picker
 
-The composer opens a compact model/effort panel above the input. It lists the CLI's ordered recommended fallback models,
-retains the active model when it is outside that set, and **Search all models…** opens the full search.
+The composer opens a compact 352 px model/effort panel above the input; the full catalog search is 392 px wide.
+It lists the CLI's ordered recommended fallback models, retains the active model when it is outside that set, and
+**Search all models…** opens the full search. Catalog rows expose supported reasoning, vision, tool use,
+structured output, pro tier, audio/video/PDF input, and a compact context-window size when the CLI provides them.
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
 the same change through keyboard and assistive activation. The slider's accessible name includes the current CLI
 level (for example, “Reasoning effort: medium”). Changes commit on release, and restart the idle
-session so the runtime receives the new effort. The header reflects the CLI's effective fast/ultrafast badge.
+session so the runtime receives the new effort. Compatible native OpenAI and Anthropic routes expose a
+toggle for the CLI's Ultrafast or Fast tier. Eligibility uses the same CLI rules as `/fast`; a change is validated,
+saved through the CLI config writer, and applied when the next session starts. The control is a labeled accessible
+toggle and reports its active state. The header continues to reflect the CLI's effective processing tier.
 The searchable model panel is anchored above the growing composer and snaps inside the window. Model names appear above
 quieter provider, canonical ID, and context-window metadata; the current model has a checkmark and is selected initially.
 Search accepts display names, providers, and canonical IDs. The composer uses the catalog display name
@@ -322,7 +328,7 @@ agent loop or bypass VT Code's approval and execution policy.
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.10` (additive over 1.0–1.9; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.13` (additive over 1.0–1.12; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
 GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
