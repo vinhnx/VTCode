@@ -47,11 +47,16 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
 
     // Support bash -lc "..." parsing for chained commands
     // If the command is bash -c "..." or similar, parse the script and check each command
-    if command.len() >= 3
-        && matches!(extract_command_name(&command[0]), "bash" | "sh" | "zsh")
-        && (command[1] == "-c" || command[1] == "-lc" || command[1] == "-ilc")
-    {
-        let script = strip_nested_script_quotes(&command[2]);
+    if let Some(script) = nested_shell_script(command) {
+        let script = strip_nested_script_quotes(script);
+        // Command substitution is resolved by the *inner* shell, after the
+        // outer single quotes have already made it inert for the top-level
+        // scan (`sh -c 'echo $(touch /tmp/probe)'`). Nothing in the nested
+        // text is statically known until the substitution runs, so the script
+        // cannot be admitted as safe.
+        if super::contains_command_substitution(script) {
+            return true;
+        }
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
                 if command_might_be_dangerous(&sub_cmd) {
@@ -64,6 +69,19 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
     }
 
     false
+}
+
+/// Return the inline script of a `bash`/`sh`/`zsh -c` style command.
+fn nested_shell_script(command: &[String]) -> Option<&str> {
+    match command {
+        [executable, flag, script, ..]
+            if matches!(extract_command_name(executable), "bash" | "sh" | "zsh")
+                && matches!(flag.as_str(), "-c" | "-lc" | "-ilc") =>
+        {
+            Some(script)
+        }
+        _ => None,
+    }
 }
 
 /// Strip one matching pair of shell quotes from a nested `-c` script.
@@ -99,7 +117,8 @@ pub fn command_requires_approval(command: &[String]) -> bool {
     if command.len() >= 3
         && matches!(extract_command_name(&command[0]), "bash" | "sh" | "zsh")
         && matches!(command[1].as_str(), "-c" | "-lc" | "-ilc")
-        && let Ok(commands) = crate::command_safety::shell_parser::parse_shell_commands(&command[2])
+        && let Some(script) = nested_shell_script(command)
+        && let Ok(commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
     {
         return commands.iter().any(|nested| command_requires_approval(nested));
     }
@@ -613,6 +632,18 @@ mod tests {
         for script in ["'git status && rm -rf /'", "'git reset --hard HEAD~1'"] {
             let command = vec_str(&["bash", "-c", script]);
             assert!(command_might_be_dangerous(&command), "destructive nested script: {command:?}");
+        }
+    }
+
+    #[test]
+    fn nested_shell_script_rejects_command_substitution() {
+        // The outer single quotes make `$(…)`/backticks inert for the
+        // top-level scan; the inner shell still runs them. `echo` and `touch`
+        // are not dangerous on their own, so only the substitution check can
+        // reject these.
+        for script in ["'echo $(touch /tmp/probe)'", "'printf %s `touch /tmp/probe`'"] {
+            let command = vec_str(&["sh", "-c", script]);
+            assert!(command_might_be_dangerous(&command), "nested substitution must be rejected: {command:?}");
         }
     }
 

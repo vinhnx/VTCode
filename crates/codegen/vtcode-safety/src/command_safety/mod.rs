@@ -337,6 +337,10 @@ mod tests {
         // Nested destructive commands stay rejected after unquoting.
         assert!(validate_shell_script("sh -c 'git status && rm -rf /'").is_err());
         assert!(validate_shell_script("sh -c 'git reset --hard HEAD~1'").is_err());
+        // Command substitution hidden behind the outer quotes runs in the
+        // inner shell, so it must be rejected as well.
+        assert!(validate_shell_script("sh -c 'echo $(touch /tmp/probe)'").is_err());
+        assert!(validate_shell_script("sh -c 'printf %s `id`'").is_err());
     }
 
     #[test]
