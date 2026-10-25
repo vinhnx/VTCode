@@ -14,6 +14,10 @@ cargo build --locked -p vtcode
 cargo run --locked -p vtcode-desktop
 ```
 
+The workspace dev profile optimizes GPUI rendering, layout, and text dependencies
+for a responsive desktop preview while keeping application code debuggable. The
+first build of those optimized dependencies can take longer.
+
 Choose a workspace folder in the app. The desktop client starts `vtcode desktop-server` with an absolute workspace path
 and uses the existing VT Code configuration, provider credentials, workspace trust, and sandbox policy. If startup
 reports missing credentials, configure the provider from Terminal with the command shown by the app, then restart it.
