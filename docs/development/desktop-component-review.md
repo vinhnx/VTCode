@@ -64,7 +64,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [radio](https://gpui-kit.com/component/radio) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [rating](https://gpui-kit.com/component/rating) | Not needed for the current coding-workspace workflows or available data. |
-| [resizable](https://gpui-kit.com/component/resizable) | Retain tested three-pane resizing and persistence; avoid unnecessary docking migration. |
+| [resizable](https://gpui-kit.com/component/resizable) | Applied standalone Kit handles with splitter semantics and keyboard resizing; preserve custom width bounds/persistence instead of migrating independent panes into a panel group. |
 | [root](https://gpui-kit.com/component/root) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
 | [scrollable](https://gpui-kit.com/component/scrollable) | Retain bounded scrolling for sessions, inspector, and Appearance. |
 | [select](https://gpui-kit.com/component/select) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |

@@ -71,15 +71,15 @@ fn file_tree_item_snapshot(window: &mut gpui_kit::Window, index: usize) -> gpui_
         .expect("tree item exposes its semantic role")
 }
 
-fn focus_button_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
+fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
     for _ in 0..128 {
-        if window.try_find(id).is_some_and(|button| button.focused() == Some(true)) {
+        if window.try_find(id).is_some_and(|element| element.focused() == Some(true)) {
             return;
         }
         window.press("tab", cx);
         window.render_frame(cx);
     }
-    panic!("Tab did not reach button {id}");
+    panic!("Tab did not reach focusable element {id}");
 }
 
 fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
@@ -1169,7 +1169,11 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
 
         // Press on the divider, drag right by 60px, release.
         dispatch_mouse(window, start, MousePhase::Down, cx);
+        assert!(view.read(cx).resizing.is_some(), "splitter press begins a resize");
+        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
+        assert!(cx.has_active_drag(), "GPUI starts a typed resize drag");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);
+        assert!(view.read(cx).resizing.is_some(), "splitter drag remains active");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Up, cx);
         let width = view.read(cx).sidebar_width;
         assert!(width > 300.0 && width < 340.0, "sidebar grew by the drag delta: {width}");
@@ -1179,10 +1183,72 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
         dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
         dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Move, cx);
         dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Up, cx);
         let width = view.read(cx).sidebar_width;
         assert!((width - super::super::preferences::MAX_PANE_WIDTH).abs() < f32::EPSILON, "clamped width: {width}");
+
+        let inspector_start_width = view.read(cx).inspector_width;
+        let handle = window.find("resize-inspector").bounds();
+        let start = point(handle.center().x, handle.center().y);
+        dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x - px(6.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Up, cx);
+        let view_state = view.read(cx);
+        assert!(view_state.resizing.is_none(), "splitter release ends the resize");
+        assert!(
+            view_state.inspector_width > inspector_start_width + 30.
+                && view_state.inspector_width < inspector_start_width + 50.,
+            "moving the inspector edge left grows it: {}",
+            view_state.inspector_width
+        );
+        assert_eq!(view_state.preferences.inspector_width, Some(view_state.inspector_width));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn pane_splitters_expose_accessibility_and_keyboard_resize(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let splitter = window.find("resize-sidebar");
+        assert_eq!(splitter.role(), Some(gpui_kit::Role::Splitter));
+        assert_eq!(splitter.label(), Some("Resize navigation"));
+
+        for _ in 0..128 {
+            if view.read(cx).sidebar_resize_focus.is_focused(window) {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+        }
+        assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "Tab reaches the sidebar splitter");
+        window.press("right", cx);
+        assert_eq!(view.read(cx).sidebar_width, 280.);
+        window.press("shift-right", cx);
+        assert_eq!(view.read(cx).sidebar_width, 330.);
+        window.press("left", cx);
+        assert_eq!(view.read(cx).sidebar_width, 320.);
+        assert_eq!(view.read(cx).preferences.sidebar_width, Some(320.));
+        window.click("resize-sidebar", cx);
+        assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "pointer interaction focuses the splitter");
+
+        for _ in 0..128 {
+            if view.read(cx).inspector_resize_focus.is_focused(window) {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+        }
+        assert!(view.read(cx).inspector_resize_focus.is_focused(window), "Tab reaches the inspector splitter");
+        window.press("left", cx);
+        assert_eq!(view.read(cx).inspector_width, 330.);
+        window.press("shift-right", cx);
+        assert_eq!(view.read(cx).inspector_width, 280.);
+        assert_eq!(view.read(cx).preferences.inspector_width, Some(280.));
     })
     .unwrap();
 }
@@ -1556,7 +1622,7 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
         window.click("copy-message-copy-test", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
         assert_eq!(window.notifications(cx).len(), 1);
-        focus_button_by_tab(window, "copy-code", cx);
+        focus_element_by_tab(window, "copy-code", cx);
         window.press("space", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap().trim_end(), "fn sample() -> u8 { 7 }");
         assert_eq!(window.notifications(cx).len(), 1);
@@ -4206,14 +4272,14 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
         });
         window.render_frame(cx);
-        focus_button_by_tab(window, "save-shortcuts", cx);
+        focus_element_by_tab(window, "save-shortcuts", cx);
         window.press("enter", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         view.update(cx, |view, cx| {
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx))
         });
-        focus_button_by_tab(window, "save-shortcuts", cx);
+        focus_element_by_tab(window, "save-shortcuts", cx);
         window.press("enter", cx);
         assert_eq!(
             crate::desktop::preferences::Preferences::load()
@@ -4224,7 +4290,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
         );
         window.render_frame(cx);
         window.click("edit-shortcuts", cx);
-        focus_button_by_tab(window, "reset-shortcuts", cx);
+        focus_element_by_tab(window, "reset-shortcuts", cx);
         window.press("enter", cx);
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
@@ -4456,7 +4522,7 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
         });
         window.render_frame(cx);
         select_settings_category(window, 3, cx);
-        focus_button_by_tab(window, "use-cli-theme", cx);
+        focus_element_by_tab(window, "use-cli-theme", cx);
         window.press("enter", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.follow_cli_theme, Some(true));

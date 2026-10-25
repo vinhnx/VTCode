@@ -31,6 +31,7 @@ use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, Me
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
@@ -39,10 +40,10 @@ use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
-    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, point,
-    px, size,
+    Anchor, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle, Focusable, KeyBinding,
+    KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions, Render,
+    ScrollHandle, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored,
+    deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -388,6 +389,8 @@ struct DesktopView {
     preview_return_focus: Option<FocusHandle>,
     palette_return_focus: Option<FocusHandle>,
     palette_focus: FocusHandle,
+    sidebar_resize_focus: FocusHandle,
+    inspector_resize_focus: FocusHandle,
     inspector_open: bool,
     inspector_tab: InspectorTab,
     inspector_focus: FocusHandle,
@@ -463,6 +466,16 @@ struct PaneResize {
     edge: ResizeEdge,
     start_x: f32,
     start_width: f32,
+}
+
+/// The splitter has no drag preview; keeping its entity empty lets the handle
+/// provide GPUI's drag lifecycle without covering the panels during resizing.
+struct ResizeDragPreview;
+
+impl Render for ResizeDragPreview {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size(px(0.))
+    }
 }
 
 fn file_tree_items(entries: &[FileEntry], parent: Option<&str>, expanded: &HashSet<String>) -> Vec<TreeItem> {
@@ -567,6 +580,8 @@ impl DesktopView {
             preview_return_focus: None,
             palette_return_focus: None,
             palette_focus: cx.focus_handle(),
+            sidebar_resize_focus: cx.focus_handle().tab_stop(true),
+            inspector_resize_focus: cx.focus_handle().tab_stop(true),
             inspector_open: false,
             inspector_tab: InspectorTab::default(),
             inspector_focus: cx.focus_handle().tab_stop(true),
@@ -2467,20 +2482,69 @@ impl DesktopView {
 
     /// The draggable divider between panes.
     fn render_resize_handle(&self, edge: ResizeEdge, cx: &mut Context<Self>) -> impl IntoElement {
-        let (id, cursor) = match edge {
-            ResizeEdge::Sidebar => ("resize-sidebar", CursorStyle::ResizeLeftRight),
-            ResizeEdge::Inspector => ("resize-inspector", CursorStyle::ResizeLeftRight),
+        let (id, placement, label, width) = match edge {
+            ResizeEdge::Sidebar => ("resize-sidebar", HandleEdge::Trailing, "Resize navigation", self.sidebar_width),
+            ResizeEdge::Inspector => {
+                ("resize-inspector", HandleEdge::Leading, "Resize inspector", self.inspector_width)
+            }
         };
-        div()
-            .id(id)
-            .test_support()
-            .w(px(5.))
-            .h_full()
-            .cursor(cursor)
-            .hover(|style| style.bg(cx.theme().colors.primary.opacity(0.4)))
+        let focus = match edge {
+            ResizeEdge::Sidebar => &self.sidebar_resize_focus,
+            ResizeEdge::Inspector => &self.inspector_resize_focus,
+        };
+        resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal)
+            .inside(placement)
+            .on_drag(edge, |_, _, _, cx| cx.new(|_| ResizeDragPreview))
+            .on_drag_move(cx.listener(|this, event: &DragMoveEvent<ResizeEdge>, _, cx| {
+                let edge = *event.drag(cx);
+                if this.resizing.is_some_and(|drag| drag.edge == edge) {
+                    let changed = this.resize_from_drag(edge, f32::from(event.event.position.x));
+                    cx.stop_propagation();
+                    if changed {
+                        cx.notify();
+                    }
+                }
+            }))
+            .track_focus(focus)
+            .role(gpui_kit::Role::Splitter)
+            .aria_label(label)
+            .aria_description("Use Left and Right arrow keys to resize; hold Shift for larger steps.")
+            .aria_numeric_value(width as f64)
+            .aria_min_numeric_value(MIN_PANE_WIDTH as f64)
+            .aria_max_numeric_value(MAX_PANE_WIDTH as f64)
+            .focus_visible(|style| style.bg(cx.theme().colors.ring.opacity(0.2)))
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                let modifiers = event.keystroke.modifiers;
+                if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+                    return;
+                }
+                let direction = match event.keystroke.key.as_str() {
+                    "left" => -1.,
+                    "right" => 1.,
+                    _ => return,
+                };
+                let step = if modifiers.shift { 50. } else { 10. };
+                let current_width = match edge {
+                    ResizeEdge::Sidebar => this.sidebar_width,
+                    ResizeEdge::Inspector => this.inspector_width,
+                };
+                let delta = match edge {
+                    ResizeEdge::Sidebar => direction * step,
+                    ResizeEdge::Inspector => -direction * step,
+                };
+                if this.resize_pane_to(edge, current_width + delta) {
+                    this.save_preferences();
+                    cx.notify();
+                }
+                cx.stop_propagation();
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    match edge {
+                        ResizeEdge::Sidebar => this.sidebar_resize_focus.focus(window, cx),
+                        ResizeEdge::Inspector => this.inspector_resize_focus.focus(window, cx),
+                    }
                     this.resizing = Some(PaneResize {
                         edge,
                         start_x: f32::from(event.position.x),
@@ -2489,10 +2553,44 @@ impl DesktopView {
                             ResizeEdge::Inspector => this.inspector_width,
                         },
                     });
-                    cx.stop_propagation();
                     cx.notify();
                 }),
             )
+            .on_drop(cx.listener(|this, _: &ResizeEdge, _, cx| {
+                if this.resizing.take().is_some() {
+                    this.save_preferences();
+                    cx.notify();
+                }
+            }))
+    }
+
+    fn resize_pane_to(&mut self, edge: ResizeEdge, width: f32) -> bool {
+        if !width.is_finite() {
+            return false;
+        }
+        let width = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
+        let current = match edge {
+            ResizeEdge::Sidebar => &mut self.sidebar_width,
+            ResizeEdge::Inspector => &mut self.inspector_width,
+        };
+        if (*current - width).abs() < f32::EPSILON {
+            return false;
+        }
+        *current = width;
+        true
+    }
+
+    fn resize_from_drag(&mut self, edge: ResizeEdge, pointer_x: f32) -> bool {
+        let Some(drag) = self.resizing.filter(|drag| drag.edge == edge) else {
+            return false;
+        };
+        let delta = pointer_x - drag.start_x;
+        let width = drag.start_width
+            + match edge {
+                ResizeEdge::Sidebar => delta,
+                ResizeEdge::Inspector => -delta,
+            };
+        self.resize_pane_to(edge, width)
     }
 
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -5343,7 +5441,12 @@ impl Render for DesktopView {
         }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
-        let sidebar = self.render_navigation(cx);
+        let sidebar = div()
+            .relative()
+            .h_full()
+            .flex_shrink_0()
+            .child(self.render_navigation(cx))
+            .when(self.sidebar_open, |sidebar| sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)));
         let shell_surface = themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail;
         let conversation = div()
             .flex_1()
@@ -5369,9 +5472,14 @@ impl Render for DesktopView {
             .border_color(colors.border.opacity(0.85))
             .child(conversation)
             .when(inspector_visible, |workspace| {
-                workspace
-                    .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
-                    .child(self.render_inspector(cx))
+                workspace.child(
+                    div()
+                        .relative()
+                        .h_full()
+                        .flex_shrink_0()
+                        .child(self.render_inspector(cx))
+                        .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
+                )
             });
         let panes = div()
             .id("pane-root")
@@ -5381,22 +5489,6 @@ impl Render for DesktopView {
             .min_h_0()
             .flex()
             .bg(shell_surface)
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                let Some(drag) = this.resizing else { return };
-                let delta = f32::from(event.position.x) - drag.start_x;
-                let width = drag.start_width
-                    + match drag.edge {
-                        ResizeEdge::Sidebar => delta,
-                        ResizeEdge::Inspector => -delta,
-                    };
-                let clamped = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
-                match drag.edge {
-                    ResizeEdge::Sidebar => this.sidebar_width = clamped,
-                    ResizeEdge::Inspector => this.inspector_width = clamped,
-                }
-                cx.stop_propagation();
-                cx.notify();
-            }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
@@ -5407,7 +5499,6 @@ impl Render for DesktopView {
                 }),
             )
             .child(sidebar)
-            .when(self.sidebar_open, |panes| panes.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)))
             .child(workspace);
         let mut body = div()
             .size_full()
