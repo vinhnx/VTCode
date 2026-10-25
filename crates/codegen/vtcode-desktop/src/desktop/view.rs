@@ -1334,9 +1334,6 @@ impl DesktopView {
             self.close_palette(window, cx);
             return;
         }
-        const MAX_SESSION_ENTRIES: usize = 10;
-        const MAX_FILE_ENTRIES: usize = 50;
-
         let mut groups: Vec<(String, Vec<PaletteCommand>)> = Vec::new();
         groups.push((
             "Session".to_string(),
@@ -1365,7 +1362,6 @@ impl DesktopView {
         let sessions: Vec<PaletteCommand> =
             self.sessions
                 .iter()
-                .take(MAX_SESSION_ENTRIES)
                 .map(|session| {
                     let label = session.title.clone().unwrap_or_else(|| {
                         format!("Session {}", session.session_id.chars().take(8).collect::<String>())
@@ -1380,7 +1376,6 @@ impl DesktopView {
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
-            .take(MAX_FILE_ENTRIES)
             .map(|entry| {
                 command(format!("Preview file: {}", entry.rel_path), PaletteAction::PreviewFile(entry.rel_path.clone()))
             })

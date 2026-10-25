@@ -1344,6 +1344,54 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.sessions = (0..16)
+            .map(|index| vtcode_desktop_protocol::SessionSummary {
+                session_id: format!("archived-{index}"),
+                title: Some(format!("Archived thread {index}")),
+                workspace: std::env::temp_dir().display().to_string(),
+                completed: true,
+                resumable: true,
+            })
+            .collect();
+        view.files = (0..60)
+            .map(|index| super::FileEntry {
+                rel_path: format!("src/generated-{index:02}.rs"),
+                depth: 1,
+                is_dir: false,
+            })
+            .collect();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        let older_thread = palette_action_id(&super::PaletteAction::LoadSession("archived-15".into()));
+        window.within("command-palette").input("Archived thread 15", cx);
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(palette.read(cx).matched_count(), 1);
+        assert_eq!(window.find(older_thread).label(), Some("Open session: Archived thread 15"));
+
+        let later_file = palette_action_id(&super::PaletteAction::PreviewFile("src/generated-59.rs".into()));
+        window.within("command-palette").press("cmd-a", cx);
+        window.within("command-palette").input("generated-59.rs", cx);
+        window.render_frame(cx);
+        assert_eq!(palette.read(cx).query(cx), "generated-59.rs");
+        assert_eq!(palette.read(cx).matched_count(), 1);
+        assert_eq!(window.find(later_file).label(), Some("Preview file: src/generated-59.rs"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn command_palette_keeps_dialog_accessible_with_reduced_motion(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update(|cx| cx.set_reduce_motion(true));
