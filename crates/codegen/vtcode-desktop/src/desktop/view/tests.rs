@@ -4094,6 +4094,30 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.open_model_options(window, cx);
+        });
+        window.render_frame(cx);
+        window.render_frame(cx);
+        window.click(("effort-stop", 2usize), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("effort request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "high");
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
 fn quick_model_step_control_sends_supported_effort_and_full_search_remains_available(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

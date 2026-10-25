@@ -359,11 +359,7 @@ pub(super) fn model_options_header(
                         .desktop_disabled(value <= minimum)
                         .on_click(move |_, window, cx| step_effort(&lower, -1., window, cx)),
                 )
-                .child(
-                    gpui_kit::component::slider::Slider::new(slider)
-                        .accessibility_label("Reasoning effort")
-                        .flex_1(),
-                )
+                .child(effort_knob(slider, options.map_or(0, |options| options.supported_efforts.len()), cx))
                 .child(
                     desktop_button("increase-effort")
                         .icon(IconName::Plus)
@@ -379,6 +375,78 @@ pub(super) fn model_options_header(
         panel = panel.child(div().text_sm().child(format!("Processing: {speed}")));
     }
     panel.into_any_element()
+}
+
+fn effort_knob(state: &Entity<gpui_kit::component::slider::SliderState>, level_count: usize, cx: &App) -> AnyElement {
+    use gpui_kit::base::slider::{Slider, SliderIndicator, SliderThumb, SliderTrack};
+    use gpui_kit::relative;
+
+    let colors = cx.theme().colors;
+    let slider = state.read(cx);
+    let span = slider.max_value() - slider.min_value();
+    let position = if span > 0. {
+        (slider.value().start() - slider.min_value()) / span
+    } else {
+        0.
+    };
+    let position = position.clamp(0., 1.);
+    let ticks = (0..level_count).map(|index| {
+        let position = index as f32 / (level_count.saturating_sub(1).max(1) as f32);
+        div()
+            .id(("effort-stop", index))
+            .test_support()
+            .absolute()
+            .left(relative(position))
+            .top(px(13.))
+            .ml(px(-3.))
+            .size(px(6.))
+            .rounded_full()
+            .bg(colors.foreground.opacity(0.35))
+    });
+
+    Slider::new(state)
+        .accessibility_label("Reasoning effort")
+        .flex_1()
+        .min_w_0()
+        .py_2()
+        .child(
+            SliderTrack::new(state)
+                .w_full()
+                .h(px(32.))
+                .px(px(18.))
+                .rounded_full()
+                .bg(colors.muted)
+                .child(
+                    SliderIndicator::new(state)
+                        .relative()
+                        .w_full()
+                        .h_full()
+                        .child(
+                            div()
+                                .absolute()
+                                .left(px(-18.))
+                                .right(relative(1. - position))
+                                .h_full()
+                                .rounded_l_full()
+                                .bg(colors.primary),
+                        )
+                        .children(ticks)
+                        .child(
+                            SliderThumb::new(state)
+                                .absolute()
+                                .left(relative(position))
+                                .top(px(-2.))
+                                .ml(px(-18.))
+                                .size(px(36.))
+                                .rounded_full()
+                                .bg(colors.foreground)
+                                .border_1()
+                                .border_color(colors.background)
+                                .shadow_sm(),
+                        ),
+                ),
+        )
+        .into_any_element()
 }
 
 fn step_effort(

@@ -220,7 +220,8 @@ resize handles retain their own cursors.
 ### Model picker
 
 The composer opens a compact model/effort panel above the input; **Search all models…** opens the full search.
-The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
+The effort knob uses Kit's slider parts with a pill track, capability dots, and a circular draggable thumb.
+It appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
 the same change through keyboard and assistive activation. Changes commit on release, and restart the idle
 session so the runtime receives the new effort. The header reflects the CLI's effective fast/ultrafast badge.
 The searchable model panel is anchored above the growing composer and snaps inside the window. Model names appear above
