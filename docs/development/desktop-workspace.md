@@ -228,7 +228,8 @@ and workspace refresh. Leave a field empty to unbind it.
 Choose Model defaults to ⌘⇧M. Saving uses atomic private-file persistence and displays write errors;
 changes apply after restart. Kit editing, inspector arrow navigation, and native window/application
 shortcuts retain their own bindings. Per-item actions remain keyboard-accessible through focus navigation
-and palettes without each receiving a global chord. CLI-only terminal actions have no inferred native mapping.
+and palettes without each receiving a global chord. Shortcut badges use Kit's platform-specific key formatting
+in both their visual labels and accessibility descriptions. CLI-only terminal actions have no inferred native mapping.
 The preference projection reflects the helper's startup snapshot: restart the service to reload on-disk CLI
 changes. The searchable CLI configuration catalog reads effective values through the shared CLI config service;
 edits target User, Workspace, or Project layers, preserve the existing value type, and reload the helper after the

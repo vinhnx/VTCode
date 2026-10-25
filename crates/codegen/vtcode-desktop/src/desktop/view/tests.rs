@@ -4125,9 +4125,13 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());
         assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
+        let expected_shortcut_label = format!(
+            "Shortcut for Search commands: {}",
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("cmd-k").unwrap())
+        );
         let shortcut = window.find("shortcut-badge-commands");
         assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));
-        assert_eq!(shortcut.label(), Some("Shortcut for Search commands: cmd-k"));
+        assert_eq!(shortcut.label(), Some(expected_shortcut_label.as_str()));
         assert!(window.try_find("shortcut-input-commands").is_none(), "inputs stay hidden until edit mode");
 
         window.click("edit-shortcuts", cx);
@@ -4144,7 +4148,7 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
             None,
             "cancelling discards unsaved bindings"
         );
-        assert_eq!(window.find("shortcut-badge-commands").label(), Some("Shortcut for Search commands: cmd-k"));
+        assert_eq!(window.find("shortcut-badge-commands").label(), Some(expected_shortcut_label.as_str()));
     })
     .unwrap();
 }

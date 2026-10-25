@@ -238,7 +238,7 @@ impl DesktopView {
                     .id(format!("shortcut-row-{id}"))
                     .test_support()
                     .role(gpui_kit::Role::Group)
-                    .aria_label(format!("{label}, shortcut {}", if value.is_empty() { "not set" } else { &value }))
+                    .aria_label(format!("{label}, shortcut {}", shortcut_accessibility_value(&value)))
                     .w_full()
                     .flex()
                     .flex_wrap()
@@ -316,14 +316,33 @@ fn shortcut_badge(id: &str, label: &str, value: &str) -> AnyElement {
         .id(format!("shortcut-badge-{id}"))
         .test_support()
         .role(gpui_kit::Role::Label)
-        .aria_label(format!("Shortcut for {label}: {}", if value.is_empty() { "not set" } else { value }))
+        .aria_label(format!("Shortcut for {label}: {}", shortcut_accessibility_value(value)))
         .child(badge)
         .into_any_element()
+}
+
+fn shortcut_accessibility_value(value: &str) -> String {
+    if value.is_empty() {
+        return "not set".into();
+    }
+
+    gpui_kit::Keystroke::parse(value)
+        .map(|keystroke| Kbd::format(&keystroke))
+        .unwrap_or_else(|_| "invalid shortcut".into())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accessible_shortcut_labels_use_the_platform_formatted_key() {
+        let keystroke = gpui_kit::Keystroke::parse("cmd-shift-p").unwrap();
+        assert_eq!(shortcut_accessibility_value("cmd-shift-p"), Kbd::format(&keystroke));
+        assert_eq!(shortcut_accessibility_value(""), "not set");
+        assert_eq!(shortcut_accessibility_value("a-b"), "invalid shortcut");
+    }
+
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
         assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 21);
