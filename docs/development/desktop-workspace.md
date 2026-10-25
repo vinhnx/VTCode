@@ -400,6 +400,18 @@ This reference informs the protocol boundary only; the desktop UI and runtime in
 The first desktop release is local and macOS-only. It has no embedded editor, terminal, remote service, automatic
 updater, concurrent turns, GUI credential setup, or full parity with every TUI command.
 
+### Desktop update policy
+
+VT Code Desktop does not currently check for or install updates. Its local `.app` bundle is ad hoc signed, and the
+main-branch macOS workflow uploads a seven-day CI artifact rather than a desktop release. The CLI's `vtcode update`
+updates a standalone CLI executable; it does not replace and verify the complete desktop bundle and its bundled helper
+as one unit.
+
+Before adding in-app update controls, publish a target-specific desktop release contract and a complete Developer ID
+signed and notarized `.app` or `.dmg`. Stage and verify the whole bundle, then let the user choose when to replace it and
+restart. Follow [GPUI Kit's update guidance](https://gpui-kit.com/docs/auto-update/) for release identity, artifact
+verification, retryable checks, and recovery; a checksum fetched beside an artifact does not authenticate its publisher.
+
 ### Concept workspace layout
 
 The desktop uses a shared top toolbar above a recessed navigation pane, central
