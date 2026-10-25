@@ -39,6 +39,7 @@ use gpui_kit::component::stepper::{Stepper, StepperItem};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
+use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
@@ -2944,53 +2945,54 @@ impl DesktopView {
                     ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        desktop_button("search-commands")
-                            .accessibility_label("Search commands")
-                            .icon(IconName::Search)
-                            .ghost()
-                            .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
-                    )
-                    .child(
-                        desktop_button("toggle-inspector")
-                            .icon(IconName::PanelRight)
-                            .accessibility_label(if self.inspector_open {
-                                "Hide panel"
-                            } else {
-                                "Show panel"
-                            })
-                            .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
-                            .ghost()
-                            .desktop_disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
-                    )
-                    .child(
-                        desktop_button("open-settings")
-                            .accessibility_label("Settings")
-                            .icon(IconName::Settings2)
-                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
-                    )
-                    .when_some(
-                        self.configuration
-                            .as_ref()
-                            .and_then(|config| config.session_options.as_ref())
-                            .and_then(|options| options.speed.as_ref()),
-                        |row, speed| {
-                            row.child(
-                                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                                    .small()
-                                    .child(speed.clone()),
-                            )
-                        },
-                    )
-                    .child(self.render_chrome_menu("header-overflow", "Window actions")),
+                Toolbar::new("header-toolbar").small().child(
+                    ToolbarGroup::new("header-actions-group")
+                        .label("Workspace actions")
+                        .gap_1()
+                        .child(
+                            desktop_button("search-commands")
+                                .accessibility_label("Search commands")
+                                .icon(IconName::Search)
+                                .ghost()
+                                .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
+                                .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
+                        )
+                        .child(
+                            desktop_button("toggle-inspector")
+                                .icon(IconName::PanelRight)
+                                .accessibility_label(if self.inspector_open {
+                                    "Hide panel"
+                                } else {
+                                    "Show panel"
+                                })
+                                .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
+                                .ghost()
+                                .desktop_disabled(self.workspace.is_none())
+                                .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
+                        )
+                        .child(
+                            desktop_button("open-settings")
+                                .accessibility_label("Settings")
+                                .icon(IconName::Settings2)
+                                .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                                .ghost()
+                                .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                        )
+                        .when_some(
+                            self.configuration
+                                .as_ref()
+                                .and_then(|config| config.session_options.as_ref())
+                                .and_then(|options| options.speed.as_ref()),
+                            |group, speed| {
+                                group.content(
+                                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                                        .small()
+                                        .child(speed.clone()),
+                                )
+                            },
+                        )
+                        .content(self.render_chrome_menu("header-overflow", "Window actions")),
+                ),
             )
     }
 

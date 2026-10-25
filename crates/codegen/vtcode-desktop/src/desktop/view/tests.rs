@@ -4591,7 +4591,15 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
         assert_eq!(window.find("toggle-inspector").label(), Some("Hide panel"));
+        assert_eq!(window.find("search-commands").role(), Some(gpui_kit::Role::Button));
         assert!(window.find_all("toggle-theme").is_empty());
+        focus_element_by_tab(window, "search-commands", cx);
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("toggle-inspector").focused(), Some(true));
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("open-settings").focused(), Some(true));
         for (id, label) in [
             ("header-overflow", "Window actions"),
             ("navigation-overflow", "Navigation actions"),

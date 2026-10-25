@@ -88,7 +88,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [time-field](https://gpui-kit.com/component/time-field) | Not needed for the current coding-workspace workflows or available data. |
 | [title-bar](https://gpui-kit.com/component/title-bar) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
 | [toggle](https://gpui-kit.com/component/toggle) | Applied to model speed selection as a controlled, accessible toolbar toggle; preference controls continue to use Switch. |
-| [toolbar](https://gpui-kit.com/component/toolbar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
+| [toolbar](https://gpui-kit.com/component/toolbar) | Applied to the header workspace actions with named grouping, compact Kit controls, and arrow-key focus navigation. |
 | [tooltip](https://gpui-kit.com/component/tooltip) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
 | [tree](https://gpui-kit.com/component/tree) | Deferred: richer navigation/editing is a separate functional increment. |
 | [virtual-list](https://gpui-kit.com/component/virtual-list) | Retain measured transcript ListState and existing anchoring/following behavior. |
