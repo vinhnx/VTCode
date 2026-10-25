@@ -10,7 +10,10 @@ use gpui_kit::{
 };
 use serde_json::json;
 
-use super::{DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_options};
+use super::{
+    DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, scale_row_height_for_ui_font,
+    workspace_picker_options,
+};
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
@@ -4184,21 +4187,72 @@ fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppC
 }
 
 #[test]
-fn fixed_virtual_list_geometry_reuses_rows_until_count_or_height_changes() {
+fn fixed_virtual_list_geometry_reuses_rows_until_count_or_font_size_changes() {
     let mut cache = FixedRowSizeCache::default();
-    let first = cache.get(120, 36.);
-    let same_geometry = cache.get(120, 36.);
+    let default_session_height = scale_row_height_for_ui_font(36., px(16.));
+    let large_session_height = scale_row_height_for_ui_font(36., px(24.));
+    assert_eq!(default_session_height, 36.);
+    assert_eq!(large_session_height, 54.);
+    assert_eq!(scale_row_height_for_ui_font(72., px(24.)), 108.);
+
+    let first = cache.get(120, default_session_height);
+    let same_geometry = cache.get(120, default_session_height);
     assert!(std::rc::Rc::ptr_eq(&first, &same_geometry));
     assert_eq!(first.len(), 120);
     assert_eq!(first[0].height, px(36.));
 
-    let changed_count = cache.get(121, 36.);
+    let changed_count = cache.get(121, default_session_height);
     assert!(!std::rc::Rc::ptr_eq(&same_geometry, &changed_count));
     assert_eq!(changed_count.len(), 121);
 
-    let changed_height = cache.get(121, 48.);
-    assert!(!std::rc::Rc::ptr_eq(&changed_count, &changed_height));
-    assert_eq!(changed_height[0].height, px(48.));
+    let changed_font_size = cache.get(121, large_session_height);
+    assert!(!std::rc::Rc::ptr_eq(&changed_count, &changed_font_size));
+    assert_eq!(changed_font_size[0].height, px(54.));
+}
+
+#[gpui_kit::test]
+fn recent_session_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.ui_font_size = Some(24);
+        view.sessions.push(vtcode_desktop_protocol::SessionSummary {
+            session_id: "font-scale".into(),
+            title: Some("Readable thread title".into()),
+            workspace: std::env::temp_dir().display().to_string(),
+            completed: false,
+            resumable: true,
+        });
+        view.apply_typography(cx);
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("session-row-font-scale").bounds().size.height, px(54.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.ui_font_size = Some(24);
+        view.apply_typography(cx);
+        view.inspector_open = true;
+        view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+        view.transcript.push(TranscriptItem::new(
+            "tool-font-scale".into(),
+            "tool".into(),
+            "Read source".into(),
+            "completed".into(),
+        ));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(108.));
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

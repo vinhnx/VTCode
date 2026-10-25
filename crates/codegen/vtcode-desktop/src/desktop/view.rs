@@ -82,12 +82,17 @@ use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 const CONTENT_WIDTH: f32 = 720.;
+const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
+
+fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
+    row_height * font_size.as_f32() / DEFAULT_UI_FONT_SIZE
+}
 
 /// Reuse fixed virtual-list geometry until its row count or height changes.
 #[derive(Default)]
@@ -2871,7 +2876,8 @@ impl DesktopView {
                         .child(self.sessions.len().to_string()),
                 ),
         );
-        let session_sizes = self.session_row_sizes.get(self.sessions.len(), SESSION_ROW_HEIGHT);
+        let session_row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
+        let session_sizes = self.session_row_sizes.get(self.sessions.len(), session_row_height);
         let session_primary = theme.colors.primary;
         sidebar = sidebar.child(
             div()
@@ -2899,7 +2905,8 @@ impl DesktopView {
                                     Some(
                                         div()
                                             .id(format!("session-row-{session_id}"))
-                                            .h(px(SESSION_ROW_HEIGHT))
+                                            .test_support()
+                                            .h(px(session_row_height))
                                             .w_full()
                                             .child(
                                                 desktop_button(format!("session-{session_id}"))
@@ -3905,7 +3912,8 @@ impl DesktopView {
                 ),
         );
 
-        let item_sizes = self.activity_row_sizes.get(rows.len(), ACTIVITY_ROW_HEIGHT);
+        let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
+        let item_sizes = self.activity_row_sizes.get(rows.len(), activity_row_height);
         let row_colors = *colors;
         body = body.child(
             div()
@@ -3921,7 +3929,7 @@ impl DesktopView {
                             .map(|index| {
                                 rows.get(index).cloned().map_or_else(
                                     || div().into_any_element(),
-                                    |row| Self::render_activity_row(row, row_colors),
+                                    |row| Self::render_activity_row(row, row_colors, activity_row_height),
                                 )
                             })
                             .collect::<Vec<_>>()
@@ -3933,7 +3941,11 @@ impl DesktopView {
         body.into_any_element()
     }
 
-    fn render_activity_row(row: ActivityRow, colors: gpui_kit::component::theme::ThemeColor) -> AnyElement {
+    fn render_activity_row(
+        row: ActivityRow,
+        colors: gpui_kit::component::theme::ThemeColor,
+        row_height: f32,
+    ) -> AnyElement {
         let (status_color, status_icon) = match row.state {
             ActivityState::Failed => (colors.danger, IconName::X),
             ActivityState::Running => (colors.primary, IconName::Activity),
@@ -3948,7 +3960,7 @@ impl DesktopView {
             .aria_label(row.title.clone())
             .aria_description(row.status.clone())
             .w_full()
-            .h(px(ACTIVITY_ROW_HEIGHT))
+            .h(px(row_height))
             .flex()
             .items_center()
             .gap_3()
