@@ -3802,18 +3802,17 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
         assert!(window.try_find("header-overflow").is_none(), "one shared overflow menu avoids duplicated chrome");
-        for (id, label) in [("navigation-overflow", "Navigation actions")] {
-            assert_eq!(window.find(id).label(), Some(label));
-            window.click(id, cx);
-            window.render_frame(cx);
-            assert_eq!(
-                window.within(format!("dropdown-menu:Name(\"{id}\")")).find("popup-menu").role(),
-                Some(gpui_kit::Role::Menu)
-            );
-            window.press("escape", cx);
-            window.render_frame(cx);
-            assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this draft");
-        }
+        let id = "navigation-overflow";
+        assert_eq!(window.find(id).label(), Some("Navigation actions"));
+        window.click(id, cx);
+        window.render_frame(cx);
+        assert_eq!(
+            window.within(format!("dropdown-menu:Name(\"{id}\")")).find("popup-menu").role(),
+            Some(gpui_kit::Role::Menu)
+        );
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this draft");
     })
     .unwrap();
 }
