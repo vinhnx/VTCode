@@ -59,6 +59,15 @@ fn file_tree_paths(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Vec<String
         .collect()
 }
 
+fn file_tree_item_snapshot(window: &mut gpui_kit::Window, index: usize) -> gpui_kit::test::ElementSnapshot {
+    window
+        .within("file-list")
+        .find_all(index)
+        .into_iter()
+        .find(|item| item.role() == Some(gpui_kit::Role::TreeItem))
+        .expect("tree item exposes its semantic role")
+}
+
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
     cx.get_menus()
         .unwrap()
@@ -761,6 +770,17 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
         assert_eq!(file_tree_paths(&view, cx), vec!["src", "README.md"]);
+        let tree_id = format!("tree-{}", view.read(cx).file_tree.entity_id());
+        let tree = window
+            .find_all(tree_id)
+            .into_iter()
+            .find(|tree| tree.role() == Some(gpui_kit::Role::Tree))
+            .expect("file tree exposes its semantic role");
+        assert_eq!(tree.role(), Some(gpui_kit::Role::Tree));
+        let root_item = file_tree_item_snapshot(window, 0);
+        assert_eq!(root_item.role(), Some(gpui_kit::Role::TreeItem));
+        assert_eq!(root_item.label(), Some("src"));
+        assert_eq!(root_item.expanded(), Some(false));
 
         let mut reached_file_focus = false;
         for _ in 0..32 {
@@ -781,10 +801,13 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         let tree = view.read(cx).file_tree.clone();
         let selected_path = tree.read(cx).selected_item().map(|item| item.id.to_string());
         assert_eq!(selected_path.as_deref(), Some("src"));
+        assert_eq!(file_tree_item_snapshot(window, 0).selected(), Some(true));
         window.press("right", cx);
+        assert_eq!(file_tree_item_snapshot(window, 0).expanded(), Some(true));
         assert!(file_tree_paths(&view, cx).contains(&"src/nested".to_string()));
         window.press("down", cx);
         window.press("right", cx);
+        assert_eq!(file_tree_item_snapshot(window, 1).expanded(), Some(true));
         assert!(file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
         window.press("left", cx);
         assert!(!file_tree_paths(&view, cx).contains(&"src/nested/mod.rs".to_string()));
