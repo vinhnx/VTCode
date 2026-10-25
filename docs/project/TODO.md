@@ -741,14 +741,14 @@ Short answer: no. They are two different protocols that happen to both put a bro
 
 ### What each one is
 
-| | MCP Apps (SEP-1865) | WebMCP (this repo's `vtcode-webmcp`) |
-| --- | --- | --- |
-| Role | External MCP **server** ships an interactive UI | VT Code itself **serves** a bridge to its own browser app |
-| Direction | Server → Host → user | Host (VT Code) → browser client |
-| Transport | `postMessage` JSON-RPC inside a sandboxed iframe | Axum WebSocket `/webmcp` + Streamable HTTP `/mcp`, loopback-only, bearer/pairing auth |
-| Content type | `text/html;profile=mcp-app` declared by a third-party server | None. Custom `BridgeRequest`/`BridgeResponse` enum; never serves files over HTTP |
-| Unit of work | A tool result rendered as a view | A workspace operation (read, propose patch, apply, run checks) |
-| Trust boundary | Untrusted third-party HTML, deny-by-default CSP | Trusted first-party app, authenticated pair, origin-bound |
+|                | MCP Apps (SEP-1865)                                          | WebMCP (this repo's `vtcode-webmcp`)                                                  |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Role           | External MCP **server** ships an interactive UI              | VT Code itself **serves** a bridge to its own browser app                             |
+| Direction      | Server → Host → user                                         | Host (VT Code) → browser client                                                       |
+| Transport      | `postMessage` JSON-RPC inside a sandboxed iframe             | Axum WebSocket `/webmcp` + Streamable HTTP `/mcp`, loopback-only, bearer/pairing auth |
+| Content type   | `text/html;profile=mcp-app` declared by a third-party server | None. Custom `BridgeRequest`/`BridgeResponse` enum; never serves files over HTTP      |
+| Unit of work   | A tool result rendered as a view                             | A workspace operation (read, propose patch, apply, run checks)                        |
+| Trust boundary | Untrusted third-party HTML, deny-by-default CSP              | Trusted first-party app, authenticated pair, origin-bound                             |
 
 The trust models are opposite. MCP Apps exists to safely render HTML we do not trust; WebMCP exists to let a client we do trust operate the workspace we control. WebMCP's crate rules explicitly forbid adding a file-serving route, which is exactly what an app host needs.
 
@@ -815,13 +815,13 @@ Ground rules for every increment:
 
 1. Add `McpUiToolMeta` to `crates/codegen/vtcode-mcp/src/types.rs`:
 
-   ```rust
-   pub struct McpUiToolMeta {
-       pub resource_uri: String,
-       pub visibility: Vec<McpToolVisibility>, // Model | App
-       pub legacy_flat: bool,                  // came from _meta["ui/resourceUri"]
-   }
-   ```
+    ```rust
+    pub struct McpUiToolMeta {
+        pub resource_uri: String,
+        pub visibility: Vec<McpToolVisibility>, // Model | App
+        pub legacy_flat: bool,                  // came from _meta["ui/resourceUri"]
+    }
+    ```
 
 2. Extend `ParsedMcpTool` (`crates/common/vtcode-utility-tool-specs/src/mcp_tool.rs:4-20`) with `ui: Option<McpUiToolMeta>`. Parse `_meta.ui.resourceUri` first, fall back to the deprecated `_meta["ui/resourceUri"]`, record which one matched. Reject values that are not `ui://` prefixed — a non-`ui://` URI is a server bug, not a feature.
 3. Extend `McpToolInfo` with `ui: Option<McpUiToolMeta>`. This touches every construction site; they are: `provider.rs:617`, `conversion.rs:65`, `mcp_facade.rs:112`, `code_executor.rs:735`, plus test fixtures in `client.rs:1236`, `tool_discovery.rs:290`, `tool_discovery_cache.rs:549`, `registry/tests.rs` (5 sites), `tools/mcp.rs:212`, `mcp_support_overview.rs:312`, `tests/mcp_basic_test.rs:145`. Default `None` everywhere except `provider.rs`.
@@ -840,11 +840,12 @@ Ground rules for every increment:
 
 1. New subcommand in `crates/codegen/vtcode-core/src/mcp/cli.rs:24` `McpCommands`:
 
-   ```
-   vtcode mcp resources [--provider <name>] [--json] [--ui-only]
-   ```
+    ```
+    vtcode mcp resources [--provider <name>] [--json] [--ui-only]
+    ```
 
-   Implementation calls the already-exported `McpClient::list_resources` (`client.rs:212`), which today has **zero callers**. Add `vtcode mcp tools --json` at the same time if it is cheap — same discovery path.
+    Implementation calls the already-exported `McpClient::list_resources` (`client.rs:212`), which today has **zero callers**. Add `vtcode mcp tools --json` at the same time if it is cheap — same discovery path.
+
 2. Optionally `vtcode mcp app <uri>` to `resources/read` and print a summary: MIME type, byte size, declared CSP domains, permissions, `prefersBorder`. Never execute or render it.
 3. Update the `mcp` CLI docs table and `docs/guides/mcp-integration.md`.
 
@@ -860,19 +861,21 @@ Ground rules for every increment:
 
 1. Add config in `McpUiConfig` (`crates/codegen/vtcode-config/src/mcp.rs:237-265`):
 
-   ```toml
-   [mcp.ui]
-   apps = "off"        # off | detect | render
-   ```
+    ```toml
+    [mcp.ui]
+    apps = "off"        # off | detect | render
+    ```
 
-   `off` (default) and `detect` do **not** advertise. Only `render` advertises, and `render` must be rejected at config load until increment 3 exists.
+    `off` (default) and `detect` do **not** advertise. Only `render` advertises, and `render` must be rejected at config load until increment 3 exists.
+
 2. In `build_initialize_params` (`client.rs:983-1001`), when mode is `render`, insert into `ClientCapabilities.extensions`:
 
-   ```json
-   "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] }
-   ```
+    ```json
+    "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] }
+    ```
 
-   `rmcp 3.5.0` already models this (`ClientCapabilities.extensions: Option<ExtensionCapabilities>`, SEP-1724) — no dependency change.
+    `rmcp 3.5.0` already models this (`ClientCapabilities.extensions: Option<ExtensionCapabilities>`, SEP-1724) — no dependency change.
+
 3. Apply the same in the reconnect path (`provider.rs:584-588`) and pool path (`connection_pool.rs:375-378`), which currently pass `ClientCapabilities::default()` and would otherwise silently lose the extension.
 
 **Acceptance:** with `apps = render` the initialize request carries the extension; with `off` the request is byte-identical to today. Assert on the serialized request, not on internal state.
@@ -887,11 +890,11 @@ Ground rules for every increment:
 
 ### 3a. Choice of surface
 
-| Surface | Cost | Verdict |
-| --- | --- | --- |
-| TUI (ratatui) | Impossible without a terminal image protocol and a DOM | **No.** A text approximation of an interactive app is worse than the fallback |
-| Desktop (GPUI) | Needs `wry`/WebKit — no webview dependency exists anywhere in the lockfile | Deferred; licensing, bundling, and sandbox review are a project of their own |
-| Browser (WebMCP bridge) | Reuses an existing authenticated, origin-bound channel | **Yes**, if any surface |
+| Surface                 | Cost                                                                       | Verdict                                                                       |
+| ----------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| TUI (ratatui)           | Impossible without a terminal image protocol and a DOM                     | **No.** A text approximation of an interactive app is worse than the fallback |
+| Desktop (GPUI)          | Needs `wry`/WebKit — no webview dependency exists anywhere in the lockfile | Deferred; licensing, bundling, and sandbox review are a project of their own  |
+| Browser (WebMCP bridge) | Reuses an existing authenticated, origin-bound channel                     | **Yes**, if any surface                                                       |
 
 ### 3b. If browser: the shape
 
@@ -922,13 +925,13 @@ Do **not** add app hosting to `vtcode-webmcp`. That crate's rules forbid file-se
 
 ## Sequencing summary
 
-| # | Increment | Depends on | Effort | Reversible |
-| - | --------- | ---------- | ------ | ---------- |
-| 0 | `ui` metadata plumbing + `[app: …]` row | — | ~1 day | Yes |
-| 1 | `vtcode mcp resources` / `app <uri>` | — | ~0.5 day | Yes |
-| 2 | Gated capability advertisement | 0 | ~0.5 day | Yes |
-| 3 | Browser rendering host | 1, 2 | weeks | Yes, config-gated |
-| 4 | Event feed, model context | 3 | days | Yes |
+| #   | Increment                               | Depends on | Effort   | Reversible        |
+| --- | --------------------------------------- | ---------- | -------- | ----------------- |
+| 0   | `ui` metadata plumbing + `[app: …]` row | —          | ~1 day   | Yes               |
+| 1   | `vtcode mcp resources` / `app <uri>`    | —          | ~0.5 day | Yes               |
+| 2   | Gated capability advertisement          | 0          | ~0.5 day | Yes               |
+| 3   | Browser rendering host                  | 1, 2       | weeks    | Yes, config-gated |
+| 4   | Event feed, model context               | 3          | days     | Yes               |
 
 Increments 0-2 are conservative and independently valuable even if nothing else follows. Increment 3 is the real commitment; do not start it before increment 1 confirms a real server exists.
 
@@ -939,8 +942,8 @@ Increments 0-2 are conservative and independently valuable even if nothing else 
 1. **"Users want interactive apps in a terminal IDE."** Unverified. The TUI cannot render HTML; the desktop app has no webview. The realistic audience is the browser integration only. If the answer is "no audience", the correct outcome is increment 0 + 1 and stop.
 2. **"Advertising the extension is free."** It is not. Servers gate tool registration on it and may return tool variants with different descriptions and schemas, which changes the model-visible catalog.
 3. **"`_meta` stripping blocks this work."** It does not. The stripping is result-level; tool-definition `_meta` is untouched by it. Increment 0 needs no policy reversal — verified against `crates/codegen/vtcode-mcp/AGENTS.md`.
-4. **"WebMCP is the natural home."** Opposite trust model. It is a *channel*, not a *host*.
-5. **"This is a security feature."** MCP Apps is a sandboxing *requirement*, not a security *gain*. Today we never render third-party HTML, so the current attack surface is the simplest possible one. Increment 3 enlarges it. That trade must be explicit before implementation.
+4. **"WebMCP is the natural home."** Opposite trust model. It is a _channel_, not a _host_.
+5. **"This is a security feature."** MCP Apps is a sandboxing _requirement_, not a security _gain_. Today we never render third-party HTML, so the current attack surface is the simplest possible one. Increment 3 enlarges it. That trade must be explicit before implementation.
 
 ## Non-goals
 
@@ -949,3 +952,11 @@ Increments 0-2 are conservative and independently valuable even if nothing else 
 - Relaxing result-level `_meta` stripping.
 - Bundling a webview engine into the desktop app before increment 3 is justified.
 - Faithfully implementing `ui/request-display-mode`, `pip`, or `ui/open-link` before there is a surface that can honor them.
+
+---
+
+Desktop: add all themes here
+
+https://github.com/longbridge/gpui-kit/tree/main/themes
+
+also sync these themes for both CLI and desktop themes

@@ -3,7 +3,7 @@
 This file lists all available skills for dynamic discovery.
 Use `read_file` on individual skill directories for full documentation.
 
-## Available Skills (74 total)
+## Available Skills (76 total)
 
 ### Traditional Skills
 
@@ -22,6 +22,8 @@ Use `read_file` on individual skill directories for full documentation.
 | `codemod` | Use Codemod CLI whenever the user wants to migrate, upgrade, update, or refactor a codebase in a repeatable way. This includes framework migrations, library upgrades, version bump migrations, API surface changes, deprecations, and large-scale mechanical edits. First search the Codemod Registry for an existing package, prefer deterministic codemods before open-ended AI rewrites, run dry-runs before apply, and create a codemod package only when no suitable package exists. | Skill |
 | `evaluate-crate` | Evaluate whether a Rust crate, library, or external resource is useful for the vtcode project. Use when the user shares a crate URL, article, or reference and asks "can we use this to improve vtcode". | Skill |
 | `generate-product-spec-patch` | Generate a numbered patch file (product-spec-patch-NNN.md) to surgically update a finalized product-spec.md when the backend contract, API field, enum value, error response, validation rule, or product requirement changes. Use this whenever the BE changes something that affects the spec, error messages change, a field type updates, an enum is renamed, or the spec falls out of sync with the implementation. Triggers on: "patch the spec", "BE changed X", "contract changed", "update product-spec", field type change, enum rename, response schema mismatch, or "spec is out of sync". | Skill |
+| `gpui-kit` | How to build desktop applications with GPUI Kit, the Rust framework published as the gpui-kit crate (GPUI plus gpui_kit::component, gpui_kit::base, gpui_kit::assets). Use when setting up a gpui-kit app, choosing or using a component (Button, Input, Select, Dialog, Sheet, Tabs, Sidebar, List, DataTable, Tree, Chart, etc.), handling component state, theming, or window overlays, and for GPUI mechanics: actions and keybindings, async tasks, contexts, custom elements, entities, events, focus, global state, layout and styling, ElementId, and tests including UI integration testing. Holds the normative Coding Guides: read them before any architecture, state-ownership, public API, naming, or testing decision. Pairs with the gpui-kit-design-guides skill for the Design Guides. | Skill |
+| `gpui-kit-design-guides` | The normative Design Guides for GPUI Kit desktop applications. Read in full before designing or changing any screen, layout, spacing, visual hierarchy, color, density, component choice, interaction state, overlay, motion, data-heavy view, or interface copy in a GPUI Kit (gpui-kit / gpui-component) application, and before reviewing UI work for design quality. Also use when asked what the design rules are, or whether a UI decision follows them. | Skill |
 | `jira-to-product-spec` | Generate product spec from Jira/Confluence PRD. Outputs 9-section spec: Metadata, Business Context, Functional Requirements (FR-CORE-001+), Acceptance Criteria (20+), User Flows (4+ with ASCII diagrams), [CONDITIONAL] API Contracts (grounded in backend-conventions.md), Platform Implementation (3 bullets per platform), Dependencies & Open Items (design conflicts + open questions sorted by criticality), and Appendix. Assumption-free: every claim is either verbatim from PRD, user-confirmed via HITL, or surfaced as a Q-XXX open question. Use when user mentions 'product spec', 'write spec', 'generate spec', 'specification', or provides Jira/Confluence URL. Includes 3 enforcement gates to prevent API hallucinations (verify conventions → validate checklist → pre-gen approval). | Skill |
 | `mcp-apps` | Build MCP Apps (SEP-1865, `io.modelcontextprotocol/ui`) — MCP servers that declare `_meta.ui.resourceUri` on a tool and serve a `ui://` resource whose content is `text/html;profile=mcp-app`, rendered in a host iframe and driven over `postMessage` JSON-RPC. Use when creating, testing, or reasoning about an interactive MCP UI, or when a user asks for a visual/form/dashboard MCP tool. | Skill |
 | `mimo-browser-use` | Prefer this skill for web search, opening URLs, reading articles, filling forms, and page UI. Controls IAB (default), Chrome, Edge, Brave, Chromium, or raw CDP via the shared js MCP for navigation, inspection, clicking, typing, tabs, downloads, dialogs, and screenshots. | Skill |
@@ -533,6 +535,20 @@ Generate a numbered patch file (product-spec-patch-NNN.md) to surgically update 
 
 - **Type**: Skill
 - **Path**: `/Users/vinhnguyenxuan/.agents/skills/generate-product-spec-patch/SKILL.md`
+
+### gpui-kit
+
+How to build desktop applications with GPUI Kit, the Rust framework published as the gpui-kit crate (GPUI plus gpui_kit::component, gpui_kit::base, gpui_kit::assets). Use when setting up a gpui-kit app, choosing or using a component (Button, Input, Select, Dialog, Sheet, Tabs, Sidebar, List, DataTable, Tree, Chart, etc.), handling component state, theming, or window overlays, and for GPUI mechanics: actions and keybindings, async tasks, contexts, custom elements, entities, events, focus, global state, layout and styling, ElementId, and tests including UI integration testing. Holds the normative Coding Guides: read them before any architecture, state-ownership, public API, naming, or testing decision. Pairs with the gpui-kit-design-guides skill for the Design Guides.
+
+- **Type**: Skill
+- **Path**: `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills/gpui-kit/SKILL.md`
+
+### gpui-kit-design-guides
+
+The normative Design Guides for GPUI Kit desktop applications. Read in full before designing or changing any screen, layout, spacing, visual hierarchy, color, density, component choice, interaction state, overlay, motion, data-heavy view, or interface copy in a GPUI Kit (gpui-kit / gpui-component) application, and before reviewing UI work for design quality. Also use when asked what the design rules are, or whether a UI decision follows them.
+
+- **Type**: Skill
+- **Path**: `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills/gpui-kit-design-guides/SKILL.md`
 
 ### jira-to-product-spec
 
