@@ -224,7 +224,8 @@ other shortcut fields are retained. Credentials and full configuration documents
 
 The shortcut editor covers command search, new/close thread, workspace/model choice, composer focus,
 sidebar/inspector toggles, cancellation, overlay dismissal, Settings, Utilities, Workspace Files, Working Tree Review,
-and workspace refresh. Leave a field empty to unbind it.
+and workspace refresh. Searchable palette rows highlight matching label text while keeping the command name
+accessible. Leave a shortcut field empty to unbind it.
 Choose Model defaults to ⌘⇧M. Saving uses atomic private-file persistence and displays write errors;
 changes apply after restart. Kit editing, inspector arrow navigation, and native window/application
 shortcuts retain their own bindings. Per-item actions remain keyboard-accessible through focus navigation

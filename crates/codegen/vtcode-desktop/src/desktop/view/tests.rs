@@ -1018,6 +1018,17 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         assert_eq!(window.find("command-palette").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Command palette"));
         assert_eq!(window.find("palette-label-0-0").label(), Some("New session"));
+        window.input("new", cx);
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(palette.read(cx).query(cx), "new");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).palette_query.as_ref(), "new");
+        assert_eq!(window.find("palette-label-0-0").label(), Some("New session"));
         for key in ["tab", "shift-tab", "tab"] {
             window.press(key, cx);
             assert!(view.read(cx).palette_focus.contains_focused(window, cx), "{key} stays inside the palette");
@@ -1030,6 +1041,7 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(window, |_, _, cx| {
         assert!(view.read(cx).palette.is_none(), "confirm closes the palette");
+        assert!(view.read(cx).palette_query.is_empty(), "closing resets the search highlight");
     })
     .unwrap();
     let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {

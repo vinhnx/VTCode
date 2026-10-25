@@ -398,6 +398,7 @@ struct DesktopView {
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
+    palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
     composer_resources: Vec<protocol::ComposerResource>,
     resources_loading: bool,
@@ -574,6 +575,7 @@ impl DesktopView {
             git_branch: None,
             palette: None,
             palette_kind: PaletteKind::Commands,
+            palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
             composer_resources: Vec::new(),
             resources_loading: false,
@@ -1142,6 +1144,7 @@ impl DesktopView {
     fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let return_to_settings = matches!(self.palette_kind, PaletteKind::Fonts(_)) && self.palette.is_some();
         self.palette = None;
+        self.palette_query = gpui_kit::SharedString::default();
         self.effort_slider = None;
         self.palette_groups.clear();
         if let Some(focus) = self.palette_return_focus.take() {
@@ -1320,6 +1323,7 @@ impl DesktopView {
         let state = cx.new(|cx| CommandState::new(window, cx));
         self.palette = Some(state.clone());
         self.palette_kind = kind;
+        self.palette_query = gpui_kit::SharedString::default();
         self.palette_groups = groups;
         // The palette installs its input state during its first render, so
         // focusing has to wait for that frame.
@@ -5142,11 +5146,13 @@ impl DesktopView {
                 )
             });
         }
+        let palette_query = self.palette_query.clone();
         for (section_index, (label, entries)) in confirm_groups.iter().enumerate() {
             let mut group = CommandGroup::new().label(label.clone());
             for (row_index, entry) in entries.iter().enumerate() {
                 let label = entry.label.clone();
                 let description = entry.description.clone();
+                let query = palette_query.clone();
                 let selected = self.is_current_palette_action(&entry.action);
                 let id = format!("palette-label-{section_index}-{row_index}");
                 let accessible_label = description
@@ -5178,7 +5184,12 @@ impl DesktopView {
                                         .flex()
                                         .flex_col()
                                         .gap_1()
-                                        .child(div().truncate().font_medium().child(label.clone()))
+                                        .child(
+                                            gpui_kit::component::label::Label::new(label.clone())
+                                                .highlights(query.clone())
+                                                .font_medium()
+                                                .truncate(),
+                                        )
                                         .when_some(description.clone(), |row, details| {
                                             row.child(
                                                 div()
@@ -5199,7 +5210,18 @@ impl DesktopView {
         }
         let confirm_weak = weak.clone();
         let cancel_weak = weak.clone();
+        let query_weak = weak.clone();
+        let palette_id = state.entity_id();
         let command = command
+            .on_query(move |query, _, cx| {
+                let _updated = query_weak.update(cx, |view, cx| {
+                    if view.palette.as_ref().is_none_or(|palette| palette.entity_id() != palette_id) {
+                        return;
+                    }
+                    view.palette_query = query.into();
+                    cx.notify();
+                });
+            })
             .on_confirm(move |path, _window, cx: &mut App| {
                 let Some(action) = confirm_groups
                     .get(path.section)
