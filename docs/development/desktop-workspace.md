@@ -82,7 +82,8 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Start from the welcome view | The kit Empty surface shows an unframed outline V and a regular-weight workspace prompt. The underlined workspace name opens the native folder picker; no-folder state keeps one workspace CTA. The thread header appears after a conversation starts; other actions stay in the composer and navigation. |
 | Open the command palette | ⌘K searches currently available session commands, view toggles, recent sessions (10), and file previews (50). Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
 | Expand navigation | The toolbar toggle or ⌘B pins/unpins the project/thread sidebar. Hover the rail’s project icon for a transient list; leaving navigation or pressing Escape dismisses the peek. Clicking the icon also pins it for keyboard use. |
-| Configure shortcuts | Settings → Keyboard shortcuts edits twenty-one main desktop commands. Invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; native menus and action-aware tooltips use active bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
+| Navigate settings | Settings groups Appearance, Accessibility, Shortcuts, VT Code, and Connections into Kit tabs. Left/Right moves between categories; Home and End select the first and last. Each category scrolls within the dialog so the title and navigation remain available. |
+| Configure shortcuts | Settings → Shortcuts shows current bindings as GPUI Kit `Kbd` badges. Choose Edit shortcuts to change twenty-one main desktop commands; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
 | Use keyboard commands | ⌘N creates a session, ⌘⇧W closes the selected session, ⌘O chooses a workspace, ⌘L focuses the composer, ⌘⇧I toggles the inspector, ⌘⇧U opens Utilities, ⌘⇧E opens Workspace Files, ⌘⇧G reviews the working tree, ⌘R refreshes the active workspace view, and ⌘. cancels the active run. The same active-turn and cleanup guards apply as for buttons. |
 | Dismiss an overlay | Escape closes the palette or file preview and restores prior keyboard focus. ⌘L dismisses these overlays and focuses the composer. Escape alone does not cancel agent work. |
 | Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. When the bar is enabled, assistive technology receives the agent state as a status announcement. |
@@ -95,11 +96,11 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
 | Add context | ⌘⇧A opens the composer-anchored file/skill/plugin/command search. Selection adds context or invokes an existing native action; it never submits. |
 | Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The model popup offers CLI-ranked quick picks, full model search, and supported reasoning effort. Active work blocks changes. |
-| Toggle status bar | Hidden by default. Settings, the header menu, and ⌘⇧S share one saved visibility preference. |
-| Sync theme to CLI | Settings → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
-| Reload CLI settings | Settings → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
-| Edit CLI settings | Settings → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
-| Open settings | The toolbar button, application menu, or ⌘, opens the same Settings dialog: live theme previews, appearance controls, configured provider and model, the credential setup command, and service/protocol versions. |
+| Toggle status bar | Hidden by default. Settings → Accessibility, the header menu, and ⌘⇧S share one saved visibility preference. |
+| Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
+| Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
+| Edit CLI settings | Settings → VT Code → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
+| Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings dialog. Appearance contains live theme previews and typography; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark buttons and the header theme control switch between saved profiles. The selected profile remains visible in the theme swatches. |
 
 ### Utilities pane
@@ -141,7 +142,7 @@ are helper-lifetime overrides; they do not write `vtcode.toml`. The mode label f
 when it changes through CLI slash commands or agent selection. The picker still edits the configured mode for the
 next session, and stale updates from another session are ignored.
 
-The status bar starts hidden. Settings → **Show status bar**, the header menu, or ⌘⇧S toggles it and saves the
+The status bar starts hidden. Settings → **Accessibility → Show status bar**, the header menu, or ⌘⇧S toggles it and saves the
 choice. The header keeps one overflow control for thread/window actions. The former duplicate thread ellipsis is
 removed. **CLI / WebMCP** opens the connection controls in Settings. Pair a browser origin there or run
 `/webmcp connect <origin>` in the desktop composer. The CLI TUI supports the same command; `/webmcp pair` remains
@@ -424,7 +425,10 @@ renderer. Font discovery is cached once per process; restart after installing
 new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
-The Appearance dialog scrolls vertically to keep controls reachable on smaller windows.
+The Settings dialog keeps its title and category tabs visible while the active page scrolls vertically;
+its width and content are constrained to the available screen. The category TabBar uses Kit's accessible tab semantics
+and scoped Left/Right/Home/End navigation. Shortcuts render with Kit `Kbd` badges in the default read-only view;
+edit fields appear only after choosing Edit shortcuts.
 Visual themes form one horizontal Kit scrolling strip with fixed-width previews, a scrollbar,
 trackpad/mouse-wheel support, and Previous/Next buttons for keyboard or pointer paging.
 Its scrolling does not move the settings below it.
@@ -445,8 +449,8 @@ distinct from VT Code's brand primary. Component surfaces preserve readable text
 | Interaction | Behavior |
 | --- | --- |
 | Thread overflow | New/close actions reuse existing guarded session commands |
-| Appearance | Centered, scrollable overlay with trapped focus and explicit close |
-| Escape from Appearance | Returns to previous focus without altering the draft |
+| Settings | Centered tabbed overlay with trapped focus, scoped category navigation, and explicit close |
+| Escape from Settings | Returns to previous focus without altering the composer draft |
 | Welcome | Quiet brand mark and one prompt; workspace and model controls remain in the composer |
 
 Navigation retains real kit buttons with left-aligned icon/title content and

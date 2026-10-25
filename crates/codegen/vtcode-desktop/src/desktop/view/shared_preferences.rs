@@ -123,18 +123,13 @@ impl DesktopView {
                             view.preferences.follow_cli_theme = Some(true);
                             view.apply_theme_state(theme, Some(window), cx);
                         }
-                    })))
-                .child(desktop_button("import-cli-shortcuts").label("Import CLI shortcuts").ghost()
-                    .desktop_disabled(shared.is_none())
-                    .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx)))))
+                    }))))
             .child(div().text_xs().text_color(cx.theme().colors.muted_foreground)
                 .child("Sync saves the selected built-in theme through the CLI config writer; new CLI sessions use it. Reload reads all CLI configuration layers through a fresh local service. Reload starts a new conversation, keeps the editable draft and attached files, and leaves previous sessions in history."))
-            .child(div().text_xs().text_color(cx.theme().colors.muted_foreground)
-                .child("Import copies the first configured Interrupt and Model Picker bindings. An empty CLI list unbinds its desktop command. Conflicts are rejected; other native commands stay unchanged. Restart the app to apply saved shortcuts."))
             .into_any_element()
     }
 
-    fn import_cli_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn import_cli_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(shared) = self
             .configuration
             .as_ref()
@@ -165,6 +160,8 @@ impl DesktopView {
                 Ok(()) => {
                     self.shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
                     self.preferences = preferences;
+                    self.shortcuts_editing = false;
+                    self.settings_navigation_focus.focus(window, cx);
                     if shared.shortcut_warnings.is_empty() {
                         "CLI shortcuts imported. Restart VT Code Desktop to apply.".into()
                     } else {

@@ -58,6 +58,7 @@ use super::transport::{
 mod composer_controls;
 mod configuration;
 mod navigation;
+mod settings;
 mod shared_preferences;
 mod shortcuts;
 mod typography;
@@ -104,6 +105,10 @@ actions!(
         PreviousInspectorTab,
         FirstInspectorTab,
         LastInspectorTab,
+        NextSettingsTab,
+        PreviousSettingsTab,
+        FirstSettingsTab,
+        LastSettingsTab,
         NextReviewChange,
         PreviousReviewChange,
         CancelRun,
@@ -144,6 +149,10 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("right", NextSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("left", PreviousSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("home", FirstSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("end", LastSettingsTab, Some("VTCodeSettings")),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
     ]);
 }
@@ -372,6 +381,8 @@ struct DesktopView {
     settings_open: bool,
     theme_scroll: ScrollHandle,
     settings_focus: FocusHandle,
+    settings_navigation_focus: FocusHandle,
+    settings_tab: settings::SettingsTab,
     settings_return_focus: Option<FocusHandle>,
     webmcp_status: Option<protocol::WebmcpBridgeStatus>,
     webmcp_pairing: Option<protocol::WebmcpPairResult>,
@@ -403,6 +414,7 @@ struct DesktopView {
     navigation_peek: bool,
     shortcut_inputs: Vec<Entity<gpui_kit::component::input::InputState>>,
     shortcut_message: Option<String>,
+    shortcuts_editing: bool,
     sidebar_width: f32,
     inspector_width: f32,
     resizing: Option<PaneResize>,
@@ -473,6 +485,7 @@ impl DesktopView {
         Self {
             shortcut_inputs,
             shortcut_message: None,
+            shortcuts_editing: false,
             default_code_font: typography::default_code_font(cx),
             focus_handle,
             workspace: None,
@@ -543,6 +556,8 @@ impl DesktopView {
             settings_open: false,
             theme_scroll: ScrollHandle::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
+            settings_navigation_focus: cx.focus_handle().tab_stop(true),
+            settings_tab: settings::SettingsTab::Appearance,
             settings_return_focus: None,
             webmcp_status: None,
             webmcp_pairing: None,
@@ -1059,12 +1074,17 @@ impl DesktopView {
             self.settings_return_focus = window.focused(cx);
         }
         self.settings_open = true;
-        self.settings_focus.focus(window, cx);
+        self.settings_navigation_focus.focus(window, cx);
         cx.notify();
     }
 
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.settings_open = false;
+        if self.shortcuts_editing {
+            self.shortcut_inputs = shortcuts::inputs(&self.preferences.shortcuts, window, cx);
+            self.shortcuts_editing = false;
+            self.shortcut_message = None;
+        }
         if let Some(focus) = self.settings_return_focus.take() {
             focus.focus(window, cx);
         } else {
@@ -2739,260 +2759,7 @@ impl DesktopView {
     }
 
     fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::SYSTEM_SWATCHES
-            .iter()
-            .copied()
-            .chain(themes::all_themes().iter().copied().map(themes::SwatchEntry::Palette));
-        let mut swatch_rows = Vec::new();
-        for entry in swatches {
-            swatch_rows.push(self.render_theme_swatch(entry, cx));
-        }
-        let webmcp_panel = self.render_webmcp_settings(cx);
-        let theme = cx.theme();
-        let colors = &theme.colors;
-        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
-            "light"
-        } else {
-            "dark"
-        };
-        let mut panel = div()
-            .id("settings-panel")
-            .lock_scroll_axis()
-            .test_support()
-            .role(gpui_kit::Role::Dialog)
-            .aria_label("Settings")
-            .w(px(740.))
-            .max_w_full()
-            .max_h_full()
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .gap_5()
-            .p_6()
-            .rounded_xl()
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.background)
-            .shadow_lg()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .text_sm()
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .child(
-                        DialogHeader::new()
-                            .child(DialogTitle::new().text_2xl().child("Make it yours"))
-                            .child(DialogDescription::new().child("Appearance · VT Code Desktop")),
-                    )
-                    .child(
-                        desktop_button("close-settings")
-                            .icon(IconName::X)
-                            .accessibility_label("Close settings")
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
-                    ),
-            )
-            .child(
-                gpui_kit::component::switch::Switch::new("show-status-bar")
-                    .label("Show status bar")
-                    .checked(self.preferences.show_status_bar)
-                    .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
-            )
-            .child(
-                gpui_kit::component::switch::Switch::new("separate-theme-profiles")
-                    .label("Separate light and dark modes")
-                    .checked(self.preferences.separate_theme_profiles)
-                    .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
-            )
-            .when(self.preferences.separate_theme_profiles, |panel| {
-                panel.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .id("theme-profile-hint")
-                                .role(gpui_kit::Role::Label)
-                                .aria_label(format!("Editing the {active_theme_profile} appearance profile"))
-                                .text_sm()
-                                .child("Editing profile"),
-                        )
-                        .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
-                            let light = mode == ThemeMode::Light;
-                            let id = if light { "light" } else { "dark" };
-                            let label = if light { "Light" } else { "Dark" };
-                            let selected = self.theme_mode == mode;
-                            desktop_button(format!("edit-{id}-profile"))
-                                .label(label)
-                                .accessibility_label(format!(
-                                    "Edit {id} appearance profile{}",
-                                    if selected { " (selected)" } else { "" }
-                                ))
-                                .ghost()
-                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    if view.theme_mode != mode {
-                                        view.apply_theme_mode(mode, window, cx);
-                                    }
-                                }))
-                        })),
-                )
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(section_label("VISUAL STYLE", colors.muted_foreground))
-                    .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
-                        let scroll = self.theme_scroll.clone();
-                        desktop_button(if forward { "next-themes" } else { "previous-themes" })
-                            .icon(if forward {
-                                IconName::ChevronRight
-                            } else {
-                                IconName::ChevronLeft
-                            })
-                            .accessibility_label(if forward { "Next themes" } else { "Previous themes" })
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(move |_, _, _, cx| {
-                                let mut offset = scroll.offset();
-                                offset.x += px(if forward { -336. } else { 336. });
-                                scroll.set_offset(offset);
-                                cx.notify();
-                            }))
-                    }))),
-            )
-            .child(
-                div()
-                    .id("theme-list")
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label("Visual themes")
-                    .w_full()
-                    .min_w_0()
-                    .flex_shrink_0()
-                    .h(px(112.))
-                    .relative()
-                    .child(
-                        div()
-                            .id("theme-scroller")
-                            .lock_scroll_axis()
-                            .size_full()
-                            .overflow_x_scroll()
-                            .track_scroll(&self.theme_scroll)
-                            .flex()
-                            .items_start()
-                            .gap_2()
-                            .children(swatch_rows),
-                    )
-                    .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
-                    .child(Scrollbar::horizontal(&self.theme_scroll)),
-            );
-
-        panel = panel
-            .child(
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .outline()
-                    .title("Typography")
-                    .child(self.render_font_family(FontTarget::Ui, cx))
-                    .child(self.render_font_family(FontTarget::Code, cx))
-                    .child(self.render_font_size(false, cx))
-                    .child(self.render_font_size(true, cx))
-                    .child(render_markdown(
-                        "appearance-code-preview".into(),
-                        "```rust\nfn main() { /* VT Code */ }\n```".into(),
-                        cx,
-                    )),
-            )
-            .child(
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .outline()
-                    .title("Accessibility")
-                    .child(self.render_reduced_motion(cx)),
-            )
-            .child(
-                desktop_button("reset-appearance")
-                    .label("Reset appearance to defaults")
-                    .ghost()
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.preferences.separate_theme_profiles = false;
-                        view.preferences.light_theme = None;
-                        view.preferences.dark_theme = None;
-                        view.preferences.light_typography = None;
-                        view.preferences.dark_typography = None;
-                        view.preferences.ui_font_family = None;
-                        view.preferences.code_font_family = None;
-                        view.preferences.ui_font_size = None;
-                        view.preferences.code_font_size = None;
-                        view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
-                        preferences::apply_reduced_motion(
-                            view.preferences.reduced_motion,
-                            view.system_motion_baseline,
-                            cx,
-                        );
-                        view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
-                    })),
-            );
-
-        if let Some(configuration) = self.configuration.as_ref() {
-            panel = panel.child(div().font_semibold().child("Provider")).child(
-                div().text_color(colors.muted_foreground).child(format!(
-                    "{} · {}",
-                    if configuration.provider.is_empty() {
-                        "not configured"
-                    } else {
-                        &configuration.provider
-                    },
-                    configuration.model
-                )),
-            );
-            if !configuration.credential_setup_command.is_empty() {
-                let command = configuration.credential_setup_command.clone();
-                panel = panel.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_xs()
-                                .font_family(theme.mono_font_family.clone())
-                                .text_color(colors.muted_foreground)
-                                .truncate()
-                                .child(command.clone()),
-                        )
-                        .child(desktop_button("copy-credential-command").label("Copy").ghost().on_click(
-                            move |_, _, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
-                            },
-                        )),
-                );
-            }
-        }
-
-        panel = panel
-            .child(self.render_shortcuts(cx))
-            .child(self.render_shared_preferences(cx))
-            .child(webmcp_panel)
-            .child(self.render_cli_configuration(cx));
-        if let Some(info) = self.service_info.as_ref() {
-            panel = panel.child(div().font_semibold().child("Service")).child(
-                div().text_color(colors.muted_foreground).child(format!(
-                    "vtcode {} · protocol {}.{}",
-                    info.server_version, info.protocol.major, info.protocol.minor
-                )),
-            );
-        }
-        panel.into_any_element()
+        self.render_settings_tabs(cx)
     }
 
     fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -5542,7 +5309,7 @@ impl Render for DesktopView {
                     )
                     .child(
                         div()
-                            .w(px(740.))
+                            .w(px(860.))
                             .max_w_full()
                             .h_full()
                             .min_w_0()

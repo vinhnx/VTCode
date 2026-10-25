@@ -79,6 +79,15 @@ fn focus_button_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mut
     panic!("Tab did not reach button {id}");
 }
 
+fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
+    window.press("home", cx);
+    window.render_frame(cx);
+    for _ in 0..index {
+        window.press("right", cx);
+        window.render_frame(cx);
+    }
+}
+
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
     cx.get_menus()
         .unwrap()
@@ -643,7 +652,8 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         window.click("open-settings", cx);
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-360.))), cx);
+        select_settings_category(window, 3, cx);
+        window.render_frame(cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
     })
@@ -726,8 +736,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
-        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         window.click("sync-cli-theme", cx);
         let BackendCommand::Request { method, params } = requests.try_recv().expect("theme request") else {
             panic!("expected a theme request");
@@ -1269,7 +1278,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.render_frame(cx);
         assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
 
-        window.scroll("theme-list", gpui_kit::ScrollDelta::Pixels(point(px(-3000.), px(0.))), cx);
+        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Pixels(point(px(-3000.), px(0.))), cx);
         window.render_frame(cx);
         let last = window.find("theme-catppuccin-mocha").bounds();
         assert!(last.left() >= strip.left() && last.right() <= strip.right());
@@ -2792,7 +2801,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         });
         assert_eq!(cx.theme().font_size, px(17.));
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-320.))), cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-320.))), cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
@@ -3585,7 +3594,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        select_settings_category(window, 1, cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
 
@@ -3998,6 +4008,11 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        window.click("edit-shortcuts", cx);
+        view.update(cx, |view, cx| {
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
         });
         window.render_frame(cx);
@@ -4017,10 +4032,81 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
                 .map(String::as_str),
             Some("ctrl-shift-k")
         );
+        window.render_frame(cx);
+        window.click("edit-shortcuts", cx);
         focus_button_by_tab(window, "reset-shortcuts", cx);
         window.press("enter", cx);
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
+        assert_eq!(window.find("settings-navigation").label(), Some("Settings categories"));
+        assert!(window.try_find("appearance-settings").is_some());
+
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("accessibility-settings").is_some());
+        window.press("end", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("connections-settings").is_some());
+
+        select_settings_category(window, 2, cx);
+        assert!(window.try_find("keyboard-settings").is_some());
+        let shortcut = window.find("shortcut-badge-commands");
+        assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(shortcut.label(), Some("Shortcut for Search commands: cmd-k"));
+        assert!(window.try_find("shortcut-input-commands").is_none(), "inputs stay hidden until edit mode");
+
+        window.click("edit-shortcuts", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("shortcut-input-commands").is_some());
+        view.update(cx, |view, cx| {
+            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx));
+        });
+        window.click("cancel-shortcuts", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("shortcut-input-commands").is_none());
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().shortcuts.get("commands"),
+            None,
+            "cancelling discards unsaved bindings"
+        );
+        assert_eq!(window.find("shortcut-badge-commands").label(), Some("Shortcut for Search commands: cmd-k"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+
+        let panel = window.find("settings-panel").bounds();
+        let viewport = window.viewport_size();
+        assert!(panel.origin.x >= px(0.) && panel.origin.y >= px(0.));
+        assert!(panel.origin.x + panel.size.width <= viewport.width);
+        assert!(panel.origin.y + panel.size.height <= viewport.height);
+
+        select_settings_category(window, 2, cx);
+        window.render_frame(cx);
+        let navigation = window.find("settings-navigation").bounds();
+        let content = window.find("settings-content").bounds();
+        assert!(navigation.origin.x >= panel.origin.x);
+        assert!(navigation.origin.x + navigation.size.width <= panel.origin.x + panel.size.width);
+        assert!(content.origin.x >= panel.origin.x);
+        assert!(content.origin.x + content.size.width <= panel.origin.x + panel.size.width);
+        assert!(window.try_find("keyboard-settings").is_some());
     })
     .unwrap();
 }
@@ -4170,6 +4256,7 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         focus_button_by_tab(window, "use-cli-theme", cx);
         window.press("enter", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
@@ -4197,7 +4284,7 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
+        select_settings_category(window, 2, cx);
         window.click("import-cli-shortcuts", cx);
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.shortcuts.get("cancel").map(String::as_str), Some("ctrl-c"));
@@ -4216,7 +4303,6 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
                 .insert("cancel".into(), vec!["cmd-q".into()]);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
         window.click("import-cli-shortcuts", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("reserved"));
         assert_eq!(
@@ -4248,6 +4334,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         assert!(crate::desktop::preferences::Preferences::load().show_status_bar);
         window.press("cmd-,", cx);
         window.render_frame(cx);
+        select_settings_category(window, 1, cx);
         window.click("show-status-bar", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).preferences.show_status_bar);
@@ -4955,8 +5042,7 @@ fn cli_settings_reload_button_and_action_share_the_transition_guard(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
-        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         window.click("reload-cli-settings", cx);
         assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
         assert!(view.read(cx).pending_workspace.is_some());

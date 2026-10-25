@@ -1,6 +1,7 @@
 //! Configurable desktop commands. Text editing and Kit focus bindings retain their own contexts.
 use super::*;
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
 const COMMANDS: [(&str, &str, &str); 21] = [
@@ -134,48 +135,190 @@ impl DesktopView {
     }
 
     pub(super) fn render_shortcuts(&self, cx: &Context<Self>) -> AnyElement {
-        GroupBox::new().flex_shrink_0().outline().title("Keyboard shortcuts")
-            .child(div().text_xs().text_color(cx.theme().colors.muted_foreground)
-                .child("Use cmd, ctrl, alt, or shift with a key (for example cmd-shift-k). Leave a field empty to unbind it. Saved changes apply when the app restarts. Tab and Shift+Tab reach controls; Enter or Space activates buttons."))
-            .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|((id, label, _), input)| {
-                div().w_full().flex().flex_wrap().items_center().justify_between().gap_2().py_1()
-                    .child(*label)
-                    .child(Input::new(input).w(px(180.)).max_w_full().accessibility_id(format!("shortcut-{id}")).aria_label(format!("Shortcut for {label}")))
-            }))
-            .children(self.shortcut_message.as_ref().map(|message| div().id("shortcut-status").role(gpui_kit::Role::Status).aria_label(message.clone()).text_sm().child(message.clone())))
-            .child(div().flex().flex_wrap().gap_2()
-                .child(desktop_button("save-shortcuts").label("Save shortcuts").ghost().on_click(cx.listener(|view, _, _, cx| {
-                    let candidate = view.shortcut_values(cx);
-                    match bindings(&candidate) {
-                        Ok(_) => {
-                            let mut preferences = view.preferences.clone();
-                            preferences.shortcuts = candidate;
-                            match preferences.try_save() {
-                                Ok(()) => { view.preferences = preferences; view.shortcut_message = Some("Shortcuts saved. Restart VT Code Desktop to apply.".into()); }
-                                Err(error) => view.shortcut_message = Some(error),
+        let description = if self.shortcuts_editing {
+            "Change a binding or leave it empty to unbind it. Saved changes apply after restarting VT Code Desktop."
+        } else {
+            "Current desktop bindings. Select Edit shortcuts to customize them."
+        };
+        let cli_shortcuts_available = self
+            .configuration
+            .as_ref()
+            .and_then(|configuration| configuration.shared_ui.as_ref())
+            .is_some();
+        let import_button = desktop_button("import-cli-shortcuts")
+            .label("Import from CLI")
+            .ghost()
+            .desktop_disabled(!cli_shortcuts_available)
+            .on_click(cx.listener(|view, _, window, cx| view.import_cli_shortcuts(window, cx)));
+        let mut actions = div().flex().flex_wrap().gap_2();
+        if self.shortcuts_editing {
+            actions = actions
+                .child(desktop_button("save-shortcuts").label("Save").primary().on_click(cx.listener(
+                    |view, _, window, cx| {
+                        let candidate = view.shortcut_values(cx);
+                        match bindings(&candidate) {
+                            Ok(_) => {
+                                let mut preferences = view.preferences.clone();
+                                preferences.shortcuts = candidate;
+                                match preferences.try_save() {
+                                    Ok(()) => {
+                                        view.preferences = preferences;
+                                        view.shortcuts_editing = false;
+                                        view.settings_navigation_focus.focus(window, cx);
+                                        view.shortcut_message =
+                                            Some("Shortcuts saved. Restart VT Code Desktop to apply.".into());
+                                    }
+                                    Err(error) => view.shortcut_message = Some(error),
+                                }
                             }
+                            Err(error) => view.shortcut_message = Some(error),
                         }
-                        Err(error) => view.shortcut_message = Some(error),
-                    }
-                    cx.notify();
-                })))
-                .child(desktop_button("reset-shortcuts").label("Reset shortcuts").ghost().on_click(cx.listener(|view, _, window, cx| {
-                    let mut preferences = view.preferences.clone();
-                    preferences.shortcuts.clear();
-                    if let Err(error) = preferences.try_save() {
-                        view.shortcut_message = Some(error);
                         cx.notify();
-                        return;
-                    }
-                    view.preferences = preferences;
-                    for ((_, _, default), input) in COMMANDS.iter().zip(&view.shortcut_inputs) {
-                        input.update(cx, |input, cx| input.set_value(*default, window, cx));
-                    }
-                    view.shortcut_message = Some("Defaults saved. Restart VT Code Desktop to apply.".into());
-                    cx.notify();
-                }))))
-            .into_any_element()
+                    },
+                )))
+                .child(
+                    desktop_button("cancel-shortcuts")
+                        .label("Cancel")
+                        .ghost()
+                        .on_click(cx.listener(|view, _, window, cx| view.cancel_shortcut_edit(window, cx))),
+                )
+                .child(
+                    desktop_button("reset-shortcuts")
+                        .label("Reset defaults")
+                        .ghost()
+                        .on_click(cx.listener(|view, _, window, cx| view.reset_shortcuts(window, cx))),
+                );
+        } else {
+            actions = actions.child(
+                desktop_button("edit-shortcuts")
+                    .label("Edit shortcuts")
+                    .ghost()
+                    .on_click(cx.listener(|view, _, window, cx| view.begin_shortcut_edit(window, cx))),
+            );
+        }
+        actions = actions.child(import_button);
+
+        let mut group = GroupBox::new()
+            .flex_shrink_0()
+            .outline()
+            .title("Keyboard shortcuts")
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child(description),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().font_medium().child("Desktop bindings"))
+                    .child(actions),
+            )
+            .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|((id, label, _), input)| {
+                let value = input.read(cx).value().to_string();
+                let value_element = if self.shortcuts_editing {
+                    div()
+                        .child(
+                            Input::new(input)
+                                .w(px(220.))
+                                .max_w_full()
+                                .id(format!("shortcut-input-{id}"))
+                                .accessibility_id(format!("shortcut-{id}"))
+                                .aria_label(format!("Shortcut for {label}")),
+                        )
+                        .into_any_element()
+                } else {
+                    shortcut_badge(id, label, &value)
+                };
+                div()
+                    .id(format!("shortcut-row-{id}"))
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label(format!("{label}, shortcut {}", if value.is_empty() { "not set" } else { &value }))
+                    .w_full()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .py_1()
+                    .child(*label)
+                    .child(value_element)
+            }))
+            .children(self.shortcut_message.as_ref().map(|message| {
+                div()
+                    .id("shortcut-status")
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(message.clone())
+                    .text_sm()
+                    .child(message.clone())
+            }));
+
+        if self.shortcuts_editing {
+            group = group.child(
+                div()
+                    .text_xs()
+                    .text_color(cx.theme().colors.muted_foreground)
+                    .child("Use cmd, ctrl, or alt with a key. Tab and Shift+Tab move between controls."),
+            );
+        }
+        group.into_any_element()
     }
+
+    fn begin_shortcut_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.shortcut_inputs = inputs(&self.preferences.shortcuts, window, cx);
+        self.shortcut_message = None;
+        self.shortcuts_editing = true;
+        if let Some(input) = self.shortcut_inputs.first().cloned() {
+            input.update(cx, |input, cx| input.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    fn cancel_shortcut_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.shortcut_inputs = inputs(&self.preferences.shortcuts, window, cx);
+        self.shortcut_message = None;
+        self.shortcuts_editing = false;
+        self.settings_navigation_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn reset_shortcuts(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let mut preferences = self.preferences.clone();
+        preferences.shortcuts.clear();
+        if let Err(error) = preferences.try_save() {
+            self.shortcut_message = Some(error);
+            cx.notify();
+            return;
+        }
+        self.preferences = preferences;
+        self.shortcut_inputs = inputs(&BTreeMap::new(), window, cx);
+        self.shortcut_message = Some("Defaults saved. Restart VT Code Desktop to apply.".into());
+        self.shortcuts_editing = false;
+        self.settings_navigation_focus.focus(window, cx);
+        cx.notify();
+    }
+}
+
+fn shortcut_badge(id: &str, label: &str, value: &str) -> AnyElement {
+    let badge = if value.is_empty() {
+        div().text_xs().child("Not set")
+    } else if let Ok(keystroke) = gpui_kit::Keystroke::parse(value) {
+        div().child(Kbd::new(keystroke).outline())
+    } else {
+        div().text_xs().child("Invalid shortcut")
+    };
+    div()
+        .id(format!("shortcut-badge-{id}"))
+        .test_support()
+        .role(gpui_kit::Role::Label)
+        .aria_label(format!("Shortcut for {label}: {}", if value.is_empty() { "not set" } else { value }))
+        .child(badge)
+        .into_any_element()
 }
 
 #[cfg(test)]
