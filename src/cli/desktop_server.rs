@@ -101,6 +101,16 @@ struct DesktopWebmcpBridge {
     endpoint: String,
 }
 
+impl DesktopWebmcpBridge {
+    async fn stop(&mut self) {
+        if self.task.is_finished() {
+            return;
+        }
+        self.task.abort();
+        let _ = (&mut self.task).await;
+    }
+}
+
 impl Drop for DesktopWebmcpBridge {
     fn drop(&mut self) {
         self.server.revoke_all_pairings();
@@ -550,6 +560,7 @@ async fn enqueue_turn(
 }
 
 async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus {
+    reap_stopped_webmcp_bridge(context).await;
     let (session_id, turns_available) = {
         let state = context.state.lock().await;
         let session_id = state.session_id.clone();
@@ -559,7 +570,13 @@ async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus
             });
         (session_id, turns_available)
     };
-    let endpoint = context.webmcp.lock().await.as_ref().map(|bridge| bridge.endpoint.clone());
+    let endpoint = context
+        .webmcp
+        .lock()
+        .await
+        .as_ref()
+        .filter(|bridge| !bridge.task.is_finished())
+        .map(|bridge| bridge.endpoint.clone());
     protocol::WebmcpBridgeStatus {
         running: endpoint.is_some(),
         endpoint,
@@ -574,6 +591,7 @@ async fn pair_webmcp(
     context: &ServiceContext,
     params: protocol::WebmcpPairParams,
 ) -> Result<protocol::WebmcpPairResult> {
+    reap_stopped_webmcp_bridge(context).await;
     let settings = &context.startup.config.webmcp;
     let origin = params.origin.trim();
     if origin != params.origin || !vtcode_commons::validation::is_valid_origin(origin) {
@@ -643,9 +661,26 @@ async fn pair_webmcp(
 }
 
 async fn stop_webmcp_bridge(context: &ServiceContext) {
-    let bridge = context.webmcp.lock().await.take();
+    let mut bridge = context.webmcp.lock().await.take();
     context.state.lock().await.webmcp_event_hub = None;
-    drop(bridge);
+    if let Some(bridge) = bridge.as_mut() {
+        bridge.stop().await;
+    }
+}
+
+async fn reap_stopped_webmcp_bridge(context: &ServiceContext) {
+    let mut bridge = {
+        let mut slot = context.webmcp.lock().await;
+        if slot.as_ref().is_some_and(|bridge| bridge.task.is_finished()) {
+            slot.take()
+        } else {
+            None
+        }
+    };
+    if let Some(bridge) = bridge.as_mut() {
+        context.state.lock().await.webmcp_event_hub = None;
+        bridge.stop().await;
+    }
 }
 
 #[derive(Clone)]
@@ -1608,6 +1643,96 @@ fn sanitize_public_error(message: &str) -> String {
 mod tests {
     use super::*;
 
+    fn test_startup_context(workspace: &Path) -> StartupContext {
+        use std::collections::BTreeMap;
+        use vtcode_core::config::core::PromptCachingConfig;
+        use vtcode_core::config::loader::VTCodeConfig;
+        use vtcode_core::config::models::Provider;
+        use vtcode_core::config::types::{
+            AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
+        };
+        use vtcode_core::core::agent::snapshots::{
+            DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+        };
+
+        StartupContext {
+            workspace: workspace.to_path_buf(),
+            config: VTCodeConfig::default(),
+            agent_config: CoreAgentConfig {
+                model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+                api_key: "test-key".to_string(),
+                provider: "gemini".to_string(),
+                openai_chatgpt_auth: None,
+                api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+                workspace: workspace.to_path_buf(),
+                verbose: false,
+                quiet: false,
+                theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+                reasoning_effort: ReasoningEffortLevel::default(),
+                ui_surface: UiSurfacePreference::default(),
+                prompt_cache: PromptCachingConfig::default(),
+                model_source: ModelSelectionSource::WorkspaceConfig,
+                custom_api_keys: BTreeMap::new(),
+                checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+                checkpointing_storage_dir: None,
+                checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+                checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+                max_conversation_turns: 1000,
+                model_behavior: None,
+            },
+            skip_confirmations: false,
+            full_auto_requested: false,
+            automation_prompt: None,
+            primary_agent_explicitly_configured: false,
+            session_resume: None,
+            resume_show_all: false,
+            custom_session_id: None,
+            summarize_fork: false,
+            planning_entry_source: vtcode_core::core::interfaces::session::PlanningEntrySource::None,
+        }
+    }
+
+    fn test_service_context(
+        startup: StartupContext,
+        workspace: PathBuf,
+    ) -> (ServiceContext, mpsc::Receiver<protocol::Notification>) {
+        let (notifications, receiver) = mpsc::channel(protocol::DEFAULT_QUEUE_CAPACITY);
+        let context = ServiceContext {
+            startup,
+            workspace,
+            state: std::sync::Arc::new(Mutex::new(ServerState::default())),
+            notifications,
+            turn_finished: std::sync::Arc::new(Notify::new()),
+            webmcp: Mutex::new(None),
+        };
+        (context, receiver)
+    }
+
+    async fn test_webmcp_server(context: &ServiceContext) -> WebmcpServer {
+        let workspace = FilesystemWorkspace::new(&context.workspace, [context.workspace.clone()], false)
+            .await
+            .expect("workspace adapter");
+        let adapter = DesktopWebmcpRuntime {
+            workspace,
+            state: std::sync::Arc::clone(&context.state),
+            notifications: context.notifications.clone(),
+        };
+        let settings = &context.startup.config.webmcp;
+        WebmcpServer::new(
+            std::sync::Arc::new(adapter),
+            WebmcpServerConfig {
+                host: settings.host.clone(),
+                port: settings.port,
+                allowed_origins: settings.allowed_origins.clone(),
+                pairing_ttl_secs: settings.pairing_ttl_secs,
+                max_frame_bytes: settings.max_frame_bytes,
+                max_in_flight_requests: settings.max_in_flight_requests,
+                ..Default::default()
+            },
+        )
+        .expect("WebMCP server")
+    }
+
     #[tokio::test]
     async fn webmcp_turns_use_the_selected_desktop_runtime_and_respect_busy_state() {
         let workspace_root = tempfile::tempdir().expect("workspace");
@@ -1655,6 +1780,65 @@ mod tests {
 
         drop(exit_sender);
         runtime_task.abort();
+    }
+
+    #[tokio::test]
+    async fn stopped_webmcp_listener_is_reported_and_can_be_repaired() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mut startup = test_startup_context(workspace.path());
+        startup.config.webmcp.host = "127.0.0.1".into();
+        startup.config.webmcp.port = 0;
+        startup.config.webmcp.allowed_origins = vec!["https://example.test".into()];
+        let (context, _notifications) = test_service_context(startup, workspace.path().to_path_buf());
+        let server = test_webmcp_server(&context).await;
+        let listener = server.bind().await.expect("initial listener");
+        let address = listener.local_addr().expect("listener address");
+        let task_server = server.clone();
+        let task = tokio::spawn(async move {
+            let _ = task_server.serve_listener(listener).await;
+        });
+        context.state.lock().await.webmcp_event_hub = Some(server.event_hub());
+        *context.webmcp.lock().await = Some(DesktopWebmcpBridge {
+            server,
+            task,
+            endpoint: format!("ws://{address}/webmcp"),
+        });
+
+        {
+            let mut slot = context.webmcp.lock().await;
+            let bridge = slot.as_mut().expect("active bridge");
+            bridge.task.abort();
+            let _ = (&mut bridge.task).await;
+        }
+
+        let stopped = webmcp_status(&context).await;
+        assert!(!stopped.running, "a finished listener must not be reported as running");
+        assert!(stopped.endpoint.is_none());
+        assert!(context.state.lock().await.webmcp_event_hub.is_none());
+
+        let pairing = pair_webmcp(
+            &context,
+            protocol::WebmcpPairParams {
+                origin: "https://example.test".into(),
+                replace: false,
+            },
+        )
+        .await
+        .expect("pairing restarts a stopped listener");
+        let connected = webmcp_status(&context).await;
+        assert!(connected.running);
+        assert_eq!(connected.endpoint.as_deref(), Some(pairing.endpoint.as_str()));
+
+        stop_webmcp_bridge(&context).await;
+        let stopped_address = pairing
+            .endpoint
+            .strip_prefix("ws://")
+            .expect("local WebSocket endpoint")
+            .strip_suffix("/webmcp")
+            .expect("WebMCP endpoint path");
+        let _rebound = tokio::net::TcpListener::bind(stopped_address)
+            .await
+            .expect("stop waits until the listener releases its port");
     }
 
     #[test]
