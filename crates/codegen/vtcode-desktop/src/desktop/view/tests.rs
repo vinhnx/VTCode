@@ -1212,8 +1212,7 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(cx.theme().font_size, px(17.));
 
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-180.))), cx);
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(180.))), cx);
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Pixels(point(px(-500.), px(0.))), cx);
         window.click("theme-solarized-light", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
@@ -1243,6 +1242,45 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 760., 700.);
+    cx.update_window(window, |_, window, cx| {
+        window.click("open-settings", cx);
+        window.render_frame(cx);
+        let strip = window.find("theme-list").bounds();
+        let first = window.find("theme-system-light").bounds();
+        let last = window.find("theme-catppuccin-mocha").bounds();
+        let typography_top = window.find("choose-ui-font").bounds().top();
+        assert_eq!(first.top(), last.top(), "themes occupy a single row");
+        assert!(last.left() > strip.right(), "the list must overflow horizontally");
+        assert_eq!(first.size.width, px(104.), "swatches must not shrink to fit");
+        window.click("next-themes", cx);
+        window.render_frame(cx);
+        assert!(window.find("theme-system-light").bounds().left() < first.left());
+        window.click("previous-themes", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
+
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Pixels(point(px(-3000.), px(0.))), cx);
+        window.render_frame(cx);
+        let last = window.find("theme-catppuccin-mocha").bounds();
+        assert!(last.left() >= strip.left() && last.right() <= strip.right());
+        assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
+        window.click("theme-catppuccin-mocha", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "catppuccin-mocha");
+
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
+        window.click("theme-system-light", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "system-light");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -1250,14 +1288,14 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-180.))), cx);
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Pixels(point(px(-900.), px(0.))), cx);
         window.click("theme-github-dark", cx);
         {
             let view = view.read(cx);
             assert_eq!(view.theme_id, "github-dark");
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(180.))), cx);
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Pixels(point(px(600.), px(0.))), cx);
         window.click("theme-solarized-light", cx);
         {
             let view = view.read(cx);
@@ -2502,7 +2540,7 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
+fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -2530,13 +2568,9 @@ fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_sessi
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
         });
         window.render_frame(cx);
-        window.click("welcome-browse-files", cx);
+        window.click("pick-model", cx);
         window.render_frame(cx);
-        assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
-        window.click("welcome-choose-model", cx);
-        window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
+        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
         assert!(
             window
                 .find("palette-label-0-0")
@@ -2734,16 +2768,39 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn welcome_review_action_opens_changes_without_creating_a_session(cx: &mut TestAppContext) {
+fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        window.click("welcome-review-changes", cx);
+        assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
+        assert!(window.find_all("thread-header").is_empty());
+        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
+            assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
+        }
+        window.click("nav-utilities", cx);
         window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
         assert!(view.read(cx).selected_session_id.is_none());
         assert_eq!(window.find("send-prompt").label(), Some("Send message"));
+        view.update(cx, |view, _| {
+            view.workspace = None;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace folder"));
+        view.update(cx, |view, _| {
+            view.workspace = Some(std::env::temp_dir());
+            view.transcript.push(TranscriptItem::new(
+                "first-message".into(),
+                "user".into(),
+                "You".into(),
+                "Inspect this workspace".into(),
+            ));
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome").is_empty());
+        assert_eq!(window.find_all("thread-header").len(), 1);
     })
     .unwrap();
 }
@@ -3880,6 +3937,7 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
             ("header-overflow", "Window actions"),
             ("navigation-overflow", "Navigation actions"),
         ] {
+            assert_eq!(window.find_all(id).len(), 1, "each chrome area has one overflow trigger");
             assert_eq!(window.find(id).label(), Some(label));
             window.click(id, cx);
             window.render_frame(cx);
@@ -4082,6 +4140,41 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         assert!(!view.read(cx).preferences.show_status_bar);
         assert!(!crate::desktop::preferences::Preferences::load().show_status_bar);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this draft");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 900., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(16);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.composer
+                .update(cx, |input, cx| input.set_value("Keep\nthis\ndraft", window, cx));
+        });
+        window.render_frame(cx);
+        for button in ["attach-files", "composer-policy", "composer-mode", "pick-model"] {
+            window.click(button, cx);
+            window.render_frame(cx);
+            let popup = window.find("command-palette").bounds();
+            let composer = window.find("composer-context").bounds();
+            assert!(popup.bottom() <= composer.top(), "{button} popup must stay above the input");
+            if button == "pick-model" {
+                assert!((popup.right() - composer.right()).abs() <= px(1.));
+            } else {
+                assert!((popup.left() - composer.left()).abs() <= px(1.));
+            }
+            assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert!(view.read(cx).palette.is_none());
+            assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "Keep\nthis\ndraft");
+        }
     })
     .unwrap();
 }

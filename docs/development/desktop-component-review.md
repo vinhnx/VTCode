@@ -38,7 +38,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [dock](https://gpui-kit.com/component/dock) | Retain tested three-pane resizing and persistence; avoid unnecessary docking migration. |
 | [dropdown_button](https://gpui-kit.com/component/dropdown_button) | A standard thread menu is sufficient; no split-button behavior needed. |
 | [editor](https://gpui-kit.com/component/editor) | Deferred: richer navigation/editing is a separate functional increment. |
-| [empty](https://gpui-kit.com/component/empty) | Applied: branded welcome with real browse/review actions. |
+| [empty](https://gpui-kit.com/component/empty) | Applied: quiet branded welcome; real workspace/model actions remain in navigation and the composer. |
 | [focus-trap](https://gpui-kit.com/component/focus-trap) | Applied: larger Appearance overlay, heading parts, contained focus, and focus restoration. |
 | [form](https://gpui-kit.com/component/form) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [group-box](https://gpui-kit.com/component/group-box) | Applied: grouped typography controls. |
@@ -51,7 +51,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [label](https://gpui-kit.com/component/label) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |
 | [list](https://gpui-kit.com/component/list) | Retain keyboard-capable navigation buttons; resolved SidebarMenu rows do not offer equivalent keyboard handling. |
 | [marker](https://gpui-kit.com/component/marker) | Do not invent execution percentages or phases beyond existing runtime events. |
-| [menu](https://gpui-kit.com/component/menu) | Applied: thread overflow uses canonical guarded new/close commands. |
+| [menu](https://gpui-kit.com/component/menu) | Applied: one overflow trigger per chrome area uses canonical guarded new/close commands. |
 | [message](https://gpui-kit.com/component/message) | Applied: sender headers, outlined user prompts, unframed assistant responses, and copy footers. |
 | [message-scroller](https://gpui-kit.com/component/message-scroller) | Retain measured transcript ListState and existing anchoring/following behavior. |
 | [notification](https://gpui-kit.com/component/notification) | Retain inline error and draft-recovery state with existing ownership. |

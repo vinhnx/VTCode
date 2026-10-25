@@ -79,7 +79,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Watch command output | The inspector's Output tab shows the newest live or restored command/tool output in mono, tail-capped to the last 1,000 lines. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
-| Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
+| Start from the welcome view | The kit Empty surface shows the VT Code mark and a single prompt, plus one workspace CTA when no folder is selected. The thread header appears after a conversation starts; other actions stay in the composer and navigation. |
 | Open the command palette | ⌘K searches currently available session commands, view toggles, recent sessions (10), and file previews (50). Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
 | Expand navigation | The toolbar toggle or ⌘B pins/unpins the project/thread sidebar. Hover the rail’s project icon for a transient list; leaving navigation or pressing Escape dismisses the peek. Clicking the icon also pins it for keyboard use. |
 | Configure shortcuts | Settings → Keyboard shortcuts edits seventeen main desktop commands. Invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; native menus and action-aware tooltips use active bindings. Tab/Shift+Tab and Enter/Space remain available on Kit controls. |
@@ -115,7 +115,7 @@ keyboard-selectable inspector tabs and accessible named controls as the other vi
 
 ### Compact composer
 
-The composer is centered with a 760-pixel width cap and a one-to-six-line growing text field. A small context strip
+The composer is centered with a 720-pixel width cap and a one-to-six-line growing text field. A small context strip
 shows workspace selection, the CLI/WebMCP documentation link, configured agent mode, and Settings. Its
 theme-derived surface contains attachment, actual execution-policy text, model selection, and send/cancel controls.
 Footer controls wrap when space is limited; long model names are bounded. Empty or whitespace-only drafts cannot be
@@ -398,7 +398,10 @@ renderer. Font discovery is cached once per process; restart after installing
 new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
-The Appearance dialog scrolls to keep controls reachable on smaller windows.
+The Appearance dialog scrolls vertically to keep controls reachable on smaller windows.
+Visual themes form one horizontal Kit scrolling strip with fixed-width previews, a scrollbar,
+trackpad/mouse-wheel support, and Previous/Next buttons for keyboard or pointer paging.
+Its scrolling does not move the settings below it.
 Separate theme profiles retain independent themes, font families, and sizes for
 light and dark modes. Custom colors, sidebar translucency, alternate Dock icons,
 and native font-smoothing overrides
@@ -418,7 +421,7 @@ distinct from VT Code's brand primary. Component surfaces preserve readable text
 | Thread overflow | New/close actions reuse existing guarded session commands |
 | Appearance | Centered, scrollable overlay with trapped focus and explicit close |
 | Escape from Appearance | Returns to previous focus without altering the draft |
-| Welcome review | Opens session changes without creating a thread or sending a prompt |
+| Welcome | Quiet brand mark and one prompt; workspace and model controls remain in the composer |
 
 Navigation retains real kit buttons with left-aligned icon/title content and
 keyboard/disabled behavior. Transcript virtualization and raw-copy behavior retain

@@ -5,7 +5,7 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, StyledExt};
+use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
@@ -24,6 +24,7 @@ use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAli
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
+use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -32,8 +33,9 @@ use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, Subscription,
-    SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list, point, px,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
+    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list,
+    point, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -65,7 +67,7 @@ use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
-const CONTENT_WIDTH: f32 = 760.;
+const CONTENT_WIDTH: f32 = 720.;
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
@@ -363,6 +365,7 @@ struct DesktopView {
     resources_loaded: bool,
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
     settings_open: bool,
+    theme_scroll: ScrollHandle,
     settings_focus: FocusHandle,
     settings_return_focus: Option<FocusHandle>,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
@@ -528,6 +531,7 @@ impl DesktopView {
             resources_loaded: false,
             palette_groups: Vec::new(),
             settings_open: false,
+            theme_scroll: ScrollHandle::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_return_focus: None,
             cli_config_settings: None,
@@ -2552,15 +2556,24 @@ impl DesktopView {
             .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
             .and_then(|session| session.title.as_deref())
             .unwrap_or("New thread");
-        div().w_full().flex().items_center().justify_between().px_8().py_3().child(
-            div()
-                .min_w_0()
-                .flex_1()
-                .text_lg()
-                .font_semibold()
-                .truncate()
-                .child(title.to_string()),
-        )
+        div()
+            .id("thread-header")
+            .test_support()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px_8()
+            .py_3()
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_lg()
+                    .font_semibold()
+                    .truncate()
+                    .child(title.to_string()),
+            )
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -2695,6 +2708,7 @@ impl DesktopView {
         };
         let mut panel = div()
             .id("settings-panel")
+            .lock_scroll_axis()
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label("Settings")
@@ -2779,18 +2793,56 @@ impl DesktopView {
                         })),
                 )
             })
-            .child(section_label("VISUAL STYLE", colors.muted_foreground))
             .child(
                 div()
-                    .id("theme-grid")
-                    .test_support()
-                    .flex_shrink_0()
-                    .max_h(px(220.))
-                    .overflow_y_scroll()
                     .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .children(swatch_rows),
+                    .items_center()
+                    .justify_between()
+                    .child(section_label("VISUAL STYLE", colors.muted_foreground))
+                    .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
+                        let scroll = self.theme_scroll.clone();
+                        desktop_button(if forward { "next-themes" } else { "previous-themes" })
+                            .icon(if forward {
+                                IconName::ChevronRight
+                            } else {
+                                IconName::ChevronLeft
+                            })
+                            .accessibility_label(if forward { "Next themes" } else { "Previous themes" })
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                let mut offset = scroll.offset();
+                                offset.x += px(if forward { -336. } else { 336. });
+                                scroll.set_offset(offset);
+                                cx.notify();
+                            }))
+                    }))),
+            )
+            .child(
+                div()
+                    .id("theme-list")
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Visual themes")
+                    .w_full()
+                    .min_w_0()
+                    .flex_shrink_0()
+                    .h(px(112.))
+                    .relative()
+                    .child(
+                        div()
+                            .id("theme-scroller")
+                            .lock_scroll_axis()
+                            .size_full()
+                            .overflow_x_scroll()
+                            .track_scroll(&self.theme_scroll)
+                            .flex()
+                            .items_start()
+                            .gap_2()
+                            .children(swatch_rows),
+                    )
+                    .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
+                    .child(Scrollbar::horizontal(&self.theme_scroll)),
             );
 
         panel = panel
@@ -3686,62 +3738,35 @@ impl DesktopView {
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let content = if self.transcript.is_empty() {
-            EmptyState::new()
-                .header(
-                    EmptyHeader::new()
-                        .media(EmptyMedia::new().child(brand_logo(40.)))
-                        .title(EmptyTitle::new().text_3xl().font_semibold().child("What will you build?"))
-                        .description(
-                            EmptyDescription::new()
-                                .text_sm()
-                                .child("Explore your code, make a change, or review your work."),
-                        ),
-                )
+            div()
+                .id("welcome")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label("VT Code welcome")
                 .size_full()
-                .content(
-                    EmptyContent::new()
-                        .flex_row()
-                        .flex_wrap()
-                        .justify_center()
-                        .gap_3()
-                        .child(
-                            desktop_button("welcome-browse-files")
-                                .accessibility_label("Browse files")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Folder)
-                                .label("Explore files")
-                                .desktop_disabled(self.workspace.is_none())
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.inspector_open = true;
-                                    view.inspector_tab = InspectorTab::Files;
-                                    view.save_preferences();
-                                    cx.notify();
-                                })),
+                .child(
+                    EmptyState::new()
+                        .header(
+                            EmptyHeader::new()
+                                .media(EmptyMedia::new().child(brand_logo(32.)))
+                                .title(EmptyTitle::new().text_2xl().font_medium().child("What will you build?")),
                         )
-                        .child(
-                            desktop_button("welcome-review-changes")
-                                .accessibility_label("Review changes")
-                                .ghost()
-                                .small()
-                                .icon(IconName::GitCompare)
-                                .label("Review changes")
-                                .desktop_disabled(self.workspace.is_none())
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.inspector_open = true;
-                                    view.inspector_tab = InspectorTab::Changes;
-                                    view.save_preferences();
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            desktop_button("welcome-choose-model")
-                                .label("Choose a model")
-                                .ghost()
-                                .small()
-                                .desktop_disabled(!self.session_change_allowed(None))
-                                .on_click(cx.listener(|view, _, window, cx| view.open_model_palette(window, cx))),
-                        ),
+                        .size_full()
+                        .when(self.workspace.is_none(), |welcome| {
+                            welcome.content(
+                                EmptyContent::new().child(
+                                    desktop_button("open-first-workspace")
+                                        .label("Choose a workspace folder")
+                                        .primary()
+                                        .desktop_disabled(
+                                            self.workspace_picker_open
+                                                || !self.workspace_switch_idle()
+                                                || self.retained_submission.is_some(),
+                                        )
+                                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                                ),
+                            )
+                        }),
                 )
                 .into_any_element()
         } else {
@@ -4830,6 +4855,7 @@ impl DesktopView {
             })
             .ghost()
             .w(px(104.))
+            .flex_shrink_0()
             .h(px(96.))
             .p_2()
             .border_1()
@@ -5229,7 +5255,7 @@ impl Render for DesktopView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .child(self.render_thread_header())
+                    .when(!self.transcript.is_empty(), |column| column.child(self.render_thread_header()))
                     .child(self.render_transcript(cx))
                     .child(self.render_composer(window, cx)),
             )
@@ -5290,21 +5316,6 @@ impl Render for DesktopView {
             .child(self.render_toolbar(cx))
             .child(panes)
             .when(self.preferences.show_status_bar, |body| body.child(self.render_status_bar(cx)));
-        if self.workspace.is_none() {
-            body = body.child(
-                div().absolute().inset_0().flex().items_center().justify_center().child(
-                    desktop_button("open-first-workspace")
-                        .label("Choose a workspace folder")
-                        .primary()
-                        .desktop_disabled(
-                            self.workspace_picker_open
-                                || !self.workspace_switch_idle()
-                                || self.retained_submission.is_some(),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
-                ),
-            );
-        }
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
