@@ -287,6 +287,7 @@ pub(crate) fn run() {
     let _application = application.on_reopen(show_main_window);
     application.run(|cx: &mut App| {
         gpui_kit::init(cx);
+        super::notifications::initialize(cx);
         init_keybindings(cx);
         init_native_menus(cx);
         show_main_window(cx);
@@ -327,7 +328,10 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
     cx.spawn(async move |cx| {
         loop {
             cx.background_executor().timer(Duration::from_millis(24)).await;
-            if weak_view.update(cx, |view, cx| view.drain_events(cx)).is_err() {
+            if weak_view
+                .update_in(cx, |view, window, cx| view.drain_events(window, cx))
+                .is_err()
+            {
                 break;
             }
         }
@@ -1757,12 +1761,13 @@ impl DesktopView {
         }
     }
 
-    fn drain_events(&mut self, cx: &mut Context<Self>) {
+    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mut changed = false;
         for _ in 0..MAX_UI_EVENTS_PER_TICK {
             match self.event_rx.try_recv() {
                 Ok(event) => {
                     changed = true;
+                    self.notify_background_activity(&event, window, cx);
                     self.handle_backend_event(event, cx);
                 }
                 Err(TryRecvError::Empty) => break,
@@ -1778,6 +1783,56 @@ impl DesktopView {
         }
         if changed {
             cx.notify();
+        }
+    }
+
+    fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if window.is_window_active() {
+            return;
+        }
+        let activity = match event {
+            BackendEvent::ThreadEvent(notification) => {
+                if self.selected_session_id.as_deref() != Some(notification.session_id.as_str())
+                    || !self.running
+                    || !notification
+                        .turn_id
+                        .as_deref()
+                        .is_some_and(|turn_id| self.active_turn_id.as_deref() == Some(turn_id))
+                    || !self.notification_matches(&notification.session_id, notification.turn_id.as_deref())
+                {
+                    return;
+                }
+                match notification.event.event() {
+                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => {
+                        Some(super::notifications::BackgroundAgentActivity::Completed)
+                    }
+                    vtcode_exec_events::ThreadEvent::TurnFailed(_)
+                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => {
+                        Some(super::notifications::BackgroundAgentActivity::NeedsAttention)
+                    }
+                    _ => None,
+                }
+            }
+            BackendEvent::Interaction(interaction) => {
+                let current_turn = interaction.turn_id == "session-start"
+                    || (self.running
+                        && self.active_turn_id.as_deref() == Some(interaction.turn_id.as_str())
+                        && self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)));
+                if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
+                    || !current_turn
+                    || self
+                        .interaction
+                        .as_ref()
+                        .is_some_and(|current| current.interaction_id == interaction.interaction_id)
+                {
+                    return;
+                }
+                Some(super::notifications::BackgroundAgentActivity::WaitingForDecision)
+            }
+            _ => None,
+        };
+        if let Some(activity) = activity {
+            super::notifications::background_agent_activity(window, activity, cx);
         }
     }
 

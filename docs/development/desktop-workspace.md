@@ -52,6 +52,12 @@ attachments, and further session/model/workspace changes wait for its response. 
 session creation before any turn is sent. Failed creation or submission leaves the original content recoverable;
 an empty prompt does not create a session.
 
+When the main window is inactive, a completed or failed/blocked run, or a request waiting for a decision, posts a
+system notification through GPUI Kit. Notifications contain only generic status text; the transcript and interaction
+state remain authoritative in the app. Clicking a Kit notification activates its originating window. OS permission,
+focus modes, and notification settings may suppress delivery. On macOS, verify delivery from a trusted bundled `.app`;
+`cargo run` does not post to Notification Center.
+
 ## UI quick reference
 
 The window opens with a compact navigation rail and the conversation. The project/thread sidebar and
@@ -64,6 +70,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
 | Open Utilities | The Utilities inspector tab summarizes session changes, recent tool activity, and draft source attachments, with actions into Changes, Activity, Files, and previews. Press ⌘⇧U or use the navigation rail button to open it. |
 | Inspect tool activity | Expand a consecutive tool-action summary, then open an action for output. Running and failed counts remain visible while collapsed. |
+| Receive a background notice | When the main window is inactive, run completion, run failure/blocking, or a pending decision posts a generic system notification. Its click returns to the owning window; app state remains available if OS notification delivery is suppressed. |
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. Send creates a session automatically when none is selected, then submits the exact captured prompt and attachments. A newer draft typed while creation is pending stays in the composer. |

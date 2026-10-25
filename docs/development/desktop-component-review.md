@@ -54,7 +54,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [menu](https://gpui-kit.com/component/menu) | Applied: one overflow trigger per chrome area uses canonical guarded new/close commands. |
 | [message](https://gpui-kit.com/component/message) | Applied: sender headers, outlined user prompts, unframed assistant responses, and copy footers. |
 | [message-scroller](https://gpui-kit.com/component/message-scroller) | Retain measured transcript ListState and existing anchoring/following behavior. |
-| [notification](https://gpui-kit.com/component/notification) | Retain inline error and draft-recovery state with existing ownership. |
+| [notification](https://gpui-kit.com/component/notification) | Applied system-only notices for inactive-window run completion, failure/blocking, and pending decisions; preserve transcript/interaction state as the source of truth and route clicks through the originating Kit window. |
 | [number-input](https://gpui-kit.com/component/number-input) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [otp-input](https://gpui-kit.com/component/otp-input) | Not needed for the current coding-workspace workflows or available data. |
 | [pagination](https://gpui-kit.com/component/pagination) | Not needed for the current coding-workspace workflows or available data. |

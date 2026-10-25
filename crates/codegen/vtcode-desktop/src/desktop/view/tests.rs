@@ -27,6 +27,7 @@ fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
     drop(isolate_preferences());
     cx.update(gpui_kit::init);
+    cx.update(super::super::notifications::initialize);
     cx.update(super::init_keybindings);
     cx.update(super::init_native_menus);
     cx.update(|cx| {
@@ -51,6 +52,131 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
         )
         .unwrap()
     })
+}
+
+#[gpui_kit::test]
+fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, TurnFailedEvent, Usage, VersionedThreadEvent};
+
+    let completed_turn = |turn_id: &str| {
+        BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some(turn_id.into()),
+            event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
+                usage: Usage {
+                    input_tokens: 0,
+                    cached_input_tokens: 0,
+                    cache_creation_tokens: 0,
+                    output_tokens: 0,
+                },
+                in_progress_exec_sessions: Vec::new(),
+            })),
+        })
+    };
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active());
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn-1".into());
+            view.running = true;
+            view.event_tx.send(completed_turn("turn-1")).unwrap();
+            view.drain_events(window, cx);
+            assert!(!view.running);
+        });
+        window.render_frame(cx);
+        assert!(window.notifications(cx).is_empty(), "background completion is system-only");
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.event_tx.send(completed_turn("stale-turn")).unwrap();
+            view.drain_events(window, cx);
+        });
+    })
+    .unwrap();
+    assert_eq!(cx.shown_system_notifications().len(), 1, "idle stale events do not post system notices");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.active_turn_id = Some("turn-2".into());
+            view.running = true;
+            view.event_tx
+                .send(BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+                    session_id: "session".into(),
+                    turn_id: Some("turn-2".into()),
+                    event: VersionedThreadEvent::new(ThreadEvent::TurnFailed(TurnFailedEvent {
+                        completed_at: None,
+                        message: "provider detail that should not appear in a system notification".into(),
+                        usage: None,
+                    })),
+                }))
+                .unwrap();
+            view.drain_events(window, cx);
+
+            view.active_turn_id = Some("turn-3".into());
+            view.running = true;
+            view.event_tx
+                .send(BackendEvent::Interaction(vtcode_desktop_protocol::InteractionRequest {
+                    session_id: "session".into(),
+                    turn_id: "turn-3".into(),
+                    interaction_id: "interaction-1".into(),
+                    kind: vtcode_desktop_protocol::InteractionKind::Question,
+                    wizard: false,
+                    title: "private prompt detail".into(),
+                    details: Vec::new(),
+                    choices: Vec::new(),
+                    steps: Vec::new(),
+                    selected_choice_id: None,
+                    selected_choice_ids: Vec::new(),
+                }))
+                .unwrap();
+            view.drain_events(window, cx);
+            assert!(view.interaction.is_some());
+        });
+        window.render_frame(cx);
+        assert!(window.notifications(cx).is_empty(), "background notices do not duplicate an in-app toast");
+    })
+    .unwrap();
+
+    let notifications = cx.delivered_system_notifications();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0].title, "VT Code");
+    assert_eq!(notifications[0].body, "An agent run is waiting for your input.");
+    let shown = cx.shown_system_notifications();
+    assert_eq!(shown.len(), 3);
+    assert_eq!(shown[0].body, "Your agent run has finished.");
+    assert_eq!(shown[1].body, "Your agent run needs attention.");
+    assert_eq!(shown[2].body, "An agent run is waiting for your input.");
+    assert!(
+        shown
+            .iter()
+            .all(|notice| { !notice.body.contains("provider detail") && !notice.body.contains("private prompt") })
+    );
+
+    cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {
+        tag: notifications[0].tag.clone(),
+        action_id: None,
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, _| {
+        assert!(window.is_window_active(), "the system notification activates its owning window");
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.active_turn_id = Some("turn-4".into());
+            view.running = true;
+            view.event_tx.send(completed_turn("turn-4")).unwrap();
+            view.drain_events(window, cx);
+            assert!(!view.running);
+        });
+    })
+    .unwrap();
+    assert_eq!(cx.shown_system_notifications().len(), 3, "active runs do not post system notices");
 }
 
 fn file_tree_paths(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Vec<String> {
@@ -277,7 +403,7 @@ fn picker_completion_rejects_switching_after_turn_starts(cx: &mut TestAppContext
 fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
     let (view, cx) = cx.add_window_view(|window, cx| DesktopView::new(window, cx, ThemeMode::Light));
-    cx.update(|_, cx| {
+    cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.selected_session_id = Some("session".into());
             for index in 0..MAX_UI_EVENTS_PER_TICK + 3 {
@@ -287,9 +413,9 @@ fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
                     ))
                     .unwrap();
             }
-            view.drain_events(cx);
+            view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK - 1));
-            view.drain_events(cx);
+            view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
         });
     });
