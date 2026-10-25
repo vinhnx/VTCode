@@ -371,6 +371,7 @@ struct DesktopView {
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,
+    system_motion_baseline: bool,
     default_code_font: gpui_kit::SharedString,
     sidebar_open: bool,
     navigation_peek: bool,
@@ -427,7 +428,9 @@ impl DesktopView {
         let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
+        let system_motion_baseline = preferences::system_motion_baseline(cx);
         let preferences = preferences::Preferences::load();
+        preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
         let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
@@ -530,6 +533,7 @@ impl DesktopView {
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
             preferences,
+            system_motion_baseline,
             sidebar_open: false,
             navigation_peek: false,
             sidebar_width: 270.0,
@@ -2730,6 +2734,13 @@ impl DesktopView {
                     )),
             )
             .child(
+                GroupBox::new()
+                    .flex_shrink_0()
+                    .outline()
+                    .title("Accessibility")
+                    .child(self.render_reduced_motion(cx)),
+            )
+            .child(
                 desktop_button("reset-appearance")
                     .label("Reset appearance to defaults")
                     .ghost()
@@ -2738,6 +2749,12 @@ impl DesktopView {
                         view.preferences.code_font_family = None;
                         view.preferences.ui_font_size = None;
                         view.preferences.code_font_size = None;
+                        view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
+                        preferences::apply_reduced_motion(
+                            view.preferences.reduced_motion,
+                            view.system_motion_baseline,
+                            cx,
+                        );
                         view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
                     })),
             );
@@ -4333,6 +4350,16 @@ impl DesktopView {
         cx.notify();
     }
 
+    fn set_reduced_motion(&mut self, preference: preferences::ReducedMotionPreference, cx: &mut Context<Self>) {
+        if self.preferences.reduced_motion == preference && preference != preferences::ReducedMotionPreference::System {
+            return;
+        }
+        self.preferences.reduced_motion = preference;
+        preferences::apply_reduced_motion(preference, self.system_motion_baseline, cx);
+        self.save_preferences();
+        cx.notify();
+    }
+
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let workspace = self
@@ -4453,6 +4480,53 @@ impl DesktopView {
         });
         self.transcript.remeasure();
         cx.notify();
+    }
+
+    fn render_reduced_motion(&self, cx: &Context<Self>) -> AnyElement {
+        let current = self.preferences.reduced_motion;
+        let colors = cx.theme().colors;
+        div()
+            .id("reduced-motion-setting")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Reduce motion")
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .child(
+                div().min_w_0().flex_1().flex().flex_col().gap_1().child("Reduce motion").child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("System uses macOS accessibility settings; select it again to refresh."),
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_1()
+                    .children(preferences::ReducedMotionPreference::ALL.into_iter().map(|preference| {
+                        let label = preference.label();
+                        let selected = preference == current;
+                        desktop_button(format!("reduce-motion-{}", preference.id()))
+                            .label(label)
+                            .accessibility_label(format!(
+                                "Reduce motion: {label}{}",
+                                if selected { " (selected)" } else { "" }
+                            ))
+                            .tooltip(match preference {
+                                preferences::ReducedMotionPreference::System => "Re-read system accessibility settings",
+                                preferences::ReducedMotionPreference::On => "Reduce interface animations",
+                                preferences::ReducedMotionPreference::Off => "Allow interface animations",
+                            })
+                            .ghost()
+                            .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                            .on_click(cx.listener(move |view, _, _, cx| view.set_reduced_motion(preference, cx)))
+                    })),
+            )
+            .into_any_element()
     }
 
     fn render_font_size(&self, code: bool, cx: &Context<Self>) -> AnyElement {

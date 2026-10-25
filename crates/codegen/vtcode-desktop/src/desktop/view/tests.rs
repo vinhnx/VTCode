@@ -3255,6 +3255,44 @@ fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut Tes
 }
 
 #[gpui_kit::test]
+fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestAppContext) {
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.reduced_motion = crate::desktop::preferences::ReducedMotionPreference::System;
+            cx.set_reduce_motion(false);
+            view.set_reduced_motion(crate::desktop::preferences::ReducedMotionPreference::System, cx);
+            assert!(cx.reduce_motion(), "selecting System again refreshes its captured system value");
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
+
+        window.click("reduce-motion-off", cx);
+        window.render_frame(cx);
+        assert!(!cx.reduce_motion());
+        assert_eq!(window.find("reduce-motion-off").label(), Some("Reduce motion: Off (selected)"));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().reduced_motion,
+            crate::desktop::preferences::ReducedMotionPreference::Off
+        );
+
+        window.click("reduce-motion-system", cx);
+        window.render_frame(cx);
+        assert!(cx.reduce_motion(), "System restores the system value captured before overrides");
+        assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().reduced_motion,
+            crate::desktop::preferences::ReducedMotionPreference::System
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
