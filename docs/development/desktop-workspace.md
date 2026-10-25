@@ -90,8 +90,8 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts, and selecting a file opens it in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. |
 | Browse files | ⌘⇧E opens the inspector's Files tab and focuses its read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | ⌘⇧G or Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh or ⌘R updates the capture. |
-| Follow activity | The inspector's Activity tab shows an accessible, theme-colored status chart and a virtualized tool/command list, retaining the newest 300 rows in chronological order. The chart's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
-| Watch command output | The inspector's Output tab and expanded activity rows show a mono tail capped at 1,000 lines and 128 KiB. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
+| Follow activity | The inspector's Activity tab shows an accessible, theme-colored status chart and a virtualized tool/command list, retaining the newest 300 rows in chronological order. Rows with captured output have a keyboard-accessible action that opens that exact capture in Output. The chart's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
+| Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
@@ -560,12 +560,16 @@ spool cannot be read.
 
 Restored activity uses the same projection and GPUI Kit cards as live tool events,
 but stays in the inspector so historical tools do not crowd out the conversation.
-New live activity takes precedence in Output. Session changes clear both projections.
+When no history row is selected, the newest live activity takes precedence in
+Output. Session changes clear both projections and the selected output.
 Unfinished historical commands and tools display as interrupted, while completed
-and failed outcomes retain their original status. Restoring never starts a command,
+and failed outcomes retain their original status. Choose **View captured output**
+on a restored Activity row to inspect and copy that row's own recovered output;
+choose **Follow latest output** to resume the live tail. New live activity is the
+default when no row is selected. Restoring never starts a command,
 reopens an approval, or marks a turn running. Unstructured archive tool text remains
 in its collapsed transcript card but is not classified as structured activity. The Output tab shows
-the newest retained command/tool output and copies its exact captured text; spool
+the selected or newest retained command/tool output and copies its exact captured text; spool
 files are not followed or fetched automatically.
 
 ### Git working-tree review

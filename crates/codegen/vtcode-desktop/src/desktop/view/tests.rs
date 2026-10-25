@@ -4068,8 +4068,11 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert_eq!(rows[0].state, crate::desktop::inspector::ActivityState::Completed);
             assert_eq!(rows[1].status, "interrupted");
             assert_eq!(rows[1].state, crate::desktop::inspector::ActivityState::Interrupted);
+            assert!(rows[0].has_output);
+            assert!(rows[1].has_output);
             assert!(view.transcript.items().any(|item| item.text == "Unstructured archive result"));
-            let restored_output = crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).unwrap();
+            let restored_output =
+                crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None).unwrap();
             assert_eq!(restored_output.text, output);
             assert!(!restored_output.running);
             let restored_command = view
@@ -4088,11 +4091,22 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
         assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("activity-saved-command").label(), Some("cargo check --locked"));
-        view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Output);
+        let output_action = window.find("activity-output-finished-command");
+        assert_eq!(output_action.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(output_action.label(), Some("View output for previous command"));
+        window.click("activity-output-finished-command", cx);
         window.render_frame(cx);
         let warning = window.find("activity-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
+        assert_eq!(window.find("output-body").label(), Some("previous output"));
+        assert_eq!(view.read(cx).selected_output_id.as_deref(), Some("finished-command"));
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("previous output"));
+        assert_eq!(window.find("output-follow-latest").label(), Some("Follow latest output"));
+        window.click("output-follow-latest", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).selected_output_id.is_none());
         assert_eq!(window.find("output-body").label(), Some(output));
         window.click("copy-output", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(output));
@@ -4105,14 +4119,17 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
                     exit_code: None, status: CommandExecutionStatus::InProgress,
                 })),
             });
-            assert!(crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).unwrap().running);
+            assert!(crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None)
+                .unwrap()
+                .running);
             assert_eq!(view.restored_activity.len(), 1, "live identity replaces its historical projection");
             assert_eq!(crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity).len(), 2);
             view.reset_session_state();
             assert!(view.restored_activity.is_empty());
+            assert!(view.selected_output_id.is_none());
             assert!(!view.restored_review_history_incomplete);
             assert!(!view.restored_activity_history_incomplete);
-            assert!(crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).is_none());
+            assert!(crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None).is_none());
         });
     }).unwrap();
 }

@@ -64,6 +64,7 @@ pub(super) struct ActivityRow {
     pub title: SharedString,
     pub status: String,
     pub state: ActivityState,
+    pub has_output: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -229,6 +230,7 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
                 title: item.title.clone(),
                 state: ActivityState::from_status(&status),
                 status,
+                has_output: item.output.is_some(),
             }
         })
         .collect();
@@ -236,25 +238,40 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
     rows
 }
 
-/// The newest aggregated command/tool output for the Output tab.
+/// The selected or newest aggregated command/tool output for the Output tab.
 pub(super) struct OutputView {
+    pub id: String,
     pub title: SharedString,
     pub text: SharedString,
     pub running: bool,
 }
 
-pub(super) fn latest_output(transcript: &Transcript, restored: &[TranscriptItem]) -> Option<OutputView> {
-    restored.iter().chain(transcript.items()).rev().find_map(|item| {
-        let output = item.output.as_ref()?;
-        Some(OutputView {
-            title: item.title.clone(),
-            text: output.clone(),
-            running: item
-                .text
-                .lines()
-                .next()
-                .is_some_and(|status| ActivityState::from_status(status) == ActivityState::Running),
+pub(super) fn output_for(
+    transcript: &Transcript,
+    restored: &[TranscriptItem],
+    selected_id: Option<&str>,
+) -> Option<OutputView> {
+    selected_id
+        .and_then(|id| {
+            restored
+                .iter()
+                .find(|item| item.id == id)
+                .or_else(|| transcript.items().find(|item| item.id == id))
         })
+        .and_then(output_view)
+        .or_else(|| restored.iter().chain(transcript.items()).rev().find_map(output_view))
+}
+
+fn output_view(item: &TranscriptItem) -> Option<OutputView> {
+    Some(OutputView {
+        id: item.id.clone(),
+        title: item.title.clone(),
+        text: item.output.clone()?,
+        running: item
+            .text
+            .lines()
+            .next()
+            .is_some_and(|status| ActivityState::from_status(status) == ActivityState::Running),
     })
 }
 
@@ -372,6 +389,7 @@ mod tests {
             title: format!("tool {index}").into(),
             status: String::new(),
             state,
+            has_output: false,
         })
         .collect::<Vec<_>>();
 
@@ -455,6 +473,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "read_file");
         assert_eq!(rows[0].status, "completed");
+        assert!(!rows[0].has_output);
     }
 
     #[test]
@@ -475,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn latest_output_tracks_the_newest_streaming_command() {
+    fn output_defaults_to_the_newest_streaming_command() {
         let mut transcript = Transcript::default();
         let mut first = TranscriptItem::new(
             "cmd-1".to_string(),
@@ -494,10 +513,43 @@ mod tests {
         second.output = Some("running output".into());
         transcript.push(second);
 
-        let output = latest_output(&transcript, &[]).expect("output projected");
+        let output = output_for(&transcript, &[], None).expect("output projected");
         assert_eq!(output.title, "cargo test");
         assert_eq!(output.text, "running output");
         assert!(output.running, "in-progress status is reflected");
+        let rows = activity_rows(&transcript, &[]);
+        assert!(rows[0].has_output);
+        assert!(rows[1].has_output);
+    }
+
+    #[test]
+    fn output_selection_recovers_a_specific_historical_capture() {
+        let mut transcript = Transcript::default();
+        let mut older = TranscriptItem::new(
+            "cmd-older".to_string(),
+            "tool".to_string(),
+            "cargo check".into(),
+            "completed".to_string(),
+        );
+        older.output = Some("older captured output".into());
+        transcript.push(older);
+        let mut latest = TranscriptItem::new(
+            "cmd-latest".to_string(),
+            "tool".to_string(),
+            "cargo test".into(),
+            "completed".to_string(),
+        );
+        latest.output = Some("latest captured output".into());
+        transcript.push(latest);
+
+        let selected = output_for(&transcript, &[], Some("cmd-older")).expect("selected output projected");
+        assert_eq!(selected.id, "cmd-older");
+        assert_eq!(selected.title, "cargo check");
+        assert_eq!(selected.text, "older captured output");
+
+        let latest = output_for(&transcript, &[], Some("missing")).expect("latest output is fallback");
+        assert_eq!(latest.id, "cmd-latest");
+        assert_eq!(latest.text, "latest captured output");
     }
 
     #[test]

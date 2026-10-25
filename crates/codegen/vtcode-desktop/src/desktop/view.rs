@@ -395,6 +395,7 @@ struct DesktopView {
     transcript: Transcript,
     message_scroller: Entity<MessageScrollerState>,
     restored_activity: Vec<TranscriptItem>,
+    selected_output_id: Option<String>,
     restored_review_history_incomplete: bool,
     restored_activity_history_incomplete: bool,
     active_turn_id: Option<String>,
@@ -597,6 +598,7 @@ impl DesktopView {
             transcript: Transcript::default(),
             message_scroller,
             restored_activity: Vec::new(),
+            selected_output_id: None,
             restored_review_history_incomplete: false,
             restored_activity_history_incomplete: false,
             active_turn_id: None,
@@ -2543,6 +2545,13 @@ impl DesktopView {
         self.set_inspector_tab(InspectorTab::Changes, cx);
     }
 
+    fn select_activity_output(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.selected_output_id = Some(id);
+        self.inspector_open = true;
+        self.set_inspector_tab(InspectorTab::Output, cx);
+        self.inspector_focus.focus(window, cx);
+    }
+
     fn navigate_change_file(&mut self, next: bool, cx: &mut Context<Self>) {
         let entries = self.changes.entries();
         if entries.is_empty() {
@@ -2642,6 +2651,7 @@ impl DesktopView {
         self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
+        self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
@@ -3809,8 +3819,7 @@ impl DesktopView {
         body.into_any_element()
     }
 
-    /// Live tail of the newest command or tool output, the desktop's
-    /// terminal pane.
+    /// Show a selected historical capture or the newest command/tool output.
     fn render_output_tab(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let colors = theme.colors;
@@ -3823,7 +3832,9 @@ impl DesktopView {
                 &colors,
             )));
         }
-        let Some(output) = inspector::latest_output(&self.transcript, &self.restored_activity) else {
+        let Some(output) =
+            inspector::output_for(&self.transcript, &self.restored_activity, self.selected_output_id.as_deref())
+        else {
             return pane
                 .child(empty_state(
                     "No output yet",
@@ -3833,60 +3844,81 @@ impl DesktopView {
                 .into_any_element();
         };
         let tail = inspector::output_tail(&output.text);
-        pane.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .px_3()
-                .py_2()
-                .border_b_1()
-                .border_color(colors.border)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_sm()
-                        .font_medium()
-                        .child(output.title.clone()),
-                )
-                .when(output.running, |header| {
-                    header.child(
-                        Tag::custom(colors.secondary, colors.foreground, colors.border)
+        let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
+        let output_header = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .border_b_1()
+            .border_color(colors.border)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_medium()
+                    .child(output.title.clone()),
+            )
+            .when(is_selected_output, |header| {
+                header
+                    .child(
+                        Tag::custom(colors.secondary, colors.muted_foreground, colors.border)
                             .small()
-                            .child("Running"),
+                            .rounded_full()
+                            .child("History"),
                     )
-                })
-                .child(
-                    desktop_button("copy-output")
-                        .icon(IconName::Copy)
-                        .accessibility_label("Copy output")
-                        .tooltip("Copy captured output")
-                        .ghost()
+                    .child(
+                        desktop_button("output-follow-latest")
+                            .icon(IconName::Activity)
+                            .ghost()
+                            .small()
+                            .accessibility_label("Follow latest output")
+                            .tooltip("Show the newest captured output")
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.selected_output_id = None;
+                                cx.notify();
+                            })),
+                    )
+            })
+            .when(output.running, |header| {
+                header.child(
+                    Tag::custom(colors.secondary, colors.foreground, colors.border)
                         .small()
-                        .on_click(move |_, window, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.to_string()));
-                            super::notifications::copied_to_clipboard(window, app);
-                        }),
-                ),
-        )
-        .child(
-            div()
-                .id("output-body")
-                .test_support()
-                .role(gpui_kit::Role::Label)
-                .aria_label(tail.clone())
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .p_2()
-                .text_xs()
-                .font_family(mono)
-                .text_size(theme.mono_font_size)
-                .child(tail),
-        )
-        .into_any_element()
+                        .child("Running"),
+                )
+            })
+            .child(
+                desktop_button("copy-output")
+                    .icon(IconName::Copy)
+                    .accessibility_label("Copy output")
+                    .tooltip("Copy captured output")
+                    .ghost()
+                    .small()
+                    .on_click(move |_, window, app| {
+                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.to_string()));
+                        super::notifications::copied_to_clipboard(window, app);
+                    }),
+            );
+        pane.child(output_header)
+            .child(
+                div()
+                    .id("output-body")
+                    .test_support()
+                    .role(gpui_kit::Role::Label)
+                    .aria_label(tail.clone())
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .p_2()
+                    .text_xs()
+                    .font_family(mono)
+                    .text_size(theme.mono_font_size)
+                    .child(tail),
+            )
+            .into_any_element()
     }
 
     fn render_activity_tab(
@@ -3982,6 +4014,7 @@ impl DesktopView {
         let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
         let item_sizes = self.activity_row_sizes.get(rows.len(), activity_row_height);
         let row_colors = *colors;
+        let weak_view = cx.entity().downgrade();
         body = body.child(
             div()
                 .id("activity-rows")
@@ -3997,7 +4030,26 @@ impl DesktopView {
                                 rows.get(index).map_or_else(
                                     || div().into_any_element(),
                                     |row| {
-                                        Self::render_activity_row(row, row_colors, activity_row_height)
+                                        let output_action = row.has_output.then(|| {
+                                            let view = weak_view.clone();
+                                            let output_id = row.id.clone();
+                                            let output_title = row.title.to_string();
+                                            desktop_button(format!("activity-output-{}", row.id))
+                                                .icon(IconName::Terminal)
+                                                .ghost()
+                                                .small()
+                                                .accessibility_label(format!("View output for {output_title}"))
+                                                .tooltip("View captured output")
+                                                .on_click(move |_, window, app| {
+                                                    if let Some(view) = view.upgrade() {
+                                                        view.update(app, |view, cx| {
+                                                            view.select_activity_output(output_id.clone(), window, cx);
+                                                        });
+                                                    }
+                                                })
+                                                .into_any_element()
+                                        });
+                                        Self::render_activity_row(row, row_colors, activity_row_height, output_action)
                                             .into_any_element()
                                     },
                                 )
@@ -4015,6 +4067,7 @@ impl DesktopView {
         row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,
         row_height: f32,
+        output_action: Option<AnyElement>,
     ) -> impl IntoElement {
         let (status_color, status_icon) = match row.state {
             ActivityState::Failed => (colors.danger, IconName::X),
@@ -4024,7 +4077,7 @@ impl DesktopView {
             ActivityState::Other => (colors.muted_foreground, IconName::Activity),
         };
         let status = gpui_kit::SharedString::from(row.status.as_str());
-        div()
+        let mut row_element = div()
             .id(format!("activity-{}", row.id))
             .test_support()
             .role(gpui_kit::Role::Group)
@@ -4068,7 +4121,11 @@ impl DesktopView {
                                 .child(div().truncate().child(status)),
                         ),
                     ),
-            )
+            );
+        if let Some(output_action) = output_action {
+            row_element = row_element.child(output_action);
+        }
+        row_element
     }
 
     fn sync_transcript_layout(&mut self, cx: &mut Context<Self>) {
