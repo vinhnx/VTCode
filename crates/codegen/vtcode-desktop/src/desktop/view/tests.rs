@@ -2225,8 +2225,8 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         window.render_frame(cx);
         assert_eq!(window.find("new-session").disabled(), Some(true));
         assert_eq!(window.find("close-session").disabled(), Some(true));
-        assert_eq!(window.find("session-1").disabled(), Some(true));
-        assert_ne!(window.find("session-0").disabled(), Some(true), "same-session reload stays available");
+        assert_eq!(window.find("session-other").disabled(), Some(true));
+        assert_ne!(window.find("session-session").disabled(), Some(true), "same-session reload stays available");
         view.update(cx, |view, cx| {
             let workspace_before = view.workspace.clone();
             view.create_session(cx);
@@ -2240,7 +2240,7 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         });
         assert!(requests.try_recv().is_err(), "guards protect keyboard and palette paths too");
         window.render_frame(cx);
-        window.click("session-0", cx);
+        window.click("session-session", cx);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else { panic!("reload") };
         assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
         assert_eq!(params, json!({ "sessionId": "session" }));
@@ -3354,6 +3354,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
 #[gpui_kit::test]
 fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let alpha_id = super::workspace_navigation_element_id("/project/alpha");
+    let beta_id = super::workspace_navigation_element_id("/project/beta");
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
             view.workspace = Some(PathBuf::from("/project/alpha"));
@@ -3371,14 +3373,20 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
             view.selected_session_id = Some("Second".into());
         });
         window.render_frame(cx);
-        assert_eq!(window.find("workspace-0").label(), Some("alpha (current workspace)"));
-        assert_eq!(window.find("workspace-1").label(), Some("beta"));
-        assert_eq!(window.find("session-0").label(), Some("First"));
-        assert_eq!(window.find("session-1").label(), Some("Second (current thread)"));
-        view.update(cx, |view, _| view.selected_session_id = Some("First".into()));
+        assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
+        assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
+        assert_eq!(window.find("session-First").label(), Some("First"));
+        assert_eq!(window.find("session-Second").label(), Some("Second (current thread)"));
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("First".into());
+            view.sessions.reverse();
+            view.preferences.recent_workspaces.reverse();
+        });
         window.render_frame(cx);
-        assert_eq!(window.find("session-0").label(), Some("First (current thread)"));
-        assert_eq!(window.find("session-1").label(), Some("Second"));
+        assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
+        assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
+        assert_eq!(window.find("session-First").label(), Some("First (current thread)"));
+        assert_eq!(window.find("session-Second").label(), Some("Second"));
     })
     .unwrap();
 }
