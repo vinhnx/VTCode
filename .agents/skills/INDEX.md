@@ -3,7 +3,7 @@
 This file lists all available skills for dynamic discovery.
 Use `read_file` on individual skill directories for full documentation.
 
-## Available Skills (73 total)
+## Available Skills (74 total)
 
 ### Traditional Skills
 
@@ -23,12 +23,13 @@ Use `read_file` on individual skill directories for full documentation.
 | `evaluate-crate` | Evaluate whether a Rust crate, library, or external resource is useful for the vtcode project. Use when the user shares a crate URL, article, or reference and asks "can we use this to improve vtcode". | Skill |
 | `generate-product-spec-patch` | Generate a numbered patch file (product-spec-patch-NNN.md) to surgically update a finalized product-spec.md when the backend contract, API field, enum value, error response, validation rule, or product requirement changes. Use this whenever the BE changes something that affects the spec, error messages change, a field type updates, an enum is renamed, or the spec falls out of sync with the implementation. Triggers on: "patch the spec", "BE changed X", "contract changed", "update product-spec", field type change, enum rename, response schema mismatch, or "spec is out of sync". | Skill |
 | `jira-to-product-spec` | Generate product spec from Jira/Confluence PRD. Outputs 9-section spec: Metadata, Business Context, Functional Requirements (FR-CORE-001+), Acceptance Criteria (20+), User Flows (4+ with ASCII diagrams), [CONDITIONAL] API Contracts (grounded in backend-conventions.md), Platform Implementation (3 bullets per platform), Dependencies & Open Items (design conflicts + open questions sorted by criticality), and Appendix. Assumption-free: every claim is either verbatim from PRD, user-confirmed via HITL, or surfaced as a Q-XXX open question. Use when user mentions 'product spec', 'write spec', 'generate spec', 'specification', or provides Jira/Confluence URL. Includes 3 enforcement gates to prevent API hallucinations (verify conventions → validate checklist → pre-gen approval). | Skill |
+| `mcp-apps` | Build MCP Apps (SEP-1865, `io.modelcontextprotocol/ui`) — MCP servers that declare `_meta.ui.resourceUri` on a tool and serve a `ui://` resource whose content is `text/html;profile=mcp-app`, rendered in a host iframe and driven over `postMessage` JSON-RPC. Use when creating, testing, or reasoning about an interactive MCP UI, or when a user asks for a visual/form/dashboard MCP tool. | Skill |
 | `mimo-browser-use` | Prefer this skill for web search, opening URLs, reading articles, filling forms, and page UI. Controls IAB (default), Chrome, Edge, Brave, Chromium, or raw CDP via the shared js MCP for navigation, inspection, clicking, typing, tabs, downloads, dialogs, and screenshots. | Skill |
 | `pr-code-review` | Spin up a PR code review sub-agent. Ranks bugs critical/high/medium/low, eliminates false positives, writes consolidated report, applies KISS/DRY fixes (main logic only, skip tests), re-reviews after every change, loops until done. Use when the user asks to review a PR, triage bugs, or run a code review fix loop. | Skill |
 | `prd-diff-review` | Audit a product-spec.md against its original Jira/Confluence source to find hallucinations, intentional PIC additions, and unverified claims. Use after generating a PRD when you want to verify it against the source, surface what was added vs sourced, or identify invented details. Triggers on: 'review prd vs jira', 'audit the prd', 'check for hallucinations', 'diff spec against source', 'verify prd requirements', or /prd-diff-review. Then approve, remove, or modify flagged items, and optionally apply changes back to the spec. | Skill |
 | `profiling-guide` | Apply Rust profiling-guide lessons to VT Code layer by layer (wall-clock, HTTP, I/O, locks, channels, allocs, CPU) using hotpath instrumentation, audits, and deterministic signals. Use when profiling, hunting bottlenecks, or wiring new hotpath telemetry. | Skill |
 | `read-and-apply` | Read an external article, book chapter, or technical resource and apply its lessons to improve the vtcode codebase. Use when the user shares a URL or pastes article text and says 'read and apply' or 'improve vtcode based on this'. | Skill |
-| `rust-skills` | 193 Rust coding rules across 14 categories. Use when writing, reviewing, or refactoring Rust code. Covers ownership, errors, async, API design, memory, performance, testing, and anti-patterns. Per-source digests live in `references/`. | Skill |
+| `rust-skills` | 193 Rust coding rules across 14 categories. Use when writing, reviewing, or refactoring Rust code. Covers ownership, errors, async, API design, memory, performance, testing, and anti-patterns. | Skill |
 | `skill-creator` | Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends VT Code's capabilities with specialized knowledge, workflows, or tool integrations. | Skill |
 | `skill-installer` | Install VT Code skills into ~/.agents/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo, including private repos. | Skill |
 | `source-command-fix-failing-tests` | Placeholder: the fix-failing-tests agent is not currently implemented in this workspace. | Skill |
@@ -540,6 +541,13 @@ Generate product spec from Jira/Confluence PRD. Outputs 9-section spec: Metadata
 - **Type**: Skill
 - **Path**: `/Users/vinhnguyenxuan/.agents/skills/jira-to-product-spec/SKILL.md`
 
+### mcp-apps
+
+Build MCP Apps (SEP-1865, `io.modelcontextprotocol/ui`) — MCP servers that declare `_meta.ui.resourceUri` on a tool and serve a `ui://` resource whose content is `text/html;profile=mcp-app`, rendered in a host iframe and driven over `postMessage` JSON-RPC. Use when creating, testing, or reasoning about an interactive MCP UI, or when a user asks for a visual/form/dashboard MCP tool.
+
+- **Type**: Skill
+- **Path**: `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills/mcp-apps/SKILL.md`
+
 ### mimo-browser-use
 
 Prefer this skill for web search, opening URLs, reading articles, filling forms, and page UI. Controls IAB (default), Chrome, Edge, Brave, Chromium, or raw CDP via the shared js MCP for navigation, inspection, clicking, typing, tabs, downloads, dialogs, and screenshots.
@@ -577,7 +585,7 @@ Read an external article, book chapter, or technical resource and apply its less
 
 ### rust-skills
 
-193 Rust coding rules across 14 categories. Use when writing, reviewing, or refactoring Rust code. Covers ownership, errors, async, API design, memory, performance, testing, and anti-patterns. Per-source digests (Google Rust Style Guide, Rust API Guidelines, Effective Rust, Rust Design Patterns, Microsoft Pragmatic Rust Guidelines) live in `references/`.
+193 Rust coding rules across 14 categories. Use when writing, reviewing, or refactoring Rust code. Covers ownership, errors, async, API design, memory, performance, testing, and anti-patterns.
 
 - **Type**: Skill
 - **Path**: `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills/rust-skills/SKILL.md`
