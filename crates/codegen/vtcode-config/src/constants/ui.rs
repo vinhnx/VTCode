@@ -117,6 +117,10 @@ pub fn agent_mode_hue(mode: &str) -> Option<&'static str> {
 
 // Theme and color constants
 pub const THEME_MIN_CONTRAST_RATIO: f32 = 4.5;
+/// Luminance where white and black text reach the same WCAG contrast ratio;
+/// drives the filled-control foreground choice (`filled_text`).
+pub const THEME_FILLED_TEXT_LUMINANCE_CROSSOVER: f32 = 0.179;
+
 pub const THEME_FOREGROUND_LIGHTEN_RATIO: f32 = 0.25;
 pub const THEME_SECONDARY_LIGHTEN_RATIO: f32 = 0.2;
 pub const THEME_MIX_RATIO: f32 = 0.35;

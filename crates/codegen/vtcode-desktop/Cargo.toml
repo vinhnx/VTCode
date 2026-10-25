@@ -27,6 +27,7 @@ tokio = { workspace = true }
 vtcode-commons = { workspace = true }
 vtcode-desktop-protocol = { workspace = true }
 vtcode-exec-events = { workspace = true }
+vtcode-ui = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["test-support"] }

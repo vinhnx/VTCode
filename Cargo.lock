@@ -12239,6 +12239,7 @@ dependencies = [
  "vtcode-commons",
  "vtcode-desktop-protocol",
  "vtcode-exec-events",
+ "vtcode-ui",
 ]
 
 [[package]]
