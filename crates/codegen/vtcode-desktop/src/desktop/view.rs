@@ -2584,13 +2584,9 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .and_then(|name| name.to_str())
             .unwrap_or("Workspace");
-        let configuration = self.configuration.as_ref();
-        let provider = configuration.map(|config| config.provider.as_str()).unwrap_or("Provider");
         TitleBar::new()
             .w_full()
             .h(px(48.))
-            .bg(chrome_background(&theme.colors))
-            .border_0()
             .pr_3()
             .child(
                 div()
@@ -2618,7 +2614,7 @@ impl DesktopView {
                             .min_w_0()
                             .truncate()
                             .text_sm()
-                            .text_color(theme.colors.muted_foreground)
+                            .text_color(theme.colors.foreground)
                             .child(format!("/ {workspace}")),
                     ),
             )
@@ -2636,31 +2632,30 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
                     )
                     .child(
-                        Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                            .small()
-                            .rounded_full()
-                            .child(provider.to_string()),
-                    )
-                    .child(
                         desktop_button("toggle-inspector")
-                            .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
-                            .label(if self.inspector_open {
+                            .icon(IconName::PanelRight)
+                            .accessibility_label(if self.inspector_open {
                                 "Hide panel"
                             } else {
                                 "Show panel"
                             })
+                            .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
                             .ghost()
                             .desktop_disabled(self.workspace.is_none())
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
                     )
                     .child(
                         desktop_button("toggle-theme")
-                            .small()
                             .icon(IconName::SunMoon)
-                            .label(if self.theme_mode == ThemeMode::Light {
-                                "Dark"
+                            .accessibility_label(if self.theme_mode == ThemeMode::Light {
+                                "Switch to dark appearance"
                             } else {
-                                "Light"
+                                "Switch to light appearance"
+                            })
+                            .tooltip(if self.theme_mode == ThemeMode::Light {
+                                "Switch to dark appearance"
+                            } else {
+                                "Switch to light appearance"
                             })
                             .ghost()
                             .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),

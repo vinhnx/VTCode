@@ -387,6 +387,7 @@ fn relative_luminance(color: Hsla) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::component::theme::ActiveTheme;
 
     #[gpui_kit::test]
     fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
@@ -457,6 +458,28 @@ mod tests {
             let muted_ratio = contrast_ratio(muted, theme.background);
             assert!(muted_ratio >= 4.5, "{}: muted text contrast {muted_ratio:.2} is below WCAG AA", theme.id);
         }
+    }
+
+    #[gpui_kit::test]
+    fn native_toolbar_keeps_text_contrast_across_themes(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let toolbar = mix(colors.background, colors.secondary, 0.08);
+                for (label, foreground) in [
+                    ("foreground", colors.foreground),
+                    ("toolbar control foreground", colors.secondary_foreground),
+                ] {
+                    let ratio = contrast_ratio(foreground, toolbar);
+                    assert!(ratio >= 4.5, "{id}: native toolbar {label} contrast {ratio:.2} is below WCAG AA");
+                }
+            }
+        });
     }
 
     #[test]

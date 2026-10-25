@@ -160,10 +160,12 @@ activation, disabled boundaries, and accessible labels.
 ### Native window chrome
 
 The header uses Kit’s `TitleBar` over a transparent macOS title bar, with the real traffic-light controls
-reserved at the left. Kit owns window dragging and delegates double clicks to the system title-bar behavior.
-The header and navigation rail share a subtle theme-derived surface. Matching overflow buttons expose
-existing thread, navigation, inspector, search, and Settings actions; unavailable session actions remain disabled.
-Menus preserve the draft and retain Kit keyboard navigation and dismissal.
+reserved at the left. It keeps Kit’s theme-derived title-bar gradient and divider while the conversation canvas
+stays opaque for predictable text contrast. Kit owns window dragging and delegates double clicks to the system
+title-bar behavior. Toolbar actions use compact icon buttons with accessible names and action-aware tooltips;
+the selected model keeps its provider context in the composer. Matching overflow buttons expose existing thread,
+navigation, inspector, search, and Settings actions; unavailable session actions remain disabled. Menus preserve
+the draft and retain Kit keyboard navigation and dismissal.
 
 ### Startup and desktop shortcuts
 

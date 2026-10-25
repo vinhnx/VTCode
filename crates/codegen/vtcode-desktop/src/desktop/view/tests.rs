@@ -3956,6 +3956,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
 fn native_titlebar_is_transparent_and_kit_owns_dragging() {
     let options = super::desktop_window_options();
     assert!(options.app_owns_titlebar_drag, "avoid duplicate AppKit/Kit double-click handling");
+    assert_eq!(options.window_background, gpui_kit::WindowBackgroundAppearance::Opaque);
     let titlebar = options.titlebar.unwrap();
     assert!(titlebar.appears_transparent);
     assert_eq!(titlebar.traffic_light_position, Some(point(px(12.), px(17.))));
@@ -3970,6 +3971,8 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         window.render_frame(cx);
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
+        assert_eq!(window.find("toggle-inspector").label(), Some("Hide panel"));
+        assert_eq!(window.find("toggle-theme").label(), Some("Switch to dark appearance"));
         for (id, label) in [
             ("header-overflow", "Window actions"),
             ("navigation-overflow", "Navigation actions"),
