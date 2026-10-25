@@ -18,10 +18,9 @@
 - Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions, never infers subagent state.
 - `view/composer_controls.rs` owns anchored controls; service validates options. Keep drafts/sources across option changes.
 - Rust 2024 RPIT captures `&mut Context`: render helpers in loops must return `AnyElement`.
-- `files.rs` bounds the workspace scan (400 entries, depth 3, skip dependency/VCS/hidden dirs),
-  previews (64 KiB, UTF-8 only), and the git branch walk. Retain background task handles for file I/O;
-  cancel superseded reads and reject stale workspace results. Reuse the shared workspace path resolver.
-  Reject truncated attachments; session switches reset projections; model/options changes retain draft sources.
+- `files.rs`: scan cap 400/depth 8; skip dep/VCS/hidden dirs; UTF-8 preview cap 64 KiB; bounded git lookup.
+  Accessible header focuses Kit Tree; selection/expansion survive refresh. Keep I/O background/cancellable; reject stale paths,
+  escapes, and truncation; use the shared resolver. Session switches reset projections; model/options retain drafts.
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.
 - `view/navigation.rs` starts collapsed; Kit buttons own hover callbacks, so use wrappers for reveal handlers.
 - Bound queues/event drains; reject stale events. CLI reload waits for shutdown, refreshes `view/configuration.rs` through the bounded credential-filtered catalog, and keeps same-workspace draft sources.
