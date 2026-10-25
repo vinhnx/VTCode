@@ -3818,7 +3818,7 @@ impl DesktopView {
                             EmptyHeader::new()
                                 .max_w(px(CONTENT_WIDTH))
                                 .gap_6()
-                                .media(EmptyMedia::new().mb_0().child(brand_logo(40.)))
+                                .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
                                 .title(title),
                         )
                         .size_full()
@@ -5491,6 +5491,15 @@ fn brand_logo(size: f32) -> impl IntoElement {
         ))
     });
     gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+}
+
+fn welcome_brand_mark(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
+    gpui_kit::svg()
+        .data(include_bytes!("../../../../../resources/icons/vtcode-mark.svg"))
+        .size(px(size))
+        .text_color(color)
+        .id("welcome-brand-mark")
+        .test_support()
 }
 
 pub(super) fn warning_alert(

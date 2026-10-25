@@ -2721,6 +2721,7 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
+        assert_eq!(window.find_all("welcome-brand-mark").len(), 1);
         assert!(window.find_all("thread-header").is_empty(), "the empty welcome should not add a thread header");
         for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
             assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
