@@ -223,13 +223,12 @@ The composer opens a compact model/effort panel above the input; **Search all mo
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
 the same change through keyboard and assistive activation. Changes commit on release, and restart the idle
 session so the runtime receives the new effort. The header reflects the CLI's effective fast/ultrafast badge.
-The searchable model panel is anchored above the growing composer and snaps inside the window.
- Model names appear above quieter provider,
-canonical ID, and context-window metadata; the current model has a checkmark and is selected initially.
+The searchable model panel is anchored above the growing composer and snaps inside the window. Model names appear above
+quieter provider, canonical ID, and context-window metadata; the current model has a checkmark and is selected initially.
 Search accepts display names, providers, and canonical IDs. The composer uses the catalog display name
 when available and preserves the canonical ID for service requests. Escape dismisses the panel and restores
-focus. The service does not currently expose reasoning-effort options, so the picker has no effort slider
-or synthetic recommended/default model list.
+focus. The service exposes only CLI-advertised effort levels; the picker does not invent effort choices or a
+recommended/default model group.
 
 ### Conversation activity
 
