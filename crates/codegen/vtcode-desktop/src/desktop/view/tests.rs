@@ -2367,6 +2367,36 @@ fn acknowledged_submission_is_not_recovered_after_disconnect(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn service_launch_failure_exposes_a_retry_path(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.first_submission = Some(super::SubmissionDraft {
+                prompt: "Keep this request".into(),
+                attachments: Vec::new(),
+                echo_id: "first-request".into(),
+                delivery_uncertain: false,
+            });
+            view.handle_backend_event(BackendEvent::LaunchFailed("Helper executable is unavailable.".into()), cx);
+            assert_eq!(view.status, "Could not connect to the local VT Code service");
+            assert_eq!(view.retained_submission.as_ref().map(|draft| draft.prompt.as_str()), Some("Keep this request"));
+            assert!(!view.can_reload_cli_settings(), "resolve retained content before a service restart");
+            assert!(view.error.as_deref().is_some_and(|error| {
+                error.contains("Helper executable is unavailable")
+                    && error.contains("Restore or dismiss the retained message")
+                    && error.contains("Reload CLI settings")
+            }));
+        });
+
+        window.render_frame(cx);
+        let error = window.find("composer-error");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert!(error.label().unwrap().contains("Reload CLI settings"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn unexpected_service_exit_replaces_connected_status_and_exposes_recovery(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(1);

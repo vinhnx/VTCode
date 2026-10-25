@@ -831,9 +831,14 @@ impl DesktopView {
         self.prepare_workspace(&workspace, cx);
         match launch_backend(workspace, self.event_tx.clone()) {
             Ok(backend) => self.initialize_backend(backend),
-            Err(error) => self.error = Some(error),
+            Err(error) => self.report_service_launch_failure(error),
         }
         cx.notify();
+    }
+
+    fn report_service_launch_failure(&mut self, error: String) {
+        self.status = "Could not connect to the local VT Code service".to_string();
+        self.error = Some(format!("{error}\n\n{}", service_reconnect_guidance(self.retained_submission.is_some())));
     }
 
     fn prepare_workspace(&mut self, workspace: &Path, cx: &mut Context<Self>) {
@@ -894,7 +899,7 @@ impl DesktopView {
             // Reuse the session transition gate until the handshake is validated.
             self.session_request = Some(protocol::method::INITIALIZE);
         } else {
-            self.error = Some("The local service request queue is unavailable.".to_string());
+            self.report_service_launch_failure("The local service request queue is unavailable.".to_string());
         }
     }
 
@@ -2294,8 +2299,7 @@ impl DesktopView {
                     self.retained_submission = Some(draft);
                 }
                 self.recover_pending_submission(true);
-                self.error = Some(error);
-                self.status = "Could not connect to the local VT Code service".to_string();
+                self.report_service_launch_failure(error);
                 self.backend = None;
                 self.running = false;
                 self.cancel_requested = false;
