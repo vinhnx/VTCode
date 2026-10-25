@@ -51,11 +51,7 @@ impl DesktopView {
                                     .ghost()
                                     .accessibility_label("Projects and threads")
                                     .tooltip_with_action("Projects and threads", &ToggleSidebar, Some("VTCodeDesktop"))
-                                    .on_click(cx.listener(|view, _, _, cx| {
-                                        view.sidebar_open = !view.sidebar_open;
-                                        view.navigation_peek = false;
-                                        cx.notify();
-                                    })),
+                                    .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                             ),
                     )
                     .child(
@@ -65,7 +61,7 @@ impl DesktopView {
                             .accessibility_label("New thread")
                             .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
                             .desktop_disabled(!self.session_change_allowed(None))
-                            .on_click(cx.listener(|view, _, _, cx| view.create_session(cx))),
+                            .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("nav-search")
@@ -73,7 +69,7 @@ impl DesktopView {
                             .ghost()
                             .accessibility_label("Search commands")
                             .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
+                            .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("nav-utilities")
@@ -82,7 +78,7 @@ impl DesktopView {
                             .accessibility_label("Workspace utilities")
                             .tooltip_with_action("Workspace utilities", &OpenUtilities, Some("VTCodeDesktop"))
                             .desktop_disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|view, _, _, cx| view.open_utilities(cx))),
+                            .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
                     )
                     .child(self.render_chrome_menu("navigation-overflow", "Navigation actions"))
                     .child(div().flex_1())
@@ -92,7 +88,7 @@ impl DesktopView {
                             .ghost()
                             .accessibility_label("Settings")
                             .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                            .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
                     ),
             )
             .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))

@@ -2804,7 +2804,7 @@ impl DesktopView {
                                     || !self.workspace_switch_idle()
                                     || self.retained_submission.is_some(),
                             )
-                            .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
+                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
                     ),
             );
 
@@ -2839,7 +2839,7 @@ impl DesktopView {
                         .ghost()
                         .flex_1()
                         .desktop_disabled(!self.session_change_allowed(None))
-                        .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
+                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("close-session")
@@ -2848,7 +2848,7 @@ impl DesktopView {
                         .accessibility_label("Close thread")
                         .ghost()
                         .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
-                        .on_click(cx.listener(|this, _, _, cx| this.close_session(cx))),
+                        .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                 ),
         );
 
@@ -3039,11 +3039,7 @@ impl DesktopView {
                             .icon(IconName::PanelLeft)
                             .ghost()
                             .tooltip_with_action("Toggle navigation", &ToggleSidebar, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.sidebar_open = !view.sidebar_open;
-                                view.navigation_peek = false;
-                                cx.notify();
-                            })),
+                            .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     )
                     .child(brand_logo(22.))
                     .child(div().text_sm().font_semibold().child("VT Code"))
@@ -3067,7 +3063,7 @@ impl DesktopView {
                                 .icon(IconName::Search)
                                 .ghost()
                                 .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
-                                .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
+                                .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
                         )
                         .child(
                             desktop_button("toggle-inspector")
@@ -3080,7 +3076,7 @@ impl DesktopView {
                                 .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
                                 .ghost()
                                 .desktop_disabled(self.workspace.is_none())
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
+                                .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
                         )
                         .child(
                             desktop_button("open-settings")
@@ -3088,7 +3084,7 @@ impl DesktopView {
                                 .icon(IconName::Settings2)
                                 .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
                                 .ghost()
-                                .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                                .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
                         )
                         .when_some(
                             self.configuration
@@ -3356,7 +3352,7 @@ impl DesktopView {
                         .ghost()
                         .small()
                         .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
-                        .on_click(cx.listener(|view, _, window, cx| view.open_workspace_review(window, cx))),
+                        .dispatches_desktop_action(OpenWorkspaceReview, self.focus_handle.clone()),
                 ),
             )
             .child(content_panel.child(content))
@@ -3698,7 +3694,7 @@ impl DesktopView {
                         .accessibility_label("Focus workspace file tree")
                         .tooltip_with_action("Focus workspace file tree", &OpenWorkspaceFiles, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| view.focus_workspace_files(window, cx))),
+                        .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("refresh-files")
@@ -3706,7 +3702,7 @@ impl DesktopView {
                         .accessibility_label("Refresh workspace files")
                         .tooltip_with_action("Refresh workspace files", &RefreshWorkspace, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh_workspace_view(cx))),
+                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 ),
         );
         let directory_paths: HashSet<_> = self
@@ -4122,7 +4118,7 @@ impl DesktopView {
                                             .border_color(colors.muted_foreground)
                                             .child(format!("{name}?")),
                                     )
-                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                                    .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
                             )
                         }),
                 );
@@ -4734,7 +4730,7 @@ impl DesktopView {
                                     || self.attachments_picker_open
                                     || self.session_request.is_some(),
                             )
-                            .on_click(cx.listener(|view, _, window, cx| view.open_add_context(window, cx))),
+                            .dispatches_desktop_action(OpenAddContext, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("composer-policy")
@@ -4748,7 +4744,7 @@ impl DesktopView {
                             .min_w_0()
                             .max_w(px(230.))
                             .desktop_disabled(!self.can_select_session_options())
-                            .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx))),
+                            .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone()),
                     ),
             );
         let mut model_actions = div().min_w_0().max_w_full().flex().flex_wrap().items_center().gap_2().child(
@@ -4766,7 +4762,7 @@ impl DesktopView {
                 )
                 .ghost()
                 .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
-                .on_click(cx.listener(|view, _, window, cx| view.open_model_options(window, cx))),
+                .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone()),
         );
         if self.running {
             model_actions = model_actions.child(
@@ -4776,7 +4772,7 @@ impl DesktopView {
                     .icon(IconName::Square)
                     .rounded_full()
                     .danger()
-                    .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
+                    .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
             );
         } else {
             model_actions = model_actions.child(
@@ -4846,7 +4842,7 @@ impl DesktopView {
                         .ml_auto()
                         .accessibility_label("Composer settings")
                         .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                        .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                        .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
                 ),
         );
         div().w_full().flex().justify_center().child(
@@ -6237,6 +6233,7 @@ fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
 
 trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
+    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
 }
 
 impl DesktopButtonExt for Button {
@@ -6246,6 +6243,10 @@ impl DesktopButtonExt for Button {
         } else {
             CursorStyle::PointingHand
         })
+    }
+
+    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
+        self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
     }
 }
 

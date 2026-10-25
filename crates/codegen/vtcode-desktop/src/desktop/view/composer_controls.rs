@@ -417,7 +417,7 @@ impl DesktopView {
         self.show_palette(PaletteKind::Modes, vec![("For the next session".into(), entries)], window, cx);
     }
 
-    pub(super) fn render_mode_button(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_mode_button(&self, _cx: &Context<Self>) -> AnyElement {
         let mode = self
             .active_primary_agent_display
             .as_ref()
@@ -444,7 +444,7 @@ impl DesktopView {
             .ghost()
             .small()
             .desktop_disabled(!self.can_select_session_options())
-            .on_click(cx.listener(|view, _, window, cx| view.open_modes(window, cx)))
+            .dispatches_desktop_action(OpenModePicker, self.focus_handle.clone())
             .into_any_element()
     }
 }

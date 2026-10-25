@@ -258,7 +258,7 @@ impl DesktopView {
                         })
                         .small()
                         .desktop_disabled(review.pending)
-                        .on_click(cx.listener(|view, _, _, cx| view.refresh_workspace_view(cx))),
+                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 )
                 .child(
                     div()
