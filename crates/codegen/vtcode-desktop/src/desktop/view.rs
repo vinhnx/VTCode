@@ -2512,7 +2512,14 @@ impl DesktopView {
                 .border_color(theme.colors.border)
                 .text_xs()
                 .text_color(theme.colors.muted_foreground)
-                .child(self.status.clone()),
+                .child(
+                    div()
+                        .id("sidebar-status")
+                        .test_support()
+                        .role(gpui_kit::Role::Status)
+                        .aria_label(self.status.clone())
+                        .child(self.status.clone()),
+                ),
         )
     }
 
