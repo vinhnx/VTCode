@@ -730,3 +730,222 @@ https://claude.com/resources/articles/the-anatomy-of-effective-commerce-agents
 ---
 
 https://claude.com/resources/articles/building-agents-when-to-fold-subagents-into-your-main-agent-loop
+
+---
+
+https://modelcontextprotocol.io/extensions/apps/overview
+
+## MCP Apps and WebMCP — are they related?
+
+Short answer: no. They are two different protocols that happen to both put a browser in the loop, and the only thing they share is the word "browser". Conflating them costs real time.
+
+### What each one is
+
+| | MCP Apps (SEP-1865) | WebMCP (this repo's `vtcode-webmcp`) |
+| --- | --- | --- |
+| Role | External MCP **server** ships an interactive UI | VT Code itself **serves** a bridge to its own browser app |
+| Direction | Server → Host → user | Host (VT Code) → browser client |
+| Transport | `postMessage` JSON-RPC inside a sandboxed iframe | Axum WebSocket `/webmcp` + Streamable HTTP `/mcp`, loopback-only, bearer/pairing auth |
+| Content type | `text/html;profile=mcp-app` declared by a third-party server | None. Custom `BridgeRequest`/`BridgeResponse` enum; never serves files over HTTP |
+| Unit of work | A tool result rendered as a view | A workspace operation (read, propose patch, apply, run checks) |
+| Trust boundary | Untrusted third-party HTML, deny-by-default CSP | Trusted first-party app, authenticated pair, origin-bound |
+
+The trust models are opposite. MCP Apps exists to safely render HTML we do not trust; WebMCP exists to let a client we do trust operate the workspace we control. WebMCP's crate rules explicitly forbid adding a file-serving route, which is exactly what an app host needs.
+
+### What would actually be shared
+
+Only two things, and neither is a renderer:
+
+1. **The event feed.** WebMCP already replays `VersionedThreadEvent` through `event_hub.rs` with bounded replay and slow-client handling. That is the correct pipe if a view ever needs to observe a live session.
+2. **The approval path.** WebMCP already routes mutations through `ApprovalRequired` and an authoritative diff. Any view-triggered mutation should reuse that, not invent a second one.
+
+### What would genuinely collide
+
+- **Two RPC dialects.** WebMCP uses a versioned custom enum; MCP Apps mandates JSON-RPC 2.0 with `ui/`-prefixed methods. Merging them means one of the two stops being spec-compliant. Keep them separate.
+- **Origin policy.** WebMCP binds exact origins and forbids file routes. An app host needs an opaque or host-controlled origin for third-party HTML. Same crate, contradictory invariants.
+
+Conclusion: an app host, if it ever exists, is a **consumer of the WebMCP bridge**, not an addition to the WebMCP crate.
+
+### What VT Code has today
+
+- `resources/list` and `resources/read` are implemented in `vtcode-mcp` and have **zero callers** outside that crate. The path is dead-ended; nothing in core or the TUI consumes it.
+- `_meta` on tool **definitions** is silently dropped at `parse_mcp_tool` (`crates/common/vtcode-utility-tool-specs/src/mcp_tool.rs:12-20`) and again at `McpToolInfo`. `_meta.ui.resourceUri` is structurally unrepresentable.
+- `_meta` on tool **results** is deliberately stripped at result, content-block, and embedded-resource levels (`crates/codegen/vtcode-mcp/src/client.rs:1031-1047`), guarded by a test and an AGENTS.md rule. That rule is about results only; definition `_meta` is not covered.
+- There is no webview anywhere: the TUI is ratatui text, the GPUI desktop app drops HTML in `markdown.rs`, and no `wry`/`cef`/`webkit` dependency exists in the lockfile.
+- `rmcp 3.5.0` already exposes `ClientCapabilities.extensions` (SEP-1724) and `Tool.meta`, so the protocol layer needs no new dependency.
+
+### Recommendation, simplest first
+
+**Do now — plumbing and detection, no UI.** About a day, no new dependencies, no policy reversal:
+
+1. Carry definition `_meta` through `ParsedMcpTool` → `McpToolInfo` → registry metadata, filtered to the `ui` key only. Do not pass arbitrary `_meta` into prompts; it is server-controlled text.
+2. Advertise `io.modelcontextprotocol/ui` in `ClientCapabilities.extensions` with `mimeTypes: ["text/html;profile=mcp-app"]` **only when a configured mode says VT Code can render apps**, and never otherwise. Advertising a capability we cannot honor is worse than not having it: servers branch on it and ship HTML we then drop.
+3. When a tool result carries a `ui`-linked tool and the mode is off, render the existing resource row plus an explicit `[app: ui://…]` marker with a hint that the host cannot render it. The user learns the app exists instead of seeing a blank `[resource: …]` line.
+4. Add a `vtcode mcp apps` (or `mcp resources`) CLI subcommand to list `ui://` resources and probe them. Today there is no way to see what a server offers — the `mcp` CLI only manages config. This is the cheapest real value and validates the plumbing against live servers.
+
+**Do next, if the probe step proves demand — rendering, one surface only.** Pick the desktop GPUI app or the browser, not the TUI. The TUI cannot render HTML and a text-mode approximation of an interactive app is a bad product. The browser route reuses the WebMCP event feed; the desktop route needs a webview engine that does not exist yet, which is a licensing, bundling, and sandbox-review project on its own.
+
+**Do not do.** Do not implement an MCP Apps host inside `vtcode-webmcp`. It inverts that crate's trust model and contradicts its no-file-serving rule. Do not build a TUI renderer for apps. Do not strip `_meta` more aggressively to "simplify" — the existing result-level rule is correct for the model context boundary and should stay.
+
+### Open questions
+
+- Is there a real server in use today that ships a `ui://` app? Without one, step 4 is the only step with observable payoff.
+- If rendering lands in the desktop app, is a bundled WebKit view acceptable, or does the app stay component-only? This decides whether apps are ever a first-class desktop feature.
+- Does advertising the extension to servers change tool registration in ways that break the text fallback? Needs a live multi-provider check before touching `build_initialize_params`.
+
+No source changes yet. The only thing implemented from this is the `mcp-apps` authoring skill at `.agents/skills/mcp-apps/SKILL.md`, which teaches an agent to build a spec-correct app server and to gate on host capability rather than assume it.
+
+---
+
+# MCP Apps implementation plan
+
+Ordered as increments. Each one ships independently, has its own acceptance test, and leaves the tree green. Stop after any increment if the next one no longer pays for itself.
+
+Ground rules for every increment:
+
+- The TUI never renders HTML. Any increment that claims to "support MCP Apps" in the terminal is wrong by construction.
+- Do not weaken the result-level `_meta` stripping in `format_tool_result`. That boundary protects the model context and already has a regression test.
+- `_meta` is server-controlled text. Anything read from it is bounded and never promoted into prompt text without the existing untrusted-description wrapping.
+
+---
+
+## Increment 0 — Discoverability only (no protocol change)
+
+**Goal:** make `ui://` capability visible without touching the initialize handshake. Lowest risk, only work that can ship unconditionally.
+
+1. Add `McpUiToolMeta` to `crates/codegen/vtcode-mcp/src/types.rs`:
+
+   ```rust
+   pub struct McpUiToolMeta {
+       pub resource_uri: String,
+       pub visibility: Vec<McpToolVisibility>, // Model | App
+       pub legacy_flat: bool,                  // came from _meta["ui/resourceUri"]
+   }
+   ```
+
+2. Extend `ParsedMcpTool` (`crates/common/vtcode-utility-tool-specs/src/mcp_tool.rs:4-20`) with `ui: Option<McpUiToolMeta>`. Parse `_meta.ui.resourceUri` first, fall back to the deprecated `_meta["ui/resourceUri"]`, record which one matched. Reject values that are not `ui://` prefixed — a non-`ui://` URI is a server bug, not a feature.
+3. Extend `McpToolInfo` with `ui: Option<McpUiToolMeta>`. This touches every construction site; they are: `provider.rs:617`, `conversion.rs:65`, `mcp_facade.rs:112`, `code_executor.rs:735`, plus test fixtures in `client.rs:1236`, `tool_discovery.rs:290`, `tool_discovery_cache.rs:549`, `registry/tests.rs` (5 sites), `tools/mcp.rs:212`, `mcp_support_overview.rs:312`, `tests/mcp_basic_test.rs:145`. Default `None` everywhere except `provider.rs`.
+4. Surface the URI in the generic renderer (`src/agent/runloop/tool_output/mcp.rs:92-101`) where `resource`/`resource_link` blocks are handled. When the URI starts with `ui://`, prefer `[app: <uri>]` over `[resource: <uri>]` and append `type: text/html;profile=mcp-app` as today.
+5. Renderer needs the tool's UI metadata, not just the result payload. The result envelope carries no linkage, so pass it through `ToolOutputItem` or look it up by tool name at render time. **Decision required:** lookup by name is simpler and needs no contract change; the envelope change is more correct but touches `vtcode-exec-events::ThreadOutputItem`, so prefer lookup first.
+
+**Acceptance:** a server that declares `_meta.ui.resourceUri` produces an `[app: ui://…]` row; a server that does not is byte-identical to today. Regression test alongside `render_tool_output_mcp_resources_and_media_preserve_content_order` (`src/agent/runloop/tool_output/tests.rs:1486`).
+
+**Risks:** none material. Worst case is a slightly uglier row.
+
+---
+
+## Increment 1 — Orientation surface (CLI)
+
+**Goal:** let a user see what a server actually offers. Fixes the gap that `vtcode mcp` only manages config and cannot inspect a live server.
+
+1. New subcommand in `crates/codegen/vtcode-core/src/mcp/cli.rs:24` `McpCommands`:
+
+   ```
+   vtcode mcp resources [--provider <name>] [--json] [--ui-only]
+   ```
+
+   Implementation calls the already-exported `McpClient::list_resources` (`client.rs:212`), which today has **zero callers**. Add `vtcode mcp tools --json` at the same time if it is cheap — same discovery path.
+2. Optionally `vtcode mcp app <uri>` to `resources/read` and print a summary: MIME type, byte size, declared CSP domains, permissions, `prefersBorder`. Never execute or render it.
+3. Update the `mcp` CLI docs table and `docs/guides/mcp-integration.md`.
+
+**Acceptance:** against a live server, the command lists `ui://` resources with their declared CSP. This is also the answer to "is there a real app in the wild?" — the plan's own open question.
+
+**Why this comes before rendering:** it costs an afternoon, has immediate utility, and tells you whether increment 2+ is worth building at all.
+
+---
+
+## Increment 2 — Capability advertisement (gated)
+
+**Goal:** tell servers we can render, but only when we actually can.
+
+1. Add config in `McpUiConfig` (`crates/codegen/vtcode-config/src/mcp.rs:237-265`):
+
+   ```toml
+   [mcp.ui]
+   apps = "off"        # off | detect | render
+   ```
+
+   `off` (default) and `detect` do **not** advertise. Only `render` advertises, and `render` must be rejected at config load until increment 3 exists.
+2. In `build_initialize_params` (`client.rs:983-1001`), when mode is `render`, insert into `ClientCapabilities.extensions`:
+
+   ```json
+   "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] }
+   ```
+
+   `rmcp 3.5.0` already models this (`ClientCapabilities.extensions: Option<ExtensionCapabilities>`, SEP-1724) — no dependency change.
+3. Apply the same in the reconnect path (`provider.rs:584-588`) and pool path (`connection_pool.rs:375-378`), which currently pass `ClientCapabilities::default()` and would otherwise silently lose the extension.
+
+**Acceptance:** with `apps = render` the initialize request carries the extension; with `off` the request is byte-identical to today. Assert on the serialized request, not on internal state.
+
+**Hard rule:** never advertise speculatively. A server that sees the capability registers a UI tool and returns HTML we discard — strictly worse than not advertising.
+
+---
+
+## Increment 3 — Rendering, one surface only
+
+**Prerequisite:** increments 0-2 shipped and increment 1 proved at least one real `ui://` server.
+
+### 3a. Choice of surface
+
+| Surface | Cost | Verdict |
+| --- | --- | --- |
+| TUI (ratatui) | Impossible without a terminal image protocol and a DOM | **No.** A text approximation of an interactive app is worse than the fallback |
+| Desktop (GPUI) | Needs `wry`/WebKit — no webview dependency exists anywhere in the lockfile | Deferred; licensing, bundling, and sandbox review are a project of their own |
+| Browser (WebMCP bridge) | Reuses an existing authenticated, origin-bound channel | **Yes**, if any surface |
+
+### 3b. If browser: the shape
+
+Do **not** add app hosting to `vtcode-webmcp`. That crate's rules forbid file-serving routes and bind exact origins, which are the opposite invariants from hosting untrusted third-party HTML. Instead:
+
+1. A separate static app shell (new directory beside `apps/webmcp`) hosts the sandbox proxy iframe on its own origin.
+2. VT Code serves the `ui://` HTML over the existing authenticated bridge as a **new `BridgeRequest` variant** (e.g. `app.resource`), returning HTML plus declared CSP. The bridge stays file-serving-free because the payload comes from an MCP provider under allowlist control, not from the workspace.
+3. The shell enforces the spec's deny-by-default CSP and the double-iframe sandbox. Implement `ui/initialize`, `ui/notifications/initialized`, `tool-input`, `tool-result`, `tool-cancelled`, `resource-teardown`, and proxy `tools/call` / `resources/read`.
+4. Reuse the existing `ApprovalRequired` path for anything mutating. Do not invent a second approval mechanism.
+
+### 3c. Proxying rules
+
+- `visibility: ["app"]` tools: strip from the model-visible catalog at registration time; accept from the view only on the same server connection; always reject cross-server.
+- Enforce the resource allowlist on view-initiated `resources/read`.
+- Honor `ui.csp` as a ceiling only. Undeclared origins must be blocked, verified by test.
+
+**Acceptance:** a real example server (`ext-apps/examples/qr-server` or `get-time`) renders and round-trips a tool call. Then a negative test: request an undeclared origin and confirm it is blocked.
+
+---
+
+## Increment 4 — Event feed and context (only if 3b ships)
+
+- Feed live session events to the view through `event_hub.rs` (`VersionedThreadEvent`, already bounded).
+- Implement `ui/update-model-context` with **last-write-wins per settled state**, debounced. It overwrites, so a naive implementation floods the context.
+- Implement `ui/message` behind consent; it appends to the conversation.
+
+---
+
+## Sequencing summary
+
+| # | Increment | Depends on | Effort | Reversible |
+| - | --------- | ---------- | ------ | ---------- |
+| 0 | `ui` metadata plumbing + `[app: …]` row | — | ~1 day | Yes |
+| 1 | `vtcode mcp resources` / `app <uri>` | — | ~0.5 day | Yes |
+| 2 | Gated capability advertisement | 0 | ~0.5 day | Yes |
+| 3 | Browser rendering host | 1, 2 | weeks | Yes, config-gated |
+| 4 | Event feed, model context | 3 | days | Yes |
+
+Increments 0-2 are conservative and independently valuable even if nothing else follows. Increment 3 is the real commitment; do not start it before increment 1 confirms a real server exists.
+
+---
+
+## Assumptions to challenge
+
+1. **"Users want interactive apps in a terminal IDE."** Unverified. The TUI cannot render HTML; the desktop app has no webview. The realistic audience is the browser integration only. If the answer is "no audience", the correct outcome is increment 0 + 1 and stop.
+2. **"Advertising the extension is free."** It is not. Servers gate tool registration on it and may return tool variants with different descriptions and schemas, which changes the model-visible catalog.
+3. **"`_meta` stripping blocks this work."** It does not. The stripping is result-level; tool-definition `_meta` is untouched by it. Increment 0 needs no policy reversal — verified against `crates/codegen/vtcode-mcp/AGENTS.md`.
+4. **"WebMCP is the natural home."** Opposite trust model. It is a *channel*, not a *host*.
+5. **"This is a security feature."** MCP Apps is a sandboxing *requirement*, not a security *gain*. Today we never render third-party HTML, so the current attack surface is the simplest possible one. Increment 3 enlarges it. That trade must be explicit before implementation.
+
+## Non-goals
+
+- Rendering apps in the TUI.
+- Implementing an MCP Apps host inside `vtcode-webmcp`.
+- Relaxing result-level `_meta` stripping.
+- Bundling a webview engine into the desktop app before increment 3 is justified.
+- Faithfully implementing `ui/request-display-mode`, `pip`, or `ui/open-link` before there is a surface that can honor them.
