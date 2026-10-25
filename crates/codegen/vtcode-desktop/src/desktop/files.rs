@@ -6,7 +6,7 @@ use std::path::Path;
 
 /// Hard bounds so one sidebar render stays cheap regardless of workspace size.
 const MAX_ENTRIES: usize = 400;
-const MAX_DEPTH: usize = 3;
+const MAX_DEPTH: usize = 8;
 /// Preview read bound; a `usize` so buffer sizing never truncates.
 const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 
@@ -192,21 +192,31 @@ mod tests {
     }
 
     #[test]
-    fn scan_is_bounded_in_count_and_depth() {
+    fn scan_is_bounded_in_count() {
         let workspace = temp_workspace();
         let root = workspace.path();
         for index in 0..(MAX_ENTRIES + 50) {
             fs::write(root.join(format!("file-{index:03}.txt")), b"x").expect("write");
         }
-        fs::create_dir_all(root.join("a/b/c/d")).expect("deep dir");
-        fs::write(root.join("a/b/c/d/buried.txt"), b"x").expect("write");
 
         let entries = scan_workspace(root);
         assert_eq!(entries.len(), MAX_ENTRIES, "entry count is capped");
-        assert!(
-            !entries.iter().any(|entry| entry.rel_path == "a/b/c/d/buried.txt"),
-            "entries deeper than the depth bound are not listed"
-        );
+    }
+
+    #[test]
+    fn scan_includes_nested_paths_through_the_depth_bound() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        let visible_directory = "a/b/c/d/e/f/g/h";
+        let beyond_bound = "a/b/c/d/e/f/g/h/i";
+        fs::create_dir_all(root.join(beyond_bound)).expect("create deep dirs");
+        fs::write(root.join(beyond_bound).join("buried.txt"), b"x").expect("write");
+
+        let entries = scan_workspace(root);
+        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
+        assert!(paths.contains(&visible_directory), "directory at the depth boundary is visible");
+        assert!(!paths.contains(&beyond_bound), "directories beyond the depth bound are omitted");
+        assert!(!paths.contains(&"a/b/c/d/e/f/g/h/i/buried.txt"), "files beyond the depth bound are omitted");
     }
 
     #[test]

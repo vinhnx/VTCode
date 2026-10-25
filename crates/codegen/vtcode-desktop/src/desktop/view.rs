@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
@@ -19,17 +20,19 @@ use gpui_kit::component::empty::{
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{Copy, Cut, Enter, Paste, Redo, SelectAll, Textarea, TextareaState, Undo};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
+use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
+use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, SystemMenuType,
-    Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list, point, px,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, Subscription,
+    SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list, point, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -75,6 +78,7 @@ actions!(
         OpenAddContext,
         OpenPermissions,
         OpenModePicker,
+        OpenSelectedFile,
         NewSession,
         CloseSession,
         ChooseWorkspace,
@@ -128,6 +132,7 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
     ]);
 }
 
@@ -314,6 +319,9 @@ struct DesktopView {
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
+    file_tree: Entity<TreeState>,
+    expanded_file_directories: HashSet<String>,
+    _file_tree_subscription: Subscription,
     files_task: Option<Task<()>>,
     preview_task: Option<Task<()>>,
     attachments_task: Option<Task<()>>,
@@ -387,6 +395,33 @@ struct PaneResize {
     start_width: f32,
 }
 
+fn file_tree_items(entries: &[FileEntry], parent: Option<&str>, expanded: &HashSet<String>) -> Vec<TreeItem> {
+    entries
+        .iter()
+        .filter(|entry| entry.rel_path.rsplit_once('/').map(|(parent, _)| parent) == parent)
+        .map(|entry| {
+            let children = if entry.is_dir {
+                file_tree_items(entries, Some(&entry.rel_path), expanded)
+            } else {
+                Vec::new()
+            };
+            TreeItem::new(entry.rel_path.clone(), entry.rel_path.clone())
+                .children(children)
+                .expanded(expanded.contains(&entry.rel_path))
+        })
+        .collect()
+}
+
+fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a TreeItem> {
+    items.iter().find_map(|item| {
+        if item.id.as_ref() == path {
+            Some(item)
+        } else {
+            find_file_tree_item(&item.children, path)
+        }
+    })
+}
+
 impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
         let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
@@ -394,6 +429,18 @@ impl DesktopView {
         focus_handle.focus(window, cx);
         let preferences = preferences::Preferences::load();
         let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
+        let file_tree = cx.new(|cx| TreeState::new(cx));
+        let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
+            match event {
+                TreeEvent::Expanded(path) => {
+                    let _inserted = view.expanded_file_directories.insert(path.to_string());
+                }
+                TreeEvent::Collapsed(path) => {
+                    let _removed = view.expanded_file_directories.remove(path.as_ref());
+                }
+            }
+            cx.notify();
+        });
         Self {
             shortcut_inputs,
             shortcut_message: None,
@@ -431,6 +478,9 @@ impl DesktopView {
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
+            file_tree,
+            expanded_file_directories: HashSet::new(),
+            _file_tree_subscription: file_tree_subscription,
             files_task: None,
             preview_task: None,
             attachments_task: None,
@@ -647,7 +697,11 @@ impl DesktopView {
         self.running = false;
         self.error = None;
         self.status = "Starting local VT Code service…".to_string();
-        self.files.clear();
+        if !same_workspace {
+            self.files.clear();
+            self.expanded_file_directories.clear();
+            self.file_tree.update(cx, |tree, cx| tree.set_items(Vec::new(), cx));
+        }
         self.git_branch = None;
         self.preview_task = None;
         self.refresh_files(cx);
@@ -830,12 +884,41 @@ impl DesktopView {
                 .await;
             let _updated = view.update(cx, |view, cx| {
                 if view.workspace.as_ref() == Some(&workspace) {
-                    view.files = entries;
+                    view.replace_file_entries(entries, cx);
                     view.git_branch = branch;
                     cx.notify();
                 }
             });
         }));
+    }
+
+    fn replace_file_entries(&mut self, entries: Vec<FileEntry>, cx: &mut Context<Self>) {
+        let selected_path = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string());
+        let directory_paths: HashSet<_> = entries
+            .iter()
+            .filter(|entry| entry.is_dir)
+            .map(|entry| entry.rel_path.clone())
+            .collect();
+        self.expanded_file_directories.retain(|path| directory_paths.contains(path));
+        let tree_items = file_tree_items(&entries, None, &self.expanded_file_directories);
+        let selected_item = selected_path
+            .as_deref()
+            .and_then(|path| find_file_tree_item(&tree_items, path))
+            .cloned();
+        self.file_tree.update(cx, |tree, cx| {
+            tree.set_items(tree_items, cx);
+            tree.set_selected_item(selected_item.as_ref(), cx);
+        });
+        self.files = entries;
+    }
+
+    fn open_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string()) else {
+            return;
+        };
+        if self.files.iter().any(|entry| entry.rel_path == path && !entry.is_dir) {
+            self.open_file_preview(path, window, cx);
+        }
     }
 
     fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -3247,7 +3330,20 @@ impl DesktopView {
                 .justify_between()
                 .px_3()
                 .py_2()
-                .child(div().text_sm().font_semibold().child("Workspace files"))
+                .child(
+                    desktop_button("focus-files")
+                        .label("Workspace files")
+                        .accessibility_label("Focus workspace file tree")
+                        .ghost()
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.file_tree.update(cx, |tree, cx| {
+                                if tree.selected_index().is_none() && tree.entry(0).is_some() {
+                                    tree.set_selected_index(Some(0), cx);
+                                }
+                                tree.focus(window, cx);
+                            });
+                        })),
+                )
                 .child(
                     desktop_button("refresh-files")
                         .label("Refresh")
@@ -3255,35 +3351,59 @@ impl DesktopView {
                         .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
                 ),
         );
+        let directory_paths: HashSet<_> = self
+            .files
+            .iter()
+            .filter(|entry| entry.is_dir)
+            .map(|entry| entry.rel_path.clone())
+            .collect();
+        let file_tree = self.file_tree.clone();
+        let weak_view = cx.entity().downgrade();
         body = body.child(
             div()
                 .id("file-list")
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scroll()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .px_2()
-                .children(self.files.iter().enumerate().map(|(index, entry)| {
-                    let rel_path = entry.rel_path.clone();
-                    let indent = entry.depth;
-                    let is_dir = entry.is_dir;
-                    let label = if is_dir {
-                        format!("{rel_path}/")
+                .on_action(cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)))
+                .child(Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
+                    let rel_path = entry.item().id.to_string();
+                    let is_dir = directory_paths.contains(&rel_path);
+                    let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                    let icon = if is_dir {
+                        if entry.is_expanded() {
+                            IconName::FolderOpen
+                        } else {
+                            IconName::FolderClosed
+                        }
                     } else {
-                        rel_path.clone()
+                        IconName::FileText
                     };
-                    div().w_full().pl(px(12. * indent as f32)).child(
-                        desktop_button(format!("file-{index}"))
-                            .label(label)
-                            .ghost()
-                            .desktop_disabled(is_dir)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_file_preview(rel_path.clone(), window, cx)
-                            })),
-                    )
+                    let tree = file_tree.clone();
+                    let view = weak_view.clone();
+                    let open_path = rel_path.clone();
+                    ListItem::new(format!("workspace-file-{rel_path}"))
+                        .selected(selected)
+                        .accessibility_label(format!("{} {rel_path}", if is_dir { "Folder" } else { "File" }))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_x_2()
+                                .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
+                                .child(div().text_sm().child(display_name)),
+                        )
+                        .on_click(move |_, window, app| {
+                            tree.update(app, |tree, app| tree.focus(window, app));
+                            if is_dir {
+                                return;
+                            }
+                            if let Some(view) = view.upgrade() {
+                                view.update(app, |view, cx| {
+                                    view.open_file_preview(open_path.clone(), window, cx);
+                                });
+                            }
+                        })
                 })),
         );
         body.into_any_element()
