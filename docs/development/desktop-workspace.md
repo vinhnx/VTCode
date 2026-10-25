@@ -111,6 +111,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | Settings → VT Code → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews and typography; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status. |
+| Change interface language | Settings → Appearance offers English and Tiếng Việt. The selection updates supported settings navigation and GPUI Kit control labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark buttons and the header theme control switch between saved profiles. The selected profile remains visible in the theme swatches. |
 
 ### Utilities pane
@@ -152,9 +153,10 @@ are helper-lifetime overrides; they do not write `vtcode.toml`. The mode label f
 when it changes through CLI slash commands or agent selection. The picker still edits the configured mode for the
 next session, and stale updates from another session are ignored.
 
-The status bar starts hidden. Settings → **Accessibility → Show status bar**, the header menu, or ⌘⇧S toggles it and saves the
-choice. The header keeps one overflow control for thread/window actions. The former duplicate thread ellipsis is
-removed. **CLI / WebMCP** opens the connection controls in Settings. Pair a browser origin there or run
+The status bar starts hidden. Settings → **Accessibility → Show status bar**, the header menu, or
+⌘⇧S toggles it and saves the choice. The header keeps one overflow control for thread/window actions.
+The former duplicate thread ellipsis is removed. **CLI / WebMCP** opens the connection controls in Settings.
+Pair a browser origin there or run
 `/webmcp connect <origin>` in the desktop composer. The CLI TUI supports the same command; `/webmcp pair` remains
 an alias.
 

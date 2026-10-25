@@ -29,6 +29,7 @@ fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView
 
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
     drop(isolate_preferences());
+    crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
     cx.update(gpui_kit::init);
     cx.update(super::super::notifications::initialize);
     cx.update(super::init_keybindings);

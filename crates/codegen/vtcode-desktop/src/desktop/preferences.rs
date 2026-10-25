@@ -9,6 +9,8 @@ use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
+use super::localization::UiLanguage;
+
 const MAX_RECENT_WORKSPACES: usize = 8;
 const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
 const DEFAULT_INSPECTOR_WIDTH: f32 = 320.0;
@@ -103,6 +105,8 @@ pub(super) fn apply_reduced_motion(preference: ReducedMotionPreference, system_b
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub(super) struct Preferences {
+    /// Selected desktop UI language. Unknown values fall back to English.
+    pub ui_language: Option<String>,
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
@@ -132,6 +136,14 @@ pub(super) struct Preferences {
 }
 
 impl Preferences {
+    pub(super) fn ui_language(&self) -> UiLanguage {
+        UiLanguage::from_saved(self.ui_language.as_deref())
+    }
+
+    pub(super) fn set_ui_language(&mut self, language: UiLanguage) {
+        self.ui_language = Some(language.locale().to_owned());
+    }
+
     pub(super) fn ui_font_size(&self) -> u8 {
         self.ui_font_size.unwrap_or(16).clamp(12, 24)
     }
@@ -310,6 +322,23 @@ pub(super) fn install_test_preferences_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences() {
+        let old: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+        assert_eq!(old.ui_language(), UiLanguage::English);
+
+        let mut preferences = old;
+        preferences.set_ui_language(UiLanguage::Vietnamese);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(loaded.ui_language(), UiLanguage::Vietnamese);
+        assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+
+        let invalid: Preferences = serde_json::from_str(r#"{"theme":"ciapre","uiLanguage":"unsupported"}"#).unwrap();
+        assert_eq!(invalid.ui_language(), UiLanguage::English);
+        assert_eq!(invalid.theme.as_deref(), Some("ciapre"));
+    }
 
     #[gpui_kit::test]
     fn system_motion_baseline_initializes_once_without_redundant_global_notifications(

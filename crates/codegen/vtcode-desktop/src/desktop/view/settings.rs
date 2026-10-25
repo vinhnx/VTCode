@@ -1,4 +1,5 @@
 use super::*;
+use crate::desktop::localization::UiLanguage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SettingsTab {
@@ -18,14 +19,15 @@ impl SettingsTab {
         Self::Connections,
     ];
 
-    const fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Appearance => "Appearance",
-            Self::Accessibility => "Accessibility",
-            Self::Shortcuts => "Shortcuts",
-            Self::VtCode => "VT Code",
-            Self::Connections => "Connections",
+            Self::Appearance => rust_i18n::t!("app.settings.tab.appearance"),
+            Self::Accessibility => rust_i18n::t!("app.settings.tab.accessibility"),
+            Self::Shortcuts => rust_i18n::t!("app.settings.tab.shortcuts"),
+            Self::VtCode => rust_i18n::t!("app.settings.tab.vtcode"),
+            Self::Connections => rust_i18n::t!("app.settings.tab.connections"),
         }
+        .to_string()
     }
 }
 
@@ -54,7 +56,7 @@ impl DesktopView {
             .track_focus(&self.settings_focus)
             .test_support()
             .role(gpui_kit::Role::Dialog)
-            .aria_label("Settings")
+            .aria_label(rust_i18n::t!("app.settings.title").to_string())
             .relative()
             .w_full()
             .flex_1()
@@ -74,7 +76,7 @@ impl DesktopView {
                     .track_focus(&self.settings_navigation_focus)
                     .key_context("VTCodeSettings")
                     .role(gpui_kit::Role::Group)
-                    .aria_label("Settings categories")
+                    .aria_label(rust_i18n::t!("app.settings.categories").to_string())
                     .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
                     .border_1()
                     .border_color(colors.border.opacity(0.))
@@ -273,6 +275,53 @@ impl DesktopView {
                     ),
             ));
 
+        let language = self.preferences.ui_language();
+        let language_group_title = rust_i18n::t!("app.settings.language.group").to_string();
+        content = content.child(accessible_group_box(
+            "appearance-language-group",
+            language_group_title.clone(),
+            GroupBox::new().flex_shrink_0().fill().title(language_group_title).child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .child(div().child(rust_i18n::t!("app.settings.language.label").to_string()))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(colors.muted_foreground)
+                                    .child(rust_i18n::t!("app.settings.language.description").to_string()),
+                            ),
+                    )
+                    .child(div().flex().flex_wrap().gap_1().children(UiLanguage::ALL.map(|option| {
+                        let selected = language == option;
+                        Toggle::new(format!("ui-language-{}", option.locale()))
+                            .label(option.label())
+                            .tooltip(
+                                rust_i18n::t!("app.settings.language.select", language = option.label()).to_string(),
+                            )
+                            .outline()
+                            .small()
+                            .checked(selected)
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |view, checked: &bool, _, cx| {
+                                if *checked {
+                                    view.set_ui_language(option, cx);
+                                } else {
+                                    // Keep one option selected even when the active toggle is clicked again.
+                                    cx.notify();
+                                }
+                            }))
+                    }))),
+            ),
+        ));
+
         content = content.child(desktop_button("reset-appearance").label("Reset appearance").ghost().on_click(
             cx.listener(|view, _, window, cx| {
                 view.preferences.separate_theme_profiles = false;
@@ -290,6 +339,21 @@ impl DesktopView {
             }),
         ));
         content.into_any_element()
+    }
+
+    fn set_ui_language(&mut self, language: UiLanguage, cx: &mut Context<Self>) {
+        if self.preferences.ui_language() == language {
+            return;
+        }
+
+        self.preferences.set_ui_language(language);
+        super::super::localization::set_language(language);
+        // Command rows cache their rendered labels. Drop that projection so a
+        // subsequently opened palette reads the newly selected locale.
+        self.palette = None;
+        self.palette_query = "".into();
+        self.preferences.save();
+        cx.notify();
     }
 
     fn render_accessibility_settings(&self, cx: &mut Context<Self>) -> AnyElement {

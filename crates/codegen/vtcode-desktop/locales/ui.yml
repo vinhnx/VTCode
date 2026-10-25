@@ -1,0 +1,49 @@
+_version: 2
+app:
+  settings:
+    title:
+      en: Settings
+      vi: Cài đặt
+    categories:
+      en: Settings categories
+      vi: Danh mục cài đặt
+    tab:
+      appearance:
+        en: Appearance
+        vi: Giao diện
+      accessibility:
+        en: Accessibility
+        vi: Trợ năng
+      shortcuts:
+        en: Shortcuts
+        vi: Phím tắt
+      vtcode:
+        en: VT Code
+        vi: VT Code
+      connections:
+        en: Connections
+        vi: Kết nối
+    language:
+      group:
+        en: Language
+        vi: Ngôn ngữ
+      label:
+        en: Interface language
+        vi: Ngôn ngữ giao diện
+      description:
+        en: Changes supported labels immediately. Untranslated app text remains in English.
+        vi: Thay đổi nhãn đã hỗ trợ ngay lập tức. Nội dung chưa dịch vẫn hiển thị bằng tiếng Anh.
+      select:
+        en: Set interface language to %{language}
+        vi: Đặt ngôn ngữ giao diện thành %{language}
+gpui_component:
+  Input:
+    Copy:
+      vi: Sao chép
+    Select All:
+      vi: Chọn tất cả
+  Attachment:
+    Remove:
+      vi: Xóa
+    Retry:
+      vi: Thử lại

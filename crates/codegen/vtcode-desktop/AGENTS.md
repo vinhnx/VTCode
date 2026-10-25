@@ -13,6 +13,7 @@
 - Palettes (including `view/typography.rs`) retain `CommandState`; focus next frame, defer confirms, consume Cancel.
 - Kit TabBar needs scoped focus/arrow/Home/End; SidebarMenu lacks equivalent keyboard support. Keep navigation buttons.
 - Theme: brand `primary`, hover `accent`, shared `apply_theme`; Markdown keeps image blocking and Kit `syntect` highlighting.
+- Localization uses app-owned `app` keys in `locales/ui.yml`; extend Kit once and notify the view after locale changes.
 - Appearance scrolling locks axes; typography follows active profiles, then becomes shared when separation is disabled.
 - Use `aa_muted` and `filled_button_foreground` over palette colors; never hardcode colors over a theme.
 - Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions, never infers subagent state.
