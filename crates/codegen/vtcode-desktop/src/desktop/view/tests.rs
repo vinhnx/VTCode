@@ -3278,6 +3278,37 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.show_status_bar = true;
+        view.running = false;
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let status = window.find("agent-status");
+        assert_eq!(status.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(status.label(), Some("Agent: idle"));
+    })
+    .unwrap();
+
+    view.update(cx, |view, cx| {
+        view.running = true;
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let status = window.find("agent-status");
+        assert_eq!(status.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(status.label(), Some("Agent: running"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
