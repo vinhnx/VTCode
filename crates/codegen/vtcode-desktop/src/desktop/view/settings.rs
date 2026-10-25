@@ -262,6 +262,7 @@ impl DesktopView {
                     .child(render_markdown(
                         "appearance-code-preview".into(),
                         "```rust\nfn main() { /* VT Code */ }\n```".into(),
+                        false,
                         cx,
                     )),
             ));

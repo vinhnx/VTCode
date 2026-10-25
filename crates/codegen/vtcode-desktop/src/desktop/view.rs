@@ -4148,6 +4148,7 @@ impl DesktopView {
                                         .child(render_markdown(
                                             format!("markdown-{}", item.id),
                                             item.markdown.clone(),
+                                            item.role == "assistant",
                                             cx,
                                         )),
                                 ),

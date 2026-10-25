@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use gpui_kit::Styled;
-use gpui_kit::base::{TextView, TextViewStyle};
+use gpui_kit::base::{TextView, TextViewMotion, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::{ClipboardItem, ImageCacheError, ImageSource, SharedString};
@@ -143,8 +143,8 @@ fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
         .with_table_head(table_head.style().clone())
 }
 
-pub(super) fn render_markdown(id: String, source: SharedString, cx: &gpui_kit::App) -> TextView {
-    TextView::markdown(id, source)
+pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool, cx: &gpui_kit::App) -> TextView {
+    let text_view = TextView::markdown(id, source)
         .style(markdown_style(cx))
         .scrollable(false)
         // A richer renderer must not fetch URLs or local files from agent output.
@@ -165,7 +165,17 @@ pub(super) fn render_markdown(id: String, source: SharedString, cx: &gpui_kit::A
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     super::notifications::copied_to_clipboard(window, cx);
                 })
-        })
+        });
+
+    if streaming {
+        text_view.motion(streaming_motion())
+    } else {
+        text_view
+    }
+}
+
+fn streaming_motion() -> TextViewMotion {
+    TextViewMotion::default().with_stream_fade(Duration::from_millis(350))
 }
 
 fn blocked_image_source() -> ImageSource {
@@ -181,6 +191,8 @@ fn is_web_link(url: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::{is_web_link, prepare_markdown};
     use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
     use gpui_kit::test::TestWindowExt;
@@ -192,11 +204,23 @@ mod tests {
 
     impl Render for ThemeFixture {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            gpui_kit::div().size_full().text_color(cx.theme().colors.foreground).child(super::render_markdown(
-                "retained-theme-markdown".into(),
-                "Readable body with `inline code`.\n\n| Column | Value |\n| --- | --- |\n| Body | text |\n\n```rust\nfn main() {}\n```".into(), cx,
-            ))
+            gpui_kit::div()
+                .size_full()
+                .text_color(cx.theme().colors.foreground)
+                .child(super::render_markdown(
+                    "retained-theme-markdown".into(),
+                    "Readable body with `inline code`.\n\n| Column | Value |\n| --- | --- |\n| Body | text |\n\n```rust\nfn main() {}\n```".into(),
+                    false,
+                    cx,
+                ))
         }
+    }
+
+    #[test]
+    fn streaming_markdown_fades_chunks_without_word_stagger() {
+        let motion = super::streaming_motion();
+        assert_eq!(motion.stream_fade(), Duration::from_millis(350));
+        assert_eq!(motion.stream_fade_stagger(), Duration::ZERO);
     }
 
     #[gpui_kit::test]

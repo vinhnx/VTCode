@@ -82,7 +82,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |
 | [tabs](https://gpui-kit.com/component/tabs) | Applied Kit TabBar with tracked reveal for keyboard/programmatic selection; retain scoped keyboard actions and VT Code-owned content. |
 | [tag](https://gpui-kit.com/component/tag) | Applied: neutral provider metadata and explicit tool-status tags in recessed activity cards. |
-| [text-view](https://gpui-kit.com/component/text-view) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
+| [text-view](https://gpui-kit.com/component/text-view) | Applied Base TextView with reduced-motion-aware assistant stream fades; preserve syntax highlighting, selection/copy, web-only links, and blocked transcript images. |
 | [textarea](https://gpui-kit.com/component/textarea) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
 | [theme](https://gpui-kit.com/component/theme) | Applied: neutral hover/selection distinct from brand primary; component surfaces follow VT Code palettes. |
 | [time-field](https://gpui-kit.com/component/time-field) | Not needed for the current coding-workspace workflows or available data. |
