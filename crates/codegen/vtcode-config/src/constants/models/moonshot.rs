@@ -1,4 +1,6 @@
 // Moonshot.ai models
+// Kimi K3.1 Pro - 3T-class open-weight flagship post-trained from K3, 1M context
+// <https://www.kimi.ai/blog/kimi-k3-1-pro>
 // Kimi K3 - 2.8T parameter flagship with Kimi Delta Attention, native vision, 1M context
 // <https://platform.kimi.ai/docs/guide/kimi-k3-quickstart>
 // Kimi K2.5 - Previous flagship model with enhanced reasoning
@@ -6,8 +8,9 @@
 // Kimi K2.6 - 1T MoE flagship model (32B active) with MLA attention and MoonViT vision encoder
 // <https://platform.moonshot.ai/docs/guide/kimi-k2-6-quickstart>
 pub const DEFAULT_MODEL: &str = KIMI_K3;
-pub const SUPPORTED_MODELS: &[&str] = &[KIMI_K3, KIMI_K2_5];
-pub(crate) const REASONING_MODELS: &[&str] = &[KIMI_K3];
+pub const SUPPORTED_MODELS: &[&str] = &[KIMI_K3_1_PRO, KIMI_K3, KIMI_K2_5];
+pub(crate) const REASONING_MODELS: &[&str] = &[KIMI_K3_1_PRO, KIMI_K3];
 
+pub const KIMI_K3_1_PRO: &str = "kimi-k3.1-pro";
 pub const KIMI_K3: &str = "kimi-k3";
 pub const KIMI_K2_5: &str = "kimi-k2.5";

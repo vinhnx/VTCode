@@ -206,6 +206,8 @@ fn test_reexported_model_id_provider_types() {
 
 #[test]
 fn test_moonshot_and_openrouter_minimax_variants() {
+    assert_eq!(models::moonshot::KIMI_K3_1_PRO.parse::<ModelId>().unwrap(), ModelId::MoonshotKimiK31Pro);
+    assert_eq!(ModelId::MoonshotKimiK31Pro.provider(), Provider::Moonshot);
     assert_eq!(models::moonshot::KIMI_K3.parse::<ModelId>().unwrap(), ModelId::MoonshotKimiK3);
     assert_eq!(ModelId::MoonshotKimiK3.provider(), Provider::Moonshot);
 }

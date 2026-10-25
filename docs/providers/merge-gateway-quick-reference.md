@@ -36,6 +36,7 @@ qwen/qwen3.8-max
 minimax/minimax-h3
 minimax/minimax-m3.1-flash
 moonshot/kimi-k3
+moonshot/kimi-k3.1-pro
 thinkingmachines/inkling
 zai/glm-5.3-flash
 zai/glm-5.3-flashx

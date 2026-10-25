@@ -65,6 +65,7 @@ impl ModelId {
             ModelId::MergeGatewayMinimaxH3,
             ModelId::MergeGatewayMinimaxM31Flash,
             ModelId::MergeGatewayMoonshotKimiK3,
+            ModelId::MergeGatewayMoonshotKimiK31Pro,
             ModelId::MergeGatewayThinkingMachinesInkling,
             ModelId::MergeGatewayZaiGlm53Flash,
             ModelId::MergeGatewayZaiGlm53Flashx,
@@ -97,6 +98,7 @@ impl ModelId {
             ModelId::MiMoV26Flash,
             ModelId::MiMoV26ProUltraspeed,
             // Moonshot models
+            ModelId::MoonshotKimiK31Pro,
             ModelId::MoonshotKimiK3,
             // OpenCode Zen models
             // OpenCode Go models

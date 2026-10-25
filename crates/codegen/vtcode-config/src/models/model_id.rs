@@ -124,6 +124,8 @@ pub enum ModelId {
     MergeGatewayMinimaxM31Flash,
     /// Moonshot Kimi K3 through Merge Gateway
     MergeGatewayMoonshotKimiK3,
+    /// Moonshot Kimi K3.1 Pro through Merge Gateway
+    MergeGatewayMoonshotKimiK31Pro,
     /// Thinking Machines Inkling through Merge Gateway
     MergeGatewayThinkingMachinesInkling,
     /// Z.AI GLM-5.3 Flash through Merge Gateway
@@ -218,6 +220,8 @@ pub enum ModelId {
     MiMoV26ProUltraspeed,
 
     // Moonshot models
+    /// Kimi K3.1 Pro - Moonshot.ai's 3T-class open-weight flagship post-trained from K3, 1M context
+    MoonshotKimiK31Pro,
     /// Kimi K3 - Moonshot.ai's 2.8T parameter flagship with Delta Attention, native vision, 1M context
     MoonshotKimiK3,
 
