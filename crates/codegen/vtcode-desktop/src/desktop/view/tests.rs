@@ -654,6 +654,13 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
         window.render_frame(cx);
         select_settings_category(window, 3, cx);
         window.render_frame(cx);
+        assert_eq!(window.find("provider-details").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("provider-details").label(), Some("Provider and model configuration"));
+        select_settings_category(window, 4, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("local-service-details").label(), Some("Local service connection details"));
+        select_settings_category(window, 3, cx);
+        window.render_frame(cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
     })
@@ -3931,7 +3938,7 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         assert_eq!(window.find("utilities-pane").role(), Some(gpui_kit::Role::Group));
         assert_eq!(
             window.find("utilities-activity").label(),
-            Some("Recent activity: 1 running · 1 done · 1 failed · 0 other")
+            Some("Recent activity: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
         );
         assert_eq!(
             window.find("utilities-changes").label(),
@@ -3960,6 +3967,12 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         );
         window.click("utilities-activity", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Activity);
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("activity-status-chart").label(),
+            Some("Activity statuses: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
+        );
+        assert!(window.try_find("activity-read").is_some(), "the virtual list renders visible activity rows");
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Utilities);
         window.render_frame(cx);
         window.click("utilities-changes", cx);
@@ -3969,6 +3982,33 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         window.click("utilities-browse-files", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
         assert_eq!(view.read(cx).attachments.len(), 2, "navigation preserves the draft sources");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_open = true;
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+            for index in 0..300 {
+                view.transcript.push(TranscriptItem::new(
+                    format!("tool-{index}"),
+                    "tool".into(),
+                    format!("tool {index}"),
+                    "completed".into(),
+                ));
+            }
+        });
+        window.render_frame(cx);
+
+        let rendered_rows = (0..300)
+            .filter(|index| window.try_find(format!("activity-tool-{index}")).is_some())
+            .count();
+        assert!(rendered_rows > 0, "visible tool activity is rendered");
+        assert!(rendered_rows < 300, "off-screen tool activity stays virtualized");
     })
     .unwrap();
 }

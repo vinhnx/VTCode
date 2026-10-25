@@ -62,83 +62,92 @@ impl DesktopView {
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_6()
-            .rounded_xl()
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.background)
-            .shadow_lg()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .text_sm()
             .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_4()
-                    .child(
-                        DialogHeader::new()
-                            .child(DialogTitle::new().text_2xl().child("Settings"))
-                            .child(DialogDescription::new().child("Customize VT Code Desktop")),
-                    )
-                    .child(
-                        desktop_button("close-settings")
-                            .icon(IconName::X)
-                            .accessibility_label("Close settings")
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
-                    ),
-            )
-            .child(
-                div()
-                    .id("settings-navigation")
-                    .test_support()
-                    .track_focus(&self.settings_navigation_focus)
-                    .key_context("VTCodeSettings")
-                    .role(gpui_kit::Role::Group)
-                    .aria_label("Settings categories")
-                    .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
-                    .border_1()
-                    .border_color(colors.border.opacity(0.))
-                    .focus_visible(|style| style.border_color(colors.ring))
-                    .on_action(
-                        cx.listener(|view, _: &NextSettingsTab, window, cx| view.cycle_settings_tab(true, window, cx)),
-                    )
-                    .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
-                        view.cycle_settings_tab(false, window, cx)
-                    }))
-                    .on_action(
-                        cx.listener(|view, _: &FirstSettingsTab, window, cx| view.select_settings_tab(0, window, cx)),
-                    )
-                    .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
-                        view.select_settings_tab(SettingsTab::ALL.len().saturating_sub(1), window, cx)
-                    }))
-                    .child(
-                        TabBar::new("settings-tabs")
-                            .underline()
-                            .small()
-                            .w_full()
-                            .selected_index(selected_index)
-                            .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                view.select_settings_tab(*index, window, cx)
-                            }))
-                            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                    ),
-            )
-            .child(
-                div()
-                    .id("settings-content")
-                    .flex_1()
-                    .min_h_0()
+                DialogContent::new()
+                    .w_full()
+                    .h_full()
+                    .max_h_full()
                     .min_w_0()
-                    .lock_scroll_axis()
-                    .overflow_y_scroll()
-                    .pr_2()
-                    .child(content)
-                    .test_support(),
+                    .min_h_0()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .p_6()
+                    .rounded_xl()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .shadow_lg()
+                    .text_sm()
+                    .child(
+                        div()
+                            .flex()
+                            .items_start()
+                            .justify_between()
+                            .gap_4()
+                            .child(
+                                DialogHeader::new()
+                                    .child(DialogTitle::new().text_2xl().child("Settings"))
+                                    .child(DialogDescription::new().child("Customize VT Code Desktop")),
+                            )
+                            .child(
+                                desktop_button("close-settings")
+                                    .icon(IconName::X)
+                                    .accessibility_label("Close settings")
+                                    .ghost()
+                                    .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("settings-navigation")
+                            .test_support()
+                            .track_focus(&self.settings_navigation_focus)
+                            .key_context("VTCodeSettings")
+                            .role(gpui_kit::Role::Group)
+                            .aria_label("Settings categories")
+                            .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
+                            .border_1()
+                            .border_color(colors.border.opacity(0.))
+                            .focus_visible(|style| style.border_color(colors.ring))
+                            .on_action(cx.listener(|view, _: &NextSettingsTab, window, cx| {
+                                view.cycle_settings_tab(true, window, cx)
+                            }))
+                            .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
+                                view.cycle_settings_tab(false, window, cx)
+                            }))
+                            .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
+                                view.select_settings_tab(0, window, cx)
+                            }))
+                            .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
+                                view.select_settings_tab(SettingsTab::ALL.len().saturating_sub(1), window, cx)
+                            }))
+                            .child(
+                                TabBar::new("settings-tabs")
+                                    .underline()
+                                    .small()
+                                    .w_full()
+                                    .selected_index(selected_index)
+                                    .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                        view.select_settings_tab(*index, window, cx)
+                                    }))
+                                    .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("settings-content")
+                            .flex_1()
+                            .min_h_0()
+                            .min_w_0()
+                            .lock_scroll_axis()
+                            .overflow_y_scroll()
+                            .pr_2()
+                            .child(content)
+                            .test_support(),
+                    ),
             )
             .into_any_element()
     }
@@ -356,16 +365,25 @@ impl DesktopView {
                 .into_any_element();
         };
 
+        let provider = if configuration.provider.is_empty() {
+            "Not configured".to_string()
+        } else {
+            configuration.provider.clone()
+        };
         let mut group = GroupBox::new().flex_shrink_0().outline().title("Provider").child(
-            div().text_color(theme.colors.muted_foreground).child(format!(
-                "{} · {}",
-                if configuration.provider.is_empty() {
-                    "not configured"
-                } else {
-                    &configuration.provider
-                },
-                configuration.model
-            )),
+            div()
+                .id("provider-details")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label("Provider and model configuration")
+                .child(
+                    DescriptionList::horizontal()
+                        .columns(1)
+                        .label_width(px(128.))
+                        .bordered(false)
+                        .item("Provider", provider, 1)
+                        .item("Model", configuration.model.clone(), 1),
+                ),
         );
         if !configuration.credential_setup_command.is_empty() {
             let command = configuration.credential_setup_command.clone();
@@ -404,12 +422,24 @@ impl DesktopView {
             .gap_4()
             .child(self.render_webmcp_settings(cx))
             .when_some(self.service_info.as_ref(), |content, info| {
-                content.child(GroupBox::new().flex_shrink_0().outline().title("Local service").child(
-                    div().text_color(cx.theme().colors.muted_foreground).child(format!(
-                        "vtcode {} · protocol {}.{}",
-                        info.server_version, info.protocol.major, info.protocol.minor
-                    )),
-                ))
+                content.child(
+                    GroupBox::new().flex_shrink_0().outline().title("Local service").child(
+                        div()
+                            .id("local-service-details")
+                            .test_support()
+                            .role(gpui_kit::Role::Group)
+                            .aria_label("Local service connection details")
+                            .child(
+                                DescriptionList::horizontal()
+                                    .columns(1)
+                                    .label_width(px(128.))
+                                    .bordered(false)
+                                    .item("Runtime", "VT Code", 1)
+                                    .item("Version", info.server_version.clone(), 1)
+                                    .item("Protocol", format!("{}.{}", info.protocol.major, info.protocol.minor), 1),
+                            ),
+                    ),
+                )
             })
             .into_any_element()
     }

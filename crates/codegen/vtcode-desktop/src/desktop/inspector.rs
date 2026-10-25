@@ -71,6 +71,44 @@ pub(super) enum ActivityState {
     Other,
 }
 
+/// Counts for the bounded activity projection, shared by the utility summary
+/// and the Activity tab's chart.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct ActivityCounts {
+    pub running: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub interrupted: usize,
+    pub other: usize,
+}
+
+impl ActivityCounts {
+    pub(super) fn from_rows(rows: &[ActivityRow]) -> Self {
+        let mut counts = Self::default();
+        for row in rows {
+            match row.state {
+                ActivityState::Running => counts.running += 1,
+                ActivityState::Completed => counts.completed += 1,
+                ActivityState::Failed => counts.failed += 1,
+                ActivityState::Interrupted => counts.interrupted += 1,
+                ActivityState::Other => counts.other += 1,
+            }
+        }
+        counts
+    }
+
+    pub(super) fn total(self) -> usize {
+        self.running + self.completed + self.failed + self.interrupted + self.other
+    }
+
+    pub(super) fn summary(self) -> String {
+        format!(
+            "{} running · {} done · {} failed · {} interrupted · {} other",
+            self.running, self.completed, self.failed, self.interrupted, self.other
+        )
+    }
+}
+
 impl ActivityState {
     pub(super) fn from_status(status: &str) -> Self {
         match status {
@@ -272,6 +310,31 @@ mod tests {
         ] {
             assert_eq!(ActivityState::from_status(status), expected, "{status}");
         }
+    }
+
+    #[test]
+    fn activity_counts_preserve_each_status_category() {
+        let rows = [
+            ActivityState::Running,
+            ActivityState::Completed,
+            ActivityState::Completed,
+            ActivityState::Failed,
+            ActivityState::Interrupted,
+            ActivityState::Other,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, state)| ActivityRow {
+            id: format!("row-{index}"),
+            title: format!("tool {index}"),
+            status: String::new(),
+            state,
+        })
+        .collect::<Vec<_>>();
+
+        let counts = ActivityCounts::from_rows(&rows);
+        assert_eq!(counts.total(), rows.len());
+        assert_eq!(counts.summary(), "1 running · 2 done · 1 failed · 1 interrupted · 1 other");
     }
 
     #[test]

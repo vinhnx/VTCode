@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
@@ -12,8 +13,10 @@ use gpui_kit::component::attachment::{
 };
 use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
-use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
+use gpui_kit::component::description_list::DescriptionList;
+use gpui_kit::component::dialog::{DialogContent, DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
 use gpui_kit::component::empty::{
     Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
@@ -24,18 +27,19 @@ use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAli
 use gpui_kit::component::list::ListItem;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
+use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
     Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list,
-    point, px,
+    point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -46,7 +50,7 @@ use vtcode_desktop_protocol::{
 };
 
 use super::files::{self, FileEntry, FilePreview};
-use super::inspector::{self, ActivityState, ChangesProjection, InspectorTab};
+use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
 use super::preferences;
 use super::themes;
@@ -74,6 +78,14 @@ const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
+const ACTIVITY_ROW_HEIGHT: f32 = 72.;
+
+#[derive(Clone, Copy)]
+struct ActivityChartDatum {
+    label: &'static str,
+    count: usize,
+    state: ActivityState,
+}
 
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
@@ -380,6 +392,7 @@ struct DesktopView {
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
     settings_open: bool,
     theme_scroll: ScrollHandle,
+    activity_scroll: VirtualListScrollHandle,
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,
@@ -555,6 +568,7 @@ impl DesktopView {
             palette_groups: Vec::new(),
             settings_open: false,
             theme_scroll: ScrollHandle::default(),
+            activity_scroll: VirtualListScrollHandle::new(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_navigation_focus: cx.focus_handle().tab_stop(true),
             settings_tab: settings::SettingsTab::Appearance,
@@ -2363,6 +2377,7 @@ impl DesktopView {
         self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
+        self.activity_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
         self.changes = ChangesProjection::default();
@@ -2935,7 +2950,7 @@ impl DesktopView {
         let content = match self.inspector_tab {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
-            InspectorTab::Activity => self.render_activity_tab(&colors),
+            InspectorTab::Activity => self.render_activity_tab(&colors, cx),
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
         };
@@ -3467,14 +3482,19 @@ impl DesktopView {
         .into_any_element()
     }
 
-    fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
+    fn render_activity_tab(
+        &self,
+        colors: &gpui_kit::component::theme::ThemeColor,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let counts = ActivityCounts::from_rows(&rows);
         let mut body = div()
             .id("activity-list")
             .w_full()
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
+            .overflow_hidden()
             .flex()
             .flex_col()
             .gap_2()
@@ -3492,62 +3512,149 @@ impl DesktopView {
                 ))
                 .into_any_element();
         }
-        for row in rows {
-            let (status_color, status_icon) = match row.state {
-                ActivityState::Failed => (colors.danger, IconName::X),
-                ActivityState::Running => (colors.primary, IconName::Activity),
-                ActivityState::Interrupted => (colors.muted_foreground, IconName::X),
-                ActivityState::Completed => (colors.muted_foreground, IconName::Check),
-                ActivityState::Other => (colors.muted_foreground, IconName::Activity),
-            };
-            body = body.child(
-                div()
-                    .id(format!("activity-{}", row.id))
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(row.title.clone())
-                    .aria_description(row.status.clone())
-                    .w_full()
-                    .flex()
-                    .items_start()
-                    .gap_3()
-                    .p_3()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.background)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(28.))
-                            .flex_shrink_0()
-                            .rounded_full()
-                            .bg(colors.secondary)
-                            .child(Icon::new(status_icon).small().text_color(status_color)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(div().text_sm().font_medium().child(row.title))
-                            .child(
-                                div().flex().min_w_0().child(
-                                    Tag::custom(colors.secondary, colors.foreground, colors.border)
-                                        .small()
-                                        .rounded_full()
-                                        .max_w_full()
-                                        .child(div().truncate().child(row.status)),
-                                ),
-                            ),
-                    ),
-            );
-        }
+        let chart_data = [
+            ActivityChartDatum {
+                label: "Running",
+                count: counts.running,
+                state: ActivityState::Running,
+            },
+            ActivityChartDatum {
+                label: "Done",
+                count: counts.completed,
+                state: ActivityState::Completed,
+            },
+            ActivityChartDatum {
+                label: "Failed",
+                count: counts.failed,
+                state: ActivityState::Failed,
+            },
+            ActivityChartDatum {
+                label: "Interrupted",
+                count: counts.interrupted,
+                state: ActivityState::Interrupted,
+            },
+            ActivityChartDatum {
+                label: "Other",
+                count: counts.other,
+                state: ActivityState::Other,
+            },
+        ]
+        .into_iter()
+        .filter(|datum| datum.count > 0)
+        .collect::<Vec<_>>();
+        let summary = counts.summary();
+        let chart_colors = *colors;
+        body = body.child(
+            div()
+                .id("activity-status-chart")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label(format!("Activity statuses: {summary}"))
+                .w_full()
+                .h(px(148.))
+                .flex_shrink_0()
+                .child(
+                    BarChart::new(chart_data)
+                        .band(|datum| datum.label)
+                        .value(|datum| datum.count as f64)
+                        .label(|datum| datum.count.to_string())
+                        .alignment(BarAlignment::Left)
+                        .value_axis(false)
+                        .grid(false)
+                        .interactive(false)
+                        .appear(false)
+                        .fill(move |datum, _, _, _| match datum.state {
+                            ActivityState::Running => chart_colors.primary,
+                            ActivityState::Completed => chart_colors.success,
+                            ActivityState::Failed => chart_colors.danger,
+                            ActivityState::Interrupted => chart_colors.warning,
+                            ActivityState::Other => chart_colors.muted_foreground,
+                        }),
+                ),
+        );
+
+        let item_sizes = Rc::new(vec![size(px(0.), px(ACTIVITY_ROW_HEIGHT)); rows.len()]);
+        let row_colors = *colors;
+        body = body.child(
+            div()
+                .id("activity-rows")
+                .relative()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
+                        visible_range
+                            .map(|index| {
+                                rows.get(index).cloned().map_or_else(
+                                    || div().into_any_element(),
+                                    |row| Self::render_activity_row(row, row_colors),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .track_scroll(&self.activity_scroll),
+                )
+                .child(Scrollbar::vertical(&self.activity_scroll)),
+        );
         body.into_any_element()
+    }
+
+    fn render_activity_row(row: ActivityRow, colors: gpui_kit::component::theme::ThemeColor) -> AnyElement {
+        let (status_color, status_icon) = match row.state {
+            ActivityState::Failed => (colors.danger, IconName::X),
+            ActivityState::Running => (colors.primary, IconName::Activity),
+            ActivityState::Interrupted => (colors.warning, IconName::X),
+            ActivityState::Completed => (colors.success, IconName::Check),
+            ActivityState::Other => (colors.muted_foreground, IconName::Activity),
+        };
+        div()
+            .id(format!("activity-{}", row.id))
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label(row.title.clone())
+            .aria_description(row.status.clone())
+            .w_full()
+            .h(px(ACTIVITY_ROW_HEIGHT))
+            .flex()
+            .items_center()
+            .gap_3()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.background)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(28.))
+                    .flex_shrink_0()
+                    .rounded_full()
+                    .bg(colors.secondary)
+                    .child(Icon::new(status_icon).small().text_color(status_color)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_sm().font_medium().truncate().child(row.title))
+                    .child(
+                        div().flex().min_w_0().child(
+                            Tag::custom(colors.secondary, colors.foreground, colors.border)
+                                .small()
+                                .rounded_full()
+                                .max_w_full()
+                                .child(div().truncate().child(row.status)),
+                        ),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
