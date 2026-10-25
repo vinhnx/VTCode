@@ -316,6 +316,8 @@ interactive TUI session. Use `/webmcp help` to print the guide without the statu
 ```text
 /webmcp
 /webmcp help
+/webmcp connect http://localhost:5173
+/webmcp connect --replace http://localhost:5173
 /webmcp pair http://localhost:5173
 /webmcp pair --replace http://localhost:5173
 /webmcp tools
@@ -323,7 +325,7 @@ interactive TUI session. Use `/webmcp help` to print the guide without the statu
 /webmcp unpair
 ```
 
-Use `/webmcp pair <origin>` when the browser must submit real agent turns to this same VT Code session. The printed
+Use `/webmcp connect <origin>` (or its `/webmcp pair` alias) when the browser must submit real agent turns to this same VT Code session. The printed
 WebSocket URL and one-time pairing code belong to that running TUI process.
 
 For the published WebMCP app, use `https://vtcode.vinhnx.chatgpt.site` for the ChatGPT Site or

@@ -142,7 +142,24 @@ next session, and stale updates from another session are ignored.
 
 The status bar starts hidden. Settings → **Show status bar**, the header menu, or ⌘⇧S toggles it and saves the
 choice. The header keeps one overflow control for thread/window actions. The former duplicate thread ellipsis is
-removed. CLI/WebMCP opens the integration documentation; it does not claim a live WebMCP connection.
+removed. **CLI / WebMCP** opens the connection controls in Settings. Pair a browser origin there or run
+`/webmcp connect <origin>` in the desktop composer. The CLI TUI supports the same command; `/webmcp pair` remains
+an alias.
+
+### Desktop, CLI, and WebMCP connection
+
+The desktop service owns one optional WebMCP listener alongside its existing unified agent session. Settings or
+`/webmcp connect <exact-browser-origin>` starts the existing authenticated bridge, checks the CLI's
+`[webmcp].allowed_origins`, and returns a one-time code to the desktop only. Pair that code with the same browser
+app used by the CLI. The selected workspace is the only visible root. Browsers can inspect files, propose changes,
+and request a turn from the selected desktop session; the bridge forwards the same canonical `VersionedThreadEvent`
+items to desktop and browser clients. The desktop's CLI configuration and runtime remain the source of model,
+workspace, and permission policy. Browser apply, check, and revert requests stay approval-gated and are not executed
+by the bridge.
+
+The bridge stops when the desktop service exits or CLI settings are reloaded. Pairing codes and session tokens are
+ephemeral and never stored in settings. `status` reports whether a desktop runtime is ready to accept a turn, including
+when one is already running.
 
 ### Cursor and contrast reliability
 

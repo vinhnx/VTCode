@@ -252,9 +252,12 @@ with a bounded timeout and output cap. The bridge does not terminate TLS or bind
 loopback listener. Direct non-loopback binding is rejected.
 
 The slash command `/webmcp` reports the command family and security boundary inside an active session.
-`/webmcp pair <origin>` starts an authenticated bridge owned by that interactive TUI session, prints its WebSocket URL,
+`/webmcp connect <origin>` starts an authenticated bridge owned by that interactive TUI session, prints its WebSocket URL,
 one-time pairing code, and browser next-step instruction, then routes `turn.request` prompts into the existing
-interaction loop. The browser pastes the URL and code into **Settings → Connect or re-pair a VT Code bridge**. The
+interaction loop. `/webmcp pair` remains an alias. VT Code Desktop exposes the same bridge from Settings → WebMCP and
+from its composer slash command; the desktop service attaches the bridge to its selected runtime session, publishes
+the same canonical `VersionedThreadEvent` stream to desktop and browser clients, and uses the same CLI origin list.
+The browser pastes the URL and code into **Settings → Connect or re-pair a VT Code bridge**. The
 browser still cannot authorize writes; normal VT Code terminal permissions and tool policy remain authoritative. If the
 bridge is already running, the pair command prints its current endpoint, one-time code, and expiry for the active
 pairing origin. Pairing another configured origin issues a new one-time code without revoking existing sessions. Use

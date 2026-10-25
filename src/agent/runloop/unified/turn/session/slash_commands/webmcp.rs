@@ -14,8 +14,8 @@ const WEBMCP_COMMAND_GUIDE: &[&str] = &[
     "WebMCP commands:",
     "  /webmcp or /webmcp status                 Show listener and pairing details.",
     "  /webmcp help                              Show this command guide.",
-    "  /webmcp pair <exact-browser-origin>       Start the active-session bridge.",
-    "  /webmcp pair --replace <origin>           Confirm and issue a fresh pairing.",
+    "  /webmcp connect <exact-browser-origin>    Start the active-session bridge (pair alias).",
+    "  /webmcp connect --replace <origin>        Confirm and issue a fresh pairing.",
     "  /webmcp tools                             List available browser tools.",
     "  /webmcp roots                             Show configured workspace-root guidance.",
     "  /webmcp unpair                            Confirm and disconnect the bridge.",
@@ -64,7 +64,7 @@ pub(crate) async fn handle_start_webmcp(
             ctx.renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "The current pairing for {origin} remains active. To revoke its sessions and issue a new code, run `/webmcp pair --replace {origin}`."
+                "The current pairing for {origin} remains active. To revoke its sessions and issue a new code, run `/webmcp connect --replace {origin}`."
                 ),
             )?;
             return Ok(SlashCommandControl::Continue);
@@ -147,12 +147,12 @@ pub(crate) async fn handle_show_webmcp_status(mut ctx: SlashCommandContext<'_>) 
         ctx.renderer.line(MessageStyle::Info, BROWSER_PAIRING_INSTRUCTION)?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "To issue a pairing for another configured origin, run `/webmcp pair <exact-browser-origin>`; use `--replace` to revoke current sessions.",
+                "To issue a pairing for another configured origin, run `/webmcp connect <exact-browser-origin>`; use `--replace` to revoke current sessions.",
         )?;
     } else {
         ctx.renderer.line(
             MessageStyle::Info,
-            "WebMCP is not listening. Use `/webmcp pair http://localhost:5173` to attach the browser editor.",
+            "WebMCP is not listening. Use `/webmcp connect http://localhost:5173` to attach the browser editor.",
         )?;
     }
     render_webmcp_command_guide(&mut ctx)?;

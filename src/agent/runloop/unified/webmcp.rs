@@ -154,7 +154,7 @@ impl Drop for ActiveWebmcpBridge {
     }
 }
 
-fn configured_origins(settings: &WebmcpConfig, requested_origin: &str) -> Result<Vec<String>> {
+pub(crate) fn configured_origins(settings: &WebmcpConfig, requested_origin: &str) -> Result<Vec<String>> {
     if settings.allowed_origins.is_empty() {
         return Ok(vec![requested_origin.to_string()]);
     }
@@ -259,18 +259,7 @@ impl RuntimeAdapter for ActiveRuntimeAdapter {
     }
 
     async fn request_turn(&self, prompt: &str, proposal_id: Option<&str>) -> vtcode_webmcp::Result<TurnResult> {
-        let prompt = prompt.trim();
-        if prompt.is_empty() {
-            return Err(vtcode_webmcp::WebmcpError::InvalidRequest("agent turn prompt cannot be empty".to_string()));
-        }
-        if prompt.len() > MAX_TURN_PROMPT_BYTES {
-            return Err(vtcode_webmcp::WebmcpError::LimitExceeded);
-        }
-        let proposal = match proposal_id {
-            Some(proposal_id) => Some(self.workspace.proposal_for_turn(proposal_id).await?),
-            None => None,
-        };
-        let handoff = build_turn_prompt(prompt, proposal.as_ref());
+        let handoff = build_turn_prompt(&self.workspace, prompt, proposal_id).await?;
         self.prompt_sender.try_send(handoff).map_err(|error| match error {
             mpsc::error::TrySendError::Full(_) => vtcode_webmcp::WebmcpError::LimitExceeded,
             mpsc::error::TrySendError::Closed(_) => {
@@ -284,7 +273,26 @@ impl RuntimeAdapter for ActiveRuntimeAdapter {
     }
 }
 
-fn build_turn_prompt(prompt: &str, proposal: Option<&PatchProposal>) -> String {
+pub(crate) async fn build_turn_prompt(
+    workspace: &FilesystemWorkspace,
+    prompt: &str,
+    proposal_id: Option<&str>,
+) -> vtcode_webmcp::Result<String> {
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+        return Err(vtcode_webmcp::WebmcpError::InvalidRequest("agent turn prompt cannot be empty".to_string()));
+    }
+    if prompt.len() > MAX_TURN_PROMPT_BYTES {
+        return Err(vtcode_webmcp::WebmcpError::LimitExceeded);
+    }
+    let proposal = match proposal_id {
+        Some(proposal_id) => Some(workspace.proposal_for_turn(proposal_id).await?),
+        None => None,
+    };
+    Ok(format_turn_prompt(prompt, proposal.as_ref()))
+}
+
+fn format_turn_prompt(prompt: &str, proposal: Option<&PatchProposal>) -> String {
     let Some(proposal) = proposal else {
         return prompt.to_string();
     };
@@ -490,6 +498,26 @@ mod tests {
     use vtcode_commons::ansi::strip_ansi;
     use vtcode_core::utils::diff_styles::{DiffColorLevel, DiffTheme};
 
+    #[test]
+    fn configured_origins_share_cli_exact_origin_policy() {
+        let defaults = WebmcpConfig::default();
+        assert_eq!(
+            configured_origins(&defaults, "http://localhost:5173").unwrap(),
+            vec!["http://localhost:5173".to_string()]
+        );
+
+        let configured = WebmcpConfig {
+            allowed_origins: vec![
+                "https://vtcode.vinhnx.chatgpt.site".into(),
+                "https://vinhnx.github.io".into(),
+            ],
+            ..WebmcpConfig::default()
+        };
+        assert_eq!(configured_origins(&configured, "https://vinhnx.github.io").unwrap(), configured.allowed_origins);
+        let error = configured_origins(&configured, "https://example.test").unwrap_err();
+        assert!(error.to_string().contains("not present in [webmcp].allowed_origins"));
+    }
+
     #[tokio::test]
     async fn active_explanation_navigation_validates_evidence_without_queuing_input() {
         use super::super::inline_events::harness::HarnessEventEmitter;
@@ -669,7 +697,7 @@ mod tests {
             changes: Vec::new(),
             unified_diff: "+🙂\n".repeat(MAX_TURN_PROMPT_BYTES),
         };
-        let prompt = build_turn_prompt(&"🙂".repeat(MAX_TURN_PROMPT_BYTES), Some(&proposal));
+        let prompt = format_turn_prompt(&"🙂".repeat(MAX_TURN_PROMPT_BYTES), Some(&proposal));
         assert!(prompt.len() <= MAX_TURN_PROMPT_BYTES);
         assert!(prompt.is_char_boundary(prompt.len()));
         assert!(prompt.contains("Proposal ID: proposal-1"));
@@ -684,7 +712,7 @@ mod tests {
             unified_diff: "--- a/main.js\n+++ b/main.js\n@@ -1 +1 @@\n-const value = 1;\n+const value = 2;\n"
                 .to_string(),
         };
-        build_turn_prompt("apply diff", Some(&proposal))
+        format_turn_prompt("apply diff", Some(&proposal))
     }
 
     fn truecolor_styles() -> (GitStyles, LsStyles) {
@@ -757,7 +785,7 @@ mod tests {
             changes: Vec::new(),
             unified_diff: "--- a/notes.md\n+++ b/notes.md\n@@ -1 +1,2 @@\n keep\n+\u{1b}[31mred\u{1b}[0m\n".to_string(),
         };
-        let handoff = build_turn_prompt("apply diff", Some(&proposal));
+        let handoff = format_turn_prompt("apply diff", Some(&proposal));
         let (git_styles, ls_styles) = truecolor_styles();
         let styled = styled_turn_handoff_with(&handoff, true, &git_styles, &ls_styles).expect("styled handoff");
 

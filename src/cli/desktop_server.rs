@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
@@ -31,6 +32,10 @@ use vtcode_ui::tui::app::{
     ContentPart, HostCommandReceiver, HostInteraction, InlineCommand, InlineEvent, SubmittedInput,
     host_interaction_from_command, host_interaction_response, new_host_session,
 };
+use vtcode_webmcp::runtime::{
+    AppliedChange, CheckResult, FileSnapshot, PatchProposal, RuntimeAdapter, RuntimeStatus, TurnResult, WorkspaceFile,
+};
+use vtcode_webmcp::{FileChange, FilesystemWorkspace, WebmcpServer, WebmcpServerConfig};
 
 use crate::agent::agents::{ResumeSession, load_resume_session};
 use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_host;
@@ -59,6 +64,7 @@ struct ServerState {
     model_override: Option<ModelSelectParams>,
     session_options: protocol::SessionOptionsSelectParams,
     theme_override: Option<String>,
+    webmcp_event_hub: Option<vtcode_webmcp::WebmcpEventHub>,
 }
 
 struct RuntimeSession {
@@ -82,6 +88,20 @@ struct ServiceContext {
     state: std::sync::Arc<Mutex<ServerState>>,
     notifications: mpsc::Sender<protocol::Notification>,
     turn_finished: std::sync::Arc<Notify>,
+    webmcp: Mutex<Option<DesktopWebmcpBridge>>,
+}
+
+struct DesktopWebmcpBridge {
+    server: WebmcpServer,
+    task: tokio::task::JoinHandle<()>,
+    endpoint: String,
+}
+
+impl Drop for DesktopWebmcpBridge {
+    fn drop(&mut self) {
+        self.server.revoke_all_pairings();
+        self.task.abort();
+    }
 }
 
 pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> Result<()> {
@@ -94,6 +114,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
         state: std::sync::Arc::new(Mutex::new(ServerState::default())),
         notifications,
         turn_finished: std::sync::Arc::new(Notify::new()),
+        webmcp: Mutex::new(None),
     };
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
@@ -124,6 +145,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
     }
 
     shutdown_current_session(&context, true).await;
+    stop_webmcp_bridge(&context).await;
     let _ = stdout.flush().await;
     Ok(())
 }
@@ -248,8 +270,22 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             }
             let result = config_settings::write(context.workspace.clone(), params).await?;
             shutdown_current_session(context, false).await;
+            stop_webmcp_bridge(context).await;
             context.state.lock().await.session_id = None;
             Ok((serde_json::to_value(result)?, false))
+        }
+        method::WEBMCP_STATUS => {
+            let status = webmcp_status(context).await;
+            Ok((serde_json::to_value(status)?, false))
+        }
+        method::WEBMCP_PAIR => {
+            let params: protocol::WebmcpPairParams = parse_params(&request.params)?;
+            let result = pair_webmcp(context, params).await?;
+            Ok((serde_json::to_value(result)?, false))
+        }
+        method::WEBMCP_STOP => {
+            stop_webmcp_bridge(context).await;
+            Ok((json!({ "stopped": true }), false))
         }
         method::CONFIG_MODELS => {
             let (provider, model) = {
@@ -393,30 +429,6 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
         }
         method::TURN_SUBMIT => {
             let params: protocol::TurnSubmitParams = parse_params(&request.params)?;
-            if params.prompt.trim().is_empty() {
-                bail!("prompt must not be empty");
-            }
-            let turn_id = uuid::Uuid::new_v4().to_string();
-            let input = {
-                let mut state = context.state.lock().await;
-                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
-                    bail!("session is not selected");
-                }
-                if state.active_turn_id.is_some() {
-                    bail!("another turn is already running");
-                }
-                let runtime = state
-                    .runtime
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("selected session is not running"))?;
-                if runtime.input.is_closed() {
-                    bail!("selected session runtime has stopped; reload the session to continue");
-                }
-                let input = runtime.input.clone();
-                state.cancel_requested_turn = None;
-                state.active_turn_id = Some(turn_id.clone());
-                input
-            };
             // Client-read attachments become inline text parts, framed with
             // their paths so the model can cite them.
             let attachment_parts = params
@@ -426,24 +438,15 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                     text: format!("--- {} ---\n{}", attachment.path, attachment.text),
                 })
                 .collect::<Vec<_>>();
-            if input
-                .send(InlineEvent::Submit(SubmittedInput::new(params.prompt, attachment_parts)))
-                .is_err()
-            {
-                let mut state = context.state.lock().await;
-                if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
-                    state.active_turn_id = None;
-                    state.cancel_requested_turn = None;
-                }
-                bail!("selected session runtime has stopped; reload the session to continue");
-            }
-            send_notification(
+            let accepted = enqueue_turn(
+                &context.state,
                 &context.notifications,
-                method::TURN_STATUS,
-                json!({ "sessionId": params.session_id, "turnId": turn_id, "status": "running" }),
+                &params.session_id,
+                params.prompt,
+                attachment_parts,
             )
             .await?;
-            Ok((serde_json::to_value(protocol::TurnAccepted { session_id: params.session_id, turn_id })?, false))
+            Ok((serde_json::to_value(accepted)?, false))
         }
         method::TURN_CANCEL => {
             let params: protocol::TurnCancelParams = parse_params(&request.params)?;
@@ -480,6 +483,219 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             Ok((json!({ "accepted": true }), false))
         }
         _ => bail!("unknown desktop method"),
+    }
+}
+
+async fn enqueue_turn(
+    state: &Mutex<ServerState>,
+    notifications: &mpsc::Sender<protocol::Notification>,
+    session_id: &str,
+    prompt: String,
+    attachment_parts: Vec<ContentPart>,
+) -> Result<protocol::TurnAccepted> {
+    if prompt.trim().is_empty() {
+        bail!("prompt must not be empty");
+    }
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    let input = {
+        let mut state = state.lock().await;
+        if state.session_id.as_deref() != Some(session_id) {
+            bail!("session is not selected");
+        }
+        if state.active_turn_id.is_some() {
+            bail!("another turn is already running");
+        }
+        let runtime = state
+            .runtime
+            .as_ref()
+            .ok_or_else(|| anyhow!("selected session is not running"))?;
+        if runtime.input.is_closed() {
+            bail!("selected session runtime has stopped; reload the session to continue");
+        }
+        let input = runtime.input.clone();
+        state.cancel_requested_turn = None;
+        state.active_turn_id = Some(turn_id.clone());
+        input
+    };
+    if input
+        .send(InlineEvent::Submit(SubmittedInput::new(prompt, attachment_parts)))
+        .is_err()
+    {
+        let mut state = state.lock().await;
+        if state.active_turn_id.as_deref() == Some(turn_id.as_str()) {
+            state.active_turn_id = None;
+            state.cancel_requested_turn = None;
+        }
+        bail!("selected session runtime has stopped; reload the session to continue");
+    }
+    send_notification(
+        notifications,
+        protocol::method::TURN_STATUS,
+        json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
+    )
+    .await?;
+    Ok(protocol::TurnAccepted { session_id: session_id.to_string(), turn_id })
+}
+
+async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus {
+    let (session_id, turns_available) = {
+        let state = context.state.lock().await;
+        let session_id = state.session_id.clone();
+        let turns_available = state.active_turn_id.is_none()
+            && state.runtime.as_ref().is_some_and(|runtime| {
+                Some(runtime.session_id.as_str()) == session_id.as_deref() && !runtime.input.is_closed()
+            });
+        (session_id, turns_available)
+    };
+    let endpoint = context.webmcp.lock().await.as_ref().map(|bridge| bridge.endpoint.clone());
+    protocol::WebmcpBridgeStatus {
+        running: endpoint.is_some(),
+        endpoint,
+        allowed_origins: context.startup.config.webmcp.allowed_origins.clone(),
+        session_id,
+        turns_available,
+        workspace: context.workspace.to_string_lossy().into_owned(),
+    }
+}
+
+async fn pair_webmcp(
+    context: &ServiceContext,
+    params: protocol::WebmcpPairParams,
+) -> Result<protocol::WebmcpPairResult> {
+    let settings = &context.startup.config.webmcp;
+    let origin = params.origin.trim();
+    if origin != params.origin || !vtcode_commons::validation::is_valid_origin(origin) {
+        bail!("enter an exact browser origin, such as https://example.test");
+    }
+    let allowed_origins = crate::agent::runloop::unified::webmcp::configured_origins(settings, origin)?;
+
+    let mut bridge_slot = context.webmcp.lock().await;
+    if let Some(bridge) = bridge_slot.as_ref() {
+        let pairing = if params.replace {
+            bridge.server.replace_pairing_for_origin(origin.to_string())?
+        } else {
+            bridge.server.begin_pairing_for_origin(origin.to_string())?
+        };
+        return Ok(protocol::WebmcpPairResult {
+            endpoint: bridge.endpoint.clone(),
+            origin: origin.to_string(),
+            pairing_code: pairing.code().to_string(),
+            expires_in_secs: pairing.expires_in().as_secs(),
+        });
+    }
+
+    let workspace = FilesystemWorkspace::new(&context.workspace, [context.workspace.clone()], false)
+        .await
+        .context("failed to initialize the desktop WebMCP workspace")?;
+    let adapter = DesktopWebmcpRuntime {
+        workspace,
+        state: std::sync::Arc::clone(&context.state),
+        notifications: context.notifications.clone(),
+    };
+    let server = WebmcpServer::new(
+        std::sync::Arc::new(adapter),
+        WebmcpServerConfig {
+            host: settings.host.clone(),
+            port: settings.port,
+            allowed_origins,
+            pairing_ttl_secs: settings.pairing_ttl_secs,
+            max_frame_bytes: settings.max_frame_bytes,
+            max_in_flight_requests: settings.max_in_flight_requests,
+            ..Default::default()
+        },
+    )?;
+    let pairing = if params.replace {
+        server.replace_pairing_for_origin(origin.to_string())?
+    } else {
+        server.begin_pairing_for_origin(origin.to_string())?
+    };
+    let listener = server.bind().await.context("failed to bind the desktop WebMCP listener")?;
+    let address = listener
+        .local_addr()
+        .context("failed to determine the desktop WebMCP listener address")?;
+    let endpoint = format!("ws://{address}/webmcp");
+    let task_server = server.clone();
+    let task = tokio::spawn(async move {
+        if let Err(error) = task_server.serve_listener(listener).await {
+            tracing::error!(error = %error, "desktop WebMCP listener stopped unexpectedly");
+        }
+    });
+    context.state.lock().await.webmcp_event_hub = Some(server.event_hub());
+    *bridge_slot = Some(DesktopWebmcpBridge { server, task, endpoint: endpoint.clone() });
+    Ok(protocol::WebmcpPairResult {
+        endpoint,
+        origin: origin.to_string(),
+        pairing_code: pairing.code().to_string(),
+        expires_in_secs: pairing.expires_in().as_secs(),
+    })
+}
+
+async fn stop_webmcp_bridge(context: &ServiceContext) {
+    let bridge = context.webmcp.lock().await.take();
+    context.state.lock().await.webmcp_event_hub = None;
+    drop(bridge);
+}
+
+#[derive(Clone)]
+struct DesktopWebmcpRuntime {
+    workspace: FilesystemWorkspace,
+    state: std::sync::Arc<Mutex<ServerState>>,
+    notifications: mpsc::Sender<protocol::Notification>,
+}
+
+#[async_trait]
+impl RuntimeAdapter for DesktopWebmcpRuntime {
+    async fn status(&self) -> vtcode_webmcp::Result<RuntimeStatus> {
+        let mut status = self.workspace.status().await?;
+        let state = self.state.lock().await;
+        status.turns_available = state.active_turn_id.is_none()
+            && state.session_id.as_deref().is_some_and(|session_id| {
+                state
+                    .runtime
+                    .as_ref()
+                    .is_some_and(|runtime| runtime.session_id == session_id && !runtime.input.is_closed())
+            });
+        status.approval_authority = "active VT Code Desktop session".into();
+        Ok(status)
+    }
+
+    async fn list_files(&self) -> vtcode_webmcp::Result<Vec<WorkspaceFile>> {
+        self.workspace.list_files().await
+    }
+
+    async fn read_file(&self, path: &str) -> vtcode_webmcp::Result<FileSnapshot> {
+        self.workspace.read_file(path).await
+    }
+
+    async fn propose_changes(&self, changes: Vec<FileChange>) -> vtcode_webmcp::Result<PatchProposal> {
+        self.workspace.propose_changes(changes).await
+    }
+
+    async fn apply_proposal(&self, _proposal_id: &str) -> vtcode_webmcp::Result<AppliedChange> {
+        Err(vtcode_webmcp::WebmcpError::ApprovalRequired)
+    }
+
+    async fn run_checks(&self, _command: &str) -> vtcode_webmcp::Result<CheckResult> {
+        Err(vtcode_webmcp::WebmcpError::ApprovalRequired)
+    }
+
+    async fn revert_last_change(&self, _change_id: &str) -> vtcode_webmcp::Result<AppliedChange> {
+        Err(vtcode_webmcp::WebmcpError::ApprovalRequired)
+    }
+
+    async fn request_turn(&self, prompt: &str, proposal_id: Option<&str>) -> vtcode_webmcp::Result<TurnResult> {
+        let prompt =
+            crate::agent::runloop::unified::webmcp::build_turn_prompt(&self.workspace, prompt, proposal_id).await?;
+        let session_id = {
+            let state = self.state.lock().await;
+            state.session_id.clone().ok_or_else(|| {
+                vtcode_webmcp::WebmcpError::Unsupported("select a VT Code Desktop session first".into())
+            })?
+        };
+        let accepted = enqueue_turn(&self.state, &self.notifications, &session_id, prompt, Vec::new())
+            .await
+            .map_err(|error| vtcode_webmcp::WebmcpError::Adapter(error.to_string()))?;
+        Ok(TurnResult { turn_id: accepted.turn_id, accepted: true })
     }
 }
 
@@ -693,7 +909,7 @@ async fn publish_thread_event(
         ThreadEvent::TurnBlocked(_) => Some("blocked"),
         _ => None,
     };
-    let turn_id = {
+    let (turn_id, webmcp_event_hub) = {
         let mut state = state.lock().await;
         if state.session_id.as_deref().is_some_and(|selected| selected != session_id) {
             return Ok(());
@@ -709,8 +925,14 @@ async fn publish_thread_event(
             state.active_turn_id = None;
             state.cancel_requested_turn = None;
         }
-        turn_id
+        (turn_id, state.webmcp_event_hub.clone())
     };
+
+    if let Some(event_hub) = webmcp_event_hub
+        && let Err(error) = event_hub.publish(event.clone())
+    {
+        tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish canonical runtime event to WebMCP");
+    }
 
     let notification = ThreadEventNotification {
         session_id: session_id.to_string(),
@@ -1326,6 +1548,55 @@ fn sanitize_public_error(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn webmcp_turns_use_the_selected_desktop_runtime_and_respect_busy_state() {
+        let workspace_root = tempfile::tempdir().expect("workspace");
+        let workspace = FilesystemWorkspace::new(workspace_root.path(), [], false)
+            .await
+            .expect("workspace adapter");
+        let (input, mut input_receiver) = mpsc::unbounded_channel();
+        let (notifications, mut notification_receiver) = mpsc::channel(2);
+        let (exit_sender, exit) = oneshot::channel();
+        let runtime_task = tokio::spawn(std::future::pending::<()>());
+        let abort = runtime_task.abort_handle();
+        let command_forwarder = std::thread::spawn(|| {});
+        let server_state = ServerState {
+            session_id: Some("desktop-session".into()),
+            runtime: Some(RuntimeSession {
+                session_id: "desktop-session".into(),
+                input,
+                exit,
+                abort,
+                command_forwarder,
+            }),
+            ..ServerState::default()
+        };
+        let state = std::sync::Arc::new(Mutex::new(server_state));
+        let adapter = DesktopWebmcpRuntime {
+            workspace,
+            state: std::sync::Arc::clone(&state),
+            notifications,
+        };
+
+        assert!(adapter.status().await.expect("status").turns_available);
+        let accepted = adapter
+            .request_turn("  inspect the workspace  ", None)
+            .await
+            .expect("accepted turn");
+        assert!(accepted.accepted);
+        let Some(InlineEvent::Submit(submission)) = input_receiver.recv().await else {
+            panic!("WebMCP must enqueue through the desktop session input");
+        };
+        assert_eq!(submission.text, "inspect the workspace");
+        assert_eq!(notification_receiver.recv().await.expect("turn status").method, protocol::method::TURN_STATUS);
+        assert!(!adapter.status().await.expect("busy status").turns_available);
+        assert!(adapter.request_turn("a second turn", None).await.is_err());
+        assert!(input_receiver.try_recv().is_err(), "a busy runtime must not receive another turn");
+
+        drop(exit_sender);
+        runtime_task.abort();
+    }
 
     #[cfg(unix)]
     fn review_item(id: &str, patch: &str) -> vtcode_core::exec::events::ThreadItem {

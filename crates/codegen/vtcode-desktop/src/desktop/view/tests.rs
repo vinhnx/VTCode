@@ -1178,18 +1178,18 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-180.))), cx);
-        window.click("theme-github-dark", cx);
+        // The picker leads with the ported gpui-kit rows; dark and light
+        // swatches apply live and switch the kit base.
+        click_in_scrolled_grid(window, "theme-grid", "theme-adventure", cx);
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "github-dark");
+            assert_eq!(view.theme_id, "adventure");
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
-        window.scroll("theme-grid", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(180.))), cx);
-        window.click("theme-solarized-light", cx);
+        click_in_scrolled_grid(window, "theme-grid", "theme-aurora-light", cx);
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "solarized-light");
+            assert_eq!(view.theme_id, "aurora-light");
             assert_eq!(view.theme_mode, ThemeMode::Light);
         }
     })
@@ -1520,6 +1520,33 @@ fn pending_attachments_prevent_submitting_an_incomplete_prompt(cx: &mut TestAppC
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
     })
     .unwrap();
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer.update(cx, |state, cx| {
+                state.set_value("/webmcp connect https://vtcode.vinhnx.chatgpt.site", window, cx)
+            });
+            view.submit_prompt(window, cx);
+            assert!(view.settings_open);
+            assert!(!view.running);
+            assert!(view.composer.read(cx).value().is_empty());
+        });
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, params }) = requests.try_recv().ok() else {
+        panic!("connect command should request a browser pairing");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_PAIR);
+    assert_eq!(params["origin"], "https://vtcode.vinhnx.chatgpt.site");
+    assert_eq!(params["replace"], false);
     assert!(requests.try_recv().is_err());
 }
 
@@ -3755,6 +3782,33 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
     .unwrap();
 }
 
+/// Scroll settings until `id` sits inside the settings viewport.
+///
+/// A single large wheel delta is clamped to the panel's maximum scroll and can
+/// overshoot the target, so step the column instead.
+fn scroll_settings_to(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
+    for _ in 0..16 {
+        let target = window.find(id).bounds();
+        if target.top() >= px(0.) && target.bottom() <= px(800.) {
+            return;
+        }
+        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-400.))), cx);
+    }
+}
+
+/// Scroll a settings sub-grid until `id` is inside it, then click it.
+fn click_in_scrolled_grid(window: &mut gpui_kit::Window, grid: &'static str, id: &'static str, cx: &mut gpui_kit::App) {
+    for _ in 0..12 {
+        let target = window.find(id).bounds();
+        let viewport = window.find(grid).bounds();
+        if target.top() >= viewport.top() && target.bottom() <= viewport.bottom() {
+            break;
+        }
+        window.scroll(grid, gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-200.))), cx);
+    }
+    window.click(id, cx);
+}
+
 #[gpui_kit::test]
 fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
@@ -3764,7 +3818,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
+        scroll_settings_to(window, "save-shortcuts", cx);
         window.click("save-shortcuts", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
@@ -3772,7 +3826,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx))
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
+        scroll_settings_to(window, "save-shortcuts", cx);
         window.click("save-shortcuts", cx);
         assert_eq!(
             crate::desktop::preferences::Preferences::load()
@@ -3782,7 +3836,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             Some("ctrl-shift-k")
         );
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
+        scroll_settings_to(window, "reset-shortcuts", cx);
         window.click("reset-shortcuts", cx);
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
@@ -3929,7 +3983,7 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
+        scroll_settings_to(window, "use-cli-theme", cx);
         window.click("use-cli-theme", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.follow_cli_theme, Some(true));
@@ -3996,7 +4050,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         window.render_frame(cx);
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-actions").is_none(), "thread actions belong in the single header menu");
-        assert_eq!(window.find("composer-cli-webmcp").label(), Some("VT Code CLI and WebMCP documentation"));
+        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Open VT Code CLI and WebMCP connection settings"));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("Keep this draft", window, cx))
