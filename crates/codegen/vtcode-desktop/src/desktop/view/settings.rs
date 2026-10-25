@@ -409,8 +409,9 @@ impl DesktopView {
                             .child(command.clone()),
                     )
                     .child(desktop_button("copy-credential-command").label("Copy").ghost().on_click(
-                        move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
+                        move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()));
+                            super::super::notifications::copied_to_clipboard(window, app);
                         },
                     )),
             );

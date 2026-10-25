@@ -2850,9 +2850,12 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
-                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(move |_, _, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()))
-                            }))
+                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(
+                                move |_, window, app| {
+                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
+                                    super::notifications::copied_to_clipboard(window, app);
+                                },
+                            ))
                             .child(
                                 desktop_button("close-preview")
                                     .tooltip("Close preview (Escape)")
@@ -3223,8 +3226,9 @@ impl DesktopView {
                         .tooltip("Copy patch")
                         .ghost()
                         .small()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 );
             }
@@ -3481,8 +3485,9 @@ impl DesktopView {
                         .tooltip("Copy captured output")
                         .ghost()
                         .small()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 ),
         )
@@ -3940,8 +3945,9 @@ impl DesktopView {
                         .tooltip("Copy message")
                         .ghost()
                         .xsmall()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 ),
             )
@@ -4133,8 +4139,9 @@ impl DesktopView {
                 desktop_button(format!("copy-patch-{}", item.id))
                     .label("Copy patch")
                     .ghost()
-                    .on_click(move |_, _, app| {
-                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()))
+                    .on_click(move |_, window, app| {
+                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()));
+                        super::notifications::copied_to_clipboard(window, app);
                     }),
             );
         }
@@ -4300,8 +4307,9 @@ impl DesktopView {
                                     .on_click(cx.listener(|view, _, window, cx| view.restore_submission(window, cx))),
                             )
                             .child(desktop_button("copy-retained-prompt").label("Copy prompt").ghost().on_click(
-                                move |_, _, cx| {
-                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()))
+                                move |_, window, cx| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()));
+                                    super::notifications::copied_to_clipboard(window, cx);
                                 },
                             ))
                             .child(desktop_button("dismiss-retained-prompt").label("Dismiss").ghost().on_click(

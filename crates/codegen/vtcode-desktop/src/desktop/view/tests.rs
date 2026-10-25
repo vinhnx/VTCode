@@ -3,6 +3,7 @@ use gpui_kit::component::theme::ActiveTheme;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, point, px, size,
@@ -1554,9 +1555,11 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
         window.render_frame(cx);
         window.click("copy-message-copy-test", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
+        assert_eq!(window.notifications(cx).len(), 1);
         focus_button_by_tab(window, "copy-code", cx);
         window.press("space", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap().trim_end(), "fn sample() -> u8 { 7 }");
+        assert_eq!(window.notifications(cx).len(), 1);
     })
     .unwrap();
 }

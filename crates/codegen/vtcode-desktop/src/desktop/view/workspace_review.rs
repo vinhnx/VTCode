@@ -278,9 +278,10 @@ impl DesktopView {
                         .ghost()
                         .small()
                         .desktop_disabled(patch.as_ref().is_none_or(String::is_empty))
-                        .on_click(move |_, _, app| {
+                        .on_click(move |_, window, app| {
                             if let Some(patch) = &patch {
                                 app.write_to_clipboard(ClipboardItem::new_string(patch.clone()));
+                                super::super::notifications::copied_to_clipboard(window, app);
                             }
                         }),
                 ),

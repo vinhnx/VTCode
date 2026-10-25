@@ -1,6 +1,7 @@
 mod files;
 mod inspector;
 mod markdown;
+mod notifications;
 mod preferences;
 mod themes;
 mod transcript;

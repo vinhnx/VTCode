@@ -424,8 +424,9 @@ fn copy_value_row(
                 .tooltip(format!("Copy {value_label}"))
                 .ghost()
                 .small()
-                .on_click(move |_, _, cx| {
+                .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy.clone()));
+                    super::super::notifications::copied_to_clipboard(window, cx);
                 }),
         )
 }

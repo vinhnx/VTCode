@@ -161,7 +161,10 @@ pub(super) fn render_markdown(id: String, source: SharedString, cx: &gpui_kit::A
                 .cursor_pointer()
                 .label("Copy code")
                 .ghost()
-                .on_click(move |_, _, cx| cx.write_to_clipboard(ClipboardItem::new_string(code.to_string())))
+                .on_click(move |_, window, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
+                    super::notifications::copied_to_clipboard(window, cx);
+                })
         })
 }
 
