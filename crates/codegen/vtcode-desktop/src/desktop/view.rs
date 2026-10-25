@@ -3060,11 +3060,7 @@ impl DesktopView {
                 .p_4()
                 .text_sm()
                 .when(self.restored_review_history_incomplete, |container| {
-                    container.child(partial_history_alert(
-                        "review-history-warning",
-                        PARTIAL_REVIEW_HISTORY_MESSAGE,
-                        colors,
-                    ))
+                    container.child(warning_alert("review-history-warning", PARTIAL_REVIEW_HISTORY_MESSAGE, colors))
                 })
                 .child("Changes are open in the expanded review.")
                 .into_any_element();
@@ -3072,7 +3068,7 @@ impl DesktopView {
         let content = self.render_changes_content(false, colors, cx);
         let mut content_panel = div().w_full().flex_1().min_h_0().flex().flex_col();
         if self.restored_review_history_incomplete {
-            content_panel = content_panel.child(div().px_3().pt_2().child(partial_history_alert(
+            content_panel = content_panel.child(div().px_3().pt_2().child(warning_alert(
                 "review-history-warning",
                 PARTIAL_REVIEW_HISTORY_MESSAGE,
                 colors,
@@ -3507,7 +3503,7 @@ impl DesktopView {
         let mono = theme.mono_font_family.clone();
         let mut pane = div().w_full().flex_1().min_h_0().flex().flex_col();
         if self.restored_activity_history_incomplete {
-            pane = pane.child(div().px_3().pt_2().child(partial_history_alert(
+            pane = pane.child(div().px_3().pt_2().child(warning_alert(
                 "activity-history-warning",
                 PARTIAL_ACTIVITY_HISTORY_MESSAGE,
                 &colors,
@@ -3591,8 +3587,7 @@ impl DesktopView {
             .gap_2()
             .p_3();
         if self.restored_activity_history_incomplete {
-            body =
-                body.child(partial_history_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
+            body = body.child(warning_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
         }
         if rows.is_empty() {
             return body
@@ -5306,16 +5301,17 @@ fn brand_logo(size: f32) -> impl IntoElement {
     gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
 }
 
-fn partial_history_alert(
+pub(super) fn warning_alert(
     id: &'static str,
-    message: &'static str,
+    message: impl Into<gpui_kit::SharedString>,
     colors: &gpui_kit::component::theme::ThemeColor,
 ) -> AnyElement {
+    let message = message.into();
     div()
         .id(id)
         .test_support()
         .role(gpui_kit::Role::Alert)
-        .aria_label(message)
+        .aria_label(message.clone())
         .w_full()
         .px_3()
         .py_2()

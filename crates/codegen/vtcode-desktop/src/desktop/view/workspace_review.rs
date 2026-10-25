@@ -13,7 +13,7 @@ use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Windo
 use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
-use super::{DesktopButtonExt, DesktopView, desktop_button, empty_state, uuid_like_id};
+use super::{DesktopButtonExt, DesktopView, desktop_button, empty_state, uuid_like_id, warning_alert};
 
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
@@ -79,8 +79,6 @@ impl DesktopView {
         }
         review.request_id = request_id.clone();
         review.pending = true;
-        review.snapshot = None;
-        review.viewer = None;
         review.error = None;
         if !self.request(
             protocol::method::WORKSPACE_REVIEW,
@@ -284,7 +282,7 @@ impl DesktopView {
                         }),
                 ),
         );
-        if review.pending {
+        if review.pending && review.snapshot.is_none() {
             return body
                 .child(review_message(
                     "workspace-review-loading",
@@ -293,6 +291,21 @@ impl DesktopView {
                     IconName::GitCompare,
                 ))
                 .into_any_element();
+        }
+        if review.pending {
+            body = body.child(
+                div()
+                    .id("workspace-review-refreshing")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label("Refreshing Git changes")
+                    .aria_description("Showing the last successful snapshot until this refresh finishes.")
+                    .px_4()
+                    .py_2()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child("Refreshing Git changes · showing the last successful snapshot"),
+            );
         }
         if let Some(viewer) = &review.viewer {
             let files = viewer.read(cx).files();
@@ -343,14 +356,21 @@ impl DesktopView {
             );
         }
         if let Some(error) = &review.error {
-            return body
-                .child(review_message(
-                    "workspace-review-unavailable",
-                    "Git review unavailable",
-                    error.clone(),
-                    IconName::GitCompare,
-                ))
-                .into_any_element();
+            if review.snapshot.is_none() {
+                return body
+                    .child(review_message(
+                        "workspace-review-unavailable",
+                        "Git review unavailable",
+                        error.clone(),
+                        IconName::GitCompare,
+                    ))
+                    .into_any_element();
+            }
+            body = body.child(warning_alert(
+                "workspace-review-refresh-warning",
+                format!("Refresh failed. Showing the last successful snapshot. {error}"),
+                &colors,
+            ));
         }
         let Some(snapshot) = &review.snapshot else {
             return body.child(review_message("workspace-review-ready", "Choose what to review", "Leave Folder empty for the whole workspace, or enter a relative directory. Then choose Load changes.", IconName::GitCompare)).into_any_element();

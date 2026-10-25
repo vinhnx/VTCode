@@ -3197,6 +3197,76 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
 }
 
 #[gpui_kit::test]
+fn failed_working_tree_refresh_keeps_the_last_successful_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    let patch = "diff --git a/src/app.rs b/src/app.rs\n--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-old\n+new\n";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace".into(),
+                server_version: "test".into(),
+            });
+            view.open_workspace_review(window, cx);
+            view.refresh_workspace_review(cx);
+        });
+        let BackendCommand::Request { params, .. } = requests.try_recv().unwrap() else {
+            panic!("initial review request")
+        };
+        view.update(cx, |view, cx| {
+            view.accept_workspace_review(
+                vtcode_desktop_protocol::WorkspaceReviewResult {
+                    include_untracked: false,
+                    scope: String::new(),
+                    request_id: params["requestId"].as_str().unwrap().to_owned(),
+                    workspace: "/workspace".into(),
+                    captured_at: "first capture".into(),
+                    patch: Some(patch.into()),
+                    truncated: false,
+                    note: "Tracked changes against HEAD".into(),
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-diff").is_some());
+
+        window.click("refresh-workspace-review", cx);
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("refresh request")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::WORKSPACE_REVIEW);
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-refreshing").is_some());
+        assert!(window.try_find("workspace-review-diff").is_some());
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::WORKSPACE_REVIEW.into(),
+                    result: None,
+                    error: Some("Git capture timed out".into()),
+                },
+                cx,
+            );
+            let review = view.workspace_review.as_ref().unwrap();
+            assert!(!review.pending);
+            assert_eq!(review.snapshot.as_ref().unwrap().patch.as_deref(), Some(patch));
+            assert!(review.viewer.is_some());
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-refreshing").is_none());
+        assert!(window.try_find("workspace-review-refresh-warning").is_some());
+        assert!(window.try_find("workspace-review-diff").is_some());
+        window.click("copy-workspace-review", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn working_tree_review_distinguishes_partial_clean_and_unavailable_snapshots(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(8);
