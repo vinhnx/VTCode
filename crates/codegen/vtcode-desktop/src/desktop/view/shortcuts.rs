@@ -3,7 +3,7 @@ use super::*;
 use gpui_kit::component::input::{Input, InputState};
 use std::collections::{BTreeMap, HashSet};
 
-const COMMANDS: [(&str, &str, &str); 17] = [
+const COMMANDS: [(&str, &str, &str); 21] = [
     ("commands", "Search commands", "cmd-k"),
     ("new_session", "New thread", "cmd-n"),
     ("close_session", "Close thread", "cmd-shift-w"),
@@ -21,6 +21,10 @@ const COMMANDS: [(&str, &str, &str); 17] = [
     ("status_bar", "Toggle status bar", "cmd-shift-s"),
     ("reload_cli_settings", "Reload CLI settings", "cmd-shift-r"),
     ("sync_cli_theme", "Sync current theme to CLI", "cmd-shift-t"),
+    ("utilities", "Open workspace utilities", "cmd-shift-u"),
+    ("workspace_files", "Open workspace files", "cmd-shift-e"),
+    ("workspace_review", "Review working tree", "cmd-shift-g"),
+    ("refresh_workspace", "Refresh current workspace view", "cmd-r"),
 ];
 
 fn action(id: &str) -> Box<dyn gpui_kit::Action> {
@@ -41,6 +45,10 @@ fn action(id: &str) -> Box<dyn gpui_kit::Action> {
         "status_bar" => Box::new(ToggleStatusBar),
         "reload_cli_settings" => Box::new(ReloadCliSettings),
         "sync_cli_theme" => Box::new(SyncCliTheme),
+        "utilities" => Box::new(OpenUtilities),
+        "workspace_files" => Box::new(OpenWorkspaceFiles),
+        "workspace_review" => Box::new(OpenWorkspaceReview),
+        "refresh_workspace" => Box::new(RefreshWorkspace),
         _ => Box::new(OpenSettings),
     }
 }
@@ -175,9 +183,9 @@ mod tests {
     use super::*;
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 17);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 21);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 16);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 20);
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [
             ("commands", "cmd-n"),

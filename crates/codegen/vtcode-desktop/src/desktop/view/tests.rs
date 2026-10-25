@@ -68,6 +68,17 @@ fn file_tree_item_snapshot(window: &mut gpui_kit::Window, index: usize) -> gpui_
         .expect("tree item exposes its semantic role")
 }
 
+fn focus_button_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
+    for _ in 0..128 {
+        if window.try_find(id).is_some_and(|button| button.focused() == Some(true)) {
+            return;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    panic!("Tab did not reach button {id}");
+}
+
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
     cx.get_menus()
         .unwrap()
@@ -1434,7 +1445,8 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
         window.render_frame(cx);
         window.click("copy-message-copy-test", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
-        window.click("copy-code", cx);
+        focus_button_by_tab(window, "copy-code", cx);
+        window.press("space", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap().trim_end(), "fn sample() -> u8 { 7 }");
     })
     .unwrap();
@@ -1934,6 +1946,45 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
         }
     }
     assert!(requests.try_recv().is_err(), "active work blocks session changes for shortcuts too");
+}
+
+#[gpui_kit::test]
+fn workspace_shortcuts_match_navigation_and_review_controls(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace".into(),
+                server_version: "test".into(),
+            });
+        });
+        window.render_frame(cx);
+
+        window.press("cmd-shift-u", cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
+
+        window.press("cmd-shift-e", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
+
+        window.press("cmd-shift-g", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).workspace_review.is_some());
+
+        window.press("cmd-r", cx);
+        assert!(view.read(cx).workspace_review.as_ref().unwrap().pending);
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+        panic!("workspace review request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WORKSPACE_REVIEW);
 }
 
 #[gpui_kit::test]
@@ -3948,16 +3999,15 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
-        window.click("save-shortcuts", cx);
+        focus_button_by_tab(window, "save-shortcuts", cx);
+        window.press("enter", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         view.update(cx, |view, cx| {
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx))
         });
-        window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
-        window.click("save-shortcuts", cx);
+        focus_button_by_tab(window, "save-shortcuts", cx);
+        window.press("enter", cx);
         assert_eq!(
             crate::desktop::preferences::Preferences::load()
                 .shortcuts
@@ -3965,9 +4015,8 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
                 .map(String::as_str),
             Some("ctrl-shift-k")
         );
-        window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-2500.))), cx);
-        window.click("reset-shortcuts", cx);
+        focus_button_by_tab(window, "reset-shortcuts", cx);
+        window.press("enter", cx);
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
     })
@@ -4119,8 +4168,8 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
-        window.click("use-cli-theme", cx);
+        focus_button_by_tab(window, "use-cli-theme", cx);
+        window.press("enter", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.follow_cli_theme, Some(true));
         assert_eq!(view.read(cx).composer.read(cx).value(), "Preserve this draft");
@@ -4186,7 +4235,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         window.render_frame(cx);
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-actions").is_none(), "thread actions belong in the single header menu");
-        assert_eq!(window.find("composer-cli-webmcp").label(), Some("VT Code CLI and WebMCP documentation"));
+        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Open VT Code CLI and WebMCP connection settings"));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("Keep this draft", window, cx))

@@ -91,6 +91,10 @@ actions!(
         CloseSession,
         ChooseWorkspace,
         FocusComposer,
+        OpenUtilities,
+        OpenWorkspaceFiles,
+        OpenWorkspaceReview,
+        RefreshWorkspace,
         ToggleInspector,
         ToggleSidebar,
         ToggleStatusBar,
@@ -929,6 +933,35 @@ impl DesktopView {
                 }
             });
         }));
+    }
+
+    fn refresh_workspace_view(&mut self, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.refresh_workspace_review(cx);
+        } else {
+            self.refresh_files(cx);
+        }
+    }
+
+    fn focus_workspace_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Files;
+        cx.notify();
+
+        let view = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let _updated = view.update(cx, |view, cx| {
+                if !view.inspector_open || view.inspector_tab != InspectorTab::Files {
+                    return;
+                }
+                view.file_tree.update(cx, |tree, cx| {
+                    if tree.selected_index().is_none() && tree.entry(0).is_some() {
+                        tree.set_selected_index(Some(0), cx);
+                    }
+                    tree.focus(window, cx);
+                });
+            });
+        });
     }
 
     fn replace_file_entries(&mut self, entries: Vec<FileEntry>, cx: &mut Context<Self>) {
@@ -3180,6 +3213,7 @@ impl DesktopView {
                     desktop_button("review-working-tree")
                         .label("Review working tree")
                         .icon(IconName::GitCompare)
+                        .tooltip_with_action("Review working tree", &OpenWorkspaceReview, Some("VTCodeDesktop"))
                         .ghost()
                         .small()
                         .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
@@ -3515,21 +3549,17 @@ impl DesktopView {
                     desktop_button("focus-files")
                         .label("Workspace files")
                         .accessibility_label("Focus workspace file tree")
+                        .tooltip_with_action("Focus workspace file tree", &OpenWorkspaceFiles, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.file_tree.update(cx, |tree, cx| {
-                                if tree.selected_index().is_none() && tree.entry(0).is_some() {
-                                    tree.set_selected_index(Some(0), cx);
-                                }
-                                tree.focus(window, cx);
-                            });
-                        })),
+                        .on_click(cx.listener(|view, _, window, cx| view.focus_workspace_files(window, cx))),
                 )
                 .child(
                     desktop_button("refresh-files")
                         .label("Refresh")
+                        .accessibility_label("Refresh workspace files")
+                        .tooltip_with_action("Refresh workspace files", &RefreshWorkspace, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh_workspace_view(cx))),
                 ),
         );
         let directory_paths: HashSet<_> = self
@@ -4432,7 +4462,11 @@ impl DesktopView {
                 .small()
                 .max_w(px(320.))
                 .overflow_hidden()
-                .tooltip("Search models by provider, name, or model ID")
+                .tooltip_with_action(
+                    "Choose a model · Search by provider, name, or model ID",
+                    &OpenModelPicker,
+                    Some("VTCodeDesktop"),
+                )
                 .ghost()
                 .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
                 .on_click(cx.listener(|view, _, window, cx| view.open_model_options(window, cx))),
@@ -5392,6 +5426,16 @@ impl Render for DesktopView {
             .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
             .when(self.workspace.is_some(), |body| {
                 body.on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+                    .on_action(cx.listener(|view, _: &OpenUtilities, _, cx| view.open_utilities(cx)))
+                    .on_action(cx.listener(|view, _: &OpenWorkspaceFiles, window, cx| {
+                        view.focus_workspace_files(window, cx);
+                    }))
+                    .on_action(cx.listener(|view, _: &RefreshWorkspace, _, cx| view.refresh_workspace_view(cx)))
+            })
+            .when(self.backend.is_some() && self.service_info.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenWorkspaceReview, window, cx| {
+                    view.open_workspace_review(window, cx);
+                }))
             })
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
@@ -5755,7 +5799,7 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
 
 /// Native clickable controls share one cursor policy; disabled controls keep the arrow.
 fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).cursor_pointer()
+    Button::new(id).tab_stop(true).cursor_pointer()
 }
 
 trait DesktopButtonExt {

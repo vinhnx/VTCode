@@ -13,7 +13,7 @@ use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Windo
 use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
-use super::{DesktopButtonExt, DesktopView, desktop_button, empty_state, uuid_like_id};
+use super::{DesktopButtonExt, DesktopView, RefreshWorkspace, desktop_button, empty_state, uuid_like_id};
 
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
@@ -224,6 +224,7 @@ impl DesktopView {
                 .border_color(colors.border)
                 .child(
                     desktop_button("refresh-workspace-review")
+                        .tooltip_with_action("Refresh working tree review", &RefreshWorkspace, Some("VTCodeDesktop"))
                         .label(if review.pending {
                             "Refreshing…"
                         } else if review.snapshot.is_none() {
@@ -233,7 +234,7 @@ impl DesktopView {
                         })
                         .small()
                         .desktop_disabled(review.pending)
-                        .on_click(cx.listener(|view, _, _, cx| view.refresh_workspace_review(cx))),
+                        .on_click(cx.listener(|view, _, _, cx| view.refresh_workspace_view(cx))),
                 )
                 .child(
                     div()

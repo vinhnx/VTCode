@@ -157,6 +157,7 @@ pub(super) fn render_markdown(id: String, source: SharedString, cx: &gpui_kit::A
         .code_block_actions(|block, _, _| {
             let code = block.code();
             Button::new("copy-code")
+                .tab_stop(true)
                 .cursor_pointer()
                 .label("Copy code")
                 .ghost()

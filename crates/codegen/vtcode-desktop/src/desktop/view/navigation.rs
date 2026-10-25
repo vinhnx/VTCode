@@ -1,6 +1,12 @@
 use super::*;
 
 impl DesktopView {
+    pub(super) fn open_utilities(&mut self, cx: &mut Context<Self>) {
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Utilities;
+        cx.notify();
+    }
+
     pub(super) fn render_navigation(&self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let expanded = self.sidebar_open || self.navigation_peek;
@@ -72,13 +78,9 @@ impl DesktopView {
                             .icon(IconName::GitCompare)
                             .ghost()
                             .accessibility_label("Workspace utilities")
-                            .tooltip("Workspace utilities")
+                            .tooltip_with_action("Workspace utilities", &OpenUtilities, Some("VTCodeDesktop"))
                             .desktop_disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_open = true;
-                                view.inspector_tab = InspectorTab::Utilities;
-                                cx.notify();
-                            })),
+                            .on_click(cx.listener(|view, _, _, cx| view.open_utilities(cx))),
                     )
                     .child(self.render_chrome_menu("navigation-overflow", "Navigation actions"))
                     .child(div().flex_1())
