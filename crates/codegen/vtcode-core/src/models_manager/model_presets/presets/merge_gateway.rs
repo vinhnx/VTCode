@@ -124,6 +124,13 @@ pub(crate) fn merge_gateway_presets() -> Vec<ModelPreset> {
             false,
         ),
         (
+            models::merge_gateway::MOONSHOT_KIMI_K3_1_PRO,
+            "Kimi K3.1 Pro (Merge Gateway)",
+            "Moonshot Kimi K3.1 Pro through Merge Gateway",
+            1_000_000,
+            false,
+        ),
+        (
             models::merge_gateway::THINKINGMACHINES_INKLING,
             "Inkling (Merge Gateway)",
             "Thinking Machines Inkling through Merge Gateway",

@@ -69,7 +69,7 @@ Choose one of the supported LLM providers:
 
 - **Moonshot (Kimi)**: `export MOONSHOT_API_KEY=your_key_here`
   - Get from [Moonshot Platform](https://platform.moonshot.ai/docs)
-  - Models: Kimi K3, K2.7 Code, K2.5
+  - Models: Kimi K3.1 Pro, K3, K2.7 Code, K2.5
   - Default model: `kimi-k3`; see the [Moonshot provider guide](../providers/PROVIDER_GUIDES.md#moonshot-kimi)
 
 - **StepFun**: `export STEPFUN_API_KEY=your_key_here`

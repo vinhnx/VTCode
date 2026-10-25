@@ -67,6 +67,7 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `minimax/minimax-h3` | 131k | No | MiniMax route |
 | `minimax/minimax-m3.1-flash` | 1M | Yes | MiniMax M3.1 Flash ultra-efficient multimodal route |
 | `moonshot/kimi-k3` | 1M | Yes | Moonshot route |
+| `moonshot/kimi-k3.1-pro` | 1M | Yes | Moonshot route, 3T-class open-weight flagship |
 | `thinkingmachines/inkling` | 1M | No | Thinking Machines route |
 | `zai/glm-5.3-flash` | 1.31M | Yes | Z.AI route (320B/18B hybrid attention, native vision) |
 | `zai/glm-5.3-flashx` | 1M | Yes | Z.AI high-speed route (Flash stack, up to 200 tok/s, native vision) |

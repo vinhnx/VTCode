@@ -4380,6 +4380,35 @@
         },
         "is_pro": true
       },
+      "moonshot/kimi-k3.1-pro": {
+        "id": "moonshot/kimi-k3.1-pro",
+        "name": "Kimi K3.1 Pro (Merge Gateway)",
+        "description": "Moonshot Kimi K3.1 Pro served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "output_tokens": 1000000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
+        "is_pro": true
+      },
       "thinkingmachines/inkling": {
         "id": "thinkingmachines/inkling",
         "name": "Inkling (Merge Gateway)",

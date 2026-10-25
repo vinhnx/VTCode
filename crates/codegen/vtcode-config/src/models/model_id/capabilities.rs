@@ -367,8 +367,10 @@ impl ModelId {
                 | ModelId::HuggingFaceMinimaxM3Novita
                 | ModelId::StepFun5Preview
                 | ModelId::OpenRouterMoonshotaiKimiK3
+                | ModelId::MoonshotKimiK31Pro
                 | ModelId::MoonshotKimiK3
                 | ModelId::MergeGatewayMoonshotKimiK3
+                | ModelId::MergeGatewayMoonshotKimiK31Pro
                 | ModelId::OllamaGlm53Cloud
                 | ModelId::OllamaGlm53FlashCloud
                 | ModelId::OllamaDeepSeekV41FlashCloud
@@ -480,8 +482,10 @@ impl ModelId {
             ModelId::StepFun37Flash => "3.7",
             ModelId::StepFun5Preview => "5",
             // Moonshot models
+            ModelId::MoonshotKimiK31Pro => "k3.1",
             ModelId::MoonshotKimiK3 => "k3",
             ModelId::MergeGatewayMoonshotKimiK3 => "k3",
+            ModelId::MergeGatewayMoonshotKimiK31Pro => "k3.1",
             // Hugging Face generations
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",

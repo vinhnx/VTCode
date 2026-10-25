@@ -392,6 +392,13 @@ model_id_table! {
         display: "Kimi K3 (Merge Gateway)",
         description: "Moonshot Kimi K3 accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
+    MergeGatewayMoonshotKimiK31Pro {
+        provider: MergeGateway,
+        id: models::merge_gateway::MOONSHOT_KIMI_K3_1_PRO,
+        parse: [models::merge_gateway::MOONSHOT_KIMI_K3_1_PRO],
+        display: "Kimi K3.1 Pro (Merge Gateway)",
+        description: "Moonshot Kimi K3.1 Pro accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
     MergeGatewayThinkingMachinesInkling {
         provider: MergeGateway,
         id: models::merge_gateway::THINKINGMACHINES_INKLING,
@@ -675,6 +682,13 @@ model_id_table! {
         description: "Xiaomi's fastest flagship variant for real-time production scenarios (1M context)",
     },
     // Moonshot models
+    MoonshotKimiK31Pro {
+        provider: Moonshot,
+        id: models::moonshot::KIMI_K3_1_PRO,
+        parse: [models::moonshot::KIMI_K3_1_PRO],
+        display: "Kimi K3.1 Pro (Moonshot)",
+        description: "Kimi K3.1 Pro - Moonshot.ai's 3T-class open-weight flagship with 1M context and always-on reasoning",
+    },
     MoonshotKimiK3 {
         provider: Moonshot,
         id: models::moonshot::KIMI_K3,

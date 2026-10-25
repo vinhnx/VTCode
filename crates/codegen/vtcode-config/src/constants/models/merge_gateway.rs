@@ -13,6 +13,7 @@ pub const XAI_GROK_4_7: &str = "xai/grok-4.7";
 pub const MINIMAX_H3: &str = "minimax/minimax-h3";
 pub const MINIMAX_M3_1_FLASH: &str = "minimax/minimax-m3.1-flash";
 pub const MOONSHOT_KIMI_K3: &str = "moonshot/kimi-k3";
+pub const MOONSHOT_KIMI_K3_1_PRO: &str = "moonshot/kimi-k3.1-pro";
 pub const THINKINGMACHINES_INKLING: &str = "thinkingmachines/inkling";
 pub const ZAI_GLM_5_3_FLASH: &str = "zai/glm-5.3-flash";
 pub const ZAI_GLM_5_3_FLASHX: &str = "zai/glm-5.3-flashx";
@@ -58,6 +59,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MINIMAX_H3,
     MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
@@ -81,6 +83,7 @@ pub const REASONING_EFFORT_ROUTES: &[&str] = &[
     XAI_GROK_4_6,
     XAI_GROK_4_7,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
     OPENAI_GPT_5_6_LUNA,
@@ -134,6 +137,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MINIMAX_H3,
     MINIMAX_M3_1_FLASH,
     MOONSHOT_KIMI_K3,
+    MOONSHOT_KIMI_K3_1_PRO,
     THINKINGMACHINES_INKLING,
     ZAI_GLM_5_3_FLASH,
     ZAI_GLM_5_3_FLASHX,
