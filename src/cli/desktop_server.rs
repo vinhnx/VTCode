@@ -1708,6 +1708,92 @@ mod tests {
         (context, receiver)
     }
 
+    fn test_git(workspace: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .current_dir(workspace)
+            .args(args)
+            .output()
+            .expect("Git executable");
+        assert!(output.status.success(), "Git setup failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[tokio::test]
+    async fn workspace_review_protocol_uses_shared_cli_git_capture() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = vtcode_commons::canonicalize(directory.path()).expect("canonical workspace");
+        test_git(&workspace, &["init", "--quiet"]);
+        test_git(&workspace, &["config", "user.name", "VT Code test"]);
+        test_git(&workspace, &["config", "user.email", "vtcode-test@example.invalid"]);
+        std::fs::create_dir(workspace.join("src")).expect("source folder");
+        std::fs::write(workspace.join("src/tracked.rs"), "before\n").expect("tracked baseline");
+        test_git(&workspace, &["add", "."]);
+        test_git(&workspace, &["commit", "--quiet", "-m", "baseline"]);
+        std::fs::write(workspace.join("src/tracked.rs"), "after\n").expect("tracked edit");
+        std::fs::write(workspace.join("src/new file.rs"), "new source\n").expect("untracked source");
+        std::fs::write(workspace.join("outside.txt"), "outside scope").expect("outside-scope file");
+
+        let startup = test_startup_context(&workspace);
+        let (context, _notifications) = test_service_context(startup, workspace.clone());
+        let initialize = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("initialize".into()),
+            method: protocol::method::INITIALIZE.into(),
+            params: serde_json::to_value(protocol::InitializeParams {
+                protocol: protocol::ProtocolRange {
+                    minimum: protocol::ProtocolVersion { major: 1, minor: 0 },
+                    maximum: protocol::PROTOCOL_VERSION,
+                },
+                client_name: "desktop-test".into(),
+                client_version: env!("CARGO_PKG_VERSION").into(),
+            })
+            .expect("initialize params"),
+        };
+        handle_request(&context, &initialize).await.expect("initialize service");
+
+        let review_request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("review-1".into()),
+            method: protocol::method::WORKSPACE_REVIEW.into(),
+            params: serde_json::to_value(protocol::WorkspaceReviewParams {
+                include_untracked: true,
+                request_id: "review-1".into(),
+                scope: Some("src".into()),
+            })
+            .expect("review params"),
+        };
+        let (result, should_stop) = handle_request(&context, &review_request).await.expect("review request");
+        assert!(!should_stop);
+        let review: protocol::WorkspaceReviewResult = serde_json::from_value(result).expect("review result");
+        assert_eq!(review.request_id, "review-1");
+        assert_eq!(review.workspace, workspace.to_string_lossy());
+        assert_eq!(review.scope, "src");
+        assert!(review.include_untracked);
+        let patch = review.patch.expect("Git snapshot available");
+        assert!(patch.contains("+after"));
+        assert!(patch.contains("+++ b/src/new file.rs"));
+        assert!(patch.contains("+new source"));
+        assert!(!patch.contains("outside scope"));
+
+        let invalid_scope = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("review-2".into()),
+            method: protocol::method::WORKSPACE_REVIEW.into(),
+            params: serde_json::to_value(protocol::WorkspaceReviewParams {
+                include_untracked: false,
+                request_id: "review-2".into(),
+                scope: Some("../outside".into()),
+            })
+            .expect("invalid scope params"),
+        };
+        let (result, _) = handle_request(&context, &invalid_scope)
+            .await
+            .expect("unavailable review result");
+        let invalid: protocol::WorkspaceReviewResult = serde_json::from_value(result).expect("unavailable result");
+        assert_eq!(invalid.request_id, "review-2");
+        assert!(invalid.patch.is_none(), "an escaped scope must never capture files");
+        assert!(invalid.note.contains("Git review unavailable"));
+    }
+
     async fn test_webmcp_server(context: &ServiceContext) -> WebmcpServer {
         let workspace = FilesystemWorkspace::new(&context.workspace, [context.workspace.clone()], false)
             .await
