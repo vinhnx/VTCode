@@ -259,12 +259,18 @@ impl DesktopView {
                     .child(self.render_font_family(FontTarget::Code, cx))
                     .child(self.render_font_size(false, cx))
                     .child(self.render_font_size(true, cx))
-                    .child(render_markdown(
-                        "appearance-code-preview".into(),
-                        "```rust\nfn main() { /* VT Code */ }\n```".into(),
-                        false,
-                        cx,
-                    )),
+                    .child(
+                        div()
+                            .id("appearance-code-preview")
+                            .test_support()
+                            .w_full()
+                            .child(render_markdown(
+                                "appearance-code-preview-text".into(),
+                                "```rust\nfn main() { /* VT Code */ }\n```".into(),
+                                false,
+                                cx,
+                            )),
+                    ),
             ));
 
         content = content.child(desktop_button("reset-appearance").label("Reset appearance").ghost().on_click(

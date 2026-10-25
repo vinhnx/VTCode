@@ -417,7 +417,9 @@ ranges from 12–24 logical pixels (default 16); code size ranges from 10–24
 (default 14). The accessible decrease/increase buttons apply immediately and
 save to desktop preferences. Code size controls Markdown code blocks, previews,
 terminal output, and gpui-kit diff typography. Kit diff sizing also follows the
-UI scale. Transcript measurements refresh when typography changes.
+UI scale. Transcript measurements refresh when typography changes. The
+syntax-highlighted Rust sample in Appearance tracks the selected code font and
+size, so changes can be previewed before closing Settings.
 
 | Setting | Behavior |
 | --- | --- |

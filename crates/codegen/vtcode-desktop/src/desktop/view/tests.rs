@@ -4041,11 +4041,17 @@ fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut Tes
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 16 pixels"));
         assert_eq!(window.find("font-code-value").label(), Some("Code font size: 14 pixels"));
+        let preview_height = window.find("appearance-code-preview").bounds().size.height;
+        assert!(preview_height > px(0.), "the highlighted code sample should have rendered layout");
         window.click("font-ui-1", cx);
-        window.click("font-code-0", cx);
+        window.click("font-code-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
-        assert_eq!(window.find("font-code-value").label(), Some("Code font size: 13 pixels"));
+        assert_eq!(window.find("font-code-value").label(), Some("Code font size: 15 pixels"));
+        assert!(
+            window.find("appearance-code-preview").bounds().size.height > preview_height,
+            "changing code size should re-layout the syntax-highlighted preview"
+        );
         assert!(window.find("choose-ui-font").label().unwrap().contains("current:"));
         assert!(window.find("choose-code-font").label().unwrap().contains("current:"));
     })
