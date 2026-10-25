@@ -5065,13 +5065,10 @@ impl DesktopView {
         let typography = self.preferences.typography_for(self.theme_mode);
         let ui = typography.ui_font_size;
         let code = typography.code_font_size;
-        let ui_family =
-            typography::resolve_font(typography.ui_font_family, ".SystemUIFont", typography::installed_fonts(cx));
-        let code_family = typography::resolve_font(
-            typography.code_font_family,
-            self.default_code_font.as_str(),
-            typography::installed_fonts(cx),
-        );
+        let installed = typography::installed_fonts(cx);
+        let ui_family = typography::resolve_font(typography.ui_font_family, ".SystemUIFont", &installed);
+        let code_family =
+            typography::resolve_font(typography.code_font_family, self.default_code_font.as_str(), &installed);
         Theme::update(cx, |theme| {
             theme.font_family = ui_family.into();
             theme.mono_font_family = code_family.into();

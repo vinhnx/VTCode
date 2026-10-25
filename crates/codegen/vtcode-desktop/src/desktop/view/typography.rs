@@ -12,20 +12,23 @@ pub(super) enum FontTarget {
     Code,
 }
 
-pub(super) fn installed_fonts(cx: &App) -> &'static [String] {
-    static FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-    FONTS.get_or_init(|| {
-        let mut fonts = cx.text_system().all_font_names();
-        fonts.retain(|name| {
+pub(super) fn installed_fonts(cx: &App) -> Vec<String> {
+    normalize_font_names(cx.text_system().all_font_names())
+}
+
+fn normalize_font_names(fonts: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut fonts = fonts
+        .into_iter()
+        .filter(|name| {
             !name.trim().is_empty()
                 && name.len() <= 128
                 && !name.starts_with('.')
                 && !name.chars().any(char::is_control)
-        });
-        fonts.sort_unstable();
-        fonts.dedup();
-        fonts
-    })
+        })
+        .collect::<Vec<_>>();
+    fonts.sort_unstable();
+    fonts.dedup();
+    fonts
 }
 
 pub(super) fn resolve_font(saved: Option<&str>, fallback: &str, installed: &[String]) -> String {
@@ -36,15 +39,10 @@ pub(super) fn resolve_font(saved: Option<&str>, fallback: &str, installed: &[Str
 }
 
 pub(super) fn default_code_font(cx: &App) -> gpui_kit::SharedString {
-    static DEFAULT: std::sync::OnceLock<gpui_kit::SharedString> = std::sync::OnceLock::new();
-    DEFAULT
-        .get_or_init(|| {
-            installed_fonts(cx)
-                .iter()
-                .find(|name| name.as_str() == "SF Mono")
-                .map_or_else(|| cx.theme().mono_font_family.clone(), |name| name.clone().into())
-        })
-        .clone()
+    installed_fonts(cx)
+        .into_iter()
+        .find(|name| name == "SF Mono")
+        .map_or_else(|| cx.theme().mono_font_family.clone(), Into::into)
 }
 
 impl DesktopView {
@@ -55,12 +53,13 @@ impl DesktopView {
             FontTarget::Ui => "System default".to_owned(),
             FontTarget::Code => format!("System default · {}", self.default_code_font),
         };
+        let installed = installed_fonts(cx);
         let mut entries = vec![command(
             default_label,
             PaletteAction::SelectFont { target, family: None },
         )];
         entries.extend(
-            installed_fonts(cx).iter().map(|family| {
+            installed.iter().map(|family| {
                 command(family.clone(), PaletteAction::SelectFont { target, family: Some(family.clone()) })
             }),
         );
@@ -68,7 +67,8 @@ impl DesktopView {
     }
 
     pub(super) fn select_font(&mut self, target: FontTarget, family: Option<String>, cx: &mut Context<Self>) {
-        if family.as_ref().is_some_and(|family| !installed_fonts(cx).contains(family)) {
+        let installed = installed_fonts(cx);
+        if family.as_ref().is_some_and(|family| !installed.contains(family)) {
             return;
         }
         match target {
@@ -114,7 +114,16 @@ impl DesktopView {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_font;
+    use super::{normalize_font_names, resolve_font};
+
+    #[test]
+    fn font_catalog_snapshots_are_normalized_without_hiding_later_fonts() {
+        let first = normalize_font_names(vec!["Menlo".into(), "Menlo".into(), ".SystemUIFont".into()]);
+        let refreshed = normalize_font_names(vec!["Menlo".into(), "Newly Registered Font".into()]);
+
+        assert_eq!(first, vec!["Menlo"]);
+        assert_eq!(refreshed, vec!["Menlo", "Newly Registered Font"]);
+    }
 
     #[test]
     fn missing_or_invalid_fonts_fall_back_without_overriding_independent_choices() {
