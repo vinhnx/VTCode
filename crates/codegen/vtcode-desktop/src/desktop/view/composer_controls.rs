@@ -259,6 +259,8 @@ impl DesktopView {
         let palette_id = self.palette.as_ref().map(|state| state.entity_id());
         let slider_observation = cx.observe(&slider, |_, _, cx| cx.notify());
         let slider_events = cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
+            // The observer above invalidates the view when slider state changes;
+            // this typed event only commits a released value to the CLI.
             if let gpui_kit::component::slider::SliderEvent::Release(value) = event {
                 let Some(effort) = effort_at(&levels, value.start()).cloned() else {
                     return;
@@ -285,7 +287,6 @@ impl DesktopView {
                     });
                 });
             }
-            cx.notify();
         });
         self.effort_slider = Some(slider);
         self._effort_slider_subscriptions = vec![slider_observation, slider_events];
