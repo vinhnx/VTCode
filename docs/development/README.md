@@ -6,6 +6,8 @@ Entry point for VT Code contributor workflows.
 
 - [Development Setup](./DEVELOPMENT_SETUP.md) - Canonical local setup and quality loop.
 - [Rust Style Guide](./rust-style-guide.md) - Google Rust guidance adoption, enforcement, exceptions, and API migrations.
+- [Rust Toolchain and MSRV](./toolchain-updates.md) - Single compiler pin, bump checklist, new-compiler gate fixes, and
+  which compiler references stay historical.
 - [Architecture Guide](../ARCHITECTURE.md#request-projection-and-context-budgets) - Runtime ownership, request projections,
   context budgets, and staged headless compaction.
 - [Testing Guide](./testing.md) - Test commands, structure, and benchmark coverage, including the startup launch

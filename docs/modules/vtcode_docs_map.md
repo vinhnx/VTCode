@@ -377,6 +377,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Rust Style Guide Adoption?", "How does Adoption matrix work?", "How
     does Rust API migration notes work?"
 
+- **File**: `docs/development/toolchain-updates.md`
+  - **Content**: Rust Toolchain and MSRV
+  - **Topics**: Policy, Pin map, Bump checklist, Compiler and Clippy fallout, Auxiliary compiler pins
+  - **User Questions**: "What can you tell me about Rust Toolchain and MSRV?", "How does Policy work?", "How does Pin
+    map work?"
+
 - **File**: `docs/development/rust-performance-principles.md`
   - **Content**: Rust-Specific Performance Principles for VT Code
   - **Topics**: Core Insight: Rust Is Not Faster Than C/C++ — It Is _Safer While Being Equally Fast_, Destructive Move

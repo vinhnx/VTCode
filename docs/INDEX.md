@@ -44,6 +44,8 @@ Last reviewed: 2026-08-28
 ## Engineering References
 
 - [Development Setup](development/DEVELOPMENT_SETUP.md) - Canonical contributor setup and local quality loop.
+- [Rust Toolchain and MSRV](development/toolchain-updates.md) - Pinned compiler, pin map, bump checklist, and
+  compiler-gated lint fixes.
 - [C++ Core Guidelines Adoption](development/CPP_CORE_GUIDELINES_ADOPTION.md) - Rules for C/C++ code paths and
   cross-language safety intent.
 - [Extension Boundaries](development/EXTENSION_BOUNDARIES.md) - When to use internal Rust traits vs external protocol or

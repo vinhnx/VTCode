@@ -13,10 +13,12 @@ The project runs two GitHub Actions workflows.
 - Manual `workflow_dispatch` with release tag input
 - Dispatched from `scripts/release.sh` Step 3.5 via `gh workflow run`
 
-**Rust toolchain:** all three Rust setup steps explicitly select the version in
+**Rust toolchain:** all four Rust setup steps (three in this workflow, one in `desktop-macos.yml`) explicitly select
+the version in
 `rust-toolchain.toml`, currently 1.99.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
 otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
-Update the workflow inputs alongside the canonical toolchain version.
+Update the workflow inputs alongside the canonical toolchain version, following
+[Rust Toolchain and MSRV](./toolchain-updates.md).
 `cargo nextest run --locked -p vtcode --test toolchain_pins_test` checks active
 `.yml`/`.yaml` workflow Rust setup steps, including missing inputs and drift,
 without assuming an old CI filename. Explicit nightly checks remain separate.
