@@ -3381,6 +3381,36 @@ fn composer_errors_are_exposed_as_alerts(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn sidebar_service_status_announces_state_changes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.status = "Starting local VT Code service…".into();
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let status = window.find("sidebar-status");
+        assert_eq!(status.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(status.label(), Some("Starting local VT Code service…"));
+    })
+    .unwrap();
+
+    view.update(cx, |view, cx| {
+        view.status = "Connected to the local VT Code service".into();
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let status = window.find("sidebar-status");
+        assert_eq!(status.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(status.label(), Some("Connected to the local VT Code service"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
