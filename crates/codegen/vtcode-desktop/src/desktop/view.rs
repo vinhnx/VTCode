@@ -5590,14 +5590,14 @@ impl DesktopView {
             });
         }
         let palette_query = self.palette_query.clone();
-        for (section_index, (label, entries)) in confirm_groups.iter().enumerate() {
+        for (label, entries) in &confirm_groups {
             let mut group = CommandGroup::new().label(label.clone());
-            for (row_index, entry) in entries.iter().enumerate() {
+            for entry in entries {
                 let label = entry.label.clone();
                 let description = entry.description.clone();
                 let query = palette_query.clone();
                 let selected = self.is_current_palette_action(&entry.action);
-                let id = format!("palette-label-{section_index}-{row_index}");
+                let id = palette_entry_element_id(&entry.action);
                 let accessible_label = description
                     .as_ref()
                     .map(|details| format!("{label} · {details}"))
@@ -5985,6 +5985,52 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
         keywords: Vec::new(),
         action,
     }
+}
+
+/// Keep palette label identity attached to the command when search/filtering changes row order.
+/// Hash payloads so file paths and draft text do not appear in rendered element IDs.
+fn palette_entry_element_id(action: &PaletteAction) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::mem::discriminant(action).hash(&mut hasher);
+    match action {
+        PaletteAction::SelectFont { target, family } => {
+            match target {
+                FontTarget::Ui => 0_u8,
+                FontTarget::Code => 1_u8,
+            }
+            .hash(&mut hasher);
+            family.hash(&mut hasher);
+        }
+        PaletteAction::EditConfigSetting(value)
+        | PaletteAction::LoadSession(value)
+        | PaletteAction::PreviewFile(value)
+        | PaletteAction::AttachFile(value)
+        | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
+        PaletteAction::SelectModel { provider, model } => {
+            provider.hash(&mut hasher);
+            model.hash(&mut hasher);
+        }
+        PaletteAction::SelectSessionOptions(options) => {
+            match options.permission_mode {
+                None => 0_u8,
+                Some(protocol::PermissionMode::Ask) => 1,
+                Some(protocol::PermissionMode::AutoApproveCommands) => 2,
+            }
+            .hash(&mut hasher);
+            options.mode.hash(&mut hasher);
+            options.reasoning_effort.hash(&mut hasher);
+            options.fast_mode.hash(&mut hasher);
+        }
+        PaletteAction::NewSession
+        | PaletteAction::CloseSession
+        | PaletteAction::ChooseModel
+        | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshFiles
+        | PaletteAction::ToggleInspector
+        | PaletteAction::ToggleTheme
+        | PaletteAction::AttachFiles => {}
+    }
+    format!("palette-label-{:016x}", hasher.finish())
 }
 
 fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {

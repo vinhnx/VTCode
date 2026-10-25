@@ -59,6 +59,10 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
     })
 }
 
+fn palette_action_id(action: &super::PaletteAction) -> String {
+    super::palette_entry_element_id(action)
+}
+
 #[test]
 fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
     let mut enabled = super::desktop_button("native-cursor-enabled");
@@ -66,6 +70,19 @@ fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
 
     let mut disabled = super::desktop_button("native-cursor-disabled").desktop_disabled(true);
     assert_eq!(disabled.style().mouse_cursor, None);
+}
+
+#[test]
+fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
+    let path = "private/workspace/src/main.rs";
+    let file_action = super::PaletteAction::PreviewFile(path.into());
+    let file_id = palette_action_id(&file_action);
+    assert_eq!(file_id, palette_action_id(&file_action));
+    assert!(!file_id.contains(path), "workspace paths stay out of element identifiers");
+    assert_ne!(
+        file_id,
+        palette_action_id(&super::PaletteAction::PreviewFile("private/workspace/src/lib.rs".into()))
+    );
 }
 
 #[gpui_kit::test]
@@ -656,7 +673,16 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
-        assert!(window.find("palette-label-1-0").label().unwrap().contains("200K context"));
+        assert!(
+            window
+                .find(palette_action_id(&super::PaletteAction::SelectModel {
+                    provider: "anthropic".into(),
+                    model: "claude-sonnet-5".into(),
+                }))
+                .label()
+                .unwrap()
+                .contains("200K context")
+        );
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -1254,7 +1280,7 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Command palette"));
-        assert_eq!(window.find("palette-label-0-0").label(), Some("New session"));
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::NewSession)).label(), Some("New session"));
         window.input("new", cx);
         window.render_frame(cx);
         let palette = view.read(cx).palette.as_ref().unwrap().clone();
@@ -1265,7 +1291,7 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(view.read(cx).palette_query.as_ref(), "new");
-        assert_eq!(window.find("palette-label-0-0").label(), Some("New session"));
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::NewSession)).label(), Some("New session"));
         for key in ["tab", "shift-tab", "tab"] {
             window.press(key, cx);
             assert!(view.read(cx).palette_focus.contains_focused(window, cx), "{key} stays inside the palette");
@@ -3061,7 +3087,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
         });
         window.render_frame(cx);
         assert_eq!(palette.read(cx).matched_count(), 1, "the same query becomes actionable after selection");
-        assert_eq!(window.find("palette-label-0-1").label(), Some("Close session"));
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::CloseSession)).label(), Some("Close session"));
         view.update(cx, |view, cx| {
             view.running = true;
             view.run_palette_action(super::PaletteAction::CloseSession, window, cx);
@@ -3166,7 +3192,10 @@ fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mu
         window.click("pick-model", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
-        let current_model_item = window.find("palette-label-0-0");
+        let current_model_item = window.find(palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "provider-a".into(),
+            model: "custom-current-id".into(),
+        }));
         let current_model_label = current_model_item.label().unwrap();
         assert!(current_model_label.contains("123.45K context"));
         assert!(current_model_label.contains("Current"));
@@ -5401,7 +5430,10 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         view.update(cx, |view, _| view.session_request = None);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("palette-label-1-0").label(), Some("Search all models…"));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
+            Some("Search all models…")
+        );
         view.update(cx, |view, cx| {
             view.run_palette_action(super::PaletteAction::ChooseModel, window, cx);
         });
@@ -5419,7 +5451,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
 }
 
 #[gpui_kit::test]
-fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_route(cx: &mut TestAppContext) {
+fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_the_real_route(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -5472,23 +5504,53 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
+        let claude_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "anthropic".into(),
+            model: "claude-sonnet-5".into(),
+        });
         assert!(
             window
-                .find("palette-label-0-0")
+                .find(claude_id.clone())
                 .label()
                 .unwrap()
                 .starts_with("Claude Sonnet 5 · anthropic · 200K context")
         );
-        let gemini_item = window.find("palette-label-0-1");
+        let gemini_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "google".into(),
+            model: "gemini-3.8-flash".into(),
+        });
+        let gemini_item = window.find(gemini_id.clone());
         let gemini_row = gemini_item.label().unwrap();
         assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
         assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
-        assert!(window.find("palette-label-1-0").label().unwrap().contains("gpt-5.6-sol"));
-        assert_eq!(window.find("palette-label-2-0").label(), Some("Search all models…"));
-        assert!(window.try_find("palette-label-0-2").is_none(), "uncurated catalog entries stay in full search");
+        let gpt_id = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries)
+            .find(|entry| entry.label.contains("gpt-5.6-sol"))
+            .map(|entry| palette_action_id(&entry.action))
+            .unwrap();
+        assert!(window.find(gpt_id).label().unwrap().contains("gpt-5.6-sol"));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
+            Some("Search all models…")
+        );
+        let uncatalogued_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "custom".into(),
+            model: "not-recommended".into(),
+        });
+        assert!(window.try_find(uncatalogued_id).is_none(), "uncurated catalog entries stay in full search");
         assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
+        window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
+        window.within("command-palette").input("gemini", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).query(cx), "gemini");
+        assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
+        assert_eq!(window.find(gemini_id).label(), Some(gemini_row));
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -5498,7 +5560,7 @@ fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_ro
         panic!("expected quick model selection request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
-    assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
+    assert_eq!(params, json!({ "provider": "google", "model": "gemini-3.8-flash" }));
 }
 
 #[gpui_kit::test]
@@ -5586,7 +5648,12 @@ fn add_popup_filters_cli_resources_and_inserts_a_skill_without_submitting(cx: &m
         window.within("command-palette").input("rust-skills", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).composer_resources.len(), 2, "resource response: {:?}", view.read(cx).error);
-        assert!(window.try_find("palette-label-2-0").is_some(), "skill row should be rendered");
+        assert!(
+            window
+                .try_find(palette_action_id(&super::PaletteAction::InsertDraft("$rust-skills".into())))
+                .is_some(),
+            "skill row should be rendered"
+        );
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).query(cx), "rust-skills");
         assert!(view.read(cx).palette.as_ref().unwrap().read(cx).selected_index().is_some());
         window.within("command-palette").press("enter", cx);
@@ -5669,7 +5736,10 @@ fn late_resource_discovery_keeps_the_selected_command_identity(cx: &mut TestAppC
                 .section,
             4
         );
-        assert_eq!(window.find("palette-label-4-2").label(), Some("Toggle inspector panel"));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ToggleInspector)).label(),
+            Some("Toggle inspector panel")
+        );
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -5694,7 +5764,17 @@ fn unsupported_inherited_effort_offers_explicit_supported_choices(cx: &mut TestA
         });
         window.render_frame(cx);
         assert!(window.try_find("increase-effort").is_none());
-        assert_eq!(window.find("palette-label-0-0").label(), Some("Use low effort"));
+        assert_eq!(
+            window
+                .find(palette_action_id(&super::PaletteAction::SelectSessionOptions(
+                    vtcode_desktop_protocol::SessionOptionsSelectParams {
+                        reasoning_effort: Some("low".into()),
+                        ..Default::default()
+                    }
+                )))
+                .label(),
+            Some("Use low effort")
+        );
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.within("command-palette").press("enter", cx);
     })
