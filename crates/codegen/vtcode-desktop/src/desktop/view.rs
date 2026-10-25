@@ -44,10 +44,10 @@ use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle,
-    Focusable, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction,
-    PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window,
-    WindowOptions, actions, anchored, deferred, div, point, px, size,
+    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, DragMoveEvent, Entity, FocusHandle, Focusable,
+    KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions,
+    Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions,
+    actions, anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -5560,7 +5560,6 @@ impl DesktopView {
                         .outline()
                         .small()
                         .checked(enabled)
-                        .cursor_pointer()
                         .on_click(move |checked, window, cx| {
                             let _updated = weak.update(cx, |view, cx| {
                                 if view.palette_kind != PaletteKind::ModelOptions
@@ -6246,9 +6245,9 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
     format!("history-{:016x}", hasher.finish())
 }
 
-/// Native clickable controls share one cursor policy; disabled controls keep the arrow.
+/// Native buttons use GPUI's arrow cursor; links opt into a pointing hand.
 fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).tab_stop(true).cursor_pointer()
+    Button::new(id).tab_stop(true)
 }
 
 trait DesktopButtonExt {
@@ -6258,11 +6257,7 @@ trait DesktopButtonExt {
 
 impl DesktopButtonExt for Button {
     fn desktop_disabled(self, disabled: bool) -> Self {
-        self.disabled(disabled).cursor(if disabled {
-            CursorStyle::Arrow
-        } else {
-            CursorStyle::PointingHand
-        })
+        self.disabled(disabled)
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {

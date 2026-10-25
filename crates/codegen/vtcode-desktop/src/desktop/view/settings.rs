@@ -309,7 +309,6 @@ impl DesktopView {
                             .outline()
                             .small()
                             .checked(selected)
-                            .cursor_pointer()
                             .on_click(cx.listener(move |view, checked: &bool, _, cx| {
                                 if *checked {
                                     view.set_ui_language(option, cx);

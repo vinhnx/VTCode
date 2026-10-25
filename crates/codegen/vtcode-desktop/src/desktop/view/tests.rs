@@ -1,4 +1,5 @@
 use gpui_kit::Focusable;
+use gpui_kit::Styled;
 use gpui_kit::component::theme::ActiveTheme;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -11,7 +12,7 @@ use gpui_kit::{
 use serde_json::json;
 
 use super::{
-    DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, scale_row_height_for_ui_font,
+    DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, scale_row_height_for_ui_font,
     workspace_picker_options,
 };
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
@@ -56,6 +57,15 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
         )
         .unwrap()
     })
+}
+
+#[test]
+fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
+    let mut enabled = super::desktop_button("native-cursor-enabled");
+    assert_eq!(enabled.style().mouse_cursor, None);
+
+    let mut disabled = super::desktop_button("native-cursor-disabled").desktop_disabled(true);
+    assert_eq!(disabled.style().mouse_cursor, None);
 }
 
 #[gpui_kit::test]
