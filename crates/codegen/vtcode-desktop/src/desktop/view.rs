@@ -15,9 +15,7 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
-use gpui_kit::component::empty::{
-    Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
-};
+use gpui_kit::component::empty::{Empty as EmptyState, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{Copy, Cut, Enter, Paste, Redo, SelectAll, Textarea, TextareaState, Undo};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
@@ -3752,9 +3750,7 @@ impl DesktopView {
                 .as_ref()
                 .and_then(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned());
-            let prompt = workspace_name
-                .as_ref()
-                .map_or_else(|| "What should we build?".to_owned(), |name| format!("What should we build in {name}?"));
+            let prompt = "What should we build in VT Code?";
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
                 .font_weight(gpui_kit::FontWeight::NORMAL)
@@ -3770,41 +3766,38 @@ impl DesktopView {
                         .items_center()
                         .justify_center()
                         .gap_2()
-                        .child(if workspace_name.is_some() {
-                            "What should we build in"
-                        } else {
-                            "What should we build?"
-                        })
-                        .when_some(workspace_name, |title, name| {
-                            title.child(
-                                desktop_button("welcome-workspace")
-                                    .accessibility_label(format!("Change workspace, current: {name}"))
-                                    .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
-                                    .text()
-                                    .text_color(colors.foreground)
-                                    .h_auto()
-                                    .p_0()
-                                    .min_w_0()
-                                    .max_w_full()
-                                    .desktop_disabled(
-                                        !self.workspace_switch_idle()
-                                            || self.workspace_picker_open
-                                            || self.retained_submission.is_some(),
-                                    )
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_size(gpui_kit::rems(1.75))
-                                            .font_weight(gpui_kit::FontWeight::NORMAL)
-                                            .border_b_1()
-                                            .border_dashed()
-                                            .border_color(colors.muted_foreground)
-                                            .child(format!("{name}?")),
-                                    )
-                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                            )
-                        }),
+                        .child("What should we build in")
+                        .child(
+                            desktop_button("welcome-workspace")
+                                .accessibility_label(workspace_name.as_ref().map_or_else(
+                                    || "Choose a workspace".to_owned(),
+                                    |name| format!("Change workspace, current: {name}"),
+                                ))
+                                .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                                .text()
+                                .text_color(colors.foreground)
+                                .h_auto()
+                                .p_0()
+                                .min_w_0()
+                                .max_w_full()
+                                .desktop_disabled(
+                                    !self.workspace_switch_idle()
+                                        || self.workspace_picker_open
+                                        || self.retained_submission.is_some(),
+                                )
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(gpui_kit::rems(1.75))
+                                        .font_weight(gpui_kit::FontWeight::NORMAL)
+                                        .border_b_1()
+                                        .border_dashed()
+                                        .border_color(colors.muted_foreground)
+                                        .child("VT Code?"),
+                                )
+                                .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                        ),
                 );
             div()
                 .id("welcome")
@@ -3821,22 +3814,7 @@ impl DesktopView {
                                 .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
                                 .title(title),
                         )
-                        .size_full()
-                        .when(self.workspace.is_none(), |welcome| {
-                            welcome.content(
-                                EmptyContent::new().child(
-                                    desktop_button("open-first-workspace")
-                                        .label("Choose a workspace folder")
-                                        .primary()
-                                        .desktop_disabled(
-                                            self.workspace_picker_open
-                                                || !self.workspace_switch_idle()
-                                                || self.retained_submission.is_some(),
-                                        )
-                                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                                ),
-                            )
-                        }),
+                        .size_full(),
                 )
                 .into_any_element()
         } else {

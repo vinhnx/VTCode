@@ -2679,7 +2679,7 @@ fn composer_model_picker_keeps_a_custom_current_model_without_resetting_a_sessio
 }
 
 #[gpui_kit::test]
-fn welcome_workspace_prompt_wraps_long_names_and_keeps_the_switch_guard(cx: &mut TestAppContext) {
+fn welcome_prompt_stays_branded_and_keeps_workspace_switch_guard(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 700.);
     let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
     cx.update_window(window, |_, window, cx| {
@@ -2696,10 +2696,7 @@ fn welcome_workspace_prompt_wraps_long_names_and_keeps_the_switch_guard(cx: &mut
         assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
         assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
         assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
-        assert_eq!(
-            window.find("welcome-prompt").label(),
-            Some(format!("What should we build in {workspace_name}?").as_str())
-        );
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
         view.update(cx, |view, _| view.workspace_picker_open = true);
         window.render_frame(cx);
         assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
@@ -2708,9 +2705,9 @@ fn welcome_workspace_prompt_wraps_long_names_and_keeps_the_switch_guard(cx: &mut
             view.workspace = None;
         });
         window.render_frame(cx);
-        assert!(window.find_all("welcome-workspace").is_empty());
-        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
-        assert_ne!(window.within("welcome").find("open-first-workspace").disabled(), Some(true));
+        assert_eq!(window.find("welcome-workspace").label(), Some("Choose a workspace"));
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
+        assert!(window.find_all("open-first-workspace").is_empty());
     })
     .unwrap();
 }
@@ -2737,7 +2734,9 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
             view.inspector_open = false;
         });
         window.render_frame(cx);
-        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace folder"));
+        assert_eq!(window.find("welcome-workspace").label(), Some("Choose a workspace"));
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
+        assert!(window.find_all("open-first-workspace").is_empty());
         view.update(cx, |view, _| {
             view.workspace = Some(std::env::temp_dir());
             view.transcript.push(TranscriptItem::new(
