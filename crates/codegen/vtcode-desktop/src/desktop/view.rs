@@ -25,6 +25,7 @@ use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{Copy, Cut, Enter, Paste, Redo, SelectAll, Textarea, TextareaState, Undo};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
+use gpui_kit::component::marker::{Marker, MarkerContent};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
 use gpui_kit::component::plot::shape::BarAlignment;
@@ -4575,8 +4576,14 @@ impl DesktopView {
                             .test_support()
                             .role(gpui_kit::Role::Status)
                             .aria_label(agent.0)
-                            .text_color(agent.1)
-                            .child(agent.0),
+                            .child(
+                                Marker::new()
+                                    .loading(self.running)
+                                    .text_xs()
+                                    .text_color(agent.1)
+                                    .w_auto()
+                                    .content(MarkerContent::new().text(agent.0)),
+                            ),
                     ),
             )
     }
