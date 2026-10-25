@@ -359,6 +359,7 @@ struct DesktopView {
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
     workspace_picker_open: bool,
+    workspace_picker_task: Option<Task<()>>,
     backend: Option<BackendHandle>,
     event_rx: Receiver<BackendEvent>,
     event_tx: SyncSender<BackendEvent>,
@@ -549,6 +550,7 @@ impl DesktopView {
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
+            workspace_picker_task: None,
             backend: None,
             event_rx,
             event_tx,
@@ -718,7 +720,7 @@ impl DesktopView {
         self.workspace_picker_open = true;
         let paths = cx.prompt_for_paths(workspace_picker_options());
         cx.notify();
-        cx.spawn(async move |view, cx| {
+        self.workspace_picker_task = Some(cx.spawn(async move |view, cx| {
             let result = paths.await;
             let _updated = view.update(cx, |view, cx| {
                 view.workspace_picker_open = false;
@@ -734,8 +736,7 @@ impl DesktopView {
                 }
                 cx.notify();
             });
-        })
-        .detach();
+        }));
     }
 
     fn workspace_switch_idle(&self) -> bool {

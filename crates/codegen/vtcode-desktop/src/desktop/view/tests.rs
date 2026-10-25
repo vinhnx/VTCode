@@ -348,6 +348,38 @@ fn workspace_picker_only_allows_one_directory() {
 }
 
 #[gpui_kit::test]
+fn workspace_picker_task_is_owned_by_view_and_clears_pending_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.choose_workspace(window, cx);
+            assert!(view.workspace_picker_open);
+            assert!(view.workspace_picker_task.is_some());
+
+            // Repeated activation while the native picker is pending must not
+            // start another continuation owned by the same view.
+            view.choose_workspace(window, cx);
+            assert!(view.workspace_picker_open);
+        });
+    })
+    .unwrap();
+    assert!(cx.did_prompt_for_paths());
+
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+
+    assert!(!cx.did_prompt_for_paths(), "one picker response resolves the only pending prompt");
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert!(!view.workspace_picker_open);
+        assert!(view.workspace_picker_task.is_some(), "the view retains the completed task until replacement");
+    });
+}
+
+#[gpui_kit::test]
 fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

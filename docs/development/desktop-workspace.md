@@ -326,8 +326,9 @@ The UI drains at most 64 service events per foreground tick so a busy stream yie
 measured list state are maintained together; streaming text, expansion, theme changes, and viewport resizing invalidate
 the affected geometry. No estimated character count is used for transcript row heights.
 
-File tasks retain cancellation handles: a newer scan or preview supersedes the previous request, and results from an
-old workspace cannot replace the current view. Switching, creating, or closing sessions clears prior changes, diff
+File scans, previews, and native workspace-picker continuations are retained by the owning view; a newer scan or
+preview supersedes the previous request, closing the view drops its unfinished continuations, and results from an old
+workspace cannot replace the current view. Switching, creating, or closing sessions clears prior changes, diff
 selection, context usage, pending interaction answers, and attachments together. Model/runtime-option switches
 clear runtime projections while preserving the editable draft and its attached sources.
 A retained unsent message survives reloading its selected session. Restore or Dismiss must resolve it before changing
