@@ -59,6 +59,26 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
     })
 }
 
+fn connected_webmcp_status() -> vtcode_desktop_protocol::WebmcpBridgeStatus {
+    vtcode_desktop_protocol::WebmcpBridgeStatus {
+        running: true,
+        endpoint: Some("ws://127.0.0.1:4000/webmcp".into()),
+        allowed_origins: vec!["https://example.test".into()],
+        session_id: Some("session-old".into()),
+        turns_available: true,
+        workspace: "/workspace-old".into(),
+    }
+}
+
+fn pending_webmcp_pairing() -> vtcode_desktop_protocol::WebmcpPairResult {
+    vtcode_desktop_protocol::WebmcpPairResult {
+        endpoint: "ws://127.0.0.1:4000/webmcp".into(),
+        origin: "https://example.test".into(),
+        pairing_code: "one-time-code".into(),
+        expires_in_secs: 60,
+    }
+}
+
 fn palette_action_id(action: &super::PaletteAction) -> String {
     super::palette_entry_element_id(action)
 }
@@ -2395,9 +2415,15 @@ fn service_launch_failure_exposes_a_retry_path(cx: &mut TestAppContext) {
                 echo_id: "first-request".into(),
                 delivery_uncertain: false,
             });
+            view.webmcp_status = Some(connected_webmcp_status());
+            view.webmcp_pairing = Some(pending_webmcp_pairing());
+            view.webmcp_request_pending = Some(vtcode_desktop_protocol::method::WEBMCP_STATUS);
             view.handle_backend_event(BackendEvent::LaunchFailed("Helper executable is unavailable.".into()), cx);
             assert_eq!(view.status, "Could not connect to the local VT Code service");
             assert_eq!(view.retained_submission.as_ref().map(|draft| draft.prompt.as_str()), Some("Keep this request"));
+            assert!(view.webmcp_status.is_none());
+            assert!(view.webmcp_pairing.is_none());
+            assert!(view.webmcp_request_pending.is_none());
             assert!(!view.can_reload_cli_settings(), "resolve retained content before a service restart");
             assert!(view.error.as_deref().is_some_and(|error| {
                 error.contains("Helper executable is unavailable")
@@ -2451,6 +2477,73 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
             assert!(view.interaction_answer_texts.is_empty());
             assert!(view.question_answer.read(cx).value().is_empty());
             assert!(view.can_reload_cli_settings(), "an exited interaction cannot block reconnection");
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn service_exit_discards_stale_webmcp_state_and_refreshes_after_reconnect(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.webmcp_status = Some(connected_webmcp_status());
+            view.webmcp_pairing = Some(pending_webmcp_pairing());
+            view.webmcp_request_pending = Some(vtcode_desktop_protocol::method::WEBMCP_STATUS);
+            view.event_tx
+                .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
+                .unwrap();
+
+            view.drain_events(window, cx);
+
+            assert!(view.webmcp_status.is_none());
+            assert!(view.webmcp_pairing.is_none(), "pairing codes belong to the exited service process");
+            assert!(view.webmcp_request_pending.is_none(), "an abandoned request cannot keep the panel busy");
+            assert!(
+                view.webmcp_notice
+                    .as_deref()
+                    .is_some_and(|notice| notice.contains("disconnected"))
+            );
+
+            let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+            view.backend = Some(BackendHandle { commands });
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::INITIALIZE.into(),
+                    result: Some(json!({
+                        "protocol": vtcode_desktop_protocol::PROTOCOL_VERSION,
+                        "workspace": "/workspace-new",
+                        "serverVersion": "test",
+                    })),
+                    error: None,
+                },
+                cx,
+            );
+            let mut methods = Vec::new();
+            for _ in 0..5 {
+                let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
+                    panic!("initialization should refresh WebMCP state");
+                };
+                methods.push(method);
+            }
+            assert_eq!(methods.last().map(String::as_str), Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            assert!(view.webmcp_status.is_none(), "the new status appears only after its response arrives");
+
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                    result: Some(serde_json::to_value(connected_webmcp_status()).unwrap()),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.webmcp_status, Some(connected_webmcp_status()));
+            assert!(view.webmcp_request_pending.is_none());
+            assert!(view.webmcp_notice.is_none(), "a successful refresh clears the disconnect notice");
         });
         window.render_frame(cx);
     })
@@ -3211,7 +3304,7 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
 #[gpui_kit::test]
 fn initialization_gates_commands_until_the_negotiated_protocol_is_validated(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(5);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.initialize_backend(BackendHandle { commands });
@@ -3239,10 +3332,12 @@ fn initialization_gates_commands_until_the_negotiated_protocol_is_validated(cx: 
                 vtcode_desktop_protocol::method::CONFIG_SETTINGS_READ,
                 vtcode_desktop_protocol::method::CONFIG_MODELS,
                 vtcode_desktop_protocol::method::SESSION_LIST,
+                vtcode_desktop_protocol::method::WEBMCP_STATUS,
             ] {
                 let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else { panic!("discovery") };
                 assert_eq!(method, expected);
             }
+            assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
             assert!(requests.try_recv().is_err());
         });
     }).unwrap();

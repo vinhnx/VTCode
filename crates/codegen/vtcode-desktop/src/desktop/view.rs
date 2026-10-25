@@ -844,6 +844,7 @@ impl DesktopView {
     fn prepare_workspace(&mut self, workspace: &Path, cx: &mut Context<Self>) {
         // A same-workspace restart reloads CLI configuration without losing draft sources.
         let same_workspace = self.workspace.as_deref() == Some(workspace);
+        self.reset_webmcp_state(None);
         let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));
         self.workspace = Some(workspace.to_path_buf());
         self.remember_workspace(workspace);
@@ -1855,6 +1856,7 @@ impl DesktopView {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     self.backend = None;
+                    self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                     self.fail_workspace_review("Local service disconnected.".into());
                     self.running = false;
                     self.status = "Local service disconnected".to_string();
@@ -1974,18 +1976,22 @@ impl DesktopView {
                             Ok(info) if info.protocol == protocol::PROTOCOL_VERSION => {
                                 self.service_info = Some(info);
                                 self.status = "Connected to the local VT Code service".to_string();
+                                let mut discovery_queued = true;
                                 for method in [
                                     protocol::method::CONFIG_DISCOVER,
                                     protocol::method::CONFIG_SETTINGS_READ,
                                     protocol::method::CONFIG_MODELS,
                                     protocol::method::SESSION_LIST,
-                                    protocol::method::WEBMCP_STATUS,
                                 ] {
                                     if !self.request(method, json!({})) {
                                         self.error =
                                             Some("The local service request queue is unavailable.".to_string());
+                                        discovery_queued = false;
                                         break;
                                     }
+                                }
+                                if discovery_queued {
+                                    self.request_webmcp_status();
                                 }
                             }
                             _ => {
@@ -2268,6 +2274,7 @@ impl DesktopView {
                 }
             }
             BackendEvent::Exited { status, authentication_required } => {
+                self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;
@@ -2304,6 +2311,7 @@ impl DesktopView {
                 }
             }
             BackendEvent::LaunchFailed(error) => {
+                self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                 self.fail_workspace_review("The local service could not start.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;

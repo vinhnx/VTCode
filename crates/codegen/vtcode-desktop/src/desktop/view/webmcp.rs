@@ -12,6 +12,8 @@ use vtcode_desktop_protocol as protocol;
 use super::{DesktopButtonExt, DesktopView, desktop_button};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
+pub(super) const WEBMCP_DISCONNECTED_NOTICE: &str =
+    "The local VT Code service disconnected. Reconnect to refresh WebMCP status.";
 
 #[derive(Debug, PartialEq, Eq)]
 enum WebmcpCommand {
@@ -66,6 +68,13 @@ fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
 }
 
 impl DesktopView {
+    pub(super) fn reset_webmcp_state(&mut self, notice: Option<&str>) {
+        self.webmcp_status = None;
+        self.webmcp_pairing = None;
+        self.webmcp_request_pending = None;
+        self.webmcp_notice = notice.map(str::to_owned);
+    }
+
     pub(super) fn open_webmcp_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_settings(window, cx);
         self.request_webmcp_status();
@@ -337,7 +346,7 @@ impl DesktopView {
         controls.into_any_element()
     }
 
-    fn request_webmcp_status(&mut self) {
+    pub(super) fn request_webmcp_status(&mut self) {
         if self.webmcp_request_pending.is_some() {
             return;
         }
@@ -391,6 +400,9 @@ impl DesktopView {
             protocol::method::WEBMCP_STATUS => match serde_json::from_value::<protocol::WebmcpBridgeStatus>(result) {
                 Ok(status) => {
                     self.webmcp_status = Some(status);
+                    if self.webmcp_notice.as_deref() == Some(WEBMCP_DISCONNECTED_NOTICE) {
+                        self.webmcp_notice = None;
+                    }
                 }
                 Err(_) => self.webmcp_notice = Some("The desktop service returned an invalid WebMCP status.".into()),
             },
