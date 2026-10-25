@@ -3603,6 +3603,13 @@ fn composer_model_name_uses_the_active_provider_catalog_entry(cx: &mut TestAppCo
         });
         window.render_frame(cx);
         assert_eq!(window.find("pick-model").label(), Some("Readable Model"));
+        assert!(window.find("pick-model").bounds().size.width <= px(216.));
+        assert!(
+            window
+                .find("composer-workspace")
+                .label()
+                .is_some_and(|label| label.starts_with("Choose workspace: "))
+        );
         view.update(cx, |view, _| view.models.clear());
         window.render_frame(cx);
         assert_eq!(

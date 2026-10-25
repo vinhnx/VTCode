@@ -4276,12 +4276,12 @@ impl DesktopView {
         let mut model_actions = div().min_w_0().max_w_full().flex().flex_wrap().items_center().gap_2().child(
             desktop_button("pick-model")
                 .accessibility_label(current_model.clone())
-                .child(div().min_w_0().max_w(px(260.)).truncate().child(current_model))
+                .child(div().min_w_0().max_w(px(176.)).truncate().child(current_model))
                 .dropdown_caret(true)
                 .small()
-                .max_w(px(320.))
+                .max_w(px(216.))
                 .overflow_hidden()
-                .tooltip("Search models by provider, name, or model ID")
+                .tooltip("Choose model and reasoning effort")
                 .ghost()
                 .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
                 .on_click(cx.listener(|view, _, window, cx| view.open_model_options(window, cx))),
@@ -4349,12 +4349,10 @@ impl DesktopView {
                 .child(
                     desktop_button("composer-workspace")
                         .icon(IconName::Folder)
-                        .label(workspace)
                         .ghost()
                         .small()
-                        .max_w(px(240.))
-                        .overflow_hidden()
-                        .accessibility_label("Choose workspace")
+                        .accessibility_label(format!("Choose workspace: {workspace}"))
+                        .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
                         .desktop_disabled(
                             !self.workspace_switch_idle()
                                 || self.retained_submission.is_some()
