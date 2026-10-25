@@ -32,6 +32,7 @@ pub(crate) enum BackendEvent {
         error: Option<String>,
     },
     ThreadEvent(ThreadEventNotification),
+    PrimaryAgentChanged(protocol::PrimaryAgentChanged),
     Interaction(InteractionRequest),
     TurnStatus(Value),
     Exited {
@@ -311,6 +312,10 @@ fn decode_frame(
                 .map(BackendEvent::Interaction)
                 .map(Some)
                 .map_err(|_error| ProtocolDecodeError),
+            protocol::method::PRIMARY_AGENT_CHANGED => serde_json::from_value::<protocol::PrimaryAgentChanged>(params)
+                .map(BackendEvent::PrimaryAgentChanged)
+                .map(Some)
+                .map_err(|_error| ProtocolDecodeError),
             protocol::method::TURN_STATUS => Ok(Some(BackendEvent::TurnStatus(params))),
             _ => Ok(None),
         };
@@ -392,6 +397,20 @@ mod tests {
             .expect("valid notification")
             .expect("decoded notification");
         assert!(matches!(event, BackendEvent::TurnStatus(value) if value["turnId"] == "t-1"));
+    }
+
+    #[test]
+    fn primary_agent_notifications_are_typed_and_session_scoped() {
+        let mut pending = HashMap::new();
+        let frame = br#"{"jsonrpc":"2.0","method":"session/primaryAgentChanged","params":{"sessionId":"session-a","displayName":"Plan"}}"#;
+        let event = decode_frame(frame, &mut pending)
+            .expect("valid notification")
+            .expect("decoded notification");
+        assert!(matches!(
+            event,
+            BackendEvent::PrimaryAgentChanged(protocol::PrimaryAgentChanged { session_id, display_name: Some(name) })
+                if session_id == "session-a" && name == "Plan"
+        ));
     }
 
     #[test]

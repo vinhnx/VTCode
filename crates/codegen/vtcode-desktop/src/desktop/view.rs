@@ -295,6 +295,11 @@ struct SubmissionDraft {
     delivery_uncertain: bool,
 }
 
+struct ActivePrimaryAgentDisplay {
+    session_id: String,
+    display_name: String,
+}
+
 struct DesktopView {
     focus_handle: FocusHandle,
     workspace: Option<PathBuf>,
@@ -305,6 +310,7 @@ struct DesktopView {
     event_tx: SyncSender<BackendEvent>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
+    active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
     restored_activity: Vec<TranscriptItem>,
     restored_review_history_incomplete: bool,
@@ -464,6 +470,7 @@ impl DesktopView {
             event_tx,
             sessions: Vec::new(),
             selected_session_id: None,
+            active_primary_agent_display: None,
             transcript: Transcript::default(),
             restored_activity: Vec::new(),
             restored_review_history_incomplete: false,
@@ -1895,6 +1902,18 @@ impl DesktopView {
                 self.refresh_selected_change(cx);
                 self.handle_cancel_state_after_turn_event();
             }
+            BackendEvent::PrimaryAgentChanged(notification) => {
+                if self.selected_session_id.as_deref() != Some(notification.session_id.as_str()) {
+                    return;
+                }
+                self.active_primary_agent_display = notification
+                    .display_name
+                    .filter(|name| !name.trim().is_empty())
+                    .map(|display_name| ActivePrimaryAgentDisplay {
+                        session_id: notification.session_id,
+                        display_name,
+                    });
+            }
             BackendEvent::Interaction(interaction) => {
                 if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
                     || (interaction.turn_id != "session-start"
@@ -2269,6 +2288,7 @@ impl DesktopView {
 
     /// Clear session-owned projections together so another conversation cannot inherit them.
     fn reset_session_state(&mut self) {
+        self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
         self.restored_review_history_incomplete = false;

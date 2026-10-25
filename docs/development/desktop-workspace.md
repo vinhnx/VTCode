@@ -69,6 +69,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Recover a submission | The app retains the submitted prompt and attachments until acknowledgement. A rejected request offers Restore draft, Copy prompt, and Dismiss; restoration requires an empty composer so newer work is preserved. A disconnect before acknowledgement warns that delivery is uncertain. Recovery never resends automatically. |
 | Attach files | "+ Attach" opens a native multi-select picker limited to workspace UTF-8 text files (at most 5 per prompt, 64 KiB each). Oversized files are rejected rather than silently truncated. Send waits for attachment loading. Chips above the composer remove items; the transcript echoes attached paths. |
 | Switch models | The composer's Model button opens a searchable kit Command picker, grouped by provider. Search names, providers, or exact IDs; rows show context token counts and preselect the current model, including configured models outside the built-in catalog. Arrow keys and Enter choose a model through `config/select`. Choosing the current model preserves the session. Escape clears a nonempty query, then dismisses without changes. |
+| Track the active agent | The composer mode control follows primary-agent changes from live slash commands. Its picker still edits the Build/Plan setting for the next session. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
 | Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts, and selecting a file opens it in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. |
@@ -135,8 +136,9 @@ CLI's command confirmation flag and preserves sandbox/tool authorization. **Mode
 through the CLI's primary-agent configuration and planning entry point. Mode, effort, and permission changes
 require an idle service, validate before shutting down the old session, and apply to the next session. The current
 draft and attached files survive the change, including model switches. Model changes wait for file loading. These
-are helper-lifetime overrides; they do not write `vtcode.toml`. The mode label reports the configured desktop
-session mode; changes made through in-chat CLI slash commands are not currently projected back into this control.
+are helper-lifetime overrides; they do not write `vtcode.toml`. The mode label follows the active primary agent
+when it changes through CLI slash commands or agent selection. The picker still edits the configured mode for the
+next session, and stale updates from another session are ignored.
 
 The status bar starts hidden. Settings → **Show status bar**, the header menu, or ⌘⇧S toggles it and saves the
 choice. The header keeps one overflow control for thread/window actions. The former duplicate thread ellipsis is
@@ -188,7 +190,8 @@ draft and attached files remain; previous sessions are available in history. Rel
 and is unavailable during active turns, pending submissions, interactions, session changes, or file pickers/reads.
 It also retries a disconnected service after configuration or authentication has been repaired outside the app.
 
-Protocol 1.9 adds searchable settings read/write methods alongside typed built-in theme synchronization. The service
+Protocol 1.10 adds live primary-agent display updates while preserving the next-session mode setting. Protocol 1.9
+added searchable settings read/write methods alongside typed built-in theme synchronization. The service
 uses the CLI startup loader for provider, model, runtime policy, and agent execution.
 Its non-secret `sharedUi` projection carries the resolved theme and equivalent shortcut overrides.
 **Import CLI shortcuts** uses the CLI key parser, normalizes modifier aliases, and imports the first
@@ -296,8 +299,8 @@ agent loop or bypass VT Code's approval and execution policy.
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.9` (additive over 1.0–1.8; older fields are serde-defaulted); incompatible ranges fail
-explicitly. The protocol crate caps a line at 1 MiB.
+server negotiate protocol version `1.10` (additive over 1.0–1.9; older fields are serde-defaulted). Incompatible ranges
+fail explicitly. The protocol crate caps a line at 1 MiB.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
 GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
 snapshots replace the pending snapshot for the same item, consecutive `plan.delta` events for one item merge, and
@@ -315,13 +318,15 @@ by the service pump.
 | `session/list`, `session/create`, `session/load`, `session/close` | Select, create, and restore durable messages, canonical change reviews, activity, and captured output. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
+| `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |
 | `desktop/shutdown` | Cancel and clean up owned work before exit. |
 
 The service consumes an interaction response only after the active runtime accepts its typed event. Failed delivery leaves
 the interaction pending so the client can retry or let session cleanup dismiss it.
 
-Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests and
-turn status. A client must reject stale or duplicate interaction responses. EOF triggers service cleanup. The full wire
+Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests,
+turn status, and session-scoped primary-agent display changes. A client must reject stale or duplicate interaction
+responses. EOF triggers service cleanup. The full wire
 types and framing helpers live in [`vtcode-desktop-protocol`](../../crates/common/vtcode-desktop-protocol/README.md).
 
 Terminal cleanup uses the accepted active-turn identity and typed runtime outcomes. It does not depend on receipt of

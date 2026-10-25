@@ -563,6 +563,17 @@ fn spawn_session_pump(
             tokio::select! {
                 command = commands.recv(), if commands_open => match command {
                     Some(command) => {
+                        if let InlineCommand::SetPrimaryAgent { name, .. } = &command
+                            && let Err(error) = publish_primary_agent_changed(
+                                &session_id,
+                                name.as_deref(),
+                                &state,
+                                &notifications,
+                            )
+                            .await
+                        {
+                            tracing::warn!(target: "vtcode.desktop", error = %error, "failed to publish active primary agent");
+                        }
                         if let Some(view) = host_interaction_from_command(&command) {
                             if let Err(error) = publish_interaction(
                                 &session_id,
@@ -622,6 +633,33 @@ fn spawn_session_pump(
             turn_finished.notify_waiters();
         }
     });
+}
+
+async fn publish_primary_agent_changed(
+    session_id: &str,
+    display_name: Option<&str>,
+    state: &Mutex<ServerState>,
+    notifications: &mpsc::Sender<protocol::Notification>,
+) -> Result<()> {
+    if state.lock().await.session_id.as_deref() != Some(session_id) {
+        return Ok(());
+    }
+
+    let notification = protocol::PrimaryAgentChanged {
+        session_id: session_id.to_string(),
+        display_name: sanitize_primary_agent_display(display_name),
+    };
+    send_notification(notifications, protocol::method::PRIMARY_AGENT_CHANGED, serde_json::to_value(notification)?).await
+}
+
+fn sanitize_primary_agent_display(display_name: Option<&str>) -> Option<String> {
+    let sanitized = display_name?
+        .trim()
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(128)
+        .collect::<String>();
+    (!sanitized.trim().is_empty()).then_some(sanitized)
 }
 
 /// Surface live-stream degradation from a saturated coalescing queue.
@@ -1748,5 +1786,71 @@ mod tests {
         .unwrap();
         assert_eq!(state.lock().await.active_turn_id.as_deref(), Some("selected-turn"));
         assert!(received.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn primary_agent_updates_are_bounded_sanitized_and_session_scoped() {
+        let state = Mutex::new(ServerState {
+            session_id: Some("selected-session".into()),
+            ..Default::default()
+        });
+        let (notifications, mut received) = mpsc::channel(3);
+
+        publish_primary_agent_changed("old-session", Some("Stale"), &state, &notifications)
+            .await
+            .expect("stale notifications are ignored");
+        assert!(received.try_recv().is_err());
+
+        publish_primary_agent_changed("selected-session", Some(" Plan \u{7}Mode "), &state, &notifications)
+            .await
+            .expect("current notification is published");
+        let update = received.try_recv().expect("current update");
+        assert_eq!(update.method, protocol::method::PRIMARY_AGENT_CHANGED);
+        assert_eq!(update.params["sessionId"], "selected-session");
+        assert_eq!(update.params["displayName"], "Plan Mode");
+
+        publish_primary_agent_changed("selected-session", None, &state, &notifications)
+            .await
+            .expect("reset is published");
+        let reset = received.try_recv().expect("reset update");
+        assert!(reset.params["displayName"].is_null());
+
+        let long_name = "a".repeat(160);
+        assert_eq!(sanitize_primary_agent_display(Some(&long_name)).unwrap().len(), 128);
+        assert_eq!(sanitize_primary_agent_display(Some("\u{1}\n ")), None);
+    }
+
+    #[tokio::test]
+    async fn session_pump_projects_primary_agent_host_commands() {
+        let state = std::sync::Arc::new(Mutex::new(ServerState {
+            session_id: Some("session-a".into()),
+            ..Default::default()
+        }));
+        let (commands, command_receiver) = mpsc::channel(1);
+        let (event_sender, event_receiver) = protocol::live_event_channel(1);
+        let (notifications, mut received) = mpsc::channel(1);
+        spawn_session_pump(
+            "session-a".into(),
+            command_receiver,
+            event_receiver,
+            state,
+            notifications,
+            std::sync::Arc::new(Notify::new()),
+        );
+
+        commands
+            .send(InlineCommand::SetPrimaryAgent { name: Some("Plan".into()), color: None })
+            .await
+            .expect("queue active-agent command");
+        drop(commands);
+        drop(event_sender);
+
+        let update = timeout(Duration::from_secs(1), received.recv())
+            .await
+            .expect("active-agent notification deadline")
+            .expect("active-agent notification");
+        assert_eq!(update.method, protocol::method::PRIMARY_AGENT_CHANGED);
+        assert_eq!(update.params["sessionId"], "session-a");
+        assert_eq!(update.params["displayName"], "Plan");
     }
 }

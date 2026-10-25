@@ -282,10 +282,20 @@ impl DesktopView {
 
     pub(super) fn render_mode_button(&self, cx: &Context<Self>) -> AnyElement {
         let mode = self
-            .configuration
+            .active_primary_agent_display
             .as_ref()
-            .and_then(|config| config.session_options.as_ref())
-            .map(|options| options.mode.as_str())
+            .filter(|active| self.selected_session_id.as_deref() == Some(active.session_id.as_str()))
+            .map(|active| active.display_name.as_str())
+            .or_else(|| {
+                self.configuration
+                    .as_ref()
+                    .and_then(|config| config.session_options.as_ref())
+                    .map(|options| match options.mode.as_str() {
+                        "build" => "Build",
+                        "plan" => "Plan",
+                        mode => mode,
+                    })
+            })
             .unwrap_or("Unavailable");
         desktop_button("composer-mode")
             .child(div().truncate().child(format!("Mode: {mode}")))
