@@ -3738,6 +3738,66 @@ impl DesktopView {
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let content = if self.transcript.is_empty() {
+            let colors = cx.theme().colors;
+            let workspace_name = self
+                .workspace
+                .as_ref()
+                .and_then(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned());
+            let prompt = workspace_name
+                .as_ref()
+                .map_or_else(|| "What should we build?".to_owned(), |name| format!("What should we build in {name}?"));
+            let title = EmptyTitle::new()
+                .text_size(gpui_kit::rems(1.75))
+                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .text_color(colors.foreground)
+                .child(
+                    div()
+                        .id("welcome-prompt")
+                        .test_support()
+                        .role(gpui_kit::Role::Heading)
+                        .aria_label(prompt)
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .child(if workspace_name.is_some() {
+                            "What should we build in"
+                        } else {
+                            "What should we build?"
+                        })
+                        .when_some(workspace_name, |title, name| {
+                            title.child(
+                                desktop_button("welcome-workspace")
+                                    .accessibility_label(format!("Change workspace, current: {name}"))
+                                    .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                                    .text()
+                                    .text_color(colors.foreground)
+                                    .h_auto()
+                                    .p_0()
+                                    .min_w_0()
+                                    .max_w_full()
+                                    .desktop_disabled(
+                                        !self.workspace_switch_idle()
+                                            || self.workspace_picker_open
+                                            || self.retained_submission.is_some(),
+                                    )
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_size(gpui_kit::rems(1.75))
+                                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                                            .border_b_1()
+                                            .border_dashed()
+                                            .border_color(colors.muted_foreground)
+                                            .child(format!("{name}?")),
+                                    )
+                                    .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                            )
+                        }),
+                );
             div()
                 .id("welcome")
                 .test_support()
@@ -3748,8 +3808,10 @@ impl DesktopView {
                     EmptyState::new()
                         .header(
                             EmptyHeader::new()
-                                .media(EmptyMedia::new().child(brand_logo(32.)))
-                                .title(EmptyTitle::new().text_2xl().font_medium().child("What will you build?")),
+                                .max_w(px(CONTENT_WIDTH))
+                                .gap_6()
+                                .media(EmptyMedia::new().mb_0().child(welcome_mark(colors.muted_foreground)))
+                                .title(title),
                         )
                         .size_full()
                         .when(self.workspace.is_none(), |welcome| {
@@ -5380,6 +5442,29 @@ fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_
         .child(Icon::new(icon).size_4().when(selected, |icon| icon.text_color(accent)))
         .child(div().flex_1().min_w_0().truncate().text_left().child(label))
         .when(selected, |row| row.child(div().size(px(5.)).rounded_full().bg(accent)))
+}
+
+/// Outline from resources/icons/vtcode.svg, OFL, kudakurage/LigatureSymbols.
+fn welcome_mark(color: gpui_kit::Hsla) -> impl IntoElement {
+    gpui_kit::canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _| {
+            let scale = bounds.size.width / 24.;
+            let position = |x: f32, y: f32| bounds.origin + point(scale * (x + 3.5), scale * (y - 5.5));
+            let mut outline = gpui_kit::PathBuilder::stroke(px(1.25));
+            outline.move_to(position(8.406, 20.625));
+            outline.line_to(position(13.687, 9.156));
+            outline.line_to(position(16.156, 9.156));
+            outline.line_to(position(8.406, 26.));
+            outline.line_to(position(0.625, 9.156));
+            outline.line_to(position(3.094, 9.156));
+            outline.close();
+            if let Ok(path) = outline.build() {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(48.))
 }
 
 /// Embed the shared artwork so packaged applications never depend on checkout paths.

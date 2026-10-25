@@ -2768,6 +2768,43 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
+fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
+        });
+        window.render_frame(cx);
+        let welcome = window.find("welcome").bounds();
+        let link = window.find("welcome-workspace");
+        assert_eq!(link.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(link.label(), Some(format!("Change workspace, current: {workspace_name}").as_str()));
+        assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
+        assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
+        assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(
+            window.find("welcome-prompt").label(),
+            Some(format!("What should we build in {workspace_name}?").as_str())
+        );
+        view.update(cx, |view, _| view.workspace_picker_open = true);
+        window.render_frame(cx);
+        assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
+        view.update(cx, |view, _| {
+            view.workspace_picker_open = false;
+            view.workspace = None;
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome-workspace").is_empty());
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
+        assert_ne!(window.within("welcome").find("open-first-workspace").disabled(), Some(true));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
