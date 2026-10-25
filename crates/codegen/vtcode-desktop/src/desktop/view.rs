@@ -1820,7 +1820,7 @@ impl DesktopView {
                                 return;
                             }
                             let retained_submission = self.retained_submission.take();
-                            self.load_history(loaded.messages);
+                            self.load_history(&loaded.session.session_id, loaded.messages);
                             self.restored_review_history_incomplete = loaded.review_history_incomplete;
                             self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
                             for item in &loaded.review_items {
@@ -2298,17 +2298,24 @@ impl DesktopView {
         self.retained_submission = None;
     }
 
-    fn load_history(&mut self, messages: Vec<SessionHistoryMessage>) {
+    fn load_history(&mut self, session_id: &str, messages: Vec<SessionHistoryMessage>) {
         self.reset_session_state();
-        for (index, message) in messages.into_iter().enumerate() {
+        let mut occurrences = std::collections::HashMap::<u64, usize>::new();
+        for message in messages {
             let title = match message.role.as_str() {
                 "user" => "You".to_string(),
                 "assistant" => "VT Code".to_string(),
                 "tool" => "Tool result".to_string(),
                 _ => message.role.clone(),
             };
+            let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
+            message.role.hash(&mut fingerprint);
+            message.text.hash(&mut fingerprint);
+            let occurrence = occurrences.entry(fingerprint.finish()).or_default();
+            let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
+            *occurrence = (*occurrence).saturating_add(1);
             // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(format!("history-{index}"), message.role, title, message.text);
+            let mut item = TranscriptItem::new(id, message.role, title, message.text);
             item.has_activity_status = false;
             self.transcript.push(item);
         }
@@ -5466,6 +5473,15 @@ fn opaque_path_element_id(prefix: &str, path: &str) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
     format!("{prefix}-{:016x}", hasher.finish())
+}
+
+fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurrence: usize) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    session_id.hash(&mut hasher);
+    role.hash(&mut hasher);
+    text.hash(&mut hasher);
+    occurrence.hash(&mut hasher);
+    format!("history-{:016x}", hasher.finish())
 }
 
 /// Native clickable controls share one cursor policy; disabled controls keep the arrow.

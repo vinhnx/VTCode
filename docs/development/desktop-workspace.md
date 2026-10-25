@@ -249,7 +249,8 @@ Font selectors announce the current family, and font-size values expose their cu
 Existing keyboard controls, modal focus containment/restoration, and theme contrast tokens remain shared.
 The conversation stays virtualized: only mounted rows appear in the accessibility tree. Dynamic navigation, change,
 and attachment rows keep IDs tied to thread or path identity so sorting does not transfer an accessibility node to
-a different item. Workspace paths are hashed before they become element IDs.
+a different item. Workspace paths are hashed before they become element IDs. Restored transcript rows use session,
+role, content, and duplicate occurrence so bounded-history shifts do not transfer a node to another message.
 
 ## Themes
 
