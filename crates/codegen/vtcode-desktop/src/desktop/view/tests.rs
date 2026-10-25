@@ -2789,12 +2789,17 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
             assert!(view.active_turn_id.is_none());
             assert_eq!(view.selected_session_id.as_deref(), Some("restored"));
             assert!(view.status.contains("partial"));
+            assert!(view.restored_review_history_incomplete);
+            assert!(!view.restored_activity_history_incomplete);
             assert_eq!(view.changes.entries().len(), 1);
             assert_eq!(view.changes.patch_for(&view.transcript, "src/app.rs").as_deref(), Some(patch.as_str()));
             view.inspector_open = true;
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
         });
         window.render_frame(cx);
+        let warning = window.find("review-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(warning.label(), Some(super::PARTIAL_REVIEW_HISTORY_MESSAGE));
         window.click("change-row-0", cx);
         window.render_frame(cx);
         window.click("copy-change-patch", cx);
@@ -2856,6 +2861,8 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert!(view.active_turn_id.is_none());
             assert!(view.interaction.is_none());
             assert!(view.status.contains("partial"));
+            assert!(!view.restored_review_history_incomplete);
+            assert!(view.restored_activity_history_incomplete);
             let rows = crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity);
             assert_eq!(rows.len(), 2, "archive text is retained without duplicating structured activity");
             assert_eq!(view.transcript.items().filter(|item| item.role == "tool").count(), 1,
@@ -2873,10 +2880,16 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
         });
         window.render_frame(cx);
+        let warning = window.find("activity-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
         assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::Group));
         assert_eq!(window.find("activity-saved-command").label(), Some("cargo check --locked"));
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Output);
         window.render_frame(cx);
+        let warning = window.find("activity-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
         assert_eq!(window.find("output-body").label(), Some(output));
         window.click("copy-output", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(output));
@@ -2894,9 +2907,47 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert_eq!(crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity).len(), 2);
             view.reset_session_state();
             assert!(view.restored_activity.is_empty());
+            assert!(!view.restored_review_history_incomplete);
+            assert!(!view.restored_activity_history_incomplete);
             assert!(crate::desktop::inspector::latest_output(&view.transcript, &view.restored_activity).is_none());
         });
     }).unwrap();
+}
+
+#[gpui_kit::test]
+fn partial_history_warnings_remain_visible_when_no_rows_were_restored(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.inspector_open = true;
+        view.restored_review_history_incomplete = true;
+        view.restored_activity_history_incomplete = true;
+        view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let warning = window.find("activity-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
+
+        view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Output);
+        window.render_frame(cx);
+        let warning = window.find("activity-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+
+        view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes);
+        window.render_frame(cx);
+        let warning = window.find("review-history-warning");
+        assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(warning.label(), Some(super::PARTIAL_REVIEW_HISTORY_MESSAGE));
+
+        view.update(cx, |view, _| view.reset_session_state());
+        window.render_frame(cx);
+        assert!(window.try_find("review-history-warning").is_none());
+        assert!(window.try_find("activity-history-warning").is_none());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
