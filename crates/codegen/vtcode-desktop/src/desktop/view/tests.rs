@@ -3140,6 +3140,27 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
+fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_focus.is_focused(window));
+
+        view.update(cx, |view, cx| view.toggle_inspector(cx));
+        window.render_frame(cx);
+
+        assert!(!view.read(cx).inspector_open);
+        assert!(view.read(cx).focus_handle.is_focused(window));
+        window.press("cmd-l", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn inspector_programmatic_selection_reveals_selected_tab(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 900.);
     cx.update_window(window, |_, window, cx| {

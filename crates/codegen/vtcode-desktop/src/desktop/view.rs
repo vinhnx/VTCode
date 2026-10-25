@@ -372,6 +372,7 @@ struct ActivePrimaryAgentDisplay {
 
 struct DesktopView {
     focus_handle: FocusHandle,
+    _focus_lost_subscription: Subscription,
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
     workspace_picker_open: bool,
@@ -543,6 +544,12 @@ impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
         let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
+        let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
+            let target = window
+                .focus_lost_restore_target(cx)
+                .unwrap_or_else(|| view.focus_handle.clone());
+            target.focus(window, cx);
+        });
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
         let preferences = preferences::Preferences::load();
@@ -567,6 +574,7 @@ impl DesktopView {
             shortcuts_editing: false,
             default_code_font: typography::default_code_font(cx),
             focus_handle,
+            _focus_lost_subscription: focus_lost_subscription,
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
