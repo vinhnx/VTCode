@@ -5,29 +5,126 @@ use gpui_kit::base::{TextView, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::{ClipboardItem, ImageCacheError, ImageSource, SharedString};
-use pulldown_cmark::{Event, Parser};
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
-/// Preserve Markdown structure while keeping raw HTML out of the transcript.
-pub(super) fn prepare_markdown(source: &SharedString) -> SharedString {
+pub(super) struct PreparedMarkdown {
+    pub markdown: SharedString,
+    pub accessible_text: SharedString,
+}
+
+/// Preserve Markdown structure and derive readable text while dropping raw HTML.
+pub(super) fn prepare_markdown(source: &SharedString) -> PreparedMarkdown {
     let mut sanitized = String::new();
+    let mut accessible_text = String::new();
     let mut retained_start = 0;
     for (event, range) in Parser::new(source).into_offset_iter() {
+        append_accessible_text(&mut accessible_text, &event);
         if matches!(event, Event::Html(_) | Event::InlineHtml(_)) {
             let Some(retained) = source.get(retained_start..range.start) else {
-                return "Unable to render Markdown: invalid source span.".into();
+                return invalid_markdown();
             };
             sanitized.push_str(retained);
             retained_start = range.end;
         }
     }
-    if retained_start == 0 {
-        return source.clone();
-    }
-    let Some(retained) = source.get(retained_start..) else {
-        return "Unable to render Markdown: invalid source span.".into();
+    let markdown = if retained_start == 0 {
+        source.clone()
+    } else {
+        let Some(retained) = source.get(retained_start..) else {
+            return invalid_markdown();
+        };
+        sanitized.push_str(retained);
+        sanitized.into()
     };
-    sanitized.push_str(retained);
-    sanitized.into()
+    PreparedMarkdown {
+        markdown,
+        accessible_text: accessible_text.trim().to_string().into(),
+    }
+}
+
+fn invalid_markdown() -> PreparedMarkdown {
+    let message = SharedString::from("Unable to render Markdown: invalid source span.");
+    PreparedMarkdown {
+        markdown: message.clone(),
+        accessible_text: message,
+    }
+}
+
+fn append_accessible_text(output: &mut String, event: &Event<'_>) {
+    match event {
+        Event::Text(text) | Event::Code(text) | Event::InlineMath(text) | Event::DisplayMath(text) => {
+            output.push_str(text);
+        }
+        Event::SoftBreak | Event::HardBreak => append_separator(output, ' '),
+        Event::TaskListMarker(checked) => {
+            append_separator(output, ' ');
+            output.push_str(if *checked { "checked " } else { "unchecked " });
+        }
+        Event::Start(tag) if is_block_start(tag) => append_block_separator(output),
+        Event::End(tag) if is_block_end(*tag) => append_block_separator(output),
+        Event::End(TagEnd::TableCell) => append_separator(output, ' '),
+        Event::Rule => append_block_separator(output),
+        Event::FootnoteReference(reference) => {
+            append_separator(output, ' ');
+            output.push_str(reference);
+        }
+        _ => {}
+    }
+}
+
+fn is_block_start(tag: &Tag<'_>) -> bool {
+    matches!(
+        tag,
+        Tag::Paragraph
+            | Tag::Heading { .. }
+            | Tag::BlockQuote(_)
+            | Tag::CodeBlock(_)
+            | Tag::HtmlBlock
+            | Tag::List(_)
+            | Tag::Item
+            | Tag::FootnoteDefinition(_)
+            | Tag::DefinitionList
+            | Tag::DefinitionListTitle
+            | Tag::DefinitionListDefinition
+            | Tag::Table(_)
+            | Tag::TableHead
+            | Tag::TableRow
+    )
+}
+
+fn is_block_end(tag: TagEnd) -> bool {
+    matches!(
+        tag,
+        TagEnd::Paragraph
+            | TagEnd::Heading(_)
+            | TagEnd::BlockQuote(_)
+            | TagEnd::CodeBlock
+            | TagEnd::HtmlBlock
+            | TagEnd::List(_)
+            | TagEnd::Item
+            | TagEnd::FootnoteDefinition
+            | TagEnd::DefinitionList
+            | TagEnd::DefinitionListTitle
+            | TagEnd::DefinitionListDefinition
+            | TagEnd::Table
+            | TagEnd::TableHead
+            | TagEnd::TableRow
+    )
+}
+
+fn append_block_separator(output: &mut String) {
+    while output.ends_with(' ') {
+        let _ = output.pop();
+    }
+    if !output.is_empty() && !output.ends_with('\n') {
+        output.push('\n');
+    }
+}
+
+fn append_separator(output: &mut String, separator: char) {
+    if !output.is_empty() && !output.chars().last().is_some_and(char::is_whitespace) {
+        output.push(separator);
+    }
 }
 
 fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
@@ -152,12 +249,17 @@ mod tests {
     #[test]
     fn preserves_markdown_structure_and_code_but_removes_raw_html() {
         let source = "# Plan\n\n**Review** [the diff](https://example.test)\n\n- first\n- second\n\n<div>hidden</div>\n\n```html\n<script>sample</script>\n```\n\nvisible <b>label</b>";
-        let rendered = prepare_markdown(&source.into());
+        let prepared = prepare_markdown(&source.into());
+        let rendered = prepared.markdown;
         assert!(rendered.starts_with("# Plan\n\n**Review** [the diff](https://example.test)"));
         assert!(rendered.contains("- first\n- second"));
         assert!(!rendered.contains("<div>hidden</div>"));
         assert!(rendered.contains("```html\n<script>sample</script>\n```"));
         assert!(rendered.ends_with("visible label"));
+        assert_eq!(
+            prepared.accessible_text,
+            "Plan\nReview the diff\nfirst\nsecond\n<script>sample</script>\nvisible label"
+        );
     }
 
     #[test]
@@ -179,6 +281,8 @@ mod tests {
     #[test]
     fn html_filter_preserves_unicode_and_inline_code() {
         let source = "Kế hoạch: <b>đúng</b> `x < y` — café";
-        assert_eq!(prepare_markdown(&source.into()), "Kế hoạch: đúng `x < y` — café");
+        let prepared = prepare_markdown(&source.into());
+        assert_eq!(prepared.markdown, "Kế hoạch: đúng `x < y` — café");
+        assert_eq!(prepared.accessible_text, "Kế hoạch: đúng x < y — café");
     }
 }

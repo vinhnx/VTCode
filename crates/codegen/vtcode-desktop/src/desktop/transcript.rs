@@ -13,6 +13,7 @@ pub(super) struct TranscriptItem {
     pub title: String,
     pub text: SharedString,
     pub markdown: SharedString,
+    pub accessibility_text: SharedString,
     pub expanded: bool,
     pub activity_expanded: bool,
     /// Whether this row carries structured activity status rather than archive text.
@@ -50,14 +51,15 @@ pub(super) enum DiffFileKind {
 impl TranscriptItem {
     pub fn new(id: String, role: String, title: String, text: String) -> Self {
         let text = SharedString::from(text);
-        let markdown = prepare_markdown(&text);
+        let prepared = prepare_markdown(&text);
         Self {
             id,
             has_activity_status: role == "tool",
             role,
             title,
             text,
-            markdown,
+            markdown: prepared.markdown,
+            accessibility_text: prepared.accessible_text,
             expanded: false,
             activity_expanded: false,
             diff: None,
