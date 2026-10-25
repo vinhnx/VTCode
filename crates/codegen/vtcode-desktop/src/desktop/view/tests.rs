@@ -3429,11 +3429,13 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         });
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").label(), Some("Expand 2 tool actions · 1 failed"));
+        assert_eq!(window.find("activity-group-read").checked(), Some(false));
         assert_eq!(window.find("message-body-comment").label(), Some("VT Code: The build needs a fix."));
         assert_eq!(window.find("tool-retry").label(), Some("Show details for cargo check"));
         assert!(!view.read(cx).transcript.get(1).unwrap().activity_expanded);
         window.click("activity-group-read", cx);
         window.render_frame(cx);
+        assert_eq!(window.find("activity-group-read").checked(), Some(true));
         assert_eq!(window.find("tool-read").label(), Some("Show details for Read Cargo.toml"));
         window.click("tool-build", cx);
         window.render_frame(cx);
@@ -3451,7 +3453,10 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         });
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").label(), Some("Collapse 2 tool actions · 1 running · 1 failed"));
+        assert_eq!(window.find("activity-group-read").checked(), Some(true));
         window.click("activity-group-read", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("activity-group-read").checked(), Some(false));
         assert!(!view.read(cx).transcript.get(1).unwrap().activity_expanded);
         assert!(view.read(cx).transcript.get(2).unwrap().expanded, "group collapse preserves detail choice");
     })
