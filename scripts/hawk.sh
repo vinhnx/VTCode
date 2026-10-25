@@ -7,11 +7,13 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-HAWK_TOOLCHAIN="1.98.1"
+HAWK_TOOLCHAIN="1.99.1"
 # Hawk links rustc internals, so a build only runs against the exact compiler it
-# shipped with. Keep this pinned to the release built for HAWK_TOOLCHAIN
-# (0.1.14 tracked rustc 1.98.1; 0.1.15 moved to 1.99 and refuses this workspace).
-HAWK_VERSION="${HAWK_VERSION:-0.1.14}"
+# shipped with. Keep this pinned to the release built for HAWK_TOOLCHAIN.
+# 0.1.15's prebuilt archives track rustc 1.99.0, which the workspace MSRV floor
+# (1.99.1) refuses, so run the from-source build below until upstream publishes
+# a 1.99.1 archive.
+HAWK_VERSION="${HAWK_VERSION:-0.1.15}"
 
 # Default arguments
 CONFIG="${HAWK_CONFIG:-$PROJECT_ROOT/hawk.toml}"

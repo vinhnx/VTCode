@@ -287,7 +287,7 @@ Handles both:
 
 ## Compatibility
 
-- Rust 1.98.1+
+- Rust 1.99.1+
 - Tokio async runtime
 - Ollama 0.1+
 - OpenAI-compatible endpoints

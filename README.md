@@ -8,7 +8,7 @@ VT Code is an open-source coding agent for your repository. Choose the model, ke
 policy, and review every change.
 
 [![GitHub release](https://img.shields.io/github/release/vinhnx/VTCode.svg)](https://github.com/vinhnx/VTCode/releases)
-[![Rust](https://img.shields.io/badge/rust-1.98.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
+[![Rust](https://img.shields.io/badge/rust-1.99.1%2B-000000?style=flat-square&logo=rust&logoColor=white)](https://github.com/vinhnx/VTCode)
 [![License](https://img.shields.io/badge/License-MIT_OR_Apache--2.0-30363D?style=flat-square)](#license)
 
 <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
@@ -78,7 +78,7 @@ See the [HOVER acceptance table](./docs/development/hypothesis-revision-validati
 
 ## Quick start
 
-Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.98.1+ (edition 2024).
+Requirements: macOS, Linux, or Windows/WSL. Building from source needs Rust 1.99.1+ (edition 2024).
 
 ### 1. Install
 
@@ -260,7 +260,7 @@ graph LR
     CORE --> UI[vtcode-ui]
 ```
 
-Build with Rust 1.98.1+ (edition 2024) and install `cargo-nextest` to run tests. Context handling separates session
+Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests. Context handling separates session
 history from provider request projections; see [context architecture](./docs/ARCHITECTURE.md#request-projection-and-context-budgets)
 and the [compaction guide](./docs/development/compaction.md). The [architecture guide](./docs/ARCHITECTURE.md) maps all
 23 crates.

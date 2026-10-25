@@ -14,7 +14,7 @@ The project runs two GitHub Actions workflows.
 - Dispatched from `scripts/release.sh` Step 3.5 via `gh workflow run`
 
 **Rust toolchain:** all three Rust setup steps explicitly select the version in
-`rust-toolchain.toml`, currently 1.98.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
+`rust-toolchain.toml`, currently 1.99.1. The [pinned setup action](https://github.com/dtolnay/rust-toolchain/blob/29eef336d9b2848a0b548edc03f92a220660cdb8/action.yml#L12)
 otherwise defaults to floating `stable`; pinning its commit alone does not pin the compiler.
 Update the workflow inputs alongside the canonical toolchain version.
 `cargo nextest run --locked -p vtcode --test toolchain_pins_test` checks active
@@ -404,7 +404,7 @@ cargo clippy -- -W clippy::all
 
 ```bash
 cargo msrv --workspace
-cargo msrv --workspace set 1.98.1  # Set specific version
+cargo msrv --workspace set 1.99.1  # Set specific version
 ```
 
 #### Dependency issues

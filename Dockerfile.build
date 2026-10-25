@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for building vtcode with sufficient memory and resources
-FROM rust:1.98.1-bookworm as builder
+FROM rust:1.99.1-bookworm as builder
 
 # Install required system dependencies
 RUN apt-get update && apt-get install -y \

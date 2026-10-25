@@ -822,7 +822,7 @@ fn reserve_bytes(reserved_bytes: &AtomicU64, bytes: usize, max_bytes: usize) -> 
     let bytes = u64::try_from(bytes).unwrap_or(u64::MAX);
     let max_bytes = u64::try_from(max_bytes).unwrap_or(u64::MAX);
     reserved_bytes
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
             current.checked_add(bytes).filter(|next| *next <= max_bytes)
         })
         .is_ok()

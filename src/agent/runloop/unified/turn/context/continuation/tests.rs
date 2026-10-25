@@ -936,7 +936,7 @@ fn checkpoint_shaped_repo_overview() -> &'static str {
     **VT Code** — a Rust coding agent for long-running autonomous workflows, with OS-native sandboxing, multi-provider LLM support, open protocols, and extensible Skills.\n\n\
     **Layout**\n\
     - Root crate `vtcode` (binary) + workspace of ~30 member crates under `vtcode-*` (e.g. `vtcode-core`, `vtcode-ui`, `vtcode-llm`, `vtcode-mcp`, `vtcode-safety`, `vtcode-exec-events`, `vtcode-indexer`, `vtcode-skills`, `vtcode-config`, `vtcode-a2a`, `vtcode-acp`, etc.)\n\
-    - Rust stable, MSRV 1.98.1, edition 2024; CI runs `RUSTFLAGS=\"-D warnings\"` with `--locked`\n\
+    - Rust stable, MSRV 1.99.1, edition 2024; CI runs `RUSTFLAGS=\"-D warnings\"` with `--locked`\n\
     - `default-members` = root, `vtcode-core`, `vtcode-ui`\n\n\
     **Capabilities**\n\
     - Agent runtime: interactive TUI, slash commands, streaming, `ask`/`exec` CLI, session resume\n\

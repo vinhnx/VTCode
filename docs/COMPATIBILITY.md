@@ -25,39 +25,39 @@ VT Code ecosystem.
 
 ## Minimum Supported Rust Version (MSRV)
 
-### Current MSRV: Rust 1.98.1
+### Current MSRV: Rust 1.99.1
 
-All VT Code crates require Rust 1.98.1 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
+All VT Code crates require Rust 1.99.1 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
 
 ### Crate Version Matrix
 
 | Crate                     | Version  | MSRV   | Edition | Published | Notes                                                      |
 | ------------------------- | -------- | ------ | ------- | --------- | ---------------------------------------------------------- |
-| vtcode                    | 0.133.21 | 1.98.1 | 2024    | Yes       | Binary crate                                               |
-| vtcode-core               | 0.133.21 | 1.98.1 | 2024    | Yes       | Main runtime                                               |
-| vtcode-config             | 0.133.21 | 1.98.1 | 2024    | Yes       | Configuration                                              |
-| vtcode-diff               | 0.162.3  | 1.93   | 2024    | Yes       | Bounded structured diffs and semantic terminal rows        |
-| vtcode-commons            | 0.133.21 | 1.98.1 | 2024    | Yes       | Shared primitives                                          |
-| vtcode-indexer            | 0.133.21 | 1.98.1 | 2024    | Yes       | File indexing + markdown storage                           |
-| vtcode-bash-runner        | 0.133.21 | 1.98.1 | 2024    | Yes       | Shell execution                                            |
-| vtcode-exec-events        | 0.133.21 | 1.98.1 | 2024    | Yes       | Event schemas                                              |
-| vtcode-webmcp             | 0.147.4  | 1.93   | 2024    | Yes       | Authenticated browser bridge and bounded workspace adapter |
-| vtcode-memory             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-eval               | 0.135.4  | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-acp                | 0.133.21 | 1.98.1 | 2024    | Yes       | Agent Communication Protocol                               |
-| vtcode-auth               | 0.133.21 | 1.98.1 | 2024    | Yes       | OAuth/PKCE                                                 |
-| vtcode-macros             | 0.133.21 | 1.98.1 | 2024    | Yes       | Proc macros                                                |
-| vtcode-ui                 | 0.133.21 | 1.98.1 | 2024    | Yes       | TUI framework                                              |
-| vtcode-desktop            | 0.180.5  | 1.98.1 | 2024    | No        | macOS GPUI app (publish=false)                             |
-| vtcode-desktop-protocol   | 0.180.5  | 1.98.1 | 2024    | No        | Internal desktop JSON-RPC contract (publish=false)         |
-| vtcode-utility-tool-specs | 0.133.21 | 1.98.1 | 2024    | Yes       | Tool schemas                                               |
-| vtcode-safety             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-a2a                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-mcp                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-llm                | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-skills             | 0.133.21 | 1.98.1 | 2024    | No        | Internal (publish=false)                                   |
-| vtcode-agent-plugins      | 0.133.21 | 1.98.1 | 2024    | No        | Agent Plugins loader                                       |
-| xtask                     | 0.133.21 | 1.98.1 | 2024    | No        | Internal build tasks                                       |
+| vtcode                    | 0.133.21 | 1.99.1 | 2024    | Yes       | Binary crate                                               |
+| vtcode-core               | 0.133.21 | 1.99.1 | 2024    | Yes       | Main runtime                                               |
+| vtcode-config             | 0.133.21 | 1.99.1 | 2024    | Yes       | Configuration                                              |
+| vtcode-diff               | 0.162.3  | 1.99.1 | 2024    | Yes       | Bounded structured diffs and semantic terminal rows        |
+| vtcode-commons            | 0.133.21 | 1.99.1 | 2024    | Yes       | Shared primitives                                          |
+| vtcode-indexer            | 0.133.21 | 1.99.1 | 2024    | Yes       | File indexing + markdown storage                           |
+| vtcode-bash-runner        | 0.133.21 | 1.99.1 | 2024    | Yes       | Shell execution                                            |
+| vtcode-exec-events        | 0.133.21 | 1.99.1 | 2024    | Yes       | Event schemas                                              |
+| vtcode-webmcp             | 0.147.4  | 1.99.1 | 2024    | Yes       | Authenticated browser bridge and bounded workspace adapter |
+| vtcode-memory             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-eval               | 0.135.4  | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-acp                | 0.133.21 | 1.99.1 | 2024    | Yes       | Agent Communication Protocol                               |
+| vtcode-auth               | 0.133.21 | 1.99.1 | 2024    | Yes       | OAuth/PKCE                                                 |
+| vtcode-macros             | 0.133.21 | 1.99.1 | 2024    | Yes       | Proc macros                                                |
+| vtcode-ui                 | 0.133.21 | 1.99.1 | 2024    | Yes       | TUI framework                                              |
+| vtcode-desktop            | 0.180.5  | 1.99.1 | 2024    | No        | macOS GPUI app (publish=false)                             |
+| vtcode-desktop-protocol   | 0.180.5  | 1.99.1 | 2024    | No        | Internal desktop JSON-RPC contract (publish=false)         |
+| vtcode-utility-tool-specs | 0.133.21 | 1.99.1 | 2024    | Yes       | Tool schemas                                               |
+| vtcode-safety             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-a2a                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-mcp                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-llm                | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-skills             | 0.133.21 | 1.99.1 | 2024    | No        | Internal (publish=false)                                   |
+| vtcode-agent-plugins      | 0.133.21 | 1.99.1 | 2024    | No        | Agent Plugins loader                                       |
+| xtask                     | 0.133.21 | 1.99.1 | 2024    | No        | Internal build tasks                                       |
 
 ---
 

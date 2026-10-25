@@ -116,7 +116,7 @@ impl CtrlCState {
         }
         // Exit is terminal for this session, including when a UI reset races
         // the callback that accepts exit.
-        let _ = self.phase.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+        let _ = self.phase.try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
             (current != CtrlCPhase::ExitRequested as u8).then_some(phase as u8)
         });
     }
@@ -217,7 +217,7 @@ impl CtrlCState {
     /// the message is processed once the agent is ready.
     pub(crate) fn take_steer_delivered(&self) -> bool {
         self.steer_delivered
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |pending| Some(pending.saturating_sub(1)))
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |pending| Some(pending.saturating_sub(1)))
             .is_ok_and(|prev| prev > 0)
     }
 

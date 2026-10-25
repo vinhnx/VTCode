@@ -2,7 +2,7 @@
 name = "vtcode"
 version = "0.180.6"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
 license = "MIT OR Apache-2.0"
@@ -142,7 +142,7 @@ vtcode-agent-plugins = { path = "crates/common/vtcode-agent-plugins", version = 
 [workspace.package]
 version = "0.180.6"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"

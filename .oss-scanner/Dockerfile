@@ -1,7 +1,7 @@
 # VTCode image for Anthropic OSS Scanner.
 # Built once WITH network, then audited WITHOUT network.
 # Contract: checkout is at /src, deps pre-fetched, project built.
-FROM rust:1.98.1-bookworm
+FROM rust:1.99.1-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CARGO_INCREMENTAL=0 \

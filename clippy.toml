@@ -3,7 +3,7 @@
 # and grok-build patterns
 
 # Minimum supported Rust version
-msrv = "1.98.1"
+msrv = "1.99.1"
 
 # Cognitive complexity threshold for functions
 cognitive-complexity-threshold = 75

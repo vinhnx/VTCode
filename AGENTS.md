@@ -44,7 +44,7 @@ Keep this file concise and under 150 lines. Root guidance belongs here; detailed
 
 ## Workspace
 
-Cargo workspace, 25 crates. Rust stable, MSRV 1.98.1, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
+Cargo workspace, 25 crates. Rust stable, MSRV 1.99.1, edition 2024. `default-members` = root, `vtcode-core`, `vtcode-ui` only.
 
 | Crate                                        | Role                                                                                                                                   |
 | -----------------------------------------    | -------------------------------------------------------------------------------------------------------------------------------------- |

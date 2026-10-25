@@ -2,7 +2,7 @@
 name = "vtcode-exec-events"
 version.workspace = true
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.1"
 description = "Structured execution telemetry event schema used across VT Code crates."
 license = "MIT OR Apache-2.0"
 readme = "README.md"

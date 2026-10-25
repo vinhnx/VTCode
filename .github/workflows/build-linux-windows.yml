@@ -93,7 +93,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
 
       # All matrix targets run on ubuntu-latest and pass --target via the CLI,
@@ -268,7 +268,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
 
       # All matrix targets run on ubuntu-latest and pass --target via the CLI,
@@ -421,7 +421,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
-          toolchain: 1.98.1
+          toolchain: 1.99.1
           targets: x86_64-pc-windows-msvc
 
       - name: Cache cargo

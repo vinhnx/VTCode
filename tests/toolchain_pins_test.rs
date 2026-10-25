@@ -16,10 +16,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Directories whose Cargo manifests are intentionally not pinned to the
-/// workspace channel (vendored forks, fuzz harnesses, editor extensions).
+/// workspace channel (vendored forks, fuzz harnesses, editor extensions) or
+/// that hold local runtime state (archived workspace snapshots, logs, memory).
 const EXCLUDED_DIRS: &[&str] = &[
     "target",
     ".worktrees",
+    ".vtcode",
     "patches",
     "fuzz",
     "extensions",
@@ -232,7 +234,7 @@ fn workflow_pin_guard_follows_active_names_and_detects_drift() {
 steps:
   - uses: dtolnay/rust-toolchain@pinned-action
     with:
-      toolchain: '1.98.1' # workspace pin
+      toolchain: '1.99.1' # workspace pin
   - name: another installer
     uses: dtolnay/rust-toolchain@pinned-action
     with:
@@ -244,8 +246,8 @@ steps:
     )
     .unwrap();
     assert_eq!(pins.len(), 2);
-    assert_eq!(pins[0].version, "1.98.1");
-    let mismatches = pins.iter().filter(|pin| pin.version != "1.98.1").collect::<Vec<_>>();
+    assert_eq!(pins[0].version, "1.99.1");
+    let mismatches = pins.iter().filter(|pin| pin.version != "1.99.1").collect::<Vec<_>>();
     assert_eq!(mismatches.len(), 1);
     assert_eq!(mismatches[0].version, "1.97.0");
     assert!(mismatches[0].location.contains("renamed-build.yaml:7"));
@@ -256,12 +258,12 @@ fn workflow_installers_cannot_borrow_a_later_steps_pin_or_default_to_stable() {
     let path = Path::new("renamed.yml");
     let missing = workflow_toolchain_pins(
         path,
-        "  - uses: dtolnay/rust-toolchain@action\n  - name: another step\n    with:\n      toolchain: 1.98.1\n",
+        "  - uses: dtolnay/rust-toolchain@action\n  - name: another step\n    with:\n      toolchain: 1.99.1\n",
     );
     assert!(missing.unwrap_err().contains("must explicitly select"));
     let floating =
         workflow_toolchain_pins(path, "  - uses: dtolnay/rust-toolchain@action\n    with:\n      toolchain: stable\n")
             .unwrap();
     assert_eq!(floating[0].version, "stable");
-    assert_ne!(floating[0].version, "1.98.1");
+    assert_ne!(floating[0].version, "1.99.1");
 }

@@ -20,7 +20,7 @@ VT Code represents a modern approach to AI-powered software development, featuri
 
 ### System Requirements
 
-- **Rust**: 1.98.1+ (stable recommended)
+- **Rust**: 1.99.1+ (stable recommended)
   - Install from [rustup.rs](https://rustup.rs/)
   - Includes Cargo package manager
 - **Git**: For version control and cloning the repository
