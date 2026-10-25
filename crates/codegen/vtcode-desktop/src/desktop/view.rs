@@ -3607,7 +3607,7 @@ impl DesktopView {
                                     div()
                                         .id(format!("message-body-{}", item.id))
                                         .role(gpui_kit::Role::Label)
-                                        .aria_label(format!("{label}: {}", item.text))
+                                        .aria_label(format!("{label}: {}", item.accessibility_text))
                                         .test_support()
                                         .child(render_markdown(
                                             format!("markdown-{}", item.id),

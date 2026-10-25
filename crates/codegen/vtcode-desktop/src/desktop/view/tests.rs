@@ -3114,7 +3114,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
                 "answer".into(),
                 "assistant".into(),
                 "VT Code".into(),
-                "Tests passed: **7**.".into(),
+                "Tests passed: **7**. Run `cargo test`.".into(),
             ));
             view.transcript.push(TranscriptItem::new(
                 "check".into(),
@@ -3125,7 +3125,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
         });
         window.render_frame(cx);
         assert_eq!(window.find("message-body-answer").role(), Some(gpui_kit::Role::Label));
-        assert_eq!(window.find("message-body-answer").label(), Some("VT Code: Tests passed: **7**."));
+        assert_eq!(window.find("message-body-answer").label(), Some("VT Code: Tests passed: 7. Run cargo test."));
         assert_eq!(window.find("tool-check").label(), Some("Show details for cargo check"));
         window.click("tool-check", cx);
         window.render_frame(cx);
@@ -3134,7 +3134,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
         window.click("tool-check", cx);
         assert!(!view.read(cx).transcript.get(1).unwrap().expanded);
         window.click("copy-message-answer", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("Tests passed: **7**."));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("Tests passed: **7**. Run `cargo test`."));
     })
     .unwrap();
 }

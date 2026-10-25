@@ -87,7 +87,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. |
 | Switch workspaces | The sidebar's Workspaces section lists recent projects (at most 8) for one-click switching; the most recent workspace reopens on launch when it still exists. |
 | Resize panes | Drag the dividers between panes; sidebar and inspector widths clamp to 180–560px and persist. |
-| Read with assistive technology | Conversation text and expanded tool output have named accessibility nodes. Tool actions identify their tool; active workspaces/threads and current typography values are included in accessible labels. |
+| Read with assistive technology | Conversation messages expose readable text without Markdown markers, and expanded tool output has named accessibility nodes. Tool actions identify their tool; active workspaces/threads and current typography values are included in accessible labels. |
 | Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. |
 | Follow a link | Explicit activation opens HTTP/HTTPS links. Other URL schemes are blocked, images are not fetched, and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
