@@ -500,7 +500,7 @@ enum ResizeEdge {
 struct PaneResize {
     edge: ResizeEdge,
     start_pointer_x_window: Pixels,
-    start_width: f32,
+    start_width: Pixels,
 }
 
 /// The splitter has no drag preview; keeping its entity empty lets the handle
@@ -2737,10 +2737,10 @@ impl DesktopView {
                     this.resizing = Some(PaneResize {
                         edge,
                         start_pointer_x_window: event.position.x,
-                        start_width: match edge {
+                        start_width: px(match edge {
                             ResizeEdge::Sidebar => this.sidebar_width,
                             ResizeEdge::Inspector => this.inspector_width,
-                        },
+                        }),
                     });
                     cx.notify();
                 }),
@@ -2773,13 +2773,13 @@ impl DesktopView {
         let Some(drag) = self.resizing.filter(|drag| drag.edge == edge) else {
             return false;
         };
-        let delta = f32::from(pointer_x_window - drag.start_pointer_x_window);
-        let width = drag.start_width
-            + match edge {
-                ResizeEdge::Sidebar => delta,
-                ResizeEdge::Inspector => -delta,
-            };
-        self.resize_pane_to(edge, width)
+        let pointer_delta_window = pointer_x_window - drag.start_pointer_x_window;
+        let width = match edge {
+            ResizeEdge::Sidebar => drag.start_width + pointer_delta_window,
+            ResizeEdge::Inspector => drag.start_width - pointer_delta_window,
+        };
+        // Preferences keep pane widths as f32; convert only at that boundary.
+        self.resize_pane_to(edge, width.as_f32())
     }
 
     fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

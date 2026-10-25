@@ -5,6 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_APP="${1:-${ROOT_DIR}/dist/VT Code.app}"
+TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT_DIR}/target}"
+if [[ "${TARGET_DIR}" != /* ]]; then
+    TARGET_DIR="${PWD}/${TARGET_DIR}"
+fi
+if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
+    TARGET_DIR="${TARGET_DIR}/${CARGO_BUILD_TARGET}"
+fi
+RELEASE_DIR="${TARGET_DIR}/release"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     printf 'Error: the VT Code desktop bundle must be built on macOS.\n' >&2
@@ -40,8 +48,8 @@ CONTENTS="${STAGED_APP}/Contents"
 cargo build --locked --release --manifest-path "${ROOT_DIR}/Cargo.toml" -p vtcode -p vtcode-desktop
 
 mkdir -p "${CONTENTS}/MacOS" "${CONTENTS}/Helpers" "${CONTENTS}/Resources"
-install -m 755 "${ROOT_DIR}/target/release/vtcode-desktop" "${CONTENTS}/MacOS/vtcode-desktop"
-install -m 755 "${ROOT_DIR}/target/release/vtcode" "${CONTENTS}/Helpers/vtcode"
+install -m 755 "${RELEASE_DIR}/vtcode-desktop" "${CONTENTS}/MacOS/vtcode-desktop"
+install -m 755 "${RELEASE_DIR}/vtcode" "${CONTENTS}/Helpers/vtcode"
 install -m 644 "${ROOT_DIR}/LICENSE" "${CONTENTS}/Resources/LICENSE"
 install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PARTY-NOTICES"
 

@@ -1444,10 +1444,13 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
+        let initial_sidebar_width = view.read(cx).sidebar_width;
 
         // Press on the divider, drag right by 60px, release.
         dispatch_mouse(window, start, MousePhase::Down, cx);
-        assert!(view.read(cx).resizing.is_some(), "splitter press begins a resize");
+        let resize = view.read(cx).resizing.expect("splitter press begins a resize");
+        assert_eq!(resize.start_pointer_x_window, start.x, "drag start uses window-space pointer coordinates");
+        assert_eq!(resize.start_width, px(initial_sidebar_width), "drag start retains pixel units for pane width");
         dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
         assert!(cx.has_active_drag(), "GPUI starts a typed resize drag");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);
