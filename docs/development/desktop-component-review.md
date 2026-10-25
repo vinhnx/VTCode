@@ -65,8 +65,8 @@ measured-list, approval, persistence, or accessibility owners.
 | [radio](https://gpui-kit.com/component/radio) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [rating](https://gpui-kit.com/component/rating) | Not needed for the current coding-workspace workflows or available data. |
 | [resizable](https://gpui-kit.com/component/resizable) | Applied standalone Kit handles with splitter semantics and keyboard resizing; preserve custom width bounds/persistence instead of migrating independent panes into a panel group. |
-| [root](https://gpui-kit.com/component/root) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
-| [scrollable](https://gpui-kit.com/component/scrollable) | Retain bounded scrolling for sessions, inspector, and Appearance. |
+| [root](https://gpui-kit.com/component/root) | Applied: `gpui_kit::open_window` owns the single Root; initialize Kit before opening, and retain tested native menu/window/reopen lifecycle. |
+| [scrollable](https://gpui-kit.com/component/scrollable) | Applied themed Kit scrollbars to settings and file preview; recent sessions use a virtual list with a Kit scrollbar. |
 | [select](https://gpui-kit.com/component/select) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |
 | [settings](https://gpui-kit.com/component/settings) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [sheet](https://gpui-kit.com/component/sheet) | Appearance is modal; inspector remains an ordinary workspace pane. |

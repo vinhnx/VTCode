@@ -3830,6 +3830,34 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let sessions = (0..120)
+        .map(|index| vtcode_desktop_protocol::SessionSummary {
+            session_id: format!("thread-{index}"),
+            title: Some(format!("Thread {index}")),
+            workspace: "/project/vtcode".into(),
+            completed: false,
+            resumable: true,
+        })
+        .collect();
+    view.update(cx, |view, _| view.sessions = sessions);
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("session-thread-0").is_some(), "the first thread is visible at the top");
+        assert!(window.try_find("session-thread-119").is_none(), "offscreen threads are not built into the UI tree");
+
+        view.read(cx).session_scroll.scroll_to_item(119, gpui_kit::ScrollStrategy::Top);
+        window.render_frame(cx);
+
+        assert!(window.try_find("session-thread-119").is_some(), "scrolling renders the requested thread");
+        assert!(window.try_find("session-thread-0").is_none(), "the previous top rows leave the rendered range");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {

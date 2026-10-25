@@ -143,10 +143,12 @@ impl DesktopView {
                             .min_h_0()
                             .min_w_0()
                             .lock_scroll_axis()
+                            .test_support()
+                            .track_scroll(&self.settings_scroll)
                             .overflow_y_scroll()
+                            .vertical_scrollbar(&self.settings_scroll)
                             .pr_2()
-                            .child(content)
-                            .test_support(),
+                            .child(content),
                     ),
             )
             .into_any_element()

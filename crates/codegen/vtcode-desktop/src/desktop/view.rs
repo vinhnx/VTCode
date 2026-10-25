@@ -32,7 +32,7 @@ use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerStat
 use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
-use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
+use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -83,6 +83,7 @@ const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
+const SESSION_ROW_HEIGHT: f32 = 36.;
 
 fn accessible_group_box(id: &'static str, label: impl Into<gpui_kit::SharedString>, group: GroupBox) -> AnyElement {
     div()
@@ -413,6 +414,8 @@ struct DesktopView {
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
     settings_open: bool,
     theme_scroll: ScrollHandle,
+    settings_scroll: ScrollHandle,
+    session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
@@ -604,6 +607,8 @@ impl DesktopView {
             palette_groups: Vec::new(),
             settings_open: false,
             theme_scroll: ScrollHandle::default(),
+            settings_scroll: ScrollHandle::default(),
+            session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_navigation_focus: cx.focus_handle().tab_stop(true),
@@ -2717,37 +2722,70 @@ impl DesktopView {
                         .child(self.sessions.len().to_string()),
                 ),
         );
+        let session_sizes = Rc::new(vec![size(px(0.), px(SESSION_ROW_HEIGHT)); self.sessions.len()]);
+        let session_primary = theme.colors.primary;
         sidebar = sidebar.child(
             div()
                 .id("session-list")
+                .relative()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scroll()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .children(self.sessions.iter().map(|session| {
-                    let session_id = session.session_id.clone();
-                    let element_id = format!("session-{session_id}");
-                    let selected = self.selected_session_id.as_deref() == Some(&session.session_id);
-                    let label = session.title.clone().unwrap_or_else(|| {
-                        format!("Session {}", session.session_id.chars().take(8).collect::<String>())
-                    });
-                    div().w_full().child(
-                        desktop_button(element_id)
-                            .accessibility_label(format!("{label}{}", if selected { " (current thread)" } else { "" }))
-                            .child(navigation_label(label, IconName::MessageSquare, selected, theme.colors.primary))
-                            .ghost()
-                            .desktop_disabled(!self.session_change_allowed(Some(&session.session_id)))
-                            .w_full()
-                            .justify_start()
-                            .when(selected, |button| {
-                                button.bg(theme.colors.secondary).text_color(theme.colors.foreground)
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| this.load_session(session_id.clone(), cx))),
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(
+                        cx.entity(),
+                        "session-virtual-list",
+                        session_sizes,
+                        move |view, visible_range, _, cx| {
+                            visible_range
+                                .filter_map(|index| {
+                                    let session = view.sessions.get(index)?;
+                                    let session_id = session.session_id.clone();
+                                    let selected = view.selected_session_id.as_deref() == Some(&session_id);
+                                    let label = session.title.clone().unwrap_or_else(|| {
+                                        format!("Session {}", session_id.chars().take(8).collect::<String>())
+                                    });
+                                    let enabled = view.session_change_allowed(Some(&session_id));
+                                    Some(
+                                        div()
+                                            .id(format!("session-row-{session_id}"))
+                                            .h(px(SESSION_ROW_HEIGHT))
+                                            .w_full()
+                                            .child(
+                                                desktop_button(format!("session-{session_id}"))
+                                                    .accessibility_label(format!(
+                                                        "{label}{}",
+                                                        if selected { " (current thread)" } else { "" }
+                                                    ))
+                                                    .child(navigation_label(
+                                                        label,
+                                                        IconName::MessageSquare,
+                                                        selected,
+                                                        session_primary,
+                                                    ))
+                                                    .ghost()
+                                                    .desktop_disabled(!enabled)
+                                                    .w_full()
+                                                    .justify_start()
+                                                    .when(selected, |button| {
+                                                        button
+                                                            .bg(cx.theme().colors.secondary)
+                                                            .text_color(cx.theme().colors.foreground)
+                                                    })
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        this.load_session(session_id.clone(), cx)
+                                                    })),
+                                            )
+                                            .into_any_element(),
+                                    )
+                                })
+                                .collect()
+                        },
                     )
-                })),
+                    .track_scroll(&self.session_scroll),
+                )
+                .child(Scrollbar::vertical(&self.session_scroll)),
         );
 
         sidebar.child(
@@ -2968,7 +3006,8 @@ impl DesktopView {
                             .id("file-preview-body")
                             .flex_1()
                             .min_h_0()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
+                            .id("file-preview-body")
                             .p_3()
                             .text_xs()
                             .font_family(mono)
