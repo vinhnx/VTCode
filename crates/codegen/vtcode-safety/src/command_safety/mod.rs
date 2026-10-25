@@ -317,6 +317,19 @@ mod tests {
     }
 
     #[test]
+    fn argv_validation_reads_the_unquoted_nested_script() {
+        // The `-c` argument keeps raw shell quoting here too, so the script the
+        // shell actually runs must be what gets validated — not the quoted
+        // blob, whose substitution scan is blinded by the outer quotes.
+        let quoted_benign = ["sh".to_string(), "-c".to_string(), "'echo MARKER'".to_string()];
+        let quoted_benign_result = validate_command_argv(&quoted_benign);
+        assert!(quoted_benign_result.is_ok(), "quoted benign script should pass: {quoted_benign_result:?}");
+
+        let quoted_destructive = ["sh".to_string(), "-c".to_string(), "'rm -rf /'".to_string()];
+        assert!(validate_command_argv(&quoted_destructive).is_err());
+    }
+
+    #[test]
     fn explicit_shell_script_allows_static_chaining_but_rejects_substitution() {
         assert!(validate_shell_script("printf first; printf second").is_ok());
         assert!(validate_shell_script("printf '%s' \"$(whoami)\"").is_err());

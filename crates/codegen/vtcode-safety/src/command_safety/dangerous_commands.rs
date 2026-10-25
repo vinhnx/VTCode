@@ -71,12 +71,19 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
     false
 }
 
+/// Shell options that make the next argument an inline script.
+const NESTED_SCRIPT_FLAGS: &[&str] = &["-c", "-lc", "-ilc"];
+
 /// Return the inline script of a `bash`/`sh`/`zsh -c` style command.
-fn nested_shell_script(command: &[String]) -> Option<&str> {
+///
+/// The returned slice is raw argument text, so it may still carry the shell
+/// quotes around the script; run it through [`strip_nested_script_quotes`]
+/// before analyzing its contents.
+pub(super) fn nested_shell_script(command: &[String]) -> Option<&str> {
     match command {
         [executable, flag, script, ..]
             if matches!(extract_command_name(executable), "bash" | "sh" | "zsh")
-                && matches!(flag.as_str(), "-c" | "-lc" | "-ilc") =>
+                && NESTED_SCRIPT_FLAGS.contains(&flag.as_str()) =>
         {
             Some(script)
         }
@@ -90,7 +97,7 @@ fn nested_shell_script(command: &[String]) -> Option<&str> {
 /// arrives as `'…'` or `"…"`. The shell removes those quotes before running the
 /// script, so analyzing the quoted blob would both miss the real commands and
 /// mistake quoted glob characters for a dynamic executable.
-fn strip_nested_script_quotes(script: &str) -> &str {
+pub(super) fn strip_nested_script_quotes(script: &str) -> &str {
     for quote in ['\'', '"'] {
         if let Some(inner) = script.strip_prefix(quote).and_then(|rest| rest.strip_suffix(quote)) {
             return inner;
@@ -114,11 +121,9 @@ pub fn command_requires_approval(command: &[String]) -> bool {
         return true;
     }
 
-    if command.len() >= 3
-        && matches!(extract_command_name(&command[0]), "bash" | "sh" | "zsh")
-        && matches!(command[1].as_str(), "-c" | "-lc" | "-ilc")
-        && let Some(script) = nested_shell_script(command)
-        && let Ok(commands) = crate::command_safety::shell_parser::parse_shell_commands(script)
+    if let Some(script) = nested_shell_script(command)
+        && let Ok(commands) =
+            crate::command_safety::shell_parser::parse_shell_commands(strip_nested_script_quotes(script))
     {
         return commands.iter().any(|nested| command_requires_approval(nested));
     }
@@ -645,6 +650,18 @@ mod tests {
             let command = vec_str(&["sh", "-c", script]);
             assert!(command_might_be_dangerous(&command), "nested substitution must be rejected: {command:?}");
         }
+    }
+
+    #[test]
+    fn nested_shell_script_keeps_inline_code_in_approval_classification() {
+        // Inline interpreter code is admitted only through sandbox or explicit
+        // approval. Quoted nested scripts must not escape that classification:
+        // parsing the raw `'…'` blob would hide the inner `python3 -c`.
+        let command = vec_str(&["sh", "-c", "'python3 -c \"print(1)\"'"]);
+        assert!(command_requires_approval(&command), "quoted nested inline code must require approval: {command:?}");
+        // Benign nested scripts still pass without an approval prompt.
+        let benign = vec_str(&["sh", "-c", "'echo MARKER'"]);
+        assert!(!command_requires_approval(&benign), "benign nested script: {benign:?}");
     }
 
     #[test]
