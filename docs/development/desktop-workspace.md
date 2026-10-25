@@ -75,7 +75,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Browse files | The inspector's Files tab shows a read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh updates the capture. |
 | Follow activity | The inspector's Activity tab projects tool and command statuses for the session, retaining the newest 300 rows in chronological order. |
-| Watch command output | The inspector's Output tab shows the newest live or restored command/tool output in mono, tail-capped to the last 1,000 lines. Copy output preserves the complete captured text; historical unfinished work is marked interrupted. |
+| Watch command output | The inspector's Output tab shows the newest live or restored command/tool output in mono, tail-capped to the last 1,000 lines. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. Historical unfinished work is marked interrupted. |
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
@@ -456,6 +456,13 @@ category rather than allowing an older patch or tool status to appear current. T
 inspector history when these limits omit evidence. Malformed complete records or
 unsafe paths fail loading explicitly. Platforms without handle-bound reads restore
 messages and report inspector history unavailable. No desktop-specific history store is written.
+
+Historical tool-output rows also recover their spool contents when the reference
+resolves beneath the workspace's `.vtcode/context/tool_outputs` directory. Each
+read is bounded to 32 KiB and the existing activity budget; symlinks, outside
+paths, missing files, and oversized output never expose a local path and report
+partial inspector history. The captured inline preview remains available when a
+spool cannot be read.
 
 Restored activity uses the same projection and GPUI Kit cards as live tool events,
 but stays in the inspector so historical tools do not crowd out the conversation.
