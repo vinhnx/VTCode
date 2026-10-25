@@ -35,6 +35,7 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::status_bar::StatusBar;
+use gpui_kit::component::stepper::{Stepper, StepperItem};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
@@ -5141,6 +5142,42 @@ impl DesktopView {
             panel = panel.child(div().text_sm().child(detail.clone()));
         }
 
+        if interaction.kind == protocol::InteractionKind::Question && interaction.steps.len() > 1 {
+            let step_index = self.interaction_step_index.min(interaction.steps.len().saturating_sub(1));
+            let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
+                let title = if step.title.trim().is_empty() {
+                    format!("Question {}", index + 1)
+                } else {
+                    step.title.clone()
+                };
+                StepperItem::new().child(div().min_w_0().max_w_full().truncate().child(title))
+            });
+            panel = panel.child(
+                div()
+                    .id("interaction-question-progress")
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Question progress")
+                    .w_full()
+                    .child(
+                        div()
+                            .id("interaction-question-stepper")
+                            .test_support()
+                            .role(gpui_kit::Role::List)
+                            .aria_label("Question steps")
+                            .w_full()
+                            .child(
+                                Stepper::new("interaction-question-steps")
+                                    .small()
+                                    .w_full()
+                                    .selected_index(step_index)
+                                    .disabled(true)
+                                    .items(steps),
+                            ),
+                    ),
+            );
+        }
+
         if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
             let step_index = self.interaction_step_index.min(interaction.steps.len().saturating_sub(1));
             if let Some(step) = interaction.steps.get(step_index) {
@@ -5202,6 +5239,10 @@ impl DesktopView {
             .gap_2()
             .child(
                 div()
+                    .id("question-step-counter")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(format!("Question {} of {total}", index + 1))
                     .text_xs()
                     .text_color(colors.muted_foreground)
                     .child(format!("Question {} of {total}", index + 1)),

@@ -2566,6 +2566,69 @@ fn interaction_notifications_preserve_startup_questions_and_reject_stale_turns(c
 }
 
 #[gpui_kit::test]
+fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{InteractionChoice, InteractionKind, InteractionRequest, InteractionStep};
+
+    let (window, view) = open_desktop(cx);
+    let make_choice = |id: &str| InteractionChoice {
+        id: id.into(),
+        label: format!("Choose {id}"),
+        description: None,
+        recommended: false,
+    };
+    let steps = [
+        ("Workspace", "Choose a workspace", "workspace"),
+        ("Task", "Describe the task", "task"),
+        ("Review", "Review the plan", "review"),
+    ]
+    .into_iter()
+    .map(|(title, question, choice_id)| InteractionStep {
+        title: title.into(),
+        question: question.into(),
+        choices: vec![make_choice(choice_id)],
+        selected_choice_id: None,
+        allow_freeform: false,
+    })
+    .collect();
+    view.update(cx, |view, cx| {
+        view.interaction = Some(InteractionRequest {
+            session_id: "session".into(),
+            turn_id: "turn".into(),
+            interaction_id: "question-wizard".into(),
+            kind: InteractionKind::Question,
+            wizard: true,
+            title: "Set up the task".into(),
+            details: Vec::new(),
+            choices: Vec::new(),
+            steps,
+            selected_choice_id: None,
+            selected_choice_ids: Vec::new(),
+        });
+        view.interaction_step_index = 0;
+        view.interaction_choice_ids = vec![None; 3];
+        view.interaction_answer_texts = vec![None; 3];
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-progress").label(), Some("Question progress"));
+        let stepper = window
+            .within("interaction-question-progress")
+            .find("interaction-question-stepper");
+        assert!(stepper.visible());
+        assert_eq!(stepper.role(), Some(gpui_kit::Role::List));
+        assert_eq!(stepper.label(), Some("Question steps"));
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        window.click("choice-workspace", cx);
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 2 of 3"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let other_workspace = tempfile::TempDir::new().unwrap();

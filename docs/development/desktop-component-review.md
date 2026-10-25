@@ -77,7 +77,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [speech](https://gpui-kit.com/component/speech) | Deferred: microphone/recognition integration is outside this UI pass. |
 | [spinner](https://gpui-kit.com/component/spinner) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
 | [status-bar](https://gpui-kit.com/component/status-bar) | Applied Kit's left/right regions to the optional workspace and runtime status row; retain VT Code palette colors, the labeled status group, and the live agent-status announcement. |
-| [stepper](https://gpui-kit.com/component/stepper) | Do not invent execution percentages or phases beyond existing runtime events. |
+| [stepper](https://gpui-kit.com/component/stepper) | Applied only to ordered multi-step runtime questions; keep the step order and current index runtime-owned, and disable direct navigation when the runtime requires sequential answers. Never invent execution phases or percentages. |
 | [switch](https://gpui-kit.com/component/switch) | Applied: separate light/dark appearance profiles have persisted theme and typography effects with accessible state. |
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |
 | [tabs](https://gpui-kit.com/component/tabs) | Retain inspector tabs and scoped keyboard wrapper. |
