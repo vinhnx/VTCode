@@ -717,41 +717,11 @@ hook the desktop <-> cli <-> webmcp apps ecosystem together for consistent behav
 
 ===
 
-duplicated visual (the ...) -> fix
-
-1. replace "This computer" with CLI / WebMCP link
-2. hide the bottom statusview line by default (configurable)
-3. for the (+) butotn in the input composer -> "Add files and more @" -> it should open a popup that pinned to the top of the input with CLI (files, skills, plugins, commands etc. with filter), reference design /Users/vinhnguyenxuan/Documents/vtcode-resources/add
-   the model selection should also pinned to top of the popup, currently is is misaligned.
-   also try to implement this UI and knob logic for model for first selection of model/effort, add cta only to show the full popup search. reference this design. it should also reflect the CLI top right indicator (fast/ultrafast).
-   /Users/vinhnguyenxuan/Documents/vtcode-resources/models
-   reduce the overall content width.
-   improve the overall app accessibility contrast, follow vtcode design system
-   update this selection to change the VT Code persmission handling in the input box '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-24 at 20.14.10.png'
-   show current VT Code modes in the input box also
-   --
-
-reduce the onboarding ui visual clutter
-
-the visual grid is not scrollable properly -> change to horzontal list scroll
+destkop: remove the light/dark switch button
 
 ====
 
-implemenet clear constrast between the main container and inner container. reference codex:
-
-'/Users/vinhnguyenxuan/Documents/vtcode-resources/container/Screenshot 2026-10-25 at 09.17.13.png' '/Users/vinhnguyenxuan/Documents/vtcode-resources/container/Screenshot 2026-10-25 at 09.17.06.png'
-
-currently the contrast is not clear, inner container blends with main background. '/Users/vinhnguyenxuan/Documents/vtcode-resources/container/Screenshot 2026-10-25 at 09.16.51.png'
-
-====
-
-MOST IMPORATANT. MAKE THE APP LOOK LESS ELECTRON FEEL. and has aesthetic and modern feel.
-
-===
-
-revamp this, this feel generic and outdated. '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-25 at 10.17.13.png'
-
-ref: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-25 at 10.17.56.png'
+MOST IMPORATANT. MAKE THE destkop APP LOOK LESS ELECTRON FEEL. and has aesthetic and modern feel.
 
 ---
 
