@@ -3010,6 +3010,11 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
             assert!(view.review_open);
         });
         window.render_frame(cx);
+        let layout_options = window.find("workspace-review-layout-options");
+        assert_eq!(layout_options.role(), Some(gpui_kit::Role::Group));
+        assert_eq!(layout_options.label(), Some("Diff layout"));
+        assert_eq!(window.find("workspace-review-unified").checked(), Some(true));
+        assert_eq!(window.find("workspace-review-split").checked(), Some(false));
         assert!(window.find("workspace-review-diff").bounds().size.width > px(900.));
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
         window.click("workspace-review-previous-file", cx);
@@ -3020,6 +3025,9 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
         window.click("workspace-review-next-file", cx);
         window.click("workspace-review-split", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("workspace-review-unified").checked(), Some(false));
+        assert_eq!(window.find("workspace-review-split").checked(), Some(true));
         assert_eq!(
             view.read(cx)
                 .workspace_review

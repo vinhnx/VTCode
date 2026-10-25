@@ -236,22 +236,38 @@ impl DesktopView {
                         .on_click(cx.listener(|view, _, _, cx| view.refresh_workspace_review(cx))),
                 )
                 .child(
-                    desktop_button("workspace-review-unified")
-                        .label("Unified")
-                        .ghost()
-                        .small()
-                        .desktop_disabled(!has_viewer)
-                        .when(review.mode == DiffMode::Unified, |button| button.bg(colors.secondary))
-                        .on_click(cx.listener(|view, _, _, cx| view.set_workspace_review_mode(DiffMode::Unified, cx))),
-                )
-                .child(
-                    desktop_button("workspace-review-split")
-                        .label("Split")
-                        .ghost()
-                        .small()
-                        .desktop_disabled(!has_viewer)
-                        .when(review.mode == DiffMode::Split, |button| button.bg(colors.secondary))
-                        .on_click(cx.listener(|view, _, _, cx| view.set_workspace_review_mode(DiffMode::Split, cx))),
+                    div()
+                        .id("workspace-review-layout-options")
+                        .test_support()
+                        .role(gpui_kit::Role::Group)
+                        .aria_label("Diff layout")
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            desktop_button("workspace-review-unified")
+                                .label("Unified")
+                                .ghost()
+                                .small()
+                                .toggled(review.mode == DiffMode::Unified)
+                                .desktop_disabled(!has_viewer)
+                                .when(review.mode == DiffMode::Unified, |button| button.bg(colors.secondary))
+                                .on_click(
+                                    cx.listener(|view, _, _, cx| view.set_workspace_review_mode(DiffMode::Unified, cx)),
+                                ),
+                        )
+                        .child(
+                            desktop_button("workspace-review-split")
+                                .label("Split")
+                                .ghost()
+                                .small()
+                                .toggled(review.mode == DiffMode::Split)
+                                .desktop_disabled(!has_viewer)
+                                .when(review.mode == DiffMode::Split, |button| button.bg(colors.secondary))
+                                .on_click(
+                                    cx.listener(|view, _, _, cx| view.set_workspace_review_mode(DiffMode::Split, cx)),
+                                ),
+                        ),
                 )
                 .child(div().flex_1())
                 .child(
