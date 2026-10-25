@@ -72,7 +72,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
 | Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts, and selecting a file opens it in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. |
-| Browse files | The inspector's Files tab shows a read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
+| Browse files | The inspector's Files tab shows a read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh updates the capture. |
 | Follow activity | The inspector's Activity tab projects tool and command statuses for the session, retaining the newest 300 rows in chronological order. |
 | Watch command output | The inspector's Output tab shows the newest live or restored command/tool output in mono, tail-capped to the last 1,000 lines. Copy output preserves the complete captured text; historical unfinished work is marked interrupted. |
@@ -187,8 +187,8 @@ draft and attached files remain; previous sessions are available in history. Rel
 and is unavailable during active turns, pending submissions, interactions, session changes, or file pickers/reads.
 It also retries a disconnected service after configuration or authentication has been repaired outside the app.
 
-Protocol 1.9 adds searchable settings read/write methods alongside typed built-in theme synchronization. The service uses the CLI startup loader for provider,
-model, runtime policy, and agent execution.
+Protocol 1.9 adds searchable settings read/write methods alongside typed built-in theme synchronization. The service
+uses the CLI startup loader for provider, model, runtime policy, and agent execution.
 Its non-secret `sharedUi` projection carries the resolved theme and equivalent shortcut overrides.
 **Import CLI shortcuts** uses the CLI key parser, normalizes modifier aliases, and imports the first
 configured `interrupt` and `open_model_picker` binding as native Cancel Run and Choose Model commands.
