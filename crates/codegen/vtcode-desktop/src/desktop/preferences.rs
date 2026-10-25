@@ -72,15 +72,20 @@ impl TypographySettings<'_> {
     }
 }
 
-#[derive(Default)]
-struct SystemMotionBaseline(Option<bool>);
+#[derive(Clone, Copy)]
+struct SystemMotionBaseline(bool);
 
 impl Global for SystemMotionBaseline {}
 
 /// Captures the GPUI Kit system setting before any desktop override is applied.
 pub(super) fn system_motion_baseline(cx: &mut App) -> bool {
+    if let Some(baseline) = cx.try_global::<SystemMotionBaseline>() {
+        return baseline.0;
+    }
+
     let current = cx.reduce_motion();
-    *cx.default_global::<SystemMotionBaseline>().0.get_or_insert(current)
+    cx.set_global(SystemMotionBaseline(current));
+    current
 }
 
 /// Applies a saved override or returns GPUI to the current OS preference.
@@ -305,6 +310,32 @@ pub(super) fn install_test_preferences_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui_kit::test]
+    fn system_motion_baseline_initializes_once_without_redundant_global_notifications(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        let notifications = std::rc::Rc::new(std::cell::Cell::new(0));
+        let notifications_for_observer = notifications.clone();
+        let observer = cx.update(|cx| {
+            cx.observe_global::<SystemMotionBaseline>(move |_| {
+                notifications_for_observer.set(notifications_for_observer.get() + 1);
+            })
+        });
+
+        cx.update(|cx| {
+            cx.set_reduce_motion(true);
+            assert!(system_motion_baseline(cx));
+        });
+        assert_eq!(notifications.get(), 1);
+
+        cx.update(|cx| {
+            cx.set_reduce_motion(false);
+            assert!(system_motion_baseline(cx), "the original system setting remains authoritative");
+        });
+        assert_eq!(notifications.get(), 1, "reading the existing baseline does not notify observers");
+        drop(observer);
+    }
 
     #[test]
     fn font_families_round_trip_independently_and_legacy_defaults_remain_optional() {
