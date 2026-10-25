@@ -16,11 +16,20 @@ pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub(super) struct Preferences {
+    /// The optional diagnostics footer is hidden on a fresh installation.
+    pub show_status_bar: bool,
+    pub shortcuts: std::collections::BTreeMap<String, String>,
+    pub ui_font_family: Option<String>,
+    pub code_font_family: Option<String>,
+    pub ui_font_size: Option<u8>,
+    pub code_font_size: Option<u8>,
     /// Selected theme id.
     pub theme: Option<String>,
+    /// None preserves legacy explicit theme choices; new profiles follow the CLI.
+    pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
     pub recent_workspaces: Vec<String>,
-    /// Whether the context inspector was open.
+    /// Last inspector state, retained for compatibility; launch always starts collapsed.
     pub inspector_open: Option<bool>,
     /// Sidebar width in logical pixels.
     pub sidebar_width: Option<f32>,
@@ -29,6 +38,13 @@ pub(super) struct Preferences {
 }
 
 impl Preferences {
+    pub(super) fn ui_font_size(&self) -> u8 {
+        self.ui_font_size.unwrap_or(16).clamp(12, 24)
+    }
+    pub(super) fn code_font_size(&self) -> u8 {
+        self.code_font_size.unwrap_or(14).clamp(10, 24)
+    }
+
     pub(super) fn sidebar_width(&self) -> f32 {
         clamp_width(self.sidebar_width.unwrap_or(DEFAULT_SIDEBAR_WIDTH))
     }
@@ -70,17 +86,16 @@ impl Preferences {
             .unwrap_or_default()
     }
 
-    /// Persist preferences; failures are swallowed (comfort settings only).
+    /// Best-effort saves for existing comfort controls.
     pub(super) fn save(&self) {
-        let Some(path) = Self::preferences_path() else {
-            return;
-        };
-        if let Some(parent) = path.parent()
-            && std::fs::create_dir_all(parent).is_ok()
-            && let Ok(content) = serde_json::to_string_pretty(self)
-        {
-            drop(std::fs::write(path, content));
-        }
+        drop(self.try_save());
+    }
+
+    pub(super) fn try_save(&self) -> Result<(), String> {
+        let path = Self::preferences_path().ok_or("Preferences directory is unavailable")?;
+        let content = serde_json::to_vec_pretty(self).map_err(|error| error.to_string())?;
+        vtcode_commons::VtCodePaths::write_private_file_atomic(path, &content)
+            .map_err(|error| format!("Could not save desktop preferences: {error}"))
     }
 }
 
@@ -106,6 +121,34 @@ pub(super) fn install_test_preferences_path() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn font_families_round_trip_independently_and_legacy_defaults_remain_optional() {
+        let old: Preferences = serde_json::from_str("{}").unwrap();
+        assert!(old.ui_font_family.is_none() && old.code_font_family.is_none());
+        let selected = Preferences {
+            ui_font_family: Some("Helvetica Neue".into()),
+            code_font_family: Some("Menlo".into()),
+            ..old
+        };
+        let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
+        assert_eq!(loaded.ui_font_family.as_deref(), Some("Helvetica Neue"));
+        assert_eq!(loaded.code_font_family.as_deref(), Some("Menlo"));
+    }
+
+    #[test]
+    fn font_sizes_default_clamp_and_round_trip_independently() {
+        let old: Preferences = serde_json::from_str("{\"theme\":\"ciapre\"}").unwrap();
+        assert_eq!((old.ui_font_size(), old.code_font_size()), (16, 14));
+        let settings = Preferences {
+            ui_font_size: Some(0),
+            code_font_size: Some(255),
+            ..old
+        };
+        assert_eq!((settings.ui_font_size(), settings.code_font_size()), (12, 24));
+        let parsed: Preferences = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        assert_eq!((parsed.ui_font_size(), parsed.code_font_size()), (12, 24));
+    }
 
     #[test]
     fn touch_workspace_moves_to_front_and_bounds_the_list() {

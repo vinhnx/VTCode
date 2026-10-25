@@ -4,9 +4,11 @@
 
 ## Conventions
 
-- Keep messages typed and JSON-RPC framing bounded.
-- Preserve opaque interaction option identities across the wire.
-- Keep runtime history/events sourced from `vtcode-exec-events`.
+- Keep messages typed and framing bounded; Git review echoes request/workspace identities to reject stale snapshots.
+- Preserve opaque interaction option identities across the wire. `sharedUi` carries only non-secret CLI preferences.
+- `sessionOptions` are typed idle-session overrides; resource names are bounded CLI-safe tokens.
+- `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never config file paths, full TOML, or credentials.
+- Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.
 - The live event channel (`live_event_channel`) coalesces under saturation: snapshots replace per item,
   plan deltas merge, ordered events are only dropped when nothing coalescable remains. A slow consumer
   must never fail the producing turn; only a dropped consumer half is fatal.

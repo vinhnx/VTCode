@@ -2,17 +2,34 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
-use gpui_kit::base::{Disableable, StyledExt};
+use gpui_kit::assets::IconName;
+use gpui_kit::base::{Disableable, FocusTrapElement, StyledExt};
+use gpui_kit::component::TitleBar;
+use gpui_kit::component::attachment::{
+    Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
+};
+use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
-use gpui_kit::component::diff::{Diff, DiffState};
-use gpui_kit::component::input::{Enter, Textarea, TextareaState};
-use gpui_kit::component::popover::Popover;
+use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
+use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
+use gpui_kit::component::empty::{
+    Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
+};
+use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
+use gpui_kit::component::input::{Copy, Cut, Enter, Paste, Redo, SelectAll, Textarea, TextareaState, Undo};
+use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
+use gpui_kit::component::menu::DropdownMenu;
+use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
+use gpui_kit::component::tab::{Tab, TabBar};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
+use gpui_kit::component::{Icon, Sizable};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, Context, CursorStyle, Entity, KeyBinding, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PathPromptOptions, Render, TestSupportExt, Window, WindowOptions, actions, div, list, px,
+    Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, SystemMenuType,
+    Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list, point, px,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -23,26 +40,164 @@ use vtcode_desktop_protocol::{
 };
 
 use super::files::{self, FileEntry, FilePreview};
-use super::inspector::{self, ChangesProjection, InspectorTab};
+use super::inspector::{self, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
 use super::preferences;
 use super::themes;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
-use super::transport::{BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend};
+use super::transport::{
+    BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend, request_fits_frame,
+};
+
+mod composer_controls;
+mod configuration;
+mod navigation;
+mod shared_preferences;
+mod shortcuts;
+mod typography;
+mod utilities;
+mod workspace_review;
+use typography::FontTarget;
+use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
+const CONTENT_WIDTH: f32 = 760.;
 
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
 const MAX_PANE_WIDTH: f32 = preferences::MAX_PANE_WIDTH;
 
-actions!(desktop, [OpenCommandPalette]);
+actions!(
+    desktop,
+    [
+        OpenCommandPalette,
+        OpenModelPicker,
+        OpenAddContext,
+        OpenPermissions,
+        OpenModePicker,
+        NewSession,
+        CloseSession,
+        ChooseWorkspace,
+        FocusComposer,
+        ToggleInspector,
+        ToggleSidebar,
+        ToggleStatusBar,
+        ReloadCliSettings,
+        SyncCliTheme,
+        NextInspectorTab,
+        PreviousInspectorTab,
+        FirstInspectorTab,
+        LastInspectorTab,
+        NextReviewChange,
+        PreviousReviewChange,
+        CancelRun,
+        DismissOverlay,
+        OpenSettings,
+        CloseWindow,
+        MinimizeWindow,
+        ZoomWindow,
+        ShowMainWindow,
+        QuitApplication,
+        HideApplication,
+        HideOtherApplications,
+        ShowAllApplications
+    ]
+);
+
+fn init_keybindings(cx: &mut App) {
+    let preferences = preferences::Preferences::load();
+    match shortcuts::bindings(&preferences.shortcuts) {
+        Ok(bindings) => cx.bind_keys(bindings),
+        Err(error) => {
+            eprintln!("Desktop shortcuts: {error}; using defaults");
+            if let Ok(bindings) = shortcuts::bindings(&Default::default()) {
+                cx.bind_keys(bindings);
+            }
+        }
+    }
+    cx.bind_keys([
+        KeyBinding::new("f7", NextReviewChange, Some("VTCodeDiffReview")),
+        KeyBinding::new("shift-f7", PreviousReviewChange, Some("VTCodeDiffReview")),
+        KeyBinding::new("cmd-w", CloseWindow, Some("VTCodeDesktop")),
+        KeyBinding::new("cmd-m", MinimizeWindow, Some("VTCodeDesktop")),
+        KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
+        KeyBinding::new("cmd-q", QuitApplication, None),
+        KeyBinding::new("cmd-h", HideApplication, None),
+        KeyBinding::new("alt-cmd-h", HideOtherApplications, None),
+        KeyBinding::new("right", NextInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
+    ]);
+}
+
+fn init_native_menus(cx: &mut App) {
+    let _app = cx.on_action(|_: &QuitApplication, cx| cx.quit());
+    let _app = cx.on_action(|_: &HideApplication, cx| cx.hide());
+    let _app = cx.on_action(|_: &HideOtherApplications, cx| cx.hide_other_apps());
+    let _app = cx.on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps());
+    let _app = cx.on_action(|_: &ShowMainWindow, cx| show_main_window(cx));
+    cx.set_menus([
+        Menu::new("VT Code").items([
+            MenuItem::action("Settings…", OpenSettings),
+            MenuItem::separator(),
+            MenuItem::os_submenu("Services", SystemMenuType::Services),
+            MenuItem::separator(),
+            MenuItem::action("Hide VT Code", HideApplication),
+            MenuItem::action("Hide Others", HideOtherApplications),
+            MenuItem::action("Show All", ShowAllApplications),
+            MenuItem::separator(),
+            MenuItem::action("Quit VT Code", QuitApplication),
+        ]),
+        Menu::new("File").items([
+            MenuItem::action("New Session", NewSession),
+            MenuItem::action("Open Workspace…", ChooseWorkspace),
+            MenuItem::action("Close Session", CloseSession),
+            MenuItem::action("Choose Model…", OpenModelPicker),
+        ]),
+        Menu::new("Edit").items([
+            MenuItem::os_action("Undo", Undo, OsAction::Undo),
+            MenuItem::os_action("Redo", Redo, OsAction::Redo),
+            MenuItem::separator(),
+            MenuItem::os_action("Cut", Cut, OsAction::Cut),
+            MenuItem::os_action("Copy", Copy, OsAction::Copy),
+            MenuItem::os_action("Paste", Paste, OsAction::Paste),
+            MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+        ]),
+        Menu::new("View").items([
+            MenuItem::action("Command Palette…", OpenCommandPalette),
+            MenuItem::action("Focus Composer", FocusComposer),
+            MenuItem::action("Toggle Inspector", ToggleInspector),
+            MenuItem::separator(),
+            MenuItem::action("Cancel Run", CancelRun),
+        ]),
+        Menu::new("Window").items([
+            MenuItem::action("Show VT Code", ShowMainWindow),
+            MenuItem::action("Minimize", MinimizeWindow),
+            MenuItem::action("Zoom", ZoomWindow),
+            MenuItem::action("Close Window", CloseWindow),
+        ]),
+    ]);
+}
 
 /// One executable entry in the command palette.
 #[derive(Clone, Debug)]
 struct PaletteCommand {
     label: String,
+    description: Option<String>,
+    keywords: Vec<String>,
     action: PaletteAction,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PaletteKind {
+    Commands,
+    Models,
+    ModelOptions,
+    AddContext,
+    Permissions,
+    Modes,
+    Fonts(FontTarget),
 }
 
 /// What confirming a palette entry does. Executed through existing methods so
@@ -51,58 +206,87 @@ struct PaletteCommand {
 enum PaletteAction {
     NewSession,
     CloseSession,
+    ChooseModel,
     ChooseWorkspace,
     RefreshFiles,
     ToggleInspector,
     ToggleTheme,
+    SelectFont { target: FontTarget, family: Option<String> },
+    EditConfigSetting(String),
     LoadSession(String),
     PreviewFile(String),
+    SelectModel { provider: String, model: String },
+    SelectSessionOptions(protocol::SessionOptionsSelectParams),
+    AttachFiles,
+    AttachFile(String),
+    InsertDraft(String),
 }
 
 pub(crate) fn run() {
-    gpui_kit::application().run(|cx: &mut App| {
+    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    let _application = application.on_reopen(show_main_window);
+    application.run(|cx: &mut App| {
         gpui_kit::init(cx);
-        cx.bind_keys([KeyBinding::new("cmd-k", OpenCommandPalette, None)]);
-        // Saved preferences decide the starting theme; Ciapre is the default.
-        let preferences = preferences::Preferences::load();
-        let start_theme = preferences
-            .theme
-            .clone()
-            .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
-        let (window, view) = match gpui_kit::open_window(WindowOptions::default(), cx, |window, cx| {
-            let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
-            let view = cx.new(|cx| DesktopView::new(window, cx, theme_mode));
-            view.update(cx, |view, cx| view.load_preferences(window, cx));
-            view
-        }) {
-            Ok(result) => result,
-            Err(error) => {
-                vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
-                return;
-            }
-        };
-        // Reopen the most recent workspace when it still exists.
-        let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
-        if let Some(path) = last_workspace
-            && path.is_dir()
-        {
-            view.update(cx, |view, cx| view.select_workspace(path, cx));
-        }
-        let weak_view = view.downgrade();
-        cx.spawn(async move |cx| {
-            loop {
-                cx.background_executor().timer(Duration::from_millis(24)).await;
-                if weak_view.update(cx, |view, cx| view.drain_events(cx)).is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
-        let _ = window;
+        init_keybindings(cx);
+        init_native_menus(cx);
+        show_main_window(cx);
     });
 }
 
+fn show_main_window(cx: &mut App) {
+    if let Err(error) = open_or_activate_main_window(cx) {
+        vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
+    }
+}
+
+/// Reopening must preserve an existing window's draft, session, and backend.
+fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
+    if let Some(window) = cx.windows().first().copied() {
+        window.update(cx, |_, window, _| window.activate_window())?;
+        cx.activate(true);
+        return Ok(window);
+    }
+    // Saved preferences decide the starting theme; Ciapre is the default.
+    let preferences = preferences::Preferences::load();
+    let start_theme = preferences.theme.unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+    let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, |window, cx| {
+        window.set_window_title("VT Code");
+        let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
+        let view = cx.new(|cx| DesktopView::new(window, cx, theme_mode));
+        view.update(cx, |view, cx| view.load_preferences(window, cx));
+        view
+    })?;
+    // Reopen the most recent workspace when it still exists.
+    let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
+    if let Some(path) = last_workspace
+        && path.is_dir()
+    {
+        view.update(cx, |view, cx| view.select_workspace(path, cx));
+    }
+    let weak_view = view.downgrade();
+    cx.spawn(async move |cx| {
+        loop {
+            cx.background_executor().timer(Duration::from_millis(24)).await;
+            if weak_view.update(cx, |view, cx| view.drain_events(cx)).is_err() {
+                break;
+            }
+        }
+    })
+    .detach();
+    cx.activate(true);
+    Ok(window)
+}
+
+/// Retain the exact submitted content until the service accepts it.
+struct SubmissionDraft {
+    prompt: String,
+    attachments: Vec<protocol::TurnAttachment>,
+    echo_id: String,
+    delivery_uncertain: bool,
+}
+
 struct DesktopView {
+    focus_handle: FocusHandle,
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
     workspace_picker_open: bool,
@@ -112,7 +296,9 @@ struct DesktopView {
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
     transcript: Transcript,
+    restored_activity: Vec<TranscriptItem>,
     active_turn_id: Option<String>,
+    finished_turn_id: Option<String>,
     cancel_requested: bool,
     cancel_request_sent: bool,
     running: bool,
@@ -128,24 +314,63 @@ struct DesktopView {
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
+    files_task: Option<Task<()>>,
+    preview_task: Option<Task<()>>,
+    attachments_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
+    preview_focus: FocusHandle,
+    preview_return_focus: Option<FocusHandle>,
+    palette_return_focus: Option<FocusHandle>,
+    palette_focus: FocusHandle,
     inspector_open: bool,
     inspector_tab: InspectorTab,
+    inspector_focus: FocusHandle,
     changes: ChangesProjection,
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
+    change_viewer_dirty: bool,
+    review_open: bool,
+    workspace_review: Option<WorkspaceReviewState>,
+    review_focus: FocusHandle,
+    review_return_focus: Option<FocusHandle>,
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
+    palette_kind: PaletteKind,
+    effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    composer_resources: Vec<protocol::ComposerResource>,
+    resources_loading: bool,
+    resources_loaded: bool,
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
+    settings_open: bool,
+    settings_focus: FocusHandle,
+    settings_return_focus: Option<FocusHandle>,
+    cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
+    config_target: protocol::ConfigTarget,
+    config_value_input: Entity<TextareaState>,
+    config_editor: Option<configuration::ConfigEditor>,
+    config_editor_focus: FocusHandle,
+    config_editor_return_focus: Option<FocusHandle>,
+    config_editor_error: Option<String>,
+    config_write_pending: bool,
+    config_write_notice: Option<String>,
     models: Vec<protocol::ModelInfo>,
     attachments: Vec<protocol::TurnAttachment>,
     attachments_picker_open: bool,
+    pending_submission: Option<SubmissionDraft>,
+    first_submission: Option<SubmissionDraft>,
+    session_request: Option<&'static str>,
+    retained_submission: Option<SubmissionDraft>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
     preferences: preferences::Preferences,
+    default_code_font: gpui_kit::SharedString,
+    sidebar_open: bool,
+    navigation_peek: bool,
+    shortcut_inputs: Vec<Entity<gpui_kit::component::input::InputState>>,
+    shortcut_message: Option<String>,
     sidebar_width: f32,
     inspector_width: f32,
-    resizing: Option<ResizeEdge>,
+    resizing: Option<PaneResize>,
 }
 
 /// Which divider is being dragged.
@@ -155,10 +380,25 @@ enum ResizeEdge {
     Inspector,
 }
 
+#[derive(Clone, Copy)]
+struct PaneResize {
+    edge: ResizeEdge,
+    start_x: f32,
+    start_width: f32,
+}
+
 impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
         let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
+        let preferences = preferences::Preferences::load();
+        let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
         Self {
+            shortcut_inputs,
+            shortcut_message: None,
+            default_code_font: typography::default_code_font(cx),
+            focus_handle,
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
@@ -168,7 +408,9 @@ impl DesktopView {
             sessions: Vec::new(),
             selected_session_id: None,
             transcript: Transcript::default(),
+            restored_activity: Vec::new(),
             active_turn_id: None,
+            finished_turn_id: None,
             cancel_requested: false,
             cancel_request_sent: false,
             running: false,
@@ -180,25 +422,66 @@ impl DesktopView {
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
-            composer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 7).submit_on_enter(true)),
+            composer: cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .placeholder("Ask VT Code to make changes…")
+                    .auto_grow(1, 6)
+                    .submit_on_enter(true)
+            }),
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
+            files_task: None,
+            preview_task: None,
+            attachments_task: None,
             file_preview: None,
-            inspector_open: true,
+            preview_focus: cx.focus_handle(),
+            preview_return_focus: None,
+            palette_return_focus: None,
+            palette_focus: cx.focus_handle(),
+            inspector_open: false,
             inspector_tab: InspectorTab::default(),
+            inspector_focus: cx.focus_handle().tab_stop(true),
             changes: ChangesProjection::default(),
             selected_change: None,
             change_viewer: None,
+            change_viewer_dirty: false,
+            review_open: false,
+            workspace_review: None,
+            review_focus: cx.focus_handle().tab_stop(true),
+            review_return_focus: None,
             git_branch: None,
             palette: None,
+            palette_kind: PaletteKind::Commands,
+            effort_slider: None,
+            composer_resources: Vec::new(),
+            resources_loading: false,
+            resources_loaded: false,
             palette_groups: Vec::new(),
+            settings_open: false,
+            settings_focus: cx.focus_handle().tab_stop(true),
+            settings_return_focus: None,
+            cli_config_settings: None,
+            config_target: protocol::ConfigTarget::Workspace,
+            config_value_input: cx.new(|cx| TextareaState::new(window, cx).auto_grow(4, 12)),
+            config_editor: None,
+            config_editor_focus: cx.focus_handle().tab_stop(true),
+            config_editor_return_focus: None,
+            config_editor_error: None,
+            config_write_pending: false,
+            config_write_notice: None,
             models: Vec::new(),
             attachments: Vec::new(),
             attachments_picker_open: false,
+            pending_submission: None,
+            first_submission: None,
+            session_request: None,
+            retained_submission: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
-            preferences: preferences::Preferences::load(),
+            preferences,
+            sidebar_open: false,
+            navigation_peek: false,
             sidebar_width: 270.0,
             inspector_width: 320.0,
             resizing: None,
@@ -208,13 +491,15 @@ impl DesktopView {
     /// Apply saved preferences: theme, pane widths, and inspector state.
     fn load_preferences(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let preferences = self.preferences.clone();
+        self.preferences.follow_cli_theme = Some(preferences.follow_cli_theme.unwrap_or(preferences.theme.is_none()));
         if let Some(theme) = preferences.theme.as_deref() {
             self.theme_mode = themes::apply_by_id(theme, Some(window), cx);
             self.theme_id = theme.to_string();
         }
+        self.apply_typography(cx);
         self.sidebar_width = preferences.sidebar_width();
         self.inspector_width = preferences.inspector_width();
-        self.inspector_open = preferences.inspector_open.unwrap_or(true);
+        self.inspector_open = false;
         cx.notify();
     }
 
@@ -241,8 +526,16 @@ impl DesktopView {
         if self.workspace_picker_open {
             return;
         }
+        if self.retained_submission.is_some() {
+            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            cx.notify();
+            return;
+        }
         if !self.workspace_switch_idle() {
-            self.error = Some("Cancel the active turn and wait for cleanup before switching workspaces.".to_string());
+            self.error = Some(
+                "Cancel the active turn or wait for the pending session change before switching workspaces."
+                    .to_string(),
+            );
             cx.notify();
             return;
         }
@@ -271,13 +564,21 @@ impl DesktopView {
     }
 
     fn workspace_switch_idle(&self) -> bool {
-        !self.running && self.pending_workspace.is_none()
+        !self.running && self.pending_workspace.is_none() && self.session_request.is_none()
     }
 
     fn select_workspace(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         // A turn may have started while the asynchronous picker was open.
+        if self.retained_submission.is_some() {
+            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            cx.notify();
+            return;
+        }
         if !self.workspace_switch_idle() {
-            self.error = Some("Cancel the active turn and wait for cleanup before switching workspaces.".to_string());
+            self.error = Some(
+                "Cancel the active turn or wait for the pending session change before switching workspaces."
+                    .to_string(),
+            );
             cx.notify();
             return;
         }
@@ -306,96 +607,127 @@ impl DesktopView {
     }
 
     fn start_workspace(&mut self, workspace: PathBuf, cx: &mut Context<Self>) {
-        self.workspace = Some(workspace.clone());
-        self.remember_workspace(&workspace);
+        self.prepare_workspace(&workspace, cx);
+        match launch_backend(workspace, self.event_tx.clone()) {
+            Ok(backend) => self.initialize_backend(backend),
+            Err(error) => self.error = Some(error),
+        }
+        cx.notify();
+    }
+
+    fn prepare_workspace(&mut self, workspace: &Path, cx: &mut Context<Self>) {
+        // A same-workspace restart reloads CLI configuration without losing draft sources.
+        let same_workspace = self.workspace.as_deref() == Some(workspace);
+        let draft_sources = same_workspace.then(|| std::mem::take(&mut self.attachments));
+        self.workspace = Some(workspace.to_path_buf());
+        self.remember_workspace(workspace);
         self.pending_workspace = None;
         self.sessions.clear();
         self.selected_session_id = None;
-        self.transcript.clear();
+        self.reset_session_state();
+        if let Some(sources) = draft_sources {
+            self.attachments = sources;
+        }
         self.configuration = None;
+        self.cli_config_settings = None;
+        self.config_editor = None;
+        self.config_editor_error = None;
+        self.config_write_pending = false;
+        if !same_workspace {
+            self.config_target = protocol::ConfigTarget::Workspace;
+            self.config_write_notice = None;
+        }
         self.service_info = None;
+        self.composer_resources.clear();
+        self.resources_loading = false;
+        self.resources_loaded = false;
         self.active_turn_id = None;
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.running = false;
         self.error = None;
         self.status = "Starting local VT Code service…".to_string();
-        self.files = files::scan_workspace(&workspace);
-        self.git_branch = files::git_branch(&workspace);
+        self.files.clear();
+        self.git_branch = None;
+        self.preview_task = None;
+        self.refresh_files(cx);
         self.file_preview = None;
-        self.changes = ChangesProjection::default();
-        self.selected_change = None;
-        self.change_viewer = None;
         self.models.clear();
-        self.attachments.clear();
-        self.attachments_picker_open = false;
+    }
 
-        match launch_backend(workspace, self.event_tx.clone()) {
-            Ok(backend) => {
-                let protocol_range = protocol::ProtocolRange {
-                    minimum: protocol::PROTOCOL_VERSION,
-                    maximum: protocol::PROTOCOL_VERSION,
-                };
-                let initialize = protocol::InitializeParams {
-                    protocol: protocol_range,
-                    client_name: "VT Code Desktop".to_string(),
-                    client_version: env!("CARGO_PKG_VERSION").to_string(),
-                };
-                let mut sent = send_request(&backend.commands, protocol::method::INITIALIZE, json!(initialize));
-                sent &= send_request(&backend.commands, protocol::method::CONFIG_DISCOVER, json!({}));
-                sent &= send_request(&backend.commands, protocol::method::CONFIG_MODELS, json!({}));
-                sent &= send_request(&backend.commands, protocol::method::SESSION_LIST, json!({}));
-                self.backend = Some(backend);
-                if !sent {
-                    self.error = Some("The local service request queue is unavailable.".to_string());
-                }
+    fn initialize_backend(&mut self, backend: BackendHandle) {
+        let initialize = protocol::InitializeParams {
+            protocol: protocol::ProtocolRange {
+                minimum: protocol::PROTOCOL_VERSION,
+                maximum: protocol::PROTOCOL_VERSION,
+            },
+            client_name: "VT Code Desktop".to_string(),
+            client_version: env!("CARGO_PKG_VERSION").to_string(),
+        };
+        if send_request(&backend.commands, protocol::method::INITIALIZE, json!(initialize)) {
+            self.backend = Some(backend);
+            // Reuse the session transition gate until the handshake is validated.
+            self.session_request = Some(protocol::method::INITIALIZE);
+        } else {
+            self.error = Some("The local service request queue is unavailable.".to_string());
+        }
+    }
+
+    fn session_change_idle(&self) -> bool {
+        self.workspace_switch_idle() && self.backend.is_some() && self.interaction.is_none()
+    }
+
+    fn session_change_allowed(&self, reload_session_id: Option<&str>) -> bool {
+        self.session_change_idle()
+            && (self.retained_submission.is_none()
+                || reload_session_id.is_some_and(|id| self.selected_session_id.as_deref() == Some(id)))
+    }
+
+    fn request_session_change(&mut self, method: &'static str, params: Value, cx: &mut Context<Self>) -> bool {
+        let reload_session_id = (method == protocol::method::SESSION_LOAD)
+            .then(|| params.get("sessionId").and_then(Value::as_str))
+            .flatten();
+        if !self.session_change_allowed(reload_session_id) {
+            if self.retained_submission.is_some() && self.session_change_idle() {
+                self.error =
+                    Some("Restore or dismiss the unsent message before changing sessions or models.".to_string());
+                cx.notify();
             }
-            Err(error) => self.error = Some(error),
+            return false;
+        }
+        self.clear_error();
+        let sent = self.request(method, params);
+        if sent {
+            self.session_request = Some(method);
+            self.status = "Updating session…".to_string();
+        } else {
+            self.error = Some("The local service request queue is full. Try again.".to_string());
         }
         cx.notify();
+        sent
     }
 
     fn create_session(&mut self, cx: &mut Context<Self>) {
-        if self.running || self.backend.is_none() {
-            return;
-        }
-        self.clear_error();
-        if !self.request(protocol::method::SESSION_CREATE, json!({ "title": null })) {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
-        }
-        cx.notify();
+        let _sent = self.request_session_change(protocol::method::SESSION_CREATE, json!({ "title": null }), cx);
     }
 
     fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) {
-        if self.running || self.backend.is_none() {
-            return;
-        }
-        self.clear_error();
-        if !self.request(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id })) {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
-        }
-        cx.notify();
+        let _sent = self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx);
     }
 
     fn close_session(&mut self, cx: &mut Context<Self>) {
-        if self.running || self.backend.is_none() {
-            return;
-        }
         let Some(session_id) = self.selected_session_id.clone() else {
             return;
         };
-        self.clear_error();
-        if !self.request(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id })) {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
-        }
-        cx.notify();
+        let _sent =
+            self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx);
     }
 
     /// Pick workspace text files to attach to the next prompt.
     fn attach_files(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         const MAX_ATTACHMENTS: usize = 5;
 
-        if self.attachments_picker_open || self.workspace.is_none() {
+        if self.attachments_picker_open || self.workspace.is_none() || self.session_request.is_some() {
             return;
         }
         self.attachments_picker_open = true;
@@ -410,49 +742,61 @@ impl DesktopView {
             prompt: Some("Attach files".into()),
         });
         cx.notify();
-        cx.spawn(async move |view, cx| {
+        let session_id = self.selected_session_id.clone();
+        self.attachments_task = Some(cx.spawn(async move |view, cx| {
             let result = picked.await;
+            let result = match result {
+                Ok(Ok(Some(paths))) => {
+                    let root = workspace.clone();
+                    // Bound both work and retained data, even for a very large native selection.
+                    Ok(cx
+                        .background_spawn(async move {
+                            let overflow = paths.len() > MAX_ATTACHMENTS;
+                            let results = paths
+                                .into_iter()
+                                .take(MAX_ATTACHMENTS)
+                                .map(|path| files::read_attachment(&root, &path))
+                                .collect::<Vec<_>>();
+                            (results, overflow)
+                        })
+                        .await)
+                }
+                Ok(Ok(None)) => Ok((Vec::new(), false)),
+                Ok(Err(error)) => Err(format!("Unable to open the file picker: {error}")),
+                Err(_) => Err("The file picker was disconnected.".to_string()),
+            };
             let _updated = view.update(cx, |view, cx| {
                 view.attachments_picker_open = false;
-                let paths = match result {
-                    Ok(Ok(Some(paths))) => paths,
-                    Ok(Ok(None)) => return,
-                    Ok(Err(error)) => {
-                        view.error = Some(format!("Unable to open the file picker: {error}"));
-                        cx.notify();
-                        return;
-                    }
-                    Err(_) => return,
-                };
-                for path in paths {
-                    if view.attachments.len() >= MAX_ATTACHMENTS {
-                        view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
-                        break;
-                    }
-                    let Some(relative) = path
-                        .strip_prefix(&workspace)
-                        .ok()
-                        .map(|relative| relative.display().to_string().replace('\\', "/"))
-                    else {
-                        view.error = Some("Attachments must live inside the workspace.".to_string());
-                        continue;
-                    };
-                    if view.attachments.iter().any(|existing| existing.path == relative) {
-                        continue;
-                    }
-                    match files::read_preview(&workspace, &relative) {
-                        Some(preview) => view
-                            .attachments
-                            .push(protocol::TurnAttachment { path: relative, text: preview.text }),
-                        None => {
-                            view.error = Some(format!("“{relative}” is missing, binary, or too large to attach."));
+                if view.workspace.as_ref() != Some(&workspace) || view.selected_session_id != session_id {
+                    cx.notify();
+                    return;
+                }
+                match result {
+                    Err(error) => view.error = Some(error),
+                    Ok((results, overflow)) => {
+                        if overflow {
+                            view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
+                        }
+                        for result in results {
+                            match result {
+                                Ok(attachment) => {
+                                    if view.attachments.iter().any(|existing| existing.path == attachment.path) {
+                                        continue;
+                                    }
+                                    if view.attachments.len() >= MAX_ATTACHMENTS {
+                                        view.error = Some(format!("At most {MAX_ATTACHMENTS} attachments per prompt."));
+                                        break;
+                                    }
+                                    view.attachments.push(attachment);
+                                }
+                                Err(error) => view.error = Some(error),
+                            }
                         }
                     }
                 }
                 cx.notify();
             });
-        })
-        .detach();
+        }));
     }
 
     fn remove_attachment(&mut self, path: String, cx: &mut Context<Self>) {
@@ -463,44 +807,177 @@ impl DesktopView {
     /// Switch the service to another catalog model. The service restarts its
     /// session; the next prompt starts a fresh one under the new model.
     fn select_model(&mut self, provider: String, model: String, cx: &mut Context<Self>) {
-        if self.running {
+        if self.attachments_picker_open {
             return;
         }
-        self.clear_error();
-        if !self.request(protocol::method::CONFIG_SELECT, json!({ "provider": provider, "model": model })) {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
-        } else {
+        if self.request_session_change(
+            protocol::method::CONFIG_SELECT,
+            json!({ "provider": provider, "model": model }),
+            cx,
+        ) {
             self.status = "Switching model…".to_string();
+        }
+    }
+
+    fn refresh_files(&mut self, cx: &mut Context<Self>) {
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        self.files_task = Some(cx.spawn(async move |view, cx| {
+            let root = workspace.clone();
+            let (entries, branch) = cx
+                .background_spawn(async move { (files::scan_workspace(&root), files::git_branch(&root)) })
+                .await;
+            let _updated = view.update(cx, |view, cx| {
+                if view.workspace.as_ref() == Some(&workspace) {
+                    view.files = entries;
+                    view.git_branch = branch;
+                    cx.notify();
+                }
+            });
+        }));
+    }
+
+    fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.close_review(window, cx);
+        }
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        if self.file_preview.is_none() {
+            self.preview_return_focus = window.focused(cx);
+        }
+        self.preview_task = Some(cx.spawn_in(window, async move |view, cx| {
+            let root = workspace.clone();
+            let path = rel_path.clone();
+            let preview = cx.background_spawn(async move { files::read_preview(&root, &path) }).await;
+            let _updated = view.update_in(cx, |view, window, cx| {
+                if view.workspace.as_ref() != Some(&workspace) {
+                    return;
+                }
+                match preview {
+                    Some(preview) => {
+                        view.file_preview = Some(preview);
+                        view.preview_focus.focus(window, cx);
+                        view.clear_error();
+                    }
+                    None => {
+                        view.error = Some(format!("“{rel_path}” is outside the workspace, missing, or not UTF-8 text."))
+                    }
+                }
+                cx.notify();
+            });
+        }));
+    }
+
+    fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.composer.read(cx).focus_handle(cx).focus(window, cx);
+    }
+
+    fn activate_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.close_review(window, cx);
+        }
+        self.settings_open = false;
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+        }
+        if self.file_preview.is_some() {
+            self.close_file_preview(window, cx);
+        }
+        self.focus_composer(window, cx);
+        cx.notify();
+    }
+
+    fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.close_review(window, cx);
+        }
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+        }
+        if self.file_preview.is_some() {
+            self.close_file_preview(window, cx);
+        }
+        if !self.settings_open {
+            self.settings_return_focus = window.focused(cx);
+        }
+        self.settings_open = true;
+        self.settings_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.settings_open = false;
+        if let Some(focus) = self.settings_return_focus.take() {
+            focus.focus(window, cx);
+        } else {
+            self.focus_composer(window, cx);
         }
         cx.notify();
     }
 
-    fn refresh_files(&mut self, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.clone() {
-            self.files = files::scan_workspace(&workspace);
-            self.git_branch = files::git_branch(&workspace);
+    fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
+        if self.workspace.is_some() {
+            self.inspector_open = !self.inspector_open;
+            self.save_preferences();
             cx.notify();
         }
     }
 
-    fn open_file_preview(&mut self, rel_path: String, cx: &mut Context<Self>) {
-        let Some(workspace) = self.workspace.clone() else {
-            return;
-        };
-        match files::read_preview(&workspace, &rel_path) {
-            Some(preview) => {
-                self.file_preview = Some(preview);
-                self.clear_error();
-            }
-            None => {
-                self.error = Some(format!("“{rel_path}” is missing, binary, or too large to preview."));
-            }
+    fn close_file_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_task = None;
+        self.file_preview = None;
+        if let Some(focus) = self.preview_return_focus.take() {
+            focus.focus(window, cx);
+        } else {
+            self.focus_composer(window, cx);
         }
         cx.notify();
     }
 
+    fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let return_to_settings = matches!(self.palette_kind, PaletteKind::Fonts(_)) && self.palette.is_some();
+        self.palette = None;
+        self.effort_slider = None;
+        self.palette_groups.clear();
+        if let Some(focus) = self.palette_return_focus.take() {
+            focus.focus(window, cx);
+        } else {
+            self.focus_composer(window, cx);
+        }
+        if return_to_settings {
+            self.open_settings(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_some() {
+            self.close_cli_config_editor(window, cx);
+        } else if self.navigation_peek {
+            self.navigation_peek = false;
+            cx.notify();
+        } else if self.settings_open {
+            self.close_settings(window, cx);
+        } else if self.review_open {
+            self.close_review(window, cx);
+        } else if self.palette.is_some() {
+            self.close_palette(window, cx);
+        } else if self.file_preview.is_some() {
+            self.close_file_preview(window, cx);
+        } else {
+            cx.propagate();
+        }
+    }
+
     /// Build and open the ⌘K command palette over the current state.
     fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::Commands {
+            self.close_palette(window, cx);
+            return;
+        }
         const MAX_SESSION_ENTRIES: usize = 10;
         const MAX_FILE_ENTRIES: usize = 50;
 
@@ -512,6 +989,7 @@ impl DesktopView {
                 command("Close session", PaletteAction::CloseSession),
                 command("Switch workspace…", PaletteAction::ChooseWorkspace),
                 command("Refresh workspace files", PaletteAction::RefreshFiles),
+                command("Choose a model…", PaletteAction::ChooseModel),
             ],
         ));
         groups.push((
@@ -555,8 +1033,102 @@ impl DesktopView {
             groups.push(("Files".to_string(), file_commands));
         }
 
+        self.show_palette(PaletteKind::Commands, groups, window, cx);
+    }
+
+    fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.session_change_allowed(None) || self.attachments_picker_open {
+            return;
+        }
+        let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
+        let active_model = self
+            .configuration
+            .as_ref()
+            .filter(|configuration| {
+                !self
+                    .models
+                    .iter()
+                    .any(|model| model.provider == configuration.provider && model.id == configuration.model)
+            })
+            .map(|configuration| protocol::ModelInfo {
+                provider: configuration.provider.clone(),
+                id: configuration.model.clone(),
+                display_name: configuration.model.clone(),
+                context_window: configuration.context_window,
+                current: true,
+            });
+        for model in self.models.iter().chain(active_model.iter()) {
+            let context = model
+                .context_window
+                .map(|tokens| format!(" · {tokens} tokens"))
+                .unwrap_or_default();
+            let current = if self.model_is_current(&model.provider, &model.id) {
+                " · Current"
+            } else {
+                ""
+            };
+            let mut entry = command(
+                model.display_name.clone(),
+                PaletteAction::SelectModel {
+                    provider: model.provider.clone(),
+                    model: model.id.clone(),
+                },
+            );
+            entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
+            entry.keywords = vec![model.provider.clone(), model.id.clone()];
+            groups.entry(model.provider.clone()).or_default().push(entry);
+        }
+        let mut groups = groups.into_iter().collect::<Vec<_>>();
+        for (_, entries) in &mut groups {
+            entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
+        }
+        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
+        self.show_palette(PaletteKind::Models, groups, window, cx);
+    }
+
+    fn model_is_current(&self, provider: &str, model: &str) -> bool {
+        if let Some(configuration) = self.configuration.as_ref() {
+            configuration.provider == provider && configuration.model == model
+        } else {
+            self.models
+                .iter()
+                .any(|entry| entry.provider == provider && entry.id == model && entry.current)
+        }
+    }
+
+    fn is_current_palette_action(&self, action: &PaletteAction) -> bool {
+        match action {
+            PaletteAction::SelectModel { provider, model } => self.model_is_current(provider, model),
+            PaletteAction::SelectSessionOptions(options) => self.session_option_is_current(options),
+            PaletteAction::SelectFont { target, family } => {
+                let selected = match target {
+                    FontTarget::Ui => &self.preferences.ui_font_family,
+                    FontTarget::Code => &self.preferences.code_font_family,
+                };
+                family == selected
+            }
+            _ => false,
+        }
+    }
+
+    fn show_palette(
+        &mut self,
+        kind: PaletteKind,
+        groups: Vec<(String, Vec<PaletteCommand>)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.review_open {
+            self.close_review(window, cx);
+        }
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+        }
+        self.settings_open = false;
+        self.palette_return_focus = window.focused(cx);
         let state = cx.new(|cx| CommandState::new(window, cx));
         self.palette = Some(state.clone());
+        self.palette_kind = kind;
         self.palette_groups = groups;
         // The palette installs its input state during its first render, so
         // focusing has to wait for that frame.
@@ -566,93 +1138,216 @@ impl DesktopView {
 
     fn focus_palette_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(state) = self.palette.clone() {
-            state.update(cx, |state, cx| state.focus(window, cx));
+            let current = (matches!(
+                self.palette_kind,
+                PaletteKind::Models | PaletteKind::Permissions | PaletteKind::Modes | PaletteKind::Fonts(_)
+            ))
+            .then(|| {
+                self.palette_groups.iter().enumerate().find_map(|(section, (_, entries))| {
+                    entries
+                        .iter()
+                        .position(|entry| self.is_current_palette_action(&entry.action))
+                        .map(|row| gpui_kit::component::IndexPath::new(row).section(section))
+                })
+            })
+            .flatten();
+            state.update(cx, |state, cx| {
+                if let Some(current) = current {
+                    state.set_selected_index(Some(current), window, cx);
+                }
+                state.focus(window, cx);
+            });
         }
     }
 
     fn run_palette_action(&mut self, action: PaletteAction, window: &mut Window, cx: &mut Context<Self>) {
-        self.palette = None;
-        self.palette_groups = Vec::new();
+        if !self.palette_action_available(&action) {
+            cx.notify();
+            return;
+        }
+        self.close_palette(window, cx);
         match action {
             PaletteAction::NewSession => self.create_session(cx),
             PaletteAction::CloseSession => self.close_session(cx),
+            PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
             PaletteAction::RefreshFiles => self.refresh_files(cx),
-            PaletteAction::ToggleInspector => {
-                self.inspector_open = !self.inspector_open;
-                cx.notify();
-            }
-            PaletteAction::ToggleTheme => {
-                let mode = if self.theme_mode == ThemeMode::Light {
-                    ThemeMode::Dark
-                } else {
-                    ThemeMode::Light
-                };
-                Theme::change(mode, Some(window), cx);
-                self.theme_mode = mode;
-                self.transcript.remeasure();
-                cx.notify();
+            PaletteAction::ToggleInspector => self.toggle_inspector(cx),
+            PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
+            PaletteAction::SelectFont { target, family } => self.select_font(target, family, cx),
+            PaletteAction::EditConfigSetting(path) => self.open_cli_config_editor(path, window, cx),
+            PaletteAction::SelectSessionOptions(options) => self.select_session_options(options, cx),
+            PaletteAction::AttachFiles => self.attach_files(window, cx),
+            PaletteAction::AttachFile(path) => self.attach_context_file(path, cx),
+            PaletteAction::InsertDraft(text) => {
+                self.composer.update(cx, |input, cx| {
+                    let current = input.value().to_string();
+                    let separator = if current.is_empty() || current.ends_with(char::is_whitespace) {
+                        ""
+                    } else {
+                        " "
+                    };
+                    input.set_value(format!("{current}{separator}{text} "), window, cx);
+                });
+                self.focus_composer(window, cx);
             }
             PaletteAction::LoadSession(session_id) => self.load_session(session_id, cx),
-            PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, cx),
+            PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, window, cx),
+            PaletteAction::SelectModel { provider, model } => {
+                if !self.model_is_current(&provider, &model) {
+                    self.select_model(provider, model, cx);
+                }
+            }
+        }
+    }
+
+    fn palette_action_available(&self, action: &PaletteAction) -> bool {
+        match action {
+            PaletteAction::NewSession | PaletteAction::ChooseModel => self.session_change_allowed(None),
+            PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
+            PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {
+                self.workspace.is_some() && !self.attachments_picker_open && self.session_request.is_none()
+            }
+            PaletteAction::InsertDraft(_) => true,
+            PaletteAction::CloseSession => self.selected_session_id.is_some() && self.session_change_allowed(None),
+            PaletteAction::LoadSession(session_id) => self.session_change_allowed(Some(session_id)),
+            PaletteAction::ChooseWorkspace => {
+                self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open
+            }
+            PaletteAction::RefreshFiles | PaletteAction::ToggleInspector | PaletteAction::PreviewFile(_) => {
+                self.workspace.is_some()
+            }
+            PaletteAction::ToggleTheme | PaletteAction::SelectFont { .. } => true,
+            PaletteAction::EditConfigSetting(path) => {
+                self.can_edit_cli_settings()
+                    && self
+                        .cli_config_settings
+                        .as_ref()
+                        .is_some_and(|snapshot| snapshot.settings.iter().any(|setting| setting.path == *path))
+            }
+            PaletteAction::SelectModel { provider, model } => {
+                self.session_change_allowed(None)
+                    && (self.model_is_current(provider, model)
+                        || self
+                            .models
+                            .iter()
+                            .any(|entry| entry.provider == *provider && entry.id == *model))
+            }
         }
     }
 
     fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.running || self.interaction.is_some() || self.backend.is_none() {
+        if !self.session_change_idle() || self.attachments_picker_open || self.retained_submission.is_some() {
             return;
         }
-        let Some(session_id) = self.selected_session_id.clone() else {
-            self.create_session(cx);
-            return;
-        };
         let prompt = self.composer.read(cx).value().to_string();
         if prompt.trim().is_empty() {
             return;
         }
-        self.clear_error();
-        let attachments = std::mem::take(&mut self.attachments);
-        let sent = self.request(
-            protocol::method::TURN_SUBMIT,
-            json!({ "sessionId": session_id, "prompt": prompt, "attachments": attachments }),
-        );
-        if !sent {
-            self.attachments = attachments;
-            self.error = Some("The local service request queue is full. Try again.".to_string());
-        } else {
-            // The sidebar shows the archive title once the session is listed
-            // again; until then name it after this first prompt.
-            if let Some(entry) = self
-                .sessions
-                .iter_mut()
-                .find(|session| session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty))
-            {
-                entry.title = Some(session_title_from_prompt(&prompt));
-            }
-            let echo = if attachments.is_empty() {
-                prompt
+        let draft = SubmissionDraft {
+            prompt,
+            attachments: std::mem::take(&mut self.attachments),
+            echo_id: format!("desktop-user-{}", uuid_like_id()),
+            delivery_uncertain: false,
+        };
+        let sent = if self.selected_session_id.is_none() {
+            if self.request_session_change(protocol::method::SESSION_CREATE, json!({ "title": null }), cx) {
+                self.first_submission = Some(draft);
+                self.status = "Creating a session for your message…".to_string();
+                true
             } else {
-                let paths = attachments
-                    .iter()
-                    .map(|attachment| attachment.path.as_str())
-                    .collect::<Vec<_>>();
-                format!("{prompt}\n\nAttached: {}", paths.join(", "))
-            };
-            self.transcript.push(TranscriptItem::new(
-                format!("desktop-user-{}", uuid_like_id()),
-                "user".to_string(),
-                "You".to_string(),
-                echo,
-            ));
-            self.transcript.follow_latest();
-            self.running = true;
-            self.active_turn_id = None;
-            self.cancel_requested = false;
-            self.cancel_request_sent = false;
-            self.status = "Submitting turn…".to_string();
+                self.attachments = draft.attachments;
+                false
+            }
+        } else {
+            match self.enqueue_submission(draft, cx) {
+                Ok(()) => true,
+                Err(draft) => {
+                    self.attachments = draft.attachments;
+                    false
+                }
+            }
+        };
+        if sent {
             self.composer.update(cx, |state, cx| state.set_value("", window, cx));
         }
         cx.notify();
+    }
+
+    /// The original Send intent can cross session creation without reading a newer composer draft.
+    fn enqueue_submission(&mut self, draft: SubmissionDraft, cx: &mut Context<Self>) -> Result<(), SubmissionDraft> {
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return Err(draft);
+        };
+        let params = json!({ "sessionId": session_id, "prompt": draft.prompt, "attachments": draft.attachments });
+        self.clear_error();
+        if !request_fits_frame(protocol::method::TURN_SUBMIT, &params) {
+            self.error = Some(
+                "This prompt exceeds the 1 MiB request limit after JSON encoding. Shorten it or remove attachments."
+                    .to_string(),
+            );
+            return Err(draft);
+        }
+        if !self.request(protocol::method::TURN_SUBMIT, params) {
+            self.error = Some("The local service request queue is full. Try again.".to_string());
+            return Err(draft);
+        }
+        if let Some(entry) = self
+            .sessions
+            .iter_mut()
+            .find(|session| session.session_id == session_id && session.title.as_deref().is_none_or(str::is_empty))
+        {
+            entry.title = Some(session_title_from_prompt(&draft.prompt));
+        }
+        let echo = if draft.attachments.is_empty() {
+            draft.prompt.clone()
+        } else {
+            let paths = draft
+                .attachments
+                .iter()
+                .map(|attachment| attachment.path.as_str())
+                .collect::<Vec<_>>();
+            format!("{}\n\nAttached: {}", draft.prompt, paths.join(", "))
+        };
+        self.transcript
+            .push(TranscriptItem::new(draft.echo_id.clone(), "user".into(), "You".into(), echo));
+        self.pending_submission = Some(draft);
+        self.transcript.follow_latest();
+        self.running = true;
+        self.active_turn_id = None;
+        self.cancel_requested = false;
+        self.cancel_request_sent = false;
+        self.status = "Submitting turn…".to_string();
+        cx.notify();
+        Ok(())
+    }
+
+    fn recover_pending_submission(&mut self, delivery_uncertain: bool) {
+        if let Some(mut draft) = self.pending_submission.take() {
+            draft.delivery_uncertain = delivery_uncertain;
+            if !delivery_uncertain {
+                self.transcript.remove(&draft.echo_id);
+            }
+            self.retained_submission = Some(draft);
+        }
+    }
+
+    fn restore_submission(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.composer.read(cx).value().is_empty()
+            || !self.attachments.is_empty()
+            || self.attachments_picker_open
+            || self.session_request.is_some()
+        {
+            return;
+        }
+        if let Some(draft) = self.retained_submission.take() {
+            self.transcript.remove(&draft.echo_id);
+            self.composer.update(cx, |state, cx| state.set_value(draft.prompt, window, cx));
+            self.attachments = draft.attachments;
+            self.clear_error();
+            self.status = "Draft restored. Review it before sending again.".to_string();
+            cx.notify();
+        }
     }
 
     fn cancel_turn(&mut self, cx: &mut Context<Self>) {
@@ -789,6 +1484,7 @@ impl DesktopView {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     self.backend = None;
+                    self.fail_workspace_review("Local service disconnected.".into());
                     self.running = false;
                     self.status = "Local service disconnected".to_string();
                     changed = true;
@@ -804,9 +1500,32 @@ impl DesktopView {
     fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {
         match event {
             BackendEvent::Response { method, result, error } => {
+                if self.session_request == Some(method.as_str()) {
+                    self.session_request = None;
+                }
                 if let Some(error) = error {
+                    if method == protocol::method::COMPOSER_RESOURCES {
+                        self.resources_loading = false;
+                    }
+                    if method == protocol::method::CONFIG_SETTINGS_WRITE {
+                        self.config_write_pending = false;
+                        self.config_editor_error = Some(error.clone());
+                    }
+                    if method == protocol::method::WORKSPACE_REVIEW {
+                        self.fail_workspace_review(error);
+                        return;
+                    }
+                    if method == protocol::method::INITIALIZE {
+                        self.backend = None;
+                    }
+                    if method == protocol::method::SESSION_CREATE
+                        && let Some(draft) = self.first_submission.take()
+                    {
+                        self.retained_submission = Some(draft);
+                    }
                     self.error = Some(error);
                     if method == protocol::method::TURN_SUBMIT {
+                        self.recover_pending_submission(false);
                         self.running = false;
                         self.cancel_requested = false;
                         self.cancel_request_sent = false;
@@ -818,12 +1537,42 @@ impl DesktopView {
                 }
                 let result = result.unwrap_or(Value::Null);
                 match method.as_str() {
+                    protocol::method::WORKSPACE_REVIEW => {
+                        match serde_json::from_value::<protocol::WorkspaceReviewResult>(result) {
+                            Ok(snapshot) => self.accept_workspace_review(snapshot, cx),
+                            Err(_) => self.fail_workspace_review("Invalid Git review response.".into()),
+                        }
+                    }
                     protocol::method::INITIALIZE => {
-                        self.service_info = serde_json::from_value::<protocol::InitializeResult>(result).ok();
-                        self.status = "Connected to the local VT Code service".to_string();
+                        let initialized = serde_json::from_value::<protocol::InitializeResult>(result);
+                        match initialized {
+                            Ok(info) if info.protocol == protocol::PROTOCOL_VERSION => {
+                                self.service_info = Some(info);
+                                self.status = "Connected to the local VT Code service".to_string();
+                                for method in [
+                                    protocol::method::CONFIG_DISCOVER,
+                                    protocol::method::CONFIG_SETTINGS_READ,
+                                    protocol::method::CONFIG_MODELS,
+                                    protocol::method::SESSION_LIST,
+                                ] {
+                                    if !self.request(method, json!({})) {
+                                        self.error =
+                                            Some("The local service request queue is unavailable.".to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                            _ => {
+                                self.service_info = None;
+                                self.backend = None;
+                                self.error = Some("The local service returned an invalid or incompatible initialization response. Rebuild the desktop app and its bundled helper together.".to_string());
+                                self.status = "Could not initialize the local VT Code service".to_string();
+                            }
+                        }
                     }
                     protocol::method::CONFIG_DISCOVER => {
                         self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
+                        self.sync_cli_theme(cx);
                         if self
                             .configuration
                             .as_ref()
@@ -834,17 +1583,81 @@ impl DesktopView {
                             );
                         }
                     }
+                    protocol::method::CONFIG_SETTINGS_READ => {
+                        self.handle_cli_config_read_response(result);
+                    }
+                    protocol::method::CONFIG_SETTINGS_WRITE => {
+                        self.handle_cli_config_write_response(result, cx);
+                    }
                     protocol::method::CONFIG_MODELS => {
                         self.models = serde_json::from_value::<Vec<protocol::ModelInfo>>(result).unwrap_or_default();
                     }
+                    protocol::method::COMPOSER_RESOURCES => {
+                        self.resources_loading = false;
+                        match serde_json::from_value::<Vec<protocol::ComposerResource>>(result) {
+                            Ok(resources)
+                                if resources.len() <= 192
+                                    && resources.iter().all(|resource| {
+                                        protocol::ComposerResource::is_valid_name(&resource.name)
+                                            && resource.description.chars().count() <= 400
+                                    }) =>
+                            {
+                                self.composer_resources = resources;
+                                self.resources_loaded = true;
+                            }
+                            _ => self.error = Some("Invalid CLI resource catalog.".into()),
+                        }
+                    }
+                    protocol::method::CONFIG_OPTIONS => match serde_json::from_value::<ConfigurationSnapshot>(result) {
+                        Ok(snapshot) => {
+                            let attachments = std::mem::take(&mut self.attachments);
+                            self.reset_session_state();
+                            self.attachments = attachments;
+                            self.selected_session_id = None;
+                            self.configuration = Some(snapshot);
+                            self.status = "Runtime options updated. The next message starts a new session.".into();
+                        }
+                        Err(_) => {
+                            self.backend = None;
+                            self.error = Some("Invalid runtime options response. Reconnect before sending.".into());
+                        }
+                    },
+                    protocol::method::CONFIG_THEME => match serde_json::from_value::<ConfigurationSnapshot>(result) {
+                        Ok(snapshot) => {
+                            let theme = snapshot
+                                .shared_ui
+                                .as_ref()
+                                .map(|preferences| preferences.theme.clone())
+                                .filter(|theme| themes::find(theme).is_some());
+                            if let Some(theme) = theme {
+                                let attachments = std::mem::take(&mut self.attachments);
+                                self.reset_session_state();
+                                self.attachments = attachments;
+                                self.selected_session_id = None;
+                                self.configuration = Some(snapshot);
+                                self.preferences.follow_cli_theme = Some(true);
+                                self.apply_theme_state(theme, None, cx);
+                                self.status = "CLI theme saved. The next message starts a new session.".into();
+                            } else {
+                                self.backend = None;
+                                self.error = Some("The CLI returned an unsupported theme after saving.".into());
+                                self.status = "Could not apply CLI theme".into();
+                            }
+                        }
+                        Err(_) => {
+                            self.backend = None;
+                            self.error = Some("Invalid CLI theme response. Reconnect before sending.".into());
+                        }
+                    },
                     protocol::method::CONFIG_SELECT => {
                         // The service restarted with the new provider/model and
                         // no selected session; the next prompt starts a fresh
                         // session under it.
                         self.configuration = serde_json::from_value::<ConfigurationSnapshot>(result).ok();
                         self.selected_session_id = None;
-                        self.transcript.clear();
-                        self.interaction = None;
+                        let attachments = std::mem::take(&mut self.attachments);
+                        self.reset_session_state();
+                        self.attachments = attachments;
                         self.models.clear();
                         let _ = self.request(protocol::method::CONFIG_MODELS, json!({}));
                         let model = self
@@ -870,27 +1683,99 @@ impl DesktopView {
                         self.sessions = refreshed;
                     }
                     protocol::method::SESSION_CREATE => {
-                        if let Ok(session) = serde_json::from_value::<SessionSummary>(result) {
+                        let first_submission = self.first_submission.take();
+                        if let Some(session) = serde_json::from_value::<SessionSummary>(result)
+                            .ok()
+                            .filter(|session| !session.session_id.is_empty())
+                        {
                             self.selected_session_id = Some(session.session_id.clone());
                             self.sessions.insert(0, session);
-                            self.transcript.clear();
+                            self.reset_session_state();
+                            self.status = "Session ready. Submit a prompt to begin.".to_string();
+                            if let Some(draft) = first_submission
+                                && let Err(draft) = self.enqueue_submission(draft, cx)
+                            {
+                                self.retained_submission = Some(draft);
+                                self.status = "Message not submitted".to_string();
+                            }
+                        } else {
+                            self.status = "Session creation failed".to_string();
+                            self.retained_submission = first_submission;
+                            self.error = Some(
+                                "The service returned an invalid session. Your message has not been submitted."
+                                    .to_string(),
+                            );
                         }
                     }
                     protocol::method::SESSION_CLOSE => {
                         self.selected_session_id = None;
-                        self.transcript.clear();
-                        self.interaction = None;
+                        self.reset_session_state();
                         self.status = "Session closed. Start a new session to continue.".to_string();
                     }
                     protocol::method::SESSION_LOAD => {
                         if let Ok(loaded) = serde_json::from_value::<SessionLoadResult>(result) {
+                            if self.retained_submission.is_some()
+                                && self.selected_session_id.as_deref() != Some(loaded.session.session_id.as_str())
+                            {
+                                self.error = Some(
+                                    "The service returned a different session; the unsent message was retained."
+                                        .to_string(),
+                                );
+                                return;
+                            }
+                            let retained_submission = self.retained_submission.take();
                             self.load_history(loaded.messages);
+                            for item in &loaded.review_items {
+                                if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
+                                    self.update_runtime_item(item);
+                                }
+                            }
+                            for item in &loaded.activity_items {
+                                use vtcode_exec_events::ThreadItemDetails;
+                                if !matches!(
+                                    item.details,
+                                    ThreadItemDetails::AgentMessage(_)
+                                        | ThreadItemDetails::Plan(_)
+                                        | ThreadItemDetails::Reasoning(_)
+                                        | ThreadItemDetails::Decision(_)
+                                        | ThreadItemDetails::FileChange(_)
+                                ) {
+                                    self.project_runtime_item(item, true);
+                                }
+                            }
+                            self.retained_submission = retained_submission;
                             self.selected_session_id = Some(loaded.session.session_id.clone());
-                            self.status = "Session loaded. Submit a prompt to continue.".to_string();
+                            self.status = if loaded.review_history_incomplete || loaded.activity_history_incomplete {
+                                "Session loaded. Recent inspector history is partial or unavailable."
+                            } else {
+                                "Session loaded. Submit a prompt to continue."
+                            }
+                            .to_string();
                         }
                     }
                     protocol::method::TURN_SUBMIT => {
-                        self.active_turn_id = result.get("turnId").and_then(Value::as_str).map(str::to_owned);
+                        let accepted =
+                            serde_json::from_value::<protocol::TurnAccepted>(result)
+                                .ok()
+                                .filter(|accepted| {
+                                    self.selected_session_id.as_deref() == Some(accepted.session_id.as_str())
+                                        && !accepted.turn_id.is_empty()
+                                });
+                        let Some(accepted) = accepted else {
+                            if self.pending_submission.is_some() {
+                                self.recover_pending_submission(true);
+                                self.running = false;
+                                self.status = "Invalid turn acknowledgement".to_string();
+                            }
+                            self.error = Some("The service returned an invalid turn acknowledgement. Delivery could not be confirmed.".to_string());
+                            return;
+                        };
+                        // Lifecycle events can complete the turn before the request response arrives.
+                        if self.pending_submission.is_none() && self.active_turn_id.is_none() {
+                            return;
+                        }
+                        self.pending_submission = None;
+                        self.active_turn_id = Some(accepted.turn_id);
                         self.running = true;
                         self.status = "Running".to_string();
                         self.try_send_pending_cancel();
@@ -905,10 +1790,20 @@ impl DesktopView {
                 }
             }
             BackendEvent::ThreadEvent(notification) => {
+                if !self.notification_matches(&notification.session_id, notification.turn_id.as_deref()) {
+                    return;
+                }
                 self.handle_thread_event(notification);
+                self.refresh_selected_change(cx);
                 self.handle_cancel_state_after_turn_event();
             }
             BackendEvent::Interaction(interaction) => {
+                if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
+                    || (interaction.turn_id != "session-start"
+                        && !self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)))
+                {
+                    return;
+                }
                 self.interaction_choice_ids =
                     interaction.steps.iter().map(|step| step.selected_choice_id.clone()).collect();
                 if self.interaction_choice_ids.is_empty() {
@@ -920,11 +1815,22 @@ impl DesktopView {
                 self.status = "Waiting for your decision".to_string();
             }
             BackendEvent::TurnStatus(status) => {
+                if !status.get("sessionId").and_then(Value::as_str).is_some_and(|session_id| {
+                    self.notification_matches(session_id, status.get("turnId").and_then(Value::as_str))
+                }) {
+                    return;
+                }
                 if let Some(label) = status.get("status").and_then(Value::as_str) {
                     self.status = label.to_string();
                 }
             }
             BackendEvent::Exited { status, authentication_required } => {
+                self.fail_workspace_review("The local service exited before Git review completed.".into());
+                self.session_request = None;
+                if let Some(draft) = self.first_submission.take() {
+                    self.retained_submission = Some(draft);
+                }
+                self.recover_pending_submission(true);
                 self.backend = None;
                 self.running = false;
                 self.active_turn_id = None;
@@ -945,6 +1851,12 @@ impl DesktopView {
                 }
             }
             BackendEvent::LaunchFailed(error) => {
+                self.fail_workspace_review("The local service could not start.".into());
+                self.session_request = None;
+                if let Some(draft) = self.first_submission.take() {
+                    self.retained_submission = Some(draft);
+                }
+                self.recover_pending_submission(true);
                 self.error = Some(error);
                 self.status = "Could not connect to the local VT Code service".to_string();
                 self.backend = None;
@@ -955,15 +1867,38 @@ impl DesktopView {
         }
     }
 
+    fn notification_matches(&self, session_id: &str, turn_id: Option<&str>) -> bool {
+        if self.selected_session_id.as_deref() != Some(session_id) {
+            return false;
+        }
+        if let Some(turn_id) = turn_id {
+            if self.active_turn_id.as_deref().is_some_and(|active| active != turn_id) {
+                return false;
+            }
+            if self.running && self.finished_turn_id.as_deref() == Some(turn_id) {
+                return false;
+            }
+        }
+        true
+    }
+
     fn handle_thread_event(&mut self, notification: ThreadEventNotification) {
         use vtcode_exec_events::ThreadEvent;
+        let terminal_turn_id = matches!(
+            notification.event.event(),
+            ThreadEvent::TurnCompleted(_) | ThreadEvent::TurnFailed(_) | ThreadEvent::TurnBlocked(_)
+        )
+        .then(|| notification.turn_id.clone())
+        .flatten();
         match notification.event.event() {
             ThreadEvent::TurnStarted(_) => {
+                self.pending_submission = None;
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
                 self.status = "Running".to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
+                self.pending_submission = None;
                 self.running = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;
@@ -997,9 +1932,13 @@ impl DesktopView {
             }
             _ => {}
         }
+        if let Some(turn_id) = terminal_turn_id {
+            self.finished_turn_id = Some(turn_id);
+        }
     }
 
     fn finish_unverified_turn(&mut self, message: &str) {
+        self.pending_submission = None;
         self.running = false;
         self.active_turn_id = None;
         self.cancel_requested = false;
@@ -1023,6 +1962,11 @@ impl DesktopView {
     }
 
     fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
+        self.restored_activity.retain(|restored| restored.id != item.id);
+        self.project_runtime_item(item, false);
+    }
+
+    fn project_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem, historical: bool) {
         use vtcode_exec_events::ThreadItemDetails;
         let id = item.id.clone();
         match &item.details {
@@ -1040,7 +1984,10 @@ impl DesktopView {
             }
             ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
             details => {
-                let (title, status) = describe_activity(details);
+                let (title, mut status) = describe_activity(details);
+                if historical && ActivityState::from_status(&status) == ActivityState::Running {
+                    status = "interrupted".to_string();
+                }
                 let payload = serde_json::to_string_pretty(details).unwrap_or_else(|_| "{}".to_string());
                 let text = format!("{status}\n\n{payload}");
                 // Keep the raw aggregated output for the inspector's Output
@@ -1050,9 +1997,15 @@ impl DesktopView {
                     ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.clone()),
                     _ => None,
                 };
-                self.append_or_update_item(id.clone(), "tool", &title, &text, true);
-                if output.is_some() {
-                    self.transcript.set_output(&id, output);
+                if historical {
+                    let mut item = TranscriptItem::new(id, "tool".to_string(), title, text);
+                    item.output = output;
+                    self.restored_activity.push(item);
+                } else {
+                    self.append_or_update_item(id.clone(), "tool", &title, &text, true);
+                    if output.is_some() {
+                        self.transcript.set_output(&id, output);
+                    }
                 }
             }
         }
@@ -1081,10 +2034,35 @@ impl DesktopView {
         };
         let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".to_string(), card.patch.clone());
         item.diff = Some(card);
+        let previous_patch = self
+            .selected_change
+            .as_deref()
+            .and_then(|path| self.changes.patch_for(&self.transcript, path));
         self.transcript.upsert(item);
         // Change-sets are rare; rebuild the inspector projection eagerly so
         // renders never parse patches.
         self.changes = ChangesProjection::rebuild(&self.transcript);
+        self.change_viewer_dirty |= self
+            .selected_change
+            .as_deref()
+            .is_some_and(|path| self.changes.patch_for(&self.transcript, path) != previous_patch);
+    }
+
+    /// Refresh only when the selected file's accepted patch changed, preserving its mode.
+    fn refresh_selected_change(&mut self, cx: &mut Context<Self>) {
+        if !std::mem::take(&mut self.change_viewer_dirty) {
+            return;
+        }
+        let file = self.selected_change.as_deref().and_then(|path| self.changes.select(path));
+        if let (Some(viewer), Some(file)) = (self.change_viewer.as_ref(), file) {
+            viewer.update(cx, |viewer, cx| viewer.set_files(vec![file], cx));
+        } else {
+            self.selected_change = None;
+            self.change_viewer = None;
+            if self.workspace_review.is_none() {
+                self.review_open = false;
+            }
+        }
     }
 
     /// Open one changed file in the inspector's syntax-highlighted diff view.
@@ -1092,11 +2070,90 @@ impl DesktopView {
         let Some(file) = self.changes.select(&path) else {
             return;
         };
+        let mode = self
+            .change_viewer
+            .as_ref()
+            .map(|viewer| viewer.read(cx).mode())
+            .unwrap_or(DiffMode::Unified);
         self.selected_change = Some(path);
-        self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx)));
+        self.change_viewer_dirty = false;
+        self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Changes;
         cx.notify();
+    }
+
+    fn navigate_change_file(&mut self, next: bool, cx: &mut Context<Self>) {
+        let entries = self.changes.entries();
+        if entries.is_empty() {
+            return;
+        }
+        let current = self
+            .selected_change
+            .as_deref()
+            .and_then(|path| entries.iter().position(|entry| entry.path == path));
+        let index = match current {
+            Some(index) if next => (index + 1) % entries.len(),
+            Some(0) => entries.len() - 1,
+            Some(index) => index - 1,
+            None => 0,
+        };
+        if let Some(entry) = entries.get(index) {
+            self.select_change(entry.path.clone(), cx);
+        }
+    }
+
+    fn open_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.change_viewer.is_none() {
+            return;
+        }
+        self.workspace_review = None;
+        self.show_review(window, cx);
+    }
+
+    fn show_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
+        if self.palette.is_some() {
+            self.close_palette(window, cx);
+        }
+        if self.file_preview.is_some() {
+            self.close_file_preview(window, cx);
+        }
+        if !self.review_open {
+            self.review_return_focus = window.focused(cx);
+        }
+        self.review_open = true;
+        self.review_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    fn close_review(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.review_open = false;
+        self.workspace_review = None;
+        if let Some(focus) = self.review_return_focus.take() {
+            focus.focus(window, cx);
+        } else {
+            self.focus_composer(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn navigate_review_change(&self, next: bool, cx: &mut Context<Self>) {
+        let viewer = match &self.workspace_review {
+            Some(review) => review.viewer.as_ref(),
+            None => self.change_viewer.as_ref(),
+        };
+        if let Some(viewer) = viewer {
+            viewer.update(cx, |viewer, cx| {
+                if next {
+                    viewer.next_change(cx);
+                } else {
+                    viewer.previous_change(cx);
+                }
+            });
+        }
     }
 
     fn append_or_update_item(&mut self, id: String, role: &str, title: &str, text: &str, expandable: bool) {
@@ -1112,11 +2169,37 @@ impl DesktopView {
         ));
     }
 
-    fn load_history(&mut self, messages: Vec<SessionHistoryMessage>) {
+    /// Clear session-owned projections together so another conversation cannot inherit them.
+    fn reset_session_state(&mut self) {
         self.transcript.clear();
+        self.restored_activity.clear();
         self.changes = ChangesProjection::default();
         self.selected_change = None;
         self.change_viewer = None;
+        self.change_viewer_dirty = false;
+        self.review_open = false;
+        self.workspace_review = None;
+        self.review_return_focus = None;
+        self.last_usage = None;
+        self.finished_turn_id = None;
+        self.interaction = None;
+        self.interaction_choice_ids.clear();
+        self.interaction_answer_texts.clear();
+        self.interaction_step_index = 0;
+        self.active_turn_id = None;
+        self.cancel_requested = false;
+        self.cancel_request_sent = false;
+        self.attachments_task = None;
+        self.attachments_picker_open = false;
+        self.attachments.clear();
+        self.pending_submission = None;
+        self.first_submission = None;
+        self.session_request = None;
+        self.retained_submission = None;
+    }
+
+    fn load_history(&mut self, messages: Vec<SessionHistoryMessage>) {
+        self.reset_session_state();
         for (index, message) in messages.into_iter().enumerate() {
             let title = match message.role.as_str() {
                 "user" => "You".to_string(),
@@ -1124,8 +2207,10 @@ impl DesktopView {
                 "tool" => "Tool result".to_string(),
                 _ => message.role.clone(),
             };
-            self.transcript
-                .push(TranscriptItem::new(format!("history-{index}"), message.role, title, message.text));
+            // Preserve collapsed archive tool text without inventing activity status.
+            let mut item = TranscriptItem::new(format!("history-{index}"), message.role, title, message.text);
+            item.has_activity_status = false;
+            self.transcript.push(item);
         }
         self.transcript.follow_latest();
     }
@@ -1155,11 +2240,18 @@ impl DesktopView {
             .w(px(5.))
             .h_full()
             .cursor(cursor)
-            .hover(|style| style.bg(cx.theme().colors.accent.opacity(0.4)))
+            .hover(|style| style.bg(cx.theme().colors.primary.opacity(0.4)))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, _: &MouseDownEvent, _, cx| {
-                    this.resizing = Some(edge);
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.resizing = Some(PaneResize {
+                        edge,
+                        start_x: f32::from(event.position.x),
+                        start_width: match edge {
+                            ResizeEdge::Sidebar => this.sidebar_width,
+                            ResizeEdge::Inspector => this.inspector_width,
+                        },
+                    });
                     cx.stop_propagation();
                     cx.notify();
                 }),
@@ -1176,29 +2268,46 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .p_4()
-            .border_r_1()
+            .bg(themes::mix(theme.colors.background, theme.colors.secondary, 0.3))
+            .rounded_lg()
             .border_color(theme.colors.border)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(div().text_xl().font_semibold().child("VT Code"))
+                    .child(section_label("WORKSPACE", theme.colors.muted_foreground))
                     .child(
-                        Button::new("choose-workspace")
+                        desktop_button("choose-workspace")
+                            .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
                             .label(if self.workspace.is_some() { "Change" } else { "Open" })
                             .ghost()
-                            .disabled(self.workspace_picker_open || !self.workspace_switch_idle())
+                            .desktop_disabled(
+                                self.workspace_picker_open
+                                    || !self.workspace_switch_idle()
+                                    || self.retained_submission.is_some(),
+                            )
                             .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
                     ),
             );
 
-        let workspace = self
-            .workspace
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "No workspace selected".to_string());
-        sidebar = sidebar.child(div().text_sm().text_color(theme.colors.muted_foreground).child(workspace));
+        sidebar = sidebar.child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(Icon::new(IconName::FolderGit2).text_color(theme.colors.primary))
+                .child(
+                    div().min_w_0().flex_1().text_sm().font_semibold().truncate().child(
+                        self.workspace
+                            .as_ref()
+                            .and_then(|p| p.file_name())
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("Choose a project")
+                            .to_string(),
+                    ),
+                ),
+        );
 
         sidebar = sidebar.child(
             div()
@@ -1206,25 +2315,29 @@ impl DesktopView {
                 .w_full()
                 .gap_2()
                 .child(
-                    Button::new("new-session")
-                        .label("New session")
-                        .primary()
+                    desktop_button("new-session")
+                        .tooltip_with_action("New session", &NewSession, Some("VTCodeDesktop"))
+                        .label("New thread")
+                        .icon(IconName::Plus)
+                        .ghost()
                         .flex_1()
-                        .disabled(self.workspace.is_none() || self.running || self.backend.is_none())
+                        .desktop_disabled(!self.session_change_allowed(None))
                         .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
                 )
                 .child(
-                    Button::new("close-session")
-                        .label("Close")
+                    desktop_button("close-session")
+                        .tooltip_with_action("Close session", &CloseSession, Some("VTCodeDesktop"))
+                        .icon(IconName::X)
+                        .accessibility_label("Close thread")
                         .ghost()
-                        .disabled(self.selected_session_id.is_none() || self.running || self.backend.is_none())
+                        .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
                         .on_click(cx.listener(|this, _, _, cx| this.close_session(cx))),
                 ),
         );
 
-        sidebar = sidebar.child(div().mt_2().text_sm().font_semibold().child("Workspaces"));
+        sidebar = sidebar.child(section_label("PROJECTS", theme.colors.muted_foreground));
         let recent = self.recent_workspaces();
-        if recent.len() > 1 {
+        if !recent.is_empty() {
             sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().enumerate().map(
                 |(index, path)| {
                     let workspace_path = path.clone();
@@ -1238,12 +2351,18 @@ impl DesktopView {
                         .unwrap_or(path)
                         .to_string();
                     div().w_full().child(
-                        Button::new(format!("workspace-{index}"))
-                            .label(label)
+                        desktop_button(format!("workspace-{index}"))
+                            .accessibility_label(format!(
+                                "{label}{}",
+                                if current { " (current workspace)" } else { "" }
+                            ))
+                            .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
                             .ghost()
                             .w_full()
-                            .disabled(self.running)
-                            .when(current, |button| button.primary())
+                            .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
+                            .when(current, |button| {
+                                button.bg(theme.colors.secondary).text_color(theme.colors.foreground)
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
                             })),
@@ -1252,7 +2371,20 @@ impl DesktopView {
             )));
         }
 
-        sidebar = sidebar.child(div().mt_2().text_sm().font_semibold().child("Recent sessions"));
+        sidebar = sidebar.child(
+            div()
+                .mt_2()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(section_label("RECENT THREADS", theme.colors.muted_foreground))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.colors.muted_foreground)
+                        .child(self.sessions.len().to_string()),
+                ),
+        );
         sidebar = sidebar.child(
             div()
                 .id("session-list")
@@ -1270,11 +2402,16 @@ impl DesktopView {
                         format!("Session {}", session.session_id.chars().take(8).collect::<String>())
                     });
                     div().w_full().child(
-                        Button::new(format!("session-{index}"))
-                            .label(label)
+                        desktop_button(format!("session-{index}"))
+                            .accessibility_label(format!("{label}{}", if selected { " (current thread)" } else { "" }))
+                            .child(navigation_label(label, IconName::MessageSquare, selected, theme.colors.primary))
                             .ghost()
-                            .disabled(self.running || self.backend.is_none())
-                            .when(selected, |button| button.primary())
+                            .desktop_disabled(!self.session_change_allowed(Some(&session.session_id)))
+                            .w_full()
+                            .justify_start()
+                            .when(selected, |button| {
+                                button.bg(theme.colors.secondary).text_color(theme.colors.foreground)
+                            })
                             .on_click(cx.listener(move |this, _, _, cx| this.load_session(session_id.clone(), cx))),
                     )
                 })),
@@ -1292,6 +2429,24 @@ impl DesktopView {
         )
     }
 
+    fn render_thread_header(&self) -> impl IntoElement {
+        let title = self
+            .sessions
+            .iter()
+            .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
+            .and_then(|session| session.title.as_deref())
+            .unwrap_or("New thread");
+        div().w_full().flex().items_center().justify_between().px_8().py_3().child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .text_lg()
+                .font_semibold()
+                .truncate()
+                .child(title.to_string()),
+        )
+    }
+
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let workspace = self
@@ -1302,74 +2457,107 @@ impl DesktopView {
             .unwrap_or("Workspace");
         let configuration = self.configuration.as_ref();
         let provider = configuration.map(|config| config.provider.as_str()).unwrap_or("Provider");
-        let model = configuration.map(|config| config.model.as_str()).unwrap_or("Model");
-        let theme_mode = if self.theme_mode == ThemeMode::Light {
-            ThemeMode::Dark
-        } else {
-            ThemeMode::Light
-        };
-        let weak = cx.entity().downgrade();
-        let settings_weak = weak.clone();
-        div()
+        TitleBar::new()
             .w_full()
-            .h(px(58.))
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .px_5()
-            .border_b_1()
-            .border_color(theme.colors.border)
-            .child(div().text_lg().font_semibold().child(workspace.to_string()))
+            .h(px(48.))
+            .bg(chrome_background(&theme.colors))
+            .border_0()
+            .pr_3()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(
+                        desktop_button("toggle-sidebar")
+                            .accessibility_label("Toggle navigation")
+                            .icon(IconName::PanelLeft)
+                            .ghost()
+                            .tooltip_with_action("Toggle navigation", &ToggleSidebar, Some("VTCodeDesktop"))
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.sidebar_open = !view.sidebar_open;
+                                view.navigation_peek = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(brand_logo(22.))
+                    .child(div().text_sm().font_semibold().child("VT Code"))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_sm()
+                            .text_color(theme.colors.muted_foreground)
+                            .child(format!("/ {workspace}")),
+                    ),
+            )
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(badge(provider.to_string(), theme.colors.accent, theme.colors.accent_foreground))
-                    .child(badge(model.to_string(), theme.colors.secondary, theme.colors.secondary_foreground))
                     .child(
-                        Button::new("toggle-inspector")
+                        desktop_button("search-commands")
+                            .accessibility_label("Search commands")
+                            .icon(IconName::Search)
+                            .ghost()
+                            .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
+                            .on_click(cx.listener(|view, _, window, cx| view.open_command_palette(window, cx))),
+                    )
+                    .child(
+                        Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                            .small()
+                            .rounded_full()
+                            .child(provider.to_string()),
+                    )
+                    .child(
+                        desktop_button("toggle-inspector")
+                            .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
                             .label(if self.inspector_open {
                                 "Hide panel"
                             } else {
                                 "Show panel"
                             })
                             .ghost()
-                            .disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.inspector_open = !this.inspector_open;
-                                this.save_preferences();
-                                cx.notify();
-                            })),
+                            .desktop_disabled(self.workspace.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
                     )
                     .child(
-                        Button::new("toggle-theme")
+                        desktop_button("toggle-theme")
+                            .small()
+                            .icon(IconName::SunMoon)
                             .label(if self.theme_mode == ThemeMode::Light {
                                 "Dark"
                             } else {
                                 "Light"
                             })
                             .ghost()
-                            .on_click(move |_, _, app| {
-                                Theme::change(theme_mode, None, app);
-                                let _updated = weak.update(app, |view, cx| {
-                                    view.theme_mode = theme_mode;
-                                    view.transcript.remeasure();
-                                    cx.notify();
-                                });
-                            }),
+                            .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),
                     )
                     .child(
-                        Popover::new("settings-popover")
-                            .anchor(gpui_kit::Anchor::BottomRight)
-                            .trigger(Button::new("open-settings").label("Settings").ghost())
-                            .content(move |_, _, cx| {
-                                settings_weak
-                                    .update(cx, |view, cx| view.render_settings(cx))
-                                    .unwrap_or_else(|_| div().into_any_element())
-                            }),
-                    ),
+                        desktop_button("open-settings")
+                            .accessibility_label("Settings")
+                            .icon(IconName::Settings2)
+                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                            .ghost()
+                            .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                    )
+                    .when_some(
+                        self.configuration
+                            .as_ref()
+                            .and_then(|config| config.session_options.as_ref())
+                            .and_then(|options| options.speed.as_ref()),
+                        |row, speed| {
+                            row.child(
+                                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                                    .small()
+                                    .child(speed.clone()),
+                            )
+                        },
+                    )
+                    .child(self.render_chrome_menu("header-overflow", "Window actions")),
             )
     }
 
@@ -1385,21 +2573,90 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = &theme.colors;
         let mut panel = div()
-            .w(px(340.))
+            .id("settings-panel")
+            .test_support()
+            .role(gpui_kit::Role::Dialog)
+            .aria_label("Settings")
+            .w(px(740.))
+            .max_w_full()
+            .max_h_full()
+            .overflow_y_scroll()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap_5()
+            .p_6()
+            .rounded_xl()
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.background)
+            .shadow_lg()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .text_sm()
-            .child(div().font_semibold().child("Theme"))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .child(
+                        DialogHeader::new()
+                            .child(DialogTitle::new().text_2xl().child("Make it yours"))
+                            .child(DialogDescription::new().child("Appearance · VT Code Desktop")),
+                    )
+                    .child(
+                        desktop_button("close-settings")
+                            .icon(IconName::X)
+                            .accessibility_label("Close settings")
+                            .ghost()
+                            .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
+                    ),
+            )
+            .child(
+                gpui_kit::component::switch::Switch::new("show-status-bar")
+                    .label("Show status bar")
+                    .checked(self.preferences.show_status_bar)
+                    .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
+            )
+            .child(section_label("VISUAL STYLE", colors.muted_foreground))
             .child(
                 div()
                     .id("theme-grid")
-                    .max_h(px(300.))
+                    .test_support()
+                    .flex_shrink_0()
+                    .max_h(px(220.))
                     .overflow_y_scroll()
                     .flex()
                     .flex_wrap()
                     .gap_2()
                     .children(swatch_rows),
+            );
+
+        panel = panel
+            .child(
+                GroupBox::new()
+                    .flex_shrink_0()
+                    .outline()
+                    .title("Typography")
+                    .child(self.render_font_family(FontTarget::Ui, cx))
+                    .child(self.render_font_family(FontTarget::Code, cx))
+                    .child(self.render_font_size(false, cx))
+                    .child(self.render_font_size(true, cx))
+                    .child(render_markdown(
+                        "appearance-code-preview".into(),
+                        "```rust\nfn main() { /* VT Code */ }\n```".into(),
+                        cx,
+                    )),
+            )
+            .child(
+                desktop_button("reset-appearance")
+                    .label("Reset appearance to defaults")
+                    .ghost()
+                    .on_click(cx.listener(|view, _, window, cx| {
+                        view.preferences.ui_font_family = None;
+                        view.preferences.code_font_family = None;
+                        view.preferences.ui_font_size = None;
+                        view.preferences.code_font_size = None;
+                        view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
+                    })),
             );
 
         if let Some(configuration) = self.configuration.as_ref() {
@@ -1431,7 +2688,7 @@ impl DesktopView {
                                 .truncate()
                                 .child(command.clone()),
                         )
-                        .child(Button::new("copy-credential-command").label("Copy").ghost().on_click(
+                        .child(desktop_button("copy-credential-command").label("Copy").ghost().on_click(
                             move |_, _, app| {
                                 app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
                             },
@@ -1440,6 +2697,10 @@ impl DesktopView {
             }
         }
 
+        panel = panel
+            .child(self.render_shortcuts(cx))
+            .child(self.render_shared_preferences(cx))
+            .child(self.render_cli_configuration(cx));
         if let Some(info) = self.service_info.as_ref() {
             panel = panel.child(div().font_semibold().child("Service")).child(
                 div().text_color(colors.muted_foreground).child(format!(
@@ -1469,6 +2730,11 @@ impl DesktopView {
             .child(
                 div()
                     .id("file-preview")
+                    .track_focus(&self.preview_focus)
+                    .role(gpui_kit::Role::Dialog)
+                    .accessibility_id("file-preview")
+                    .aria_label(format!("File preview: {}", preview.rel_path))
+                    .aria_description("Read-only file preview. Press Escape to close.")
                     .w(px(860.))
                     .max_h(px(640.))
                     .flex()
@@ -1497,15 +2763,16 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
-                            .child(Button::new("copy-preview").label("Copy").ghost().on_click(move |_, _, app| {
+                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(move |_, _, app| {
                                 app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()))
                             }))
-                            .child(Button::new("close-preview").label("Close").ghost().on_click(cx.listener(
-                                |this, _, _, cx| {
-                                    this.file_preview = None;
-                                    cx.notify();
-                                },
-                            ))),
+                            .child(
+                                desktop_button("close-preview")
+                                    .tooltip("Close preview (Escape)")
+                                    .label("Close")
+                                    .ghost()
+                                    .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
+                            ),
                     )
                     .child(
                         div()
@@ -1516,6 +2783,7 @@ impl DesktopView {
                             .p_3()
                             .text_xs()
                             .font_family(mono)
+                            .text_size(theme.mono_font_size)
                             .child(preview.text.clone()),
                     )
                     .when(preview.truncated, |panel| {
@@ -1533,47 +2801,93 @@ impl DesktopView {
             )
     }
 
+    fn select_inspector_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(tab) = InspectorTab::ALL.get(index) {
+            self.inspector_tab = *tab;
+            self.inspector_focus.focus(window, cx);
+            cx.notify();
+        }
+    }
+
+    fn cycle_inspector_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let count = InspectorTab::ALL.len();
+        let current = InspectorTab::ALL
+            .iter()
+            .position(|tab| *tab == self.inspector_tab)
+            .unwrap_or_default();
+        let index = if forward {
+            (current + 1) % count
+        } else {
+            (current + count - 1) % count
+        };
+        self.select_inspector_tab(index, window, cx);
+    }
+
     /// Right-hand context inspector: derived Changes, Files, and Activity
     /// views over the same transcript the conversation renders.
     fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let colors = theme.colors;
-        let panel = div()
-            .w(px(self.inspector_width))
-            .min_w(px(MIN_PANE_WIDTH))
-            .h_full()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .border_l_1()
-            .border_color(colors.border)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_2()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(colors.border)
-                    .children(InspectorTab::ALL.map(|tab| {
-                        let active = self.inspector_tab == tab;
-                        Button::new(tab.id())
-                            .label(tab.label())
-                            .ghost()
-                            .when(active, |button| button.primary())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.inspector_tab = tab;
-                                cx.notify();
-                            }))
-                    })),
-            );
+        let panel =
+            div()
+                .w(px(self.inspector_width))
+                .min_w(px(MIN_PANE_WIDTH))
+                .h_full()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .rounded_lg()
+                .bg(themes::mix(colors.background, colors.secondary, 0.3))
+                .border_1()
+                .border_color(colors.border)
+                .child(
+                    div()
+                        .id("inspector-navigation")
+                        .test_support()
+                        .track_focus(&self.inspector_focus)
+                        .key_context("VTCodeInspector")
+                        .role(gpui_kit::Role::Group)
+                        .aria_label("Context inspector tabs")
+                        .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
+                        .border_1()
+                        .border_color(colors.border.opacity(0.))
+                        .focus_visible(|style| style.border_color(colors.ring))
+                        .on_action(cx.listener(|view, _: &NextInspectorTab, window, cx| {
+                            view.cycle_inspector_tab(true, window, cx)
+                        }))
+                        .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
+                            view.cycle_inspector_tab(false, window, cx)
+                        }))
+                        .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
+                            view.select_inspector_tab(0, window, cx)
+                        }))
+                        .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
+                            view.select_inspector_tab(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+                        }))
+                        .child(
+                            TabBar::new("inspector-tabs")
+                                .underline()
+                                .small()
+                                .w_full()
+                                .selected_index(
+                                    InspectorTab::ALL
+                                        .iter()
+                                        .position(|tab| *tab == self.inspector_tab)
+                                        .unwrap_or_default(),
+                                )
+                                .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                    view.select_inspector_tab(*index, window, cx)
+                                }))
+                                .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                        ),
+                );
 
         let content = match self.inspector_tab {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
             InspectorTab::Activity => self.render_activity_tab(&colors),
             InspectorTab::Output => self.render_output_tab(cx),
+            InspectorTab::Utilities => self.render_utilities(cx),
         };
         panel.child(content).into_any_element()
     }
@@ -1583,15 +2897,50 @@ impl DesktopView {
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if self.review_open {
+            return div()
+                .p_4()
+                .text_sm()
+                .child("Changes are open in the expanded review.")
+                .into_any_element();
+        }
+        let content = self.render_changes_content(false, colors, cx);
+        div()
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div().px_3().py_2().border_b_1().border_color(colors.border).child(
+                    desktop_button("review-working-tree")
+                        .label("Review working tree")
+                        .icon(IconName::GitCompare)
+                        .ghost()
+                        .small()
+                        .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
+                        .on_click(cx.listener(|view, _, window, cx| view.open_workspace_review(window, cx))),
+                ),
+            )
+            .child(content)
+            .into_any_element()
+    }
+
+    fn render_changes_content(
+        &mut self,
+        expanded: bool,
+        colors: &gpui_kit::component::theme::ThemeColor,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
 
         if self.changes.is_empty() {
-            return body
-                .p_3()
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("File changes from this session appear here.")
-                .into_any_element();
+            return empty_state(
+                "No changes yet",
+                "Edits made during this session will appear here for review.",
+                IconName::GitCompare,
+            )
+            .into_any_element();
         }
 
         let (additions, deletions) = self.changes.totals();
@@ -1600,19 +2949,52 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
+                .gap_2()
                 .px_3()
                 .py_2()
-                .text_xs()
-                .text_color(colors.muted_foreground)
-                .child(format!("{} files", self.changes.entries().len()))
-                .child(format!("+{additions} −{deletions}")),
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .text_xs()
+                        .child(format!("{} files", self.changes.entries().len()))
+                        .child(div().text_color(colors.primary).child(format!("+{additions}")))
+                        .child(div().text_color(colors.danger).child(format!("−{deletions}"))),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            desktop_button("previous-change-file")
+                                .icon(IconName::ChevronLeft)
+                                .accessibility_label("Previous changed file")
+                                .tooltip("Previous changed file")
+                                .ghost()
+                                .small()
+                                .desktop_disabled(self.changes.entries().len() < 2)
+                                .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
+                        )
+                        .child(
+                            desktop_button("next-change-file")
+                                .icon(IconName::ChevronRight)
+                                .accessibility_label("Next changed file")
+                                .tooltip("Next changed file")
+                                .ghost()
+                                .small()
+                                .desktop_disabled(self.changes.entries().len() < 2)
+                                .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
+                        ),
+                ),
         );
 
         body = body.child(
             div()
                 .id("change-list")
                 .w_full()
-                .max_h(px(220.))
+                .max_h(px(if expanded { 220. } else { 112. }))
                 .min_h_0()
                 .overflow_y_scroll()
                 .flex()
@@ -1624,7 +3006,7 @@ impl DesktopView {
                     let path = entry.path.clone();
                     let selected = self.selected_change.as_deref() == Some(entry.path.as_str());
                     let kind_label = match entry.kind {
-                        DiffFileKind::Add => ("A", colors.accent),
+                        DiffFileKind::Add => ("A", colors.primary),
                         DiffFileKind::Delete => ("D", colors.danger),
                         DiffFileKind::Update => ("M", colors.muted_foreground),
                     };
@@ -1653,9 +3035,12 @@ impl DesktopView {
                                 .child(format!("+{} −{}", entry.additions, entry.deletions)),
                         )
                         .child(
-                            Button::new(format!("change-row-{index}"))
-                                .label("Open")
+                            desktop_button(format!("change-row-{index}"))
+                                .icon(IconName::ChevronRight)
+                                .accessibility_label(format!("Review {path}"))
+                                .tooltip(path.clone())
                                 .ghost()
+                                .small()
                                 .on_click(cx.listener(move |this, _, _, cx| this.select_change(path.clone(), cx))),
                         )
                 })),
@@ -1681,28 +3066,176 @@ impl DesktopView {
                 .px_3()
                 .py_2()
                 .child(div().flex_1().min_w_0().truncate().text_sm().font_medium().child(path));
+            if expanded {
+                let mode = viewer.read(cx).mode();
+                for (id, label, target) in [
+                    ("review-unified", "Unified", DiffMode::Unified),
+                    ("review-split", "Split", DiffMode::Split),
+                ] {
+                    let state = viewer.clone();
+                    header = header.child(
+                        desktop_button(id)
+                            .label(label)
+                            .ghost()
+                            .small()
+                            .when(mode == target, |button| button.bg(colors.secondary))
+                            .on_click(move |_, _, cx| state.update(cx, |state, cx| state.set_mode(target, cx))),
+                    );
+                }
+                header = header
+                    .child(
+                        desktop_button("review-previous-change")
+                            .icon(IconName::ArrowUp)
+                            .accessibility_label("Previous change")
+                            .tooltip("Previous change (⇧F7)")
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(false, cx))),
+                    )
+                    .child(
+                        desktop_button("review-next-change")
+                            .icon(IconName::ArrowDown)
+                            .accessibility_label("Next change")
+                            .tooltip("Next change (F7)")
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
+                    );
+            } else {
+                header = header.child(
+                    desktop_button("expand-change-review")
+                        .icon(IconName::Maximize2)
+                        .accessibility_label("Expand diff review")
+                        .tooltip("Expand diff review")
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(|view, _, window, cx| view.open_review(window, cx))),
+                );
+            }
             if let Some(patch) = patch {
-                header = header.child(Button::new("copy-change-patch").label("Copy patch").ghost().on_click(
-                    move |_, _, app| app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string())),
-                ));
+                header = header.child(
+                    desktop_button("copy-change-patch")
+                        .icon(IconName::Copy)
+                        .accessibility_label("Copy patch")
+                        .tooltip("Copy patch")
+                        .ghost()
+                        .small()
+                        .on_click(move |_, _, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()))
+                        }),
+                );
             }
             header = header.child(
-                Button::new("open-change-file")
-                    .label("Open file")
+                desktop_button("open-change-file")
+                    .icon(IconName::ExternalLink)
+                    .accessibility_label("Open file")
+                    .tooltip("Open file preview")
                     .ghost()
-                    .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
+                    .small()
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| this.open_file_preview(rel_path.clone(), window, cx)),
+                    ),
             );
             viewer_panel = viewer_panel.child(header).child(
                 div()
                     .id("change-diff-view")
+                    .test_support()
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .child(Diff::new(&viewer).line_number(true)),
+                    .child(Diff::new(&viewer).line_number(true).soft_wrap(expanded)),
             );
             body = body.child(viewer_panel);
         }
         body.into_any_element()
+    }
+
+    fn render_change_review(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let workspace_review = self.workspace_review.is_some();
+        let content = if workspace_review {
+            self.render_workspace_review_content(cx)
+        } else {
+            self.render_changes_content(true, &colors, cx)
+        };
+        let title = if workspace_review {
+            "Working tree review"
+        } else {
+            "Review changes"
+        };
+        let description = if workspace_review {
+            "Read-only redacted snapshot · staged and unstaged changes · optional untracked text previews"
+        } else {
+            "Session patch previews · read-only"
+        };
+        div()
+            .absolute()
+            .inset_0()
+            .p_6()
+            .bg(colors.background.opacity(0.85))
+            .flex()
+            .items_center()
+            .justify_center()
+            .on_mouse_down(MouseButton::Left, cx.listener(|view, _, window, cx| view.close_review(window, cx)))
+            .child(
+                div()
+                    .w_full()
+                    .h_full()
+                    .max_w(px(1500.))
+                    .child(
+                        div()
+                            .id("diff-review-panel")
+                            .test_support()
+                            .role(gpui_kit::Role::Dialog)
+                            .aria_label(title)
+                            .key_context("VTCodeDiffReview")
+                            .size_full()
+                            .flex()
+                            .flex_col()
+                            .rounded_xl()
+                            .border_1()
+                            .border_color(colors.border)
+                            .bg(colors.background)
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_action(
+                                cx.listener(|view, _: &NextReviewChange, _, cx| view.navigate_review_change(true, cx)),
+                            )
+                            .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| {
+                                view.navigate_review_change(false, cx)
+                            }))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .px_4()
+                                    .py_3()
+                                    .border_b_1()
+                                    .border_color(colors.border)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap_1()
+                                            .child(div().text_lg().font_semibold().child(title))
+                                            .child(
+                                                div().text_xs().text_color(colors.muted_foreground).child(description),
+                                            ),
+                                    )
+                                    .child(
+                                        desktop_button("close-diff-review")
+                                            .icon(IconName::X)
+                                            .accessibility_label("Close diff review")
+                                            .tooltip("Close review (Escape)")
+                                            .ghost()
+                                            .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
+                                    ),
+                            )
+                            .child(content),
+                    )
+                    .focus_trap("diff-review-trap", &self.review_focus),
+            )
+            .into_any_element()
     }
 
     fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -1716,7 +3249,7 @@ impl DesktopView {
                 .py_2()
                 .child(div().text_sm().font_semibold().child("Workspace files"))
                 .child(
-                    Button::new("refresh-files")
+                    desktop_button("refresh-files")
                         .label("Refresh")
                         .ghost()
                         .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
@@ -1743,11 +3276,13 @@ impl DesktopView {
                         rel_path.clone()
                     };
                     div().w_full().pl(px(12. * indent as f32)).child(
-                        Button::new(format!("file-{index}"))
+                        desktop_button(format!("file-{index}"))
                             .label(label)
                             .ghost()
-                            .disabled(is_dir)
-                            .on_click(cx.listener(move |this, _, _, cx| this.open_file_preview(rel_path.clone(), cx))),
+                            .desktop_disabled(is_dir)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_file_preview(rel_path.clone(), window, cx)
+                            })),
                     )
                 })),
         );
@@ -1760,16 +3295,13 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = theme.colors;
         let mono = theme.mono_font_family.clone();
-        let Some(output) = inspector::latest_output(&self.transcript) else {
-            return div()
-                .w_full()
-                .flex_1()
-                .min_h_0()
-                .p_3()
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("Command and tool output appears here while a turn runs.")
-                .into_any_element();
+        let Some(output) = inspector::latest_output(&self.transcript, &self.restored_activity) else {
+            return empty_state(
+                "No output yet",
+                "Command and tool output will appear here while a turn runs.",
+                IconName::Terminal,
+            )
+            .into_any_element();
         };
         let tail = inspector::output_tail(&output.text);
         div()
@@ -1797,25 +3329,44 @@ impl DesktopView {
                             .child(output.title.clone()),
                     )
                     .when(output.running, |header| {
-                        header.child(div().text_xs().text_color(colors.accent).child("● running"))
-                    }),
+                        header.child(
+                            Tag::custom(colors.secondary, colors.foreground, colors.border)
+                                .small()
+                                .child("Running"),
+                        )
+                    })
+                    .child(
+                        desktop_button("copy-output")
+                            .icon(IconName::Copy)
+                            .accessibility_label("Copy output")
+                            .tooltip("Copy captured output")
+                            .ghost()
+                            .small()
+                            .on_click(move |_, _, app| {
+                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()))
+                            }),
+                    ),
             )
             .child(
                 div()
                     .id("output-body")
+                    .test_support()
+                    .role(gpui_kit::Role::Label)
+                    .aria_label(tail.clone())
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
                     .p_2()
                     .text_xs()
                     .font_family(mono)
+                    .text_size(theme.mono_font_size)
                     .child(tail),
             )
             .into_any_element()
     }
 
     fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
-        let rows = inspector::activity_rows(&self.transcript);
+        let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
         let mut body = div()
             .id("activity-list")
             .w_full()
@@ -1827,34 +3378,65 @@ impl DesktopView {
             .gap_2()
             .p_3();
         if rows.is_empty() {
-            return body
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("Tool and command activity appears here.")
-                .into_any_element();
+            return empty_state(
+                "No activity yet",
+                "Follow tool calls and verification as VT Code works.",
+                IconName::Activity,
+            )
+            .into_any_element();
         }
         for row in rows {
-            let (dot_color, dot) = if row.status == "failed" {
-                (colors.danger, "✕")
-            } else if row.status == "running" || row.status == "in progress" {
-                (colors.accent, "●")
-            } else {
-                (colors.muted_foreground, "✓")
+            let (status_color, status_icon) = match row.state {
+                ActivityState::Failed => (colors.danger, IconName::X),
+                ActivityState::Running => (colors.primary, IconName::Activity),
+                ActivityState::Interrupted => (colors.muted_foreground, IconName::X),
+                ActivityState::Completed => (colors.muted_foreground, IconName::Check),
+                ActivityState::Other => (colors.muted_foreground, IconName::Activity),
             };
             body = body.child(
                 div()
+                    .id(format!("activity-{}", row.id))
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label(row.title.clone())
+                    .aria_description(row.status.clone())
+                    .w_full()
                     .flex()
                     .items_start()
-                    .gap_2()
-                    .child(div().text_xs().w(px(14.)).text_color(dot_color).child(dot))
+                    .gap_3()
+                    .p_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(28.))
+                            .flex_shrink_0()
+                            .rounded_full()
+                            .bg(colors.secondary)
+                            .child(Icon::new(status_icon).small().text_color(status_color)),
+                    )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .child(div().text_sm().truncate().child(row.title.clone()))
-                            .child(div().text_xs().text_color(colors.muted_foreground).child(row.status.clone())),
+                            .gap_2()
+                            .child(div().text_sm().font_medium().child(row.title))
+                            .child(
+                                div().flex().min_w_0().child(
+                                    Tag::custom(colors.secondary, colors.foreground, colors.border)
+                                        .small()
+                                        .rounded_full()
+                                        .max_w_full()
+                                        .child(div().truncate().child(row.status)),
+                                ),
+                            ),
                     ),
             );
         }
@@ -1862,25 +3444,63 @@ impl DesktopView {
     }
 
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = cx.theme().colors;
         let content = if self.transcript.is_empty() {
-            div()
+            EmptyState::new()
+                .header(
+                    EmptyHeader::new()
+                        .media(EmptyMedia::new().child(brand_logo(40.)))
+                        .title(EmptyTitle::new().text_3xl().font_semibold().child("What will you build?"))
+                        .description(
+                            EmptyDescription::new()
+                                .text_sm()
+                                .child("Explore your code, make a change, or review your work."),
+                        ),
+                )
                 .size_full()
-                .flex()
-                .px_8()
-                .py_6()
-                .child(
-                    div()
-                        .m_auto()
-                        .max_w(px(640.))
-                        .text_center()
-                        .flex()
-                        .flex_col()
+                .content(
+                    EmptyContent::new()
+                        .flex_row()
+                        .flex_wrap()
+                        .justify_center()
                         .gap_3()
-                        .child(div().text_2xl().font_semibold().child("What should we work on?"))
-                        .child(div().text_color(colors.muted_foreground).child(
-                            "Choose a workspace, then start a task. VT Code will ask before protected actions.",
-                        )),
+                        .child(
+                            desktop_button("welcome-browse-files")
+                                .accessibility_label("Browse files")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Folder)
+                                .label("Explore files")
+                                .desktop_disabled(self.workspace.is_none())
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.inspector_open = true;
+                                    view.inspector_tab = InspectorTab::Files;
+                                    view.save_preferences();
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            desktop_button("welcome-review-changes")
+                                .accessibility_label("Review changes")
+                                .ghost()
+                                .small()
+                                .icon(IconName::GitCompare)
+                                .label("Review changes")
+                                .desktop_disabled(self.workspace.is_none())
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.inspector_open = true;
+                                    view.inspector_tab = InspectorTab::Changes;
+                                    view.save_preferences();
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            desktop_button("welcome-choose-model")
+                                .label("Choose a model")
+                                .ghost()
+                                .small()
+                                .desktop_disabled(!self.session_change_allowed(None))
+                                .on_click(cx.listener(|view, _, window, cx| view.open_model_palette(window, cx))),
+                        ),
                 )
                 .into_any_element()
         } else {
@@ -1888,14 +3508,28 @@ impl DesktopView {
                 self.transcript.list_state(),
                 cx.processor(|view, index, _, cx| {
                     if let Some(item) = view.transcript.get(index) {
+                        let group = view.transcript.activity_group(index);
+                        let group_head = group.as_ref().and_then(|range| view.transcript.get(range.start));
+                        if group.as_ref().is_some_and(|range| index != range.start)
+                            && group_head.is_some_and(|head| !head.activity_expanded)
+                        {
+                            return div().into_any_element();
+                        }
+                        let group_header = group
+                            .as_ref()
+                            .filter(|range| index == range.start)
+                            .map(|range| view.render_activity_group(range.clone(), cx));
+                        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
                         div()
                             .id(format!("transcript-row-{}", item.id))
                             .role(gpui_kit::Role::ListItem)
                             .test_support()
                             .w_full()
                             .px_8()
-                            .pb_4()
-                            .child(view.render_transcript_item(item, cx))
+                            .when(item.role == "tool", |row| row.pb_1())
+                            .when(item.role != "tool", |row| row.pb_4())
+                            .children(group_header)
+                            .when(show_item, |row| row.child(view.render_transcript_item(item, cx)))
                             .into_any_element()
                     } else {
                         div().into_any_element()
@@ -1908,6 +3542,7 @@ impl DesktopView {
         };
         div()
             .id("transcript-scroll")
+            .aria_label("Conversation")
             .role(gpui_kit::Role::List)
             .test_support()
             .flex_1()
@@ -1926,69 +3561,190 @@ impl DesktopView {
         }
 
         let colors = cx.theme().colors;
-        let (label, bg) = match item.role.as_str() {
-            "user" => ("You", colors.accent.opacity(0.12)),
-            "notice" => (item.title.as_str(), colors.warning.opacity(0.12)),
-            _ => (item.title.as_str(), colors.background),
-        };
+        let user = item.role == "user";
+        let label = if user { "You" } else { item.title.as_str() };
         let copy_text = item.text.clone();
-        let card = div()
+        Message::new()
+            .id(format!("message-{}", item.id))
+            .alignment(if user {
+                MessageAlignment::End
+            } else {
+                MessageAlignment::Start
+            })
             .w_full()
-            .max_w(px(860.))
-            .flex()
-            .flex_col()
-            .gap_2()
-            .rounded_md()
-            .p_3()
-            .bg(bg)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().font_semibold().child(label.to_string()))
-                    .child(Button::new(format!("copy-message-{}", item.id)).label("Copy").ghost().on_click(
-                        move |_, _, app| {
+            .max_w(px(CONTENT_WIDTH))
+            .header(
+                MessageHeader::new().child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .when(!user, |row| row.child(brand_logo(18.)))
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_semibold()
+                                .text_color(colors.muted_foreground)
+                                .child(label.to_string()),
+                        ),
+                ),
+            )
+            .content(
+                MessageContent::new().bubble(
+                    Bubble::new()
+                        .with_variant(if user {
+                            BubbleVariant::Outline
+                        } else {
+                            BubbleVariant::Ghost
+                        })
+                        .content(
+                            BubbleContent::new()
+                                .rounded_xl()
+                                .when(user, |surface| {
+                                    surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_3()
+                                })
+                                .child(
+                                    div()
+                                        .id(format!("message-body-{}", item.id))
+                                        .role(gpui_kit::Role::Label)
+                                        .aria_label(format!("{label}: {}", item.text))
+                                        .test_support()
+                                        .child(render_markdown(
+                                            format!("markdown-{}", item.id),
+                                            item.markdown.clone(),
+                                            cx,
+                                        )),
+                                ),
+                        ),
+                ),
+            )
+            .footer(
+                MessageFooter::new().child(
+                    desktop_button(format!("copy-message-{}", item.id))
+                        .icon(IconName::Copy)
+                        .accessibility_label("Copy message")
+                        .tooltip("Copy message")
+                        .ghost()
+                        .xsmall()
+                        .on_click(move |_, _, app| {
                             app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()))
-                        },
-                    )),
-            );
-        card.child(render_markdown(format!("markdown-{}", item.id), item.markdown.clone()))
+                        }),
+                ),
+            )
+            .into_any_element()
+    }
+
+    fn render_activity_group(&self, range: std::ops::Range<usize>, cx: &mut Context<Self>) -> AnyElement {
+        let Some(head) = self.transcript.get(range.start) else {
+            return div().into_any_element();
+        };
+        let id = head.id.clone();
+        let mut failed = 0;
+        let mut running = 0;
+        for item in range.clone().filter_map(|index| self.transcript.get(index)) {
+            match ActivityState::from_status(item.text.lines().next().unwrap_or_default()) {
+                ActivityState::Failed => failed += 1,
+                ActivityState::Running => running += 1,
+                _ => {}
+            }
+        }
+        let mut label = format!("{} tool actions", range.len());
+        if running > 0 {
+            label.push_str(&format!(" · {running} running"));
+        }
+        if failed > 0 {
+            label.push_str(&format!(" · {failed} failed"));
+        }
+        desktop_button(format!("activity-group-{}", head.id))
+            .icon(if head.activity_expanded {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            })
+            .label(label.clone())
+            .accessibility_label(format!("{} {label}", if head.activity_expanded { "Collapse" } else { "Expand" }))
+            .ghost()
+            .small()
+            .when(failed > 0, |button| button.text_color(cx.theme().colors.danger))
+            .on_click(cx.listener(move |view, _, _, cx| {
+                view.transcript.toggle_activity_group(&id);
+                cx.notify();
+            }))
             .into_any_element()
     }
 
     fn render_tool_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let id = item.id.clone();
-        let mut panel = div()
-            .w_full()
-            .max_w(px(860.))
-            .border_1()
-            .border_color(colors.border)
-            .rounded_md()
-            .overflow_hidden()
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_3()
-                    .py_2()
-                    .bg(colors.secondary)
-                    .child(div().font_medium().child(item.title.clone()))
-                    .child(
-                        Button::new(format!("tool-{}", item.id))
-                            .label(if item.expanded { "Hide details" } else { "Show details" })
-                            .ghost()
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.transcript.toggle_tool(&id);
-                                cx.notify();
-                            })),
-                    ),
-            );
+        let status = if item.has_activity_status {
+            item.text.lines().next().unwrap_or_default()
+        } else {
+            "Archived output"
+        };
+        let state = ActivityState::from_status(status);
+        let icon = match state {
+            ActivityState::Completed => IconName::Check,
+            ActivityState::Failed | ActivityState::Interrupted => IconName::X,
+            ActivityState::Running | ActivityState::Other => IconName::Activity,
+        };
+        let mut panel = div().w_full().max_w(px(CONTENT_WIDTH)).flex().flex_col().gap_1().child(
+            desktop_button(format!("tool-{}", item.id))
+                .accessibility_label(format!(
+                    "{} for {}",
+                    if item.expanded { "Hide details" } else { "Show details" },
+                    item.title
+                ))
+                .tooltip(format!("{} · {status}", item.title))
+                .ghost()
+                .small()
+                .w_full()
+                .justify_start()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .min_w_0()
+                        .w_full()
+                        .text_color(if state == ActivityState::Failed {
+                            colors.danger
+                        } else {
+                            colors.muted_foreground
+                        })
+                        .child(Icon::new(icon).small())
+                        .child(div().flex_1().min_w_0().truncate().child(item.title.clone()))
+                        .child(div().text_xs().child(status.to_string()))
+                        .child(
+                            Icon::new(if item.expanded {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronRight
+                            })
+                            .small(),
+                        ),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.transcript.toggle_tool(&id);
+                    cx.notify();
+                })),
+        );
         if item.expanded {
-            panel = panel.child(div().px_3().py_2().text_sm().child(item.text.clone()));
+            let output = item.output.as_deref().filter(|output| !output.is_empty()).unwrap_or(&item.text);
+            panel = panel.child(
+                div()
+                    .id(format!("tool-output-{}", item.id))
+                    .role(gpui_kit::Role::Label)
+                    .aria_label(output.to_string())
+                    .test_support()
+                    .ml_4()
+                    .pl_3()
+                    .py_2()
+                    .border_l_1()
+                    .border_color(colors.border)
+                    .font_family(cx.theme().mono_font_family.clone())
+                    .text_size(cx.theme().mono_font_size)
+                    .child(output.to_string()),
+            );
         }
         panel.into_any_element()
     }
@@ -2047,7 +3803,7 @@ impl DesktopView {
                     ),
             )
             .child(
-                Button::new(format!("diff-{}", item.id))
+                desktop_button(format!("diff-{}", item.id))
                     .label(if item.expanded { "Hide diff" } else { "Show diff" })
                     .ghost()
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -2059,7 +3815,7 @@ impl DesktopView {
         if !diff.patch.is_empty() {
             let copy_patch = diff.patch.clone();
             header = header.child(
-                Button::new(format!("copy-patch-{}", item.id))
+                desktop_button(format!("copy-patch-{}", item.id))
                     .label("Copy patch")
                     .ghost()
                     .on_click(move |_, _, app| {
@@ -2069,8 +3825,9 @@ impl DesktopView {
         }
 
         let mut panel = div()
+            .relative()
             .w_full()
-            .max_w(px(860.))
+            .max_w(px(CONTENT_WIDTH))
             .border_1()
             .border_color(colors.border)
             .rounded_md()
@@ -2080,7 +3837,7 @@ impl DesktopView {
         let mut body = div().w_full().flex().flex_col().px_3().py_2().gap_1();
         for file in &diff.files {
             let (kind_label, kind_color) = match file.kind {
-                DiffFileKind::Add => ("added", colors.accent),
+                DiffFileKind::Add => ("added", colors.primary),
                 DiffFileKind::Delete => ("deleted", colors.danger),
                 DiffFileKind::Update => ("modified", colors.muted_foreground),
             };
@@ -2116,7 +3873,7 @@ impl DesktopView {
                 .bg(colors.background);
             for line in &lines {
                 let (line_color, line_bg) = match line.kind {
-                    DiffLineKind::Added => (colors.foreground, colors.accent.opacity(0.12)),
+                    DiffLineKind::Added => (colors.foreground, colors.primary.opacity(0.12)),
                     DiffLineKind::Removed => (colors.foreground, colors.danger.opacity(0.12)),
                     DiffLineKind::Hunk => (colors.muted_foreground, colors.secondary),
                     DiffLineKind::Header | DiffLineKind::Context => (colors.foreground, colors.background),
@@ -2151,49 +3908,96 @@ impl DesktopView {
 
     fn render_composer(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
-        let mut panel = div().w_full().flex().flex_col().gap_2().px_8().pb_5().pt_2();
+        let mut panel = div()
+            .w_full()
+            .max_w(px(CONTENT_WIDTH))
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .px_4()
+            .pb_4()
+            .pt_2();
         if !self.attachments.is_empty() {
             panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(
                 self.attachments.iter().enumerate().map(|(index, attachment)| {
                     let path = attachment.path.clone();
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .px_2()
-                        .py_1()
-                        .rounded_full()
-                        .border_1()
-                        .border_color(colors.border)
-                        .text_xs()
-                        .child(attachment.path.clone())
-                        .child(
-                            Button::new(format!("remove-attachment-{index}"))
-                                .label("×")
-                                .ghost()
-                                .on_click(cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx))),
+                    Attachment::new()
+                        .small()
+                        .w(px(230.))
+                        .media(AttachmentMedia::new().child(Icon::new(IconName::FileCode)))
+                        .content(
+                            AttachmentContent::new()
+                                .title(AttachmentTitle::new(attachment.path.clone()))
+                                .description(AttachmentDescription::new(format!(
+                                    "{} bytes · workspace file",
+                                    attachment.text.len()
+                                ))),
+                        )
+                        .actions(
+                            AttachmentActions::new().child(
+                                desktop_button(format!("remove-attachment-{index}"))
+                                    .icon(IconName::X)
+                                    .accessibility_label(format!("Remove {}", attachment.path))
+                                    .ghost()
+                                    .xsmall()
+                                    .on_click(
+                                        cx.listener(move |this, _, _, cx| this.remove_attachment(path.clone(), cx)),
+                                    ),
+                            ),
                         )
                 }),
             ));
         }
-        panel = panel.child(
-            div()
-                .w_full()
-                .border_1()
-                .border_color(colors.border)
-                .rounded_md()
-                .p_2()
-                // The composer submits on plain Enter, so the textarea
-                // propagates the unconsumed `Enter` action up to this wrapper
-                // instead of inserting a newline; Shift+Enter stays a newline.
-                .on_action(cx.listener(|view, _: &Enter, window, cx| view.submit_prompt(window, cx)))
-                .child(
-                    Textarea::new(&self.composer)
-                        .accessibility_id("composer")
-                        .aria_label("Message to VT Code")
-                        .h(px(100.)),
-                ),
-        );
+        let input = Textarea::new(&self.composer)
+            .accessibility_id("composer")
+            .aria_label("Message to VT Code")
+            .cursor_text()
+            .min_h(px(32.));
+
+        if let Some(draft) = self.retained_submission.as_ref() {
+            let prompt = draft.prompt.clone();
+            let explanation = if draft.delivery_uncertain {
+                "Delivery was not confirmed. Check session history before resending. Restore this draft or copy it before dismissing."
+            } else {
+                "This message was not submitted. Restore this draft or copy it before dismissing."
+            };
+            panel = panel.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(explanation)
+                    .child("Clear the current draft and attachments to restore.")
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(
+                                desktop_button("restore-submission")
+                                    .label("Restore draft")
+                                    .desktop_disabled(
+                                        !self.composer.read(cx).value().is_empty()
+                                            || !self.attachments.is_empty()
+                                            || self.attachments_picker_open
+                                            || self.session_request.is_some(),
+                                    )
+                                    .on_click(cx.listener(|view, _, window, cx| view.restore_submission(window, cx))),
+                            )
+                            .child(desktop_button("copy-retained-prompt").label("Copy prompt").ghost().on_click(
+                                move |_, _, cx| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()))
+                                },
+                            ))
+                            .child(desktop_button("dismiss-retained-prompt").label("Dismiss").ghost().on_click(
+                                cx.listener(|view, _, _, cx| {
+                                    view.retained_submission = None;
+                                    cx.notify();
+                                }),
+                            )),
+                    ),
+            );
+        }
 
         if let Some(error) = self.error.as_ref() {
             panel = panel.child(div().w_full().text_sm().text_color(colors.danger).child(error.clone()));
@@ -2202,63 +4006,213 @@ impl DesktopView {
             panel = panel.child(self.render_interaction(&interaction, window, cx));
         }
 
-        let can_submit = self.selected_session_id.is_some() && !self.running && self.interaction.is_none();
+        let can_submit = self.session_change_idle()
+            && !self.attachments_picker_open
+            && self.retained_submission.is_none()
+            && !self.composer.read(cx).value().trim().is_empty();
         let current_model = self
             .configuration
             .as_ref()
-            .map(|configuration| configuration.model.clone())
-            .unwrap_or_else(|| "Model".to_string());
-        let model_weak = cx.entity().downgrade();
-        let mut buttons = div().w_full().flex().items_center().justify_between().child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    Button::new("attach-files")
-                        .label("+ Attach")
-                        .ghost()
-                        .disabled(self.workspace.is_none() || self.attachments_picker_open)
-                        .on_click(cx.listener(|this, _, window, cx| this.attach_files(window, cx))),
-                )
-                .child(
-                    Popover::new("model-popover")
-                        .anchor(gpui_kit::Anchor::BottomLeft)
-                        .trigger(Button::new("pick-model").label(format!("{current_model} ▾")).ghost())
-                        .content(move |_, _, cx| {
-                            model_weak
-                                .update(cx, |view, cx| view.render_model_list(cx))
-                                .unwrap_or_else(|_| div().into_any_element())
-                        }),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child("Enter to send · Shift+Enter for a new line"),
-                ),
+            .map(|configuration| {
+                self.models
+                    .iter()
+                    .find(|model| model.provider == configuration.provider && model.id == configuration.model)
+                    .map(|model| model.display_name.clone())
+                    .unwrap_or_else(|| configuration.model.clone())
+            })
+            .unwrap_or_else(|| "Choose model".to_string());
+        let policy = self
+            .configuration
+            .as_ref()
+            .and_then(|config| config.sandbox.as_deref())
+            .unwrap_or("Permissions unavailable");
+        let buttons = div()
+            .w_full()
+            .min_w_0()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .min_w_0()
+                    .child(
+                        desktop_button("attach-files")
+                            .icon(IconName::Plus)
+                            .accessibility_label("Add files and more @")
+                            .tooltip_with_action("Add files and more @", &OpenAddContext, Some("VTCodeDesktop"))
+                            .ghost()
+                            .small()
+                            .desktop_disabled(
+                                self.workspace.is_none()
+                                    || self.attachments_picker_open
+                                    || self.session_request.is_some(),
+                            )
+                            .on_click(cx.listener(|view, _, window, cx| view.open_add_context(window, cx))),
+                    )
+                    .child(
+                        desktop_button("composer-policy")
+                            .accessibility_label(format!("Execution policy: {policy}"))
+                            .tooltip_with_action("Command permissions", &OpenPermissions, Some("VTCodeDesktop"))
+                            .icon(IconName::Shield)
+                            .child(div().truncate().child(policy.to_string()))
+                            .dropdown_caret(true)
+                            .ghost()
+                            .small()
+                            .min_w_0()
+                            .max_w(px(230.))
+                            .desktop_disabled(!self.can_select_session_options())
+                            .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx))),
+                    ),
+            );
+        let mut model_actions = div().min_w_0().max_w_full().flex().flex_wrap().items_center().gap_2().child(
+            desktop_button("pick-model")
+                .accessibility_label(current_model.clone())
+                .child(div().min_w_0().max_w(px(260.)).truncate().child(current_model))
+                .dropdown_caret(true)
+                .small()
+                .max_w(px(320.))
+                .overflow_hidden()
+                .tooltip("Search models by provider, name, or model ID")
+                .ghost()
+                .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
+                .on_click(cx.listener(|view, _, window, cx| view.open_model_options(window, cx))),
         );
         if self.running {
-            buttons = buttons.child(
-                Button::new("cancel-turn")
-                    .label("Cancel run")
+            model_actions = model_actions.child(
+                desktop_button("cancel-turn")
+                    .tooltip_with_action("Cancel active run", &CancelRun, Some("VTCodeDesktop"))
+                    .accessibility_label("Cancel run")
+                    .icon(IconName::Square)
+                    .rounded_full()
                     .danger()
                     .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
             );
         } else {
-            buttons = buttons.child(
-                Button::new("send-prompt")
-                    .label("Send")
+            model_actions = model_actions.child(
+                desktop_button("send-prompt")
+                    .accessibility_label("Send message")
+                    .tooltip("Send message (Enter)")
+                    .icon(IconName::ArrowUp)
+                    .rounded_full()
                     .primary()
-                    .disabled(!can_submit)
+                    .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );
         }
-        panel.child(buttons)
+        let buttons = buttons.child(model_actions);
+        let workspace = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Choose workspace".into());
+        if self.palette_kind.is_composer_popup() {
+            if let Some(state) = self.palette.clone() {
+                if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
+                    panel = panel.child(
+                        div()
+                            .absolute()
+                            .top(px(8.))
+                            .right(px(16.))
+                            .w_0()
+                            .h_0()
+                            .child(self.render_command_palette(state, cx)),
+                    );
+                } else {
+                    panel = panel.child(self.render_command_palette(state, cx));
+                }
+            }
+        }
+        panel = panel.child(
+            div()
+                .id("composer-context")
+                .test_support()
+                .w_full()
+                .min_w_0()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .py_1()
+                .rounded_lg()
+                .bg(colors.background)
+                .child(
+                    desktop_button("composer-workspace")
+                        .icon(IconName::Folder)
+                        .label(workspace)
+                        .ghost()
+                        .small()
+                        .max_w(px(240.))
+                        .overflow_hidden()
+                        .accessibility_label("Choose workspace")
+                        .desktop_disabled(
+                            !self.workspace_switch_idle()
+                                || self.retained_submission.is_some()
+                                || self.workspace_picker_open,
+                        )
+                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                )
+                .child(
+                    desktop_button("composer-cli-webmcp")
+                        .icon(IconName::Terminal)
+                        .label("CLI / WebMCP")
+                        .accessibility_label("VT Code CLI and WebMCP documentation")
+                        .tooltip("Shared CLI runtime · WebMCP integration")
+                        .ghost()
+                        .small()
+                        .on_click(|_, _, cx| {
+                            cx.open_url("https://github.com/vinhnx/VTCode/blob/main/docs/development/webmcp.md")
+                        }),
+                )
+                .child(self.render_mode_button(cx))
+                .child(
+                    desktop_button("composer-settings")
+                        .icon(IconName::Settings2)
+                        .ghost()
+                        .small()
+                        .ml_auto()
+                        .accessibility_label("Composer settings")
+                        .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                        .on_click(cx.listener(|view, _, window, cx| view.open_settings(window, cx))),
+                ),
+        );
+        div().w_full().flex().justify_center().child(
+            panel.child(
+                div()
+                    .w_full()
+                    .on_action(cx.listener(|view, _: &Enter, window, cx| view.submit_prompt(window, cx)))
+                    .child(
+                        InputGroup::new("message-composer")
+                            .aria_label("Message composer")
+                            .w_full()
+                            .rounded(px(22.))
+                            .p_2()
+                            .bg(colors.secondary)
+                            .input(input)
+                            .addon(
+                                InputGroupAddon::new("composer-actions")
+                                    .align(InputGroupAddonAlignment::BlockEnd)
+                                    .child(buttons),
+                            ),
+                    ),
+            ),
+        )
     }
 
     /// Full-width bottom bar: workspace, git branch, provider · model, and
     /// the live turn status.
+    fn toggle_status_bar(&mut self, cx: &mut Context<Self>) {
+        self.preferences.show_status_bar = !self.preferences.show_status_bar;
+        self.save_preferences();
+        cx.notify();
+    }
+
     fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let workspace = self
@@ -2268,7 +4222,7 @@ impl DesktopView {
             .and_then(|name| name.to_str())
             .unwrap_or("No workspace");
         let agent = if self.running {
-            ("Agent: running", colors.accent)
+            ("Agent: running", colors.primary)
         } else {
             ("Agent: idle", colors.muted_foreground)
         };
@@ -2326,13 +4280,131 @@ impl DesktopView {
             )
     }
 
+    fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let id = if self.theme_mode == ThemeMode::Light {
+            themes::SYSTEM_DARK_ID
+        } else {
+            themes::SYSTEM_LIGHT_ID
+        };
+        self.apply_theme(id.to_owned(), window, cx);
+    }
+
     /// Apply a theme from the picker and remember the choice.
     fn apply_theme(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.theme_mode = themes::apply_by_id(&id, Some(window), cx);
+        self.preferences.follow_cli_theme = Some(false);
+        self.apply_theme_state(id, Some(window), cx);
+    }
+
+    fn apply_theme_state(&mut self, id: String, window: Option<&mut Window>, cx: &mut Context<Self>) {
+        self.theme_mode = themes::apply_by_id(&id, window, cx);
         self.theme_id = id;
+        self.apply_typography(cx);
         self.transcript.remeasure();
         self.save_preferences();
         cx.notify();
+    }
+
+    fn apply_typography(&mut self, cx: &mut Context<Self>) {
+        let ui = self.preferences.ui_font_size();
+        let code = self.preferences.code_font_size();
+        let ui_family = typography::resolve_font(
+            self.preferences.ui_font_family.as_deref(),
+            ".SystemUIFont",
+            typography::installed_fonts(cx),
+        );
+        let code_family = typography::resolve_font(
+            self.preferences.code_font_family.as_deref(),
+            self.default_code_font.as_str(),
+            typography::installed_fonts(cx),
+        );
+        Theme::update(cx, |theme| {
+            theme.font_family = ui_family.into();
+            theme.mono_font_family = code_family.into();
+            theme.font_size = px(f32::from(ui));
+            theme.mono_font_size = px(f32::from(code));
+        });
+        self.transcript.remeasure();
+        cx.notify();
+    }
+
+    fn render_font_size(&self, code: bool, cx: &Context<Self>) -> AnyElement {
+        let (key, label, description, size, minimum, maximum) = if code {
+            (
+                "code",
+                "Code font size",
+                "Code, diffs, and terminal output",
+                self.preferences.code_font_size(),
+                10,
+                24,
+            )
+        } else {
+            (
+                "ui",
+                "UI font size",
+                "Base size for controls and conversation text",
+                self.preferences.ui_font_size(),
+                12,
+                24,
+            )
+        };
+        div()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .py_2()
+            .child(
+                div().flex_1().min_w_0().flex().flex_col().gap_1().child(label).child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().colors.muted_foreground)
+                        .child(description),
+                ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .children([-1i16, 1].into_iter().enumerate().map(|(index, delta)| {
+                        desktop_button(format!("font-{key}-{index}"))
+                            .label(if delta < 0 { "−" } else { "+" })
+                            .accessibility_label(format!("{} {label}", if delta < 0 { "Decrease" } else { "Increase" }))
+                            .ghost()
+                            .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                let current = if code {
+                                    view.preferences.code_font_size()
+                                } else {
+                                    view.preferences.ui_font_size()
+                                };
+                                let next = if delta < 0 {
+                                    current.saturating_sub(1)
+                                } else {
+                                    current.saturating_add(1)
+                                }
+                                .clamp(minimum, maximum);
+                                if code {
+                                    view.preferences.code_font_size = Some(next);
+                                } else {
+                                    view.preferences.ui_font_size = Some(next);
+                                }
+                                view.apply_typography(cx);
+                                view.save_preferences();
+                            }))
+                    }))
+                    .child(
+                        div()
+                            .id(format!("font-{key}-value"))
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(format!("{label}: {size} pixels"))
+                            .test_support()
+                            .text_sm()
+                            .child(format!("{size} px")),
+                    ),
+            )
+            .into_any_element()
     }
 
     /// One theme entry in the settings picker: a color preview chip that
@@ -2342,7 +4414,7 @@ impl DesktopView {
         let selected = self.theme_id == entry.id();
         let id = format!("theme-{}", entry.id());
         let mut swatch = div()
-            .w(px(104.))
+            .w_full()
             .flex()
             .flex_col()
             .gap_1()
@@ -2369,59 +4441,26 @@ impl DesktopView {
                     .child(entry.label()),
             );
         if selected {
-            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.accent).child("active"));
+            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child("active"));
         }
-        div()
-            .id(id)
-            .test_support()
-            .cursor_pointer()
+        desktop_button(id)
+            .accessibility_label(format!("{}{}", entry.label(), if selected { " (active)" } else { "" }))
+            .ghost()
+            .w(px(104.))
+            .h(px(96.))
+            .p_2()
+            .border_1()
+            .border_color(if selected {
+                cx.theme().colors.primary
+            } else {
+                cx.theme().colors.border
+            })
+            .rounded_lg()
             .on_click(cx.listener(move |this, _, window, cx| {
                 let theme_id = entry.id();
                 this.apply_theme(theme_id, window, cx);
             }))
             .child(swatch)
-            .into_any_element()
-    }
-
-    /// Selectable model catalog for the composer's Model dropdown.
-    fn render_model_list(&self, cx: &mut Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
-        if self.models.is_empty() {
-            return div()
-                .w(px(320.))
-                .max_h(px(360.))
-                .p_3()
-                .text_sm()
-                .text_color(colors.muted_foreground)
-                .child("Model catalog unavailable.")
-                .into_any_element();
-        }
-        div()
-            .id("model-list")
-            .w(px(340.))
-            .max_h(px(360.))
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .p_1()
-            .children(self.models.iter().enumerate().map(|(index, model)| {
-                let provider = model.provider.clone();
-                let model_id = model.id.clone();
-                let label = if model.provider.is_empty() {
-                    model.display_name.clone()
-                } else {
-                    format!("{} · {}", model.provider, model.display_name)
-                };
-                Button::new(format!("model-{index}"))
-                    .label(label)
-                    .ghost()
-                    .w_full()
-                    .when(model.current, |button| button.primary())
-                    .disabled(self.running)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_model(provider.clone(), model_id.clone(), cx);
-                    }))
-            }))
             .into_any_element()
     }
 
@@ -2434,7 +4473,7 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let mut panel = div()
             .w_full()
-            .max_w(px(860.))
+            .max_w(px(CONTENT_WIDTH))
             .flex()
             .flex_col()
             .gap_2()
@@ -2471,7 +4510,7 @@ impl DesktopView {
                 .items_center()
                 .justify_between()
                 .child(
-                    Button::new("cancel-interaction").label("Cancel request").ghost().on_click(
+                    desktop_button("cancel-interaction").label("Cancel request").ghost().on_click(
                         cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
                     ),
                 )
@@ -2479,7 +4518,7 @@ impl DesktopView {
                     interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty(),
                     |row| {
                         row.child(
-                            Button::new("continue-question")
+                            desktop_button("continue-question")
                                 .label(if self.interaction_step_index + 1 == interaction.steps.len() {
                                     "Submit answers"
                                 } else {
@@ -2543,7 +4582,7 @@ impl DesktopView {
         } else {
             choice.label.clone()
         };
-        let mut button = Button::new(format!("choice-{}", choice.id)).label(label).w_full().ghost();
+        let mut button = desktop_button(format!("choice-{}", choice.id)).label(label).w_full().ghost();
         if let Some(description) = choice.description.as_ref() {
             button = button.tooltip(description.clone());
         }
@@ -2558,12 +4597,134 @@ impl DesktopView {
     fn render_command_palette(&self, state: Entity<CommandState>, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let weak = cx.entity().downgrade();
-        let confirm_groups = self.palette_groups.clone();
-        let mut command = Command::new(&state).placeholder("Type a command or search…").max_h(px(360.));
-        for (label, entries) in &self.palette_groups {
+        let groups = if self.palette_kind == PaletteKind::AddContext {
+            self.composer_resource_groups()
+        } else {
+            self.palette_groups.clone()
+        };
+        let confirm_groups = groups
+            .iter()
+            .map(|(label, entries)| {
+                (
+                    label.clone(),
+                    entries
+                        .iter()
+                        .filter(|entry| {
+                            self.palette_kind == PaletteKind::AddContext || self.palette_action_available(&entry.action)
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .filter(|(_, entries)| self.palette_kind == PaletteKind::AddContext || !entries.is_empty())
+            .collect::<Vec<_>>();
+        let models = self.palette_kind == PaletteKind::Models;
+        let composer_popup = self.palette_kind.is_composer_popup();
+        let title = match self.palette_kind {
+            PaletteKind::Models => "Choose a model",
+            PaletteKind::ModelOptions => "Model and reasoning effort",
+            PaletteKind::AddContext => "Add files and more @",
+            PaletteKind::Permissions => "Command permissions",
+            PaletteKind::Modes => "Agent mode",
+            PaletteKind::Fonts(FontTarget::Ui) => "Choose UI font",
+            PaletteKind::Fonts(FontTarget::Code) => "Choose code font",
+            PaletteKind::Commands => "Command palette",
+        };
+        let catalog_empty = confirm_groups.is_empty();
+        let quick_model = self.palette_kind == PaletteKind::ModelOptions;
+        let mut command = Command::new(&state)
+            .placeholder(if matches!(self.palette_kind, PaletteKind::Fonts(_)) {
+                "Search installed fonts…"
+            } else if models {
+                "Search providers, models, or IDs…"
+            } else {
+                "Type a command or search…"
+            })
+            .max_h(px(360.))
+            .when(models, |command| {
+                command.header(|_, _, _| div().px_3().py_2().font_semibold().child("Choose a model"))
+            })
+            .empty(move |_, _, _| {
+                empty_state(
+                    if models && catalog_empty {
+                        "No models available"
+                    } else {
+                        "No matching results"
+                    },
+                    if models && catalog_empty {
+                        "Reopen VT Code to reload the model catalog."
+                    } else {
+                        "Try a different search."
+                    },
+                    IconName::Search,
+                )
+            });
+        if quick_model {
+            let slider = self.effort_slider.clone();
+            let configuration = self.configuration.clone();
+            let label = configuration.as_ref().map(|config| {
+                self.models
+                    .iter()
+                    .find(|model| model.provider == config.provider && model.id == config.model)
+                    .map(|model| model.display_name.clone())
+                    .unwrap_or_else(|| config.model.clone())
+            });
+            command = command.searchable(false).header(move |_, _, cx| {
+                composer_controls::model_options_header(configuration.as_ref(), slider.as_ref(), label.as_deref(), cx)
+            });
+        }
+        for (section_index, (label, entries)) in confirm_groups.iter().enumerate() {
             let mut group = CommandGroup::new().label(label.clone());
-            for entry in entries {
-                group = group.item(CommandItem::new().label(entry.label.clone()));
+            for (row_index, entry) in entries.iter().enumerate() {
+                let label = entry.label.clone();
+                let description = entry.description.clone();
+                let selected = self.is_current_palette_action(&entry.action);
+                let id = format!("palette-label-{section_index}-{row_index}");
+                let accessible_label = description
+                    .as_ref()
+                    .map(|details| format!("{label} · {details}"))
+                    .unwrap_or_else(|| label.clone());
+                group = group.item(
+                    CommandItem::new()
+                        .disabled(!self.palette_action_available(&entry.action))
+                        .label(label.clone())
+                        .checked(selected)
+                        .keywords(entry.keywords.clone())
+                        .child(move |_, _| {
+                            div()
+                                .id(id.clone())
+                                .test_support()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .py_1()
+                                .role(gpui_kit::Role::Label)
+                                .aria_label(accessible_label.clone())
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(div().truncate().font_medium().child(label.clone()))
+                                        .when_some(description.clone(), |row, details| {
+                                            row.child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(colors.muted_foreground)
+                                                    .truncate()
+                                                    .child(details),
+                                            )
+                                        }),
+                                )
+                                .when(selected, |row| {
+                                    row.child(Icon::new(IconName::Check).small().text_color(colors.foreground))
+                                })
+                        }),
+                );
             }
             command = command.group(group);
         }
@@ -2582,14 +4743,47 @@ impl DesktopView {
                     view.run_palette_action(action, _window, cx);
                 });
             })
-            .on_cancel(move |_window, cx: &mut App| {
-                let _updated = cancel_weak.update(cx, |view, cx| {
-                    view.palette = None;
-                    view.palette_groups = Vec::new();
-                    cx.notify();
-                });
+            .on_cancel(move |window, cx: &mut App| {
+                let _updated = cancel_weak.update(cx, |view, cx| view.close_palette(window, cx));
             });
 
+        let panel = div()
+            .id("command-palette")
+            .test_support()
+            .role(gpui_kit::Role::Dialog)
+            .aria_label(title)
+            .w(px(if models { 440. } else { 560. }))
+            .max_w_full()
+            .when(models, |panel| {
+                panel
+                    .rounded_xl()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .overflow_hidden()
+            })
+            .on_mouse_down_out(move |_, window, cx| {
+                let _updated = weak.update(cx, |view, cx| view.close_palette(window, cx));
+            })
+            .on_action(|_: &gpui_kit::base::actions::Cancel, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(command)
+            .focus_trap("command-palette", &self.palette_focus);
+        if composer_popup {
+            return deferred(
+                anchored()
+                    .anchor(if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
+                        Anchor::BottomRight
+                    } else {
+                        Anchor::BottomLeft
+                    })
+                    .offset(point(px(0.), px(-8.)))
+                    .snap_to_window_with_margin(px(12.))
+                    .child(panel),
+            )
+            .priority(2)
+            .into_any_element();
+        }
         div()
             .absolute()
             .inset_0()
@@ -2597,43 +4791,37 @@ impl DesktopView {
             .justify_center()
             .pt(px(90.))
             .bg(colors.background.opacity(0.4))
-            .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                let _updated = weak.update(cx, |view, cx| {
-                    view.palette = None;
-                    view.palette_groups = Vec::new();
-                    cx.notify();
-                });
-            })
-            .child(
-                div()
-                    .id("command-palette")
-                    .test_support()
-                    .w(px(560.))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(command),
-            )
+            .child(panel)
             .into_any_element()
     }
 }
 
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.review_open && self.review_focus.contains_focused(window, cx) {
+            self.review_return_focus = None;
+            self.focus_composer(window, cx);
+        }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
-        let sidebar = self.render_sidebar(cx).into_any_element();
+        let sidebar = self.render_navigation(cx);
         let panes = div()
             .id("pane-root")
+            .p_3()
+            .gap_1()
             .flex_1()
             .min_h_0()
             .flex()
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, window, cx| {
-                let Some(edge) = this.resizing else { return };
-                let width = match edge {
-                    ResizeEdge::Sidebar => f32::from(event.position.x),
-                    ResizeEdge::Inspector => f32::from(window.viewport_size().width) - f32::from(event.position.x),
-                };
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                let Some(drag) = this.resizing else { return };
+                let delta = f32::from(event.position.x) - drag.start_x;
+                let width = drag.start_width
+                    + match drag.edge {
+                        ResizeEdge::Sidebar => delta,
+                        ResizeEdge::Inspector => -delta,
+                    };
                 let clamped = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
-                match edge {
+                match drag.edge {
                     ResizeEdge::Sidebar => this.sidebar_width = clamped,
                     ResizeEdge::Inspector => this.inspector_width = clamped,
                 }
@@ -2650,7 +4838,7 @@ impl Render for DesktopView {
                 }),
             )
             .child(sidebar)
-            .child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+            .when(self.sidebar_open, |panes| panes.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)))
             .child(
                 div()
                     .flex_1()
@@ -2658,7 +4846,7 @@ impl Render for DesktopView {
                     .h_full()
                     .flex()
                     .flex_col()
-                    .child(self.render_toolbar(cx))
+                    .child(self.render_thread_header())
                     .child(self.render_transcript(cx))
                     .child(self.render_composer(window, cx)),
             )
@@ -2673,16 +4861,63 @@ impl Render for DesktopView {
             .flex_col()
             .bg(colors.background)
             .text_color(colors.foreground)
+            .track_focus(&self.focus_handle)
+            .key_context("VTCodeDesktop")
+            .when(self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &NewSession, _, cx| view.create_session(cx)))
+            })
+            .when(self.selected_session_id.is_some() && self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &CloseSession, _, cx| view.close_session(cx)))
+            })
+            .when(
+                self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open,
+                |body| {
+                    body.on_action(
+                        cx.listener(|view, _: &ChooseWorkspace, window, cx| view.choose_workspace(window, cx)),
+                    )
+                },
+            )
+            .on_action(cx.listener(|view, _: &ToggleSidebar, _, cx| {
+                view.sidebar_open = !view.sidebar_open;
+                view.navigation_peek = false;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
+            .on_action(cx.listener(|view, _: &ReloadCliSettings, _, cx| view.reload_cli_settings(cx)))
+            .on_action(cx.listener(|view, _: &SyncCliTheme, _, cx| view.sync_theme_to_cli(cx)))
+            .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
+            .when(self.workspace.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+            })
+            .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
+            .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
+            .when(self.can_select_session_options(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenPermissions, window, cx| view.open_permissions(window, cx)))
+                    .on_action(cx.listener(|view, _: &OpenModePicker, window, cx| view.open_modes(window, cx)))
+            })
+            .on_action(cx.listener(|view, _: &OpenAddContext, window, cx| view.open_add_context(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.open_settings(window, cx)))
+            .when(self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
+            })
+            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
+            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()))
+            .child(self.render_toolbar(cx))
             .child(panes)
-            .child(self.render_status_bar(cx));
+            .when(self.preferences.show_status_bar, |body| body.child(self.render_status_bar(cx)));
         if self.workspace.is_none() {
             body = body.child(
                 div().absolute().inset_0().flex().items_center().justify_center().child(
-                    Button::new("open-first-workspace")
+                    desktop_button("open-first-workspace")
                         .label("Choose a workspace folder")
                         .primary()
-                        .disabled(self.workspace_picker_open || !self.workspace_switch_idle())
+                        .desktop_disabled(
+                            self.workspace_picker_open
+                                || !self.workspace_switch_idle()
+                                || self.retained_submission.is_some(),
+                        )
                         .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
                 ),
             );
@@ -2690,8 +4925,42 @@ impl Render for DesktopView {
         if self.file_preview.is_some() {
             body = body.child(self.render_file_preview(cx));
         }
-        if let Some(state) = self.palette.clone() {
-            body = body.child(self.render_command_palette(state, cx));
+        if self.review_open {
+            body = body.child(self.render_change_review(cx));
+        }
+        if self.settings_open {
+            body = body.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p_8()
+                    .bg(colors.background.opacity(0.85))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|view, _, window, cx| view.close_settings(window, cx)),
+                    )
+                    .child(
+                        div()
+                            .w(px(740.))
+                            .max_w_full()
+                            .h_full()
+                            .min_w_0()
+                            .min_h_0()
+                            .child(self.render_settings(cx))
+                            .focus_trap("settings-trap", &self.settings_focus),
+                    ),
+            );
+        }
+        if !self.palette_kind.is_composer_popup() {
+            if let Some(state) = self.palette.clone() {
+                body = body.child(self.render_command_palette(state, cx));
+            }
+        }
+        if self.config_editor.is_some() {
+            body = body.child(self.render_cli_config_editor(cx));
         }
         body
     }
@@ -2703,19 +4972,54 @@ fn send_request(commands: &mpsc::Sender<BackendCommand>, method: &str, params: V
         .is_ok()
 }
 
-fn badge(text: String, background: gpui_kit::Hsla, foreground: gpui_kit::Hsla) -> impl IntoElement {
+fn section_label(text: &'static str, color: gpui_kit::Hsla) -> impl IntoElement {
+    div().text_xs().font_semibold().text_color(color).child(text)
+}
+
+fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_kit::Hsla) -> impl IntoElement {
     div()
-        .rounded_full()
-        .px_2()
-        .py_1()
-        .bg(background)
-        .text_xs()
-        .text_color(foreground)
-        .child(text)
+        .w_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(Icon::new(icon).size_4().when(selected, |icon| icon.text_color(accent)))
+        .child(div().flex_1().min_w_0().truncate().text_left().child(label))
+        .when(selected, |row| row.child(div().size(px(5.)).rounded_full().bg(accent)))
+}
+
+/// Embed the shared artwork so packaged applications never depend on checkout paths.
+fn brand_logo(size: f32) -> impl IntoElement {
+    static LOGO: std::sync::OnceLock<std::sync::Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
+    let image = LOGO.get_or_init(|| {
+        std::sync::Arc::new(gpui_kit::Image::from_bytes(
+            gpui_kit::ImageFormat::Png,
+            include_bytes!("../../../../../resources/icons/vtcode-profile-120.png").to_vec(),
+        ))
+    });
+    gpui_kit::img(image.clone()).w(px(size)).h(px(size)).rounded_md()
+}
+
+fn empty_state(title: &'static str, description: impl Into<gpui_kit::SharedString>, icon: IconName) -> EmptyState {
+    EmptyState::new().header(
+        EmptyHeader::new()
+            .media(EmptyMedia::new().child(if matches!(icon, IconName::Bot) {
+                brand_logo(40.).into_any_element()
+            } else {
+                Icon::new(icon).size_6().into_any_element()
+            }))
+            .title(EmptyTitle::new().text_lg().font_semibold().child(title))
+            .description(EmptyDescription::new().child(description.into())),
+    )
 }
 
 fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
-    PaletteCommand { label: label.into(), action }
+    PaletteCommand {
+        label: label.into(),
+        description: None,
+        keywords: Vec::new(),
+        action,
+    }
 }
 
 fn workspace_picker_options() -> PathPromptOptions {
@@ -2870,6 +5174,37 @@ fn classify_diff_lines(patch: &str) -> (Vec<DiffLine<'_>>, bool) {
         lines.push(DiffLine { kind, text: line });
     }
     (lines, truncated)
+}
+
+fn desktop_window_options() -> WindowOptions {
+    let mut options = TitleBar::window_options();
+    if let Some(titlebar) = options.titlebar.as_mut() {
+        titlebar.traffic_light_position = Some(point(px(12.), px(17.)));
+    }
+    options
+}
+
+fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
+    themes::mix(colors.background, colors.secondary, 0.08)
+}
+
+/// Native clickable controls share one cursor policy; disabled controls keep the arrow.
+fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
+    Button::new(id).cursor_pointer()
+}
+
+trait DesktopButtonExt {
+    fn desktop_disabled(self, disabled: bool) -> Self;
+}
+
+impl DesktopButtonExt for Button {
+    fn desktop_disabled(self, disabled: bool) -> Self {
+        self.disabled(disabled).cursor(if disabled {
+            CursorStyle::Arrow
+        } else {
+            CursorStyle::PointingHand
+        })
+    }
 }
 
 #[cfg(test)]

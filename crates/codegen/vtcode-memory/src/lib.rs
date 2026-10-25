@@ -40,6 +40,7 @@ pub mod pack;
 pub mod progress;
 pub mod query;
 pub mod retention;
+pub mod snapshot;
 
 pub use error::SessionStoreError;
 pub use event_log::{

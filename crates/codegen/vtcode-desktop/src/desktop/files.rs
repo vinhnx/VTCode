@@ -1,6 +1,7 @@
 //! Bounded read-only workspace file listing and previews for the sidebar.
 
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 
 /// Hard bounds so one sidebar render stays cheap regardless of workspace size.
@@ -91,7 +92,7 @@ pub(super) fn git_branch(workspace: &Path) -> Option<String> {
             // Worktree/submodule pointer: `gitdir: <path>`.
             let pointer = fs::read_to_string(&dot_git).ok()?;
             let target = pointer.strip_prefix("gitdir:")?.trim();
-            return parse_branch_head(Path::new(target));
+            return parse_branch_head(&current.join(target));
         }
         dir = current.parent();
     }
@@ -113,29 +114,49 @@ fn parse_branch_head(git_dir: &Path) -> Option<String> {
 /// Read a bounded text preview of one file. Returns `None` for missing,
 /// oversized-binary, or non-UTF-8 files.
 pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
-    let path = root.join(rel_path);
-    let metadata = fs::metadata(&path).ok()?;
+    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path)).ok()?;
+    if !fs::metadata(&path).ok()?.is_file() {
+        return None;
+    }
+    let file = fs::File::open(&path).ok()?;
+    let metadata = file.metadata().ok()?;
     if !metadata.is_file() {
         return None;
     }
-    let truncated = metadata.len() > MAX_PREVIEW_BYTES as u64;
-    let bytes = if truncated {
-        let mut file = fs::File::open(&path).ok()?;
-        let mut buffer = vec![0_u8; MAX_PREVIEW_BYTES];
-        let read = std::io::Read::read(&mut file, &mut buffer).ok()?;
-        buffer.truncate(read);
-        buffer
-    } else {
-        fs::read(&path).ok()?
-    };
+    // Read one extra byte to detect truncation even if the file grows after metadata.
+    let mut bytes = Vec::new();
+    let _read = file.take((MAX_PREVIEW_BYTES + 1) as u64).read_to_end(&mut bytes).ok()?;
+    let truncated = bytes.len() > MAX_PREVIEW_BYTES;
+    bytes.truncate(MAX_PREVIEW_BYTES);
     if bytes.contains(&0_u8) {
         return None;
     }
+    // A valid UTF-8 character may straddle the preview boundary.
+    let text = match std::str::from_utf8(&bytes) {
+        Ok(text) => text,
+        Err(error) if truncated && error.error_len().is_none() => {
+            std::str::from_utf8(bytes.get(..error.valid_up_to())?).ok()?
+        }
+        Err(_) => return None,
+    };
     Some(FilePreview {
         rel_path: rel_path.to_string(),
-        text: String::from_utf8_lossy(&bytes).into_owned(),
+        text: text.to_string(),
         truncated,
     })
+}
+
+/// Attach complete text only; the preview's truncation is never silently submitted.
+pub(super) fn read_attachment(root: &Path, path: &Path) -> Result<vtcode_desktop_protocol::TurnAttachment, String> {
+    let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
+    let resolved = vtcode_commons::paths::resolve_workspace_path(&root, path)
+        .map_err(|_error| "Attachments must be existing files inside the workspace.".to_string())?;
+    let relative = resolved.strip_prefix(&root).map_err(|error| error.to_string())?;
+    let relative = relative.to_string_lossy().replace('\\', "/");
+    let preview = read_preview(&root, &relative)
+        .filter(|preview| !preview.truncated)
+        .ok_or_else(|| format!("“{relative}” must be a UTF-8 text file no larger than 64 KiB."))?;
+    Ok(vtcode_desktop_protocol::TurnAttachment { path: relative, text: preview.text })
 }
 
 #[cfg(test)]
@@ -210,6 +231,49 @@ mod tests {
     }
 
     #[test]
+    fn previews_and_attachments_reject_workspace_escapes() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = temp_workspace();
+        let outside = temp_workspace();
+        fs::write(outside.path().join("secret.txt"), "private").unwrap();
+        symlink(outside.path(), workspace.path().join("escape")).unwrap();
+        fs::write(workspace.path().join("inside.txt"), "allowed").unwrap();
+        symlink(workspace.path().join("inside.txt"), workspace.path().join("alias.txt")).unwrap();
+
+        let absolute = outside.path().join("secret.txt");
+        let traversal = format!("../{}/secret.txt", outside.path().file_name().unwrap().to_str().unwrap());
+        for path in [absolute.to_str().unwrap(), traversal.as_str(), "escape/secret.txt"] {
+            assert!(read_preview(workspace.path(), path).is_none(), "reject {path}");
+            assert!(read_attachment(workspace.path(), Path::new(path)).is_err(), "reject {path}");
+        }
+        assert_eq!(read_preview(workspace.path(), "alias.txt").unwrap().text, "allowed");
+        let attachment = read_attachment(workspace.path(), &workspace.path().join("alias.txt")).unwrap();
+        assert_eq!(attachment.path, "inside.txt");
+        assert_eq!(attachment.text, "allowed");
+    }
+
+    #[test]
+    fn attachments_require_complete_utf8_text_at_the_size_boundary() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        fs::write(root.join("exact.txt"), "x".repeat(MAX_PREVIEW_BYTES)).unwrap();
+        fs::write(root.join("large.txt"), "x".repeat(MAX_PREVIEW_BYTES + 1)).unwrap();
+        fs::write(root.join("invalid.txt"), [0xff, 0xfe]).unwrap();
+        fs::write(root.join("binary.txt"), [b'a', 0, b'b']).unwrap();
+        assert_eq!(read_attachment(root, Path::new("exact.txt")).unwrap().text.len(), MAX_PREVIEW_BYTES);
+        for path in ["large.txt", "invalid.txt", "binary.txt"] {
+            assert!(read_attachment(root, Path::new(path)).is_err(), "reject {path}");
+        }
+        let boundary = format!("{}é", "x".repeat(MAX_PREVIEW_BYTES - 1));
+        fs::write(root.join("unicode.txt"), boundary).unwrap();
+        let preview = read_preview(root, "unicode.txt").unwrap();
+        assert!(preview.truncated);
+        assert_eq!(preview.text, "x".repeat(MAX_PREVIEW_BYTES - 1));
+        assert!(read_attachment(root, Path::new("unicode.txt")).is_err());
+    }
+
+    #[test]
     fn git_branch_reads_refs_detached_heads_and_worktrees() {
         let workspace = temp_workspace();
         let root = workspace.path();
@@ -238,6 +302,8 @@ mod tests {
         fs::write(real_git.join("HEAD"), "ref: refs/heads/wt\n").expect("head");
         fs::write(worktree.path().join("code.rs"), b"x").expect("file");
         fs::write(worktree.path().join(".git"), format!("gitdir: {}\n", real_git.display())).expect("pointer");
+        assert_eq!(git_branch(worktree.path()).as_deref(), Some("wt"));
+        fs::write(worktree.path().join(".git"), "gitdir: real-git\n").expect("relative pointer");
         assert_eq!(git_branch(worktree.path()).as_deref(), Some("wt"));
 
         // No repository at all.

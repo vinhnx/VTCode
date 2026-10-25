@@ -14,6 +14,9 @@ pub(super) struct TranscriptItem {
     pub text: SharedString,
     pub markdown: SharedString,
     pub expanded: bool,
+    pub activity_expanded: bool,
+    /// Whether this row carries structured activity status rather than archive text.
+    pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
     pub output: Option<String>,
@@ -50,11 +53,13 @@ impl TranscriptItem {
         let markdown = prepare_markdown(&text);
         Self {
             id,
+            has_activity_status: role == "tool",
             role,
             title,
             text,
             markdown,
             expanded: false,
+            activity_expanded: false,
             diff: None,
             output: None,
         }
@@ -91,7 +96,7 @@ impl Transcript {
 
     /// Rows newest first, for reverse projections such as the inspector.
     pub fn items_newest_first(&self) -> impl Iterator<Item = &TranscriptItem> {
-        self.items.iter().rev()
+        self.items().rev()
     }
 
     pub fn list_state(&self) -> ListState {
@@ -108,19 +113,38 @@ impl Transcript {
         if self.items.len() == MAX_TRANSCRIPT_ITEMS {
             let _removed = self.items.pop_front();
             self.list.splice(0..1, 0);
+            self.list.remeasure();
         }
         let index = self.items.len();
         self.items.push_back(item);
         self.list.splice(index..index, 1);
+        if let Some(group) = self.activity_group(index) {
+            self.list.remeasure_items(group);
+        }
+    }
+
+    /// Remove a local unsent echo together with its measured row.
+    pub fn remove(&mut self, id: &str) {
+        if let Some(index) = self.items.iter().position(|item| item.id == id) {
+            let _removed = self.items.remove(index);
+            self.list.splice(index..index + 1, 0);
+            self.list.remeasure();
+        }
     }
 
     pub fn upsert(&mut self, mut item: TranscriptItem) {
         if let Some(index) = self.items.iter().position(|existing| existing.id == item.id) {
+            let role_changed = self.items.get(index).is_some_and(|existing| existing.role != item.role);
             if let Some(existing) = self.items.get_mut(index) {
                 item.expanded = existing.expanded;
+                item.activity_expanded = existing.activity_expanded;
                 *existing = item;
             }
-            self.list.remeasure_items(index..index + 1);
+            if role_changed {
+                self.list.remeasure();
+            } else {
+                self.list.remeasure_items(index..index + 1);
+            }
         } else {
             self.push(item);
         }
@@ -133,6 +157,34 @@ impl Transcript {
                 item.output = output;
             }
             self.list.remeasure_items(index..index + 1);
+        }
+    }
+
+    /// Consecutive tool rows form a presentation group without changing event identities or ordering.
+    pub fn activity_group(&self, index: usize) -> Option<std::ops::Range<usize>> {
+        if self.items.get(index)?.role != "tool" {
+            return None;
+        }
+        let mut start = index;
+        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.role == "tool") {
+            start -= 1;
+        }
+        let mut end = index + 1;
+        while self.items.get(end).is_some_and(|item| item.role == "tool") {
+            end += 1;
+        }
+        (end - start > 1).then_some(start..end)
+    }
+
+    pub fn toggle_activity_group(&mut self, id: &str) {
+        if let Some(index) = self.items.iter().position(|item| item.id == id)
+            && let Some(range) = self.activity_group(index)
+        {
+            if let Some(head) = self.items.get_mut(range.start) {
+                head.activity_expanded = !head.activity_expanded;
+            }
+            self.list.pause_following_tail();
+            self.list.remeasure_items(range);
         }
     }
 
@@ -174,6 +226,29 @@ mod tests {
 
     fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
         TranscriptItem::new(id.to_string(), role.to_string(), "Activity".to_string(), text.to_string())
+    }
+
+    #[test]
+    fn activity_group_boundaries_follow_removal_role_changes_and_eviction() {
+        let mut transcript = Transcript::default();
+        transcript.push(item(1, "tool", "completed"));
+        transcript.push(item(2, "tool", "running"));
+        transcript.push(item(3, "assistant", "commentary"));
+        transcript.push(item(4, "tool", "completed"));
+        assert_eq!(transcript.activity_group(1), Some(0..2));
+        assert_eq!(transcript.activity_group(3), None);
+        transcript.toggle_activity_group("1");
+        transcript.upsert(item(1, "tool", "completed with output"));
+        assert!(transcript.get(0).unwrap().activity_expanded);
+        transcript.remove("1");
+        assert_eq!(transcript.activity_group(0), None);
+        transcript.upsert(item(3, "tool", "completed"));
+        assert_eq!(transcript.activity_group(0), Some(0..3));
+        for id in 5..MAX_TRANSCRIPT_ITEMS + 5 {
+            transcript.push(item(id, "tool", "completed"));
+        }
+        assert_eq!(transcript.activity_group(0), Some(0..MAX_TRANSCRIPT_ITEMS));
+        assert_eq!(transcript.list_state().item_count(), MAX_TRANSCRIPT_ITEMS);
     }
 
     #[test]

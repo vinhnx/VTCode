@@ -4,28 +4,26 @@
 
 ## Conventions
 
-- Keep GPUI rendering on the UI thread; transport and process supervision run asynchronously.
-- Use GPUI's asynchronous `PathPromptOptions` picker; a blocking native panel can abort the GPUI app.
-- `transcript.rs` owns row data and measured `ListState`; notify it of inserts, removals, text changes and expansion.
-- Match `vtcode-exec-events` types for runtime items; never duck-type event JSON. File changes render as
-  `DiffCard` rows; diff text is bounded before rendering.
-- `inspector.rs` owns derived projections (changes, activity, output) over the transcript; rebuild the
-  changes projection on diff upserts, never parse patches during render. Build `DiffState` entities on click only.
-- The composer submits through `submit_on_enter` plus the propagated `Enter` action on its wrapper;
-  `cx.subscribe`-style handlers lack a window, action handlers have one.
-- The ⌘K palette creates its `CommandState` on open and focuses it on the next frame (the kit installs
-  its input state during the first render); confirm callbacks are deferred, so tests need `run_until_parked`.
-- `themes.rs` gates every palette behind WCAG AA tests; derive muted text with `aa_muted` and filled-button
-  text with `filled_button_foreground` — never hardcode colors over a theme.
-- `preferences.rs` persists comfort settings to `~/.vtcode/desktop/preferences.json`; missing or corrupt
-  files fall back to defaults, and GUI tests must call `install_test_preferences_path()` first.
-- Rust 2024 RPIT captures `&mut Context` lifetimes: render helpers called in loops must return
-  `AnyElement`, not `impl IntoElement`.
+- Render on the UI thread; supervise transport asynchronously. Use GPUI's asynchronous `PathPromptOptions` picker.
+- `transcript.rs` owns rows, contiguous activity groups and measured `ListState`; remeasure grouping/expansion changes.
+- Use `vtcode-exec-events` runtime types; never duck-type JSON. File changes use bounded `DiffCard` rows.
+- `inspector.rs` projects live/restored rows (live IDs win); rebuild changes on upsert, never parse in render.
+  Newest valid patch wins; copy its exact source item. Retain one visible `DiffState`.
+- Menus/`view/shortcuts.rs` reuse typed actions; desktop buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
+- Gate discovery on validated initialization; serialize session/model changes and capture first-message Send content.
+- Palettes (including `view/typography.rs`) retain `CommandState`; focus next frame, defer confirms, consume Cancel.
+- Kit TabBar needs scoped focus/arrow/Home/End; SidebarMenu lacks equivalent keyboard support. Keep navigation buttons.
+- Theme: brand `primary`, hover `accent`, shared `apply_theme`; Markdown keeps image blocking and Kit `syntect` highlighting.
+- Use `aa_muted` and `filled_button_foreground` over palette colors; never hardcode colors over a theme.
+- Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions, never infers subagent state.
+- `view/composer_controls.rs` owns anchored controls; service validates options. Keep drafts/sources across option changes.
+- Rust 2024 RPIT captures `&mut Context`: render helpers in loops must return `AnyElement`.
 - `files.rs` bounds the workspace scan (400 entries, depth 3, skip dependency/VCS/hidden dirs),
-  previews (64 KiB, no binary), and the git branch walk; the sidebar never blocks on unbounded I/O.
+  previews (64 KiB, UTF-8 only), and the git branch walk. Retain background task handles for file I/O;
+  cancel superseded reads and reject stale workspace results. Reuse the shared workspace path resolver.
+  Reject truncated attachments; session switches reset projections; model/options changes retain draft sources.
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.
-- Drain a bounded event batch per foreground tick so streaming cannot starve input.
-- Keep transport, UI-event, and host-command queues bounded; preserve protocol-issued
-  session, turn, interaction, and choice identities.
-- Render only data received from the local service; agent execution remains in the unified runloop.
-- Build and package with the commands in `docs/development/desktop-workspace.md`.
+- `view/navigation.rs` starts collapsed; Kit buttons own hover callbacks, so use wrappers for reveal handlers.
+- Bound queues/event drains; reject stale events. CLI reload waits for shutdown, refreshes `view/configuration.rs` through the bounded credential-filtered catalog, and keeps same-workspace draft sources.
+- Retain submissions until typed acknowledgement or runtime proof; never automatically replay uncertain delivery.
+- `view/workspace_review.rs`: retain Git navigation by path across refresh; history never replays lifecycle/approvals.

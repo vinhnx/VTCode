@@ -20,6 +20,7 @@ mod welcome_tests;
 
 pub(crate) use crate::agent::agents::ResumeSession;
 pub(crate) use plugin_commands::{
-    PluginCommandAction, PluginCommandOutcome, handle_plugin_command, parse_plugin_command,
+    PluginCommandAction, PluginCommandOutcome, discover_installed_plugins, handle_plugin_command, parse_plugin_command,
 };
 pub(crate) use skills_commands::{SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command};
+pub(crate) use unified::fast_mode::effective_speed_label;

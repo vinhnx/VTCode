@@ -30,3 +30,12 @@ Kepano (MIT-licensed network allowlist)
   License: MIT
   Component: vtcode-config/data/network_allowlist.toml
 
+Zed GPUI macOS backend
+  Source: https://github.com/zed-industries/zed
+  Snapshot: gpui-pre-macos 0.3.9, zed@93d745668805029476e6d7fbb19652116fed51de
+  License: Apache License, Version 2.0
+  Vendored path: patches/gpui-pre-macos
+  VT Code modifications: immediate native cursor refresh, state-lock release
+  before AppKit callbacks, content-boundary guard and regression coverage.
+  See patches/gpui-pre-macos/PATCH.md and LICENSE-APACHE.
+

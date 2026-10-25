@@ -46,6 +46,12 @@ pub(crate) struct BackendHandle {
     pub commands: mpsc::Sender<BackendCommand>,
 }
 
+/// Include JSON escaping and the largest issued request ID in the wire-size check.
+pub(super) fn request_fits_frame(method: &str, params: &Value) -> bool {
+    let request = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": params });
+    serde_json::to_vec(&request).is_ok_and(|bytes| bytes.len() <= protocol::MAX_FRAME_BYTES)
+}
+
 pub(crate) fn launch_backend(workspace: PathBuf, ui_events: SyncSender<BackendEvent>) -> Result<BackendHandle, String> {
     let executable = resolve_backend_executable()?;
     let (commands, command_rx) = mpsc::channel(CLIENT_QUEUE_CAPACITY);
@@ -350,6 +356,21 @@ fn missing_credentials_diagnostic(stderr: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn request_size_preflight_matches_protocol_encoding_at_the_boundary() {
+        let method = protocol::method::TURN_SUBMIT;
+        let empty = json!({ "prompt": "" });
+        let envelope = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": empty });
+        let overhead = serde_json::to_vec(&envelope).unwrap().len();
+        for (extra, fits) in [(0, true), (1, false)] {
+            let params = json!({ "prompt": "a".repeat(protocol::MAX_FRAME_BYTES - overhead + extra) });
+            assert_eq!(request_fits_frame(method, &params), fits);
+            let request = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": params });
+            assert_eq!(protocol::write_frame(&mut tokio::io::sink(), &request).await.is_ok(), fits);
+        }
+        assert!(!request_fits_frame(method, &json!({ "prompt": "\u{1}".repeat(protocol::MAX_FRAME_BYTES / 5) })));
+    }
 
     #[test]
     fn protocol_responses_are_correlated_with_the_request_method() {
