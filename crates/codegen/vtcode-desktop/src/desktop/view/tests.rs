@@ -1136,6 +1136,8 @@ enum MousePhase {
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find_all("toggle-theme").is_empty());
         view.update(cx, |view, cx| {
             view.preferences.ui_font_size = Some(19);
             view.preferences.code_font_size = Some(14);
@@ -1149,24 +1151,17 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
                 "Text and `code` stay visible.".into(),
             ));
         });
-        for palette in [false, true] {
-            for (mode, id) in [(ThemeMode::Dark, "system-dark"), (ThemeMode::Light, "system-light")] {
-                window.render_frame(cx);
-                if palette {
-                    view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
-                } else {
-                    window.click("toggle-theme", cx);
-                }
-                window.render_frame(cx);
-                assert_eq!(view.read(cx).theme_mode, mode);
-                assert_eq!(view.read(cx).theme_id, id);
-                assert_eq!(crate::desktop::preferences::Preferences::load().theme.as_deref(), Some(id));
-                assert_eq!(cx.theme().font_size, px(19.));
-                assert_eq!(cx.theme().mono_font_size, px(14.));
-                assert_eq!(gpui_kit::base::Theme::global(cx).tokens.colors.foreground, cx.theme().colors.foreground);
-                assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "keep this draft");
-                assert_eq!(view.read(cx).transcript.get(0).unwrap().id, "theme-content");
-            }
+        for (mode, id) in [(ThemeMode::Dark, "system-dark"), (ThemeMode::Light, "system-light")] {
+            view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
+            window.render_frame(cx);
+            assert_eq!(view.read(cx).theme_mode, mode);
+            assert_eq!(view.read(cx).theme_id, id);
+            assert_eq!(crate::desktop::preferences::Preferences::load().theme.as_deref(), Some(id));
+            assert_eq!(cx.theme().font_size, px(19.));
+            assert_eq!(cx.theme().mono_font_size, px(14.));
+            assert_eq!(gpui_kit::base::Theme::global(cx).tokens.colors.foreground, cx.theme().colors.foreground);
+            assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "keep this draft");
+            assert_eq!(view.read(cx).transcript.get(0).unwrap().id, "theme-content");
         }
     })
     .unwrap();
@@ -1220,12 +1215,12 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
 
         window.click("close-settings", cx);
         window.render_frame(cx);
-        window.click("toggle-theme", cx);
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
         assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(view.read(cx).theme_id, "ciapre");
-        window.click("toggle-theme", cx);
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(cx.theme().font_size, px(17.));
@@ -3999,7 +3994,7 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
         assert_eq!(window.find("toggle-inspector").label(), Some("Hide panel"));
-        assert_eq!(window.find("toggle-theme").label(), Some("Switch to dark appearance"));
+        assert!(window.find_all("toggle-theme").is_empty());
         for (id, label) in [
             ("header-overflow", "Window actions"),
             ("navigation-overflow", "Navigation actions"),

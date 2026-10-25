@@ -2680,22 +2680,6 @@ impl DesktopView {
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
                     )
                     .child(
-                        desktop_button("toggle-theme")
-                            .icon(IconName::SunMoon)
-                            .accessibility_label(if self.theme_mode == ThemeMode::Light {
-                                "Switch to dark appearance"
-                            } else {
-                                "Switch to light appearance"
-                            })
-                            .tooltip(if self.theme_mode == ThemeMode::Light {
-                                "Switch to dark appearance"
-                            } else {
-                                "Switch to light appearance"
-                            })
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),
-                    )
-                    .child(
                         desktop_button("open-settings")
                             .accessibility_label("Settings")
                             .icon(IconName::Settings2)
