@@ -91,6 +91,15 @@ fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mu
     }
 }
 
+fn horizontal_scroll_item_is_visible(scroll: &gpui_kit::ScrollHandle, index: usize) -> bool {
+    let viewport = scroll.bounds();
+    let Some(item) = scroll.bounds_for_item(index) else {
+        return false;
+    };
+    let offset = scroll.offset().x;
+    item.left() + offset >= viewport.left() - px(1.) && item.right() + offset <= viewport.right() + px(1.)
+}
+
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
     cx.get_menus()
         .unwrap()
@@ -2828,7 +2837,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
 
 #[gpui_kit::test]
 fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.within("inspector-tabs").find(0usize).role(), Some(gpui_kit::Role::Tab));
@@ -2847,12 +2856,39 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
             window.press(key, cx);
             window.render_frame(cx);
             assert_eq!(view.read(cx).inspector_tab, expected, "{key}");
+            if key == "end" || key == "left" {
+                let scroll = &view.read(cx).inspector_tabs_scroll;
+                let visible = horizontal_scroll_item_is_visible(scroll, 4);
+                let offset = scroll.offset().x;
+                assert!(visible, "keyboard selection reveals the final inspector tab; scroll offset={offset:?}");
+                assert!(offset < px(0.), "narrow inspector tab row must scroll to its final tab");
+            }
         }
         window.press("cmd-l", cx);
         window.input("composer text", cx);
         window.press("left", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
         assert_eq!(view.read(cx).composer.read(cx).value(), "composer text");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn inspector_programmatic_selection_reveals_selected_tab(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_utilities(cx));
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
+        assert!(
+            horizontal_scroll_item_is_visible(&view.read(cx).inspector_tabs_scroll, 4),
+            "workflow selection reveals the selected inspector tab"
+        );
+        assert!(
+            view.read(cx).inspector_tabs_scroll.offset().x < px(0.),
+            "workflow selection must scroll the narrow inspector tab row"
+        );
     })
     .unwrap();
 }
@@ -4435,7 +4471,7 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
 
 #[gpui_kit::test]
 fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 450., 900.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
@@ -4452,7 +4488,16 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         assert_eq!(window.find("accessibility-display-group").role(), Some(gpui_kit::Role::Group));
         window.press("end", cx);
         window.render_frame(cx);
+        window.render_frame(cx);
         assert!(window.try_find("connections-settings").is_some());
+        assert_eq!(window.within("settings-tabs").find(4usize).selected(), Some(true));
+        let scroll = &view.read(cx).settings_tabs_scroll;
+        let offset = scroll.offset().x;
+        assert!(
+            horizontal_scroll_item_is_visible(scroll, 4),
+            "End reveals the selected settings category; scroll offset={offset:?}"
+        );
+        assert!(offset < px(0.), "narrow settings tabs must scroll to the selected category");
 
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());

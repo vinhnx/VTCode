@@ -398,6 +398,7 @@ struct DesktopView {
     inspector_open: bool,
     inspector_tab: InspectorTab,
     inspector_focus: FocusHandle,
+    inspector_tabs_scroll: ScrollHandle,
     changes: ChangesProjection,
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
@@ -418,6 +419,7 @@ struct DesktopView {
     settings_open: bool,
     theme_scroll: ScrollHandle,
     settings_scroll: ScrollHandle,
+    settings_tabs_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
     settings_focus: FocusHandle,
@@ -591,6 +593,7 @@ impl DesktopView {
             inspector_open: false,
             inspector_tab: InspectorTab::default(),
             inspector_focus: cx.focus_handle().tab_stop(true),
+            inspector_tabs_scroll: ScrollHandle::default(),
             changes: ChangesProjection::default(),
             selected_change: None,
             change_viewer: None,
@@ -611,6 +614,7 @@ impl DesktopView {
             settings_open: false,
             theme_scroll: ScrollHandle::default(),
             settings_scroll: ScrollHandle::default(),
+            settings_tabs_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
             settings_focus: cx.focus_handle().tab_stop(true),
@@ -1018,8 +1022,7 @@ impl DesktopView {
 
     fn focus_workspace_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.inspector_open = true;
-        self.inspector_tab = InspectorTab::Files;
-        cx.notify();
+        self.set_inspector_tab(InspectorTab::Files, cx);
 
         let view = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {
@@ -2381,8 +2384,7 @@ impl DesktopView {
         self.change_viewer_dirty = false;
         self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
         self.inspector_open = true;
-        self.inspector_tab = InspectorTab::Changes;
-        cx.notify();
+        self.set_inspector_tab(InspectorTab::Changes, cx);
     }
 
     fn navigate_change_file(&mut self, next: bool, cx: &mut Context<Self>) {
@@ -3086,9 +3088,28 @@ impl DesktopView {
     }
 
     fn select_inspector_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_inspector_tab(index, false, Some(window), cx);
+    }
+
+    fn select_inspector_tab_from_keyboard(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_inspector_tab(index, true, Some(window), cx);
+    }
+
+    fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
+        if let Some(index) = InspectorTab::ALL.iter().position(|candidate| *candidate == tab) {
+            self.update_inspector_tab(index, true, None, cx);
+        }
+    }
+
+    fn update_inspector_tab(&mut self, index: usize, reveal: bool, focus: Option<&mut Window>, cx: &mut Context<Self>) {
         if let Some(tab) = InspectorTab::ALL.get(index) {
             self.inspector_tab = *tab;
-            self.inspector_focus.focus(window, cx);
+            if reveal {
+                self.inspector_tabs_scroll.scroll_to_item(index);
+            }
+            if let Some(window) = focus {
+                self.inspector_focus.focus(window, cx);
+            }
             cx.notify();
         }
     }
@@ -3104,7 +3125,7 @@ impl DesktopView {
         } else {
             (current + count - 1) % count
         };
-        self.select_inspector_tab(index, window, cx);
+        self.select_inspector_tab_from_keyboard(index, window, cx);
     }
 
     /// Right-hand context inspector: derived Changes, Files, and Activity
@@ -3112,59 +3133,61 @@ impl DesktopView {
     fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let colors = theme.colors;
-        let panel =
-            div()
-                .w(px(self.inspector_width))
-                .min_w(px(MIN_PANE_WIDTH))
-                .h_full()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .rounded_lg()
-                .bg(themes::mix(colors.background, colors.secondary, 0.3))
-                .border_1()
-                .border_color(colors.border)
-                .child(
-                    div()
-                        .id("inspector-navigation")
-                        .test_support()
-                        .track_focus(&self.inspector_focus)
-                        .key_context("VTCodeInspector")
-                        .role(gpui_kit::Role::Group)
-                        .aria_label("Context inspector tabs")
-                        .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
-                        .border_1()
-                        .border_color(colors.border.opacity(0.))
-                        .focus_visible(|style| style.border_color(colors.ring))
-                        .on_action(cx.listener(|view, _: &NextInspectorTab, window, cx| {
+        let panel = div()
+            .w(px(self.inspector_width))
+            .min_w(px(MIN_PANE_WIDTH))
+            .h_full()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .rounded_lg()
+            .bg(themes::mix(colors.background, colors.secondary, 0.3))
+            .border_1()
+            .border_color(colors.border)
+            .child(
+                div()
+                    .id("inspector-navigation")
+                    .test_support()
+                    .track_focus(&self.inspector_focus)
+                    .key_context("VTCodeInspector")
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Context inspector tabs")
+                    .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
+                    .border_1()
+                    .border_color(colors.border.opacity(0.))
+                    .focus_visible(|style| style.border_color(colors.ring))
+                    .on_action(
+                        cx.listener(|view, _: &NextInspectorTab, window, cx| {
                             view.cycle_inspector_tab(true, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
-                            view.cycle_inspector_tab(false, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
-                            view.select_inspector_tab(0, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
-                            view.select_inspector_tab(InspectorTab::ALL.len().saturating_sub(1), window, cx)
-                        }))
-                        .child(
-                            TabBar::new("inspector-tabs")
-                                .underline()
-                                .small()
-                                .w_full()
-                                .selected_index(
-                                    InspectorTab::ALL
-                                        .iter()
-                                        .position(|tab| *tab == self.inspector_tab)
-                                        .unwrap_or_default(),
-                                )
-                                .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                    view.select_inspector_tab(*index, window, cx)
-                                }))
-                                .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                        ),
-                );
+                        }),
+                    )
+                    .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
+                        view.cycle_inspector_tab(false, window, cx)
+                    }))
+                    .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
+                        view.select_inspector_tab_from_keyboard(0, window, cx)
+                    }))
+                    .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
+                        view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+                    }))
+                    .child(
+                        TabBar::new("inspector-tabs")
+                            .underline()
+                            .small()
+                            .w_full()
+                            .track_scroll(&self.inspector_tabs_scroll)
+                            .selected_index(
+                                InspectorTab::ALL
+                                    .iter()
+                                    .position(|tab| *tab == self.inspector_tab)
+                                    .unwrap_or_default(),
+                            )
+                            .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                view.select_inspector_tab(*index, window, cx)
+                            }))
+                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                    ),
+            );
 
         let content = match self.inspector_tab {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),

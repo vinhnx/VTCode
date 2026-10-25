@@ -80,7 +80,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [stepper](https://gpui-kit.com/component/stepper) | Applied only to ordered multi-step runtime questions; keep the step order and current index runtime-owned, and disable direct navigation when the runtime requires sequential answers. Never invent execution phases or percentages. |
 | [switch](https://gpui-kit.com/component/switch) | Applied: separate light/dark appearance profiles have persisted theme and typography effects with accessible state. |
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |
-| [tabs](https://gpui-kit.com/component/tabs) | Retain inspector tabs and scoped keyboard wrapper. |
+| [tabs](https://gpui-kit.com/component/tabs) | Applied Kit TabBar with tracked reveal for keyboard/programmatic selection; retain scoped keyboard actions and VT Code-owned content. |
 | [tag](https://gpui-kit.com/component/tag) | Applied: neutral provider metadata and explicit tool-status tags in recessed activity cards. |
 | [text-view](https://gpui-kit.com/component/text-view) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
 | [textarea](https://gpui-kit.com/component/textarea) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |

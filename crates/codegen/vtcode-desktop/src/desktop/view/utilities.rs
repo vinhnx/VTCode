@@ -54,8 +54,7 @@ impl DesktopView {
                                     .child(div().text_sm().text_color(colors.danger).child(format!("−{deletions}"))),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Changes;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
                     .child(
@@ -82,8 +81,7 @@ impl DesktopView {
                                     .child(div().text_sm().truncate().child(summary)),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Activity;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Activity, cx);
                             })),
                     )
                     .child(
@@ -149,8 +147,7 @@ impl DesktopView {
                             .justify_start()
                             .desktop_disabled(self.workspace.is_none())
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Files;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Files, cx);
                             })),
                     ),
             ))

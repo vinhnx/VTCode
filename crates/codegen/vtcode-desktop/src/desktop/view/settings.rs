@@ -85,17 +85,18 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
                         view.cycle_settings_tab(false, window, cx)
                     }))
-                    .on_action(
-                        cx.listener(|view, _: &FirstSettingsTab, window, cx| view.select_settings_tab(0, window, cx)),
-                    )
+                    .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
+                        view.select_settings_tab_from_keyboard(0, window, cx)
+                    }))
                     .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
-                        view.select_settings_tab(SettingsTab::ALL.len().saturating_sub(1), window, cx)
+                        view.select_settings_tab_from_keyboard(SettingsTab::ALL.len().saturating_sub(1), window, cx)
                     }))
                     .child(
                         TabBar::new("settings-tabs")
                             .underline()
                             .small()
                             .w_full()
+                            .track_scroll(&self.settings_tabs_scroll)
                             .selected_index(selected_index)
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_settings_tab(*index, window, cx)
@@ -424,8 +425,24 @@ impl DesktopView {
     }
 
     pub(super) fn select_settings_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_settings_tab(index, false, window, cx);
+    }
+
+    pub(super) fn select_settings_tab_from_keyboard(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.update_settings_tab(index, true, window, cx);
+    }
+
+    fn update_settings_tab(&mut self, index: usize, reveal: bool, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(tab) = SettingsTab::ALL.get(index) {
             self.settings_tab = *tab;
+            if reveal {
+                self.settings_tabs_scroll.scroll_to_item(index);
+            }
             self.settings_navigation_focus.focus(window, cx);
             cx.notify();
         }
@@ -442,6 +459,6 @@ impl DesktopView {
         } else {
             (current + count - 1) % count
         };
-        self.select_settings_tab(index, window, cx);
+        self.select_settings_tab_from_keyboard(index, window, cx);
     }
 }
