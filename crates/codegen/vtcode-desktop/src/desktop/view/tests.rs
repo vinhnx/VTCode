@@ -782,6 +782,15 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         assert_eq!(root_item.label(), Some("src"));
         assert_eq!(root_item.expanded(), Some(false));
 
+        window.click("workspace-file-src", cx);
+        window.render_frame(cx);
+        assert_eq!(file_tree_item_snapshot(window, 0).expanded(), Some(true));
+        assert!(file_tree_paths(&view, cx).contains(&"src/nested".to_string()));
+        assert!(view.read(cx).file_preview.is_none(), "folder activation expands instead of previewing");
+        window.click("workspace-file-src", cx);
+        window.render_frame(cx);
+        assert_eq!(file_tree_item_snapshot(window, 0).expanded(), Some(false));
+
         let mut reached_file_focus = false;
         for _ in 0..32 {
             window.press("tab", cx);
