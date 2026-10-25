@@ -73,6 +73,11 @@ impl DesktopView {
         cx.notify();
     }
 
+    pub(super) fn reload_cli_settings_from_ui(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.reload_cli_settings(cx);
+        self.restore_focus_after_review_close(window, cx);
+    }
+
     pub(super) fn sync_cli_theme(&mut self, cx: &mut Context<Self>) {
         if !self.preferences.follow_cli_theme.unwrap_or(self.preferences.theme.is_none()) {
             return;
@@ -128,7 +133,7 @@ impl DesktopView {
                             .ghost()
                             .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
                             .desktop_disabled(!self.can_reload_cli_settings())
-                            .on_click(cx.listener(|view, _, _, cx| view.reload_cli_settings(cx))),
+                            .on_click(cx.listener(|view, _, window, cx| view.reload_cli_settings_from_ui(window, cx))),
                     )
                     .child(
                         desktop_button("use-cli-theme")

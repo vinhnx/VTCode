@@ -1200,7 +1200,13 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
             scrolled_line.top() >= viewport.top() && scrolled_line.bottom() <= viewport.bottom(),
             "the Kit Diff's virtualized list should scroll within its own review viewport"
         );
-        view.update(cx, |view, _| view.reset_session_state());
+        view.update(cx, |view, cx| {
+            view.reset_session_state();
+            view.restore_focus_after_review_close(window, cx);
+            assert!(!view.review_open);
+            assert!(!view.review_focus.contains_focused(window, cx));
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
         window.render_frame(cx);
         assert!(!view.read(cx).review_open);
         assert!(view.read(cx).change_viewer.is_none());
@@ -3507,7 +3513,15 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
-        view.update(cx, |view, cx| view.handle_backend_event(notification("edit", "src/app.rs", "invalid patch"), cx));
+        view.update(cx, |view, cx| {
+            view.event_tx.send(notification("edit", "src/app.rs", "invalid patch")).unwrap();
+            view.drain_events(window, cx);
+            assert!(view.selected_change.is_none());
+            assert!(view.change_viewer.is_none());
+            assert!(!view.review_open);
+            assert!(!view.review_focus.contains_focused(window, cx));
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
         assert!(view.read(cx).selected_change.is_none());
         assert!(view.read(cx).change_viewer.is_none());
         window.render_frame(cx);

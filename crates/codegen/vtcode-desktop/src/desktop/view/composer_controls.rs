@@ -104,7 +104,9 @@ impl DesktopView {
                                 .on_click(cx.listener(move |popover, _, window, cx| {
                                     popover.dismiss(window, cx);
                                     let path = PathBuf::from(entry_path.clone());
-                                    let _updated = entry_view.update(cx, |view, cx| view.select_workspace(path, cx));
+                                    let _updated = entry_view.update(cx, |view, cx| {
+                                        view.select_workspace_from_ui(path, window, cx);
+                                    });
                                 })),
                         );
                     }

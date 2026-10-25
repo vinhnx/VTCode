@@ -348,7 +348,8 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
     if let Some(path) = last_workspace
         && path.is_dir()
     {
-        view.update(cx, |view, cx| view.select_workspace(path, cx));
+        window
+            .update(cx, |_, window, cx| view.update(cx, |view, cx| view.select_workspace_from_ui(path, window, cx)))?;
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
@@ -719,7 +720,7 @@ impl DesktopView {
         self.preferences.recent_workspaces.clone()
     }
 
-    fn choose_workspace(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace_picker_open {
             return;
         }
@@ -740,14 +741,14 @@ impl DesktopView {
         self.workspace_picker_open = true;
         let paths = cx.prompt_for_paths(workspace_picker_options());
         cx.notify();
-        self.workspace_picker_task = Some(cx.spawn(async move |view, cx| {
+        self.workspace_picker_task = Some(cx.spawn_in(window, async move |view, cx| {
             let result = paths.await;
-            let _updated = view.update(cx, |view, cx| {
+            let _updated = view.update_in(cx, |view, window, cx| {
                 view.workspace_picker_open = false;
                 match result {
                     Ok(Ok(Some(paths))) => {
                         if let Some(path) = paths.into_iter().next() {
-                            view.select_workspace(path, cx);
+                            view.select_workspace_from_ui(path, window, cx);
                         }
                     }
                     Ok(Err(error)) => view.error = Some(format!("Unable to open the workspace picker: {error}")),
@@ -761,6 +762,11 @@ impl DesktopView {
 
     fn workspace_switch_idle(&self) -> bool {
         !self.running && self.pending_workspace.is_none() && self.session_request.is_none()
+    }
+
+    fn select_workspace_from_ui(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_workspace(path, cx);
+        self.restore_focus_after_review_close(window, cx);
     }
 
     fn select_workspace(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -1808,6 +1814,7 @@ impl DesktopView {
                     changed = true;
                     self.notify_background_activity(&event, window, cx);
                     self.handle_backend_event(event, cx);
+                    self.restore_focus_after_review_close(window, cx);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -2539,6 +2546,14 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Return focus when a state transition removes the focused review surface.
+    fn restore_focus_after_review_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.review_open && self.review_focus.contains_focused(window, cx) {
+            self.review_return_focus = None;
+            self.focus_composer(window, cx);
+        }
+    }
+
     fn navigate_review_change(&self, next: bool, cx: &mut Context<Self>) {
         let viewer = match &self.workspace_review {
             Some(review) => review.viewer.as_ref(),
@@ -2858,8 +2873,8 @@ impl DesktopView {
                         .w_full()
                         .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
                         .when(current, |button| button.bg(theme.colors.secondary).text_color(theme.colors.foreground))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.select_workspace_from_ui(PathBuf::from(workspace_path.clone()), window, cx)
                         })),
                 )
             })));
@@ -5707,10 +5722,6 @@ impl DesktopView {
 
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.review_open && self.review_focus.contains_focused(window, cx) {
-            self.review_return_focus = None;
-            self.focus_composer(window, cx);
-        }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
         let sidebar = div()
@@ -5800,7 +5811,9 @@ impl Render for DesktopView {
                 cx.notify();
             }))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
-            .on_action(cx.listener(|view, _: &ReloadCliSettings, _, cx| view.reload_cli_settings(cx)))
+            .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
+                view.reload_cli_settings_from_ui(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &SyncCliTheme, _, cx| view.sync_theme_to_cli(cx)))
             .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
             .when(self.workspace.is_some(), |body| {
