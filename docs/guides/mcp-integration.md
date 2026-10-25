@@ -189,6 +189,13 @@ for the app it is building, over Streamable HTTP. Use the [runnable TOML example
 add the anonymous endpoint alongside your existing providers. It requires no account or API key; new projects expire
 after 72 hours unless claimed.
 
+### deed.page static site publishing without an account
+
+[deed.page MCP](deedpage-mcp.md) lets the agent publish the HTML pages, reports and small static sites it builds to a
+permanent public URL, then update, roll back or delete them, over Streamable HTTP. Use the
+[runnable TOML example](../examples/deedpage-mcp.toml) to add the anonymous endpoint alongside your existing providers.
+It requires no account or API key; free sites are public.
+
 ### Memcode long-term memory over OAuth
 
 [Memcode](https://memcode.in) exposes an optional hosted Streamable HTTP server for persistent personal memory. VT Code
