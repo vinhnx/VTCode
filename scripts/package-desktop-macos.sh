@@ -18,7 +18,7 @@ if [[ ! "${MACOS_MAJOR}" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
     exit 1
 fi
 
-for tool in cargo codesign ditto; do
+for tool in cargo codesign ditto sips iconutil; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'Error: required packaging tool is missing: %s\n' "${tool}" >&2
         exit 1
@@ -45,6 +45,18 @@ install -m 755 "${ROOT_DIR}/target/release/vtcode" "${CONTENTS}/Helpers/vtcode"
 install -m 644 "${ROOT_DIR}/LICENSE" "${CONTENTS}/Resources/LICENSE"
 install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PARTY-NOTICES"
 
+# Build the native icon from the same artwork embedded in the desktop logo.
+ICONSET="${TEMP_ROOT}/VTCode.iconset"
+mkdir -p "${ICONSET}"
+for size in 16 32 128 256 512; do
+    sips -z "${size}" "${size}" "${ROOT_DIR}/resources/icons/vtcode-profile-512.png" \
+        --out "${ICONSET}/icon_${size}x${size}.png" >/dev/null
+    retina_size=$((size * 2))
+    sips -z "${retina_size}" "${retina_size}" "${ROOT_DIR}/resources/icons/vtcode-profile-512.png" \
+        --out "${ICONSET}/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "${ICONSET}" -o "${CONTENTS}/Resources/VTCode.icns"
+
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${ROOT_DIR}/Cargo.toml" | head -n 1)"
 cat >"${CONTENTS}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -59,6 +71,8 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
     <string>VT Code</string>
     <key>CFBundleDisplayName</key>
     <string>VT Code</string>
+    <key>CFBundleIconFile</key>
+    <string>VTCode.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -236,21 +236,63 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
 
 fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
     Theme::change(theme.mode, window, cx);
-    let colors = &mut cx.global_mut::<Theme>().colors;
-    colors.background = theme.background;
-    colors.foreground = theme.foreground;
-    colors.border = mix(theme.background, theme.foreground, 0.20);
-    colors.muted_foreground = aa_muted(theme.background, theme.foreground);
-    colors.secondary = mix(theme.background, theme.secondary, 0.30);
-    colors.secondary_foreground = theme.foreground;
-    colors.accent = theme.accent;
-    colors.accent_foreground = filled_button_foreground(theme.accent);
-    colors.danger = theme.danger;
-    colors.danger_foreground = filled_button_foreground(theme.danger);
-    colors.warning = theme.warning;
-    colors.popover = mix(theme.background, theme.foreground, 0.05);
-    colors.popover_foreground = theme.foreground;
-    cx.refresh_windows();
+    Theme::update(cx, |kit_theme| {
+        let colors = &mut kit_theme.colors;
+        colors.background = theme.background;
+        colors.foreground = theme.foreground;
+        colors.border = mix(theme.background, theme.foreground, 0.20);
+        colors.muted_foreground = aa_muted(theme.background, theme.foreground);
+        // Recessed surfaces move away from the foreground, preserving text contrast.
+        let surface = mix(theme.background, filled_button_foreground(theme.foreground), 0.10);
+        colors.secondary = surface;
+        colors.muted = surface;
+        colors.chart_2 = theme.secondary;
+        colors.group_box = surface;
+        colors.group_box_foreground = theme.foreground;
+        colors.sidebar = surface;
+        colors.sidebar_foreground = theme.foreground;
+        colors.sidebar_border = colors.border;
+        colors.sidebar_accent = surface;
+        colors.sidebar_accent_foreground = theme.foreground;
+        colors.sidebar_primary = theme.accent;
+        colors.sidebar_primary_foreground = filled_button_foreground(theme.accent);
+        colors.list = theme.background;
+        colors.list_hover = surface;
+        colors.list_active = surface;
+        colors.list_active_border = theme.accent;
+        colors.input = colors.border;
+        colors.button = surface;
+        colors.button_foreground = theme.foreground;
+        colors.button_hover = surface;
+        colors.button_active = surface;
+        colors.button_secondary = surface;
+        colors.button_secondary_foreground = theme.foreground;
+        colors.button_secondary_hover = surface;
+        colors.button_secondary_active = surface;
+        colors.secondary_hover = surface;
+        colors.secondary_active = surface;
+        colors.secondary_foreground = theme.foreground;
+        // Kit accent is the neutral hover/selection surface; brand emphasis is primary.
+        colors.accent = surface;
+        colors.accent_foreground = theme.foreground;
+        colors.danger = theme.danger;
+        colors.danger_foreground = filled_button_foreground(theme.danger);
+        colors.warning = theme.warning;
+        colors.popover = surface;
+        colors.popover_foreground = theme.foreground;
+        colors.primary = theme.accent;
+        colors.primary_foreground = filled_button_foreground(theme.accent);
+        let contrast_end = filled_button_foreground(colors.primary_foreground);
+        colors.primary_hover = mix(theme.accent, contrast_end, 0.08);
+        colors.primary_active = mix(theme.accent, contrast_end, 0.16);
+        colors.button_primary = colors.primary;
+        colors.button_primary_foreground = colors.primary_foreground;
+        colors.button_primary_hover = colors.primary_hover;
+        colors.button_primary_active = colors.primary_active;
+        colors.ring = theme.accent;
+        colors.tab_foreground = colors.muted_foreground;
+        colors.tab_active_foreground = theme.foreground;
+    });
     theme.mode
 }
 
@@ -323,6 +365,66 @@ fn relative_luminance(color: Hsla) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui_kit::test]
+    fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            for palette in all_themes() {
+                let _mode = apply_by_id(palette.id, None, cx);
+                let kit = cx.global::<Theme>();
+                let base = gpui_kit::base::Theme::global(cx);
+                assert_eq!(
+                    kit.tokens.primary,
+                    gpui_kit::component::theme::ThemeToken::from(palette.accent),
+                    "{}",
+                    palette.id
+                );
+                assert_eq!(base.tokens.colors.background, palette.background, "{}", palette.id);
+                assert_eq!(base.tokens.colors.primary, palette.accent, "{}", palette.id);
+                for foreground in [kit.colors.tab_foreground, kit.colors.tab_active_foreground] {
+                    assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
+                }
+                for background in [kit.colors.primary, kit.colors.primary_hover, kit.colors.primary_active] {
+                    assert!(
+                        contrast_ratio(kit.colors.primary_foreground, background) >= 4.5,
+                        "{}: unreadable primary control",
+                        palette.id
+                    );
+                }
+                for (background, foreground) in [
+                    (kit.colors.secondary, kit.colors.secondary_foreground),
+                    (kit.colors.accent, kit.colors.accent_foreground),
+                    (kit.colors.group_box, kit.colors.group_box_foreground),
+                    (kit.colors.sidebar, kit.colors.sidebar_foreground),
+                    (kit.colors.popover, kit.colors.popover_foreground),
+                ] {
+                    assert!(
+                        contrast_ratio(foreground, background) >= 4.5,
+                        "{}: unreadable component surface",
+                        palette.id
+                    );
+                }
+                for background in [
+                    kit.colors.background,
+                    kit.colors.secondary,
+                    kit.colors.popover,
+                    mix(kit.colors.background, kit.colors.secondary, 0.08),
+                ] {
+                    assert!(
+                        contrast_ratio(kit.colors.muted_foreground, background) >= 4.5,
+                        "{}: muted text must stay readable on raised surfaces",
+                        palette.id
+                    );
+                }
+                assert_ne!(kit.colors.accent, kit.colors.primary, "brand and hover surfaces must differ");
+                assert_eq!(kit.colors.button_primary, kit.colors.primary);
+                assert_eq!(kit.colors.button_primary_foreground, kit.colors.primary_foreground);
+                assert_eq!(kit.colors.button_primary_hover, kit.colors.primary_hover);
+                assert_eq!(kit.colors.button_primary_active, kit.colors.primary_active);
+            }
+        });
+    }
 
     #[test]
     fn every_theme_keeps_wcag_aa_foreground_contrast() {

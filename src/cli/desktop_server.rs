@@ -1,3 +1,9 @@
+mod composer_resources;
+mod config_settings;
+mod session_options;
+mod shared_preferences;
+mod theme_preferences;
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -47,6 +53,8 @@ struct ServerState {
     /// Provider/model override applied to every session started after a
     /// `config/select`; the session restarts so the runtime rebuilds cleanly.
     model_override: Option<ModelSelectParams>,
+    session_options: protocol::SessionOptionsSelectParams,
+    theme_override: Option<String>,
 }
 
 struct RuntimeSession {
@@ -184,10 +192,60 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
     }
 
     match request.method.as_str() {
+        method::WORKSPACE_REVIEW => {
+            let params: protocol::WorkspaceReviewParams = parse_params(&request.params)?;
+            if params.request_id.is_empty() || params.request_id.len() > 128 {
+                bail!("invalid workspace review request identity");
+            }
+            let mut result = protocol::WorkspaceReviewResult {
+                include_untracked: params.include_untracked,
+                scope: String::new(),
+                request_id: params.request_id,
+                workspace: context.workspace.to_string_lossy().into_owned(),
+                captured_at: chrono::Utc::now().to_rfc3339(),
+                patch: None,
+                truncated: false,
+                note: String::new(),
+            };
+            match resolve_review_scope(&context.workspace, params.scope.as_deref()) {
+                Ok(scope_path) => {
+                    result.scope = scope_path
+                        .strip_prefix(&context.workspace)
+                        .context("Git review scope escaped workspace")?
+                        .to_string_lossy()
+                        .into_owned();
+                    let snapshot =
+                        vtcode_core::git::capture_workspace_review_diff(&scope_path, params.include_untracked).await;
+                    result.captured_at = snapshot.captured_at;
+                    result.patch = snapshot.text;
+                    result.truncated = snapshot.truncated;
+                    result.note = snapshot.note;
+                }
+                Err(error) => {
+                    result.note = format!("Git review unavailable: {}", sanitize_public_error(&error.to_string()))
+                }
+            }
+            Ok((serde_json::to_value(result)?, false))
+        }
         method::CONFIG_DISCOVER => {
             let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent);
+            let snapshot = configuration_snapshot(context, &agent).await;
             Ok((serde_json::to_value(snapshot)?, false))
+        }
+        method::CONFIG_SETTINGS_READ => {
+            let snapshot = config_settings::read(context.workspace.clone()).await?;
+            Ok((serde_json::to_value(snapshot)?, false))
+        }
+        method::CONFIG_SETTINGS_WRITE => {
+            let params: protocol::ConfigSettingsWriteParams = parse_params(&request.params)?;
+            ensure_no_active_turn(context).await?;
+            if !context.state.lock().await.pending_interactions.is_empty() {
+                bail!("Resolve the pending CLI interaction before changing configuration");
+            }
+            let result = config_settings::write(context.workspace.clone(), params).await?;
+            shutdown_current_session(context, false).await;
+            context.state.lock().await.session_id = None;
+            Ok((serde_json::to_value(result)?, false))
         }
         method::CONFIG_MODELS => {
             let (provider, model) = {
@@ -211,9 +269,48 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 let mut state = context.state.lock().await;
                 state.session_id = None;
                 state.model_override = Some(params);
+                state.session_options.reasoning_effort = None;
             }
             let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent);
+            let snapshot = configuration_snapshot(context, &agent).await;
+            Ok((serde_json::to_value(snapshot)?, false))
+        }
+        method::COMPOSER_RESOURCES => {
+            ensure_no_active_turn(context).await?;
+            let resources = timeout(Duration::from_secs(3), composer_resources::discover(context.workspace.clone()))
+                .await
+                .context("CLI resource discovery timed out")??;
+            Ok((serde_json::to_value(resources)?, false))
+        }
+        method::CONFIG_OPTIONS => {
+            let params: protocol::SessionOptionsSelectParams = parse_params(&request.params)?;
+            ensure_no_active_turn(context).await?;
+            let agent = active_agent_config(context).await;
+            session_options::validate(&params, &agent.provider, &agent.model)?;
+            shutdown_current_session(context, false).await;
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = None;
+                session_options::merge(&mut state.session_options, params);
+            }
+            let agent = active_agent_config(context).await;
+            Ok((serde_json::to_value(configuration_snapshot(context, &agent).await)?, false))
+        }
+        method::CONFIG_THEME => {
+            let params: protocol::ThemePreferenceSelectParams = parse_params(&request.params)?;
+            ensure_no_active_turn(context).await?;
+            let theme = theme_preferences::persist(context.workspace.clone(), params.theme).await?;
+            shutdown_current_session(context, false).await;
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = None;
+                state.theme_override = Some(theme.clone());
+            }
+            let agent = active_agent_config(context).await;
+            let mut snapshot = configuration_snapshot(context, &agent).await;
+            if let Some(shared) = snapshot.shared_ui.as_mut() {
+                shared.theme = theme;
+            }
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::SESSION_LIST => {
@@ -261,11 +358,21 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 .await?
                 .ok_or_else(|| anyhow!("saved session could not be loaded"))?;
             shutdown_current_session(context, false).await;
+            let workspace = context.workspace.clone();
+            let history_session_id = params.session_id.clone();
+            let inspector_history =
+                tokio::task::spawn_blocking(move || restored_inspector_history(&workspace, &history_session_id))
+                    .await
+                    .context("inspector history task failed")??;
             start_session(context, params.session_id.clone(), Some(resume)).await?;
             context.state.lock().await.session_id = Some(params.session_id.clone());
             let result = protocol::SessionLoadResult {
                 session: session_summary(&listing),
                 messages: restored_history(&listing),
+                review_items: inspector_history.items,
+                review_history_incomplete: inspector_history.incomplete,
+                activity_items: inspector_history.activity_items,
+                activity_history_incomplete: inspector_history.activity_incomplete,
             };
             Ok((serde_json::to_value(result)?, false))
         }
@@ -316,10 +423,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 })
                 .collect::<Vec<_>>();
             if input
-                .send(InlineEvent::Submit(SubmittedInput::new(
-                    params.prompt,
-                    attachment_parts,
-                )))
+                .send(InlineEvent::Submit(SubmittedInput::new(params.prompt, attachment_parts)))
                 .is_err()
             {
                 let mut state = context.state.lock().await;
@@ -385,10 +489,16 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
         .context("failed to start desktop host command bridge")?;
     let (event_sender, event_receiver) = protocol::live_event_channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let config = active_agent_config(context).await;
-    let vt_config = context.startup.config.clone();
-    let skip_confirmations = context.startup.skip_confirmations;
-    let primary_agent_explicitly_configured = context.startup.primary_agent_explicitly_configured;
-    let planning_entry_source = context.startup.planning_entry_source;
+    let mut vt_config = context.startup.config.clone();
+    vt_config.agent.theme.clone_from(&config.theme);
+    let options = context.state.lock().await.session_options.clone();
+    let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
+    if let Some(mode) = options.mode.as_ref() {
+        vt_config.default_primary_agent.clone_from(mode);
+    }
+    let primary_agent_explicitly_configured =
+        options.mode.is_some() || context.startup.primary_agent_explicitly_configured;
+    let planning_entry_source = session_options::planning_source(&options, context.startup.planning_entry_source);
     let runtime_task = tokio::spawn(async move {
         run_single_agent_loop_unified_with_host(
             &config,
@@ -533,24 +643,20 @@ async fn publish_thread_event(
     notifications: &mpsc::Sender<protocol::Notification>,
     turn_finished: &Notify,
 ) -> Result<()> {
-    let event_value = serde_json::to_value(&event)?;
-    let event_type = event_value
-        .get("event")
-        .and_then(|event| event.get("type"))
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let terminal_status = match event_type {
-        "turn.completed" => Some("completed"),
-        "turn.failed" => Some("failed"),
+    use vtcode_core::exec::events::ThreadEvent;
+
+    let terminal_status = match event.event() {
+        ThreadEvent::TurnCompleted(_) => Some("completed"),
+        ThreadEvent::TurnFailed(_) => Some("failed"),
+        ThreadEvent::TurnBlocked(_) => Some("blocked"),
         _ => None,
     };
     let turn_id = {
         let mut state = state.lock().await;
-        let turn_id = state
-            .session_id
-            .as_deref()
-            .filter(|selected| *selected == session_id)
-            .and(state.active_turn_id.clone());
+        if state.session_id.as_deref().is_some_and(|selected| selected != session_id) {
+            return Ok(());
+        }
+        let turn_id = state.active_turn_id.clone();
         if terminal_status.is_some() && turn_id.is_some() && state.session_id.as_deref() == Some(session_id) {
             if let Some(turn_id) = turn_id.as_deref() {
                 state.interaction_registry.finish_turn(session_id, turn_id);
@@ -776,6 +882,18 @@ async fn send_notification(sender: &mpsc::Sender<protocol::Notification>, method
         .map_err(|_error| anyhow!("desktop client disconnected"))
 }
 
+fn resolve_review_scope(workspace: &Path, scope: Option<&str>) -> Result<PathBuf> {
+    let scope = scope.filter(|scope| !scope.is_empty()).unwrap_or(".");
+    if scope.len() > 4096 {
+        bail!("Git review folder path is too long");
+    }
+    let resolved = vtcode_commons::resolve_workspace_path(workspace, Path::new(scope))?;
+    if !resolved.starts_with(workspace) || !resolved.is_dir() {
+        bail!("Git review scope must be a directory within the selected workspace");
+    }
+    Ok(resolved)
+}
+
 fn parse_params<T: DeserializeOwned>(value: &Value) -> Result<T> {
     serde_json::from_value(value.clone()).context("invalid request parameters")
 }
@@ -798,6 +916,91 @@ fn session_summary(listing: &SessionListing) -> SessionSummary {
         completed: listing.snapshot.progress.is_none(),
         resumable: !listing.snapshot.messages.is_empty(),
     }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct RestoredInspectorHistory {
+    items: Vec<vtcode_core::exec::events::ThreadItem>,
+    incomplete: bool,
+    activity_items: Vec<vtcode_core::exec::events::ThreadItem>,
+    activity_incomplete: bool,
+}
+
+#[derive(Default)]
+struct BoundedHistoryItems {
+    items: Vec<vtcode_core::exec::events::ThreadItem>,
+    seen: std::collections::HashSet<String>,
+    encoded_bytes: usize,
+    incomplete: bool,
+    full: bool,
+}
+
+impl BoundedHistoryItems {
+    fn retain_latest(&mut self, item: vtcode_core::exec::events::ThreadItem, byte_limit: usize) -> Result<()> {
+        if self.full || !self.seen.insert(item.id.clone()) {
+            return Ok(());
+        }
+        let size = serde_json::to_vec(&item)?.len();
+        if self.items.len() >= 80 || self.encoded_bytes.saturating_add(size) > byte_limit {
+            self.incomplete = true;
+            self.full = true;
+        } else {
+            self.encoded_bytes += size;
+            self.items.push(item);
+        }
+        Ok(())
+    }
+}
+
+/// Read-only review projection over the shared canonical store. Lifecycle events
+/// remain historical evidence and must never be replayed into the live runloop.
+fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<RestoredInspectorHistory> {
+    use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
+    const MAX_REVIEW_BYTES: usize = 200 * 1024;
+    const MAX_ACTIVITY_BYTES: usize = 64 * 1024;
+    let tail = match vtcode_memory::snapshot::read_event_tail(workspace, session_id, 4 * 1024 * 1024) {
+        Ok(Some(tail)) => tail,
+        Ok(None) => return Ok(RestoredInspectorHistory::default()),
+        Err(vtcode_memory::SessionStoreError::Io { source, .. })
+            if source.kind() == std::io::ErrorKind::Unsupported =>
+        {
+            return Ok(RestoredInspectorHistory {
+                incomplete: true,
+                activity_incomplete: true,
+                ..Default::default()
+            });
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let mut review = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
+    let mut activity = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
+    for event in tail.events.into_iter().rev() {
+        let item = match event.into_event() {
+            ThreadEvent::ItemStarted(event) => event.item,
+            ThreadEvent::ItemUpdated(event) => event.item,
+            ThreadEvent::ItemCompleted(event) => event.item,
+            _ => continue,
+        };
+        match &item.details {
+            ThreadItemDetails::FileChange(_) => review.retain_latest(item, MAX_REVIEW_BYTES)?,
+            ThreadItemDetails::ToolInvocation(_)
+            | ThreadItemDetails::ToolOutput(_)
+            | ThreadItemDetails::CommandExecution(_)
+            | ThreadItemDetails::McpToolCall(_)
+            | ThreadItemDetails::WebSearch(_)
+            | ThreadItemDetails::Harness(_)
+            | ThreadItemDetails::Error(_) => activity.retain_latest(item, MAX_ACTIVITY_BYTES)?,
+            _ => {}
+        }
+    }
+    review.items.reverse();
+    activity.items.reverse();
+    Ok(RestoredInspectorHistory {
+        items: review.items,
+        incomplete: review.incomplete,
+        activity_items: activity.items,
+        activity_incomplete: activity.incomplete,
+    })
 }
 
 fn restored_history(listing: &SessionListing) -> Vec<protocol::SessionHistoryMessage> {
@@ -850,26 +1053,26 @@ fn workspace_label(workspace: &Path) -> String {
 /// The startup agent config with any `config/select` override applied.
 async fn active_agent_config(context: &ServiceContext) -> vtcode_core::config::types::AgentConfig {
     let mut config = context.startup.agent_config.clone();
-    if let Some(selection) = context.state.lock().await.model_override.clone() {
-        config.provider = selection.provider;
-        config.model = selection.model;
+    let state = context.state.lock().await;
+    if let Some(selection) = state.model_override.as_ref() {
+        config.provider.clone_from(&selection.provider);
+        config.model.clone_from(&selection.model);
+    }
+    if let Some(effort) = state
+        .session_options
+        .reasoning_effort
+        .as_deref()
+        .and_then(vtcode_commons::reasoning::ReasoningEffortLevel::parse)
+    {
+        config.reasoning_effort = effort;
+    }
+    if let Some(theme) = state.theme_override.as_ref() {
+        config.theme.clone_from(theme);
     }
     config
 }
 
-/// Honest label for the execution policy this service runs under, derived
-/// from the same startup switches that produced it.
-fn sandbox_label(startup: &StartupContext) -> &'static str {
-    if startup.full_auto_requested {
-        "Full auto"
-    } else if startup.skip_confirmations {
-        "Auto-approved commands"
-    } else {
-        "Ask before protected actions"
-    }
-}
-
-fn configuration_snapshot(
+async fn configuration_snapshot(
     context: &ServiceContext,
     agent: &vtcode_core::config::types::AgentConfig,
 ) -> ConfigurationSnapshot {
@@ -881,14 +1084,36 @@ fn configuration_snapshot(
     } else {
         format!("vtcode login {}", agent.provider)
     };
+    let options = context.state.lock().await.session_options.clone();
+    let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
     ConfigurationSnapshot {
+        session_options: Some(protocol::SessionOptionsSnapshot {
+            permission_mode: if skip_confirmations {
+                protocol::PermissionMode::AutoApproveCommands
+            } else {
+                protocol::PermissionMode::Ask
+            },
+            mode: options
+                .mode
+                .unwrap_or_else(|| context.startup.config.default_primary_agent.clone()),
+            reasoning_effort: agent.reasoning_effort.as_str().into(),
+            supported_efforts: session_options::supported_efforts(&agent.provider, &agent.model),
+            speed: crate::agent::runloop::effective_speed_label(agent, &context.startup.config).map(str::to_owned),
+        }),
         provider: agent.provider.clone(),
         model: agent.model.clone(),
         authenticated: true,
         credential_setup_command: setup,
-        sandbox: Some(sandbox_label(&context.startup).to_string()),
-        context_window: model_catalog_entry(&agent.provider, &agent.model)
-            .map(|entry| entry.context_window as u64),
+        sandbox: Some(
+            if skip_confirmations {
+                "Auto-approved commands"
+            } else {
+                "Ask before protected actions"
+            }
+            .to_string(),
+        ),
+        shared_ui: Some(shared_preferences::snapshot(&context.startup.config.ui.keybindings, &agent.theme)),
+        context_window: model_catalog_entry(&agent.provider, &agent.model).map(|entry| entry.context_window as u64),
     }
 }
 
@@ -927,6 +1152,148 @@ fn sanitize_public_error(message: &str) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    fn review_item(id: &str, patch: &str) -> vtcode_core::exec::events::ThreadItem {
+        use vtcode_core::exec::events::*;
+        ThreadItem {
+            id: id.into(),
+            context: None,
+            details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
+                changes: vec![FileUpdateChange {
+                    path: "src/app.rs".into(),
+                    kind: PatchChangeKind::Update,
+                }],
+                status: PatchApplyStatus::Completed,
+                unified_diff: Some(patch.into()),
+                diff_incomplete: Some(false),
+                additions: None,
+                deletions: None,
+            })),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_review_uses_latest_canonical_items_without_lifecycle_replay() {
+        use vtcode_core::exec::events::*;
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        assert_eq!(restored_inspector_history(&workspace, "legacy").unwrap(), RestoredInspectorHistory::default());
+        let log = vtcode_memory::open(&workspace, "review", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id: "review".into() }))
+            .unwrap();
+        log.append(&ThreadEvent::ItemStarted(ItemStartedEvent { item: review_item("first", "old patch") }))
+            .unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: review_item("other", "other patch") }))
+            .unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: review_item("first", "latest patch") }))
+            .unwrap();
+        log.flush().unwrap();
+        let RestoredInspectorHistory { items, incomplete, .. } =
+            restored_inspector_history(&workspace, "review").unwrap();
+        assert!(!incomplete);
+        assert_eq!(
+            items,
+            vec![
+                review_item("other", "other patch"),
+                review_item("first", "latest patch")
+            ]
+        );
+        // An oversized newest patch must not expose an older patch as current.
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: review_item("huge", &"x".repeat(210 * 1024)),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+        let RestoredInspectorHistory { items, incomplete, .. } =
+            restored_inspector_history(&workspace, "review").unwrap();
+        assert!(items.is_empty());
+        assert!(incomplete);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_activity_is_latest_ordered_and_cannot_displace_saved_patches() {
+        use vtcode_core::exec::events::*;
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let log = vtcode_memory::open(&workspace, "activity", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        let command = |id: &str, output: &str, status| ThreadItem {
+            id: id.into(),
+            context: None,
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                command: "cargo check --locked".into(),
+                arguments: None,
+                aggregated_output: output.into(),
+                exit_code: None,
+                status,
+            })),
+        };
+        log.append(&ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: command("checked", "starting", CommandExecutionStatus::InProgress),
+        }))
+        .unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: review_item("edit", "saved patch") }))
+            .unwrap();
+        let completed = command("checked", "check passed", CommandExecutionStatus::Completed);
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent { item: completed.clone() }))
+            .unwrap();
+        let interrupted = command("unfinished", "partial output", CommandExecutionStatus::InProgress);
+        log.append(&ThreadEvent::ItemUpdated(ItemUpdatedEvent { item: interrupted.clone() }))
+            .unwrap();
+        log.flush().unwrap();
+        let restored = restored_inspector_history(&workspace, "activity").unwrap();
+        assert_eq!(restored.items, vec![review_item("edit", "saved patch")]);
+        assert_eq!(restored.activity_items, vec![completed, interrupted]);
+        assert!(!restored.activity_incomplete);
+        // Oversized activity stops only its own suffix; review remains intact.
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: command("huge", &"x".repeat(65 * 1024), CommandExecutionStatus::Completed),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+        let restored = restored_inspector_history(&workspace, "activity").unwrap();
+        assert_eq!(restored.items, vec![review_item("edit", "saved patch")]);
+        assert!(!restored.incomplete);
+        assert!(restored.activity_items.is_empty());
+        assert!(restored.activity_incomplete);
+        // The count cap retains a contiguous newest suffix in persisted order.
+        for index in 0..81 {
+            log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: command(&format!("command-{index}"), "ok", CommandExecutionStatus::Completed),
+            }))
+            .unwrap();
+        }
+        log.flush().unwrap();
+        let restored = restored_inspector_history(&workspace, "activity").unwrap();
+        assert_eq!(restored.activity_items.len(), 80);
+        assert_eq!(restored.activity_items[0].id, "command-1");
+        assert_eq!(restored.activity_items[79].id, "command-80");
+        assert!(restored.activity_incomplete);
+        assert_eq!(restored.items.len(), 1);
+    }
+
+    #[test]
+    fn review_scope_is_bounded_to_existing_workspace_directories() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = vtcode_commons::canonicalize(workspace.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.join("src")).unwrap();
+        std::fs::create_dir(root.join(" spaced ")).unwrap();
+        std::fs::write(root.join("file"), "not a directory").unwrap();
+        assert_eq!(resolve_review_scope(&root, None).unwrap(), root);
+        assert_eq!(resolve_review_scope(&root, Some("src")).unwrap(), root.join("src"));
+        assert_eq!(resolve_review_scope(&root, Some(" spaced ")).unwrap(), root.join(" spaced "));
+        assert!(resolve_review_scope(&root, Some("file")).is_err());
+        assert!(resolve_review_scope(&root, Some(outside.path().to_str().unwrap())).is_err());
+        assert!(resolve_review_scope(&root, Some(&"x".repeat(4097))).is_err());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
+            assert!(resolve_review_scope(&root, Some("escape")).is_err());
+        }
+    }
+
     #[test]
     fn public_errors_remove_control_characters_and_limit_length() {
         let sanitized = sanitize_public_error(&format!("bad\u{001b}[31m{}", "x".repeat(300)));
@@ -946,5 +1313,88 @@ mod tests {
     fn session_workspace_labels_are_file_names() {
         assert_eq!(workspace_label(Path::new("/tmp/example-workspace")), "example-workspace");
         assert_eq!(workspace_label(Path::new("/")), "workspace");
+    }
+
+    #[tokio::test]
+    async fn terminal_events_release_accepted_turns_without_a_start_event() {
+        use vtcode_core::exec::events::{
+            ThreadEvent, TurnCompletedEvent, TurnFailedEvent, Usage, VersionedThreadEvent,
+        };
+        for (turn_id, event, expected_status) in [
+            (
+                "first-turn",
+                ThreadEvent::TurnFailed(TurnFailedEvent {
+                    completed_at: None,
+                    message: "turn cancelled during preparation".into(),
+                    usage: None,
+                }),
+                "failed",
+            ),
+            (
+                "later-turn",
+                ThreadEvent::TurnFailed(TurnFailedEvent {
+                    completed_at: None,
+                    message: "turn cancelled during preparation".into(),
+                    usage: None,
+                }),
+                "failed",
+            ),
+            (
+                "dropped-start",
+                ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    completed_at: None,
+                    usage: Usage::default(),
+                    in_progress_exec_sessions: Vec::new(),
+                }),
+                "completed",
+            ),
+        ] {
+            let state = Mutex::new(ServerState {
+                session_id: Some("session".into()),
+                active_turn_id: Some(turn_id.into()),
+                cancel_requested_turn: Some(turn_id.into()),
+                ..Default::default()
+            });
+            let (notifications, mut received) = mpsc::channel(4);
+            let finished = Notify::new();
+            let waiting = finished.notified();
+            tokio::pin!(waiting);
+            let _already_notified = waiting.as_mut().enable();
+            publish_thread_event("session", VersionedThreadEvent::new(event), &state, &notifications, &finished)
+                .await
+                .unwrap();
+            timeout(Duration::from_secs(1), waiting).await.expect("cleanup waiter notified");
+            let state = state.lock().await;
+            assert!(state.active_turn_id.is_none(), "{turn_id}");
+            assert!(state.cancel_requested_turn.is_none(), "{turn_id}");
+            let event = received.try_recv().unwrap();
+            assert_eq!(event.method, protocol::method::THREAD_EVENT);
+            assert_eq!(event.params["turnId"], turn_id);
+            let status = received.try_recv().unwrap();
+            assert_eq!(status.params["turnId"], turn_id);
+            assert_eq!(status.params["status"], expected_status);
+        }
+    }
+
+    #[tokio::test]
+    async fn old_session_events_do_not_reach_the_selected_session() {
+        use vtcode_core::exec::events::{ThreadEvent, TurnStartedEvent, VersionedThreadEvent};
+        let state = Mutex::new(ServerState {
+            session_id: Some("selected-session".into()),
+            active_turn_id: Some("selected-turn".into()),
+            ..Default::default()
+        });
+        let (notifications, mut received) = mpsc::channel(2);
+        publish_thread_event(
+            "old-session",
+            VersionedThreadEvent::new(ThreadEvent::TurnStarted(TurnStartedEvent::default())),
+            &state,
+            &notifications,
+            &Notify::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(state.lock().await.active_turn_id.as_deref(), Some("selected-turn"));
+        assert!(received.try_recv().is_err());
     }
 }

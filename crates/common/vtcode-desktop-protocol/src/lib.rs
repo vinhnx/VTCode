@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 1 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 9 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -166,6 +166,181 @@ pub struct ConfigurationSnapshot {
     /// Context window of the active model, when the catalog knows it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u64>,
+    /// Non-secret CLI UI preferences available to the native client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_ui: Option<SharedUiPreferences>,
+    /// Effective options for the next runtime session, absent on older helpers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_options: Option<SessionOptionsSnapshot>,
+}
+
+/// A discoverable source for the native composer's Add menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ComposerResourceKind {
+    /// A CLI skill with an explicit dollar-name mention.
+    Skill,
+    /// An installed Agent Plugin.
+    Plugin,
+}
+
+/// Bounded, non-secret discovery metadata; never executable content.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposerResource {
+    /// Validated resource name.
+    pub name: String,
+    /// Short plain-text description.
+    pub description: String,
+    /// Which shared CLI discovery source owns this entry.
+    pub kind: ComposerResourceKind,
+}
+
+impl ComposerResource {
+    /// Resource names are safe single tokens for explicit CLI skill mentions.
+    pub fn is_valid_name(name: &str) -> bool {
+        !name.is_empty()
+            && name.len() <= 128
+            && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+    }
+}
+
+/// Command confirmation policy; this never bypasses sandbox authorization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PermissionMode {
+    /// Preserve interactive confirmation for protected commands.
+    Ask,
+    /// Use the CLI's skip-confirmations behavior for commands.
+    AutoApproveCommands,
+}
+
+/// Runtime options exposed without credentials or complete configuration documents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionOptionsSnapshot {
+    /// Effective command confirmation policy.
+    pub permission_mode: PermissionMode,
+    /// Selected primary agent, such as build or plan.
+    pub mode: String,
+    /// CLI reasoning effort identifier.
+    pub reasoning_effort: String,
+    /// Efforts supported by this exact provider/model route.
+    pub supported_efforts: Vec<String>,
+    /// Effective provider speed badge, when supported by this route.
+    pub speed: Option<String>,
+}
+
+/// An explicit idle-session option change. Omitted values preserve existing choices.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionOptionsSelectParams {
+    /// Change command confirmations, retaining sandbox and tool authorization.
+    pub permission_mode: Option<PermissionMode>,
+    /// Select a built-in build or plan agent.
+    pub mode: Option<String>,
+    /// Select a capability-validated reasoning effort.
+    pub reasoning_effort: Option<String>,
+}
+
+/// Persist a built-in CLI theme selected in Desktop.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemePreferenceSelectParams {
+    /// Built-in VT Code theme identifier.
+    pub theme: String,
+}
+
+/// Writable configuration layer understood by the CLI config service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigTarget {
+    /// User-level configuration.
+    User,
+    /// Workspace-level configuration.
+    Workspace,
+    /// Project profile configuration.
+    Project,
+}
+
+/// Non-secret setting value exposed to the native configuration browser.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSetting {
+    /// Stable dotted path accepted by the CLI config writer.
+    pub path: String,
+    /// Effective value from the merged CLI configuration.
+    pub value: Value,
+    /// Safe layer label such as `workspace` or `user`; never a filesystem path.
+    pub origin: Option<String>,
+}
+
+/// Version of one writable config layer, for optimistic write protection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigTargetVersion {
+    /// Layer represented by this version.
+    pub target: ConfigTarget,
+    /// Layer fingerprint, when the selected layer was loaded.
+    pub version: Option<String>,
+}
+
+/// Bounded, credential-filtered settings catalog returned by the CLI.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSettingsSnapshot {
+    /// Effective values that can be edited through the shared config writer.
+    pub settings: Vec<ConfigSetting>,
+    /// Fingerprints for user, workspace, and project layers.
+    pub target_versions: Vec<ConfigTargetVersion>,
+    /// Number of credential-bearing branches excluded from the catalog.
+    pub omitted_sensitive: usize,
+    /// Number of values omitted because they exceeded the UI size bound.
+    pub omitted_large: usize,
+    /// Number of additional settings omitted because the catalog reached its limit.
+    pub omitted_limit: usize,
+}
+
+/// Write one setting through the shared, validated CLI configuration service.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigSettingsWriteParams {
+    /// Layer to update.
+    pub target: ConfigTarget,
+    /// Dotted setting path from `ConfigSettingsSnapshot`.
+    pub path: String,
+    /// Replacement value. Its type must match the effective setting.
+    pub value: Value,
+    /// Version observed when the setting editor opened.
+    pub expected_layer_version: Option<String>,
+}
+
+/// Result of persisting a CLI configuration value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigSettingsWriteResult {
+    /// Layer updated by the CLI config service.
+    pub target: ConfigTarget,
+    /// Setting path that was persisted.
+    pub path: String,
+    /// Version of the updated layer.
+    pub written_layer_version: String,
+    /// Whether a higher-precedence layer still controls the effective value.
+    pub overridden: bool,
+}
+
+/// CLI preferences projected through existing parsers rather than a second config loader.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedUiPreferences {
+    /// Theme ID resolved by the CLI startup loader.
+    pub theme: String,
+    /// Desktop command ID to normalized native key combinations; an empty list unbinds it.
+    #[serde(default)]
+    pub shortcuts: std::collections::BTreeMap<String, Vec<String>>,
+    /// Explicit diagnostics for skipped bindings; contains no configuration secrets.
+    #[serde(default)]
+    pub shortcut_warnings: Vec<String>,
 }
 
 /// One selectable model from the service's catalog.
@@ -230,6 +405,56 @@ pub struct SessionLoadResult {
     pub session: SessionSummary,
     /// Recent messages restored from the archive snapshot.
     pub messages: Vec<SessionHistoryMessage>,
+    /// Recent file-change snapshots from canonical history, in persisted order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_items: Vec<vtcode_exec_events::ThreadItem>,
+    /// Whether bounded history projection omitted review evidence.
+    #[serde(default)]
+    pub review_history_incomplete: bool,
+    /// Recent canonical tool, command, and supporting activity snapshots.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activity_items: Vec<vtcode_exec_events::ThreadItem>,
+    /// Whether bounded history projection omitted activity or output evidence.
+    #[serde(default)]
+    pub activity_history_incomplete: bool,
+}
+
+/// Request identity for one bounded read-only Git snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceReviewParams {
+    /// Include bounded previews of non-ignored untracked regular text files.
+    #[serde(default)]
+    pub include_untracked: bool,
+    /// Opaque client identity used to reject superseded captures.
+    pub request_id: String,
+    /// Optional directory within the selected workspace; empty means the root.
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+/// Current Git preview; separate from historical agent-attributed changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceReviewResult {
+    /// Whether untracked previews were requested for this capture.
+    #[serde(default)]
+    pub include_untracked: bool,
+    /// Canonical workspace-relative directory captured by this snapshot.
+    #[serde(default)]
+    pub scope: String,
+    /// Echoed request identity.
+    pub request_id: String,
+    /// Canonical service workspace.
+    pub workspace: String,
+    /// Capture timestamp.
+    pub captured_at: String,
+    /// Redacted diff against HEAD or the empty tree before the first commit.
+    pub patch: Option<String>,
+    /// Whether the preview omits content.
+    pub truncated: bool,
+    /// Scope or availability explanation.
+    pub note: String,
 }
 
 /// Parameters for creating an empty session.
@@ -409,6 +634,8 @@ pub struct ThreadEventNotification {
 pub mod method {
     /// Initialize and negotiate protocol support.
     pub const INITIALIZE: &str = "desktop/initialize";
+    /// Capture a bounded read-only Git preview, including valid unborn branches.
+    pub const WORKSPACE_REVIEW: &str = "workspace/review";
     /// List sessions in the selected workspace.
     pub const SESSION_LIST: &str = "session/list";
     /// Create a session.
@@ -425,6 +652,16 @@ pub mod method {
     pub const INTERACTION_RESPOND: &str = "interaction/respond";
     /// Discover active provider/model setup.
     pub const CONFIG_DISCOVER: &str = "config/discover";
+    /// Change runtime session options while idle.
+    pub const CONFIG_OPTIONS: &str = "config/options";
+    /// Persist the selected built-in CLI theme.
+    pub const CONFIG_THEME: &str = "config/theme";
+    /// Read a bounded, credential-filtered CLI settings catalog.
+    pub const CONFIG_SETTINGS_READ: &str = "config/settings/read";
+    /// Persist one CLI setting through the shared configuration service.
+    pub const CONFIG_SETTINGS_WRITE: &str = "config/settings/write";
+    /// Discover installed CLI skills and Agent Plugins.
+    pub const COMPOSER_RESOURCES: &str = "composer/resources";
     /// List selectable models from the service's catalog.
     pub const CONFIG_MODELS: &str = "config/models";
     /// Select the provider/model used for the next session.
@@ -836,12 +1073,33 @@ mod tests {
     use std::error::Error;
 
     #[test]
+    fn legacy_session_load_defaults_review_history() {
+        let loaded: SessionLoadResult = serde_json::from_value(serde_json::json!({
+            "session": {"sessionId": "legacy", "title": "Legacy", "workspace": "/workspace", "completed": true, "resumable": true},
+            "messages": [{"role": "user", "text": "Continue"}]
+        })).unwrap();
+        assert!(loaded.review_items.is_empty());
+        assert!(!loaded.review_history_incomplete);
+        assert!(loaded.activity_items.is_empty());
+        assert!(!loaded.activity_history_incomplete);
+        assert_eq!(loaded.messages[0].text, "Continue");
+        let round_trip: SessionLoadResult = serde_json::from_value(serde_json::to_value(&loaded).unwrap()).unwrap();
+        assert_eq!(round_trip, loaded);
+    }
+
+    #[test]
     fn negotiation_selects_server_version_and_rejects_major_mismatch() {
         let range = ProtocolRange {
             minimum: ProtocolVersion { major: 1, minor: 0 },
-            maximum: ProtocolVersion { major: 1, minor: 3 },
+            maximum: PROTOCOL_VERSION,
         };
         assert_eq!(range.negotiate(PROTOCOL_VERSION), Ok(PROTOCOL_VERSION));
+        let tracked_only: WorkspaceReviewParams =
+            serde_json::from_value(serde_json::json!({"requestId":"old-client"})).unwrap();
+        assert!(!tracked_only.include_untracked);
+        let with_untracked: WorkspaceReviewParams =
+            serde_json::from_value(serde_json::json!({"requestId":"new-client","includeUntracked":true})).unwrap();
+        assert!(with_untracked.include_untracked);
         assert!(matches!(
             ProtocolRange {
                 minimum: ProtocolVersion { major: 2, minor: 0 },
@@ -850,6 +1108,33 @@ mod tests {
             .negotiate(PROTOCOL_VERSION),
             Err(ProtocolError::IncompatibleVersion { .. })
         ));
+    }
+
+    #[test]
+    fn cli_settings_requests_keep_target_versions_and_typed_values() {
+        let request = ConfigSettingsWriteParams {
+            target: ConfigTarget::Workspace,
+            path: "agent.max_conversation_turns".into(),
+            value: serde_json::json!(24),
+            expected_layer_version: Some("version-a".into()),
+        };
+        let serialized = serde_json::to_value(&request).expect("serialize request");
+        assert_eq!(serialized["target"], "workspace");
+        assert_eq!(serialized["expectedLayerVersion"], "version-a");
+        assert_eq!(serialized["value"], 24);
+        assert_eq!(
+            serde_json::from_value::<ConfigSettingsWriteParams>(serialized).expect("deserialize request"),
+            request
+        );
+        assert!(
+            serde_json::from_value::<ConfigSettingsWriteParams>(serde_json::json!({
+                "target": "workspace",
+                "path": "agent.enabled",
+                "value": true,
+                "unexpected": "field"
+            }))
+            .is_err()
+        );
     }
 
     #[test]
@@ -921,6 +1206,15 @@ mod tests {
             answer_texts: Vec::new(),
             cancelled: false,
         };
+        let theme = ThemePreferenceSelectParams { theme: "ciapre-blue".into() };
+        let theme_json = serde_json::to_value(theme)?;
+        assert_eq!(theme_json, serde_json::json!({ "theme": "ciapre-blue" }));
+        assert!(
+            serde_json::from_value::<ThemePreferenceSelectParams>(
+                serde_json::json!({ "theme": "ciapre-blue", "path": "/tmp/unsafe" })
+            )
+            .is_err()
+        );
         let value = serde_json::to_value(params)?;
         assert_eq!(value["sessionId"], "s");
         assert_eq!(value["interactionId"], "i");
@@ -940,6 +1234,7 @@ mod tests {
         }))?;
         assert_eq!(snapshot.sandbox, None);
         assert_eq!(snapshot.context_window, None);
+        assert_eq!(snapshot.shared_ui, None);
 
         let value = serde_json::to_value(ConfigurationSnapshot {
             provider: "ollama".to_string(),
@@ -948,6 +1243,8 @@ mod tests {
             credential_setup_command: "vtcode login ollama".to_string(),
             sandbox: Some("Ask before protected actions".to_string()),
             context_window: Some(131_072),
+            shared_ui: None,
+            session_options: None,
         })?;
         assert_eq!(value["sandbox"], "Ask before protected actions");
         assert_eq!(value["contextWindow"], 131_072);
@@ -961,7 +1258,10 @@ mod tests {
         let value = serde_json::to_value(TurnSubmitParams {
             session_id: "s".to_string(),
             prompt: "hi".to_string(),
-            attachments: vec![TurnAttachment { path: "src/a.rs".to_string(), text: "fn a() {}".to_string() }],
+            attachments: vec![TurnAttachment {
+                path: "src/a.rs".to_string(),
+                text: "fn a() {}".to_string(),
+            }],
         })?;
         assert_eq!(value["attachments"][0]["path"], "src/a.rs");
 

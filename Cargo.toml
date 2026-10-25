@@ -187,6 +187,8 @@ exclude = [
 ]
 
 [patch.crates-io]
+# Refresh macOS cursors immediately after hit-test changes; see patch notes.
+gpui-pre-macos = { path = "patches/gpui-pre-macos" }
 crossterm = { path = "patches/crossterm" }
 # Patched mac-notification-sys 0.6.15: retryable set_application (see
 # patches/mac-notification-sys/PATCH.md).
