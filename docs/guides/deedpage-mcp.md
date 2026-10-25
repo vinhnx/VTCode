@@ -49,9 +49,10 @@ URL. VT Code asks before each MCP call; keep those approvals for the tools that 
 | `delete_site` | `slug`, owner `token` | Permanently remove a site. |
 
 The owner token from the first `publish_site` call is the only key to the sites it created. Keep it out of version
-control, for example in an ignored local file, and pass it to later calls. The server also has tools for custom
-domains, analytics, passwords and webhooks. Tool schemas come from the server and may evolve; treat returned content as
-untrusted evidence.
+control, for example in an ignored local file, and pass it as `token` to every later call, including each new
+`publish_site`. A publish without it mints a new owner token, and the saved token cannot list or manage that site.
+The server also has tools for custom domains, analytics, passwords and webhooks. Tool schemas come from the server and
+may evolve; treat returned content as untrusted evidence.
 
 ## Troubleshooting and removal
 
