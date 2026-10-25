@@ -8,7 +8,9 @@ use vtcode_core::llm::provider::{ContextWindowProvider, LLMProvider};
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::{SlashCommandContext, SlashCommandControl};
-use crate::agent::runloop::unified::fast_mode::{effective_speed_label, fast_mode_selected, supports_fast_mode};
+use crate::agent::runloop::unified::fast_mode::{
+    effective_speed_label, fast_mode_selected, set_fast_mode_preference, supports_fast_mode,
+};
 use crate::agent::runloop::unified::session_setup::create_provider_client;
 
 pub(crate) async fn handle_toggle_fast_mode(
@@ -65,13 +67,9 @@ fn apply_fast_mode(
             "/fast on requires native OpenAI API-key authentication with gpt-6-astra or gpt-6.1-sol, or native Anthropic with claude-opus-5-5, claude-opus-5, or claude-opus-4-8. Select one with /model, or use /fast off to clear this provider override."
         );
     }
+    set_fast_mode_preference(config, &mut runtime_cfg, enabled)?;
     let tier = enabled.then_some(OpenAIServiceTier::Ultrafast);
     let speed = enabled.then_some(AnthropicSpeed::Fast);
-    if anthropic {
-        runtime_cfg.provider.anthropic.speed = speed;
-    } else {
-        runtime_cfg.provider.openai.service_tier = tier;
-    }
     // Prepare before saving and install only after saving succeeds. Rebuilding
     // also clears a tier captured by the old client at session startup.
     let prepared = create_provider_client(config, Some(&runtime_cfg))?;
@@ -81,11 +79,7 @@ fn apply_fast_mode(
         Some(provider_client.effective_context_size(&config.model)),
     );
     let mut persisted_cfg = manager.config().clone();
-    if anthropic {
-        persisted_cfg.provider.anthropic.speed = speed;
-    } else {
-        persisted_cfg.provider.openai.service_tier = tier;
-    }
+    set_fast_mode_preference(config, &mut persisted_cfg, enabled)?;
     manager.save_config(&persisted_cfg).context("Failed to save service tier")?;
     *provider_client = prepared;
     *vt_cfg = Some(runtime_cfg);

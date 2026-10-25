@@ -8,6 +8,114 @@ impl PaletteKind {
 }
 
 impl DesktopView {
+    pub(super) fn render_workspace_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        let current = self.workspace.as_ref().map(|path| path.display().to_string());
+        let current_label = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Choose workspace".into());
+        let recent = self.recent_workspaces();
+        let disabled =
+            !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
+        let view = cx.entity().downgrade();
+        let trigger = desktop_button("composer-workspace")
+            .icon(IconName::Folder)
+            .label(current_label)
+            .ghost()
+            .small()
+            .max_w(px(240.))
+            .overflow_hidden()
+            .accessibility_label("Choose workspace")
+            .tooltip("Choose a workspace or recent project")
+            .desktop_disabled(disabled);
+
+        Popover::new("composer-workspace-popover")
+            .anchor(Anchor::BottomLeft)
+            .offset(px(8.))
+            .w(px(300.))
+            .max_h(px(360.))
+            .trigger(trigger)
+            .content(move |_, _, cx| {
+                let colors = cx.theme().colors;
+                let mut content = div()
+                    .id("workspace-picker-list")
+                    .w_full()
+                    .min_h_0()
+                    .max_h(px(340.))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .px_2()
+                            .py_1()
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(colors.muted_foreground)
+                            .child("WORKSPACES"),
+                    );
+                let open_view = view.clone();
+                content = content.child(
+                    desktop_button("open-workspace-folder")
+                        .icon(IconName::Folder)
+                        .label("Choose folder…")
+                        .ghost()
+                        .w_full()
+                        .desktop_disabled(disabled)
+                        .on_click(cx.listener(move |popover, _, window, cx| {
+                            popover.dismiss(window, cx);
+                            let _updated = open_view.update(cx, |view, cx| view.choose_workspace(window, cx));
+                        })),
+                );
+                if recent.is_empty() {
+                    content = content.child(
+                        div()
+                            .px_2()
+                            .py_2()
+                            .text_sm()
+                            .text_color(colors.muted_foreground)
+                            .child("No recent workspaces"),
+                    );
+                } else {
+                    content = content.child(div().mx_2().my_1().h(px(1.)).bg(colors.border.opacity(0.7)));
+                    for path in &recent {
+                        let label = Path::new(path)
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or(path)
+                            .to_string();
+                        let selected = current.as_deref() == Some(path.as_str());
+                        let entry_view = view.clone();
+                        let entry_path = path.clone();
+                        content = content.child(
+                            desktop_button(opaque_path_element_id("recent-workspace-popover", path))
+                                .accessibility_label(format!(
+                                    "{label}{}",
+                                    if selected { " (current workspace)" } else { "" }
+                                ))
+                                .child(navigation_label(label, IconName::Folder, selected, colors.primary))
+                                .ghost()
+                                .w_full()
+                                .desktop_disabled(disabled)
+                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                                .on_click(cx.listener(move |popover, _, window, cx| {
+                                    popover.dismiss(window, cx);
+                                    let path = PathBuf::from(entry_path.clone());
+                                    let _updated = entry_view.update(cx, |view, cx| {
+                                        view.select_workspace_from_ui(path, window, cx);
+                                    });
+                                })),
+                        );
+                    }
+                }
+                content.into_any_element()
+            })
+            .into_any_element()
+    }
+
     pub(super) fn open_add_context(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace.is_none() || self.attachments_picker_open || self.session_request.is_some() {
             return;
@@ -149,8 +257,10 @@ impl DesktopView {
                 .default_value(selected as f32)
         });
         let palette_id = self.palette.as_ref().map(|state| state.entity_id());
-        cx.observe(&slider, |_, _, cx| cx.notify()).detach();
-        cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
+        let slider_observation = cx.observe(&slider, |_, _, cx| cx.notify());
+        let slider_events = cx.subscribe_in(&slider, window, move |_view, _, event, window, cx| {
+            // The observer above invalidates the view when slider state changes;
+            // this typed event only commits a released value to the CLI.
             if let gpui_kit::component::slider::SliderEvent::Release(value) = event {
                 let Some(effort) = effort_at(&levels, value.start()).cloned() else {
                     return;
@@ -177,10 +287,9 @@ impl DesktopView {
                     });
                 });
             }
-            cx.notify();
-        })
-        .detach();
+        });
         self.effort_slider = Some(slider);
+        self._effort_slider_subscriptions = vec![slider_observation, slider_events];
         cx.notify();
     }
 
@@ -249,6 +358,7 @@ impl DesktopView {
                         .reasoning_effort
                         .as_ref()
                         .is_none_or(|effort| current.reasoning_effort == *effort)
+                    && options.fast_mode.is_none_or(|enabled| current.fast_mode_enabled == enabled)
             })
     }
 
@@ -308,7 +418,7 @@ impl DesktopView {
         self.show_palette(PaletteKind::Modes, vec![("For the next session".into(), entries)], window, cx);
     }
 
-    pub(super) fn render_mode_button(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_mode_button(&self, _cx: &Context<Self>) -> AnyElement {
         let mode = self
             .active_primary_agent_display
             .as_ref()
@@ -341,7 +451,7 @@ impl DesktopView {
             .ghost()
             .small()
             .desktop_disabled(!self.can_select_session_options())
-            .on_click(cx.listener(|view, _, window, cx| view.open_modes(window, cx)))
+            .dispatches_desktop_action(OpenModePicker, self.focus_handle.clone())
             .into_any_element()
     }
 }
@@ -350,6 +460,7 @@ pub(super) fn model_options_header(
     config: Option<&ConfigurationSnapshot>,
     slider: Option<&Entity<gpui_kit::component::slider::SliderState>>,
     model_label: Option<&str>,
+    speed_control: Option<AnyElement>,
     cx: &App,
 ) -> AnyElement {
     let options = config.and_then(|config| config.session_options.as_ref());
@@ -405,14 +516,14 @@ pub(super) fn model_options_header(
                 ),
         );
     }
-    if let Some(speed) = options.and_then(|options| options.speed.as_ref()) {
+    if let Some(speed_control) = speed_control {
         panel = panel.child(
             div()
-                .id("model-speed-indicator")
+                .id("model-fast-mode-row")
                 .test_support()
-                .role(gpui_kit::Role::Status)
-                .aria_label(format!("CLI processing speed: {speed}"))
-                .child(Tag::warning().small().child(speed.clone())),
+                .flex()
+                .justify_end()
+                .child(speed_control),
         );
     }
     panel.into_any_element()

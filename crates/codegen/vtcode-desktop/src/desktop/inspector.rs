@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, hash_map::Entry};
 
+use gpui_kit::SharedString;
 use gpui_kit::component::diff::{DiffFile, DiffFileStatus};
 
 use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
@@ -57,7 +58,7 @@ pub(super) struct ChangeEntry {
 #[derive(Clone, Debug)]
 pub(super) struct ActivityRow {
     pub id: String,
-    pub title: String,
+    pub title: SharedString,
     pub status: String,
     pub state: ActivityState,
 }
@@ -69,6 +70,44 @@ pub(super) enum ActivityState {
     Failed,
     Interrupted,
     Other,
+}
+
+/// Counts for the bounded activity projection, shared by the utility summary
+/// and the Activity tab's chart.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct ActivityCounts {
+    pub running: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub interrupted: usize,
+    pub other: usize,
+}
+
+impl ActivityCounts {
+    pub(super) fn from_rows(rows: &[ActivityRow]) -> Self {
+        let mut counts = Self::default();
+        for row in rows {
+            match row.state {
+                ActivityState::Running => counts.running += 1,
+                ActivityState::Completed => counts.completed += 1,
+                ActivityState::Failed => counts.failed += 1,
+                ActivityState::Interrupted => counts.interrupted += 1,
+                ActivityState::Other => counts.other += 1,
+            }
+        }
+        counts
+    }
+
+    pub(super) fn total(self) -> usize {
+        self.running + self.completed + self.failed + self.interrupted + self.other
+    }
+
+    pub(super) fn summary(self) -> String {
+        format!(
+            "{} running · {} done · {} failed · {} interrupted · {} other",
+            self.running, self.completed, self.failed, self.interrupted, self.other
+        )
+    }
 }
 
 impl ActivityState {
@@ -196,8 +235,8 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
 
 /// The newest aggregated command/tool output for the Output tab.
 pub(super) struct OutputView {
-    pub title: String,
-    pub text: String,
+    pub title: SharedString,
+    pub text: SharedString,
     pub running: bool,
 }
 
@@ -217,17 +256,21 @@ pub(super) fn latest_output(transcript: &Transcript, restored: &[TranscriptItem]
 }
 
 /// Cap the rendered output tail so a chatty command stays cheap to draw.
-pub(super) fn output_tail(text: &str) -> String {
+pub(super) fn output_tail(text: &SharedString) -> SharedString {
     const MAX_OUTPUT_LINES: usize = 1_000;
-    let lines: Vec<&str> = text.lines().collect();
-    if lines.len() <= MAX_OUTPUT_LINES {
-        return text.to_string();
+    let line_count = text.lines().count();
+    if line_count <= MAX_OUTPUT_LINES {
+        return text.clone();
     }
-    let Some(skipped) = lines.len().checked_sub(MAX_OUTPUT_LINES) else {
-        return text.to_string();
-    };
-    let tail = lines.iter().skip(skipped).copied().collect::<Vec<_>>().join("\n");
-    format!("… {skipped} earlier lines truncated\n{tail}")
+    let skipped = line_count - MAX_OUTPUT_LINES;
+    let mut tail = format!("… {skipped} earlier lines truncated\n");
+    for (index, line) in text.lines().skip(skipped).enumerate() {
+        if index > 0 {
+            tail.push('\n');
+        }
+        tail.push_str(line);
+    }
+    tail.into()
 }
 
 fn change_kind(status: DiffFileStatus) -> DiffFileKind {
@@ -245,7 +288,7 @@ mod tests {
 
     fn diff_item(id: &str, patch: &str) -> TranscriptItem {
         let mut item =
-            TranscriptItem::new(id.to_string(), "diff".to_string(), "File changes".to_string(), patch.to_string());
+            TranscriptItem::new(id.to_string(), "diff".to_string(), "File changes".into(), patch.to_string());
         item.diff = Some(crate::desktop::transcript::DiffCard {
             files: Vec::new(),
             additions: None,
@@ -272,6 +315,31 @@ mod tests {
         ] {
             assert_eq!(ActivityState::from_status(status), expected, "{status}");
         }
+    }
+
+    #[test]
+    fn activity_counts_preserve_each_status_category() {
+        let rows = [
+            ActivityState::Running,
+            ActivityState::Completed,
+            ActivityState::Completed,
+            ActivityState::Failed,
+            ActivityState::Interrupted,
+            ActivityState::Other,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, state)| ActivityRow {
+            id: format!("row-{index}"),
+            title: format!("tool {index}").into(),
+            status: String::new(),
+            state,
+        })
+        .collect::<Vec<_>>();
+
+        let counts = ActivityCounts::from_rows(&rows);
+        assert_eq!(counts.total(), rows.len());
+        assert_eq!(counts.summary(), "1 running · 2 done · 1 failed · 1 interrupted · 1 other");
     }
 
     #[test]
@@ -336,13 +404,13 @@ mod tests {
         transcript.push(TranscriptItem::new(
             "tool-1".to_string(),
             "tool".to_string(),
-            "read_file".to_string(),
+            "read_file".into(),
             "completed\n\n{\"details\": true}".to_string(),
         ));
         transcript.push(TranscriptItem::new(
             "msg-1".to_string(),
             "assistant".to_string(),
-            "VT Code".to_string(),
+            "VT Code".into(),
             "not an activity".to_string(),
         ));
         let rows = activity_rows(&transcript, &[]);
@@ -358,7 +426,7 @@ mod tests {
             transcript.push(TranscriptItem::new(
                 format!("tool-{index}"),
                 "tool".into(),
-                format!("command {index}"),
+                format!("command {index}").into(),
                 "completed".into(),
             ));
         }
@@ -374,18 +442,18 @@ mod tests {
         let mut first = TranscriptItem::new(
             "cmd-1".to_string(),
             "tool".to_string(),
-            "cargo build".to_string(),
+            "cargo build".into(),
             "completed\n\n{}".to_string(),
         );
-        first.output = Some("old output".to_string());
+        first.output = Some("old output".into());
         transcript.push(first);
         let mut second = TranscriptItem::new(
             "cmd-2".to_string(),
             "tool".to_string(),
-            "cargo test".to_string(),
+            "cargo test".into(),
             "in progress\n\n{}".to_string(),
         );
-        second.output = Some("running output".to_string());
+        second.output = Some("running output".into());
         transcript.push(second);
 
         let output = latest_output(&transcript, &[]).expect("output projected");
@@ -396,10 +464,14 @@ mod tests {
 
     #[test]
     fn output_tail_truncates_long_streams() {
-        let short = "line one\nline two";
-        assert_eq!(output_tail(short), short);
+        let short: SharedString = "line one\nline two".into();
+        assert_eq!(output_tail(&short), short);
 
-        let long = (0..1_050).map(|index| format!("line {index}")).collect::<Vec<_>>().join("\n");
+        let long: SharedString = (0..1_050)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into();
         let tail = output_tail(&long);
         assert!(tail.starts_with("… 50 earlier lines truncated"), "tail notes skipped lines");
         assert!(tail.ends_with("line 1049"));

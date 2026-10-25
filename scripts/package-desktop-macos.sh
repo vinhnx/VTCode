@@ -5,6 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUTPUT_APP="${1:-${ROOT_DIR}/dist/VT Code.app}"
+TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT_DIR}/target}"
+if [[ "${TARGET_DIR}" != /* ]]; then
+    TARGET_DIR="${PWD}/${TARGET_DIR}"
+fi
+if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
+    TARGET_DIR="${TARGET_DIR}/${CARGO_BUILD_TARGET}"
+fi
+RELEASE_DIR="${TARGET_DIR}/release"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     printf 'Error: the VT Code desktop bundle must be built on macOS.\n' >&2
@@ -18,7 +26,7 @@ if [[ ! "${MACOS_MAJOR}" =~ ^[0-9]+$ ]] || (( MACOS_MAJOR < 15 )); then
     exit 1
 fi
 
-for tool in cargo codesign ditto sips iconutil; do
+for tool in cargo codesign ditto sips iconutil plutil; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         printf 'Error: required packaging tool is missing: %s\n' "${tool}" >&2
         exit 1
@@ -40,8 +48,8 @@ CONTENTS="${STAGED_APP}/Contents"
 cargo build --locked --release --manifest-path "${ROOT_DIR}/Cargo.toml" -p vtcode -p vtcode-desktop
 
 mkdir -p "${CONTENTS}/MacOS" "${CONTENTS}/Helpers" "${CONTENTS}/Resources"
-install -m 755 "${ROOT_DIR}/target/release/vtcode-desktop" "${CONTENTS}/MacOS/vtcode-desktop"
-install -m 755 "${ROOT_DIR}/target/release/vtcode" "${CONTENTS}/Helpers/vtcode"
+install -m 755 "${RELEASE_DIR}/vtcode-desktop" "${CONTENTS}/MacOS/vtcode-desktop"
+install -m 755 "${RELEASE_DIR}/vtcode" "${CONTENTS}/Helpers/vtcode"
 install -m 644 "${ROOT_DIR}/LICENSE" "${CONTENTS}/Resources/LICENSE"
 install -m 644 "${ROOT_DIR}/THIRD-PARTY-NOTICES" "${CONTENTS}/Resources/THIRD-PARTY-NOTICES"
 
@@ -86,6 +94,7 @@ cat >"${CONTENTS}/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+plutil -lint "${CONTENTS}/Info.plist" >/dev/null
 
 # Ad hoc signatures are for local development; they do not grant Developer ID trust.
 codesign --force --sign - "${CONTENTS}/Helpers/vtcode"
@@ -93,6 +102,8 @@ codesign --force --sign - "${CONTENTS}/MacOS/vtcode-desktop"
 codesign --force --sign - "${STAGED_APP}"
 codesign --verify --deep --strict "${STAGED_APP}"
 ditto "${STAGED_APP}" "${OUTPUT_APP}"
+# Verify the copied artifact that users will actually open.
+codesign --verify --deep --strict "${OUTPUT_APP}"
 
 printf 'Packaged locally signed app: %s\n' "${OUTPUT_APP}"
 printf 'Ad hoc signing does not provide Developer ID trust or notarization.\n'

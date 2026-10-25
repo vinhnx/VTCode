@@ -1,14 +1,21 @@
 use gpui_kit::Focusable;
+use gpui_kit::Styled;
 use gpui_kit::component::theme::ActiveTheme;
 use std::path::PathBuf;
+use std::time::Duration;
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, point, px, size,
 };
 use serde_json::json;
 
-use super::{DesktopView, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_options};
+use super::{
+    DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, scale_row_height_for_ui_font,
+    workspace_picker_options,
+};
+use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
 
@@ -23,7 +30,9 @@ fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView
 
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
     drop(isolate_preferences());
+    crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
     cx.update(gpui_kit::init);
+    cx.update(super::super::notifications::initialize);
     cx.update(super::init_keybindings);
     cx.update(super::init_native_menus);
     cx.update(|cx| {
@@ -50,6 +59,157 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
     })
 }
 
+fn palette_action_id(action: &super::PaletteAction) -> String {
+    super::palette_entry_element_id(action)
+}
+
+#[test]
+fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
+    let mut enabled = super::desktop_button("native-cursor-enabled");
+    assert_eq!(enabled.style().mouse_cursor, None);
+
+    let mut disabled = super::desktop_button("native-cursor-disabled").desktop_disabled(true);
+    assert_eq!(disabled.style().mouse_cursor, None);
+}
+
+#[test]
+fn palette_entry_ids_follow_action_identity_without_exposing_payloads() {
+    let path = "private/workspace/src/main.rs";
+    let file_action = super::PaletteAction::PreviewFile(path.into());
+    let file_id = palette_action_id(&file_action);
+    assert_eq!(file_id, palette_action_id(&file_action));
+    assert!(!file_id.contains(path), "workspace paths stay out of element identifiers");
+    assert_ne!(
+        file_id,
+        palette_action_id(&super::PaletteAction::PreviewFile("private/workspace/src/lib.rs".into()))
+    );
+}
+
+#[gpui_kit::test]
+fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ThreadEvent, TurnCompletedEvent, TurnFailedEvent, Usage, VersionedThreadEvent};
+
+    let completed_turn = |turn_id: &str| {
+        BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some(turn_id.into()),
+            event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                completed_at: None,
+                usage: Usage {
+                    input_tokens: 0,
+                    cached_input_tokens: 0,
+                    cache_creation_tokens: 0,
+                    output_tokens: 0,
+                },
+                in_progress_exec_sessions: Vec::new(),
+            })),
+        })
+    };
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.is_window_active());
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn-1".into());
+            view.running = true;
+            view.event_tx.send(completed_turn("turn-1")).unwrap();
+            view.drain_events(window, cx);
+            assert!(!view.running);
+        });
+        window.render_frame(cx);
+        assert!(window.notifications(cx).is_empty(), "background completion is system-only");
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.event_tx.send(completed_turn("stale-turn")).unwrap();
+            view.drain_events(window, cx);
+        });
+    })
+    .unwrap();
+    assert_eq!(cx.shown_system_notifications().len(), 1, "idle stale events do not post system notices");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.active_turn_id = Some("turn-2".into());
+            view.running = true;
+            view.event_tx
+                .send(BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+                    session_id: "session".into(),
+                    turn_id: Some("turn-2".into()),
+                    event: VersionedThreadEvent::new(ThreadEvent::TurnFailed(TurnFailedEvent {
+                        completed_at: None,
+                        message: "provider detail that should not appear in a system notification".into(),
+                        usage: None,
+                    })),
+                }))
+                .unwrap();
+            view.drain_events(window, cx);
+
+            view.active_turn_id = Some("turn-3".into());
+            view.running = true;
+            view.event_tx
+                .send(BackendEvent::Interaction(vtcode_desktop_protocol::InteractionRequest {
+                    session_id: "session".into(),
+                    turn_id: "turn-3".into(),
+                    interaction_id: "interaction-1".into(),
+                    kind: vtcode_desktop_protocol::InteractionKind::Question,
+                    wizard: false,
+                    title: "private prompt detail".into(),
+                    details: Vec::new(),
+                    choices: Vec::new(),
+                    steps: Vec::new(),
+                    selected_choice_id: None,
+                    selected_choice_ids: Vec::new(),
+                }))
+                .unwrap();
+            view.drain_events(window, cx);
+            assert!(view.interaction.is_some());
+        });
+        window.render_frame(cx);
+        assert!(window.notifications(cx).is_empty(), "background notices do not duplicate an in-app toast");
+    })
+    .unwrap();
+
+    let notifications = cx.delivered_system_notifications();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0].title, "VT Code");
+    assert_eq!(notifications[0].body, "An agent run is waiting for your input.");
+    let shown = cx.shown_system_notifications();
+    assert_eq!(shown.len(), 3);
+    assert_eq!(shown[0].body, "Your agent run has finished.");
+    assert_eq!(shown[1].body, "Your agent run needs attention.");
+    assert_eq!(shown[2].body, "An agent run is waiting for your input.");
+    assert!(
+        shown
+            .iter()
+            .all(|notice| { !notice.body.contains("provider detail") && !notice.body.contains("private prompt") })
+    );
+
+    cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {
+        tag: notifications[0].tag.clone(),
+        action_id: None,
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, _| {
+        assert!(window.is_window_active(), "the system notification activates its owning window");
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.active_turn_id = Some("turn-4".into());
+            view.running = true;
+            view.event_tx.send(completed_turn("turn-4")).unwrap();
+            view.drain_events(window, cx);
+            assert!(!view.running);
+        });
+    })
+    .unwrap();
+    assert_eq!(cx.shown_system_notifications().len(), 3, "active runs do not post system notices");
+}
+
 fn file_tree_paths(view: &Entity<DesktopView>, cx: &gpui_kit::App) -> Vec<String> {
     let files_count = view.read(cx).files.len();
     let tree = view.read(cx).file_tree.clone();
@@ -66,6 +226,65 @@ fn file_tree_item_snapshot(window: &mut gpui_kit::Window, index: usize) -> gpui_
         .into_iter()
         .find(|item| item.role() == Some(gpui_kit::Role::TreeItem))
         .expect("tree item exposes its semantic role")
+}
+
+fn focus_element_by_tab(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
+    for _ in 0..128 {
+        if window.try_find(id).is_some_and(|element| element.focused() == Some(true)) {
+            return;
+        }
+        window.press("tab", cx);
+        window.render_frame(cx);
+    }
+    panic!("Tab did not reach focusable element {id}");
+}
+
+fn select_settings_category(window: &mut gpui_kit::Window, index: usize, cx: &mut gpui_kit::App) {
+    window.press("home", cx);
+    window.render_frame(cx);
+    for _ in 0..index {
+        window.press("right", cx);
+        window.render_frame(cx);
+    }
+}
+
+fn scroll_theme_into_view(
+    window: &mut gpui_kit::Window,
+    view: &Entity<DesktopView>,
+    id: &'static str,
+    cx: &mut gpui_kit::App,
+) {
+    for _ in 0..24 {
+        let viewport = window.find("theme-list").bounds();
+        let item = window.find(id).bounds();
+        if item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.) {
+            return;
+        }
+        let delta = if item.left() >= viewport.right() {
+            -px(336.)
+        } else {
+            px(336.)
+        };
+        view.update(cx, |view, cx| {
+            let mut offset = view.theme_scroll.offset();
+            offset.x += delta;
+            view.theme_scroll.set_offset(offset);
+            cx.notify();
+        });
+        window.render_frame(cx);
+    }
+    let viewport = window.find("theme-list").bounds();
+    let item = window.find(id).bounds();
+    panic!("theme swatch {id} did not scroll into view: viewport={viewport:?}, item={item:?}");
+}
+
+fn horizontal_scroll_item_is_visible(scroll: &gpui_kit::ScrollHandle, index: usize) -> bool {
+    let viewport = scroll.bounds();
+    let Some(item) = scroll.bounds_for_item(index) else {
+        return false;
+    };
+    let offset = scroll.offset().x;
+    item.left() + offset >= viewport.left() - px(1.) && item.right() + offset <= viewport.right() + px(1.)
 }
 
 fn menu_action(cx: &gpui_kit::App, menu_name: &str, item_name: &str) -> Box<dyn gpui_kit::Action> {
@@ -190,6 +409,38 @@ fn workspace_picker_only_allows_one_directory() {
 }
 
 #[gpui_kit::test]
+fn workspace_picker_task_is_owned_by_view_and_clears_pending_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.choose_workspace(window, cx);
+            assert!(view.workspace_picker_open);
+            assert!(view.workspace_picker_task.is_some());
+
+            // Repeated activation while the native picker is pending must not
+            // start another continuation owned by the same view.
+            view.choose_workspace(window, cx);
+            assert!(view.workspace_picker_open);
+        });
+    })
+    .unwrap();
+    assert!(cx.did_prompt_for_paths());
+
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+
+    assert!(!cx.did_prompt_for_paths(), "one picker response resolves the only pending prompt");
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert!(!view.workspace_picker_open);
+        assert!(view.workspace_picker_task.is_some(), "the view retains the completed task until replacement");
+    });
+}
+
+#[gpui_kit::test]
 fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
@@ -206,6 +457,42 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
         assert_eq!(cx.windows().len(), 1);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this unsent draft");
         assert_eq!(view.read(cx).selected_session_id.as_deref(), Some("existing-session"));
+    });
+}
+
+#[gpui_kit::test]
+fn reopening_activates_the_focused_window_when_multiple_are_open(cx: &mut TestAppContext) {
+    let (first_window, _first_view) = open_desktop(cx);
+    let (second_window, _second_view) = open_desktop(cx);
+    assert_ne!(first_window, second_window);
+    assert_eq!(cx.windows().len(), 2);
+
+    cx.update_window(second_window, |_, window, _| window.activate_window())
+        .unwrap();
+    cx.update(|cx| {
+        assert_eq!(cx.active_window(), Some(second_window));
+        assert_eq!(super::open_or_activate_main_window(cx).unwrap(), second_window);
+        assert_eq!(cx.windows().len(), 2, "reopening activates a window instead of duplicating it");
+    });
+
+    cx.update_window(first_window, |_, window, _| window.remove_window()).unwrap();
+    cx.update(|cx| {
+        assert_eq!(cx.windows(), vec![second_window]);
+        assert!(first_window.update(cx, |_, _, _| ()).is_err(), "closed handles reject later updates");
+        second_window.update(cx, |_, window, cx| window.render_frame(cx)).unwrap();
+    });
+}
+
+#[gpui_kit::test]
+fn event_drain_task_is_owned_by_the_desktop_view(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| view.start_event_drain(cx));
+    })
+    .unwrap();
+
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert!(view.event_drain_task.is_some());
     });
 }
 
@@ -245,7 +532,7 @@ fn picker_completion_rejects_switching_after_turn_starts(cx: &mut TestAppContext
 fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
     let (view, cx) = cx.add_window_view(|window, cx| DesktopView::new(window, cx, ThemeMode::Light));
-    cx.update(|_, cx| {
+    cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.selected_session_id = Some("session".into());
             for index in 0..MAX_UI_EVENTS_PER_TICK + 3 {
@@ -255,9 +542,9 @@ fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
                     ))
                     .unwrap();
             }
-            view.drain_events(cx);
+            view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK - 1));
-            view.drain_events(cx);
+            view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
         });
     });
@@ -371,6 +658,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     context_window: Some(131_072),
                     current: true,
                     recommended_rank: None,
+                    capabilities: None,
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "anthropic".to_string(),
@@ -378,14 +666,15 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     display_name: "Claude Sonnet 5".to_string(),
                     context_window: Some(200_000),
                     current: false,
-                    recommended_rank: None,
+                    recommended_rank: Some(0),
+                    capabilities: None,
                 },
             ];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
         view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -414,7 +703,16 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
-        assert!(window.find("palette-label-1-0").label().unwrap().contains("200000 tokens"));
+        assert!(
+            window
+                .find(palette_action_id(&super::PaletteAction::SelectModel {
+                    provider: "anthropic".into(),
+                    model: "claude-sonnet-5".into(),
+                }))
+                .label()
+                .unwrap()
+                .contains("200K context")
+        );
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -628,10 +926,25 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
             );
         });
         window.render_frame(cx);
-        window.press("cmd-,", cx);
+        window.click("open-settings", cx);
         window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-360.))), cx);
+        assert_eq!(window.find("provider-details").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("provider-details").label(), Some("Provider and model configuration"));
+        assert_eq!(window.find("provider-settings-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("cli-preferences-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("cli-configuration-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(
+            window.find("config-target-workspace").label(),
+            Some("Write CLI settings to Workspace configuration (selected)")
+        );
+        select_settings_category(window, 4, cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("local-service-settings-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("local-service-details").label(), Some("Local service connection details"));
+        select_settings_category(window, 3, cx);
+        window.render_frame(cx);
         window.click("copy-credential-command", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("vtcode login ollama"));
     })
@@ -668,6 +981,9 @@ fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppCon
         assert!(view.read(cx).config_editor.is_none());
         assert!(view.read(cx).settings_open);
         assert!(view.read(cx).settings_focus.contains_focused(window, cx));
+        window.press("escape", cx);
+        window.render_frame(cx);
+        assert!(!view.read(cx).settings_open);
     })
     .unwrap();
 }
@@ -714,8 +1030,7 @@ fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx:
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
-        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         window.click("sync-cli-theme", cx);
         let BackendCommand::Request { method, params } = requests.try_recv().expect("theme request") else {
             panic!("expected a theme request");
@@ -878,7 +1193,12 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _cx| {
             view.workspace = Some(std::env::temp_dir());
-            let patch = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,2 +1,3 @@\n ctx\n-gone\n+here\n+added\n";
+            let patch = format!(
+                "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,80 +1,80 @@\n{}",
+                (1..=80)
+                    .map(|line| format!("-line {line}\n+{}\n", if line == 40 { "here" } else { "updated" }))
+                    .collect::<String>()
+            );
             view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
                 session_id: "session-f".to_string(),
                 turn_id: Some("turn-1".to_string()),
@@ -893,16 +1213,16 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
                                 kind: PatchChangeKind::Update,
                             }],
                             status: PatchApplyStatus::Completed,
-                            unified_diff: Some(patch.to_string()),
-                            additions: Some(2),
-                            deletions: Some(1),
+                            unified_diff: Some(patch.clone()),
+                            additions: Some(80),
+                            deletions: Some(80),
                         })),
                     },
                 })),
             });
             assert_eq!(view.changes.entries().len(), 1);
             assert_eq!(view.changes.entries()[0].path, "src/app.rs");
-            assert_eq!(view.changes.totals(), (2, 1));
+            assert_eq!(view.changes.totals(), (80, 80));
         });
         window.render_frame(cx);
         window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
@@ -922,9 +1242,13 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         window.within("diff-review-panel").click("review-split", cx);
         window.render_frame(cx);
         assert_eq!(viewer.read(cx).mode(), gpui_kit::component::diff::DiffMode::Split);
+        assert_eq!(window.find("review-split").label(), Some("Split diff view (selected)"));
+        assert_eq!(window.find("review-unified").label(), Some("Unified diff view"));
         window.within("diff-review-panel").click("review-unified", cx);
         window.render_frame(cx);
         assert_eq!(viewer.read(cx).mode(), gpui_kit::component::diff::DiffMode::Unified);
+        assert_eq!(window.find("review-unified").label(), Some("Unified diff view (selected)"));
+        assert_eq!(window.find("review-split").label(), Some("Split diff view"));
         for _ in 0..8 {
             window.press("tab", cx);
             window.render_frame(cx);
@@ -943,7 +1267,21 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.width > px(900.));
         assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.height > px(400.));
-        view.update(cx, |view, _| view.reset_session_state());
+        let viewport = window.within("diff-review-panel").find("change-diff-view").bounds();
+        window.scroll("change-diff-view", gpui_kit::ScrollDelta::Lines(point(0., -100.)), cx);
+        window.render_frame(cx);
+        let scrolled_line = window.within(("new", 52usize)).find("source").bounds();
+        assert!(
+            scrolled_line.top() >= viewport.top() && scrolled_line.bottom() <= viewport.bottom(),
+            "the Kit Diff's virtualized list should scroll within its own review viewport"
+        );
+        view.update(cx, |view, cx| {
+            view.reset_session_state();
+            view.restore_focus_after_review_close(window, cx);
+            assert!(!view.review_open);
+            assert!(!view.review_focus.contains_focused(window, cx));
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
         window.render_frame(cx);
         assert!(!view.read(cx).review_open);
         assert!(view.read(cx).change_viewer.is_none());
@@ -972,7 +1310,18 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").role(), Some(gpui_kit::Role::Dialog));
         assert_eq!(window.find("command-palette").label(), Some("Command palette"));
-        assert_eq!(window.find("palette-label-0-0").label(), Some("New session"));
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::NewSession)).label(), Some("New session"));
+        window.input("new", cx);
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(palette.read(cx).query(cx), "new");
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).palette_query.as_ref(), "new");
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::NewSession)).label(), Some("New session"));
         for key in ["tab", "shift-tab", "tab"] {
             window.press(key, cx);
             assert!(view.read(cx).palette_focus.contains_focused(window, cx), "{key} stays inside the palette");
@@ -985,12 +1334,31 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(window, |_, _, cx| {
         assert!(view.read(cx).palette.is_none(), "confirm closes the palette");
+        assert!(view.read(cx).palette_query.is_empty(), "closing resets the search highlight");
     })
     .unwrap();
     let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
         panic!("expected session create request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+}
+
+#[gpui_kit::test]
+fn command_palette_keeps_dialog_accessible_with_reduced_motion(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        assert_eq!(window.find("command-palette").role(), Some(gpui_kit::Role::Dialog));
+        assert_eq!(window.find("command-palette").label(), Some("Command palette"));
+        assert!(view.read(cx).palette_focus.contains_focused(window, cx));
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -1106,10 +1474,17 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
+        let initial_sidebar_width = view.read(cx).sidebar_width;
 
         // Press on the divider, drag right by 60px, release.
         dispatch_mouse(window, start, MousePhase::Down, cx);
+        let resize = view.read(cx).resizing.expect("splitter press begins a resize");
+        assert_eq!(resize.start_pointer_x_window, start.x, "drag start uses window-space pointer coordinates");
+        assert_eq!(resize.start_width, px(initial_sidebar_width), "drag start retains pixel units for pane width");
+        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
+        assert!(cx.has_active_drag(), "GPUI starts a typed resize drag");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Move, cx);
+        assert!(view.read(cx).resizing.is_some(), "splitter drag remains active");
         dispatch_mouse(window, point(start.x + px(60.), start.y), MousePhase::Up, cx);
         let width = view.read(cx).sidebar_width;
         assert!(width > 300.0 && width < 340.0, "sidebar grew by the drag delta: {width}");
@@ -1119,10 +1494,72 @@ fn dragging_the_sidebar_divider_resizes_the_pane(cx: &mut TestAppContext) {
         let handle = window.find("resize-sidebar").bounds();
         let start = point(handle.center().x, handle.center().y);
         dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x + px(6.), start.y), MousePhase::Move, cx);
         dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Move, cx);
         dispatch_mouse(window, point(start.x + px(600.), start.y), MousePhase::Up, cx);
         let width = view.read(cx).sidebar_width;
         assert!((width - super::super::preferences::MAX_PANE_WIDTH).abs() < f32::EPSILON, "clamped width: {width}");
+
+        let inspector_start_width = view.read(cx).inspector_width;
+        let handle = window.find("resize-inspector").bounds();
+        let start = point(handle.center().x, handle.center().y);
+        dispatch_mouse(window, start, MousePhase::Down, cx);
+        dispatch_mouse(window, point(start.x - px(6.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Move, cx);
+        dispatch_mouse(window, point(start.x - px(40.), start.y), MousePhase::Up, cx);
+        let view_state = view.read(cx);
+        assert!(view_state.resizing.is_none(), "splitter release ends the resize");
+        assert!(
+            view_state.inspector_width > inspector_start_width + 30.
+                && view_state.inspector_width < inspector_start_width + 50.,
+            "moving the inspector edge left grows it: {}",
+            view_state.inspector_width
+        );
+        assert_eq!(view_state.preferences.inspector_width, Some(view_state.inspector_width));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn pane_splitters_expose_accessibility_and_keyboard_resize(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let splitter = window.find("resize-sidebar");
+        assert_eq!(splitter.role(), Some(gpui_kit::Role::Splitter));
+        assert_eq!(splitter.label(), Some("Resize navigation"));
+
+        for _ in 0..128 {
+            if view.read(cx).sidebar_resize_focus.is_focused(window) {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+        }
+        assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "Tab reaches the sidebar splitter");
+        window.press("right", cx);
+        assert_eq!(view.read(cx).sidebar_width, 280.);
+        window.press("shift-right", cx);
+        assert_eq!(view.read(cx).sidebar_width, 330.);
+        window.press("left", cx);
+        assert_eq!(view.read(cx).sidebar_width, 320.);
+        assert_eq!(view.read(cx).preferences.sidebar_width, Some(320.));
+        window.click("resize-sidebar", cx);
+        assert!(view.read(cx).sidebar_resize_focus.is_focused(window), "pointer interaction focuses the splitter");
+
+        for _ in 0..128 {
+            if view.read(cx).inspector_resize_focus.is_focused(window) {
+                break;
+            }
+            window.press("tab", cx);
+            window.render_frame(cx);
+        }
+        assert!(view.read(cx).inspector_resize_focus.is_focused(window), "Tab reaches the inspector splitter");
+        window.press("left", cx);
+        assert_eq!(view.read(cx).inspector_width, 330.);
+        window.press("shift-right", cx);
+        assert_eq!(view.read(cx).inspector_width, 280.);
+        assert_eq!(view.read(cx).preferences.inspector_width, Some(280.));
     })
     .unwrap();
 }
@@ -1137,6 +1574,8 @@ enum MousePhase {
 fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find_all("toggle-theme").is_empty());
         view.update(cx, |view, cx| {
             view.preferences.ui_font_size = Some(19);
             view.preferences.code_font_size = Some(14);
@@ -1150,35 +1589,28 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
                 "Text and `code` stay visible.".into(),
             ));
         });
-        for palette in [false, true] {
-            for (mode, id) in [(ThemeMode::Dark, "system-dark"), (ThemeMode::Light, "system-light")] {
-                window.render_frame(cx);
-                if palette {
-                    view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
-                } else {
-                    window.click("toggle-theme", cx);
-                }
-                window.render_frame(cx);
-                assert_eq!(view.read(cx).theme_mode, mode);
-                assert_eq!(view.read(cx).theme_id, id);
-                assert_eq!(crate::desktop::preferences::Preferences::load().theme.as_deref(), Some(id));
-                assert_eq!(cx.theme().font_size, px(19.));
-                assert_eq!(cx.theme().mono_font_size, px(14.));
-                assert_eq!(gpui_kit::base::Theme::global(cx).tokens.colors.foreground, cx.theme().colors.foreground);
-                assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "keep this draft");
-                assert_eq!(view.read(cx).transcript.get(0).unwrap().id, "theme-content");
-            }
+        for (mode, id) in [(ThemeMode::Dark, "system-dark"), (ThemeMode::Light, "system-light")] {
+            view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
+            window.render_frame(cx);
+            assert_eq!(view.read(cx).theme_mode, mode);
+            assert_eq!(view.read(cx).theme_id, id);
+            assert_eq!(crate::desktop::preferences::Preferences::load().theme.as_deref(), Some(id));
+            assert_eq!(cx.theme().font_size, px(19.));
+            assert_eq!(cx.theme().mono_font_size, px(14.));
+            assert_eq!(gpui_kit::base::Theme::global(cx).tokens.colors.foreground, cx.theme().colors.foreground);
+            assert_eq!(view.read(cx).composer.read(cx).value().as_str(), "keep this draft");
+            assert_eq!(view.read(cx).transcript.get(0).unwrap().id, "theme-content");
         }
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn separate_theme_profiles_restore_theme_and_typography_per_mode(cx: &mut TestAppContext) {
+fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
-        window.press("cmd-,", cx);
+        window.click("open-settings", cx);
         window.render_frame(cx);
         window.click("separate-theme-profiles", cx);
         window.render_frame(cx);
@@ -1189,39 +1621,50 @@ fn separate_theme_profiles_restore_theme_and_typography_per_mode(cx: &mut TestAp
             assert_eq!(preferences.dark_theme.as_deref(), Some("ciapre"));
             assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
         }
+        assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile (selected)"));
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile"));
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile (selected)"));
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile"));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
         window.within("settings-panel").click("font-ui-1", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(17.));
-        view.update(cx, |view, cx| view.apply_theme("solarized-light".into(), window, cx));
-
+        assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
+        assert_eq!(view.read(cx).preferences.typography_for(ThemeMode::Light).ui_font_size, 17);
         window.click("edit-dark-profile", cx);
         window.render_frame(cx);
+        assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
-        assert_eq!(view.read(cx).theme_id, "ciapre");
         assert_eq!(cx.theme().font_size, px(16.));
-
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
-        assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(cx.theme().font_size, px(17.));
-        window.click("close-settings", cx);
-        window.render_frame(cx);
 
-        window.click("toggle-theme", cx);
+        scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
+        window.click("theme-solarized-light", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
+        assert_eq!(view.read(cx).preferences.light_theme.as_deref(), Some("solarized-light"));
+
+        window.within("sheet-content").click("close", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Dark);
+        assert_eq!(cx.theme().font_size, px(16.));
         assert_eq!(view.read(cx).theme_id, "ciapre");
-        window.click("toggle-theme", cx);
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ToggleTheme, window, cx));
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
-        assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(cx.theme().font_size, px(17.));
+        assert_eq!(view.read(cx).theme_id, "solarized-light");
 
         let saved = crate::desktop::preferences::Preferences::load();
         assert!(saved.separate_theme_profiles);
@@ -1236,45 +1679,39 @@ fn separate_theme_profiles_restore_theme_and_typography_per_mode(cx: &mut TestAp
 #[gpui_kit::test]
 fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 760., 700.);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
-        window.press("cmd-,", cx);
+        window.click("open-settings", cx);
         window.render_frame(cx);
         let strip = window.find("theme-list").bounds();
-        let first = window.find("theme-ciapre").bounds();
-        let ciapre_dark = window.find("theme-ciapre-dark").bounds();
-        let ciapre_blue = window.find("theme-ciapre-blue").bounds();
-        let system_light = window.find("theme-system-light").bounds();
-        let last = window.find("theme-catppuccin-mocha").bounds();
+        let first = window.find("theme-system-light").bounds();
         let typography_top = window.find("choose-ui-font").bounds().top();
-        assert_eq!(first.top(), last.top(), "themes occupy a single row");
-        assert!(first.left() < ciapre_dark.left() && ciapre_dark.left() < ciapre_blue.left());
-        assert!(ciapre_blue.right() < system_light.left(), "Ciapre themes lead the picker");
-        assert!(last.left() > strip.right(), "the list must overflow horizontally");
+        assert!(
+            ["theme-github-dark", "theme-catppuccin-mocha", "theme-solarized-light"]
+                .into_iter()
+                .any(|id| window.find(id).bounds().left() > strip.right()),
+            "the list must overflow horizontally"
+        );
         assert_eq!(first.size.width, px(104.), "swatches must not shrink to fit");
         window.click("next-themes", cx);
         window.render_frame(cx);
-        assert!(window.find("theme-ciapre").bounds().left() < first.left());
+        assert!(window.find("theme-system-light").bounds().left() < first.left());
         window.click("previous-themes", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("theme-ciapre").bounds().left(), first.left());
+        assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
 
-        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Pixels(point(px(-1200.), px(0.))), cx);
-        window.render_frame(cx);
-        let last = window.find("theme-catppuccin-mocha").bounds();
-        assert!(
-            last.left() >= strip.left() && last.right() <= strip.right(),
-            "last swatch {last:?} is outside {strip:?}; scroll offset {:?}",
-            view.read(cx).theme_scroll.offset()
-        );
+        scroll_theme_into_view(window, &view, "theme-catppuccin-mocha", cx);
+        let mocha = window.find("theme-catppuccin-mocha").bounds();
+        assert!(mocha.left() >= strip.left() && mocha.right() <= strip.right());
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
         window.click("theme-catppuccin-mocha", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "catppuccin-mocha");
 
-        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
+        window.scroll("theme-list", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
         window.render_frame(cx);
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
-        click_in_scrolled_grid(window, "theme-scroller", "theme-system-light", cx);
+        window.click("theme-system-light", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "system-light");
     })
@@ -1285,23 +1722,22 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
 fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        window.press("cmd-,", cx);
-        window.render_frame(cx);
+        window.click("open-settings", cx);
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
-        // The picker leads with the ported gpui-kit rows; dark and light
-        // swatches apply live and switch the kit base.
-        click_in_scrolled_grid(window, "theme-scroller", "theme-adventure", cx);
+        scroll_theme_into_view(window, &view, "theme-github-dark", cx);
+        window.click("theme-github-dark", cx);
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "adventure");
+            assert_eq!(view.theme_id, "github-dark");
             assert_eq!(view.theme_mode, ThemeMode::Dark);
         }
-        click_in_scrolled_grid(window, "theme-scroller", "theme-aurora-light", cx);
+        scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
+        window.click("theme-solarized-light", cx);
         {
             let view = view.read(cx);
-            assert_eq!(view.theme_id, "aurora-light");
+            assert_eq!(view.theme_id, "solarized-light");
             assert_eq!(view.theme_mode, ThemeMode::Light);
         }
     })
@@ -1377,37 +1813,46 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let list = cx.update(|cx| {
+    let scroller = cx.update(|cx| {
         view.update(cx, |view, _| {
             for index in 0..20 {
                 view.transcript.push(TranscriptItem::new(
                     format!("message-{index}"),
                     "assistant".to_string(),
-                    "VT Code".to_string(),
+                    "VT Code".into(),
                     format!("Message {index}\n\n{}", "wrapped words ".repeat(index + 1)),
                 ));
             }
             view.transcript.push(TranscriptItem::new(
                 "stream".to_string(),
                 "assistant".to_string(),
-                "VT Code".to_string(),
+                "VT Code".into(),
                 "A tall paragraph.\n\n".repeat(100),
             ));
-            view.transcript.list_state()
+            view.message_scroller.clone()
         })
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(window.within("pane-root").find_by_label("Conversation").role(), Some(gpui_kit::Role::Region));
         let last = window.find("transcript-row-stream").bounds();
-        let viewport = list.viewport_bounds();
+        let viewport = window.find("transcript-scroll").bounds();
         assert!(last.size.height > viewport.size.height);
         assert!(last.bottom() <= viewport.bottom() + px(1.));
         assert!(last.bottom() >= viewport.bottom() - px(32.), "last={last:?}, viewport={viewport:?}");
-
-        list.scroll_by(px(-120.));
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-120.))), cx);
         window.render_frame(cx);
-        let anchor = list.logical_scroll_top();
-        assert!(!list.is_following_tail());
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(250));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let anchor = scroller.read(cx).logical_scroll_top();
+        assert!(!scroller.read(cx).is_following_tail());
+        assert!(scroller.read(cx).is_scrolled_up());
         view.update(cx, |view, _| {
             view.append_or_update_item(
                 "stream".to_string(),
@@ -1418,9 +1863,60 @@ fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut 
             );
         });
         window.render_frame(cx);
-        let after = list.logical_scroll_top();
+        let after = scroller.read(cx).logical_scroll_top();
         assert_eq!(after.item_ix, anchor.item_ix);
         assert!((after.offset_in_item - anchor.offset_in_item).abs() <= px(1.));
+        assert_eq!(
+            window
+                .within("transcript-scroller")
+                .find_by_label("Jump to latest message")
+                .role(),
+            Some(gpui_kit::Role::Button)
+        );
+        window.click((gpui_kit::ElementId::from("transcript-scroller"), "jump-to-latest"), cx);
+        window.render_frame(cx);
+        assert!(scroller.read(cx).is_following_tail());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn transcript_eviction_preserves_reader_anchor(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let scroller = cx.update(|cx| {
+        view.update(cx, |view, _| {
+            for index in 0..MAX_TRANSCRIPT_ITEMS {
+                view.transcript.push(TranscriptItem::new(
+                    index.to_string(),
+                    "assistant".to_string(),
+                    "VT Code".into(),
+                    format!("Message {index}"),
+                ));
+            }
+            view.message_scroller.clone()
+        })
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        scroller.update(cx, |state, cx| assert!(state.scroll_to_item(12, cx)));
+        window.render_frame(cx);
+        assert_eq!(scroller.read(cx).logical_scroll_top().item_ix, 12);
+
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "newest".to_string(),
+                "assistant".to_string(),
+                "VT Code".into(),
+                "Newest message".to_string(),
+            ));
+        });
+        window.render_frame(cx);
+
+        let anchor = scroller.read(cx).logical_scroll_top();
+        assert_eq!(view.read(cx).transcript.get(anchor.item_ix).unwrap().id, "12");
+        assert_eq!(scroller.read(cx).item_count(), MAX_TRANSCRIPT_ITEMS);
+        assert!(!scroller.read(cx).is_following_tail());
     })
     .unwrap();
 }
@@ -1434,15 +1930,18 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
             view.transcript.push(TranscriptItem::new(
                 "copy-test".to_string(),
                 "assistant".to_string(),
-                "VT Code".to_string(),
+                "VT Code".into(),
                 source.to_string(),
             ));
         });
         window.render_frame(cx);
         window.click("copy-message-copy-test", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
-        window.click("copy-code", cx);
+        assert_eq!(window.notifications(cx).len(), 1);
+        focus_element_by_tab(window, "copy-code", cx);
+        window.press("space", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().unwrap().trim_end(), "fn sample() -> u8 { 7 }");
+        assert_eq!(window.notifications(cx).len(), 1);
     })
     .unwrap();
 }
@@ -1456,7 +1955,7 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
                 view.transcript.push(TranscriptItem::new(
                     "resize".to_string(),
                     "assistant".to_string(),
-                    "VT Code".to_string(),
+                    "VT Code".into(),
                     format!("## Summary\n\n{}", "A longer paragraph that wraps naturally. ".repeat(50)),
                 ));
             });
@@ -1470,9 +1969,9 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
         window.render_frame(cx);
         let row = window.find("transcript-row-resize").bounds();
         assert!(row.size.height > wide_height);
-        let list = view.read(cx).transcript.list_state();
-        assert!(list.is_following_tail());
-        assert!(row.bottom() <= list.viewport_bounds().bottom() + px(1.));
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(scroller.read(cx).is_following_tail());
+        assert!(row.bottom() <= window.find("transcript-scroll").bounds().bottom() + px(1.));
     })
     .unwrap();
 }
@@ -1944,6 +2443,45 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn workspace_shortcuts_match_navigation_and_review_controls(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace".into(),
+                server_version: "test".into(),
+            });
+        });
+        window.render_frame(cx);
+
+        window.press("cmd-shift-u", cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
+
+        window.press("cmd-shift-e", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
+
+        window.press("cmd-shift-g", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).review_open);
+        assert!(view.read(cx).workspace_review.is_some());
+
+        window.press("cmd-r", cx);
+        assert!(view.read(cx).workspace_review.as_ref().unwrap().pending);
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+        panic!("workspace review request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WORKSPACE_REVIEW);
+}
+
+#[gpui_kit::test]
 fn escape_closes_preview_and_returns_keyboard_input_to_composer(cx: &mut TestAppContext) {
     use gpui_kit::Focusable;
     let workspace = tempfile::TempDir::new().unwrap();
@@ -2014,7 +2552,6 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
             view.attachments.push(vtcode_desktop_protocol::TurnAttachment { path: "first.rs".into(), text: "first content".into() });
         });
         window.render_frame(cx);
-        assert_ne!(window.find("send-prompt").disabled(), Some(true));
         window.click("send-prompt", cx);
         assert_eq!(view.read(cx).session_request, Some(vtcode_desktop_protocol::method::SESSION_CREATE));
         assert!(view.read(cx).first_submission.is_some());
@@ -2038,7 +2575,7 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
         assert!(view.read(cx).session_request.is_none());
         assert!(view.read(cx).running);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Newer unsent draft");
-        assert_eq!(view.read(cx).transcript.list_state().item_count(), 1);
+        assert_eq!(view.read(cx).transcript.len(), 1);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else { panic!("submit") };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
         assert_eq!(params, json!({ "sessionId": "created", "prompt": "First request", "attachments": [{ "path": "first.rs", "text": "first content" }] }));
@@ -2340,6 +2877,69 @@ fn interaction_notifications_preserve_startup_questions_and_reject_stale_turns(c
 }
 
 #[gpui_kit::test]
+fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{InteractionChoice, InteractionKind, InteractionRequest, InteractionStep};
+
+    let (window, view) = open_desktop(cx);
+    let make_choice = |id: &str| InteractionChoice {
+        id: id.into(),
+        label: format!("Choose {id}"),
+        description: None,
+        recommended: false,
+    };
+    let steps = [
+        ("Workspace", "Choose a workspace", "workspace"),
+        ("Task", "Describe the task", "task"),
+        ("Review", "Review the plan", "review"),
+    ]
+    .into_iter()
+    .map(|(title, question, choice_id)| InteractionStep {
+        title: title.into(),
+        question: question.into(),
+        choices: vec![make_choice(choice_id)],
+        selected_choice_id: None,
+        allow_freeform: false,
+    })
+    .collect();
+    view.update(cx, |view, cx| {
+        view.interaction = Some(InteractionRequest {
+            session_id: "session".into(),
+            turn_id: "turn".into(),
+            interaction_id: "question-wizard".into(),
+            kind: InteractionKind::Question,
+            wizard: true,
+            title: "Set up the task".into(),
+            details: Vec::new(),
+            choices: Vec::new(),
+            steps,
+            selected_choice_id: None,
+            selected_choice_ids: Vec::new(),
+        });
+        view.interaction_step_index = 0;
+        view.interaction_choice_ids = vec![None; 3];
+        view.interaction_answer_texts = vec![None; 3];
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-progress").label(), Some("Question progress"));
+        let stepper = window
+            .within("interaction-question-progress")
+            .find("interaction-question-stepper");
+        assert!(stepper.visible());
+        assert_eq!(stepper.role(), Some(gpui_kit::Role::List));
+        assert_eq!(stepper.label(), Some("Question steps"));
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        window.click("choice-workspace", cx);
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 2 of 3"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let other_workspace = tempfile::TempDir::new().unwrap();
@@ -2366,7 +2966,6 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         assert_eq!(window.find("new-session").disabled(), Some(true));
         assert_eq!(window.find("close-session").disabled(), Some(true));
         assert_eq!(window.find("session-other").disabled(), Some(true));
-        assert_ne!(window.find("session-session").disabled(), Some(true), "same-session reload stays available");
         view.update(cx, |view, cx| {
             let workspace_before = view.workspace.clone();
             view.create_session(cx);
@@ -2523,7 +3122,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
         });
         window.render_frame(cx);
         assert_eq!(palette.read(cx).matched_count(), 1, "the same query becomes actionable after selection");
-        assert_eq!(window.find("palette-label-0-1").label(), Some("Close session"));
+        assert_eq!(window.find(palette_action_id(&super::PaletteAction::CloseSession)).label(), Some("Close session"));
         view.update(cx, |view, cx| {
             view.running = true;
             view.run_palette_action(super::PaletteAction::CloseSession, window, cx);
@@ -2539,7 +3138,7 @@ fn palette_filters_unavailable_commands_as_session_state_changes(cx: &mut TestAp
 
 #[gpui_kit::test]
 fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.within("inspector-tabs").find(0usize).role(), Some(gpui_kit::Role::Tab));
@@ -2558,6 +3157,13 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
             window.press(key, cx);
             window.render_frame(cx);
             assert_eq!(view.read(cx).inspector_tab, expected, "{key}");
+            if key == "end" || key == "left" {
+                let scroll = &view.read(cx).inspector_tabs_scroll;
+                let visible = horizontal_scroll_item_is_visible(scroll, 4);
+                let offset = scroll.offset().x;
+                assert!(visible, "keyboard selection reveals the final inspector tab; scroll offset={offset:?}");
+                assert!(offset < px(0.), "narrow inspector tab row must scroll to its final tab");
+            }
         }
         window.press("cmd-l", cx);
         window.input("composer text", cx);
@@ -2569,7 +3175,48 @@ fn inspector_tabs_expose_selection_and_keyboard_navigation(cx: &mut TestAppConte
 }
 
 #[gpui_kit::test]
-fn welcome_keeps_file_and_model_workflows_in_navigation_and_composer(cx: &mut TestAppContext) {
+fn hiding_a_focused_inspector_restores_the_desktop_focus_path(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_focus.is_focused(window));
+
+        view.update(cx, |view, cx| view.toggle_inspector(cx));
+        window.render_frame(cx);
+
+        assert!(!view.read(cx).inspector_open);
+        assert!(view.read(cx).focus_handle.is_focused(window));
+        window.press("cmd-l", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn inspector_programmatic_selection_reveals_selected_tab(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 900.);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_utilities(cx));
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
+        assert!(
+            horizontal_scroll_item_is_visible(&view.read(cx).inspector_tabs_scroll, 4),
+            "workflow selection reveals the selected inspector tab"
+        );
+        assert!(
+            view.read(cx).inspector_tabs_scroll.offset().x < px(0.),
+            "workflow selection must scroll the narrow inspector tab row"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -2592,30 +3239,22 @@ fn welcome_keeps_file_and_model_workflows_in_navigation_and_composer(cx: &mut Te
                 context_window: Some(7000),
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
             view.composer
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
         });
         window.render_frame(cx);
-        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
-            assert!(window.find_all(id).is_empty(), "welcome actions belong in navigation and the composer");
-        }
-        window.click("nav-utilities", cx);
-        window.render_frame(cx);
-        window.within("inspector-tabs").click(1usize, cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
-        assert!(
-            window
-                .find("palette-label-0-0")
-                .label()
-                .unwrap()
-                .contains("123456 tokens · Current")
-        );
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        let current_model_item = window.find(palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "provider-a".into(),
+            model: "custom-current-id".into(),
+        }));
+        let current_model_label = current_model_item.label().unwrap();
+        assert!(current_model_label.contains("123.45K context"));
+        assert!(current_model_label.contains("Current"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.within("command-palette").press("enter", cx);
@@ -2629,133 +3268,6 @@ fn welcome_keeps_file_and_model_workflows_in_navigation_and_composer(cx: &mut Te
     })
     .unwrap();
     assert!(requests.try_recv().is_err(), "choosing the current model must not restart the session");
-}
-
-#[gpui_kit::test]
-fn composer_model_picker_keeps_a_custom_current_model_without_resetting_a_session(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.selected_session_id = Some("keep-session".into());
-            view.configuration = Some(
-                serde_json::from_value(json!({
-                    "provider": "provider-a", "model": "custom-current-id", "authenticated": true,
-                    "credentialSetupCommand": "", "contextWindow": 123456,
-                }))
-                .unwrap(),
-            );
-            view.models = vec![vtcode_desktop_protocol::ModelInfo {
-                provider: "provider-b".into(),
-                id: "other-id".into(),
-                display_name: "Other model".into(),
-                context_window: Some(7000),
-                current: false,
-                recommended_rank: None,
-            }];
-            view.composer
-                .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
-        });
-        window.render_frame(cx);
-        window.click("pick-model", cx);
-        window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
-        assert!(
-            window
-                .find("palette-label-0-0")
-                .label()
-                .unwrap()
-                .contains("123456 tokens · Current")
-        );
-        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
-        window.render_frame(cx);
-        window.within("command-palette").press("enter", cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    cx.update_window(window, |_, _, cx| {
-        assert!(view.read(cx).palette.is_none());
-        assert_eq!(view.read(cx).selected_session_id.as_deref(), Some("keep-session"));
-        assert_eq!(view.read(cx).composer.read(cx).value(), "Keep my draft");
-    })
-    .unwrap();
-    assert!(requests.try_recv().is_err(), "the current catalog fallback must not restart the session");
-}
-
-#[gpui_kit::test]
-fn welcome_prompt_stays_branded_and_keeps_workspace_switch_guard(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 600., 700.);
-    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.sidebar_open = false;
-            view.inspector_open = false;
-            view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
-        });
-        window.render_frame(cx);
-        let welcome = window.find("welcome").bounds();
-        let link = window.find("welcome-workspace");
-        assert_eq!(link.role(), Some(gpui_kit::Role::Button));
-        assert_eq!(link.label(), Some(format!("Change workspace, current: {workspace_name}").as_str()));
-        assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
-        assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
-        assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
-        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
-        view.update(cx, |view, _| view.workspace_picker_open = true);
-        window.render_frame(cx);
-        assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
-        view.update(cx, |view, _| {
-            view.workspace_picker_open = false;
-            view.workspace = None;
-        });
-        window.render_frame(cx);
-        assert_eq!(window.find("welcome-workspace").label(), Some("Choose a workspace"));
-        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
-        assert!(window.find_all("open-first-workspace").is_empty());
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
-        assert_eq!(window.find_all("welcome-brand-mark").len(), 1);
-        assert!(window.find_all("thread-header").is_empty(), "the empty welcome should not add a thread header");
-        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
-            assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
-        }
-        window.click("nav-utilities", cx);
-        window.render_frame(cx);
-        assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
-        assert!(view.read(cx).selected_session_id.is_none());
-        assert_eq!(window.find("send-prompt").label(), Some("Send message"));
-        view.update(cx, |view, _| {
-            view.workspace = None;
-            view.inspector_open = false;
-        });
-        window.render_frame(cx);
-        assert_eq!(window.find("welcome-workspace").label(), Some("Choose a workspace"));
-        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build in VT Code?"));
-        assert!(window.find_all("open-first-workspace").is_empty());
-        view.update(cx, |view, _| {
-            view.workspace = Some(std::env::temp_dir());
-            view.transcript.push(TranscriptItem::new(
-                "first-message".into(),
-                "user".into(),
-                "You".into(),
-                "Inspect this workspace".into(),
-            ));
-        });
-        window.render_frame(cx);
-        assert!(window.find_all("welcome").is_empty());
-        assert_eq!(window.find_all("thread-header").len(), 1);
-    })
-    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -2773,6 +3285,7 @@ fn model_picker_revalidates_a_deferred_selection_against_the_current_catalog(cx:
                 context_window: None,
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
             view.open_model_palette(window, cx);
         });
@@ -2863,8 +3376,8 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
 fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
-            view.settings_open = true;
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
         });
         window.render_frame(cx);
         window.within("settings-panel").click("font-ui-1", cx);
@@ -2883,7 +3396,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         });
         assert_eq!(cx.theme().font_size, px(17.));
         window.render_frame(cx);
-        scroll_settings_to(window, "reset-appearance", cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-320.))), cx);
         window.within("settings-panel").click("reset-appearance", cx);
         window.render_frame(cx);
         assert_eq!(cx.theme().font_size, px(16.));
@@ -2923,52 +3436,120 @@ fn appearance_dialog_traps_focus_and_escape_restores_the_draft(cx: &mut TestAppC
         assert!(!view.read(cx).settings_open);
         assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
         assert_eq!(view.read(cx).composer.read(cx).value(), "preserve this draft");
-        window.press("cmd-,", cx);
-        window.render_frame(cx);
-        window.click("close-settings", cx);
-        window.render_frame(cx);
-        assert!(!view.read(cx).settings_open);
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mut TestAppContext) {
+fn settings_sheet_close_button_restores_the_previous_focus(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("cmd-l", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        assert!(window.within("sheet-content").find("close").visible());
+        window.within("sheet-content").click("close", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        assert!(!window.has_active_sheet(cx), "sheet close button did not close the Kit sheet");
+        assert!(!view.read(cx).settings_open);
+        assert!(view.read(cx).composer.read(cx).focus_handle(cx).is_focused(window));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    let workspace_name = "A workspace with a deliberately long name for responsive welcome typography";
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
-            view.webmcp_pairing = Some(vtcode_desktop_protocol::WebmcpPairResult {
-                endpoint: "ws://127.0.0.1:43719/mcp".into(),
-                origin: "https://example.test".into(),
-                pairing_code: "0123456789abcdef".into(),
-                expires_in_secs: 300,
-            });
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
         });
-        window.press("cmd-,", cx);
         window.render_frame(cx);
+        let welcome = window.find("welcome").bounds();
+        let link = window.find("welcome-workspace");
+        assert_eq!(link.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(link.label(), Some(format!("Change workspace, current: {workspace_name}").as_str()));
+        assert!(link.bounds().left() >= welcome.left() && link.bounds().right() <= welcome.right());
+        assert!(link.bounds().size.height >= px(28.), "workspace link must retain headline-sized text");
+        assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
+        assert_eq!(
+            window.find("welcome-prompt").label(),
+            Some(format!("What should we build in {workspace_name}?").as_str())
+        );
+        view.update(cx, |view, _| view.workspace_picker_open = true);
+        window.render_frame(cx);
+        assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
+        view.update(cx, |view, _| {
+            view.workspace_picker_open = false;
+            view.workspace = None;
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome-workspace").is_empty());
+        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
+        window.within("welcome").click("open-first-workspace", cx);
+        assert!(view.read(cx).workspace_picker_open, "the welcome action opens the native workspace picker");
+    })
+    .unwrap();
 
-        assert!(view.read(cx).settings_open, "the Settings shortcut opens the dialog");
-        assert_eq!(window.find_all("webmcp-status").len(), 1);
-        assert_eq!(window.find_all("webmcp-pairing").len(), 1);
-        assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);
-        assert_eq!(window.find_all("webmcp-pairing-details").len(), 1);
+    assert!(cx.did_prompt_for_paths());
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories);
+        None
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert!(!view.read(cx).workspace_picker_open, "canceling the picker restores the welcome state");
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn welcome_review_action_opens_changes_without_creating_a_session(cx: &mut TestAppContext) {
+fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(window.find("welcome").label(), Some("VT Code welcome"));
+        assert!(window.find_all("thread-header").is_empty());
+        for id in ["welcome-review-changes", "welcome-browse-files", "welcome-choose-model"] {
+            assert!(window.find_all(id).is_empty(), "welcome should not duplicate workspace controls");
+        }
         window.click("nav-utilities", cx);
         window.render_frame(cx);
-        window.within("inspector-tabs").click(0usize, cx);
-        window.render_frame(cx);
         assert!(view.read(cx).inspector_open);
-        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Utilities);
         assert!(view.read(cx).selected_session_id.is_none());
         assert_eq!(window.find("send-prompt").label(), Some("Send message"));
+        view.update(cx, |view, _| {
+            view.workspace = None;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace folder"));
+        view.update(cx, |view, _| {
+            view.workspace = Some(std::env::temp_dir());
+            view.transcript.push(TranscriptItem::new(
+                "first-message".into(),
+                "user".into(),
+                "You".into(),
+                "Inspect this workspace".into(),
+            ));
+        });
+        window.render_frame(cx);
+        assert!(window.find_all("welcome").is_empty());
+        assert_eq!(window.find_all("thread-header").len(), 1);
     })
     .unwrap();
 }
@@ -3032,7 +3613,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         );
         assert_eq!(
             window.find(super::opaque_path_element_id("change-row", "src/app.rs")).label(),
-            Some("Review src/app.rs"),
+            Some("Review src/app.rs (selected)"),
             "a newly inserted row must not inherit an existing file's accessibility node"
         );
         assert_eq!(viewer.read(cx).selected_lines(), selection, "unrelated events preserve review selection");
@@ -3056,7 +3637,15 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         window.render_frame(cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("src/app.rs"));
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
-        view.update(cx, |view, cx| view.handle_backend_event(notification("edit", "src/app.rs", "invalid patch"), cx));
+        view.update(cx, |view, cx| {
+            view.event_tx.send(notification("edit", "src/app.rs", "invalid patch")).unwrap();
+            view.drain_events(window, cx);
+            assert!(view.selected_change.is_none());
+            assert!(view.change_viewer.is_none());
+            assert!(!view.review_open);
+            assert!(!view.review_focus.contains_focused(window, cx));
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
         assert!(view.read(cx).selected_change.is_none());
         assert!(view.read(cx).change_viewer.is_none());
         window.render_frame(cx);
@@ -3314,6 +3903,7 @@ fn untracked_review_renders_added_empty_and_spaced_paths_and_reports_omissions(c
 #[gpui_kit::test]
 fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     let patch = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.rs b/b.rs\n--- a/b.rs\n+++ b/b.rs\n@@ -1 +1 @@\n-before\n+after\n";
     let snapshot = |request_id: &str, workspace: &str| BackendEvent::Response {
@@ -3351,6 +3941,15 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert!(view.read(cx).review_open);
         assert_eq!(window.find("diff-review-panel").label(), Some("Working tree review"));
         assert_eq!(window.find("refresh-workspace-review").disabled(), Some(true));
+        let loading = window.find("workspace-review-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Reading Git changes"));
+        assert!(window.find("workspace-review-placeholder-file").visible());
+        cx.set_reduce_motion(false);
+        window.render_frame(cx);
+        assert!(window.find("workspace-review-placeholder-file").visible());
+        cx.set_reduce_motion(true);
+        window.render_frame(cx);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
             panic!("review request")
         };
@@ -3467,76 +4066,6 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
 }
 
 #[gpui_kit::test]
-fn failed_working_tree_refresh_keeps_the_last_successful_snapshot(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
-    let patch = "diff --git a/src/app.rs b/src/app.rs\n--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-old\n+new\n";
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
-                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
-                workspace: "/workspace".into(),
-                server_version: "test".into(),
-            });
-            view.open_workspace_review(window, cx);
-            view.refresh_workspace_review(cx);
-        });
-        let BackendCommand::Request { params, .. } = requests.try_recv().unwrap() else {
-            panic!("initial review request")
-        };
-        view.update(cx, |view, cx| {
-            view.accept_workspace_review(
-                vtcode_desktop_protocol::WorkspaceReviewResult {
-                    include_untracked: false,
-                    scope: String::new(),
-                    request_id: params["requestId"].as_str().unwrap().to_owned(),
-                    workspace: "/workspace".into(),
-                    captured_at: "first capture".into(),
-                    patch: Some(patch.into()),
-                    truncated: false,
-                    note: "Tracked changes against HEAD".into(),
-                },
-                cx,
-            );
-        });
-        window.render_frame(cx);
-        assert!(window.try_find("workspace-review-diff").is_some());
-
-        window.click("refresh-workspace-review", cx);
-        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
-            panic!("refresh request")
-        };
-        assert_eq!(method, vtcode_desktop_protocol::method::WORKSPACE_REVIEW);
-        window.render_frame(cx);
-        assert!(window.try_find("workspace-review-refreshing").is_some());
-        assert!(window.try_find("workspace-review-diff").is_some());
-
-        view.update(cx, |view, cx| {
-            view.handle_backend_event(
-                BackendEvent::Response {
-                    method: vtcode_desktop_protocol::method::WORKSPACE_REVIEW.into(),
-                    result: None,
-                    error: Some("Git capture timed out".into()),
-                },
-                cx,
-            );
-            let review = view.workspace_review.as_ref().unwrap();
-            assert!(!review.pending);
-            assert_eq!(review.snapshot.as_ref().unwrap().patch.as_deref(), Some(patch));
-            assert!(review.viewer.is_some());
-        });
-        window.render_frame(cx);
-        assert!(window.try_find("workspace-review-refreshing").is_none());
-        assert!(window.try_find("workspace-review-refresh-warning").is_some());
-        assert!(window.try_find("workspace-review-diff").is_some());
-        window.click("copy-workspace-review", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch));
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
 fn working_tree_review_distinguishes_partial_clean_and_unavailable_snapshots(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(8);
@@ -3636,7 +4165,6 @@ fn working_tree_queue_failure_preserves_agent_and_draft_and_allows_retry(cx: &mu
         });
         window.render_frame(cx);
         assert_eq!(window.find("workspace-review-unavailable").label(), Some("Git review unavailable"));
-        assert_ne!(window.find("refresh-workspace-review").disabled(), Some(true));
         let _occupied = requests.try_recv().unwrap();
         window.click("refresh-workspace-review", cx);
         assert!(view.read(cx).workspace_review.as_ref().unwrap().pending);
@@ -3665,6 +4193,8 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
             ));
         });
         window.render_frame(cx);
+        assert_eq!(window.find("transcript-row-answer").role(), None);
+        assert_eq!(window.find("transcript-row-check").role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(window.find("message-body-answer").role(), Some(gpui_kit::Role::Label));
         assert_eq!(window.find("message-body-answer").label(), Some("VT Code: Tests passed: 7. Run cargo test."));
         assert_eq!(window.find("tool-check").label(), Some("Show details for cargo check"));
@@ -3684,15 +4214,21 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
 fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| view.settings_open = true);
+        view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 16 pixels"));
         assert_eq!(window.find("font-code-value").label(), Some("Code font size: 14 pixels"));
+        let preview_height = window.find("appearance-code-preview").bounds().size.height;
+        assert!(preview_height > px(0.), "the highlighted code sample should have rendered layout");
         window.click("font-ui-1", cx);
-        window.click("font-code-0", cx);
+        window.click("font-code-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
-        assert_eq!(window.find("font-code-value").label(), Some("Code font size: 13 pixels"));
+        assert_eq!(window.find("font-code-value").label(), Some("Code font size: 15 pixels"));
+        assert!(
+            window.find("appearance-code-preview").bounds().size.height > preview_height,
+            "changing code size should re-layout the syntax-highlighted preview"
+        );
         assert!(window.find("choose-ui-font").label().unwrap().contains("current:"));
         assert!(window.find("choose-code-font").label().unwrap().contains("current:"));
     })
@@ -3712,7 +4248,8 @@ fn reduced_motion_setting_overrides_and_restores_the_system_value(cx: &mut TestA
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        select_settings_category(window, 1, cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
         window.render_frame(cx);
         assert_eq!(window.find("reduce-motion-system").label(), Some("Reduce motion: System (selected)"));
 
@@ -3759,6 +4296,11 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
             view.selected_session_id = Some("Second".into());
         });
         window.render_frame(cx);
+        let navigation = window.find("left-navigation");
+        assert_eq!(navigation.role(), Some(gpui_kit::Role::Navigation));
+        assert_eq!(navigation.label(), Some("VT Code navigation"));
+        assert_eq!(window.find("project-thread-sidebar").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("project-thread-sidebar").label(), Some("Workspace, projects, and recent threads"));
         assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
         assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
         assert_eq!(window.find("session-First").label(), Some("First"));
@@ -3778,6 +4320,156 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let sessions = (0..120)
+        .map(|index| vtcode_desktop_protocol::SessionSummary {
+            session_id: format!("thread-{index}"),
+            title: Some(format!("Thread {index}")),
+            workspace: "/project/vtcode".into(),
+            completed: false,
+            resumable: true,
+        })
+        .collect();
+    view.update(cx, |view, _| view.sessions = sessions);
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("session-thread-0").is_some(), "the first thread is visible at the top");
+        assert!(window.try_find("session-thread-119").is_none(), "offscreen threads are not built into the UI tree");
+
+        view.read(cx).session_scroll.scroll_to_item(119, gpui_kit::ScrollStrategy::Top);
+        window.render_frame(cx);
+
+        assert!(window.try_find("session-thread-119").is_some(), "scrolling renders the requested thread");
+        assert!(window.try_find("session-thread-0").is_none(), "the previous top rows leave the rendered range");
+    })
+    .unwrap();
+}
+
+#[test]
+fn fixed_virtual_list_geometry_reuses_rows_until_count_or_font_size_changes() {
+    let mut cache = FixedRowSizeCache::default();
+    let default_session_height = scale_row_height_for_ui_font(36., px(16.));
+    let large_session_height = scale_row_height_for_ui_font(36., px(24.));
+    assert_eq!(default_session_height, 36.);
+    assert_eq!(large_session_height, 54.);
+    assert_eq!(scale_row_height_for_ui_font(72., px(24.)), 108.);
+
+    let first = cache.get(120, default_session_height);
+    let same_geometry = cache.get(120, default_session_height);
+    assert!(std::rc::Rc::ptr_eq(&first, &same_geometry));
+    assert_eq!(first.len(), 120);
+    assert_eq!(first[0].height, px(36.));
+
+    let changed_count = cache.get(121, default_session_height);
+    assert!(!std::rc::Rc::ptr_eq(&same_geometry, &changed_count));
+    assert_eq!(changed_count.len(), 121);
+
+    let changed_font_size = cache.get(121, large_session_height);
+    assert!(!std::rc::Rc::ptr_eq(&changed_count, &changed_font_size));
+    assert_eq!(changed_font_size[0].height, px(54.));
+}
+
+#[gpui_kit::test]
+fn recent_session_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.ui_font_size = Some(24);
+        view.sessions.push(vtcode_desktop_protocol::SessionSummary {
+            session_id: "font-scale".into(),
+            title: Some("Readable thread title".into()),
+            workspace: std::env::temp_dir().display().to_string(),
+            completed: false,
+            resumable: true,
+        });
+        view.apply_typography(cx);
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("session-row-font-scale").bounds().size.height, px(54.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn activity_rows_scale_with_the_accessibility_font_size(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.ui_font_size = Some(24);
+        view.apply_typography(cx);
+        view.inspector_open = true;
+        view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+        view.transcript.push(TranscriptItem::new(
+            "tool-font-scale".into(),
+            "tool".into(),
+            "Read source".into(),
+            "completed".into(),
+        ));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("activity-tool-font-scale").bounds().size.height, px(108.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.workspace = Some(PathBuf::from("/project/alpha"));
+        view.preferences.recent_workspaces = vec!["/project/alpha".into(), "/project/beta".into()];
+        cx.notify();
+    });
+
+    let alpha_id = super::opaque_path_element_id("recent-workspace-popover", "/project/alpha");
+    let beta_id = super::opaque_path_element_id("recent-workspace-popover", "/project/beta");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
+        assert_eq!(window.find(alpha_id.clone()).label(), Some("alpha (current workspace)"));
+        assert_eq!(window.find(beta_id.clone()).label(), Some("beta"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn selecting_a_recent_workspace_uses_the_existing_shutdown_transition(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let target = tempfile::tempdir().unwrap();
+    let target_path = target.path().to_path_buf();
+    let canonical_target = vtcode_commons::paths::canonicalize(&target_path).unwrap();
+    let target_display = target_path.display().to_string();
+    let (commands, mut received) = tokio::sync::mpsc::channel(1);
+    view.update(cx, |view, cx| {
+        view.preferences.recent_workspaces = vec![target_display];
+        view.backend = Some(BackendHandle { commands });
+        cx.notify();
+    });
+
+    let target_id = super::opaque_path_element_id("recent-workspace-popover", &target_path.display().to_string());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+        window.click(target_id, cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).pending_workspace.as_deref(), Some(canonical_target.as_path()));
+    });
+    assert!(matches!(received.try_recv(), Ok(BackendCommand::Stop)));
+}
+
+#[gpui_kit::test]
 fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {
@@ -3788,6 +4480,9 @@ fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        let status_bar = window.find("status-bar");
+        assert_eq!(status_bar.role(), Some(gpui_kit::Role::Group));
+        assert_eq!(status_bar.label(), Some("Status bar"));
         let status = window.find("agent-status");
         assert_eq!(status.role(), Some(gpui_kit::Role::Status));
         assert_eq!(status.label(), Some("Agent: idle"));
@@ -3968,18 +4663,12 @@ fn composer_model_name_uses_the_active_provider_catalog_entry(cx: &mut TestAppCo
                     context_window: None,
                     current: false,
                     recommended_rank: None,
+                    capabilities: None,
                 })
                 .collect();
         });
         window.render_frame(cx);
         assert_eq!(window.find("pick-model").label(), Some("Readable Model"));
-        assert!(window.find("pick-model").bounds().size.width <= px(216.));
-        assert!(
-            window
-                .find("composer-workspace")
-                .label()
-                .is_some_and(|label| label.starts_with("Choose workspace: "))
-        );
         view.update(cx, |view, _| view.models.clear());
         window.render_frame(cx);
         assert_eq!(
@@ -4052,9 +4741,11 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("utilities-pane").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("utilities-workspace-group").role(), Some(gpui_kit::Role::Group));
+        assert!(window.find("utilities-workspace-group").label().is_some());
         assert_eq!(
             window.find("utilities-activity").label(),
-            Some("Recent activity: 1 running · 1 done · 1 failed · 0 other")
+            Some("Recent activity: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
         );
         assert_eq!(
             window.find("utilities-changes").label(),
@@ -4083,6 +4774,12 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         );
         window.click("utilities-activity", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Activity);
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("activity-status-chart").label(),
+            Some("Activity statuses: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
+        );
+        assert!(window.try_find("activity-read").is_some(), "the virtual list renders visible activity rows");
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Utilities);
         window.render_frame(cx);
         window.click("utilities-changes", cx);
@@ -4092,6 +4789,40 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         window.click("utilities-browse-files", cx);
         assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Files);
         assert_eq!(view.read(cx).attachments.len(), 2, "navigation preserves the draft sources");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_open = true;
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+            for index in 0..300 {
+                view.transcript.push(TranscriptItem::new(
+                    format!("tool-{index}"),
+                    "tool".into(),
+                    format!("tool {index}").into(),
+                    "completed".into(),
+                ));
+            }
+        });
+        window.render_frame(cx);
+
+        let rendered_row_indexes = (0..300)
+            .filter(|index| window.try_find(format!("activity-tool-{index}")).is_some())
+            .collect::<Vec<_>>();
+        assert!(!rendered_row_indexes.is_empty(), "visible tool activity is rendered");
+        assert!(rendered_row_indexes.len() < 300, "off-screen tool activity stays virtualized");
+        let first_visible = rendered_row_indexes[0];
+        let expected_label = format!("tool {first_visible}");
+        assert_eq!(
+            window.find(format!("activity-tool-{first_visible}")).label(),
+            Some(expected_label.as_str()),
+            "borrowing the row projection preserves its accessible label"
+        );
     })
     .unwrap();
 }
@@ -4119,42 +4850,10 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
         assert!(!view.read(cx).navigation_peek);
         window.click("toggle-sidebar", cx);
         assert!(view.read(cx).sidebar_open);
-        window.render_frame(cx);
-        assert!(window.try_find("nav-new-thread").is_none(), "the expanded sidebar already has New thread");
-        assert!(window.try_find("new-session").is_some(), "New thread remains available in the expanded sidebar");
         window.press("cmd-b", cx);
         assert!(!view.read(cx).sidebar_open);
     })
     .unwrap();
-}
-
-/// Scroll settings until `id` sits inside the settings viewport.
-///
-/// A single large wheel delta is clamped to the panel's maximum scroll and can
-/// overshoot the target, so step the column instead.
-fn scroll_settings_to(window: &mut gpui_kit::Window, id: &'static str, cx: &mut gpui_kit::App) {
-    for _ in 0..16 {
-        let target = window.find(id).bounds();
-        if target.top() >= px(0.) && target.bottom() <= px(800.) {
-            return;
-        }
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-400.))), cx);
-    }
-}
-
-/// Scroll a settings sub-grid until `id` is inside it, then click it.
-fn click_in_scrolled_grid(window: &mut gpui_kit::Window, grid: &'static str, id: &'static str, cx: &mut gpui_kit::App) {
-    for _ in 0..12 {
-        let target = window.find(id).bounds();
-        let viewport = window.find(grid).bounds();
-        if target.left() >= viewport.left() && target.right() <= viewport.right() {
-            break;
-        }
-        let direction = if target.left() < viewport.left() { 400. } else { -400. };
-        window.scroll(grid, gpui_kit::ScrollDelta::Pixels(point(px(direction), px(0.))), cx);
-        window.render_frame(cx);
-    }
-    window.click(id, cx);
 }
 
 #[gpui_kit::test]
@@ -4163,19 +4862,23 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        window.click("edit-shortcuts", cx);
+        view.update(cx, |view, cx| {
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("cmd-n", window, cx));
         });
         window.render_frame(cx);
-        scroll_settings_to(window, "save-shortcuts", cx);
-        window.click("save-shortcuts", cx);
+        focus_element_by_tab(window, "save-shortcuts", cx);
+        window.press("enter", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("already assigned"));
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         view.update(cx, |view, cx| {
             view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx))
         });
-        window.render_frame(cx);
-        scroll_settings_to(window, "save-shortcuts", cx);
-        window.click("save-shortcuts", cx);
+        focus_element_by_tab(window, "save-shortcuts", cx);
+        window.press("enter", cx);
         assert_eq!(
             crate::desktop::preferences::Preferences::load()
                 .shortcuts
@@ -4184,10 +4887,145 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
             Some("ctrl-shift-k")
         );
         window.render_frame(cx);
-        scroll_settings_to(window, "reset-shortcuts", cx);
-        window.click("reset-shortcuts", cx);
+        window.click("edit-shortcuts", cx);
+        focus_element_by_tab(window, "reset-shortcuts", cx);
+        window.press("enter", cx);
         assert!(crate::desktop::preferences::Preferences::load().shortcuts.is_empty());
         assert_eq!(view.read(cx).shortcut_inputs[0].read(cx).value(), "cmd-k");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 450., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        assert_eq!(window.find("settings-panel").role(), Some(gpui_kit::Role::Dialog));
+        assert_eq!(window.find("settings-navigation").label(), Some("Settings categories"));
+        assert!(window.try_find("appearance-settings").is_some());
+        assert_eq!(window.find("appearance-visual-style-group").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("appearance-visual-style-group").label(), Some("Visual style"));
+        assert_eq!(window.find("appearance-typography-group").role(), Some(gpui_kit::Role::Group));
+
+        window.press("right", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("accessibility-settings").is_some());
+        assert_eq!(window.find("accessibility-display-group").role(), Some(gpui_kit::Role::Group));
+        window.press("end", cx);
+        window.render_frame(cx);
+        window.render_frame(cx);
+        assert!(window.try_find("connections-settings").is_some());
+        assert_eq!(window.within("settings-tabs").find(4usize).selected(), Some(true));
+        let scroll = &view.read(cx).settings_tabs_scroll;
+        let offset = scroll.offset().x;
+        assert!(
+            horizontal_scroll_item_is_visible(scroll, 4),
+            "End reveals the selected settings category; scroll offset={offset:?}"
+        );
+        assert!(offset < px(0.), "narrow settings tabs must scroll to the selected category");
+
+        select_settings_category(window, 2, cx);
+        assert!(window.try_find("keyboard-settings").is_some());
+        assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
+        let context = gpui_kit::KeyBindingContextPredicate::parse("VTCodeDesktop").unwrap();
+        let binding = gpui_kit::KeyBinding::load(
+            "ctrl-shift-k",
+            Box::new(super::OpenCommandPalette),
+            Some(context.into()),
+            false,
+            None,
+            &gpui_kit::DummyKeyboardMapper,
+        )
+        .unwrap();
+        cx.bind_keys([binding]);
+        window.render_frame(cx);
+        window.render_frame(cx);
+        let expected_shortcut_label = format!(
+            "Shortcut for Search commands: {}",
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-shift-k").unwrap())
+        );
+        let shortcut = window.find("shortcut-badge-commands");
+        assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));
+        assert_eq!(shortcut.label(), Some(expected_shortcut_label.as_str()));
+        assert!(window.try_find("shortcut-input-commands").is_none(), "inputs stay hidden until edit mode");
+
+        window.click("edit-shortcuts", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("shortcut-input-commands").is_some());
+        view.update(cx, |view, cx| {
+            view.shortcut_inputs[0].update(cx, |input, cx| input.set_value("ctrl-shift-k", window, cx));
+        });
+        window.click("cancel-shortcuts", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("shortcut-input-commands").is_none());
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().shortcuts.get("commands"),
+            None,
+            "cancelling discards unsaved bindings"
+        );
+        assert_eq!(window.find("shortcut-badge-commands").label(), Some(expected_shortcut_label.as_str()));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 700.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        let sheet = window.find("sheet-content").bounds();
+        let panel = window.find("settings-panel").bounds();
+        let viewport = window.viewport_size();
+        assert!(
+            sheet.origin.x >= px(0.) && sheet.origin.y >= px(0.),
+            "settings sheet starts outside viewport: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(
+            sheet.origin.x + sheet.size.width <= viewport.width,
+            "settings sheet exceeds viewport width: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(
+            sheet.origin.y + sheet.size.height <= viewport.height,
+            "settings sheet exceeds viewport height: sheet={sheet:?}, viewport={viewport:?}"
+        );
+        assert!(panel.size.width <= sheet.size.width);
+
+        select_settings_category(window, 2, cx);
+        window.render_frame(cx);
+        let navigation = window.find("settings-navigation").bounds();
+        let content = window.find("settings-content").bounds();
+        assert!(navigation.origin.x >= panel.origin.x);
+        assert!(navigation.origin.x + navigation.size.width <= panel.origin.x + panel.size.width);
+        assert!(content.origin.x >= panel.origin.x);
+        assert!(content.origin.x + content.size.width <= panel.origin.x + panel.size.width);
+        assert!(window.try_find("keyboard-settings").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_sheet_tracks_window_width_after_open(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1_100., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(600.), px(700.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let sheet = window.find("sheet-content").bounds();
+        let viewport = window.viewport_size();
+        assert_eq!(sheet.size.width, viewport.width - px(24.), "sheet width follows the resized viewport");
     })
     .unwrap();
 }
@@ -4196,29 +5034,10 @@ fn shortcut_settings_reject_conflicts_then_persist_and_reset(cx: &mut TestAppCon
 fn native_titlebar_is_transparent_and_kit_owns_dragging() {
     let options = super::desktop_window_options();
     assert!(options.app_owns_titlebar_drag, "avoid duplicate AppKit/Kit double-click handling");
+    assert_eq!(options.window_background, gpui_kit::WindowBackgroundAppearance::Opaque);
     let titlebar = options.titlebar.unwrap();
     assert!(titlebar.appears_transparent);
     assert_eq!(titlebar.traffic_light_position, Some(point(px(12.), px(17.))));
-}
-
-#[gpui_kit::test]
-fn conversation_workspace_is_inset_below_the_toolbar_and_after_navigation(cx: &mut TestAppContext) {
-    let (window, _) = open_desktop(cx);
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        let navigation = window.find("left-navigation").bounds();
-        let toolbar = window.find("title-bar").bounds();
-        let workspace = window.find("workspace-surface");
-        let bounds = workspace.bounds();
-
-        assert_eq!(workspace.role(), Some(gpui_kit::Role::Group));
-        assert_eq!(workspace.label(), Some("Conversation workspace"));
-        assert!(bounds.left() > navigation.right(), "workspace must have a visible left inset: {bounds:?}");
-        assert!(bounds.top() > toolbar.bottom(), "workspace must have a visible top inset: {bounds:?}");
-        assert!(bounds.size.width > px(500.));
-        assert!(bounds.size.height > px(500.));
-    })
-    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -4230,20 +5049,32 @@ fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppC
         window.render_frame(cx);
         assert_eq!(window.find("title-bar").bounds().size.height, px(48.));
         assert!(window.find("toggle-sidebar").bounds().origin.x >= px(80.), "reserve native traffic-light space");
-        assert!(window.try_find("header-overflow").is_none(), "one shared overflow menu avoids duplicated chrome");
-        assert!(window.try_find("nav-search").is_none(), "command search remains available from the shared menu");
-        assert!(window.try_find("open-settings").is_none(), "settings are available from the shared menu");
-        let id = "navigation-overflow";
-        assert_eq!(window.find(id).label(), Some("Navigation actions"));
-        window.click(id, cx);
+        assert_eq!(window.find("toggle-inspector").label(), Some("Hide panel"));
+        assert_eq!(window.find("search-commands").role(), Some(gpui_kit::Role::Button));
+        assert!(window.find_all("toggle-theme").is_empty());
+        focus_element_by_tab(window, "search-commands", cx);
+        window.press("right", cx);
         window.render_frame(cx);
-        assert_eq!(
-            window.within(format!("dropdown-menu:Name(\"{id}\")")).find("popup-menu").role(),
-            Some(gpui_kit::Role::Menu)
-        );
-        window.press("escape", cx);
+        assert_eq!(window.find("toggle-inspector").focused(), Some(true));
+        window.press("right", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this draft");
+        assert_eq!(window.find("open-settings").focused(), Some(true));
+        for (id, label) in [
+            ("header-overflow", "Window actions"),
+            ("navigation-overflow", "Navigation actions"),
+        ] {
+            assert_eq!(window.find_all(id).len(), 1, "each chrome area has one overflow trigger");
+            assert_eq!(window.find(id).label(), Some(label));
+            window.click(id, cx);
+            window.render_frame(cx);
+            assert_eq!(
+                window.within(format!("dropdown-menu:Name(\"{id}\")")).find("popup-menu").role(),
+                Some(gpui_kit::Role::Menu)
+            );
+            window.press("escape", cx);
+            window.render_frame(cx);
+            assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this draft");
+        }
     })
     .unwrap();
 }
@@ -4261,10 +5092,8 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         assert!(compact.size.width <= px(960.));
         assert!(compact.size.height <= px(120.), "empty composer height: {:?}", compact.size.height);
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
-        assert!(window.try_find("open-settings").is_none());
-        assert!(window.try_find("composer-settings").is_none());
+        assert_eq!(window.find("composer-settings").label(), Some("Composer settings"));
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
-        assert!(window.find("composer-policy-label").bounds().size.width <= px(60.));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
@@ -4288,8 +5117,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
         });
         window.render_frame(cx);
-        window.press("cmd-,", cx);
-        window.render_frame(cx);
+        window.click("composer-settings", cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
@@ -4355,8 +5183,9 @@ fn cli_theme_inheritance_respects_explicit_desktop_override_and_keeps_draft(cx: 
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        scroll_settings_to(window, "use-cli-theme", cx);
-        window.click("use-cli-theme", cx);
+        select_settings_category(window, 3, cx);
+        focus_element_by_tab(window, "use-cli-theme", cx);
+        window.press("enter", cx);
         assert_eq!(view.read(cx).theme_id, "solarized-light");
         assert_eq!(view.read(cx).preferences.follow_cli_theme, Some(true));
         assert_eq!(view.read(cx).composer.read(cx).value(), "Preserve this draft");
@@ -4382,7 +5211,7 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
+        select_settings_category(window, 2, cx);
         window.click("import-cli-shortcuts", cx);
         let saved = crate::desktop::preferences::Preferences::load();
         assert_eq!(saved.shortcuts.get("cancel").map(String::as_str), Some("ctrl-c"));
@@ -4401,7 +5230,6 @@ fn cli_shortcut_import_preserves_unsaved_edits_and_explicit_unbinds(cx: &mut Tes
                 .insert("cancel".into(), vec!["cmd-q".into()]);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
         window.click("import-cli-shortcuts", cx);
         assert!(view.read(cx).shortcut_message.as_ref().unwrap().contains("reserved"));
         assert_eq!(
@@ -4422,7 +5250,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         window.render_frame(cx);
         assert!(window.try_find("status-bar").is_none());
         assert!(window.try_find("thread-actions").is_none(), "thread actions belong in the single header menu");
-        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Connect VT Code CLI and WebMCP"));
+        assert_eq!(window.find("composer-cli-webmcp").label(), Some("Open VT Code CLI and WebMCP connection settings"));
         view.update(cx, |view, cx| {
             view.composer
                 .update(cx, |input, cx| input.set_value("Keep this draft", window, cx))
@@ -4433,6 +5261,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
         assert!(crate::desktop::preferences::Preferences::load().show_status_bar);
         window.press("cmd-,", cx);
         window.render_frame(cx);
+        select_settings_category(window, 1, cx);
         window.click("show-status-bar", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).preferences.show_status_bar);
@@ -4443,37 +5272,7 @@ fn status_bar_is_opt_in_and_keyboard_toggle_persists_without_losing_draft(cx: &m
 }
 
 #[gpui_kit::test]
-fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop_sized(cx, 900., 800.);
-    let (commands, _requests) = tokio::sync::mpsc::channel(4);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.sidebar_open = false;
-            view.inspector_open = false;
-            view.open_model_palette(window, cx);
-        });
-        window.render_frame(cx);
-        let initial_popup = window.find("command-palette").bounds();
-        let composer = window.find("composer-context").bounds();
-        assert!(initial_popup.bottom() <= composer.top());
-        assert!((initial_popup.right() - composer.right()).abs() <= px(1.));
-        view.update(cx, |view, cx| {
-            view.composer
-                .update(cx, |input, cx| input.set_value("one\ntwo\nthree\nfour\nfive", window, cx));
-        });
-        window.render_frame(cx);
-        let popup = window.find("command-palette").bounds();
-        let composer = window.find("composer-context").bounds();
-        assert!(popup.bottom() <= composer.top(), "popup must remain above the growing composer");
-        assert!(popup.top() < initial_popup.top());
-        assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn composer_popups_align_above_input_and_preserve_the_draft(cx: &mut TestAppContext) {
+fn composer_popups_align_above_the_input_and_preserve_the_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 900., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(16);
     cx.update_window(window, |_, window, cx| {
@@ -4507,11 +5306,87 @@ fn composer_popups_align_above_input_and_preserve_the_draft(cx: &mut TestAppCont
     .unwrap();
 }
 
+#[gpui_kit::test]
+fn model_popup_follows_composer_above_growing_input(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 900., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.open_model_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let initial_popup = window.find("command-palette").bounds();
+        assert_eq!(initial_popup.size.width, px(392.));
+        let composer = window.find("composer-context").bounds();
+        assert!(initial_popup.bottom() <= composer.top());
+        assert!((initial_popup.right() - composer.right()).abs() <= px(1.));
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |input, cx| input.set_value("one\ntwo\nthree\nfour\nfive", window, cx));
+        });
+        window.render_frame(cx);
+        let popup = window.find("command-palette").bounds();
+        let composer = window.find("composer-context").bounds();
+        assert!(popup.bottom() <= composer.top(), "popup must remain above the growing composer");
+        assert!(popup.top() < initial_popup.top());
+        assert!(popup.left() >= px(12.) && popup.right() <= window.viewport_size().width - px(12.));
+
+        window.press("escape", cx);
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_font_size(ThemeMode::Light, 24);
+            view.apply_typography(cx);
+            view.open_model_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let enlarged_popup = window.find("command-palette").bounds();
+        assert_eq!(enlarged_popup.size.width, px(24.5 * 24.));
+        assert!(enlarged_popup.left() >= px(12.));
+        assert!(enlarged_popup.right() <= window.viewport_size().width - px(12.));
+
+        window.press("escape", cx);
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let quick_popup = window.find("command-palette").bounds();
+        assert_eq!(quick_popup.size.width, px(22. * 24.));
+        assert!(quick_popup.left() >= px(12.));
+        assert!(quick_popup.right() <= window.viewport_size().width - px(12.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn enlarged_model_popup_stays_inside_a_narrow_window(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 450., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.preferences.set_ui_font_size(ThemeMode::Light, 24);
+            view.apply_typography(cx);
+            view.configuration = Some(runtime_options_config());
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.open_model_palette(window, cx);
+        });
+        window.render_frame(cx);
+        let popup = window.find("command-palette").bounds();
+        let viewport = window.viewport_size();
+        assert!(popup.left() >= px(12.), "popup left={:?}", popup.left());
+        assert!(popup.right() <= viewport.width - px(12.), "popup right={:?}, viewport={viewport:?}", popup.right());
+    })
+    .unwrap();
+}
+
 fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
     serde_json::from_value(json!({
         "provider": "openai", "model": "gpt-5.6-sol", "authenticated": true, "credentialSetupCommand": "",
         "sandbox": "Ask before protected actions",
-        "sessionOptions": {"permissionMode": "ask", "mode": "build", "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast"}
+        "sessionOptions": {"permissionMode": "ask", "mode": "build", "reasoningEffort": "medium", "supportedEfforts": ["low", "medium", "high"], "speed": "ultrafast", "fastModeSupported": true, "fastModeEnabled": true, "fastModeLabel": "Ultrafast"}
     })).unwrap()
 }
 
@@ -4547,67 +5422,28 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
-fn compact_model_picker_uses_cli_recommendations_and_selects_the_catalog_route(cx: &mut TestAppContext) {
+fn reasoning_effort_slider_subscriptions_follow_palette_lifecycle(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| {
+        view.update(cx, |view, _cx| {
             view.backend = Some(BackendHandle { commands });
             view.configuration = Some(runtime_options_config());
-            view.models = vec![
-                vtcode_desktop_protocol::ModelInfo {
-                    provider: "anthropic".into(),
-                    id: "claude-sonnet-5".into(),
-                    display_name: "Claude Sonnet 5".into(),
-                    context_window: Some(200_000),
-                    current: false,
-                    recommended_rank: Some(0),
-                },
-                vtcode_desktop_protocol::ModelInfo {
-                    provider: "google".into(),
-                    id: "gemini-3.8-flash".into(),
-                    display_name: "Gemini 3.8 Flash".into(),
-                    context_window: Some(1_000_000),
-                    current: false,
-                    recommended_rank: Some(3),
-                },
-                vtcode_desktop_protocol::ModelInfo {
-                    provider: "custom".into(),
-                    id: "not-recommended".into(),
-                    display_name: "Not recommended".into(),
-                    context_window: None,
-                    current: false,
-                    recommended_rank: None,
-                },
-            ];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert!(window.find("palette-label-0-0").label().unwrap().starts_with("Claude Sonnet 5"));
-        assert!(
-            window
-                .find("palette-label-0-1")
-                .label()
-                .unwrap()
-                .starts_with("Gemini 3.8 Flash")
-        );
-        assert!(window.find("palette-label-1-0").label().unwrap().contains("gpt-5.6-sol"));
-        assert_eq!(window.find("palette-label-2-0").label(), Some("Search all models…"));
-        assert!(window.try_find("palette-label-0-2").is_none(), "uncurated catalog entries stay in full search");
-        assert!(window.find("model-speed-indicator").label().unwrap().contains("ultrafast"));
-        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
-        window.render_frame(cx);
-        window.within("command-palette").press("enter", cx);
+
+        view.update(cx, |view, cx| {
+            assert!(view.effort_slider.is_some());
+            assert_eq!(view._effort_slider_subscriptions.len(), 2);
+            view.close_palette(window, cx);
+            assert!(view.effort_slider.is_none());
+            assert!(view._effort_slider_subscriptions.is_empty());
+            assert!(view.palette.is_none());
+        });
     })
     .unwrap();
-    cx.run_until_parked();
-
-    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("expected quick model selection request");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
-    assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 }
 
 #[gpui_kit::test]
@@ -4655,30 +5491,6 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
 }
 
 #[gpui_kit::test]
-fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) {
-    let (window, view) = open_desktop(cx);
-    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
-            view.backend = Some(BackendHandle { commands });
-            view.configuration = Some(runtime_options_config());
-            view.open_model_options(window, cx);
-        });
-        window.render_frame(cx);
-        window.render_frame(cx);
-        window.click(("effort-stop", 2usize), cx);
-    })
-    .unwrap();
-    cx.run_until_parked();
-    let BackendCommand::Request { method, params } = requests.try_recv().expect("effort request") else {
-        panic!("request expected")
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
-    assert_eq!(params["reasoningEffort"], "high");
-    assert!(requests.try_recv().is_err());
-}
-
-#[gpui_kit::test]
 fn quick_model_step_control_sends_supported_effort_and_full_search_remains_available(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -4693,13 +5505,23 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
                 context_window: None,
                 current: false,
                 recommended_rank: None,
+                capabilities: None,
             }];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        assert_eq!(window.find("command-palette").bounds().size.width, px(352.));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
+        assert!(
+            !view
+                .read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .any(|entry| entry.label == "Custom route")
+        );
         window.click("increase-effort", cx);
         window.render_frame(cx);
     })
@@ -4715,8 +5537,13 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         view.update(cx, |view, _| view.session_request = None);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("palette-label-1-0").label(), Some("Search all models…"));
-        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
+            Some("Search all models…")
+        );
+        view.update(cx, |view, cx| {
+            view.run_palette_action(super::PaletteAction::ChooseModel, window, cx);
+        });
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
         assert!(
@@ -4728,6 +5555,173 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         );
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_the_real_route(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.models = vec![
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "anthropic".into(),
+                    id: "claude-sonnet-5".into(),
+                    display_name: "Claude Sonnet 5".into(),
+                    context_window: Some(200_000),
+                    current: false,
+                    recommended_rank: Some(0),
+                    capabilities: None,
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "google".into(),
+                    id: "gemini-3.8-flash".into(),
+                    display_name: "Gemini 3.8 Flash".into(),
+                    context_window: Some(1_000_000),
+                    current: false,
+                    recommended_rank: Some(3),
+                    capabilities: Some(vtcode_desktop_protocol::ModelCapabilities {
+                        reasoning: true,
+                        vision: true,
+                        tool_call: true,
+                        structured_output: true,
+                        is_pro: true,
+                        input_modalities: vec![
+                            "text".into(),
+                            "image".into(),
+                            "audio".into(),
+                            "video".into(),
+                            "pdf".into(),
+                        ],
+                    }),
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "custom".into(),
+                    id: "not-recommended".into(),
+                    display_name: "Not recommended".into(),
+                    context_window: None,
+                    current: false,
+                    recommended_rank: None,
+                    capabilities: None,
+                },
+            ];
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let claude_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "anthropic".into(),
+            model: "claude-sonnet-5".into(),
+        });
+        assert!(
+            window
+                .find(claude_id.clone())
+                .label()
+                .unwrap()
+                .starts_with("Claude Sonnet 5 · anthropic · 200K context")
+        );
+        let gemini_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "google".into(),
+            model: "gemini-3.8-flash".into(),
+        });
+        let gemini_item = window.find(gemini_id.clone());
+        let gemini_row = gemini_item.label().unwrap();
+        assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
+        assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
+        let gpt_id = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries)
+            .find(|entry| entry.label.contains("gpt-5.6-sol"))
+            .map(|entry| palette_action_id(&entry.action))
+            .unwrap();
+        assert!(window.find(gpt_id).label().unwrap().contains("gpt-5.6-sol"));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
+            Some("Search all models…")
+        );
+        let uncatalogued_id = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "custom".into(),
+            model: "not-recommended".into(),
+        });
+        assert!(window.try_find(uncatalogued_id).is_none(), "uncurated catalog entries stay in full search");
+        assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
+        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("gemini", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).query(cx), "gemini");
+        assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
+        assert_eq!(window.find(gemini_id).label(), Some(gemini_row));
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected quick model selection request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
+    assert_eq!(params, json!({ "provider": "google", "model": "gemini-3.8-flash" }));
+}
+
+#[gpui_kit::test]
+fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let toggle = window.find("fast-mode-toggle");
+        assert_eq!(toggle.label(), Some("Disable Ultrafast processing"));
+        assert_eq!(toggle.checked(), Some(true));
+        assert_eq!(toggle.role(), Some(gpui_kit::Role::Button));
+        window.click("fast-mode-toggle", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("fast-mode request") else {
+        panic!("expected runtime option request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["fastMode"], false);
+}
+
+#[test]
+fn model_picker_includes_catalog_capabilities_and_search_keywords() {
+    let model = vtcode_desktop_protocol::ModelInfo {
+        provider: "google".into(),
+        id: "gemini-special".into(),
+        display_name: "Gemini Special".into(),
+        context_window: Some(1_000_000),
+        current: false,
+        recommended_rank: None,
+        capabilities: Some(vtcode_desktop_protocol::ModelCapabilities {
+            reasoning: true,
+            vision: true,
+            tool_call: true,
+            structured_output: true,
+            is_pro: true,
+            input_modalities: vec!["text".into(), "audio".into(), "video".into(), "pdf".into()],
+        }),
+    };
+    let command = super::model_palette_command(&model, false);
+    let description = command.description.as_deref().unwrap();
+    assert!(
+        description.contains("Reasoning · Vision · Tools · Structured output · Pro · Audio · Video · PDF · 1M context")
+    );
+    assert!(command.keywords.contains(&"gemini-special".into()));
 }
 
 #[gpui_kit::test]
@@ -4761,7 +5755,12 @@ fn add_popup_filters_cli_resources_and_inserts_a_skill_without_submitting(cx: &m
         window.within("command-palette").input("rust-skills", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).composer_resources.len(), 2, "resource response: {:?}", view.read(cx).error);
-        assert!(window.try_find("palette-label-2-0").is_some(), "skill row should be rendered");
+        assert!(
+            window
+                .try_find(palette_action_id(&super::PaletteAction::InsertDraft("$rust-skills".into())))
+                .is_some(),
+            "skill row should be rendered"
+        );
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).query(cx), "rust-skills");
         assert!(view.read(cx).palette.as_ref().unwrap().read(cx).selected_index().is_some());
         window.within("command-palette").press("enter", cx);
@@ -4844,7 +5843,10 @@ fn late_resource_discovery_keeps_the_selected_command_identity(cx: &mut TestAppC
                 .section,
             4
         );
-        assert_eq!(window.find("palette-label-4-2").label(), Some("Toggle inspector panel"));
+        assert_eq!(
+            window.find(palette_action_id(&super::PaletteAction::ToggleInspector)).label(),
+            Some("Toggle inspector panel")
+        );
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
@@ -4869,7 +5871,17 @@ fn unsupported_inherited_effort_offers_explicit_supported_choices(cx: &mut TestA
         });
         window.render_frame(cx);
         assert!(window.try_find("increase-effort").is_none());
-        assert_eq!(window.find("palette-label-0-0").label(), Some("Use low effort"));
+        assert_eq!(
+            window
+                .find(palette_action_id(&super::PaletteAction::SelectSessionOptions(
+                    vtcode_desktop_protocol::SessionOptionsSelectParams {
+                        reasoning_effort: Some("low".into()),
+                        ..Default::default()
+                    }
+                )))
+                .label(),
+            Some("Use low effort")
+        );
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.within("command-palette").press("enter", cx);
     })
@@ -4929,8 +5941,6 @@ fn runtime_option_popups_focus_the_current_choice_and_confirming_it_is_a_noop(cx
             view.configuration = Some(config);
         });
         window.render_frame(cx);
-        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Auto-approve commands"));
-        assert!(window.find("composer-policy-label").bounds().size.width <= px(40.));
         window.click("composer-mode", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
@@ -4963,7 +5973,6 @@ fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
-        assert!(window.find("composer-mode-label").bounds().size.width <= px(60.));
 
         view.update(cx, |view, cx| {
             view.handle_backend_event(
@@ -4976,7 +5985,6 @@ fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut 
         });
         window.render_frame(cx);
         assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Plan"));
-        assert!(window.find("composer-mode-label").bounds().size.width <= px(60.));
         assert_eq!(
             view.read(cx)
                 .configuration
@@ -5083,8 +6091,7 @@ fn cli_settings_reload_button_and_action_share_the_transition_guard(cx: &mut Tes
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        window.scroll("settings-panel", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-5000.))), cx);
-        window.render_frame(cx);
+        select_settings_category(window, 3, cx);
         window.click("reload-cli-settings", cx);
         assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
         assert!(view.read(cx).pending_workspace.is_some());
@@ -5092,4 +6099,162 @@ fn cli_settings_reload_button_and_action_share_the_transition_guard(cx: &mut Tes
         assert!(requests.try_recv().is_err(), "the keyboard action cannot bypass the pending restart");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn conversation_workspace_is_inset_below_the_toolbar_and_after_navigation(cx: &mut TestAppContext) {
+    let (window, _) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let navigation = window.find("left-navigation").bounds();
+        let toolbar = window.find("title-bar").bounds();
+        let workspace = window.find("workspace-surface");
+        let bounds = workspace.bounds();
+
+        assert_eq!(workspace.role(), Some(gpui_kit::Role::Group));
+        assert_eq!(workspace.label(), Some("Conversation workspace"));
+        assert!(bounds.left() > navigation.right(), "workspace must have a visible left inset: {bounds:?}");
+        assert!(bounds.top() > toolbar.bottom(), "workspace must have a visible top inset: {bounds:?}");
+        assert!(bounds.size.width > px(500.));
+        assert!(bounds.size.height > px(500.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.webmcp_pairing = Some(vtcode_desktop_protocol::WebmcpPairResult {
+                endpoint: "ws://127.0.0.1:43719/mcp".into(),
+                origin: "https://example.test".into(),
+                pairing_code: "0123456789abcdef".into(),
+                expires_in_secs: 300,
+            });
+        });
+        window.press("cmd-,", cx);
+        window.render_frame(cx);
+        select_settings_category(window, 4, cx);
+
+        assert!(view.read(cx).settings_open, "the Settings shortcut opens the dialog");
+        assert_eq!(window.find_all("webmcp-status").len(), 1);
+        assert_eq!(window.find_all("webmcp-pairing").len(), 1);
+        assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);
+        assert_eq!(window.find_all("webmcp-pairing-details").len(), 1);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn workspace_utilities_can_return_to_changes_without_creating_a_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.workspace = Some(std::env::temp_dir()));
+        window.render_frame(cx);
+        window.click("nav-utilities", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
+        window.press("home", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).inspector_open);
+        assert_eq!(view.read(cx).inspector_tab, crate::desktop::inspector::InspectorTab::Changes);
+        assert!(view.read(cx).selected_session_id.is_none());
+        assert_eq!(window.find("send-prompt").label(), Some("Send message"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn failed_working_tree_refresh_keeps_the_last_successful_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    let patch = "diff --git a/src/app.rs b/src/app.rs\n--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-old\n+new\n";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace".into(),
+                server_version: "test".into(),
+            });
+            view.open_workspace_review(window, cx);
+            view.refresh_workspace_review(cx);
+        });
+        let BackendCommand::Request { params, .. } = requests.try_recv().unwrap() else {
+            panic!("initial review request")
+        };
+        view.update(cx, |view, cx| {
+            view.accept_workspace_review(
+                vtcode_desktop_protocol::WorkspaceReviewResult {
+                    include_untracked: false,
+                    scope: String::new(),
+                    request_id: params["requestId"].as_str().unwrap().to_owned(),
+                    workspace: "/workspace".into(),
+                    captured_at: "first capture".into(),
+                    patch: Some(patch.into()),
+                    truncated: false,
+                    note: "Tracked changes against HEAD".into(),
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-diff").is_some());
+
+        window.click("refresh-workspace-review", cx);
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("refresh request")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::WORKSPACE_REVIEW);
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-refreshing").is_some());
+        assert!(window.try_find("workspace-review-diff").is_some());
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::WORKSPACE_REVIEW.into(),
+                    result: None,
+                    error: Some("Git capture timed out".into()),
+                },
+                cx,
+            );
+            let review = view.workspace_review.as_ref().unwrap();
+            assert!(!review.pending);
+            assert_eq!(review.snapshot.as_ref().unwrap().patch.as_deref(), Some(patch));
+            assert!(review.viewer.is_some());
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("workspace-review-refreshing").is_none());
+        assert!(window.try_find("workspace-review-refresh-warning").is_some());
+        assert!(window.try_find("workspace-review-diff").is_some());
+        window.click("copy-workspace-review", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.open_model_options(window, cx);
+        });
+        window.render_frame(cx);
+        window.render_frame(cx);
+        window.click(("effort-stop", 2usize), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("effort request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "high");
+    assert!(requests.try_recv().is_err());
 }

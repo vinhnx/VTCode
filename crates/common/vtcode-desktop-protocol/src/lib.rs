@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 11 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 13 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -229,6 +229,15 @@ pub struct SessionOptionsSnapshot {
     pub supported_efforts: Vec<String>,
     /// Effective provider speed badge, when supported by this route.
     pub speed: Option<String>,
+    /// Whether this exact provider/model route supports the CLI's fast setting.
+    #[serde(default)]
+    pub fast_mode_supported: bool,
+    /// Whether fast processing is currently enabled for this route.
+    #[serde(default)]
+    pub fast_mode_enabled: bool,
+    /// Label used by the CLI for the selected fast tier on this route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fast_mode_label: Option<String>,
 }
 
 /// An explicit idle-session option change. Omitted values preserve existing choices.
@@ -241,6 +250,8 @@ pub struct SessionOptionsSelectParams {
     pub mode: Option<String>,
     /// Select a capability-validated reasoning effort.
     pub reasoning_effort: Option<String>,
+    /// Select the CLI's fast processing tier for a compatible route.
+    pub fast_mode: Option<bool>,
 }
 
 /// Persist a built-in CLI theme selected in Desktop.
@@ -362,6 +373,33 @@ pub struct ModelInfo {
     /// Position in the CLI's recommended model set, if the model is recommended.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recommended_rank: Option<u8>,
+    /// Capability details sourced from the CLI's model catalog.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<ModelCapabilities>,
+}
+
+/// Non-secret model capabilities used to explain model choices in the desktop picker.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCapabilities {
+    /// Supports reasoning controls.
+    #[serde(default)]
+    pub reasoning: bool,
+    /// Accepts image input.
+    #[serde(default)]
+    pub vision: bool,
+    /// Supports tool calls.
+    #[serde(default)]
+    pub tool_call: bool,
+    /// Supports structured output.
+    #[serde(default)]
+    pub structured_output: bool,
+    /// Identifies a pro-tier model.
+    #[serde(default)]
+    pub is_pro: bool,
+    /// Input modalities advertised by the CLI catalog.
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
 }
 
 /// Parameters for selecting a provider and model for the next session.
@@ -1325,6 +1363,17 @@ mod tests {
         assert_eq!(snapshot.context_window, None);
         assert_eq!(snapshot.shared_ui, None);
 
+        let legacy_options: SessionOptionsSnapshot = serde_json::from_value(serde_json::json!({
+            "permissionMode": "ask",
+            "mode": "build",
+            "reasoningEffort": "medium",
+            "supportedEfforts": ["low", "medium", "high"],
+            "speed": null
+        }))?;
+        assert!(!legacy_options.fast_mode_supported);
+        assert!(!legacy_options.fast_mode_enabled);
+        assert_eq!(legacy_options.fast_mode_label, None);
+
         let value = serde_json::to_value(ConfigurationSnapshot {
             provider: "ollama".to_string(),
             model: "gpt-oss:20b".to_string(),
@@ -1361,17 +1410,28 @@ mod tests {
             context_window: Some(400_000),
             current: true,
             recommended_rank: Some(2),
+            capabilities: Some(ModelCapabilities {
+                reasoning: true,
+                vision: true,
+                tool_call: true,
+                structured_output: false,
+                is_pro: false,
+                input_modalities: vec!["text".into(), "image".into()],
+            }),
         })?;
         assert_eq!(model["displayName"], "GPT-6 Sol");
         assert_eq!(model["contextWindow"], 400_000);
         assert_eq!(model["current"], true);
         assert_eq!(model["recommendedRank"], 2);
+        assert_eq!(model["capabilities"]["reasoning"], true);
+        assert_eq!(model["capabilities"]["inputModalities"], serde_json::json!(["text", "image"]));
         let legacy_model: ModelInfo = serde_json::from_value(serde_json::json!({
             "provider": "openai",
             "id": "gpt-6-sol",
             "displayName": "GPT-6 Sol",
             "current": true
         }))?;
+        assert_eq!(legacy_model.capabilities, None);
         assert_eq!(legacy_model.recommended_rank, None);
         assert_eq!(method::CONFIG_MODELS, "config/models");
         assert_eq!(method::CONFIG_SELECT, "config/select");

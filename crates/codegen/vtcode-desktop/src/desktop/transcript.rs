@@ -1,16 +1,27 @@
 use std::collections::VecDeque;
+use std::ops::Range;
 
-use gpui_kit::{FollowMode, ListAlignment, ListState, SharedString, px};
+use gpui_kit::SharedString;
 
 use super::markdown::prepare_markdown;
 
-const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
+pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum TranscriptLayoutChange {
+    Reset(usize),
+    Splice { range: Range<usize>, count: usize },
+    Remeasure,
+    RemeasureItems(Range<usize>),
+    PauseFollowingTail,
+    FollowLatest,
+}
 
 #[derive(Clone, Debug)]
 pub(super) struct TranscriptItem {
     pub id: String,
     pub role: String,
-    pub title: String,
+    pub title: SharedString,
     pub text: SharedString,
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
@@ -20,7 +31,7 @@ pub(super) struct TranscriptItem {
     pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
-    pub output: Option<String>,
+    pub output: Option<SharedString>,
 }
 
 /// Structured payload for a file-change activity row.
@@ -49,7 +60,7 @@ pub(super) enum DiffFileKind {
 }
 
 impl TranscriptItem {
-    pub fn new(id: String, role: String, title: String, text: String) -> Self {
+    pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
         let prepared = prepare_markdown(&text);
         Self {
@@ -68,21 +79,20 @@ impl TranscriptItem {
     }
 }
 
-/// Owns row data together with GPUI's measured geometry and scroll anchor.
+/// Owns transcript rows and queues the minimal layout changes for the view.
+#[derive(Default)]
 pub(super) struct Transcript {
     items: VecDeque<TranscriptItem>,
-    list: ListState,
-}
-
-impl Default for Transcript {
-    fn default() -> Self {
-        let list = ListState::new(0, ListAlignment::Top, px(200.));
-        list.set_follow_mode(FollowMode::Tail);
-        Self { items: VecDeque::new(), list }
-    }
+    layout_changes: Vec<TranscriptLayoutChange>,
+    layout_initialized: bool,
 }
 
 impl Transcript {
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
@@ -101,27 +111,41 @@ impl Transcript {
         self.items().rev()
     }
 
-    pub fn list_state(&self) -> ListState {
-        self.list.clone()
+    pub fn take_layout_changes(&mut self) -> Vec<TranscriptLayoutChange> {
+        if !self.layout_initialized {
+            self.layout_initialized = true;
+            self.layout_changes.clear();
+            return vec![TranscriptLayoutChange::Reset(self.items.len())];
+        }
+        if self
+            .layout_changes
+            .iter()
+            .any(|change| matches!(change, TranscriptLayoutChange::Reset(_)))
+        {
+            self.layout_changes.clear();
+            return vec![TranscriptLayoutChange::Reset(self.items.len())];
+        }
+        std::mem::take(&mut self.layout_changes)
     }
 
     pub fn clear(&mut self) {
         self.items.clear();
-        self.list.reset(0);
-        self.follow_latest();
+        self.layout_changes.clear();
+        self.layout_changes.push(TranscriptLayoutChange::Reset(0));
     }
 
     pub fn push(&mut self, item: TranscriptItem) {
         if self.items.len() == MAX_TRANSCRIPT_ITEMS {
             let _removed = self.items.pop_front();
-            self.list.splice(0..1, 0);
-            self.list.remeasure();
+            self.layout_changes
+                .push(TranscriptLayoutChange::Splice { range: 0..1, count: 0 });
         }
         let index = self.items.len();
         self.items.push_back(item);
-        self.list.splice(index..index, 1);
+        self.layout_changes
+            .push(TranscriptLayoutChange::Splice { range: index..index, count: 1 });
         if let Some(group) = self.activity_group(index) {
-            self.list.remeasure_items(group);
+            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(group));
         }
     }
 
@@ -129,8 +153,12 @@ impl Transcript {
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.items.iter().position(|item| item.id == id) {
             let _removed = self.items.remove(index);
-            self.list.splice(index..index + 1, 0);
-            self.list.remeasure();
+            self.layout_changes
+                .push(TranscriptLayoutChange::Splice { range: index..index + 1, count: 0 });
+            let affected = index.saturating_sub(1)..(index + 1).min(self.items.len());
+            if !affected.is_empty() {
+                self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(affected));
+            }
         }
     }
 
@@ -143,9 +171,10 @@ impl Transcript {
                 *existing = item;
             }
             if role_changed {
-                self.list.remeasure();
+                self.layout_changes.push(TranscriptLayoutChange::Remeasure);
             } else {
-                self.list.remeasure_items(index..index + 1);
+                self.layout_changes
+                    .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
             }
         } else {
             self.push(item);
@@ -153,17 +182,18 @@ impl Transcript {
     }
 
     /// Attach or replace raw command output on an existing row.
-    pub fn set_output(&mut self, id: &str, output: Option<String>) {
+    pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
         if let Some(index) = self.items.iter().position(|item| item.id == id) {
             if let Some(item) = self.items.get_mut(index) {
                 item.output = output;
             }
-            self.list.remeasure_items(index..index + 1);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
         }
     }
 
     /// Consecutive tool rows form a presentation group without changing event identities or ordering.
-    pub fn activity_group(&self, index: usize) -> Option<std::ops::Range<usize>> {
+    pub fn activity_group(&self, index: usize) -> Option<Range<usize>> {
         if self.items.get(index)?.role != "tool" {
             return None;
         }
@@ -185,8 +215,8 @@ impl Transcript {
             if let Some(head) = self.items.get_mut(range.start) {
                 head.activity_expanded = !head.activity_expanded;
             }
-            self.list.pause_following_tail();
-            self.list.remeasure_items(range);
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
         }
     }
 
@@ -195,8 +225,9 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
-            self.list.pause_following_tail();
-            self.list.remeasure_items(index..index + 1);
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
         }
     }
 
@@ -205,29 +236,27 @@ impl Transcript {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
-            self.list.pause_following_tail();
-            self.list.remeasure_items(index..index + 1);
+            self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
         }
     }
 
-    pub fn follow_latest(&self) {
-        self.list.set_follow_mode(FollowMode::Tail);
-        self.list.scroll_to_end();
+    pub fn follow_latest(&mut self) {
+        self.layout_changes.push(TranscriptLayoutChange::FollowLatest);
     }
 
-    pub fn remeasure(&self) {
-        self.list.remeasure();
+    pub fn remeasure(&mut self) {
+        self.layout_changes.push(TranscriptLayoutChange::Remeasure);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{ListOffset, px};
-
     use super::{MAX_TRANSCRIPT_ITEMS, Transcript, TranscriptItem};
 
     fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
-        TranscriptItem::new(id.to_string(), role.to_string(), "Activity".to_string(), text.to_string())
+        TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
     }
 
     #[test]
@@ -237,6 +266,7 @@ mod tests {
         transcript.push(item(2, "tool", "running"));
         transcript.push(item(3, "assistant", "commentary"));
         transcript.push(item(4, "tool", "completed"));
+        assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Reset(4)]);
         assert_eq!(transcript.activity_group(1), Some(0..2));
         assert_eq!(transcript.activity_group(3), None);
         transcript.toggle_activity_group("1");
@@ -250,43 +280,31 @@ mod tests {
             transcript.push(item(id, "tool", "completed"));
         }
         assert_eq!(transcript.activity_group(0), Some(0..MAX_TRANSCRIPT_ITEMS));
-        assert_eq!(transcript.list_state().item_count(), MAX_TRANSCRIPT_ITEMS);
+        assert_eq!(transcript.len(), MAX_TRANSCRIPT_ITEMS);
+        assert_eq!(transcript.get(MAX_TRANSCRIPT_ITEMS - 1).unwrap().text, "completed");
     }
 
     #[test]
-    fn bounds_rows_and_preserves_reader_anchor_when_oldest_row_is_evicted() {
-        let mut transcript = Transcript::default();
-        for id in 0..MAX_TRANSCRIPT_ITEMS {
-            transcript.push(item(id, "assistant", "row"));
-        }
-        let list = transcript.list_state();
-        list.scroll_to(ListOffset { item_ix: 12, offset_in_item: px(7.) });
-        transcript.push(item(MAX_TRANSCRIPT_ITEMS, "assistant", "new row"));
-
-        assert_eq!(list.item_count(), MAX_TRANSCRIPT_ITEMS);
-        assert_eq!(transcript.get(0).unwrap().id, "1");
-        let anchor = list.logical_scroll_top();
-        assert_eq!(transcript.get(anchor.item_ix).unwrap().id, "12");
-        assert_eq!(anchor.offset_in_item, px(7.));
-        assert!(!list.is_following_tail());
-        assert_eq!(transcript.get(MAX_TRANSCRIPT_ITEMS - 1).unwrap().text, "new row");
-    }
-
-    #[test]
-    fn updates_keep_tool_expansion_and_reset_restores_tail_following() {
+    fn updates_keep_tool_expansion_and_queue_layout_changes() {
         let mut transcript = Transcript::default();
         transcript.push(item(1, "tool", "before"));
         transcript.push(item(2, "assistant", "reply"));
+        let _initial_layout = transcript.take_layout_changes();
         transcript.toggle_tool("1");
         transcript.upsert(item(1, "tool", "after\nwith details"));
 
-        assert_eq!(transcript.list_state().item_count(), 2);
+        assert_eq!(transcript.len(), 2);
         assert!(transcript.get(0).unwrap().expanded);
         assert_eq!(transcript.get(0).unwrap().text, "after\nwith details");
-        assert!(!transcript.list_state().is_following_tail());
+        assert!(
+            transcript
+                .take_layout_changes()
+                .iter()
+                .any(|change| { matches!(change, super::TranscriptLayoutChange::PauseFollowingTail) })
+        );
         transcript.clear();
         assert!(transcript.is_empty());
-        assert_eq!(transcript.list_state().item_count(), 0);
-        assert!(transcript.list_state().is_following_tail());
+        assert_eq!(transcript.len(), 0);
+        assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Reset(0)]);
     }
 }

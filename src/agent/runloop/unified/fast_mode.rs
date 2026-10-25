@@ -1,6 +1,6 @@
 //! Shared native fast-mode eligibility, effective display, and session discovery.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use vtcode_config::models::{Provider, ProviderModelSupport};
 use vtcode_config::{AnthropicSpeed, OpenAIServiceTier, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig;
@@ -51,6 +51,35 @@ pub(crate) fn fast_mode_selected(config: &AgentConfig, cfg: &VTCodeConfig) -> bo
     } else {
         false
     }
+}
+
+pub(crate) fn fast_mode_label(config: &AgentConfig) -> Option<&'static str> {
+    if Provider::Anthropic.name_matches(&config.provider) {
+        Some("Fast")
+    } else if Provider::OpenAI.name_matches(&config.provider) {
+        Some("Ultrafast")
+    } else {
+        None
+    }
+}
+
+/// Apply the provider-local fast preference using the same eligibility rules as `/fast`.
+pub(crate) fn set_fast_mode_preference(config: &AgentConfig, cfg: &mut VTCodeConfig, enabled: bool) -> Result<()> {
+    let is_openai = Provider::OpenAI.name_matches(&config.provider);
+    let is_anthropic = Provider::Anthropic.name_matches(&config.provider);
+    if cfg.custom_provider(&config.provider).is_some() || !(is_openai || is_anthropic) {
+        bail!("fast processing is available only for native OpenAI and Anthropic routes");
+    }
+    if enabled && !supports_fast_mode(config, cfg) {
+        bail!("fast processing is not supported by the selected provider/model route");
+    }
+
+    if is_anthropic {
+        cfg.provider.anthropic.speed = enabled.then_some(AnthropicSpeed::Fast);
+    } else {
+        cfg.provider.openai.service_tier = enabled.then_some(OpenAIServiceTier::Ultrafast);
+    }
+    Ok(())
 }
 
 /// Reevaluate at idle so startup and model/auth changes share one session tip.

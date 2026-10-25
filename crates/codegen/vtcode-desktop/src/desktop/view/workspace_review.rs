@@ -1,19 +1,22 @@
 //! Read-only Git review; snapshots never enter the agent transcript.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::Disableable;
+use gpui_kit::base::{Disableable, StyledExt};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Window, div};
+use gpui_kit::{AnyElement, App, ClipboardItem, Context, Entity, Pixels, TestSupportExt, Window, div, px};
 use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
-use super::{DesktopButtonExt, DesktopView, desktop_button, empty_state, uuid_like_id, warning_alert};
+use super::{
+    DesktopButtonExt, DesktopView, RefreshWorkspace, desktop_button, empty_state, uuid_like_id, warning_alert,
+};
 
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
@@ -44,6 +47,29 @@ fn review_message(
         .flex_1()
         .min_h_0()
         .child(empty_state(title, description, icon))
+        .into_any_element()
+}
+
+fn review_skeleton_line(id: &'static str, width: Pixels, cx: &App) -> AnyElement {
+    let placeholder = if cx.reduce_motion() {
+        div()
+            .w(width)
+            .max_w_full()
+            .h_4()
+            .rounded_md()
+            .bg(cx.theme().skeleton)
+            .into_any_element()
+    } else {
+        Skeleton::new().w(width).max_w_full().h_4().rounded_md().into_any_element()
+    };
+
+    div()
+        .id(id)
+        .test_support()
+        .w(width)
+        .max_w_full()
+        .h_4()
+        .child(placeholder)
         .into_any_element()
 }
 
@@ -222,6 +248,7 @@ impl DesktopView {
                 .border_color(colors.border)
                 .child(
                     desktop_button("refresh-workspace-review")
+                        .tooltip_with_action("Refresh working tree review", &RefreshWorkspace, Some("VTCodeDesktop"))
                         .label(if review.pending {
                             "Refreshing…"
                         } else if review.snapshot.is_none() {
@@ -231,7 +258,7 @@ impl DesktopView {
                         })
                         .small()
                         .desktop_disabled(review.pending)
-                        .on_click(cx.listener(|view, _, _, cx| view.refresh_workspace_review(cx))),
+                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 )
                 .child(
                     div()
@@ -275,22 +302,54 @@ impl DesktopView {
                         .ghost()
                         .small()
                         .desktop_disabled(patch.as_ref().is_none_or(String::is_empty))
-                        .on_click(move |_, _, app| {
+                        .on_click(move |_, window, app| {
                             if let Some(patch) = &patch {
                                 app.write_to_clipboard(ClipboardItem::new_string(patch.clone()));
+                                super::super::notifications::copied_to_clipboard(window, app);
                             }
                         }),
                 ),
         );
         if review.pending && review.snapshot.is_none() {
-            return body
-                .child(review_message(
-                    "workspace-review-loading",
-                    "Reading Git changes",
-                    "Capturing a bounded read-only snapshot.",
-                    IconName::GitCompare,
-                ))
-                .into_any_element();
+            let loading = div()
+                .id("workspace-review-loading")
+                .test_support()
+                .role(gpui_kit::Role::Status)
+                .aria_label("Reading Git changes")
+                .aria_description("Capturing a bounded read-only snapshot.")
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .p_4()
+                .child(div().font_medium().child("Reading Git changes…"))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.muted_foreground)
+                        .child("Capturing a bounded read-only snapshot."),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .rounded_lg()
+                        .border_1()
+                        .border_color(colors.border)
+                        .bg(colors.background)
+                        .p_4()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(review_skeleton_line("workspace-review-placeholder-file", px(180.), cx))
+                        .child(review_skeleton_line("workspace-review-placeholder-hunk", px(120.), cx))
+                        .child(div().h(px(1.)).w_full().bg(colors.border.opacity(0.7)))
+                        .child(review_skeleton_line("workspace-review-placeholder-line-1", px(320.), cx))
+                        .child(review_skeleton_line("workspace-review-placeholder-line-2", px(248.), cx))
+                        .child(review_skeleton_line("workspace-review-placeholder-line-3", px(286.), cx))
+                        .child(review_skeleton_line("workspace-review-placeholder-line-4", px(196.), cx)),
+                );
+            return body.child(loading).into_any_element();
         }
         if review.pending {
             body = body.child(

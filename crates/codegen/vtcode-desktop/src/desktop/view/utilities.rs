@@ -11,16 +11,11 @@ impl DesktopView {
             .unwrap_or_else(|| "No workspace".into());
         let (additions, deletions) = self.changes.totals();
         let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
-        let completed = rows.iter().filter(|row| row.state == ActivityState::Completed).count();
-        let running = rows.iter().filter(|row| row.state == ActivityState::Running).count();
-        let failed = rows.iter().filter(|row| row.state == ActivityState::Failed).count();
-        let summary = if rows.is_empty() {
+        let counts = ActivityCounts::from_rows(&rows);
+        let summary = if counts.total() == 0 {
             "No activity yet".to_string()
         } else {
-            format!(
-                "{running} running · {completed} done · {failed} failed · {} other",
-                rows.len() - running - completed - failed
-            )
+            counts.summary()
         };
         div()
             .id("utilities-pane")
@@ -32,9 +27,11 @@ impl DesktopView {
             .min_h_0()
             .overflow_y_scroll()
             .p_3()
-            .child(
+            .child(accessible_group_box(
+                "utilities-workspace-group",
+                workspace.clone(),
                 GroupBox::new()
-                    .outline()
+                    .fill()
                     .title(workspace)
                     .child(
                         desktop_button("utilities-changes")
@@ -57,8 +54,7 @@ impl DesktopView {
                                     .child(div().text_sm().text_color(colors.danger).child(format!("−{deletions}"))),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Changes;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
                     .child(
@@ -82,11 +78,10 @@ impl DesktopView {
                                     .gap_2()
                                     .min_w_0()
                                     .child(Icon::new(IconName::Activity).small())
-                                    .child(div().text_sm().child(summary)),
+                                    .child(div().text_sm().truncate().child(summary)),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Activity;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Activity, cx);
                             })),
                     )
                     .child(
@@ -152,11 +147,10 @@ impl DesktopView {
                             .justify_start()
                             .desktop_disabled(self.workspace.is_none())
                             .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_tab = InspectorTab::Files;
-                                cx.notify();
+                                view.set_inspector_tab(InspectorTab::Files, cx);
                             })),
                     ),
-            )
+            ))
             .into_any_element()
     }
 }

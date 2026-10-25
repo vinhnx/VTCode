@@ -1,12 +1,20 @@
 use super::*;
 
 impl DesktopView {
-    pub(super) fn render_navigation(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn open_utilities(&mut self, cx: &mut Context<Self>) {
+        self.inspector_open = true;
+        self.set_inspector_tab(InspectorTab::Utilities, cx);
+    }
+
+    pub(super) fn render_navigation(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let expanded = self.sidebar_open || self.navigation_peek;
         div()
             .id("left-navigation")
             .test_support()
+            .role(gpui_kit::Role::Navigation)
+            .aria_label("VT Code navigation")
+            .aria_description("Projects, threads, and workspace tools.")
             .h_full()
             .flex_shrink_0()
             .flex()
@@ -42,11 +50,7 @@ impl DesktopView {
                                     .ghost()
                                     .accessibility_label("Projects and threads")
                                     .tooltip_with_action("Projects and threads", &ToggleSidebar, Some("VTCodeDesktop"))
-                                    .on_click(cx.listener(|view, _, _, cx| {
-                                        view.sidebar_open = !view.sidebar_open;
-                                        view.navigation_peek = false;
-                                        cx.notify();
-                                    })),
+                                    .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                             ),
                     )
                     .when(!expanded, |rail| {
@@ -57,7 +61,7 @@ impl DesktopView {
                                 .accessibility_label("New thread")
                                 .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
                                 .desktop_disabled(!self.session_change_allowed(None))
-                                .on_click(cx.listener(|view, _, _, cx| view.create_session(cx))),
+                                .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                         )
                     })
                     .child(
@@ -65,16 +69,20 @@ impl DesktopView {
                             .icon(IconName::GitCompare)
                             .ghost()
                             .accessibility_label("Workspace utilities")
-                            .tooltip("Workspace utilities")
+                            .tooltip_with_action("Workspace utilities", &OpenUtilities, Some("VTCodeDesktop"))
                             .desktop_disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.inspector_open = true;
-                                view.inspector_tab = InspectorTab::Utilities;
-                                cx.notify();
-                            })),
+                            .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
                     )
                     .child(self.render_chrome_menu("navigation-overflow", "Navigation actions"))
-                    .child(div().flex_1()),
+                    .child(div().flex_1())
+                    .child(
+                        desktop_button("nav-settings")
+                            .icon(IconName::Settings2)
+                            .ghost()
+                            .accessibility_label("Settings")
+                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                            .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
+                    ),
             )
             .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
             .bg(chrome_background(&colors))

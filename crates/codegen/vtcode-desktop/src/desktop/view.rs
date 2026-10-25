@@ -1,39 +1,53 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
 use gpui_kit::component::TitleBar;
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
 };
 use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonVariants, Toggle, ToggleVariants};
+use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
+use gpui_kit::component::description_list::DescriptionList;
 use gpui_kit::component::dialog::{DialogDescription, DialogHeader, DialogTitle};
 use gpui_kit::component::diff::{Diff, DiffMode, DiffState};
-use gpui_kit::component::empty::{Empty as EmptyState, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle};
+use gpui_kit::component::empty::{
+    Empty as EmptyState, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
+};
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{Copy, Cut, Enter, Paste, Redo, SelectAll, Textarea, TextareaState, Undo};
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
+use gpui_kit::component::marker::{Marker, MarkerContent};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
-use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
+use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
+use gpui_kit::component::plot::shape::BarAlignment;
+use gpui_kit::component::popover::Popover;
+use gpui_kit::component::resizable::{HandleEdge, resize_handle};
+use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
+use gpui_kit::component::status_bar::StatusBar;
+use gpui_kit::component::stepper::{Stepper, StepperItem};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
+use gpui_kit::component::toolbar::{Toolbar, ToolbarGroup};
 use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::{Icon, Sizable};
+use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
-    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list,
-    point, px,
+    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, DragMoveEvent, Entity, FocusHandle, Focusable,
+    KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions,
+    Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions,
+    actions, anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -44,7 +58,7 @@ use vtcode_desktop_protocol::{
 };
 
 use super::files::{self, FileEntry, FilePreview};
-use super::inspector::{self, ActivityState, ChangesProjection, InspectorTab};
+use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
 use super::preferences;
 use super::themes;
@@ -56,6 +70,7 @@ use super::transport::{
 mod composer_controls;
 mod configuration;
 mod navigation;
+mod settings;
 mod shared_preferences;
 mod shortcuts;
 mod typography;
@@ -66,11 +81,56 @@ use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
-const CONTENT_WIDTH: f32 = 760.;
+const CONTENT_WIDTH: f32 = 720.;
+const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
+const ACTIVITY_ROW_HEIGHT: f32 = 72.;
+const SESSION_ROW_HEIGHT: f32 = 36.;
+
+fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
+    row_height * font_size.as_f32() / DEFAULT_UI_FONT_SIZE
+}
+
+/// Reuse fixed virtual-list geometry until its row count or height changes.
+#[derive(Default)]
+struct FixedRowSizeCache {
+    row_height_bits: u32,
+    sizes: Rc<Vec<Size<Pixels>>>,
+}
+
+impl FixedRowSizeCache {
+    fn get(&mut self, row_count: usize, row_height: f32) -> Rc<Vec<Size<Pixels>>> {
+        let row_height_bits = row_height.to_bits();
+        if self.sizes.len() != row_count || self.row_height_bits != row_height_bits {
+            self.sizes = Rc::new(vec![size(px(0.), px(row_height)); row_count]);
+            self.row_height_bits = row_height_bits;
+        }
+        Rc::clone(&self.sizes)
+    }
+}
+
+fn accessible_group_box(id: &'static str, label: impl Into<gpui_kit::SharedString>, group: GroupBox) -> AnyElement {
+    div()
+        .id(id)
+        .test_support()
+        .role(gpui_kit::Role::Group)
+        .aria_label(label)
+        .w_full()
+        .min_w_0()
+        .flex_shrink_0()
+        .child(group.id(format!("{id}-surface")))
+        .into_any_element()
+}
+
+#[derive(Clone, Copy)]
+struct ActivityChartDatum {
+    label: &'static str,
+    count: usize,
+    state: ActivityState,
+}
 
 /// Pane-width drag bounds, shared with the preferences clamp.
 const MIN_PANE_WIDTH: f32 = preferences::MIN_PANE_WIDTH;
@@ -89,6 +149,10 @@ actions!(
         CloseSession,
         ChooseWorkspace,
         FocusComposer,
+        OpenUtilities,
+        OpenWorkspaceFiles,
+        OpenWorkspaceReview,
+        RefreshWorkspace,
         ToggleInspector,
         ToggleSidebar,
         ToggleStatusBar,
@@ -98,6 +162,10 @@ actions!(
         PreviousInspectorTab,
         FirstInspectorTab,
         LastInspectorTab,
+        NextSettingsTab,
+        PreviousSettingsTab,
+        FirstSettingsTab,
+        LastSettingsTab,
         NextReviewChange,
         PreviousReviewChange,
         CancelRun,
@@ -138,6 +206,10 @@ fn init_keybindings(cx: &mut App) {
         KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
+        KeyBinding::new("right", NextSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("left", PreviousSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("home", FirstSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("end", LastSettingsTab, Some("VTCodeSettings")),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
     ]);
 }
@@ -234,10 +306,12 @@ enum PaletteAction {
 }
 
 pub(crate) fn run() {
-    let application = gpui_kit::application().with_assets(gpui_kit::assets::AllAssets);
+    super::localization::initialize(preferences::Preferences::load().ui_language());
+    let application = gpui_kit::application().with_assets(super::assets::DesktopAssets);
     let _application = application.on_reopen(show_main_window);
     application.run(|cx: &mut App| {
         gpui_kit::init(cx);
+        super::notifications::initialize(cx);
         init_keybindings(cx);
         init_native_menus(cx);
         show_main_window(cx);
@@ -252,7 +326,10 @@ fn show_main_window(cx: &mut App) {
 
 /// Reopening must preserve an existing window's draft, session, and backend.
 fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
-    if let Some(window) = cx.windows().first().copied() {
+    // A dock/Finder reopen should return to the user's focused workspace when
+    // multiple windows exist; keep the first-window fallback for the current
+    // single-window lifecycle when the platform has no active window.
+    if let Some(window) = cx.active_window().or_else(|| cx.windows().first().copied()) {
         window.update(cx, |_, window, _| window.activate_window())?;
         cx.activate(true);
         return Ok(window);
@@ -272,18 +349,10 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
     if let Some(path) = last_workspace
         && path.is_dir()
     {
-        view.update(cx, |view, cx| view.select_workspace(path, cx));
+        window
+            .update(cx, |_, window, cx| view.update(cx, |view, cx| view.select_workspace_from_ui(path, window, cx)))?;
     }
-    let weak_view = view.downgrade();
-    cx.spawn(async move |cx| {
-        loop {
-            cx.background_executor().timer(Duration::from_millis(24)).await;
-            if weak_view.update(cx, |view, cx| view.drain_events(cx)).is_err() {
-                break;
-            }
-        }
-    })
-    .detach();
+    view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
     Ok(window)
 }
@@ -303,16 +372,20 @@ struct ActivePrimaryAgentDisplay {
 
 struct DesktopView {
     focus_handle: FocusHandle,
+    _focus_lost_subscription: Subscription,
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
     workspace_picker_open: bool,
+    workspace_picker_task: Option<Task<()>>,
     backend: Option<BackendHandle>,
     event_rx: Receiver<BackendEvent>,
     event_tx: SyncSender<BackendEvent>,
+    event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
+    message_scroller: Entity<MessageScrollerState>,
     restored_activity: Vec<TranscriptItem>,
     restored_review_history_incomplete: bool,
     restored_activity_history_incomplete: bool,
@@ -344,9 +417,12 @@ struct DesktopView {
     preview_return_focus: Option<FocusHandle>,
     palette_return_focus: Option<FocusHandle>,
     palette_focus: FocusHandle,
+    sidebar_resize_focus: FocusHandle,
+    inspector_resize_focus: FocusHandle,
     inspector_open: bool,
     inspector_tab: InspectorTab,
     inspector_focus: FocusHandle,
+    inspector_tabs_scroll: ScrollHandle,
     changes: ChangesProjection,
     selected_change: Option<String>,
     change_viewer: Option<Entity<DiffState>>,
@@ -358,14 +434,24 @@ struct DesktopView {
     git_branch: Option<String>,
     palette: Option<Entity<CommandState>>,
     palette_kind: PaletteKind,
+    palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    _effort_slider_subscriptions: Vec<Subscription>,
     composer_resources: Vec<protocol::ComposerResource>,
     resources_loading: bool,
     resources_loaded: bool,
     palette_groups: Vec<(String, Vec<PaletteCommand>)>,
     settings_open: bool,
     theme_scroll: ScrollHandle,
+    settings_scroll: ScrollHandle,
+    settings_tabs_scroll: ScrollHandle,
+    session_scroll: VirtualListScrollHandle,
+    activity_scroll: VirtualListScrollHandle,
+    session_row_sizes: FixedRowSizeCache,
+    activity_row_sizes: FixedRowSizeCache,
     settings_focus: FocusHandle,
+    settings_navigation_focus: FocusHandle,
+    settings_tab: settings::SettingsTab,
     settings_return_focus: Option<FocusHandle>,
     webmcp_status: Option<protocol::WebmcpBridgeStatus>,
     webmcp_pairing: Option<protocol::WebmcpPairResult>,
@@ -397,6 +483,7 @@ struct DesktopView {
     navigation_peek: bool,
     shortcut_inputs: Vec<Entity<gpui_kit::component::input::InputState>>,
     shortcut_message: Option<String>,
+    shortcuts_editing: bool,
     sidebar_width: f32,
     inspector_width: f32,
     resizing: Option<PaneResize>,
@@ -412,8 +499,18 @@ enum ResizeEdge {
 #[derive(Clone, Copy)]
 struct PaneResize {
     edge: ResizeEdge,
-    start_x: f32,
-    start_width: f32,
+    start_pointer_x_window: Pixels,
+    start_width: Pixels,
+}
+
+/// The splitter has no drag preview; keeping its entity empty lets the handle
+/// provide GPUI's drag lifecycle without covering the panels during resizing.
+struct ResizeDragPreview;
+
+impl Render for ResizeDragPreview {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size(px(0.))
+    }
 }
 
 fn file_tree_items(entries: &[FileEntry], parent: Option<&str>, expanded: &HashSet<String>) -> Vec<TreeItem> {
@@ -447,11 +544,18 @@ impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
         let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
+        let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
+            let target = window
+                .focus_lost_restore_target(cx)
+                .unwrap_or_else(|| view.focus_handle.clone());
+            target.focus(window, cx);
+        });
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
         let preferences = preferences::Preferences::load();
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
         let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
+        let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
             match event {
@@ -467,18 +571,23 @@ impl DesktopView {
         Self {
             shortcut_inputs,
             shortcut_message: None,
+            shortcuts_editing: false,
             default_code_font: typography::default_code_font(cx),
             focus_handle,
+            _focus_lost_subscription: focus_lost_subscription,
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
+            workspace_picker_task: None,
             backend: None,
             event_rx,
             event_tx,
+            event_drain_task: None,
             sessions: Vec::new(),
             selected_session_id: None,
             active_primary_agent_display: None,
             transcript: Transcript::default(),
+            message_scroller,
             restored_activity: Vec::new(),
             restored_review_history_incomplete: false,
             restored_activity_history_incomplete: false,
@@ -515,9 +624,12 @@ impl DesktopView {
             preview_return_focus: None,
             palette_return_focus: None,
             palette_focus: cx.focus_handle(),
+            sidebar_resize_focus: cx.focus_handle().tab_stop(true),
+            inspector_resize_focus: cx.focus_handle().tab_stop(true),
             inspector_open: false,
             inspector_tab: InspectorTab::default(),
             inspector_focus: cx.focus_handle().tab_stop(true),
+            inspector_tabs_scroll: ScrollHandle::default(),
             changes: ChangesProjection::default(),
             selected_change: None,
             change_viewer: None,
@@ -529,14 +641,24 @@ impl DesktopView {
             git_branch: None,
             palette: None,
             palette_kind: PaletteKind::Commands,
+            palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
+            _effort_slider_subscriptions: Vec::new(),
             composer_resources: Vec::new(),
             resources_loading: false,
             resources_loaded: false,
             palette_groups: Vec::new(),
             settings_open: false,
             theme_scroll: ScrollHandle::default(),
+            settings_scroll: ScrollHandle::default(),
+            settings_tabs_scroll: ScrollHandle::default(),
+            session_scroll: VirtualListScrollHandle::new(),
+            activity_scroll: VirtualListScrollHandle::new(),
+            session_row_sizes: FixedRowSizeCache::default(),
+            activity_row_sizes: FixedRowSizeCache::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
+            settings_navigation_focus: cx.focus_handle().tab_stop(true),
+            settings_tab: settings::SettingsTab::Appearance,
             settings_return_focus: None,
             webmcp_status: None,
             webmcp_pairing: None,
@@ -609,7 +731,7 @@ impl DesktopView {
         self.preferences.recent_workspaces.clone()
     }
 
-    fn choose_workspace(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace_picker_open {
             return;
         }
@@ -630,14 +752,14 @@ impl DesktopView {
         self.workspace_picker_open = true;
         let paths = cx.prompt_for_paths(workspace_picker_options());
         cx.notify();
-        cx.spawn(async move |view, cx| {
+        self.workspace_picker_task = Some(cx.spawn_in(window, async move |view, cx| {
             let result = paths.await;
-            let _updated = view.update(cx, |view, cx| {
+            let _updated = view.update_in(cx, |view, window, cx| {
                 view.workspace_picker_open = false;
                 match result {
                     Ok(Ok(Some(paths))) => {
                         if let Some(path) = paths.into_iter().next() {
-                            view.select_workspace(path, cx);
+                            view.select_workspace_from_ui(path, window, cx);
                         }
                     }
                     Ok(Err(error)) => view.error = Some(format!("Unable to open the workspace picker: {error}")),
@@ -646,12 +768,16 @@ impl DesktopView {
                 }
                 cx.notify();
             });
-        })
-        .detach();
+        }));
     }
 
     fn workspace_switch_idle(&self) -> bool {
         !self.running && self.pending_workspace.is_none() && self.session_request.is_none()
+    }
+
+    fn select_workspace_from_ui(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_workspace(path, cx);
+        self.restore_focus_after_review_close(window, cx);
     }
 
     fn select_workspace(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -762,6 +888,24 @@ impl DesktopView {
         } else {
             self.error = Some("The local service request queue is unavailable.".to_string());
         }
+    }
+
+    fn start_event_drain(&mut self, cx: &mut Context<Self>) {
+        if self.event_drain_task.is_some() {
+            return;
+        }
+
+        self.event_drain_task = Some(cx.spawn(async move |weak_view, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_millis(24)).await;
+                if weak_view
+                    .update_in(cx, |view, window, cx| view.drain_events(window, cx))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        }));
     }
 
     fn session_change_idle(&self) -> bool {
@@ -929,6 +1073,34 @@ impl DesktopView {
         }));
     }
 
+    fn refresh_workspace_view(&mut self, cx: &mut Context<Self>) {
+        if self.review_open {
+            self.refresh_workspace_review(cx);
+        } else {
+            self.refresh_files(cx);
+        }
+    }
+
+    fn focus_workspace_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.inspector_open = true;
+        self.set_inspector_tab(InspectorTab::Files, cx);
+
+        let view = cx.entity().downgrade();
+        window.defer(cx, move |window, cx| {
+            let _updated = view.update(cx, |view, cx| {
+                if !view.inspector_open || view.inspector_tab != InspectorTab::Files {
+                    return;
+                }
+                view.file_tree.update(cx, |tree, cx| {
+                    if tree.selected_index().is_none() && tree.entry(0).is_some() {
+                        tree.set_selected_index(Some(0), cx);
+                    }
+                    tree.focus(window, cx);
+                });
+            });
+        });
+    }
+
     fn replace_file_entries(&mut self, entries: Vec<FileEntry>, cx: &mut Context<Self>) {
         let selected_path = self.file_tree.read(cx).selected_item().map(|item| item.id.to_string());
         let directory_paths: HashSet<_> = entries
@@ -999,7 +1171,9 @@ impl DesktopView {
         if self.review_open {
             self.close_review(window, cx);
         }
-        self.settings_open = false;
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
@@ -1011,6 +1185,9 @@ impl DesktopView {
     }
 
     fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            return;
+        }
         if self.review_open {
             self.close_review(window, cx);
         }
@@ -1024,18 +1201,71 @@ impl DesktopView {
             self.settings_return_focus = window.focused(cx);
         }
         self.settings_open = true;
-        self.settings_focus.focus(window, cx);
+        let settings_view = cx.entity().clone();
+        let close_view = settings_view.clone();
+        let initial_focus = std::cell::Cell::new(true);
+        let settings_navigation_focus = self.settings_navigation_focus.clone();
+        window.open_sheet_at(gpui_kit::component::Placement::Right, cx, move |sheet, window, cx| {
+            if initial_focus.replace(false) {
+                settings_navigation_focus.focus(window, cx);
+            }
+            // The Kit builder runs again as the window resizes; keep the sheet
+            // within the current viewport instead of retaining its opening width.
+            let sheet_width = (window.viewport_size().width.min(px(860.)) - px(24.)).max(px(0.));
+            let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(window, cx));
+            let on_close_view = close_view.clone();
+            sheet
+                .title(DialogTitle::new().text_lg().child("Settings"))
+                .size(sheet_width)
+                .p_0()
+                .child(content)
+                .on_close(move |_, window, cx| {
+                    on_close_view.update(cx, |view, cx| view.handle_settings_sheet_close(window, cx));
+                })
+        });
         cx.notify();
     }
 
     fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if window.has_active_sheet(cx) {
+            window.close_sheet(cx);
+        }
+        self.finish_settings_close(window, cx);
+    }
+
+    fn finish_settings_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings_open {
+            return;
+        }
         self.settings_open = false;
+        if self.shortcuts_editing {
+            self.shortcut_inputs = shortcuts::inputs(&self.preferences.shortcuts, window, cx);
+            self.shortcuts_editing = false;
+            self.shortcut_message = None;
+        }
         if let Some(focus) = self.settings_return_focus.take() {
             focus.focus(window, cx);
         } else {
             self.focus_composer(window, cx);
         }
         cx.notify();
+    }
+
+    fn handle_settings_sheet_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.config_editor.is_none() {
+            self.finish_settings_close(window, cx);
+            return;
+        }
+
+        if !self.config_write_pending {
+            self.config_editor = None;
+            self.config_editor_error = None;
+            self.config_editor_return_focus = None;
+        }
+        let settings_return_focus = self.settings_return_focus.take();
+        self.settings_open = false;
+        self.open_settings(window, cx);
+        self.settings_return_focus = settings_return_focus;
     }
 
     fn toggle_inspector(&mut self, cx: &mut Context<Self>) {
@@ -1059,9 +1289,7 @@ impl DesktopView {
 
     fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let return_to_settings = matches!(self.palette_kind, PaletteKind::Fonts(_)) && self.palette.is_some();
-        self.palette = None;
-        self.effort_slider = None;
-        self.palette_groups.clear();
+        self.clear_palette_state();
         if let Some(focus) = self.palette_return_focus.take() {
             focus.focus(window, cx);
         } else {
@@ -1071,6 +1299,14 @@ impl DesktopView {
             self.open_settings(window, cx);
         }
         cx.notify();
+    }
+
+    fn clear_palette_state(&mut self) {
+        self.palette = None;
+        self.palette_query = gpui_kit::SharedString::default();
+        self._effort_slider_subscriptions.clear();
+        self.effort_slider = None;
+        self.palette_groups.clear();
     }
 
     fn dismiss_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1190,6 +1426,7 @@ impl DesktopView {
                 context_window: configuration.context_window,
                 current: true,
                 recommended_rank: None,
+                capabilities: None,
             })
     }
 
@@ -1232,11 +1469,14 @@ impl DesktopView {
         if self.palette.is_some() {
             self.close_palette(window, cx);
         }
-        self.settings_open = false;
+        if self.settings_open {
+            self.close_settings(window, cx);
+        }
         self.palette_return_focus = window.focused(cx);
         let state = cx.new(|cx| CommandState::new(window, cx));
         self.palette = Some(state.clone());
         self.palette_kind = kind;
+        self.palette_query = gpui_kit::SharedString::default();
         self.palette_groups = groups;
         // The palette installs its input state during its first render, so
         // focusing has to wait for that frame.
@@ -1584,13 +1824,15 @@ impl DesktopView {
         }
     }
 
-    fn drain_events(&mut self, cx: &mut Context<Self>) {
+    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mut changed = false;
         for _ in 0..MAX_UI_EVENTS_PER_TICK {
             match self.event_rx.try_recv() {
                 Ok(event) => {
                     changed = true;
+                    self.notify_background_activity(&event, window, cx);
                     self.handle_backend_event(event, cx);
+                    self.restore_focus_after_review_close(window, cx);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -1605,6 +1847,56 @@ impl DesktopView {
         }
         if changed {
             cx.notify();
+        }
+    }
+
+    fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if window.is_window_active() {
+            return;
+        }
+        let activity = match event {
+            BackendEvent::ThreadEvent(notification) => {
+                if self.selected_session_id.as_deref() != Some(notification.session_id.as_str())
+                    || !self.running
+                    || !notification
+                        .turn_id
+                        .as_deref()
+                        .is_some_and(|turn_id| self.active_turn_id.as_deref() == Some(turn_id))
+                    || !self.notification_matches(&notification.session_id, notification.turn_id.as_deref())
+                {
+                    return;
+                }
+                match notification.event.event() {
+                    vtcode_exec_events::ThreadEvent::TurnCompleted(_) => {
+                        Some(super::notifications::BackgroundAgentActivity::Completed)
+                    }
+                    vtcode_exec_events::ThreadEvent::TurnFailed(_)
+                    | vtcode_exec_events::ThreadEvent::TurnBlocked(_) => {
+                        Some(super::notifications::BackgroundAgentActivity::NeedsAttention)
+                    }
+                    _ => None,
+                }
+            }
+            BackendEvent::Interaction(interaction) => {
+                let current_turn = interaction.turn_id == "session-start"
+                    || (self.running
+                        && self.active_turn_id.as_deref() == Some(interaction.turn_id.as_str())
+                        && self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)));
+                if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
+                    || !current_turn
+                    || self
+                        .interaction
+                        .as_ref()
+                        .is_some_and(|current| current.interaction_id == interaction.interaction_id)
+                {
+                    return;
+                }
+                Some(super::notifications::BackgroundAgentActivity::WaitingForDecision)
+            }
+            _ => None,
+        };
+        if let Some(activity) = activity {
+            super::notifications::background_agent_activity(window, activity, cx);
         }
     }
 
@@ -2059,7 +2351,7 @@ impl DesktopView {
                 self.transcript.push(TranscriptItem::new(
                     format!("runtime-error-{}", uuid_like_id()),
                     "notice".to_string(),
-                    "Runtime error".to_string(),
+                    "Runtime error".into(),
                     message,
                 ));
             }
@@ -2081,7 +2373,7 @@ impl DesktopView {
         self.transcript.push(TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
-            "Run status".to_string(),
+            "Run status".into(),
             message.to_string(),
         ));
     }
@@ -2126,12 +2418,12 @@ impl DesktopView {
                 // Keep the raw aggregated output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
                 let output = match details {
-                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.clone()),
-                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.clone()),
+                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.as_str().into()),
+                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.as_str().into()),
                     _ => None,
                 };
                 if historical {
-                    let mut item = TranscriptItem::new(id, "tool".to_string(), title, text);
+                    let mut item = TranscriptItem::new(id, "tool".to_string(), title.into(), text);
                     item.output = output;
                     self.restored_activity.push(item);
                 } else {
@@ -2165,7 +2457,7 @@ impl DesktopView {
             failed: change.status == vtcode_exec_events::PatchApplyStatus::Failed,
             patch: change.unified_diff.clone().unwrap_or_default(),
         };
-        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".to_string(), card.patch.clone());
+        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".into(), card.patch.clone());
         item.diff = Some(card);
         let previous_patch = self
             .selected_change
@@ -2212,8 +2504,7 @@ impl DesktopView {
         self.change_viewer_dirty = false;
         self.change_viewer = Some(cx.new(|cx| DiffState::new(vec![file], cx).with_mode(mode)));
         self.inspector_open = true;
-        self.inspector_tab = InspectorTab::Changes;
-        cx.notify();
+        self.set_inspector_tab(InspectorTab::Changes, cx);
     }
 
     fn navigate_change_file(&mut self, next: bool, cx: &mut Context<Self>) {
@@ -2273,6 +2564,14 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Return focus when a state transition removes the focused review surface.
+    fn restore_focus_after_review_close(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.review_open && self.review_focus.contains_focused(window, cx) {
+            self.review_return_focus = None;
+            self.focus_composer(window, cx);
+        }
+    }
+
     fn navigate_review_change(&self, next: bool, cx: &mut Context<Self>) {
         let viewer = match &self.workspace_review {
             Some(review) => review.viewer.as_ref(),
@@ -2297,7 +2596,7 @@ impl DesktopView {
             } else {
                 "assistant".to_string()
             },
-            title.to_string(),
+            title.into(),
             text.to_string(),
         ));
     }
@@ -2307,6 +2606,7 @@ impl DesktopView {
         self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
+        self.activity_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
         self.changes = ChangesProjection::default();
@@ -2351,7 +2651,7 @@ impl DesktopView {
             let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
             *occurrence = (*occurrence).saturating_add(1);
             // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(id, message.role, title, message.text);
+            let mut item = TranscriptItem::new(id, message.role, title.into(), message.text);
             item.has_activity_status = false;
             self.transcript.push(item);
         }
@@ -2373,37 +2673,124 @@ impl DesktopView {
 
     /// The draggable divider between panes.
     fn render_resize_handle(&self, edge: ResizeEdge, cx: &mut Context<Self>) -> impl IntoElement {
-        let (id, cursor) = match edge {
-            ResizeEdge::Sidebar => ("resize-sidebar", CursorStyle::ResizeLeftRight),
-            ResizeEdge::Inspector => ("resize-inspector", CursorStyle::ResizeLeftRight),
+        let (id, placement, label, width) = match edge {
+            ResizeEdge::Sidebar => ("resize-sidebar", HandleEdge::Trailing, "Resize navigation", self.sidebar_width),
+            ResizeEdge::Inspector => {
+                ("resize-inspector", HandleEdge::Leading, "Resize inspector", self.inspector_width)
+            }
         };
-        div()
-            .id(id)
-            .test_support()
-            .w(px(5.))
-            .h_full()
-            .cursor(cursor)
-            .hover(|style| style.bg(cx.theme().colors.primary.opacity(0.4)))
+        let focus = match edge {
+            ResizeEdge::Sidebar => &self.sidebar_resize_focus,
+            ResizeEdge::Inspector => &self.inspector_resize_focus,
+        };
+        resize_handle::<ResizeEdge, ResizeDragPreview>(id, Axis::Horizontal)
+            .inside(placement)
+            .on_drag(edge, |_, _, _, cx| cx.new(|_| ResizeDragPreview))
+            .on_drag_move(cx.listener(|this, event: &DragMoveEvent<ResizeEdge>, _, cx| {
+                let edge = *event.drag(cx);
+                if this.resizing.is_some_and(|drag| drag.edge == edge) {
+                    let changed = this.resize_from_drag(edge, event.event.position.x);
+                    cx.stop_propagation();
+                    if changed {
+                        cx.notify();
+                    }
+                }
+            }))
+            .track_focus(focus)
+            .role(gpui_kit::Role::Splitter)
+            .aria_label(label)
+            .aria_description("Use Left and Right arrow keys to resize; hold Shift for larger steps.")
+            .aria_numeric_value(width as f64)
+            .aria_min_numeric_value(MIN_PANE_WIDTH as f64)
+            .aria_max_numeric_value(MAX_PANE_WIDTH as f64)
+            .focus_visible(|style| style.bg(cx.theme().colors.ring.opacity(0.2)))
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                let modifiers = event.keystroke.modifiers;
+                if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+                    return;
+                }
+                let direction = match event.keystroke.key.as_str() {
+                    "left" => -1.,
+                    "right" => 1.,
+                    _ => return,
+                };
+                let step = if modifiers.shift { 50. } else { 10. };
+                let current_width = match edge {
+                    ResizeEdge::Sidebar => this.sidebar_width,
+                    ResizeEdge::Inspector => this.inspector_width,
+                };
+                let delta = match edge {
+                    ResizeEdge::Sidebar => direction * step,
+                    ResizeEdge::Inspector => -direction * step,
+                };
+                if this.resize_pane_to(edge, current_width + delta) {
+                    this.save_preferences();
+                    cx.notify();
+                }
+                cx.stop_propagation();
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    match edge {
+                        ResizeEdge::Sidebar => this.sidebar_resize_focus.focus(window, cx),
+                        ResizeEdge::Inspector => this.inspector_resize_focus.focus(window, cx),
+                    }
                     this.resizing = Some(PaneResize {
                         edge,
-                        start_x: f32::from(event.position.x),
-                        start_width: match edge {
+                        start_pointer_x_window: event.position.x,
+                        start_width: px(match edge {
                             ResizeEdge::Sidebar => this.sidebar_width,
                             ResizeEdge::Inspector => this.inspector_width,
-                        },
+                        }),
                     });
-                    cx.stop_propagation();
                     cx.notify();
                 }),
             )
+            .on_drop(cx.listener(|this, _: &ResizeEdge, _, cx| {
+                if this.resizing.take().is_some() {
+                    this.save_preferences();
+                    cx.notify();
+                }
+            }))
     }
 
-    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn resize_pane_to(&mut self, edge: ResizeEdge, width: f32) -> bool {
+        if !width.is_finite() {
+            return false;
+        }
+        let width = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
+        let current = match edge {
+            ResizeEdge::Sidebar => &mut self.sidebar_width,
+            ResizeEdge::Inspector => &mut self.inspector_width,
+        };
+        if (*current - width).abs() < f32::EPSILON {
+            return false;
+        }
+        *current = width;
+        true
+    }
+
+    fn resize_from_drag(&mut self, edge: ResizeEdge, pointer_x_window: Pixels) -> bool {
+        let Some(drag) = self.resizing.filter(|drag| drag.edge == edge) else {
+            return false;
+        };
+        let pointer_delta_window = pointer_x_window - drag.start_pointer_x_window;
+        let width = match edge {
+            ResizeEdge::Sidebar => drag.start_width + pointer_delta_window,
+            ResizeEdge::Inspector => drag.start_width - pointer_delta_window,
+        };
+        // Preferences keep pane widths as f32; convert only at that boundary.
+        self.resize_pane_to(edge, width.as_f32())
+    }
+
+    fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let mut sidebar = div()
+            .id("project-thread-sidebar")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Workspace, projects, and recent threads")
             .w(px(self.sidebar_width))
             .min_w(px(MIN_PANE_WIDTH))
             .h_full()
@@ -2434,7 +2821,7 @@ impl DesktopView {
                                     || !self.workspace_switch_idle()
                                     || self.retained_submission.is_some(),
                             )
-                            .on_click(cx.listener(|this, _, window, cx| this.choose_workspace(window, cx))),
+                            .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
                     ),
             );
 
@@ -2469,7 +2856,7 @@ impl DesktopView {
                         .ghost()
                         .flex_1()
                         .desktop_disabled(!self.session_change_allowed(None))
-                        .on_click(cx.listener(|this, _, _, cx| this.create_session(cx))),
+                        .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("close-session")
@@ -2478,7 +2865,7 @@ impl DesktopView {
                         .accessibility_label("Close thread")
                         .ghost()
                         .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
-                        .on_click(cx.listener(|this, _, _, cx| this.close_session(cx))),
+                        .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                 ),
         );
 
@@ -2504,8 +2891,8 @@ impl DesktopView {
                         .w_full()
                         .desktop_disabled(!self.workspace_switch_idle() || self.retained_submission.is_some())
                         .when(current, |button| button.bg(theme.colors.secondary).text_color(theme.colors.foreground))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.select_workspace(PathBuf::from(workspace_path.clone()), cx)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.select_workspace_from_ui(PathBuf::from(workspace_path.clone()), window, cx)
                         })),
                 )
             })));
@@ -2525,37 +2912,72 @@ impl DesktopView {
                         .child(self.sessions.len().to_string()),
                 ),
         );
+        let session_row_height = scale_row_height_for_ui_font(SESSION_ROW_HEIGHT, cx.theme().font_size);
+        let session_sizes = self.session_row_sizes.get(self.sessions.len(), session_row_height);
+        let session_primary = theme.colors.primary;
         sidebar = sidebar.child(
             div()
                 .id("session-list")
+                .relative()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scroll()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .children(self.sessions.iter().map(|session| {
-                    let session_id = session.session_id.clone();
-                    let element_id = format!("session-{session_id}");
-                    let selected = self.selected_session_id.as_deref() == Some(&session.session_id);
-                    let label = session.title.clone().unwrap_or_else(|| {
-                        format!("Session {}", session.session_id.chars().take(8).collect::<String>())
-                    });
-                    div().w_full().child(
-                        desktop_button(element_id)
-                            .accessibility_label(format!("{label}{}", if selected { " (current thread)" } else { "" }))
-                            .child(navigation_label(label, IconName::MessageSquare, selected, theme.colors.primary))
-                            .ghost()
-                            .desktop_disabled(!self.session_change_allowed(Some(&session.session_id)))
-                            .w_full()
-                            .justify_start()
-                            .when(selected, |button| {
-                                button.bg(theme.colors.secondary).text_color(theme.colors.foreground)
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| this.load_session(session_id.clone(), cx))),
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(
+                        cx.entity(),
+                        "session-virtual-list",
+                        session_sizes,
+                        move |view, visible_range, _, cx| {
+                            visible_range
+                                .filter_map(|index| {
+                                    let session = view.sessions.get(index)?;
+                                    let session_id = session.session_id.clone();
+                                    let selected = view.selected_session_id.as_deref() == Some(&session_id);
+                                    let label = session.title.clone().unwrap_or_else(|| {
+                                        format!("Session {}", session_id.chars().take(8).collect::<String>())
+                                    });
+                                    let enabled = view.session_change_allowed(Some(&session_id));
+                                    Some(
+                                        div()
+                                            .id(format!("session-row-{session_id}"))
+                                            .test_support()
+                                            .h(px(session_row_height))
+                                            .w_full()
+                                            .child(
+                                                desktop_button(format!("session-{session_id}"))
+                                                    .accessibility_label(format!(
+                                                        "{label}{}",
+                                                        if selected { " (current thread)" } else { "" }
+                                                    ))
+                                                    .child(navigation_label(
+                                                        label,
+                                                        IconName::MessageSquare,
+                                                        selected,
+                                                        session_primary,
+                                                    ))
+                                                    .ghost()
+                                                    .desktop_disabled(!enabled)
+                                                    .w_full()
+                                                    .justify_start()
+                                                    .when(selected, |button| {
+                                                        button
+                                                            .bg(cx.theme().colors.secondary)
+                                                            .text_color(cx.theme().colors.foreground)
+                                                    })
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        this.load_session(session_id.clone(), cx)
+                                                    })),
+                                            )
+                                            .into_any_element(),
+                                    )
+                                })
+                                .collect()
+                        },
                     )
-                })),
+                    .track_scroll(&self.session_scroll),
+                )
+                .child(Scrollbar::vertical(&self.session_scroll)),
         );
 
         sidebar.child(
@@ -2606,6 +3028,8 @@ impl DesktopView {
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
+        let toolbar_surface =
+            themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
         let workspace = self
             .workspace
             .as_ref()
@@ -2615,9 +3039,10 @@ impl DesktopView {
         TitleBar::new()
             .w_full()
             .h(px(48.))
-            .bg(chrome_background(&theme.colors))
-            .border_0()
             .pr_3()
+            .bg(toolbar_surface)
+            .border_b_1()
+            .border_color(toolbar_surface)
             .child(
                 div()
                     .flex_1()
@@ -2631,326 +3056,69 @@ impl DesktopView {
                             .icon(IconName::PanelLeft)
                             .ghost()
                             .tooltip_with_action("Toggle navigation", &ToggleSidebar, Some("VTCodeDesktop"))
-                            .on_click(cx.listener(|view, _, _, cx| {
-                                view.sidebar_open = !view.sidebar_open;
-                                view.navigation_peek = false;
-                                cx.notify();
-                            })),
+                            .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     )
                     .child(brand_logo(22.))
+                    .child(div().text_sm().font_semibold().child("VT Code"))
                     .child(
                         div()
                             .min_w_0()
                             .truncate()
                             .text_sm()
-                            .text_color(theme.colors.muted_foreground)
-                            .child(workspace.to_string()),
+                            .text_color(theme.colors.foreground)
+                            .child(format!("/ {workspace}")),
                     ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        desktop_button("toggle-inspector")
-                            .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
-                            .icon(IconName::PanelRight)
-                            .accessibility_label(if self.inspector_open {
-                                "Hide panel"
-                            } else {
-                                "Show panel"
-                            })
-                            .ghost()
-                            .desktop_disabled(self.workspace.is_none())
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_inspector(cx))),
-                    )
-                    .child(
-                        desktop_button("toggle-theme")
-                            .small()
-                            .icon(IconName::SunMoon)
-                            .accessibility_label(if self.theme_mode == ThemeMode::Light {
-                                "Switch to dark appearance"
-                            } else {
-                                "Switch to light appearance"
-                            })
-                            .tooltip("Switch appearance")
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.toggle_theme(window, cx))),
-                    )
-                    .when_some(
-                        self.configuration
-                            .as_ref()
-                            .and_then(|config| config.session_options.as_ref())
-                            .and_then(|options| options.speed.as_ref()),
-                        |row, speed| {
-                            row.child(
-                                Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
-                                    .small()
-                                    .child(speed.clone()),
-                            )
-                        },
-                    ),
-            )
-    }
-
-    fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::picker_swatches();
-        let mut swatch_rows = Vec::new();
-        for entry in swatches {
-            swatch_rows.push(self.render_theme_swatch(entry, cx));
-        }
-        // Connection status sits with the appearance controls; the pairing
-        // controls follow the CLI groups so the theme actions keep their place.
-        let webmcp_status_panel = self.render_webmcp_settings(false, cx);
-        let webmcp_origin_controls = self.render_webmcp_settings(true, cx);
-        let theme = cx.theme();
-        let colors = &theme.colors;
-        let active_theme_profile = if self.theme_mode == ThemeMode::Light {
-            "light"
-        } else {
-            "dark"
-        };
-        let mut panel = div()
-            .id("settings-panel")
-            .test_support()
-            .role(gpui_kit::Role::Dialog)
-            .aria_label("Settings")
-            .w(px(740.))
-            .max_w_full()
-            .max_h_full()
-            .overflow_y_scroll()
-            .flex()
-            .flex_col()
-            .gap_5()
-            .p_6()
-            .rounded_xl()
-            .border_1()
-            .border_color(colors.border)
-            .bg(colors.background)
-            .shadow_lg()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .text_sm()
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .child(
-                        DialogHeader::new()
-                            .child(DialogTitle::new().text_2xl().child("Make it yours"))
-                            .child(DialogDescription::new().child("Appearance · VT Code Desktop")),
-                    )
-                    .child(
-                        desktop_button("close-settings")
-                            .icon(IconName::X)
-                            .accessibility_label("Close settings")
-                            .ghost()
-                            .on_click(cx.listener(|view, _, window, cx| view.close_settings(window, cx))),
-                    ),
-            )
-            .child(
-                gpui_kit::component::switch::Switch::new("show-status-bar")
-                    .label("Show status bar")
-                    .checked(self.preferences.show_status_bar)
-                    .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
-            )
-            .child(
-                gpui_kit::component::switch::Switch::new("separate-theme-profiles")
-                    .label("Separate light and dark modes")
-                    .checked(self.preferences.separate_theme_profiles)
-                    .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
-            )
-            .when(self.preferences.separate_theme_profiles, |panel| {
-                panel.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
+                Toolbar::new("header-toolbar").small().child(
+                    ToolbarGroup::new("header-actions-group")
+                        .label("Workspace actions")
+                        .gap_1()
                         .child(
-                            div()
-                                .id("theme-profile-hint")
-                                .role(gpui_kit::Role::Label)
-                                .aria_label(format!("Editing the {active_theme_profile} appearance profile"))
-                                .text_sm()
-                                .child("Editing profile"),
-                        )
-                        .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
-                            let light = mode == ThemeMode::Light;
-                            let id = if light { "light" } else { "dark" };
-                            let label = if light { "Light" } else { "Dark" };
-                            let selected = self.theme_mode == mode;
-                            desktop_button(format!("edit-{id}-profile"))
-                                .label(label)
-                                .accessibility_label(format!(
-                                    "Edit {id} appearance profile{}",
-                                    if selected { " (selected)" } else { "" }
-                                ))
+                            desktop_button("search-commands")
+                                .accessibility_label("Search commands")
+                                .icon(IconName::Search)
                                 .ghost()
-                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    if view.theme_mode != mode {
-                                        view.apply_theme_mode(mode, window, cx);
-                                    }
-                                }))
-                        })),
-                )
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(section_label("VISUAL STYLE", colors.muted_foreground))
-                    .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
-                        let scroll = self.theme_scroll.clone();
-                        desktop_button(if forward { "next-themes" } else { "previous-themes" })
-                            .icon(if forward {
-                                IconName::ChevronRight
-                            } else {
-                                IconName::ChevronLeft
-                            })
-                            .accessibility_label(if forward { "Next themes" } else { "Previous themes" })
-                            .ghost()
-                            .small()
-                            .on_click(cx.listener(move |_, _, _, cx| {
-                                let mut offset = scroll.offset();
-                                offset.x += px(if forward { -336. } else { 336. });
-                                scroll.set_offset(offset);
-                                cx.notify();
-                            }))
-                    }))),
-            )
-            .child(
-                div()
-                    .id("theme-list")
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label("Visual themes")
-                    .w_full()
-                    .min_w_0()
-                    .flex_shrink_0()
-                    .h(px(112.))
-                    .relative()
-                    .child(
-                        div()
-                            .id("theme-scroller")
-                            .lock_scroll_axis()
-                            .size_full()
-                            .overflow_x_scroll()
-                            .track_scroll(&self.theme_scroll)
-                            .flex()
-                            .items_start()
-                            .gap_2()
-                            .children(swatch_rows)
-                            .test_support(),
-                    )
-                    .child(ScrollableMask::new(gpui_kit::Axis::Horizontal, &self.theme_scroll))
-                    .child(ScrollableMask::vertical_wheel(&self.theme_scroll))
-                    .child(Scrollbar::horizontal(&self.theme_scroll)),
-            );
-
-        panel = panel
-            .child(
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .outline()
-                    .title("Typography")
-                    .child(self.render_font_family(FontTarget::Ui, cx))
-                    .child(self.render_font_family(FontTarget::Code, cx))
-                    .child(self.render_font_size(false, cx))
-                    .child(self.render_font_size(true, cx))
-                    .child(render_markdown(
-                        "appearance-code-preview".into(),
-                        "```rust\nfn main() { /* VT Code */ }\n```".into(),
-                        cx,
-                    )),
-            )
-            .child(
-                GroupBox::new()
-                    .flex_shrink_0()
-                    .outline()
-                    .title("Accessibility")
-                    .child(self.render_reduced_motion(cx)),
-            )
-            .child(
-                desktop_button("reset-appearance")
-                    .label("Reset appearance to defaults")
-                    .ghost()
-                    .on_click(cx.listener(|view, _, window, cx| {
-                        view.preferences.separate_theme_profiles = false;
-                        view.preferences.light_theme = None;
-                        view.preferences.dark_theme = None;
-                        view.preferences.light_typography = None;
-                        view.preferences.dark_typography = None;
-                        view.preferences.ui_font_family = None;
-                        view.preferences.code_font_family = None;
-                        view.preferences.ui_font_size = None;
-                        view.preferences.code_font_size = None;
-                        view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
-                        preferences::apply_reduced_motion(
-                            view.preferences.reduced_motion,
-                            view.system_motion_baseline,
-                            cx,
-                        );
-                        view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
-                    })),
-            );
-
-        if let Some(configuration) = self.configuration.as_ref() {
-            panel = panel.child(div().font_semibold().child("Provider")).child(
-                div().text_color(colors.muted_foreground).child(format!(
-                    "{} · {}",
-                    if configuration.provider.is_empty() {
-                        "not configured"
-                    } else {
-                        &configuration.provider
-                    },
-                    configuration.model
-                )),
-            );
-            if !configuration.credential_setup_command.is_empty() {
-                let command = configuration.credential_setup_command.clone();
-                panel = panel.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_xs()
-                                .font_family(theme.mono_font_family.clone())
-                                .text_color(colors.muted_foreground)
-                                .truncate()
-                                .child(command.clone()),
+                                .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
+                                .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
                         )
-                        .child(desktop_button("copy-credential-command").label("Copy").ghost().on_click(
-                            move |_, _, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()))
+                        .child(
+                            desktop_button("toggle-inspector")
+                                .icon(IconName::PanelRight)
+                                .accessibility_label(if self.inspector_open {
+                                    "Hide panel"
+                                } else {
+                                    "Show panel"
+                                })
+                                .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
+                                .ghost()
+                                .desktop_disabled(self.workspace.is_none())
+                                .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
+                        )
+                        .child(
+                            desktop_button("open-settings")
+                                .accessibility_label("Settings")
+                                .icon(IconName::Settings2)
+                                .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                                .ghost()
+                                .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
+                        )
+                        .when_some(
+                            self.configuration
+                                .as_ref()
+                                .and_then(|config| config.session_options.as_ref())
+                                .and_then(|options| options.speed.as_ref()),
+                            |group, speed| {
+                                group.content(
+                                    Tag::custom(theme.colors.secondary, theme.colors.foreground, theme.colors.border)
+                                        .small()
+                                        .child(speed.clone()),
+                                )
                             },
-                        )),
-                );
-            }
-        }
-
-        panel = panel
-            .child(webmcp_status_panel)
-            .child(self.render_shortcuts(cx))
-            .child(self.render_shared_preferences(cx))
-            .child(self.render_cli_configuration(cx))
-            .child(webmcp_origin_controls);
-        if let Some(info) = self.service_info.as_ref() {
-            panel = panel.child(div().font_semibold().child("Service")).child(
-                div().text_color(colors.muted_foreground).child(format!(
-                    "vtcode {} · protocol {}.{}",
-                    info.server_version, info.protocol.major, info.protocol.minor
-                )),
-            );
-        }
-        panel.into_any_element()
+                        )
+                        .content(self.render_chrome_menu("header-overflow", "Window actions")),
+                ),
+            )
     }
 
     fn render_file_preview(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -3004,12 +3172,15 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
-                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(move |_, _, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()))
-                            }))
+                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(
+                                move |_, window, app| {
+                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
+                                    super::notifications::copied_to_clipboard(window, app);
+                                },
+                            ))
                             .child(
                                 desktop_button("close-preview")
-                                    .tooltip("Close preview (Escape)")
+                                    .tooltip_with_action("Close preview", &DismissOverlay, Some("VTCodeDesktop"))
                                     .label("Close")
                                     .ghost()
                                     .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
@@ -3020,7 +3191,8 @@ impl DesktopView {
                             .id("file-preview-body")
                             .flex_1()
                             .min_h_0()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
+                            .id("file-preview-body")
                             .p_3()
                             .text_xs()
                             .font_family(mono)
@@ -3043,9 +3215,28 @@ impl DesktopView {
     }
 
     fn select_inspector_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_inspector_tab(index, false, Some(window), cx);
+    }
+
+    fn select_inspector_tab_from_keyboard(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.update_inspector_tab(index, true, Some(window), cx);
+    }
+
+    fn set_inspector_tab(&mut self, tab: InspectorTab, cx: &mut Context<Self>) {
+        if let Some(index) = InspectorTab::ALL.iter().position(|candidate| *candidate == tab) {
+            self.update_inspector_tab(index, true, None, cx);
+        }
+    }
+
+    fn update_inspector_tab(&mut self, index: usize, reveal: bool, focus: Option<&mut Window>, cx: &mut Context<Self>) {
         if let Some(tab) = InspectorTab::ALL.get(index) {
             self.inspector_tab = *tab;
-            self.inspector_focus.focus(window, cx);
+            if reveal {
+                self.inspector_tabs_scroll.scroll_to_item(index);
+            }
+            if let Some(window) = focus {
+                self.inspector_focus.focus(window, cx);
+            }
             cx.notify();
         }
     }
@@ -3061,7 +3252,7 @@ impl DesktopView {
         } else {
             (current + count - 1) % count
         };
-        self.select_inspector_tab(index, window, cx);
+        self.select_inspector_tab_from_keyboard(index, window, cx);
     }
 
     /// Right-hand context inspector: derived Changes, Files, and Activity
@@ -3069,64 +3260,66 @@ impl DesktopView {
     fn render_inspector(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme();
         let colors = theme.colors;
-        let panel =
-            div()
-                .w(px(self.inspector_width))
-                .min_w(px(MIN_PANE_WIDTH))
-                .h_full()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .rounded_lg()
-                .bg(themes::mix(colors.background, colors.secondary, 0.3))
-                .border_1()
-                .border_color(colors.border)
-                .child(
-                    div()
-                        .id("inspector-navigation")
-                        .test_support()
-                        .track_focus(&self.inspector_focus)
-                        .key_context("VTCodeInspector")
-                        .role(gpui_kit::Role::Group)
-                        .aria_label("Context inspector tabs")
-                        .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
-                        .border_1()
-                        .border_color(colors.border.opacity(0.))
-                        .focus_visible(|style| style.border_color(colors.ring))
-                        .on_action(cx.listener(|view, _: &NextInspectorTab, window, cx| {
+        let panel = div()
+            .w(px(self.inspector_width))
+            .min_w(px(MIN_PANE_WIDTH))
+            .h_full()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .rounded_lg()
+            .bg(themes::mix(colors.background, colors.secondary, 0.3))
+            .border_1()
+            .border_color(colors.border)
+            .child(
+                div()
+                    .id("inspector-navigation")
+                    .test_support()
+                    .track_focus(&self.inspector_focus)
+                    .key_context("VTCodeInspector")
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Context inspector tabs")
+                    .aria_description("Use Left and Right arrows, Home, or End to choose a tab.")
+                    .border_1()
+                    .border_color(colors.border.opacity(0.))
+                    .focus_visible(|style| style.border_color(colors.ring))
+                    .on_action(
+                        cx.listener(|view, _: &NextInspectorTab, window, cx| {
                             view.cycle_inspector_tab(true, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
-                            view.cycle_inspector_tab(false, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
-                            view.select_inspector_tab(0, window, cx)
-                        }))
-                        .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
-                            view.select_inspector_tab(InspectorTab::ALL.len().saturating_sub(1), window, cx)
-                        }))
-                        .child(
-                            TabBar::new("inspector-tabs")
-                                .underline()
-                                .small()
-                                .w_full()
-                                .selected_index(
-                                    InspectorTab::ALL
-                                        .iter()
-                                        .position(|tab| *tab == self.inspector_tab)
-                                        .unwrap_or_default(),
-                                )
-                                .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                    view.select_inspector_tab(*index, window, cx)
-                                }))
-                                .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
-                        ),
-                );
+                        }),
+                    )
+                    .on_action(cx.listener(|view, _: &PreviousInspectorTab, window, cx| {
+                        view.cycle_inspector_tab(false, window, cx)
+                    }))
+                    .on_action(cx.listener(|view, _: &FirstInspectorTab, window, cx| {
+                        view.select_inspector_tab_from_keyboard(0, window, cx)
+                    }))
+                    .on_action(cx.listener(|view, _: &LastInspectorTab, window, cx| {
+                        view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
+                    }))
+                    .child(
+                        TabBar::new("inspector-tabs")
+                            .underline()
+                            .small()
+                            .w_full()
+                            .track_scroll(&self.inspector_tabs_scroll)
+                            .selected_index(
+                                InspectorTab::ALL
+                                    .iter()
+                                    .position(|tab| *tab == self.inspector_tab)
+                                    .unwrap_or_default(),
+                            )
+                            .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                view.select_inspector_tab(*index, window, cx)
+                            }))
+                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                    ),
+            );
 
         let content = match self.inspector_tab {
             InspectorTab::Changes => self.render_changes_tab(&colors, cx),
             InspectorTab::Files => self.render_inspector_files_tab(cx),
-            InspectorTab::Activity => self.render_activity_tab(&colors),
+            InspectorTab::Activity => self.render_activity_tab(&colors, cx),
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
         };
@@ -3168,10 +3361,11 @@ impl DesktopView {
                     desktop_button("review-working-tree")
                         .label("Review working tree")
                         .icon(IconName::GitCompare)
+                        .tooltip_with_action("Review working tree", &OpenWorkspaceReview, Some("VTCodeDesktop"))
                         .ghost()
                         .small()
                         .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
-                        .on_click(cx.listener(|view, _, window, cx| view.open_workspace_review(window, cx))),
+                        .dispatches_desktop_action(OpenWorkspaceReview, self.focus_handle.clone()),
                 ),
             )
             .child(content_panel.child(content))
@@ -3289,7 +3483,10 @@ impl DesktopView {
                         .child(
                             desktop_button(opaque_path_element_id("change-row", &path))
                                 .icon(IconName::ChevronRight)
-                                .accessibility_label(format!("Review {path}"))
+                                .accessibility_label(format!(
+                                    "Review {path}{}",
+                                    if selected { " (selected)" } else { "" }
+                                ))
                                 .tooltip(path.clone())
                                 .ghost()
                                 .small()
@@ -3328,6 +3525,10 @@ impl DesktopView {
                     header = header.child(
                         desktop_button(id)
                             .label(label)
+                            .accessibility_label(format!(
+                                "{label} diff view{}",
+                                if mode == target { " (selected)" } else { "" }
+                            ))
                             .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
@@ -3339,7 +3540,7 @@ impl DesktopView {
                         desktop_button("review-previous-change")
                             .icon(IconName::ArrowUp)
                             .accessibility_label("Previous change")
-                            .tooltip("Previous change (⇧F7)")
+                            .tooltip_with_action("Previous change", &PreviousReviewChange, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(false, cx))),
@@ -3348,7 +3549,7 @@ impl DesktopView {
                         desktop_button("review-next-change")
                             .icon(IconName::ArrowDown)
                             .accessibility_label("Next change")
-                            .tooltip("Next change (F7)")
+                            .tooltip_with_action("Next change", &NextReviewChange, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
@@ -3372,8 +3573,9 @@ impl DesktopView {
                         .tooltip("Copy patch")
                         .ghost()
                         .small()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch.to_string()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 );
             }
@@ -3394,7 +3596,7 @@ impl DesktopView {
                     .test_support()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
+                    .overflow_hidden()
                     .child(Diff::new(&viewer).line_number(true).soft_wrap(expanded)),
             );
             body = body.child(viewer_panel);
@@ -3478,7 +3680,7 @@ impl DesktopView {
                                         desktop_button("close-diff-review")
                                             .icon(IconName::X)
                                             .accessibility_label("Close diff review")
-                                            .tooltip("Close review (Escape)")
+                                            .tooltip_with_action("Close review", &DismissOverlay, Some("VTCodeDesktop"))
                                             .ghost()
                                             .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
                                     ),
@@ -3503,21 +3705,17 @@ impl DesktopView {
                     desktop_button("focus-files")
                         .label("Workspace files")
                         .accessibility_label("Focus workspace file tree")
+                        .tooltip_with_action("Focus workspace file tree", &OpenWorkspaceFiles, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|view, _, window, cx| {
-                            view.file_tree.update(cx, |tree, cx| {
-                                if tree.selected_index().is_none() && tree.entry(0).is_some() {
-                                    tree.set_selected_index(Some(0), cx);
-                                }
-                                tree.focus(window, cx);
-                            });
-                        })),
+                        .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("refresh-files")
                         .label("Refresh")
+                        .accessibility_label("Refresh workspace files")
+                        .tooltip_with_action("Refresh workspace files", &RefreshWorkspace, Some("VTCodeDesktop"))
                         .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh_files(cx))),
+                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 ),
         );
         let directory_paths: HashSet<_> = self
@@ -3634,8 +3832,9 @@ impl DesktopView {
                         .tooltip("Copy captured output")
                         .ghost()
                         .small()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.to_string()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 ),
         )
@@ -3657,14 +3856,19 @@ impl DesktopView {
         .into_any_element()
     }
 
-    fn render_activity_tab(&self, colors: &gpui_kit::component::theme::ThemeColor) -> AnyElement {
+    fn render_activity_tab(
+        &mut self,
+        colors: &gpui_kit::component::theme::ThemeColor,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let counts = ActivityCounts::from_rows(&rows);
         let mut body = div()
             .id("activity-list")
             .w_full()
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
+            .overflow_hidden()
             .flex()
             .flex_col()
             .gap_2()
@@ -3681,65 +3885,197 @@ impl DesktopView {
                 ))
                 .into_any_element();
         }
-        for row in rows {
-            let (status_color, status_icon) = match row.state {
-                ActivityState::Failed => (colors.danger, IconName::X),
-                ActivityState::Running => (colors.primary, IconName::Activity),
-                ActivityState::Interrupted => (colors.muted_foreground, IconName::X),
-                ActivityState::Completed => (colors.muted_foreground, IconName::Check),
-                ActivityState::Other => (colors.muted_foreground, IconName::Activity),
-            };
-            body = body.child(
-                div()
-                    .id(format!("activity-{}", row.id))
-                    .test_support()
-                    .role(gpui_kit::Role::Group)
-                    .aria_label(row.title.clone())
-                    .aria_description(row.status.clone())
-                    .w_full()
-                    .flex()
-                    .items_start()
-                    .gap_3()
-                    .p_3()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.background)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(28.))
-                            .flex_shrink_0()
-                            .rounded_full()
-                            .bg(colors.secondary)
-                            .child(Icon::new(status_icon).small().text_color(status_color)),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(div().text_sm().font_medium().child(row.title))
-                            .child(
-                                div().flex().min_w_0().child(
-                                    Tag::custom(colors.secondary, colors.foreground, colors.border)
-                                        .small()
-                                        .rounded_full()
-                                        .max_w_full()
-                                        .child(div().truncate().child(row.status)),
-                                ),
-                            ),
-                    ),
-            );
-        }
+        let chart_data = [
+            ActivityChartDatum {
+                label: "Running",
+                count: counts.running,
+                state: ActivityState::Running,
+            },
+            ActivityChartDatum {
+                label: "Done",
+                count: counts.completed,
+                state: ActivityState::Completed,
+            },
+            ActivityChartDatum {
+                label: "Failed",
+                count: counts.failed,
+                state: ActivityState::Failed,
+            },
+            ActivityChartDatum {
+                label: "Interrupted",
+                count: counts.interrupted,
+                state: ActivityState::Interrupted,
+            },
+            ActivityChartDatum {
+                label: "Other",
+                count: counts.other,
+                state: ActivityState::Other,
+            },
+        ]
+        .into_iter()
+        .filter(|datum| datum.count > 0)
+        .collect::<Vec<_>>();
+        let summary = counts.summary();
+        let chart_colors = *colors;
+        body = body.child(
+            div()
+                .id("activity-status-chart")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label(format!("Activity statuses: {summary}"))
+                .w_full()
+                .h(px(148.))
+                .flex_shrink_0()
+                .child(
+                    BarChart::new(chart_data)
+                        .band(|datum| datum.label)
+                        .value(|datum| datum.count as f64)
+                        .label(|datum| datum.count.to_string())
+                        .alignment(BarAlignment::Left)
+                        .value_axis(false)
+                        .grid(false)
+                        .interactive(false)
+                        .appear(false)
+                        .fill(move |datum, _, _, _| match datum.state {
+                            ActivityState::Running => chart_colors.primary,
+                            ActivityState::Completed => chart_colors.success,
+                            ActivityState::Failed => chart_colors.danger,
+                            ActivityState::Interrupted => chart_colors.warning,
+                            ActivityState::Other => chart_colors.muted_foreground,
+                        }),
+                ),
+        );
+
+        let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
+        let item_sizes = self.activity_row_sizes.get(rows.len(), activity_row_height);
+        let row_colors = *colors;
+        body = body.child(
+            div()
+                .id("activity-rows")
+                .relative()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
+                        visible_range
+                            .map(|index| {
+                                rows.get(index).map_or_else(
+                                    || div().into_any_element(),
+                                    |row| {
+                                        Self::render_activity_row(row, row_colors, activity_row_height)
+                                            .into_any_element()
+                                    },
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .track_scroll(&self.activity_scroll),
+                )
+                .child(Scrollbar::vertical(&self.activity_scroll)),
+        );
         body.into_any_element()
     }
 
-    fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_activity_row(
+        row: &ActivityRow,
+        colors: gpui_kit::component::theme::ThemeColor,
+        row_height: f32,
+    ) -> impl IntoElement {
+        let (status_color, status_icon) = match row.state {
+            ActivityState::Failed => (colors.danger, IconName::X),
+            ActivityState::Running => (colors.primary, IconName::Activity),
+            ActivityState::Interrupted => (colors.warning, IconName::X),
+            ActivityState::Completed => (colors.success, IconName::Check),
+            ActivityState::Other => (colors.muted_foreground, IconName::Activity),
+        };
+        let status = gpui_kit::SharedString::from(row.status.as_str());
+        div()
+            .id(format!("activity-{}", row.id))
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label(row.title.clone())
+            .aria_description(status.clone())
+            .w_full()
+            .h(px(row_height))
+            .flex()
+            .items_center()
+            .gap_3()
+            .p_2()
+            .rounded_lg()
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.background)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(28.))
+                    .flex_shrink_0()
+                    .rounded_full()
+                    .bg(colors.secondary)
+                    .child(Icon::new(status_icon).small().text_color(status_color)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
+                    .child(
+                        div().flex().min_w_0().child(
+                            Tag::custom(colors.secondary, colors.foreground, colors.border)
+                                .small()
+                                .rounded_full()
+                                .max_w_full()
+                                .child(div().truncate().child(status)),
+                        ),
+                    ),
+            )
+    }
+
+    fn sync_transcript_layout(&mut self, cx: &mut Context<Self>) {
+        use super::transcript::TranscriptLayoutChange;
+
+        let changes = self.transcript.take_layout_changes();
+        if changes.is_empty() {
+            return;
+        }
+
+        self.message_scroller.update(cx, |state, cx| {
+            for change in changes {
+                match change {
+                    TranscriptLayoutChange::Reset(item_count) => state.reset(item_count, cx),
+                    TranscriptLayoutChange::Splice { range, count } => {
+                        let applied = state.splice(range, count, cx);
+                        debug_assert!(applied, "transcript and message scroller row counts diverged");
+                    }
+                    TranscriptLayoutChange::Remeasure => state.remeasure(cx),
+                    TranscriptLayoutChange::RemeasureItems(range) => {
+                        let applied = state.remeasure_items(range, cx);
+                        debug_assert!(applied, "transcript remeasurement range is out of bounds");
+                    }
+                    TranscriptLayoutChange::PauseFollowingTail => {
+                        // Kit exposes scrolling but no pause-only operation. Scroll to the
+                        // current row only when tail-following is active; a reader who has
+                        // already scrolled away keeps the exact existing item offset.
+                        if state.item_count() > 0 && state.is_following_tail() {
+                            let anchor = state.logical_scroll_top();
+                            let _scrolled = state.scroll_to_item(anchor.item_ix, cx);
+                        }
+                    }
+                    TranscriptLayoutChange::FollowLatest => state.scroll_to_end(cx),
+                }
+            }
+        });
+    }
+
+    fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_transcript_layout(cx);
         let content = if self.transcript.is_empty() {
             let colors = cx.theme().colors;
             let workspace_name = self
@@ -3747,7 +4083,9 @@ impl DesktopView {
                 .as_ref()
                 .and_then(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned());
-            let prompt = "What should we build in VT Code?";
+            let prompt = workspace_name
+                .as_ref()
+                .map_or_else(|| "What should we build?".to_owned(), |name| format!("What should we build in {name}?"));
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
                 .font_weight(gpui_kit::FontWeight::NORMAL)
@@ -3763,38 +4101,41 @@ impl DesktopView {
                         .items_center()
                         .justify_center()
                         .gap_2()
-                        .child("What should we build in")
-                        .child(
-                            desktop_button("welcome-workspace")
-                                .accessibility_label(workspace_name.as_ref().map_or_else(
-                                    || "Choose a workspace".to_owned(),
-                                    |name| format!("Change workspace, current: {name}"),
-                                ))
-                                .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
-                                .text()
-                                .text_color(colors.foreground)
-                                .h_auto()
-                                .p_0()
-                                .min_w_0()
-                                .max_w_full()
-                                .desktop_disabled(
-                                    !self.workspace_switch_idle()
-                                        || self.workspace_picker_open
-                                        || self.retained_submission.is_some(),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(gpui_kit::rems(1.75))
-                                        .font_weight(gpui_kit::FontWeight::NORMAL)
-                                        .border_b_1()
-                                        .border_dashed()
-                                        .border_color(colors.muted_foreground)
-                                        .child("VT Code?"),
-                                )
-                                .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                        ),
+                        .child(if workspace_name.is_some() {
+                            "What should we build in"
+                        } else {
+                            "What should we build?"
+                        })
+                        .when_some(workspace_name, |title, name| {
+                            title.child(
+                                desktop_button("welcome-workspace")
+                                    .accessibility_label(format!("Change workspace, current: {name}"))
+                                    .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                                    .text()
+                                    .text_color(colors.foreground)
+                                    .h_auto()
+                                    .p_0()
+                                    .min_w_0()
+                                    .max_w_full()
+                                    .desktop_disabled(
+                                        !self.workspace_switch_idle()
+                                            || self.workspace_picker_open
+                                            || self.retained_submission.is_some(),
+                                    )
+                                    .child(
+                                        div()
+                                            .min_w_0()
+                                            .truncate()
+                                            .text_size(gpui_kit::rems(1.75))
+                                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                                            .border_b_1()
+                                            .border_dashed()
+                                            .border_color(colors.muted_foreground)
+                                            .child(format!("{name}?")),
+                                    )
+                                    .dispatches_desktop_action(ChooseWorkspace, self.focus_handle.clone()),
+                            )
+                        }),
                 );
             div()
                 .id("welcome")
@@ -3811,42 +4152,32 @@ impl DesktopView {
                                 .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
                                 .title(title),
                         )
-                        .size_full(),
+                        .size_full()
+                        .when(self.workspace.is_none(), |welcome| {
+                            welcome.content(
+                                EmptyContent::new().child(
+                                    desktop_button("open-first-workspace")
+                                        .label("Choose a workspace folder")
+                                        .primary()
+                                        .desktop_disabled(
+                                            self.workspace_picker_open
+                                                || !self.workspace_switch_idle()
+                                                || self.retained_submission.is_some(),
+                                        )
+                                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
+                                ),
+                            )
+                        }),
                 )
                 .into_any_element()
         } else {
-            list(
-                self.transcript.list_state(),
-                cx.processor(|view, index, _, cx| {
-                    if let Some(item) = view.transcript.get(index) {
-                        let group = view.transcript.activity_group(index);
-                        let group_head = group.as_ref().and_then(|range| view.transcript.get(range.start));
-                        if group.as_ref().is_some_and(|range| index != range.start)
-                            && group_head.is_some_and(|head| !head.activity_expanded)
-                        {
-                            return div().into_any_element();
-                        }
-                        let group_header = group
-                            .as_ref()
-                            .filter(|range| index == range.start)
-                            .map(|range| view.render_activity_group(range.clone(), cx));
-                        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
-                        div()
-                            .id(format!("transcript-row-{}", item.id))
-                            .role(gpui_kit::Role::ListItem)
-                            .test_support()
-                            .w_full()
-                            .px_8()
-                            .when(item.role == "tool", |row| row.pb_1())
-                            .when(item.role != "tool", |row| row.pb_4())
-                            .children(group_header)
-                            .when(show_item, |row| row.child(view.render_transcript_item(item, cx)))
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    }
-                }),
+            MessageScroller::new(
+                "transcript-scroller",
+                self.message_scroller.clone(),
+                cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
             )
+            .with_jump_button_label("Jump to latest message")
+            .with_jump_button_renderer(|button| button.accessibility_label("Jump to latest message"))
             .size_full()
             .py_6()
             .into_any_element()
@@ -3854,13 +4185,43 @@ impl DesktopView {
         div()
             .id("transcript-scroll")
             .aria_label("Conversation")
-            .role(gpui_kit::Role::List)
+            .role(gpui_kit::Role::Region)
             .test_support()
             .flex_1()
             .min_h_0()
             .w_full()
             .overflow_hidden()
             .child(content)
+    }
+
+    fn render_transcript_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let Some(item) = self.transcript.get(index) else {
+            return div().into_any_element();
+        };
+        let group = self.transcript.activity_group(index);
+        let group_head = group.as_ref().and_then(|range| self.transcript.get(range.start));
+        if group.as_ref().is_some_and(|range| index != range.start)
+            && group_head.is_some_and(|head| !head.activity_expanded)
+        {
+            return div().into_any_element();
+        }
+        let group_header = group
+            .as_ref()
+            .filter(|range| index == range.start)
+            .map(|range| self.render_activity_group(range.clone(), cx));
+        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
+        div()
+            .id(format!("transcript-row-{}", item.id))
+            .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
+            .test_support()
+            .w_full()
+            // MessageScroller adds three pixels of horizontal row inset.
+            .px_5()
+            .when(item.role == "tool", |row| row.pb_1())
+            .when(item.role != "tool", |row| row.pb_4())
+            .children(group_header)
+            .when(show_item, |row| row.child(self.render_transcript_item(item, cx)))
+            .into_any_element()
     }
 
     fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
@@ -3877,6 +4238,7 @@ impl DesktopView {
         let copy_text = item.text.clone();
         Message::new()
             .id(format!("message-{}", item.id))
+            .role(gpui_kit::Role::ListItem)
             .alignment(if user {
                 MessageAlignment::End
             } else {
@@ -3923,6 +4285,7 @@ impl DesktopView {
                                         .child(render_markdown(
                                             format!("markdown-{}", item.id),
                                             item.markdown.clone(),
+                                            item.role == "assistant",
                                             cx,
                                         )),
                                 ),
@@ -3937,8 +4300,9 @@ impl DesktopView {
                         .tooltip("Copy message")
                         .ghost()
                         .xsmall()
-                        .on_click(move |_, _, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()))
+                        .on_click(move |_, window, app| {
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()));
+                            super::notifications::copied_to_clipboard(window, app);
                         }),
                 ),
             )
@@ -4041,12 +4405,17 @@ impl DesktopView {
                 })),
         );
         if item.expanded {
-            let output = item.output.as_deref().filter(|output| !output.is_empty()).unwrap_or(&item.text);
+            let output = item
+                .output
+                .as_ref()
+                .filter(|output| !output.is_empty())
+                .cloned()
+                .unwrap_or_else(|| item.text.clone());
             panel = panel.child(
                 div()
                     .id(format!("tool-output-{}", item.id))
                     .role(gpui_kit::Role::Label)
-                    .aria_label(output.to_string())
+                    .aria_label(output.clone())
                     .test_support()
                     .ml_4()
                     .pl_3()
@@ -4055,7 +4424,7 @@ impl DesktopView {
                     .border_color(colors.border)
                     .font_family(cx.theme().mono_font_family.clone())
                     .text_size(cx.theme().mono_font_size)
-                    .child(output.to_string()),
+                    .child(output),
             );
         }
         panel.into_any_element()
@@ -4130,8 +4499,9 @@ impl DesktopView {
                 desktop_button(format!("copy-patch-{}", item.id))
                     .label("Copy patch")
                     .ghost()
-                    .on_click(move |_, _, app| {
-                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()))
+                    .on_click(move |_, window, app| {
+                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()));
+                        super::notifications::copied_to_clipboard(window, app);
                     }),
             );
         }
@@ -4297,8 +4667,9 @@ impl DesktopView {
                                     .on_click(cx.listener(|view, _, window, cx| view.restore_submission(window, cx))),
                             )
                             .child(desktop_button("copy-retained-prompt").label("Copy prompt").ghost().on_click(
-                                move |_, _, cx| {
-                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()))
+                                move |_, window, cx| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(prompt.clone()));
+                                    super::notifications::copied_to_clipboard(window, cx);
                                 },
                             ))
                             .child(desktop_button("dismiss-retained-prompt").label("Dismiss").ghost().on_click(
@@ -4386,7 +4757,7 @@ impl DesktopView {
                                     || self.attachments_picker_open
                                     || self.session_request.is_some(),
                             )
-                            .on_click(cx.listener(|view, _, window, cx| view.open_add_context(window, cx))),
+                            .dispatches_desktop_action(OpenAddContext, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("composer-policy")
@@ -4406,7 +4777,7 @@ impl DesktopView {
                             .min_w_0()
                             .max_w(px(112.))
                             .desktop_disabled(!self.can_select_session_options())
-                            .on_click(cx.listener(|view, _, window, cx| view.open_permissions(window, cx))),
+                            .dispatches_desktop_action(OpenPermissions, self.focus_handle.clone()),
                     ),
             );
         let mut model_actions = div().min_w_0().max_w_full().flex().flex_wrap().items_center().gap_2().child(
@@ -4417,10 +4788,14 @@ impl DesktopView {
                 .small()
                 .max_w(px(216.))
                 .overflow_hidden()
-                .tooltip("Choose model and reasoning effort")
+                .tooltip_with_action(
+                    "Choose a model · Search by provider, name, or model ID",
+                    &OpenModelPicker,
+                    Some("VTCodeDesktop"),
+                )
                 .ghost()
                 .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
-                .on_click(cx.listener(|view, _, window, cx| view.open_model_options(window, cx))),
+                .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone()),
         );
         if self.running {
             model_actions = model_actions.child(
@@ -4430,7 +4805,7 @@ impl DesktopView {
                     .icon(IconName::Square)
                     .rounded_full()
                     .danger()
-                    .on_click(cx.listener(|this, _, _, cx| this.cancel_turn(cx))),
+                    .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
             );
         } else {
             model_actions = model_actions.child(
@@ -4445,27 +4820,20 @@ impl DesktopView {
             );
         }
         let buttons = buttons.child(model_actions);
-        let workspace = self
-            .workspace
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Choose workspace".into());
-        let webmcp_connected = self.webmcp_status.as_ref().is_some_and(|status| status.running);
         if self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
                 if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
                     panel = panel.child(
                         div()
                             .absolute()
-                            .top(px(8.))
-                            .right(px(16.))
+                            .top(gpui_kit::rems(0.5))
+                            .right(gpui_kit::rems(1.))
                             .w_0()
                             .h_0()
-                            .child(self.render_command_palette(state, cx)),
+                            .child(self.render_command_palette(state, window, cx)),
                     );
                 } else {
-                    panel = panel.child(self.render_command_palette(state, cx));
+                    panel = panel.child(self.render_command_palette(state, window, cx));
                 }
             }
         }
@@ -4483,38 +4851,32 @@ impl DesktopView {
                 .py_1()
                 .rounded_lg()
                 .bg(colors.background)
-                .child(
-                    desktop_button("composer-workspace")
-                        .icon(IconName::Folder)
-                        .ghost()
-                        .small()
-                        .accessibility_label(format!("Choose workspace: {workspace}"))
-                        .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
-                        .desktop_disabled(
-                            !self.workspace_switch_idle()
-                                || self.retained_submission.is_some()
-                                || self.workspace_picker_open,
-                        )
-                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                )
+                .child(self.render_workspace_picker(cx))
                 .child(
                     desktop_button("composer-cli-webmcp")
                         .icon(IconName::Terminal)
-                        .accessibility_label(if webmcp_connected {
-                            "WebMCP connected. Open connection settings"
+                        .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
+                            "WebMCP connected"
                         } else {
-                            "Connect VT Code CLI and WebMCP"
+                            "Connect WebMCP"
                         })
-                        .tooltip(if webmcp_connected {
-                            "Open WebMCP connection settings"
-                        } else {
-                            "Connect the VT Code CLI and browser app"
-                        })
+                        .accessibility_label("Open VT Code CLI and WebMCP connection settings")
+                        .tooltip("Pair the browser app with this CLI-backed desktop session")
                         .ghost()
                         .small()
                         .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
                 )
-                .child(self.render_mode_button(cx)),
+                .child(self.render_mode_button(cx))
+                .child(
+                    desktop_button("composer-settings")
+                        .icon(IconName::Settings2)
+                        .ghost()
+                        .small()
+                        .ml_auto()
+                        .accessibility_label("Composer settings")
+                        .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                        .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
+                ),
         );
         div().w_full().flex().justify_center().child(
             panel.child(
@@ -4579,56 +4941,67 @@ impl DesktopView {
             .and_then(|config| config.context_window)
             .zip(self.last_usage.as_ref())
             .and_then(|(window, usage)| context_usage_percent(usage, window));
+        let workspace_details = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .min_w_0()
+            .child(div().truncate().child(workspace.to_string()))
+            .when(self.git_branch.is_some(), |bar| {
+                bar.child(
+                    div()
+                        .truncate()
+                        .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
+                )
+            })
+            .when(sandbox.is_some(), |bar| {
+                bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
+            });
+        let runtime_details = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .min_w_0()
+            .when(context_percent.is_some(), |bar| {
+                bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
+            })
+            .child(div().truncate().child(provider_model))
+            .child(
+                div()
+                    .id("agent-status")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(agent.0)
+                    .child(
+                        Marker::new()
+                            .loading(self.running)
+                            .text_xs()
+                            .text_color(agent.1)
+                            .w_auto()
+                            .content(MarkerContent::new().text(agent.0)),
+                    ),
+            );
+
         div()
             .id("status-bar")
             .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Status bar")
             .w_full()
-            .h(px(26.))
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .px_3()
-            .border_t_1()
-            .border_color(colors.border)
-            .text_xs()
-            .text_color(colors.muted_foreground)
+            .flex_shrink_0()
             .child(
-                div()
-                    .flex()
-                    .items_center()
+                StatusBar::new()
+                    .left(workspace_details)
+                    .right(runtime_details)
+                    .w_full()
+                    .h(px(26.))
                     .gap_3()
-                    .min_w_0()
-                    .child(div().truncate().child(workspace.to_string()))
-                    .when(self.git_branch.is_some(), |bar| {
-                        bar.child(
-                            div()
-                                .truncate()
-                                .child(format!("Branch: {}", self.git_branch.clone().unwrap_or_default())),
-                        )
-                    })
-                    .when(sandbox.is_some(), |bar| {
-                        bar.child(div().truncate().child(format!("Sandbox: {}", sandbox.unwrap_or_default())))
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .when(context_percent.is_some(), |bar| {
-                        bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
-                    })
-                    .child(div().truncate().child(provider_model))
-                    .child(
-                        div()
-                            .id("agent-status")
-                            .test_support()
-                            .role(gpui_kit::Role::Status)
-                            .aria_label(agent.0)
-                            .text_color(agent.1)
-                            .child(agent.0),
-                    ),
+                    .px_3()
+                    .py_0()
+                    .border_color(colors.border)
+                    .bg(colors.background)
+                    .text_xs()
+                    .text_color(colors.muted_foreground),
             )
     }
 
@@ -4707,13 +5080,10 @@ impl DesktopView {
         let typography = self.preferences.typography_for(self.theme_mode);
         let ui = typography.ui_font_size;
         let code = typography.code_font_size;
-        let ui_family =
-            typography::resolve_font(typography.ui_font_family, ".SystemUIFont", typography::installed_fonts(cx));
-        let code_family = typography::resolve_font(
-            typography.code_font_family,
-            self.default_code_font.as_str(),
-            typography::installed_fonts(cx),
-        );
+        let installed = typography::installed_fonts(cx);
+        let ui_family = typography::resolve_font(typography.ui_font_family, ".SystemUIFont", &installed);
+        let code_family =
+            typography::resolve_font(typography.code_font_family, self.default_code_font.as_str(), &installed);
         Theme::update(cx, |theme| {
             theme.font_family = ui_family.into();
             theme.mono_font_family = code_family.into();
@@ -4953,6 +5323,42 @@ impl DesktopView {
             panel = panel.child(div().text_sm().child(detail.clone()));
         }
 
+        if interaction.kind == protocol::InteractionKind::Question && interaction.steps.len() > 1 {
+            let step_index = self.interaction_step_index.min(interaction.steps.len().saturating_sub(1));
+            let steps = interaction.steps.iter().enumerate().map(|(index, step)| {
+                let title = if step.title.trim().is_empty() {
+                    format!("Question {}", index + 1)
+                } else {
+                    step.title.clone()
+                };
+                StepperItem::new().child(div().min_w_0().max_w_full().truncate().child(title))
+            });
+            panel = panel.child(
+                div()
+                    .id("interaction-question-progress")
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label("Question progress")
+                    .w_full()
+                    .child(
+                        div()
+                            .id("interaction-question-stepper")
+                            .test_support()
+                            .role(gpui_kit::Role::List)
+                            .aria_label("Question steps")
+                            .w_full()
+                            .child(
+                                Stepper::new("interaction-question-steps")
+                                    .small()
+                                    .w_full()
+                                    .selected_index(step_index)
+                                    .disabled(true)
+                                    .items(steps),
+                            ),
+                    ),
+            );
+        }
+
         if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
             let step_index = self.interaction_step_index.min(interaction.steps.len().saturating_sub(1));
             if let Some(step) = interaction.steps.get(step_index) {
@@ -5014,6 +5420,10 @@ impl DesktopView {
             .gap_2()
             .child(
                 div()
+                    .id("question-step-counter")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(format!("Question {} of {total}", index + 1))
                     .text_xs()
                     .text_color(colors.muted_foreground)
                     .child(format!("Question {} of {total}", index + 1)),
@@ -5060,8 +5470,21 @@ impl DesktopView {
 
     /// Modal ⌘K palette. The state entity is created on open, never during
     /// render; confirm and cancel run through the owning view.
-    fn render_command_palette(&self, state: Entity<CommandState>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_command_palette(
+        &self,
+        state: Entity<CommandState>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let colors = cx.theme().colors;
+        let ui_font_size = cx.theme().font_size;
+        let popup_margin = ui_font_size * 0.75;
+        let viewport_width = window.viewport_size().width;
+        let max_popup_width = if viewport_width > popup_margin * 2. {
+            viewport_width - popup_margin * 2.
+        } else {
+            px(0.)
+        };
         let weak = cx.entity().downgrade();
         let groups = if self.palette_kind == PaletteKind::AddContext {
             self.composer_resource_groups()
@@ -5088,7 +5511,7 @@ impl DesktopView {
         let composer_popup = self.palette_kind.is_composer_popup();
         let title = match self.palette_kind {
             PaletteKind::Models => "Choose a model",
-            PaletteKind::ModelOptions => "Model and reasoning effort",
+            PaletteKind::ModelOptions => "Select model",
             PaletteKind::AddContext => "Add files and more @",
             PaletteKind::Permissions => "Command permissions",
             PaletteKind::Modes => "Agent mode",
@@ -5128,6 +5551,20 @@ impl DesktopView {
         if quick_model {
             let slider = self.effort_slider.clone();
             let configuration = self.configuration.clone();
+            let speed_toggle = configuration.as_ref().and_then(|configuration| {
+                let options = configuration.session_options.as_ref()?;
+                if !options.fast_mode_supported {
+                    return None;
+                }
+                Some((
+                    options.fast_mode_label.clone()?,
+                    options.fast_mode_enabled,
+                    configuration.provider.clone(),
+                    configuration.model.clone(),
+                    self.palette.as_ref().map(|state| state.entity_id()),
+                ))
+            });
+            let speed_toggle_view = weak.clone();
             let label = configuration.as_ref().map(|config| {
                 self.models
                     .iter()
@@ -5136,16 +5573,61 @@ impl DesktopView {
                     .unwrap_or_else(|| config.model.clone())
             });
             command = command.searchable(false).header(move |_, _, cx| {
-                composer_controls::model_options_header(configuration.as_ref(), slider.as_ref(), label.as_deref(), cx)
+                let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
+                    let weak = speed_toggle_view.clone();
+                    let label = label.clone();
+                    let enabled = *enabled;
+                    let provider = provider.clone();
+                    let model = model.clone();
+                    let palette_id = *palette_id;
+                    Toggle::new("fast-mode-toggle")
+                        .label(label.clone())
+                        .tooltip(if enabled {
+                            format!("Disable {label} processing")
+                        } else {
+                            format!("Enable {label} processing")
+                        })
+                        .outline()
+                        .small()
+                        .checked(enabled)
+                        .on_click(move |checked, window, cx| {
+                            let _updated = weak.update(cx, |view, cx| {
+                                if view.palette_kind != PaletteKind::ModelOptions
+                                    || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
+                                    || !view.model_is_current(&provider, &model)
+                                {
+                                    return;
+                                }
+                                view.close_palette(window, cx);
+                                view.select_session_options(
+                                    protocol::SessionOptionsSelectParams {
+                                        fast_mode: Some(*checked),
+                                        ..Default::default()
+                                    },
+                                    cx,
+                                );
+                            });
+                        })
+                        .into_any_element()
+                });
+                composer_controls::model_options_header(
+                    configuration.as_ref(),
+                    slider.as_ref(),
+                    label.as_deref(),
+                    speed_control,
+                    cx,
+                )
             });
         }
-        for (section_index, (label, entries)) in confirm_groups.iter().enumerate() {
+        let palette_query = self.palette_query.clone();
+        for (label, entries) in &confirm_groups {
             let mut group = CommandGroup::new().label(label.clone());
-            for (row_index, entry) in entries.iter().enumerate() {
+            for entry in entries {
                 let label = entry.label.clone();
                 let description = entry.description.clone();
+                let query = palette_query.clone();
                 let selected = self.is_current_palette_action(&entry.action);
-                let id = format!("palette-label-{section_index}-{row_index}");
+                let id = palette_entry_element_id(&entry.action);
                 let accessible_label = description
                     .as_ref()
                     .map(|details| format!("{label} · {details}"))
@@ -5175,7 +5657,12 @@ impl DesktopView {
                                         .flex()
                                         .flex_col()
                                         .gap_1()
-                                        .child(div().truncate().font_medium().child(label.clone()))
+                                        .child(
+                                            gpui_kit::component::label::Label::new(label.clone())
+                                                .highlights(query.clone())
+                                                .font_medium()
+                                                .truncate(),
+                                        )
                                         .when_some(description.clone(), |row, details| {
                                             row.child(
                                                 div()
@@ -5196,7 +5683,18 @@ impl DesktopView {
         }
         let confirm_weak = weak.clone();
         let cancel_weak = weak.clone();
+        let query_weak = weak.clone();
+        let palette_id = state.entity_id();
         let command = command
+            .on_query(move |query, _, cx| {
+                let _updated = query_weak.update(cx, |view, cx| {
+                    if view.palette.as_ref().is_none_or(|palette| palette.entity_id() != palette_id) {
+                        return;
+                    }
+                    view.palette_query = query.into();
+                    cx.notify();
+                });
+            })
             .on_confirm(move |path, _window, cx: &mut App| {
                 let Some(action) = confirm_groups
                     .get(path.section)
@@ -5218,9 +5716,15 @@ impl DesktopView {
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label(title)
-            .w(px(if models { 440. } else { 560. }))
-            .max_w_full()
-            .when(models, |panel| {
+            .w(gpui_kit::rems(if quick_model {
+                22.
+            } else if models {
+                24.5
+            } else {
+                35.
+            }))
+            .max_w(max_popup_width)
+            .when(models || quick_model, |panel| {
                 panel
                     .rounded_xl()
                     .border_1()
@@ -5233,7 +5737,14 @@ impl DesktopView {
             })
             .on_action(|_: &gpui_kit::base::actions::Cancel, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(command)
+            .child(command.with_animation(
+                ("command-palette-content", state.entity_id()),
+                Animation::new(cx.theme().motion_tokens().duration_fast).with_easing({
+                    let easing = cx.theme().motion_tokens().easing_enter.clone();
+                    move |progress| easing.sample(progress).clamp(0., 1.)
+                }),
+                |content, progress| content.opacity(progress),
+            ))
             .focus_trap("command-palette", &self.palette_focus);
         if composer_popup {
             return deferred(
@@ -5243,8 +5754,8 @@ impl DesktopView {
                     } else {
                         Anchor::BottomLeft
                     })
-                    .offset(point(px(0.), px(-8.)))
-                    .snap_to_window_with_margin(px(12.))
+                    .offset(point(px(0.), ui_font_size * -0.5))
+                    .snap_to_window_with_margin(popup_margin)
                     .child(panel),
             )
             .priority(2)
@@ -5255,7 +5766,7 @@ impl DesktopView {
             .inset_0()
             .flex()
             .justify_center()
-            .pt(px(90.))
+            .pt(gpui_kit::rems(5.625))
             .bg(colors.background.opacity(0.4))
             .child(panel)
             .into_any_element()
@@ -5264,13 +5775,14 @@ impl DesktopView {
 
 impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.review_open && self.review_focus.contains_focused(window, cx) {
-            self.review_return_focus = None;
-            self.focus_composer(window, cx);
-        }
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
-        let sidebar = self.render_navigation(cx);
+        let sidebar = div()
+            .relative()
+            .h_full()
+            .flex_shrink_0()
+            .child(self.render_navigation(cx))
+            .when(self.sidebar_open, |sidebar| sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)));
         let conversation = div()
             .flex_1()
             .min_w_0()
@@ -5298,9 +5810,14 @@ impl Render for DesktopView {
             .border_color(colors.border.opacity(0.85))
             .child(conversation)
             .when(inspector_visible, |workspace| {
-                workspace
-                    .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
-                    .child(self.render_inspector(cx))
+                workspace.child(
+                    div()
+                        .relative()
+                        .h_full()
+                        .flex_shrink_0()
+                        .child(self.render_inspector(cx))
+                        .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
+                )
             });
         let panes = div()
             .id("pane-root")
@@ -5310,22 +5827,6 @@ impl Render for DesktopView {
             .min_h_0()
             .flex()
             .bg(chrome_background(&colors))
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                let Some(drag) = this.resizing else { return };
-                let delta = f32::from(event.position.x) - drag.start_x;
-                let width = drag.start_width
-                    + match drag.edge {
-                        ResizeEdge::Sidebar => delta,
-                        ResizeEdge::Inspector => -delta,
-                    };
-                let clamped = width.clamp(MIN_PANE_WIDTH, MAX_PANE_WIDTH);
-                match drag.edge {
-                    ResizeEdge::Sidebar => this.sidebar_width = clamped,
-                    ResizeEdge::Inspector => this.inspector_width = clamped,
-                }
-                cx.stop_propagation();
-                cx.notify();
-            }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseUpEvent, _, cx| {
@@ -5336,7 +5837,6 @@ impl Render for DesktopView {
                 }),
             )
             .child(sidebar)
-            .when(self.sidebar_open, |panes| panes.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)))
             .child(workspace);
         let mut body = div()
             .size_full()
@@ -5366,11 +5866,23 @@ impl Render for DesktopView {
                 cx.notify();
             }))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
-            .on_action(cx.listener(|view, _: &ReloadCliSettings, _, cx| view.reload_cli_settings(cx)))
+            .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
+                view.reload_cli_settings_from_ui(window, cx);
+            }))
             .on_action(cx.listener(|view, _: &SyncCliTheme, _, cx| view.sync_theme_to_cli(cx)))
             .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
             .when(self.workspace.is_some(), |body| {
                 body.on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+                    .on_action(cx.listener(|view, _: &OpenUtilities, _, cx| view.open_utilities(cx)))
+                    .on_action(cx.listener(|view, _: &OpenWorkspaceFiles, window, cx| {
+                        view.focus_workspace_files(window, cx);
+                    }))
+                    .on_action(cx.listener(|view, _: &RefreshWorkspace, _, cx| view.refresh_workspace_view(cx)))
+            })
+            .when(self.backend.is_some() && self.service_info.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenWorkspaceReview, window, cx| {
+                    view.open_workspace_review(window, cx);
+                }))
             })
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
@@ -5396,39 +5908,10 @@ impl Render for DesktopView {
         if self.review_open {
             body = body.child(self.render_change_review(cx));
         }
-        if self.settings_open {
-            body = body.child(
-                div()
-                    .absolute()
-                    .inset_0()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .p_8()
-                    .bg(colors.background.opacity(0.85))
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(|view, _, window, cx| view.close_settings(window, cx)),
-                    )
-                    .child(
-                        div()
-                            .w(px(740.))
-                            .max_w_full()
-                            .h_full()
-                            .min_w_0()
-                            .min_h_0()
-                            .child(self.render_settings(cx))
-                            .focus_trap("settings-trap", &self.settings_focus),
-                    ),
-            );
-        }
         if !self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
-                body = body.child(self.render_command_palette(state, cx));
+                body = body.child(self.render_command_palette(state, window, cx));
             }
-        }
-        if self.config_editor.is_some() {
-            body = body.child(self.render_cli_config_editor(cx));
         }
         body
     }
@@ -5523,12 +6006,59 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
     }
 }
 
+/// Keep palette label identity attached to the command when search/filtering changes row order.
+/// Hash payloads so file paths and draft text do not appear in rendered element IDs.
+fn palette_entry_element_id(action: &PaletteAction) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::mem::discriminant(action).hash(&mut hasher);
+    match action {
+        PaletteAction::SelectFont { target, family } => {
+            match target {
+                FontTarget::Ui => 0_u8,
+                FontTarget::Code => 1_u8,
+            }
+            .hash(&mut hasher);
+            family.hash(&mut hasher);
+        }
+        PaletteAction::EditConfigSetting(value)
+        | PaletteAction::LoadSession(value)
+        | PaletteAction::PreviewFile(value)
+        | PaletteAction::AttachFile(value)
+        | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
+        PaletteAction::SelectModel { provider, model } => {
+            provider.hash(&mut hasher);
+            model.hash(&mut hasher);
+        }
+        PaletteAction::SelectSessionOptions(options) => {
+            match options.permission_mode {
+                None => 0_u8,
+                Some(protocol::PermissionMode::Ask) => 1,
+                Some(protocol::PermissionMode::AutoApproveCommands) => 2,
+            }
+            .hash(&mut hasher);
+            options.mode.hash(&mut hasher);
+            options.reasoning_effort.hash(&mut hasher);
+            options.fast_mode.hash(&mut hasher);
+        }
+        PaletteAction::NewSession
+        | PaletteAction::CloseSession
+        | PaletteAction::ChooseModel
+        | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshFiles
+        | PaletteAction::ToggleInspector
+        | PaletteAction::ToggleTheme
+        | PaletteAction::AttachFiles => {}
+    }
+    format!("palette-label-{:016x}", hasher.finish())
+}
+
 fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
     let context = model
         .context_window
-        .map(|tokens| format!(" · {tokens} tokens"))
+        .map(|tokens| format!(" · {} context", format_context_window(tokens)))
         .unwrap_or_default();
     let current = if current { " · Current" } else { "" };
+    let capabilities = model.capabilities.as_ref().map(model_capability_labels).unwrap_or_default();
     let mut entry = command(
         model.display_name.clone(),
         PaletteAction::SelectModel {
@@ -5536,9 +6066,70 @@ fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteC
             model: model.id.clone(),
         },
     );
-    entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
+    let mut details = vec![model.provider.clone()];
+    details.extend(capabilities.iter().cloned());
+    if !context.is_empty() {
+        details.push(context.trim_start_matches(" · ").to_string());
+    }
+    details.push(model.id.clone());
+    if !current.is_empty() {
+        details.push(current.trim_start_matches(" · ").to_string());
+    }
+    entry.description = Some(details.join(" · "));
     entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry.keywords.extend(capabilities);
     entry
+}
+
+fn model_capability_labels(capabilities: &protocol::ModelCapabilities) -> Vec<String> {
+    let mut labels = Vec::new();
+    if capabilities.reasoning {
+        labels.push("Reasoning".into());
+    }
+    if capabilities.vision {
+        labels.push("Vision".into());
+    }
+    if capabilities.tool_call {
+        labels.push("Tools".into());
+    }
+    if capabilities.structured_output {
+        labels.push("Structured output".into());
+    }
+    if capabilities.is_pro {
+        labels.push("Pro".into());
+    }
+    for (modality, label) in [("audio", "Audio"), ("video", "Video"), ("pdf", "PDF")] {
+        if capabilities
+            .input_modalities
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case(modality))
+        {
+            labels.push(label.into());
+        }
+    }
+    labels
+}
+
+fn format_context_window(tokens: u64) -> String {
+    if tokens >= 1_000_000 {
+        format_compact_count(tokens, 1_000_000, "M")
+    } else if tokens >= 1_000 {
+        format_compact_count(tokens, 1_000, "K")
+    } else {
+        tokens.to_string()
+    }
+}
+
+fn format_compact_count(value: u64, divisor: u64, suffix: &str) -> String {
+    let whole = value / divisor;
+    let hundredths = (value % divisor) * 100 / divisor;
+    if hundredths == 0 {
+        format!("{whole}{suffix}")
+    } else if hundredths.is_multiple_of(10) {
+        format!("{whole}.{}{suffix}", hundredths / 10)
+    } else {
+        format!("{whole}.{hundredths:02}{suffix}")
+    }
 }
 
 fn workspace_picker_options() -> PathPromptOptions {
@@ -5723,22 +6314,23 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
     format!("history-{:016x}", hasher.finish())
 }
 
-/// Native clickable controls share one cursor policy; disabled controls keep the arrow.
+/// Native buttons use GPUI's arrow cursor; links opt into a pointing hand.
 fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).cursor_pointer()
+    Button::new(id).tab_stop(true)
 }
 
 trait DesktopButtonExt {
     fn desktop_disabled(self, disabled: bool) -> Self;
+    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self;
 }
 
 impl DesktopButtonExt for Button {
     fn desktop_disabled(self, disabled: bool) -> Self {
-        self.disabled(disabled).cursor(if disabled {
-            CursorStyle::Arrow
-        } else {
-            CursorStyle::PointingHand
-        })
+        self.disabled(disabled)
+    }
+
+    fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {
+        self.on_click(move |_, window, cx| focus.dispatch_action(&action, window, cx))
     }
 }
 

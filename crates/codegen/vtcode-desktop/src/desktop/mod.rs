@@ -1,6 +1,9 @@
+mod assets;
 mod files;
 mod inspector;
+mod localization;
 mod markdown;
+mod notifications;
 mod preferences;
 mod themes;
 mod transcript;

@@ -1,6 +1,9 @@
 //! Native GPUI desktop client for the VT Code local service.
 
 #[cfg(target_os = "macos")]
+rust_i18n::i18n!("locales", fallback = "en");
+
+#[cfg(target_os = "macos")]
 mod desktop;
 
 #[cfg(target_os = "macos")]

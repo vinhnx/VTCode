@@ -12,6 +12,7 @@ on:
       - "crates/common/vtcode-desktop-protocol/**"
       - "src/agent/runloop/unified/**"
       - "src/cli/desktop_server.rs"
+      - "src/cli/desktop_server/**"
       - "src/cli/dispatch/commands.rs"
       - "src/cli/mod.rs"
       - "src/main.rs"
@@ -19,6 +20,7 @@ on:
       - "tests/desktop_server.rs"
       - "crates/codegen/vtcode-ui/AGENTS.md"
       - "scripts/package-desktop-macos.sh"
+      - "scripts/tests/test_package_desktop_macos.sh"
       - ".github/workflows/desktop-macos.yml"
   push:
     branches: [main]
@@ -29,12 +31,14 @@ on:
       - "crates/common/vtcode-desktop-protocol/**"
       - "src/agent/runloop/unified/**"
       - "src/cli/desktop_server.rs"
+      - "src/cli/desktop_server/**"
       - "src/cli/dispatch/commands.rs"
       - "src/cli/mod.rs"
       - "src/main.rs"
       - "src/startup/**"
       - "tests/desktop_server.rs"
       - "scripts/package-desktop-macos.sh"
+      - "scripts/tests/test_package_desktop_macos.sh"
       - ".github/workflows/desktop-macos.yml"
 
 permissions:
@@ -78,6 +82,9 @@ jobs:
 
       - name: Test the headless service process
         run: cargo nextest run --locked -p vtcode --test desktop_server
+
+      - name: Test macOS bundle assembly safeguards
+        run: bash scripts/tests/test_package_desktop_macos.sh
 
       - name: Build and verify the app bundle
         run: scripts/package-desktop-macos.sh "$RUNNER_TEMP/VT Code.app"

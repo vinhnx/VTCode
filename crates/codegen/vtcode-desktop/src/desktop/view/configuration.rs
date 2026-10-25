@@ -81,10 +81,9 @@ impl ConfigValueKind {
 
 impl DesktopView {
     pub(super) fn render_cli_configuration(&self, cx: &Context<Self>) -> AnyElement {
-        let colors = cx.theme().colors;
         let snapshot = self.cli_config_settings.as_ref();
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
-        let mut group = GroupBox::new().flex_shrink_0().outline().title("CLI configuration");
+        let mut group = GroupBox::new().flex_shrink_0().fill().title("CLI configuration");
         group = group.child(div().text_sm().child(match snapshot {
             Some(_) => format!("{count} settings · values follow the active CLI config layers"),
             None if self.workspace.is_some() => "Loading shared CLI settings…".into(),
@@ -106,7 +105,10 @@ impl DesktopView {
                     protocol::ConfigTarget::Project => "config-target-project",
                 })
                 .label(label)
-                .accessibility_label(format!("Write CLI settings to {label} configuration"))
+                .accessibility_label(format!(
+                    "Write CLI settings to {label} configuration{}",
+                    if selected { " (selected)" } else { "" }
+                ))
                 .when(selected, |button| button.primary())
                 .when(!selected, |button| button.ghost())
                 .small()
@@ -133,9 +135,8 @@ impl DesktopView {
                 note.push_str(" Some unusually large or numerous settings are omitted from this browser.");
             }
         }
-        group
-            .child(div().text_xs().text_color(colors.muted_foreground).child(note))
-            .into_any_element()
+        group = group.footer(note);
+        accessible_group_box("cli-configuration-group", "CLI configuration", group)
     }
 
     pub(super) fn can_edit_cli_settings(&self) -> bool {
@@ -187,6 +188,9 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
+        if !self.settings_open {
+            self.open_settings(window, cx);
+        }
         let Some(setting) = self
             .cli_config_settings
             .as_ref()
@@ -214,7 +218,6 @@ impl DesktopView {
             target: self.config_target,
             expected_layer_version: self.target_version(self.config_target),
         });
-        self.settings_open = true;
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| view.config_editor_focus.focus(window, cx));
         cx.notify();

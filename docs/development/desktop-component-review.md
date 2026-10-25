@@ -54,7 +54,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [menu](https://gpui-kit.com/component/menu) | Applied: thread overflow uses canonical guarded new/close commands. |
 | [message](https://gpui-kit.com/component/message) | Applied: sender headers, outlined user prompts, unframed assistant responses, and copy footers. |
 | [message-scroller](https://gpui-kit.com/component/message-scroller) | Retain measured transcript ListState and existing anchoring/following behavior. |
-| [notification](https://gpui-kit.com/component/notification) | Retain inline error and draft-recovery state with existing ownership. |
+| [notification](https://gpui-kit.com/component/notification) | Applied system-only notices for inactive-window run completion, failure/blocking, and pending decisions; preserve transcript/interaction state as the source of truth and route clicks through the originating Kit window. |
 | [number-input](https://gpui-kit.com/component/number-input) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
 | [otp-input](https://gpui-kit.com/component/otp-input) | Not needed for the current coding-workspace workflows or available data. |
 | [pagination](https://gpui-kit.com/component/pagination) | Not needed for the current coding-workspace workflows or available data. |
@@ -64,31 +64,31 @@ measured-list, approval, persistence, or accessibility owners.
 | [questionnaire](https://gpui-kit.com/component/questionnaire) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [radio](https://gpui-kit.com/component/radio) | Preserve runtime-owned approval/choice identity and existing guarded callbacks. |
 | [rating](https://gpui-kit.com/component/rating) | Not needed for the current coding-workspace workflows or available data. |
-| [resizable](https://gpui-kit.com/component/resizable) | Retain tested three-pane resizing and persistence; avoid unnecessary docking migration. |
-| [root](https://gpui-kit.com/component/root) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
-| [scrollable](https://gpui-kit.com/component/scrollable) | Retain bounded scrolling for sessions, inspector, and Appearance. |
+| [resizable](https://gpui-kit.com/component/resizable) | Applied standalone Kit handles with splitter semantics and keyboard resizing; preserve custom width bounds/persistence instead of migrating independent panes into a panel group. |
+| [root](https://gpui-kit.com/component/root) | Applied: `gpui_kit::open_window` owns the single Root; initialize Kit before opening, and retain tested native menu/window/reopen lifecycle. |
+| [scrollable](https://gpui-kit.com/component/scrollable) | Applied themed Kit scrollbars to settings and file preview; recent sessions use a virtual list with a Kit scrollbar. |
 | [select](https://gpui-kit.com/component/select) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |
 | [settings](https://gpui-kit.com/component/settings) | Use current grouped, bounded preference controls; do not introduce a parallel global settings store. |
-| [sheet](https://gpui-kit.com/component/sheet) | Appearance is modal; inspector remains an ordinary workspace pane. |
+| [sheet](https://gpui-kit.com/component/sheet) | Applied: Settings uses the Root-managed right Sheet for responsive sizing, built-in focus trapping, Escape/outside dismissal, and close behavior; the inspector remains an ordinary workspace pane. |
 | [shimmer](https://gpui-kit.com/component/shimmer) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
-| [sidebar](https://gpui-kit.com/component/sidebar) | Retain keyboard-capable navigation buttons; resolved SidebarMenu rows do not offer equivalent keyboard handling. |
-| [skeleton](https://gpui-kit.com/component/skeleton) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
+| [sidebar](https://gpui-kit.com/component/sidebar) | Applied its labeled navigation structure to the rail and workspace/thread panel. Keep VT Code's keyboard-capable Kit Button rows and virtualized session list; Kit SidebarMenu rows are click-only tree items without equivalent keyboard handling. |
+| [skeleton](https://gpui-kit.com/component/skeleton) | Applied to the owned Git review pending state; preserve its status label and render static theme-colored placeholders when reduced motion is enabled because Kit's Skeleton pulse is unconditional. |
 | [slider](https://gpui-kit.com/component/slider) | Applied to persisted status-bar visibility; disabled/default state remains native. |
 | [speech](https://gpui-kit.com/component/speech) | Deferred: microphone/recognition integration is outside this UI pass. |
 | [spinner](https://gpui-kit.com/component/spinner) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
-| [status-bar](https://gpui-kit.com/component/status-bar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
-| [stepper](https://gpui-kit.com/component/stepper) | Do not invent execution percentages or phases beyond existing runtime events. |
-| [switch](https://gpui-kit.com/component/switch) | Deferred: custom preferences require real effects, persistence, and accessibility validation. |
+| [status-bar](https://gpui-kit.com/component/status-bar) | Applied Kit's left/right regions to the optional workspace and runtime status row; retain VT Code palette colors, the labeled status group, and the live agent-status announcement. |
+| [stepper](https://gpui-kit.com/component/stepper) | Applied only to ordered multi-step runtime questions; keep the step order and current index runtime-owned, and disable direct navigation when the runtime requires sequential answers. Never invent execution phases or percentages. |
+| [switch](https://gpui-kit.com/component/switch) | Applied: separate light/dark appearance profiles have persisted theme and typography effects with accessible state. |
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |
-| [tabs](https://gpui-kit.com/component/tabs) | Retain inspector tabs and scoped keyboard wrapper. |
+| [tabs](https://gpui-kit.com/component/tabs) | Applied Kit TabBar with tracked reveal for keyboard/programmatic selection; retain scoped keyboard actions and VT Code-owned content. |
 | [tag](https://gpui-kit.com/component/tag) | Applied: neutral provider metadata and explicit tool-status tags in recessed activity cards. |
-| [text-view](https://gpui-kit.com/component/text-view) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
+| [text-view](https://gpui-kit.com/component/text-view) | Applied Base TextView with reduced-motion-aware assistant stream fades; preserve syntax highlighting, selection/copy, web-only links, and blocked transcript images. |
 | [textarea](https://gpui-kit.com/component/textarea) | Retain rich Markdown, owned input state, raw copy, and image/security policy. |
 | [theme](https://gpui-kit.com/component/theme) | Applied: neutral hover/selection distinct from brand primary; component surfaces follow VT Code palettes. |
 | [time-field](https://gpui-kit.com/component/time-field) | Not needed for the current coding-workspace workflows or available data. |
 | [title-bar](https://gpui-kit.com/component/title-bar) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
-| [toggle](https://gpui-kit.com/component/toggle) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |
-| [toolbar](https://gpui-kit.com/component/toolbar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
-| [tooltip](https://gpui-kit.com/component/tooltip) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
+| [toggle](https://gpui-kit.com/component/toggle) | Applied to model speed selection as a controlled, accessible toolbar toggle; preference controls continue to use Switch. |
+| [toolbar](https://gpui-kit.com/component/toolbar) | Applied to the header workspace actions with named grouping, compact Kit controls, and arrow-key focus navigation. |
+| [tooltip](https://gpui-kit.com/component/tooltip) | Applied Kit-managed tooltips to action buttons; shortcut hints resolve from the active keymap, while icon controls retain explicit accessible names. Keep fixed Enter guidance only where the action is not configurable. |
 | [tree](https://gpui-kit.com/component/tree) | Deferred: richer navigation/editing is a separate functional increment. |
 | [virtual-list](https://gpui-kit.com/component/virtual-list) | Retain measured transcript ListState and existing anchoring/following behavior. |
