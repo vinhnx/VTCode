@@ -499,7 +499,7 @@ enum ResizeEdge {
 #[derive(Clone, Copy)]
 struct PaneResize {
     edge: ResizeEdge,
-    start_x: f32,
+    start_pointer_x_window: Pixels,
     start_width: f32,
 }
 
@@ -2687,7 +2687,7 @@ impl DesktopView {
             .on_drag_move(cx.listener(|this, event: &DragMoveEvent<ResizeEdge>, _, cx| {
                 let edge = *event.drag(cx);
                 if this.resizing.is_some_and(|drag| drag.edge == edge) {
-                    let changed = this.resize_from_drag(edge, f32::from(event.event.position.x));
+                    let changed = this.resize_from_drag(edge, event.event.position.x);
                     cx.stop_propagation();
                     if changed {
                         cx.notify();
@@ -2736,7 +2736,7 @@ impl DesktopView {
                     }
                     this.resizing = Some(PaneResize {
                         edge,
-                        start_x: f32::from(event.position.x),
+                        start_pointer_x_window: event.position.x,
                         start_width: match edge {
                             ResizeEdge::Sidebar => this.sidebar_width,
                             ResizeEdge::Inspector => this.inspector_width,
@@ -2769,11 +2769,11 @@ impl DesktopView {
         true
     }
 
-    fn resize_from_drag(&mut self, edge: ResizeEdge, pointer_x: f32) -> bool {
+    fn resize_from_drag(&mut self, edge: ResizeEdge, pointer_x_window: Pixels) -> bool {
         let Some(drag) = self.resizing.filter(|drag| drag.edge == edge) else {
             return false;
         };
-        let delta = pointer_x - drag.start_x;
+        let delta = f32::from(pointer_x_window - drag.start_pointer_x_window);
         let width = drag.start_width
             + match edge {
                 ResizeEdge::Sidebar => delta,
