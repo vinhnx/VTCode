@@ -4359,6 +4359,67 @@ fn runtime_option_popups_focus_the_current_choice_and_confirming_it_is_a_noop(cx
 }
 
 #[gpui_kit::test]
+fn composer_tracks_the_active_agent_without_changing_next_session_mode(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.configuration = Some(runtime_options_config());
+            view.selected_session_id = Some("session-a".into());
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::PrimaryAgentChanged(vtcode_desktop_protocol::PrimaryAgentChanged {
+                    session_id: "session-a".into(),
+                    display_name: Some("Plan".into()),
+                }),
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Plan"));
+        assert_eq!(
+            view.read(cx)
+                .configuration
+                .as_ref()
+                .unwrap()
+                .session_options
+                .as_ref()
+                .unwrap()
+                .mode,
+            "build"
+        );
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::PrimaryAgentChanged(vtcode_desktop_protocol::PrimaryAgentChanged {
+                    session_id: "session-b".into(),
+                    display_name: Some("Stale agent".into()),
+                }),
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Plan"));
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::PrimaryAgentChanged(vtcode_desktop_protocol::PrimaryAgentChanged {
+                    session_id: "session-a".into(),
+                    display_name: None,
+                }),
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-mode").label(), Some("Agent mode: Build"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn cli_settings_reload_waits_for_shutdown_and_preserves_draft_sources(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);

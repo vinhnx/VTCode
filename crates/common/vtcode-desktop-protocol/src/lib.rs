@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 9 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 10 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -630,6 +630,16 @@ pub struct ThreadEventNotification {
     pub event: VersionedThreadEvent,
 }
 
+/// Ephemeral active primary-agent display state for one live session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrimaryAgentChanged {
+    /// Session owning the active-agent state.
+    pub session_id: String,
+    /// Sanitized active-agent label, or `None` to use the configured fallback.
+    pub display_name: Option<String>,
+}
+
 /// Known desktop JSON-RPC methods.
 pub mod method {
     /// Initialize and negotiate protocol support.
@@ -672,6 +682,8 @@ pub mod method {
     pub const THREAD_EVENT: &str = "thread/event";
     /// Ask the client to resolve a runtime interaction.
     pub const INTERACTION_REQUESTED: &str = "interaction/requested";
+    /// Publish the active primary agent for a live session.
+    pub const PRIMARY_AGENT_CHANGED: &str = "session/primaryAgentChanged";
     /// Publish visible turn state.
     pub const TURN_STATUS: &str = "turn/status";
 }

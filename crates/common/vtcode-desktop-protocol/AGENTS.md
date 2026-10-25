@@ -9,6 +9,7 @@
 - For `interaction/respond`, validate without consuming, enqueue to the active runtime, then resolve; failed delivery
   must leave it retryable.
 - `sessionOptions` are typed idle-session overrides; resource names are bounded CLI-safe tokens.
+- Primary-agent display notifications are ephemeral and session-scoped; keep configured `sessionOptions.mode` separate.
 - `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never
   config file paths, full TOML, or credentials.
 - Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.

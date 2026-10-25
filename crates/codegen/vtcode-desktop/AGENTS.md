@@ -24,6 +24,6 @@
 - Recheck workspace switching after an asynchronous picker completes; permit only one picker at a time.
 - `view/navigation.rs` starts collapsed; Kit buttons own hover callbacks, so use wrappers for reveal handlers.
 - Stable row IDs use session/path identity; restored history uses session/content plus duplicate occurrence.
-- Bound queues; reject stale events. Reload bounded credential-filtered CLI settings only after shutdown.
-  Keep same-workspace drafts; retain unacknowledged submissions and never replay uncertain delivery.
+- Bound queues; reject stale events, including primary-agent notifications. Keep mode selection next-session only.
+  Reload bounded credential-filtered CLI settings after shutdown; retain drafts and never replay uncertain delivery.
 - `view/workspace_review.rs`: retain Git navigation by path across refresh; history never replays lifecycle/approvals.
