@@ -46,7 +46,8 @@ policy, and review every change.
     - [Core Contributors](#core-contributors)
     - [Contributors](#contributors)
     - [Resources](#resources)
-- [Sponsorship](#sponsorship)
+- [Support VT Code](#support-vt-code)
+- [Thank you!](#thank-you)
 - [License](#license)
 
 ## Overview
@@ -384,20 +385,26 @@ figure it out together.
   evals, security, and lessons learned.
 - [Podcast](https://www.youtube.com/watch?v=XLoswcd5rH0) · [Video](https://www.youtube.com/watch?v=PvL_kPjgU6o)
 
-## Sponsorship
+## Support VT Code
 
-VT Code is maintained in spare time; a [sponsorship](https://github.com/sponsors/vinhnx) keeps it independent.
+VT Code is created by me and with help from the community. Consider supporting the development. Every bit helps. Thank you!
 
 <div align="center">
-
----
 
 [![@codemod](https://avatars.githubusercontent.com/u/78830094?s=80)](https://github.com/codemod)&nbsp;
 [![@coderabbitai](https://avatars.githubusercontent.com/u/132028505?s=80)](https://github.com/coderabbitai)&nbsp;
 
----
-
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/vinhnz?style=for-the-badge&label=Click%20to%20sponsor&labelColor=BFB38F&color=000000&link=https%3A%2F%2Fgithub.com%2Fsponsors%2Fvinhnx)](https://github.com/sponsors/vinhnx)
+
+## Thank you!
+
+<a href="https://www.star-history.com/?repos=vinhnx%2FVTCode&type=timeline&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vinhnx/VTCode&type=timeline&legend=top-left" />
+ </picture>
+</a>
 
 </div>
 
