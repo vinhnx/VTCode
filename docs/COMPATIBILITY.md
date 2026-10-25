@@ -28,6 +28,8 @@ VT Code ecosystem.
 ### Current MSRV: Rust 1.99.1
 
 All VT Code crates require Rust 1.99.1 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
+The pin is workspace-wide and guarded; see [Rust Toolchain and MSRV](./development/toolchain-updates.md) before changing
+it.
 
 ### Crate Version Matrix
 

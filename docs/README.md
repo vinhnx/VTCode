@@ -155,6 +155,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 
 - **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
 - **[Development Guide](./development/README.md)** - Development environment setup
+- **[Rust Toolchain and MSRV](./development/toolchain-updates.md)** - Pinned compiler, bump checklist, and gate fixes
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
 - **[AI Tool Surface Migration](./development/ai-tool-surface-migration.md)** - Breaking-change notes for the
   Codex-style default tools

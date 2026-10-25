@@ -4,7 +4,8 @@ Canonical local setup for contributing to VT Code.
 
 ## Prerequisites
 
-- Rust toolchain (stable) via [rustup](https://rustup.rs/)
+- Rust toolchain (stable) via [rustup](https://rustup.rs/). The repository pins an exact release in
+  `rust-toolchain.toml`; see [Rust Toolchain and MSRV](./toolchain-updates.md) for the pin map and bump checklist.
 - Git
 - An LLM provider credential: either (a) a shell/workspace env var like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
   `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `STEPFUN_API_KEY`, or `MINIMAX_API_KEY`, (b) an
