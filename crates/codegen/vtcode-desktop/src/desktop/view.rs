@@ -90,6 +90,14 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 
+fn service_reconnect_guidance(has_retained_submission: bool) -> &'static str {
+    if has_retained_submission {
+        "Restore or dismiss the retained message, then choose Reload CLI settings in Settings → VT Code to reconnect."
+    } else {
+        "Choose Reload CLI settings in Settings → VT Code to reconnect."
+    }
+}
+
 fn scale_row_height_for_ui_font(row_height: f32, font_size: Pixels) -> f32 {
     row_height * font_size.as_f32() / DEFAULT_UI_FONT_SIZE
 }
@@ -2260,14 +2268,23 @@ impl DesktopView {
                     self.start_workspace(workspace, cx);
                 } else if authentication_required {
                     self.status = "Provider credentials required".to_string();
-                    self.error = Some(
-                        "VT Code could not authenticate the configured provider. In Terminal, run `vtcode auth` or `vtcode login <provider>`, then restart the desktop app.".to_string(),
-                    );
-                } else if self.status != "Connected to the local VT Code service" {
+                    self.error = Some(format!(
+                        "VT Code could not authenticate the configured provider. In Terminal, run `vtcode auth` or `vtcode login <provider>`. {}",
+                        service_reconnect_guidance(self.retained_submission.is_some())
+                    ));
+                } else {
                     self.status = match status {
                         Some(code) => format!("Local service exited with code {code}"),
                         None => "Local service exited".to_string(),
                     };
+                    let reconnect_error = format!(
+                        "The local VT Code service disconnected. {}",
+                        service_reconnect_guidance(self.retained_submission.is_some())
+                    );
+                    self.error = Some(match self.error.take() {
+                        Some(error) => format!("{error}\n\n{reconnect_error}"),
+                        None => reconnect_error,
+                    });
                 }
             }
             BackendEvent::LaunchFailed(error) => {

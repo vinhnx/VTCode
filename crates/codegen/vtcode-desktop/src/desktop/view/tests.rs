@@ -2320,6 +2320,11 @@ fn disconnect_before_acceptance_retains_draft_with_uncertain_delivery(cx: &mut T
             assert!(draft.delivery_uncertain);
             assert_eq!(draft.prompt, "Unconfirmed request");
             assert!(!view.transcript.is_empty(), "unconfirmed delivery is not a confirmed rejection");
+            assert!(
+                view.error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("Restore or dismiss the retained message"))
+            );
         });
         window.render_frame(cx);
         window.click("restore-submission", cx);
@@ -2357,6 +2362,58 @@ fn acknowledged_submission_is_not_recovered_after_disconnect(cx: &mut TestAppCon
             assert!(view.retained_submission.is_none(), "accepted requests must not be offered as unsent drafts");
             assert_eq!(view.transcript.get(0).unwrap().text, "Accepted request");
         });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn unexpected_service_exit_replaces_connected_status_and_exposes_recovery(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.status = "Connected to the local VT Code service".into();
+            view.handle_backend_event(BackendEvent::Exited { status: Some(1), authentication_required: false }, cx);
+
+            assert!(view.backend.is_none());
+            assert_eq!(view.status, "Local service exited with code 1");
+            assert!(view.can_reload_cli_settings(), "disconnected workspaces can restart the service");
+            assert!(view.error.as_deref().is_some_and(|error| error.contains("Reload CLI settings")));
+        });
+
+        window.render_frame(cx);
+        let error = window.find("composer-error");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert!(error.label().unwrap().contains("Reload CLI settings"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn authentication_failure_explains_how_to_reconnect_without_restarting_desktop(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.retained_submission = Some(super::SubmissionDraft {
+                prompt: "Uncertain request".into(),
+                attachments: Vec::new(),
+                echo_id: "uncertain-request".into(),
+                delivery_uncertain: true,
+            });
+            view.handle_backend_event(BackendEvent::Exited { status: Some(1), authentication_required: true }, cx);
+            assert_eq!(view.status, "Provider credentials required");
+            let error = view.error.as_deref().unwrap();
+            assert!(error.contains("vtcode auth"));
+            assert!(error.contains("Restore or dismiss the retained message"));
+            assert!(error.contains("Reload CLI settings"));
+            assert!(!error.contains("restart the desktop app"));
+            assert!(!view.can_reload_cli_settings(), "the retained submission must be resolved before restart");
+        });
+        window.render_frame(cx);
+        let error = window.find("composer-error");
+        assert_eq!(error.role(), Some(gpui_kit::Role::Alert));
+        assert!(error.label().unwrap().contains("Reload CLI settings"));
     })
     .unwrap();
 }

@@ -73,6 +73,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | --- | --- |
 | Reopen the app | Dock or Finder relaunch activates the existing window. If the last window was closed, it opens a new window and restores the most recent existing workspace. |
 | Connect to a workspace | Initialization validates the negotiated protocol before configuration and session discovery. Session commands and Send wait for this handshake; incompatible helpers disconnect with the initialization error preserved. |
+| Recover a disconnected service | The composer announces an unexpected local-service exit and directs you to Settings → VT Code → Reload CLI settings. Repair provider credentials in Terminal when requested. If delivery was uncertain, restore or dismiss the retained message first; it is never resent automatically. |
 | Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
 | Open Utilities | The Utilities inspector tab summarizes session changes, recent tool activity, and draft source attachments, with actions into Changes, Activity, Files, and previews. Press ⌘⇧U or use the navigation rail button to open it. |
 | Inspect tool activity | Expand a consecutive tool-action summary, then open an action for output. Running and failed counts remain visible while collapsed. |
