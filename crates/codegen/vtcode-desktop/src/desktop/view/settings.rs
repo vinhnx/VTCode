@@ -32,7 +32,7 @@ impl SettingsTab {
 }
 
 impl DesktopView {
-    pub(super) fn render_settings_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_settings_tabs(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let selected_index = SettingsTab::ALL
             .iter()
@@ -44,7 +44,7 @@ impl DesktopView {
             SettingsTab::Shortcuts => div()
                 .id("keyboard-settings")
                 .test_support()
-                .child(self.render_shortcuts(cx))
+                .child(self.render_shortcuts(window, cx))
                 .into_any_element(),
             SettingsTab::VtCode => self.render_vtcode_settings(cx),
             SettingsTab::Connections => self.render_connections_settings(cx),

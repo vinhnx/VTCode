@@ -134,7 +134,7 @@ impl DesktopView {
             .collect()
     }
 
-    pub(super) fn render_shortcuts(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn render_shortcuts(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
         let description = if self.shortcuts_editing {
             "Change a binding or leave it empty to unbind it. Saved changes apply after restarting VT Code Desktop."
         } else {
@@ -220,6 +220,7 @@ impl DesktopView {
             )
             .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|((id, label, _), input)| {
                 let value = input.read(cx).value().to_string();
+                let current_binding = active_binding(id, window);
                 let value_element = if self.shortcuts_editing {
                     div()
                         .child(
@@ -232,13 +233,18 @@ impl DesktopView {
                         )
                         .into_any_element()
                 } else {
-                    shortcut_badge(id, label, &value)
+                    shortcut_badge(id, label, current_binding.as_ref())
+                };
+                let accessible_shortcut = if self.shortcuts_editing {
+                    shortcut_accessibility_value(&value)
+                } else {
+                    current_binding.as_ref().map(Kbd::format).unwrap_or_else(|| "not set".into())
                 };
                 div()
                     .id(format!("shortcut-row-{id}"))
                     .test_support()
                     .role(gpui_kit::Role::Group)
-                    .aria_label(format!("{label}, shortcut {}", shortcut_accessibility_value(&value)))
+                    .aria_label(format!("{label}, shortcut {accessible_shortcut}"))
                     .w_full()
                     .flex()
                     .flex_wrap()
@@ -304,19 +310,26 @@ impl DesktopView {
     }
 }
 
-fn shortcut_badge(id: &str, label: &str, value: &str) -> AnyElement {
-    let badge = if value.is_empty() {
-        div().text_xs().child("Not set")
-    } else if let Ok(keystroke) = gpui_kit::Keystroke::parse(value) {
-        div().child(Kbd::new(keystroke).outline())
-    } else {
-        div().text_xs().child("Invalid shortcut")
+fn active_binding(id: &str, window: &Window) -> Option<gpui_kit::Keystroke> {
+    let context = gpui_kit::KeyContext::parse("VTCodeDesktop").ok()?;
+    let action = action(id);
+    window
+        .highest_precedence_binding_for_action_in_context(action.as_ref(), context)?
+        .keystrokes()
+        .first()
+        .map(|keystroke| gpui_kit::AsKeystroke::as_keystroke(keystroke).clone())
+}
+
+fn shortcut_badge(id: &str, label: &str, binding: Option<&gpui_kit::Keystroke>) -> AnyElement {
+    let badge = match binding {
+        Some(keystroke) => div().child(Kbd::new(keystroke.clone()).outline()),
+        None => div().text_xs().child("Not set"),
     };
     div()
         .id(format!("shortcut-badge-{id}"))
         .test_support()
         .role(gpui_kit::Role::Label)
-        .aria_label(format!("Shortcut for {label}: {}", shortcut_accessibility_value(value)))
+        .aria_label(format!("Shortcut for {label}: {}", binding.map(Kbd::format).unwrap_or_else(|| "not set".into())))
         .child(badge)
         .into_any_element()
 }

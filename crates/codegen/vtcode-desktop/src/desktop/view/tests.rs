@@ -4798,9 +4798,22 @@ fn settings_categories_are_keyboard_navigable_and_shortcuts_use_kit_kbd(cx: &mut
         select_settings_category(window, 2, cx);
         assert!(window.try_find("keyboard-settings").is_some());
         assert_eq!(window.find("keyboard-shortcuts-group").role(), Some(gpui_kit::Role::Group));
+        let context = gpui_kit::KeyBindingContextPredicate::parse("VTCodeDesktop").unwrap();
+        let binding = gpui_kit::KeyBinding::load(
+            "ctrl-shift-k",
+            Box::new(super::OpenCommandPalette),
+            Some(context.into()),
+            false,
+            None,
+            &gpui_kit::DummyKeyboardMapper,
+        )
+        .unwrap();
+        cx.bind_keys([binding]);
+        window.render_frame(cx);
+        window.render_frame(cx);
         let expected_shortcut_label = format!(
             "Shortcut for Search commands: {}",
-            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("cmd-k").unwrap())
+            gpui_kit::component::kbd::Kbd::format(&gpui_kit::Keystroke::parse("ctrl-shift-k").unwrap())
         );
         let shortcut = window.find("shortcut-badge-commands");
         assert_eq!(shortcut.role(), Some(gpui_kit::Role::Label));

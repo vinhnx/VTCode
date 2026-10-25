@@ -1200,7 +1200,7 @@ impl DesktopView {
             if initial_focus.replace(false) {
                 settings_navigation_focus.focus(window, cx);
             }
-            let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(cx));
+            let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(window, cx));
             let on_close_view = close_view.clone();
             sheet
                 .title(DialogTitle::new().text_lg().child("Settings"))
