@@ -323,6 +323,23 @@ mod tests {
     }
 
     #[test]
+    fn nested_shell_script_preflight_reads_the_unquoted_script() {
+        // Issue #792: the reproduction command is a quoted `sh -c` script with a
+        // `[ -t 1 ]` test. The quotes are shell syntax, not part of the script.
+        assert!(
+            validate_shell_script(
+                "sh -c 'if [ -t 1 ]; then echo TTY_YES; else echo TTY_NO; fi; echo MARKER_7319; exit 3'"
+            )
+            .is_ok()
+        );
+        assert!(validate_shell_script("sh -c 'read line; echo GOT:$line'").is_ok());
+        assert!(validate_shell_script("[ -t 1 ]").is_ok());
+        // Nested destructive commands stay rejected after unquoting.
+        assert!(validate_shell_script("sh -c 'git status && rm -rf /'").is_err());
+        assert!(validate_shell_script("sh -c 'git reset --hard HEAD~1'").is_err());
+    }
+
+    #[test]
     fn quoted_heredoc_body_is_not_command_substitution() {
         // Session-vtcode-20260925: a `cat <<'EOF'` payload containing Rust
         // string literals with markdown fences (backticks) was rejected as

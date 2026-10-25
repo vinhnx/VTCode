@@ -51,7 +51,7 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
         && matches!(extract_command_name(&command[0]), "bash" | "sh" | "zsh")
         && (command[1] == "-c" || command[1] == "-lc" || command[1] == "-ilc")
     {
-        let script = &command[2];
+        let script = strip_nested_script_quotes(&command[2]);
         if let Ok(sub_commands) = crate::command_safety::shell_parser::parse_shell_commands(script) {
             for sub_cmd in sub_commands {
                 if command_might_be_dangerous(&sub_cmd) {
@@ -64,6 +64,21 @@ pub fn command_might_be_dangerous(command: &[String]) -> bool {
     }
 
     false
+}
+
+/// Strip one matching pair of shell quotes from a nested `-c` script.
+///
+/// `parse_shell_commands` preserves raw argument text, so a nested script
+/// arrives as `'…'` or `"…"`. The shell removes those quotes before running the
+/// script, so analyzing the quoted blob would both miss the real commands and
+/// mistake quoted glob characters for a dynamic executable.
+fn strip_nested_script_quotes(script: &str) -> &str {
+    for quote in ['\'', '"'] {
+        if let Some(inner) = script.strip_prefix(quote).and_then(|rest| rest.strip_suffix(quote)) {
+            return inner;
+        }
+    }
+    script
 }
 
 /// Returns whether the command crosses an inline-code boundary that must be
@@ -93,6 +108,11 @@ pub fn command_requires_approval(command: &[String]) -> bool {
 }
 
 fn executable_is_dynamic(executable: &str) -> bool {
+    // `[` is the POSIX test builtin, not a glob; `[ -f path ]` must stay a
+    // literal executable. Any other bracket usage is still dynamic.
+    if executable == "[" {
+        return false;
+    }
     executable
         .chars()
         .any(|character| matches!(character, '$' | '`' | '*' | '?' | '[' | ']' | '{' | '}'))
@@ -573,6 +593,36 @@ mod tests {
 
     fn vec_str(args: &[&str]) -> Vec<String> {
         args.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn nested_shell_script_is_analyzed_without_its_quoting() {
+        // Raw argument text keeps the shell quotes, but the shell strips them
+        // before running the script: the quoted blob must not be treated as an
+        // executable, and the commands inside it must still be inspected.
+        for script in [
+            "'if [ -t 1 ]; then echo TTY_YES; else echo TTY_NO; fi; echo MARKER; exit 3'",
+            "\"if [ -t 1 ]; then echo TTY_YES; fi\"",
+            "'echo $HOME'",
+            "'printf %s hello; printf %s world'",
+        ] {
+            let command = vec_str(&["sh", "-c", script]);
+            assert!(!command_might_be_dangerous(&command), "benign nested script: {command:?}");
+        }
+
+        for script in ["'git status && rm -rf /'", "'git reset --hard HEAD~1'"] {
+            let command = vec_str(&["bash", "-c", script]);
+            assert!(command_might_be_dangerous(&command), "destructive nested script: {command:?}");
+        }
+    }
+
+    #[test]
+    fn posix_test_builtin_is_not_a_dynamic_executable() {
+        assert!(!command_might_be_dangerous(&vec_str(&["[", "-t", "1", "]"])));
+        assert!(!command_might_be_dangerous(&vec_str(&["[", "-f", "src/main.rs", "]"])));
+        // Glob-shaped executables stay dynamic.
+        assert!(command_might_be_dangerous(&vec_str(&["[abc]", "x"])));
+        assert!(command_might_be_dangerous(&vec_str(&["{cmd}", "x"])));
     }
 
     #[test]

@@ -13,12 +13,6 @@ pub(crate) enum ToolRuntime {
     Disabled,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum RunTerminalMode {
-    Terminal,
-    Pty,
-}
-
 pub(crate) struct PlanProgress {
     entries: Vec<acp::PlanEntry>,
     analyze_index: usize,
