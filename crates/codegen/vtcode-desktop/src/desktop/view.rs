@@ -2421,9 +2421,13 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .p_4()
-            .bg(themes::mix(theme.colors.background, theme.colors.secondary, 0.3))
+            .bg(
+                themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground)
+                    .panel,
+            )
             .rounded_lg()
-            .border_color(theme.colors.border)
+            .border_1()
+            .border_color(theme.colors.border.opacity(0.85))
             .child(
                 div()
                     .flex()
@@ -5106,13 +5110,45 @@ impl Render for DesktopView {
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some();
         let sidebar = self.render_navigation(cx);
+        let conversation = div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .child(self.render_thread_header())
+            .child(self.render_transcript(cx))
+            .child(self.render_composer(window, cx));
+        let workspace = div()
+            .id("workspace-surface")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Conversation workspace")
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .flex()
+            .gap_1()
+            .p_3()
+            .bg(colors.background)
+            .rounded_xl()
+            .border_1()
+            .border_color(colors.border.opacity(0.85))
+            .child(conversation)
+            .when(inspector_visible, |workspace| {
+                workspace
+                    .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
+                    .child(self.render_inspector(cx))
+            });
         let panes = div()
             .id("pane-root")
             .p_3()
-            .gap_1()
+            .gap_2()
             .flex_1()
             .min_h_0()
             .flex()
+            .bg(chrome_background(&colors))
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
                 let Some(drag) = this.resizing else { return };
                 let delta = f32::from(event.position.x) - drag.start_x;
@@ -5140,22 +5176,7 @@ impl Render for DesktopView {
             )
             .child(sidebar)
             .when(self.sidebar_open, |panes| panes.child(self.render_resize_handle(ResizeEdge::Sidebar, cx)))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .child(self.render_thread_header())
-                    .child(self.render_transcript(cx))
-                    .child(self.render_composer(window, cx)),
-            )
-            .when(inspector_visible, |panes| {
-                panes
-                    .child(self.render_resize_handle(ResizeEdge::Inspector, cx))
-                    .child(self.render_inspector(cx))
-            });
+            .child(workspace);
         let mut body = div()
             .size_full()
             .flex()
@@ -5510,7 +5531,7 @@ fn desktop_window_options() -> WindowOptions {
 }
 
 fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
-    themes::mix(colors.background, colors.secondary, 0.08)
+    themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail
 }
 
 /// Keep local paths out of element IDs while preserving path-based identity across sorting.

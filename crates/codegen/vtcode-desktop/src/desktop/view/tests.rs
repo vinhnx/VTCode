@@ -3929,6 +3929,26 @@ fn native_titlebar_is_transparent_and_kit_owns_dragging() {
 }
 
 #[gpui_kit::test]
+fn conversation_workspace_is_inset_below_the_toolbar_and_after_navigation(cx: &mut TestAppContext) {
+    let (window, _) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let navigation = window.find("left-navigation").bounds();
+        let toolbar = window.find("title-bar").bounds();
+        let workspace = window.find("workspace-surface");
+        let bounds = workspace.bounds();
+
+        assert_eq!(workspace.role(), Some(gpui_kit::Role::Group));
+        assert_eq!(workspace.label(), Some("Conversation workspace"));
+        assert!(bounds.left() > navigation.right(), "workspace must have a visible left inset: {bounds:?}");
+        assert!(bounds.top() > toolbar.bottom(), "workspace must have a visible top inset: {bounds:?}");
+        assert!(bounds.size.width > px(500.));
+        assert!(bounds.size.height > px(500.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn chrome_overflow_menus_are_accessible_and_preserve_the_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

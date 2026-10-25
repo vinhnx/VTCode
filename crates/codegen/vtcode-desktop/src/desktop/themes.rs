@@ -373,6 +373,30 @@ pub(super) fn mix(lower: Hsla, upper: Hsla, amount: f32) -> Hsla {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct NavigationSurfaces {
+    pub(super) rail: Hsla,
+    pub(super) panel: Hsla,
+}
+
+/// Keep the navigation shell visually distinct from the inset workspace.
+/// Dark palettes recess the shell and sidebar; light palettes use the shared
+/// secondary surface without changing component colors.
+pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground: Hsla) -> NavigationSurfaces {
+    if relative_luminance(background) < 0.179 {
+        let recessed = filled_button_foreground(foreground);
+        NavigationSurfaces {
+            rail: mix(background, recessed, 0.35),
+            panel: mix(background, recessed, 0.55),
+        }
+    } else {
+        NavigationSurfaces {
+            rail: secondary,
+            panel: mix(background, secondary, 0.85),
+        }
+    }
+}
+
 /// WCAG contrast ratio between two colors.
 pub(super) fn contrast_ratio(a: Hsla, b: Hsla) -> f32 {
     let la = relative_luminance(a);
@@ -396,6 +420,7 @@ fn relative_luminance(color: Hsla) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::component::theme::ActiveTheme;
 
     #[gpui_kit::test]
     fn palettes_synchronize_component_and_base_tokens_with_readable_controls(cx: &mut gpui_kit::TestAppContext) {
@@ -466,6 +491,44 @@ mod tests {
             let muted_ratio = contrast_ratio(muted, theme.background);
             assert!(muted_ratio >= 4.5, "{}: muted text contrast {muted_ratio:.2} is below WCAG AA", theme.id);
         }
+    }
+
+    #[gpui_kit::test]
+    fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let surfaces = navigation_surfaces(colors.background, colors.secondary, colors.foreground);
+                let edge = mix(surfaces.panel, colors.border, 0.85);
+                let workspace_edge = mix(colors.background, colors.border, 0.85);
+
+                assert!(
+                    contrast_ratio(colors.background, surfaces.rail) >= 1.02
+                        || contrast_ratio(colors.background, workspace_edge) >= 1.08,
+                    "{id}: shell must contrast with the workspace top and left edges"
+                );
+                assert!(
+                    contrast_ratio(colors.background, surfaces.panel) >= 1.02
+                        || contrast_ratio(colors.background, edge) >= 1.08,
+                    "{id}: sidebar must contrast with its surrounding workspace"
+                );
+                assert!(
+                    contrast_ratio(surfaces.panel, surfaces.rail) >= 1.02
+                        || contrast_ratio(surfaces.panel, edge) >= 1.08,
+                    "{id}: sidebar must remain distinct from the navigation rail"
+                );
+                assert!(
+                    contrast_ratio(colors.foreground, surfaces.panel) >= 4.5,
+                    "{id}: sidebar text must meet WCAG AA"
+                );
+                assert!(contrast_ratio(colors.foreground, surfaces.rail) >= 4.5, "{id}: shell text must meet WCAG AA");
+            }
+        });
     }
 
     #[test]
