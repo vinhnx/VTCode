@@ -3223,7 +3223,7 @@ impl DesktopView {
                     .test_support()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
+                    .overflow_hidden()
                     .child(Diff::new(&viewer).line_number(true).soft_wrap(expanded)),
             );
             body = body.child(viewer_panel);

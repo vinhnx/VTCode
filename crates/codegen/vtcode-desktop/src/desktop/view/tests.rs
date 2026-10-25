@@ -906,7 +906,12 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _cx| {
             view.workspace = Some(std::env::temp_dir());
-            let patch = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,2 +1,3 @@\n ctx\n-gone\n+here\n+added\n";
+            let patch = format!(
+                "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1,80 +1,80 @@\n{}",
+                (1..=80)
+                    .map(|line| format!("-line {line}\n+{}\n", if line == 40 { "here" } else { "updated" }))
+                    .collect::<String>()
+            );
             view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
                 session_id: "session-f".to_string(),
                 turn_id: Some("turn-1".to_string()),
@@ -921,16 +926,16 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
                                 kind: PatchChangeKind::Update,
                             }],
                             status: PatchApplyStatus::Completed,
-                            unified_diff: Some(patch.to_string()),
-                            additions: Some(2),
-                            deletions: Some(1),
+                            unified_diff: Some(patch.clone()),
+                            additions: Some(80),
+                            deletions: Some(80),
                         })),
                     },
                 })),
             });
             assert_eq!(view.changes.entries().len(), 1);
             assert_eq!(view.changes.entries()[0].path, "src/app.rs");
-            assert_eq!(view.changes.totals(), (2, 1));
+            assert_eq!(view.changes.totals(), (80, 80));
         });
         window.render_frame(cx);
         window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
@@ -971,6 +976,14 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
         window.render_frame(cx);
         assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.width > px(900.));
         assert!(window.within("diff-review-panel").find("change-diff-view").bounds().size.height > px(400.));
+        let viewport = window.within("diff-review-panel").find("change-diff-view").bounds();
+        window.scroll("change-diff-view", gpui_kit::ScrollDelta::Lines(point(0., -100.)), cx);
+        window.render_frame(cx);
+        let scrolled_line = window.within(("new", 52usize)).find("source").bounds();
+        assert!(
+            scrolled_line.top() >= viewport.top() && scrolled_line.bottom() <= viewport.bottom(),
+            "the Kit Diff's virtualized list should scroll within its own review viewport"
+        );
         view.update(cx, |view, _| view.reset_session_state());
         window.render_frame(cx);
         assert!(!view.read(cx).review_open);

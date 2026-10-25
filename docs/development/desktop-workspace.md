@@ -469,6 +469,8 @@ Select a changed file in the Changes inspector, then choose **Expand diff review
 The larger read-only surface reuses the selected gpui-kit `DiffState` and parsed
 session patches. Unified/split mode persists while switching reviewed files.
 Only one visible diff component renders that state at a time.
+The Kit Diff owns its virtualized viewport and both scroll axes; surrounding
+review containers clip overflow instead of introducing a competing scroll area.
 
 | Control | Behavior |
 | --- | --- |
