@@ -2695,10 +2695,7 @@ impl DesktopView {
     }
 
     fn render_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::SYSTEM_SWATCHES
-            .iter()
-            .copied()
-            .chain(themes::all_themes().iter().copied().map(themes::SwatchEntry::Palette));
+        let swatches = themes::picker_swatches();
         let mut swatch_rows = Vec::new();
         for entry in swatches {
             swatch_rows.push(self.render_theme_swatch(entry, cx));

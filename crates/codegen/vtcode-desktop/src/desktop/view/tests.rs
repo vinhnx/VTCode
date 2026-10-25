@@ -1240,20 +1240,25 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.press("cmd-,", cx);
         window.render_frame(cx);
         let strip = window.find("theme-list").bounds();
-        let first = window.find("theme-system-light").bounds();
+        let first = window.find("theme-ciapre").bounds();
+        let ciapre_dark = window.find("theme-ciapre-dark").bounds();
+        let ciapre_blue = window.find("theme-ciapre-blue").bounds();
+        let system_light = window.find("theme-system-light").bounds();
         let last = window.find("theme-catppuccin-mocha").bounds();
         let typography_top = window.find("choose-ui-font").bounds().top();
         assert_eq!(first.top(), last.top(), "themes occupy a single row");
+        assert!(first.left() < ciapre_dark.left() && ciapre_dark.left() < ciapre_blue.left());
+        assert!(ciapre_blue.right() < system_light.left(), "Ciapre themes lead the picker");
         assert!(last.left() > strip.right(), "the list must overflow horizontally");
         assert_eq!(first.size.width, px(104.), "swatches must not shrink to fit");
         window.click("next-themes", cx);
         window.render_frame(cx);
-        assert!(window.find("theme-system-light").bounds().left() < first.left());
+        assert!(window.find("theme-ciapre").bounds().left() < first.left());
         window.click("previous-themes", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("theme-system-light").bounds().left(), first.left());
+        assert_eq!(window.find("theme-ciapre").bounds().left(), first.left());
 
-        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Pixels(point(px(-900.), px(0.))), cx);
+        window.scroll("theme-scroller", gpui_kit::ScrollDelta::Pixels(point(px(-1200.), px(0.))), cx);
         window.render_frame(cx);
         let last = window.find("theme-catppuccin-mocha").bounds();
         assert!(
@@ -1269,7 +1274,7 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.scroll("theme-scroller", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
         window.render_frame(cx);
         assert_eq!(window.find("choose-ui-font").bounds().top(), typography_top);
-        window.click("theme-system-light", cx);
+        click_in_scrolled_grid(window, "theme-scroller", "theme-system-light", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "system-light");
     })

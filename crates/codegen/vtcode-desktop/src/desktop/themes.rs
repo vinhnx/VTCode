@@ -264,6 +264,27 @@ pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
     SwatchEntry::System(ThemeMode::Dark),
 ];
 
+const FEATURED_THEME_IDS: [&str; 3] = ["ciapre", "ciapre-dark", "ciapre-blue"];
+
+/// Picker order leads with the VT Code themes, then system bases and the
+/// remaining shared palette catalog in its existing order.
+pub(super) fn picker_swatches() -> impl Iterator<Item = SwatchEntry> {
+    let themes = all_themes();
+    FEATURED_THEME_IDS
+        .iter()
+        .filter_map(|id| themes.iter().find(|theme| theme.id == *id))
+        .copied()
+        .map(SwatchEntry::Palette)
+        .chain(SYSTEM_SWATCHES)
+        .chain(
+            themes
+                .iter()
+                .copied()
+                .filter(|theme| !FEATURED_THEME_IDS.contains(&theme.id))
+                .map(SwatchEntry::Palette),
+        )
+}
+
 /// Apply a theme by id: install the kit base for its mode, then override the
 /// core tokens from the palette.
 pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
