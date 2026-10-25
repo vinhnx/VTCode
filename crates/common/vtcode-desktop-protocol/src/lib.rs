@@ -12,7 +12,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use vtcode_exec_events::VersionedThreadEvent;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 10 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 11 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -359,6 +359,9 @@ pub struct ModelInfo {
     /// Whether this is the currently active provider/model.
     #[serde(default)]
     pub current: bool,
+    /// Order in the CLI's recommended model set, when included.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_rank: Option<u8>,
 }
 
 /// Parameters for selecting a provider and model for the next session.
@@ -1246,7 +1249,7 @@ mod tests {
     }
 
     #[test]
-    fn protocol_1_1_additions_are_optional_and_camel_cased() -> Result<(), Box<dyn Error>> {
+    fn optional_protocol_extensions_are_camel_cased() -> Result<(), Box<dyn Error>> {
         // A 1.0-era snapshot without the additive fields still deserializes.
         let snapshot: ConfigurationSnapshot = serde_json::from_value(serde_json::json!({
             "provider": "ollama",
@@ -1293,10 +1296,19 @@ mod tests {
             display_name: "GPT-6 Sol".to_string(),
             context_window: Some(400_000),
             current: true,
+            recommended_rank: Some(2),
         })?;
         assert_eq!(model["displayName"], "GPT-6 Sol");
         assert_eq!(model["contextWindow"], 400_000);
         assert_eq!(model["current"], true);
+        assert_eq!(model["recommendedRank"], 2);
+        let legacy_model: ModelInfo = serde_json::from_value(serde_json::json!({
+            "provider": "openai",
+            "id": "gpt-6-sol",
+            "displayName": "GPT-6 Sol",
+            "current": true
+        }))?;
+        assert_eq!(legacy_model.recommended_rank, None);
         assert_eq!(method::CONFIG_MODELS, "config/models");
         assert_eq!(method::CONFIG_SELECT, "config/select");
         Ok(())

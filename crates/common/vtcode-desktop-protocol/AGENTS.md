@@ -9,6 +9,7 @@
 - For `interaction/respond`, validate without consuming, enqueue to the active runtime, then resolve; failed delivery
   must leave it retryable.
 - `sessionOptions` are typed idle-session overrides; resource names are bounded CLI-safe tokens.
+- Optional `ModelInfo.recommendedRank` carries CLI fallback order; clients must tolerate its absence.
 - Primary-agent display notifications are ephemeral and session-scoped; keep configured `sessionOptions.mode` separate.
 - `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never
   config file paths, full TOML, or credentials.

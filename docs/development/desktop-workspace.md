@@ -94,7 +94,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Follow a link | Explicit activation opens HTTP/HTTPS links. Other URL schemes are blocked, images are not fetched, and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
 | Add context | ⌘⇧A opens the composer-anchored file/skill/plugin/command search. Selection adds context or invokes an existing native action; it never submits. |
-| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The model knob changes supported reasoning effort only. Active work blocks changes. |
+| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The model popup offers CLI-ranked quick picks, full model search, and supported reasoning effort. Active work blocks changes. |
 | Toggle status bar | Hidden by default. Settings, the header menu, and ⌘⇧S share one saved visibility preference. |
 | Sync theme to CLI | Settings → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
@@ -219,7 +219,8 @@ resize handles retain their own cursors.
 
 ### Model picker
 
-The composer opens a compact model/effort panel above the input; **Search all models…** opens the full search.
+The composer opens a compact model/effort panel above the input. It lists the CLI's ordered recommended fallback models,
+retains the active model when it is outside that set, and **Search all models…** opens the full search.
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
 the same change through keyboard and assistive activation. Changes commit on release, and restart the idle
 session so the runtime receives the new effort. The header reflects the CLI's effective fast/ultrafast badge.
@@ -227,8 +228,8 @@ The searchable model panel is anchored above the growing composer and snaps insi
 quieter provider, canonical ID, and context-window metadata; the current model has a checkmark and is selected initially.
 Search accepts display names, providers, and canonical IDs. The composer uses the catalog display name
 when available and preserves the canonical ID for service requests. Escape dismisses the panel and restores
-focus. The service exposes only CLI-advertised effort levels; the picker does not invent effort choices or a
-recommended/default model group.
+focus. The service exposes only CLI-advertised effort levels and the CLI's recommended fallback order; the picker
+does not invent model or effort choices. Older catalog payloads without recommendation metadata remain readable.
 
 ### Conversation activity
 
@@ -312,7 +313,7 @@ by the service pump.
 | `desktop/initialize` | Negotiate protocol compatibility and confirm the selected workspace. |
 | `config/discover` | Read active provider, model, sandbox label, and context window. |
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
-| `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
+| `config/models`, `config/select` | List the model catalog, including CLI fallback recommendation order, or switch provider/model for the next session (requires no active turn). |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
 | `session/list`, `session/create`, `session/load`, `session/close` | Select, create, and restore durable messages, canonical change reviews, activity, and captured output. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |

@@ -105,12 +105,8 @@ impl DesktopView {
         if !self.session_change_allowed(None) || self.attachments_picker_open {
             return;
         }
-        self.show_palette(
-            PaletteKind::ModelOptions,
-            vec![("".into(), vec![command("Search all models…", PaletteAction::ChooseModel)])],
-            window,
-            cx,
-        );
+        let groups = self.quick_model_groups();
+        self.show_palette(PaletteKind::ModelOptions, groups, window, cx);
         let Some(config) = self.configuration.as_ref() else {
             return;
         };
@@ -186,6 +182,38 @@ impl DesktopView {
         .detach();
         self.effort_slider = Some(slider);
         cx.notify();
+    }
+
+    fn quick_model_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
+        let active_model = self.active_model_fallback();
+        let mut recommended = self
+            .models
+            .iter()
+            .chain(active_model.iter())
+            .filter_map(|model| model.recommended_rank.map(|rank| (rank, model)))
+            .collect::<Vec<_>>();
+        recommended.sort_by_key(|(rank, _)| *rank);
+
+        let mut groups = Vec::new();
+        if !recommended.is_empty() {
+            groups.push((
+                "Recommended".into(),
+                recommended
+                    .into_iter()
+                    .map(|(_, model)| model_palette_command(model, self.model_is_current(&model.provider, &model.id)))
+                    .collect(),
+            ));
+        }
+        if let Some(current) = self
+            .models
+            .iter()
+            .chain(active_model.iter())
+            .find(|model| self.model_is_current(&model.provider, &model.id) && model.recommended_rank.is_none())
+        {
+            groups.push(("Current".into(), vec![model_palette_command(current, true)]));
+        }
+        groups.push(("Browse".into(), vec![command("Search all models…", PaletteAction::ChooseModel)]));
+        groups
     }
 
     pub(super) fn can_select_session_options(&self) -> bool {
@@ -376,7 +404,14 @@ pub(super) fn model_options_header(
         );
     }
     if let Some(speed) = options.and_then(|options| options.speed.as_ref()) {
-        panel = panel.child(div().text_sm().child(format!("Processing: {speed}")));
+        panel = panel.child(
+            div()
+                .id("model-speed-indicator")
+                .test_support()
+                .role(gpui_kit::Role::Status)
+                .aria_label(format!("CLI processing speed: {speed}"))
+                .child(Tag::warning().small().child(speed.clone())),
+        );
     }
     panel.into_any_element()
 }

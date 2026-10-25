@@ -370,6 +370,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     display_name: "GPT OSS 20B".to_string(),
                     context_window: Some(131_072),
                     current: true,
+                    recommended_rank: None,
                 },
                 vtcode_desktop_protocol::ModelInfo {
                     provider: "anthropic".to_string(),
@@ -377,6 +378,7 @@ fn selecting_a_model_switches_configuration_and_resets_the_session(cx: &mut Test
                     display_name: "Claude Sonnet 5".to_string(),
                     context_window: Some(200_000),
                     current: false,
+                    recommended_rank: Some(0),
                 },
             ];
         });
@@ -2452,6 +2454,7 @@ fn welcome_actions_browse_files_and_keep_current_model_without_resetting_a_sessi
                 display_name: "Other model".into(),
                 context_window: Some(7000),
                 current: false,
+                recommended_rank: None,
             }];
             view.composer
                 .update(cx, |state, cx| state.set_value("Keep my draft", window, cx));
@@ -2500,6 +2503,7 @@ fn model_picker_revalidates_a_deferred_selection_against_the_current_catalog(cx:
                 display_name: "Temporary model".into(),
                 context_window: None,
                 current: false,
+                recommended_rank: None,
             }];
             view.open_model_palette(window, cx);
         });
@@ -3598,6 +3602,7 @@ fn composer_model_name_uses_the_active_provider_catalog_entry(cx: &mut TestAppCo
                     display_name: name.into(),
                     context_window: None,
                     current: false,
+                    recommended_rank: None,
                 })
                 .collect();
         });
@@ -4101,12 +4106,28 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         view.update(cx, |view, _| {
             view.backend = Some(BackendHandle { commands });
             view.configuration = Some(runtime_options_config());
+            view.models = vec![vtcode_desktop_protocol::ModelInfo {
+                provider: "custom".into(),
+                id: "custom-route".into(),
+                display_name: "Custom route".into(),
+                context_window: None,
+                current: false,
+                recommended_rank: None,
+            }];
         });
         window.render_frame(cx);
         window.click("pick-model", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Model and reasoning effort"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · medium"));
+        assert!(
+            !view
+                .read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .any(|entry| entry.label == "Custom route")
+        );
         window.click("increase-effort", cx);
         window.render_frame(cx);
     })
@@ -4119,22 +4140,94 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
     assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
     assert_eq!(params["reasoningEffort"], "high");
     cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.session_request = None);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("palette-label-1-0").label(), Some("Search all models…"));
         view.update(cx, |view, cx| {
-            view.session_request = None;
-            view.open_model_options(window, cx);
+            view.run_palette_action(super::PaletteAction::ChooseModel, window, cx);
         });
         window.render_frame(cx);
-        assert_eq!(window.find("palette-label-0-0").label(), Some("Search all models…"));
+        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
+        assert!(
+            view.read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .any(|entry| entry.label == "Custom route")
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn compact_model_picker_uses_cli_recommendations_and_selects_the_real_catalog_route(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.models = vec![
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "anthropic".into(),
+                    id: "claude-sonnet-5".into(),
+                    display_name: "Claude Sonnet 5".into(),
+                    context_window: Some(200_000),
+                    current: false,
+                    recommended_rank: Some(0),
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "google".into(),
+                    id: "gemini-3.8-flash".into(),
+                    display_name: "Gemini 3.8 Flash".into(),
+                    context_window: Some(1_000_000),
+                    current: false,
+                    recommended_rank: Some(3),
+                },
+                vtcode_desktop_protocol::ModelInfo {
+                    provider: "custom".into(),
+                    id: "not-recommended".into(),
+                    display_name: "Not recommended".into(),
+                    context_window: None,
+                    current: false,
+                    recommended_rank: None,
+                },
+            ];
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert!(
+            window
+                .find("palette-label-0-0")
+                .label()
+                .unwrap()
+                .starts_with("Claude Sonnet 5 · anthropic · claude-sonnet-5")
+        );
+        assert!(
+            window
+                .find("palette-label-0-1")
+                .label()
+                .unwrap()
+                .starts_with("Gemini 3.8 Flash · google · gemini-3.8-flash")
+        );
+        assert!(window.find("palette-label-1-0").label().unwrap().contains("gpt-5.6-sol"));
+        assert_eq!(window.find("palette-label-2-0").label(), Some("Search all models…"));
+        assert!(window.try_find("palette-label-0-2").is_none(), "uncurated catalog entries stay in full search");
+        assert!(window.find("model-speed-indicator").label().unwrap().contains("ultrafast"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();
     cx.run_until_parked();
-    cx.update_window(window, |_, window, cx| {
-        window.render_frame(cx);
-        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
-    })
-    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected quick model selection request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SELECT);
+    assert_eq!(params, json!({ "provider": "anthropic", "model": "claude-sonnet-5" }));
 }
 
 #[gpui_kit::test]

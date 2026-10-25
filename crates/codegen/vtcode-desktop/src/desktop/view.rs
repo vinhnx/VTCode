@@ -1144,8 +1144,21 @@ impl DesktopView {
             return;
         }
         let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
-        let active_model = self
-            .configuration
+        let active_model = self.active_model_fallback();
+        for model in self.models.iter().chain(active_model.iter()) {
+            let entry = model_palette_command(model, self.model_is_current(&model.provider, &model.id));
+            groups.entry(model.provider.clone()).or_default().push(entry);
+        }
+        let mut groups = groups.into_iter().collect::<Vec<_>>();
+        for (_, entries) in &mut groups {
+            entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
+        }
+        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
+        self.show_palette(PaletteKind::Models, groups, window, cx);
+    }
+
+    fn active_model_fallback(&self) -> Option<protocol::ModelInfo> {
+        self.configuration
             .as_ref()
             .filter(|configuration| {
                 !self
@@ -1159,34 +1172,8 @@ impl DesktopView {
                 display_name: configuration.model.clone(),
                 context_window: configuration.context_window,
                 current: true,
-            });
-        for model in self.models.iter().chain(active_model.iter()) {
-            let context = model
-                .context_window
-                .map(|tokens| format!(" · {tokens} tokens"))
-                .unwrap_or_default();
-            let current = if self.model_is_current(&model.provider, &model.id) {
-                " · Current"
-            } else {
-                ""
-            };
-            let mut entry = command(
-                model.display_name.clone(),
-                PaletteAction::SelectModel {
-                    provider: model.provider.clone(),
-                    model: model.id.clone(),
-                },
-            );
-            entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
-            entry.keywords = vec![model.provider.clone(), model.id.clone()];
-            groups.entry(model.provider.clone()).or_default().push(entry);
-        }
-        let mut groups = groups.into_iter().collect::<Vec<_>>();
-        for (_, entries) in &mut groups {
-            entries.sort_by_key(|entry| !self.is_current_palette_action(&entry.action));
-        }
-        groups.sort_by_key(|(_, entries)| !entries.iter().any(|entry| self.is_current_palette_action(&entry.action)));
-        self.show_palette(PaletteKind::Models, groups, window, cx);
+                recommended_rank: None,
+            })
     }
 
     fn model_is_current(&self, provider: &str, model: &str) -> bool {
@@ -5320,6 +5307,24 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
         keywords: Vec::new(),
         action,
     }
+}
+
+fn model_palette_command(model: &protocol::ModelInfo, current: bool) -> PaletteCommand {
+    let context = model
+        .context_window
+        .map(|tokens| format!(" · {tokens} tokens"))
+        .unwrap_or_default();
+    let current = if current { " · Current" } else { "" };
+    let mut entry = command(
+        model.display_name.clone(),
+        PaletteAction::SelectModel {
+            provider: model.provider.clone(),
+            model: model.id.clone(),
+        },
+    );
+    entry.description = Some(format!("{} · {}{context}{current}", model.provider, model.id));
+    entry.keywords = vec![model.provider.clone(), model.id.clone()];
+    entry
 }
 
 fn workspace_picker_options() -> PathPromptOptions {

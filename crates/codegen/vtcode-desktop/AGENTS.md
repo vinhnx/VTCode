@@ -11,6 +11,7 @@
   Newest valid patch wins; copy its exact source item. Retain one visible `DiffState`.
 - Menus/`view/shortcuts.rs` reuse typed actions; desktop buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.
 - Gate discovery on validated initialization; serialize session/model changes and capture first-message Send content.
+  Compact model picks use the optional CLI rank; full search remains the entire catalog.
 - Palettes (including `view/typography.rs`) retain `CommandState`; focus next frame, defer confirms, consume Cancel.
 - Kit TabBar needs scoped focus/arrow/Home/End; SidebarMenu lacks equivalent keyboard support. Keep navigation buttons.
 - Theme: brand `primary`, hover `accent`, shared `apply_theme`; Markdown keeps image blocking and Kit `syntect` highlighting.
