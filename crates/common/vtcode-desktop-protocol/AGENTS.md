@@ -6,8 +6,11 @@
 
 - Keep messages typed and framing bounded; Git review echoes request/workspace identities to reject stale snapshots.
 - Preserve opaque interaction option identities across the wire. `sharedUi` carries only non-secret CLI preferences.
+- For `interaction/respond`, validate without consuming, enqueue to the active runtime, then resolve; failed delivery
+  must leave it retryable.
 - `sessionOptions` are typed idle-session overrides; resource names are bounded CLI-safe tokens.
-- `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never config file paths, full TOML, or credentials.
+- `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never
+  config file paths, full TOML, or credentials.
 - Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.
 - The live event channel (`live_event_channel`) coalesces under saturation: snapshots replace per item,
   plan deltas merge, ordered events are only dropped when nothing coalescable remains. A slow consumer

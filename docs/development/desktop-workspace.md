@@ -314,6 +314,9 @@ by the service pump.
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `desktop/shutdown` | Cancel and clean up owned work before exit. |
 
+The service consumes an interaction response only after the active runtime accepts its typed event. Failed delivery leaves
+the interaction pending so the client can retry or let session cleanup dismiss it.
+
 Notifications stream the canonical `VersionedThreadEvent` from `vtcode-exec-events` along with interaction requests and
 turn status. A client must reject stale or duplicate interaction responses. EOF triggers service cleanup. The full wire
 types and framing helpers live in [`vtcode-desktop-protocol`](../../crates/common/vtcode-desktop-protocol/README.md).
