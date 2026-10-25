@@ -1,7 +1,7 @@
 use hashbrown::HashSet;
 use std::sync::Arc;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::llm::provider::{FinishReason, LLMRequest, LLMResponse, Message, ToolChoice};
+use vtcode_core::llm::provider::{FinishReason, LLMProvider, LLMRequest, LLMResponse, Message, ToolChoice};
 
 use super::{
     MAX_REFINED_WORD_MULTIPLIER, MIN_KEYWORD_LENGTH, MIN_KEYWORD_OVERLAP_RATIO, MIN_PROMPT_LENGTH_FOR_REFINEMENT,
@@ -12,7 +12,13 @@ const REFINEMENT_SYSTEM_PROMPT: &str = "Rewrite the supplied request for clarity
 
 pub(super) const REFINEMENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-pub(super) fn refinement_request(raw: &str, model: &str, supported_efforts: &[&str], temperature: f32) -> LLMRequest {
+pub(super) fn refinement_request(
+    provider: &dyn LLMProvider,
+    raw: &str,
+    model: &str,
+    supported_efforts: &[&str],
+    temperature: f32,
+) -> LLMRequest {
     // This auxiliary rewrite does not need the primary task's reasoning budget.
     let reasoning_effort = supported_efforts.contains(&"low").then_some(ReasoningEffortLevel::Low);
     let output_budget = vtcode_commons::estimate_tokens(raw)
@@ -24,7 +30,11 @@ pub(super) fn refinement_request(raw: &str, model: &str, supported_efforts: &[&s
         system_prompt: Some(Arc::from(REFINEMENT_SYSTEM_PROMPT)),
         model: model.to_string(),
         max_tokens: Some(output_budget as u32),
-        temperature: supported_efforts.is_empty().then_some(temperature),
+        // Anthropic Messages (API 2026-10-21) rejects sampling; a model that
+        // advertises no effort level would otherwise keep this value.
+        temperature: (supported_efforts.is_empty()
+            && !provider.sampling_overrides(model).drops_sampling_params(false, false))
+        .then_some(temperature),
         tool_choice: Some(ToolChoice::none()),
         reasoning_effort,
         ..Default::default()

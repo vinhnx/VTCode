@@ -114,8 +114,9 @@ When VT Code resolves a model's runtime shape, values are applied in this order,
 
 Sampling values resolve on the same chain with one extra global layer beneath the provider: profile → provider default →
 `agent.temperature` / `agent.reasoning_effort` globals → built-in per-task limits (`max_tokens` only). Simple sub-tasks
-force `reasoning_effort = "minimal"` regardless of a profile pin, and reasoning-rejecting backends (native
-Anthropic/MiniMax, or `api_format = "anthropic-messages"` profiles) drop `temperature` while reasoning is active.
+force `reasoning_effort = "minimal"` regardless of a profile pin, and Anthropic Messages backends (native
+Anthropic/MiniMax, or `api_format = "anthropic-messages"` profiles) drop `temperature`, `top_p`, and `top_k` on every
+request: Anthropic API version `2026-10-21` rejects them outright, so a pinned value never reaches the wire.
 
 An explicit boolean `false` is honored at every level. Omitting `api_format` preserves autodetection, while an explicit
 value selects that API shape.

@@ -231,7 +231,10 @@ impl LLMRequest {
         self.reasoning_effort = levels.contains(&"low").then_some(ReasoningEffortLevel::Low);
         self.max_tokens = Some(visible_output_tokens.max(1).saturating_add(if reasoning { 2048 } else { 0 }));
         self.verbosity = Some(VerbosityLevel::Low);
-        if reasoning {
+        // Routes that always reject sampling must not carry it even without
+        // reasoning: Anthropic Messages (API 2026-10-21) fails the whole
+        // request instead of ignoring the value.
+        if reasoning || provider.sampling_overrides(&self.model).drops_sampling_params(false, false) {
             self.temperature = None;
             self.top_p = None;
             self.top_k = None;
@@ -261,22 +264,26 @@ pub struct SamplingOverrides {
     pub max_tokens: Option<u32>,
     /// Reasoning effort for models that accept it.
     pub reasoning_effort: Option<ReasoningEffortLevel>,
-    /// Whether this model's wire format rejects sampling parameters while
-    /// reasoning is active (e.g. custom endpoints speaking the Anthropic
-    /// Messages shape).
-    pub suppresses_sampling_with_reasoning: bool,
+    /// Whether this wire format rejects sampling parameters, as Anthropic
+    /// Messages does under API version `2026-10-21`, independent of reasoning.
+    pub suppresses_sampling: bool,
     /// Set by providers that resolve overrides from an explicit user profile;
     /// callers use it to trust these values over name-based heuristics.
     pub profile_aware: bool,
 }
 
 impl SamplingOverrides {
-    /// Whether sampling parameters must be dropped for this request: either
-    /// the model's wire format rejects sampling while reasoning is active, or
-    /// a built-in Anthropic/MiniMax-shaped backend (`native_match`) enforces
-    /// the same rule outside of profile-aware routing.
-    pub fn suppresses_sampling(&self, native_match: bool, reasoning_active: bool) -> bool {
-        reasoning_active && (self.suppresses_sampling_with_reasoning || (!self.profile_aware && native_match))
+    /// Whether sampling parameters must be dropped for this request.
+    ///
+    /// Anthropic Messages routes reject `temperature`, `top_p`, and `top_k`
+    /// under API version `2026-10-21` even at their default values, so the
+    /// drop is unconditional for them: either the provider declares that its
+    /// wire rejects sampling (`suppresses_sampling`), or it is a built-in
+    /// Anthropic/MiniMax backend (`native_match`) that resolves no user
+    /// profile. Reasoning state does not change the answer.
+    pub fn drops_sampling_params(&self, native_match: bool, reasoning_active: bool) -> bool {
+        let _ = reasoning_active;
+        self.suppresses_sampling || (!self.profile_aware && native_match)
     }
 }
 

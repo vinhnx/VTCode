@@ -124,7 +124,7 @@ No other config changes are required.
    is needed — but a mid-conversation edit of the system prompt or tool list will not carry earlier reasoning forward.
 
 4. **Sampling parameters are still rejected.** Same as Sonnet 5: `temperature`, `top_p`, and `top_k` must be omitted. VT
-   Code drops them for the whole Claude 5.x family.
+   Code drops them for every model: API version `2026-10-21` rejects sampling outright, not just the Claude 5.x family.
 
 **Recommended:**
 

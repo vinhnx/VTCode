@@ -767,6 +767,51 @@ fn first_party_provider(model: &str) -> AnthropicProvider {
     )
 }
 
+/// The wire request is pinned to the current Messages API version and never
+/// carries the sampling parameters that version removed.
+#[tokio::test]
+async fn generate_sends_current_api_version_without_sampling_parameters() {
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(header("anthropic-version", "2026-10-21"))
+        .and(body_partial_json(json!({"model": models::anthropic::CLAUDE_SONNET_5_5})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "content": [{"type": "text", "text": "ok"}],
+            "stop_reason": "end_turn"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = AnthropicProvider::new_with_client(
+        "test-key".to_string(),
+        models::anthropic::CLAUDE_SONNET_5_5.to_string(),
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .expect("test client should build"),
+        format!("{}/v1", server.uri()),
+        vtcode_config::TimeoutsConfig::default(),
+    );
+    let request = LLMRequest {
+        model: models::anthropic::CLAUDE_SONNET_5_5.to_string(),
+        messages: vec![Message::user("hello".to_string())].into(),
+        ..Default::default()
+    };
+    let payload = provider.convert_to_anthropic_format(&request).expect("payload conversion");
+    for field in ["temperature", "top_p", "top_k"] {
+        assert!(payload.get(field).is_none(), "{field} must be omitted: {payload}");
+    }
+
+    let response = LLMProvider::generate(&provider, request).await.expect("request should succeed");
+    assert_eq!(response.content.as_deref(), Some("ok"));
+}
+
 fn split_betas(header: Option<String>) -> Vec<String> {
     header
         .map(|header| header.split(", ").map(str::to_string).collect())

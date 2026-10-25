@@ -14,8 +14,8 @@ pub use vtcode_llm::provider::{
     LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message, MessageClearAt, MessageContent, MessageRole,
     NormalizedStreamEvent, ParallelToolConfig, PreparedResponsesRequest, PromptCacheProfile, ProviderCapabilities,
     ReasoningSource, ResponsesCompactionOptions, ResponsesContinuationState, ResponsesContinuationStore,
-    ShellToolDefinition, SpecificFunctionChoice, SpecificToolChoice, ToolCall, ToolChoice, ToolDefinition,
-    ToolNamespace, ToolSearchAlgorithm, Usage, get_cached_capabilities, is_standard_decisions_endpoint,
+    SamplingOverrides, ShellToolDefinition, SpecificFunctionChoice, SpecificToolChoice, ToolCall, ToolChoice,
+    ToolDefinition, ToolNamespace, ToolSearchAlgorithm, Usage, get_cached_capabilities, is_standard_decisions_endpoint,
     prepare_openai_responses_request, prepare_responses_continuation_request, records_responses_continuation_state,
     responses_continuation_key, supports_responses_chaining, uses_incremental_responses_history,
 };

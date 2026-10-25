@@ -66,7 +66,7 @@ fn test_should_accept_refinement_rejects_role_play() {
 #[test]
 fn refinement_request_preserves_input_and_defines_rewrite_contract() {
     let raw = "Review `src/parser.rs`; do not edit files or run commands.";
-    let request = refinement_request(raw, "test-model", &["low", "high"], 0.3);
+    let request = refinement_request(&PlainRoute, raw, "test-model", &["low", "high"], 0.3);
     assert_eq!(request.messages.len(), 1);
     assert_eq!(request.messages[0].content.as_text(), raw);
     let system = request.system_prompt.as_deref().unwrap();
@@ -83,9 +83,93 @@ fn refinement_request_preserves_input_and_defines_rewrite_contract() {
 }
 
 #[test]
+fn refinement_request_keeps_sampling_only_for_routes_that_accept_it() {
+    use vtcode_core::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, SamplingOverrides};
+
+    #[derive(Clone, Copy)]
+    struct SamplingRoute {
+        drops_sampling: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for SamplingRoute {
+        fn name(&self) -> &str {
+            "sampling-route"
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Err(LLMError::Provider { message: "test route".to_string(), metadata: None })
+        }
+
+        fn sampling_overrides(&self, _model: &str) -> SamplingOverrides {
+            SamplingOverrides {
+                suppresses_sampling: self.drops_sampling,
+                ..Default::default()
+            }
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    let short = refinement_request(
+        &SamplingRoute { drops_sampling: false },
+        "Review the parser without edits",
+        "plain",
+        &[],
+        0.2,
+    );
+    assert_eq!(short.temperature, Some(0.2));
+
+    // Anthropic Messages rejects sampling outright, so a route without
+    // advertised efforts must not carry the refinement temperature either.
+    let anthropic_short = refinement_request(
+        &SamplingRoute { drops_sampling: true },
+        "Review the parser without edits",
+        "plain",
+        &[],
+        0.2,
+    );
+    assert_eq!(anthropic_short.temperature, None);
+}
+
+/// Route with the default (sampling-accepting) policy.
+struct PlainRoute;
+
+#[async_trait::async_trait]
+impl vtcode_core::llm::provider::LLMProvider for PlainRoute {
+    fn name(&self) -> &str {
+        "plain-route"
+    }
+
+    async fn generate(
+        &self,
+        _request: vtcode_core::llm::provider::LLMRequest,
+    ) -> Result<vtcode_core::llm::provider::LLMResponse, vtcode_core::llm::provider::LLMError> {
+        Err(vtcode_core::llm::provider::LLMError::Provider { message: "test route".to_string(), metadata: None })
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn validate_request(
+        &self,
+        _request: &vtcode_core::llm::provider::LLMRequest,
+    ) -> Result<(), vtcode_core::llm::provider::LLMError> {
+        Ok(())
+    }
+}
+
+#[test]
 fn refinement_request_bounds_output_and_omits_unsupported_effort() {
-    let short = refinement_request("Review the parser without edits", "plain", &[], 0.2);
-    let long = refinement_request(&"parser context ".repeat(10_000), "reasoning", &["high"], 0.4);
+    let short = refinement_request(&PlainRoute, "Review the parser without edits", "plain", &[], 0.2);
+    let long = refinement_request(&PlainRoute, &"parser context ".repeat(10_000), "reasoning", &["high"], 0.4);
     assert!(short.max_tokens.is_some_and(|tokens| (2048..8192).contains(&tokens)));
     assert_eq!(long.max_tokens, Some(8192));
     assert_eq!(short.reasoning_effort, None);

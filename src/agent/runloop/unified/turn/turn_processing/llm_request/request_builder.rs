@@ -196,16 +196,18 @@ pub(super) async fn build_turn_request(
         .vt_cfg
         .map(|cfg| cfg.agent.temperature)
         .unwrap_or(llm_generation::DEFAULT_TEMPERATURE);
-    let suppress_sampling = sampling_overrides
-        .suppresses_sampling(matches!(turn_snapshot.provider_name.as_str(), "anthropic" | "minimax"), reasoning_active);
+    let suppress_sampling = sampling_overrides.drops_sampling_params(
+        matches!(turn_snapshot.provider_name.as_str(), "anthropic" | "minimax"),
+        reasoning_active,
+    );
     let mut top_p_override = sampling_overrides.top_p;
     let mut top_k_override = sampling_overrides.top_k;
     if suppress_sampling {
-        // Anthropic-shaped backends reject top_k entirely and clamp top_p to
-        // [0.95, 1.0] while extended thinking is active; drop instead of
-        // failing every request.
+        // Anthropic Messages (API 2026-10-21) rejects top_k outright, whether
+        // or not extended thinking is active; drop instead of failing every
+        // request.
         top_k_override = None;
-        top_p_override = top_p_override.filter(|value| *value >= 0.95);
+        top_p_override = None;
     }
     let temperature = if suppress_sampling {
         None

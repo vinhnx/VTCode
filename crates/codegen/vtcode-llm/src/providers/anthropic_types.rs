@@ -30,8 +30,6 @@ pub struct AnthropicRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) system: Option<Value>, // Can be string or array of blocks
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tools: Option<Vec<AnthropicTool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) tool_choice: Option<Value>,

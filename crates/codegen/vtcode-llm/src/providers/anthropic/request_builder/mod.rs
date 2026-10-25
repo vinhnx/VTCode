@@ -23,7 +23,7 @@ use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
     default_effort_for_model, default_max_tokens_for_model, effort_allowed_for_model, preserves_thinking_across_turns,
-    rejects_forced_tool_choice, rejects_sampling, resolve_model_name, supports_assistant_prefill, supports_effort,
+    rejects_forced_tool_choice, resolve_model_name, supports_assistant_prefill, supports_effort,
     supports_mid_conversation_system_messages, supports_server_side_fallback, supports_task_budget, thinking_is_on,
 };
 use super::prompt_cache::{get_tools_cache_ttl, messages_cache_ttl_for_profile};
@@ -283,24 +283,6 @@ pub(crate) fn convert_to_anthropic_format(
         None
     };
 
-    // Fallback entries cannot override sampling, so the top-level temperature
-    // is sent to every fallback model too; drop it when any of them would
-    // reject it.
-    let fallback_rejects_sampling = fallbacks.as_ref().is_some_and(|fallbacks| {
-        fallbacks.models().iter().any(|fb| {
-            rejects_sampling(&fb.model, ctx.model)
-                || fb.thinking.as_ref().is_some_and(|thinking| {
-                    !matches!(thinking, ThinkingConfig::Disabled | ThinkingConfig::BetweenTools)
-                })
-        })
-    });
-    let effective_temperature =
-        if thinking_val.is_some() || rejects_sampling(resolved_model, ctx.model) || fallback_rejects_sampling {
-            None
-        } else {
-            request.temperature
-        };
-
     let top_level_cache_control =
         if ctx.prompt_cache_enabled && explicit_breakpoints_used < max_breakpoints && !has_uncached_runtime_context {
             let ttl = if messages_breakpoints_used > 0 {
@@ -327,7 +309,6 @@ pub(crate) fn convert_to_anthropic_format(
         cache_control: top_level_cache_control,
         messages,
         system: system_value,
-        temperature: effective_temperature,
         tools,
         tool_choice: final_tool_choice,
         thinking: thinking_val,
@@ -811,18 +792,12 @@ mod tests {
     fn request_fallbacks_are_gated_like_config_fallbacks() {
         let fallbacks = || vec![fallback(anthropic::CLAUDE_OPUS_5_5, None)];
 
-        // Models without server-side fallback support never send them, so a
-        // fallback that rejects sampling cannot strip the primary temperature.
+        // Models without server-side fallback support never send them.
         for model in ["claude-unlisted-model", anthropic::CLAUDE_SONNET_5] {
-            let mut request = request_with_fallbacks(model, fallbacks());
-            request.temperature = Some(0.2);
+            let request = request_with_fallbacks(model, fallbacks());
             let payload = convert_first_party(&request);
             assert!(payload.get("fallbacks").is_none(), "{model}: {payload}");
         }
-        let mut request = request_with_fallbacks("claude-unlisted-model", fallbacks());
-        request.temperature = Some(0.2);
-        let payload = convert_first_party(&request);
-        assert!(payload["temperature"].as_f64().is_some_and(|t| (t - 0.2).abs() < 1e-6), "payload: {payload}");
 
         let request = request_with_fallbacks(anthropic::CLAUDE_OPUS_5, fallbacks());
         assert!(convert(&request).get("fallbacks").is_none(), "non-first-party endpoints send nothing");
@@ -870,12 +845,18 @@ mod tests {
     }
 
     #[test]
-    fn temperature_is_kept_when_no_fallback_rejects_sampling() {
+    fn sampling_parameters_are_never_sent() {
+        // API version 2026-10-21 rejects `temperature`, `top_p`, and `top_k`
+        // outright, so the wire request must never carry them.
         let mut request = request_with_fallbacks("claude-unlisted-model", vec![fallback("claude-other-model", None)]);
         request.temperature = Some(0.2);
+        request.top_p = Some(0.9);
+        request.top_k = Some(40);
         let payload = convert(&request);
 
-        assert!(payload["temperature"].as_f64().is_some_and(|t| (t - 0.2).abs() < 1e-6), "payload: {payload}");
+        for field in ["temperature", "top_p", "top_k"] {
+            assert!(payload.get(field).is_none(), "{field} must be omitted: {payload}");
+        }
     }
 
     fn plain_request(model: &str) -> LLMRequest {

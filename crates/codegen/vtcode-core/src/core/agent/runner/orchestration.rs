@@ -333,6 +333,16 @@ impl AgentRunner {
             output_format: Some(serde_json::json!({ "type": "json_object" })),
             ..Default::default()
         };
+        // Anthropic Messages (API 2026-10-21) rejects sampling on every
+        // request, so drop it for routes that do rather than failing the
+        // whole planner/evaluator call.
+        if self
+            .provider_client
+            .sampling_overrides(&request.model)
+            .drops_sampling_params(false, false)
+        {
+            request.temperature = None;
+        }
         let mut response = self.provider_client.generate(request.clone()).await.context(request_label)?;
         if response.finish_reason == FinishReason::Length {
             std::sync::Arc::make_mut(&mut request.messages).push(Message::user(

@@ -108,6 +108,7 @@ async fn try_refine_prompt_with_route(
     };
     let refiner = create_provider_for_model_route(route, cfg, Some(vt_cfg))?;
     let req = refinement_request(
+        refiner.as_ref(),
         raw,
         &route.model,
         refiner.supported_reasoning_efforts(&route.model),

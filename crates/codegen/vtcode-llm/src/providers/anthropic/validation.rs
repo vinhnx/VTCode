@@ -15,9 +15,9 @@ use vtcode_config::types::ReasoningEffortLevel;
 
 use super::capabilities::{
     adaptive_thinking_always_on, allowed_efforts_for_model, claude_thinking_profile, default_effort_for_model,
-    default_max_tokens_for_model, effort_allowed_for_model, effort_is_at_most_high, matches_model, rejects_sampling,
-    resolve_model_name, structured_output_models, supports_effort, supports_manual_interleaved_beta,
-    supports_manual_thinking_budget, supports_structured_output, supports_task_budget,
+    default_max_tokens_for_model, effort_allowed_for_model, effort_is_at_most_high, matches_model, resolve_model_name,
+    structured_output_models, supports_effort, supports_manual_interleaved_beta, supports_manual_thinking_budget,
+    supports_structured_output, supports_task_budget,
 };
 
 pub fn validate_request(
@@ -92,12 +92,14 @@ pub fn validate_request(
         }
     }
 
-    if rejects_sampling(&request.model, default_model)
-        && (request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some())
-    {
+    // API version `2026-10-21` removed `temperature`, `top_p`, and `top_k`:
+    // any request that sends them is rejected, whatever the model. The
+    // request builder omits them unconditionally, so an explicit sampling
+    // value is an error rather than a silently ignored setting.
+    if request.temperature.is_some() || request.top_p.is_some() || request.top_k.is_some() {
         let formatted_error = error_display::format_llm_error(
             provider_name,
-            "Claude Sonnet 5, Sonnet 5.5, Fable 5/5.1, Opus 5, and Opus 5.5 reject explicit temperature, top_p, and top_k values; omit sampling parameters entirely.",
+            "Anthropic API version 2026-10-21 removed temperature, top_p, and top_k; omit sampling parameters entirely.",
         );
         return Err(LLMError::InvalidRequest { message: formatted_error, metadata: None });
     }
@@ -568,4 +570,52 @@ fn validate_schema_object(obj: &serde_json::Map<String, serde_json::Value>, path
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::Message;
+    use vtcode_config::constants::models;
+
+    fn request(model: &str) -> LLMRequest {
+        LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())].into(),
+            ..Default::default()
+        }
+    }
+
+    fn validate(request: &LLMRequest) -> Result<(), LLMError> {
+        validate_request(request, models::anthropic::DEFAULT_MODEL, &AnthropicConfig::default(), "Anthropic")
+    }
+
+    /// API version `2026-10-21` rejects any sampling parameter on any model,
+    /// not only the Claude 5 family.
+    #[test]
+    fn sampling_parameters_are_rejected_on_every_model() {
+        for model in [
+            models::anthropic::CLAUDE_SONNET_5_5,
+            "claude-sonnet-4-5-20250929",
+            "claude-opus-4-8",
+        ] {
+            let mut with_temperature = request(model);
+            with_temperature.temperature = Some(0.2);
+            assert!(matches!(validate(&with_temperature), Err(LLMError::InvalidRequest { .. })), "{model}");
+
+            let mut with_top_p = request(model);
+            with_top_p.top_p = Some(0.9);
+            assert!(matches!(validate(&with_top_p), Err(LLMError::InvalidRequest { .. })), "{model}");
+
+            let mut with_top_k = request(model);
+            with_top_k.top_k = Some(10);
+            assert!(matches!(validate(&with_top_k), Err(LLMError::InvalidRequest { .. })), "{model}");
+        }
+    }
+
+    #[test]
+    fn default_sampling_parameters_validate() {
+        assert!(validate(&request(models::anthropic::CLAUDE_SONNET_5_5)).is_ok());
+        assert!(validate(&request("claude-sonnet-4-5-20250929")).is_ok());
+    }
 }

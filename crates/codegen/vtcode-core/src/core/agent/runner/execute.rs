@@ -488,14 +488,18 @@ impl AgentRunner {
                 }
 
                 let anthropic_shaped = matches!(provider_kind, ModelProvider::Anthropic | ModelProvider::Minimax);
-                let temperature = if sampling_overrides.suppresses_sampling(anthropic_shaped, reasoning_active) {
+                // Anthropic Messages (API 2026-10-21) rejects sampling even
+                // when reasoning is off, so the drop is unconditional.
+                let drop_sampling_params =
+                    sampling_overrides.drops_sampling_params(anthropic_shaped, reasoning_active);
+                let temperature = if drop_sampling_params {
                     None
                 } else {
                     Some(sampling_overrides.temperature.unwrap_or(self.config().agent.temperature))
                 };
                 let mut top_p_override = sampling_overrides.top_p;
                 let mut top_k_override = sampling_overrides.top_k;
-                if sampling_overrides.suppresses_sampling(anthropic_shaped, reasoning_active) {
+                if drop_sampling_params {
                     // Keep the payload inside what our Anthropic reasoning
                     // validator accepts: `validate_reasoning_constraints`
                     // rejects any top_k and requires top_p in [0.95, 1.0]
@@ -528,12 +532,12 @@ impl AgentRunner {
                     temperature,
                     top_p: top_p_override,
                     top_k: top_k_override,
-                    presence_penalty: if sampling_overrides.suppresses_sampling(anthropic_shaped, reasoning_active) {
+                    presence_penalty: if drop_sampling_params {
                         None
                     } else {
                         sampling_overrides.presence_penalty
                     },
-                    frequency_penalty: if sampling_overrides.suppresses_sampling(anthropic_shaped, reasoning_active) {
+                    frequency_penalty: if drop_sampling_params {
                         None
                     } else {
                         sampling_overrides.frequency_penalty
