@@ -5115,6 +5115,7 @@ fn fast_mode_toggle_sends_cli_option_and_is_exposed_as_a_toggle(cx: &mut TestApp
         let toggle = window.find("fast-mode-toggle");
         assert_eq!(toggle.label(), Some("Disable Ultrafast processing"));
         assert_eq!(toggle.checked(), Some(true));
+        assert_eq!(toggle.role(), Some(gpui_kit::Role::Button));
         window.click("fast-mode-toggle", cx);
     })
     .unwrap();

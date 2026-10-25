@@ -6,14 +6,14 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, Selectable, StyledExt};
+use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentMedia, AttachmentTitle,
 };
 use gpui_kit::component::bubble::{Bubble, BubbleContent, BubbleVariant};
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::{Button, ButtonVariants, Toggle, ToggleVariants};
 use gpui_kit::component::chart::BarChart;
 use gpui_kit::component::command::{Command, CommandGroup, CommandItem, CommandState};
 use gpui_kit::component::description_list::DescriptionList;
@@ -5410,18 +5410,18 @@ impl DesktopView {
                     let provider = provider.clone();
                     let model = model.clone();
                     let palette_id = *palette_id;
-                    desktop_button("fast-mode-toggle")
+                    Toggle::new("fast-mode-toggle")
                         .label(label.clone())
-                        .outline()
-                        .small()
-                        .selected(enabled)
-                        .toggled(enabled)
-                        .accessibility_label(if enabled {
+                        .tooltip(if enabled {
                             format!("Disable {label} processing")
                         } else {
                             format!("Enable {label} processing")
                         })
-                        .on_click(move |_, window, cx| {
+                        .outline()
+                        .small()
+                        .checked(enabled)
+                        .cursor_pointer()
+                        .on_click(move |checked, window, cx| {
                             let _updated = weak.update(cx, |view, cx| {
                                 if view.palette_kind != PaletteKind::ModelOptions
                                     || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
@@ -5432,7 +5432,7 @@ impl DesktopView {
                                 view.close_palette(window, cx);
                                 view.select_session_options(
                                     protocol::SessionOptionsSelectParams {
-                                        fast_mode: Some(!enabled),
+                                        fast_mode: Some(*checked),
                                         ..Default::default()
                                     },
                                     cx,

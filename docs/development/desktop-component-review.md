@@ -87,7 +87,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [theme](https://gpui-kit.com/component/theme) | Applied: neutral hover/selection distinct from brand primary; component surfaces follow VT Code palettes. |
 | [time-field](https://gpui-kit.com/component/time-field) | Not needed for the current coding-workspace workflows or available data. |
 | [title-bar](https://gpui-kit.com/component/title-bar) | Retain one kit Root and tested native menu/window/reopen lifecycle. |
-| [toggle](https://gpui-kit.com/component/toggle) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |
+| [toggle](https://gpui-kit.com/component/toggle) | Applied to model speed selection as a controlled, accessible toolbar toggle; preference controls continue to use Switch. |
 | [toolbar](https://gpui-kit.com/component/toolbar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
 | [tooltip](https://gpui-kit.com/component/tooltip) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
 | [tree](https://gpui-kit.com/component/tree) | Deferred: richer navigation/editing is a separate functional increment. |
