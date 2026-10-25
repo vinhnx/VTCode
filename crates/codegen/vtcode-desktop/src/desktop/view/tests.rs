@@ -1,6 +1,7 @@
 use gpui_kit::Focusable;
 use gpui_kit::component::theme::ActiveTheme;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
@@ -9,6 +10,7 @@ use gpui_kit::{
 use serde_json::json;
 
 use super::{DesktopView, MAX_UI_EVENTS_PER_TICK, ThemeMode, workspace_picker_options};
+use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
 
@@ -1428,7 +1430,7 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
-    let list = cx.update(|cx| {
+    let scroller = cx.update(|cx| {
         view.update(cx, |view, _| {
             for index in 0..20 {
                 view.transcript.push(TranscriptItem::new(
@@ -1444,21 +1446,30 @@ fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut 
                 "VT Code".to_string(),
                 "A tall paragraph.\n\n".repeat(100),
             ));
-            view.transcript.list_state()
+            view.message_scroller.clone()
         })
     });
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(window.within("pane-root").find_by_label("Conversation").role(), Some(gpui_kit::Role::Region));
         let last = window.find("transcript-row-stream").bounds();
-        let viewport = list.viewport_bounds();
+        let viewport = window.find("transcript-scroll").bounds();
         assert!(last.size.height > viewport.size.height);
         assert!(last.bottom() <= viewport.bottom() + px(1.));
         assert!(last.bottom() >= viewport.bottom() - px(32.), "last={last:?}, viewport={viewport:?}");
-
-        list.scroll_by(px(-120.));
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.scroll("transcript-scroll", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-120.))), cx);
         window.render_frame(cx);
-        let anchor = list.logical_scroll_top();
-        assert!(!list.is_following_tail());
+    })
+    .unwrap();
+    cx.executor().advance_clock(Duration::from_millis(250));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let anchor = scroller.read(cx).logical_scroll_top();
+        assert!(!scroller.read(cx).is_following_tail());
+        assert!(scroller.read(cx).is_scrolled_up());
         view.update(cx, |view, _| {
             view.append_or_update_item(
                 "stream".to_string(),
@@ -1469,9 +1480,60 @@ fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut 
             );
         });
         window.render_frame(cx);
-        let after = list.logical_scroll_top();
+        let after = scroller.read(cx).logical_scroll_top();
         assert_eq!(after.item_ix, anchor.item_ix);
         assert!((after.offset_in_item - anchor.offset_in_item).abs() <= px(1.));
+        assert_eq!(
+            window
+                .within("transcript-scroller")
+                .find_by_label("Jump to latest message")
+                .role(),
+            Some(gpui_kit::Role::Button)
+        );
+        window.click((gpui_kit::ElementId::from("transcript-scroller"), "jump-to-latest"), cx);
+        window.render_frame(cx);
+        assert!(scroller.read(cx).is_following_tail());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn transcript_eviction_preserves_reader_anchor(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let scroller = cx.update(|cx| {
+        view.update(cx, |view, _| {
+            for index in 0..MAX_TRANSCRIPT_ITEMS {
+                view.transcript.push(TranscriptItem::new(
+                    index.to_string(),
+                    "assistant".to_string(),
+                    "VT Code".to_string(),
+                    format!("Message {index}"),
+                ));
+            }
+            view.message_scroller.clone()
+        })
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        scroller.update(cx, |state, cx| assert!(state.scroll_to_item(12, cx)));
+        window.render_frame(cx);
+        assert_eq!(scroller.read(cx).logical_scroll_top().item_ix, 12);
+
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "newest".to_string(),
+                "assistant".to_string(),
+                "VT Code".to_string(),
+                "Newest message".to_string(),
+            ));
+        });
+        window.render_frame(cx);
+
+        let anchor = scroller.read(cx).logical_scroll_top();
+        assert_eq!(view.read(cx).transcript.get(anchor.item_ix).unwrap().id, "12");
+        assert_eq!(scroller.read(cx).item_count(), MAX_TRANSCRIPT_ITEMS);
+        assert!(!scroller.read(cx).is_following_tail());
     })
     .unwrap();
 }
@@ -1522,9 +1584,9 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
         window.render_frame(cx);
         let row = window.find("transcript-row-resize").bounds();
         assert!(row.size.height > wide_height);
-        let list = view.read(cx).transcript.list_state();
-        assert!(list.is_following_tail());
-        assert!(row.bottom() <= list.viewport_bounds().bottom() + px(1.));
+        let scroller = view.read(cx).message_scroller.clone();
+        assert!(scroller.read(cx).is_following_tail());
+        assert!(row.bottom() <= window.find("transcript-scroll").bounds().bottom() + px(1.));
     })
     .unwrap();
 }
@@ -2129,7 +2191,7 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
         assert!(view.read(cx).session_request.is_none());
         assert!(view.read(cx).running);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Newer unsent draft");
-        assert_eq!(view.read(cx).transcript.list_state().item_count(), 1);
+        assert_eq!(view.read(cx).transcript.len(), 1);
         let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else { panic!("submit") };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
         assert_eq!(params, json!({ "sessionId": "created", "prompt": "First request", "attachments": [{ "path": "first.rs", "text": "first content" }] }));

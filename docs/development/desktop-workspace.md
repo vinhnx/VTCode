@@ -274,13 +274,15 @@ configured code font, with structured event details as a fallback when plain out
 Streaming updates retain group and detail expansion. Collapsing activity pauses automatic tail following,
 so inspecting earlier work does not pull the conversation away. Original events and inspector history remain
 unchanged; this is a presentation grouping over the measured transcript rows.
+The virtualized transcript uses Kit MessageScroller to preserve the reader anchor during streaming and history
+eviction, and to offer a labelled jump-to-latest control after scrolling away from new activity.
 
 ## Accessibility
 
 The desktop follows the [VT Code accessibility conventions](tui-design-system.md#accessibility):
 status includes text, active navigation does not rely on color, and decorative chrome does not
-add keyboard stops. Conversation bodies expose the author and original message text to assistive
-technology; expanded tool output is readable separately from its named show/hide action.
+add keyboard stops. Conversation bodies expose the author and original message text through the transcript's
+log region; expanded tool output is readable separately from its named show/hide action.
 Font selectors announce the current family, and font-size values expose their current pixel size.
 Existing keyboard controls, modal focus containment/restoration, and theme contrast tokens remain shared.
 The conversation stays virtualized: only mounted rows appear in the accessibility tree. Dynamic navigation, change,

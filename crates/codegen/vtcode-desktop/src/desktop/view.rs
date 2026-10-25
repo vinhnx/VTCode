@@ -28,6 +28,7 @@ use gpui_kit::component::list::ListItem;
 use gpui_kit::component::marker::{Marker, MarkerContent};
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
+use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -39,8 +40,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, Context, CursorStyle, Entity, FocusHandle, Focusable, KeyBinding, Menu, MenuItem,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, OsAction, PathPromptOptions, Render, ScrollHandle,
-    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, list,
-    point, px, size,
+    Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, point,
+    px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -354,6 +355,7 @@ struct DesktopView {
     selected_session_id: Option<String>,
     active_primary_agent_display: Option<ActivePrimaryAgentDisplay>,
     transcript: Transcript,
+    message_scroller: Entity<MessageScrollerState>,
     restored_activity: Vec<TranscriptItem>,
     restored_review_history_incomplete: bool,
     restored_activity_history_incomplete: bool,
@@ -498,6 +500,7 @@ impl DesktopView {
         let preferences = preferences::Preferences::load();
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
         let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
+        let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let file_tree = cx.new(|cx| TreeState::new(cx));
         let file_tree_subscription = cx.subscribe(&file_tree, |view, _, event, cx| {
             match event {
@@ -526,6 +529,7 @@ impl DesktopView {
             selected_session_id: None,
             active_primary_agent_display: None,
             transcript: Transcript::default(),
+            message_scroller,
             restored_activity: Vec::new(),
             restored_review_history_incomplete: false,
             restored_activity_history_incomplete: false,
@@ -3675,7 +3679,44 @@ impl DesktopView {
             .into_any_element()
     }
 
-    fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn sync_transcript_layout(&mut self, cx: &mut Context<Self>) {
+        use super::transcript::TranscriptLayoutChange;
+
+        let changes = self.transcript.take_layout_changes();
+        if changes.is_empty() {
+            return;
+        }
+
+        self.message_scroller.update(cx, |state, cx| {
+            for change in changes {
+                match change {
+                    TranscriptLayoutChange::Reset(item_count) => state.reset(item_count, cx),
+                    TranscriptLayoutChange::Splice { range, count } => {
+                        let applied = state.splice(range, count, cx);
+                        debug_assert!(applied, "transcript and message scroller row counts diverged");
+                    }
+                    TranscriptLayoutChange::Remeasure => state.remeasure(cx),
+                    TranscriptLayoutChange::RemeasureItems(range) => {
+                        let applied = state.remeasure_items(range, cx);
+                        debug_assert!(applied, "transcript remeasurement range is out of bounds");
+                    }
+                    TranscriptLayoutChange::PauseFollowingTail => {
+                        // Kit exposes scrolling but no pause-only operation. Scroll to the
+                        // current row only when tail-following is active; a reader who has
+                        // already scrolled away keeps the exact existing item offset.
+                        if state.item_count() > 0 && state.is_following_tail() {
+                            let anchor = state.logical_scroll_top();
+                            let _scrolled = state.scroll_to_item(anchor.item_ix, cx);
+                        }
+                    }
+                    TranscriptLayoutChange::FollowLatest => state.scroll_to_end(cx),
+                }
+            }
+        });
+    }
+
+    fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_transcript_layout(cx);
         let content = if self.transcript.is_empty() {
             let colors = cx.theme().colors;
             let workspace_name = self
@@ -3771,38 +3812,13 @@ impl DesktopView {
                 )
                 .into_any_element()
         } else {
-            list(
-                self.transcript.list_state(),
-                cx.processor(|view, index, _, cx| {
-                    if let Some(item) = view.transcript.get(index) {
-                        let group = view.transcript.activity_group(index);
-                        let group_head = group.as_ref().and_then(|range| view.transcript.get(range.start));
-                        if group.as_ref().is_some_and(|range| index != range.start)
-                            && group_head.is_some_and(|head| !head.activity_expanded)
-                        {
-                            return div().into_any_element();
-                        }
-                        let group_header = group
-                            .as_ref()
-                            .filter(|range| index == range.start)
-                            .map(|range| view.render_activity_group(range.clone(), cx));
-                        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
-                        div()
-                            .id(format!("transcript-row-{}", item.id))
-                            .role(gpui_kit::Role::ListItem)
-                            .test_support()
-                            .w_full()
-                            .px_8()
-                            .when(item.role == "tool", |row| row.pb_1())
-                            .when(item.role != "tool", |row| row.pb_4())
-                            .children(group_header)
-                            .when(show_item, |row| row.child(view.render_transcript_item(item, cx)))
-                            .into_any_element()
-                    } else {
-                        div().into_any_element()
-                    }
-                }),
+            MessageScroller::new(
+                "transcript-scroller",
+                self.message_scroller.clone(),
+                cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
             )
+            .with_jump_button_label("Jump to latest message")
+            .with_jump_button_renderer(|button| button.accessibility_label("Jump to latest message"))
             .size_full()
             .py_6()
             .into_any_element()
@@ -3810,13 +3826,43 @@ impl DesktopView {
         div()
             .id("transcript-scroll")
             .aria_label("Conversation")
-            .role(gpui_kit::Role::List)
+            .role(gpui_kit::Role::Region)
             .test_support()
             .flex_1()
             .min_h_0()
             .w_full()
             .overflow_hidden()
             .child(content)
+    }
+
+    fn render_transcript_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let Some(item) = self.transcript.get(index) else {
+            return div().into_any_element();
+        };
+        let group = self.transcript.activity_group(index);
+        let group_head = group.as_ref().and_then(|range| self.transcript.get(range.start));
+        if group.as_ref().is_some_and(|range| index != range.start)
+            && group_head.is_some_and(|head| !head.activity_expanded)
+        {
+            return div().into_any_element();
+        }
+        let group_header = group
+            .as_ref()
+            .filter(|range| index == range.start)
+            .map(|range| self.render_activity_group(range.clone(), cx));
+        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
+        div()
+            .id(format!("transcript-row-{}", item.id))
+            .role(gpui_kit::Role::ListItem)
+            .test_support()
+            .w_full()
+            // MessageScroller adds three pixels of horizontal row inset.
+            .px_5()
+            .when(item.role == "tool", |row| row.pb_1())
+            .when(item.role != "tool", |row| row.pb_4())
+            .children(group_header)
+            .when(show_item, |row| row.child(self.render_transcript_item(item, cx)))
+            .into_any_element()
     }
 
     fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
