@@ -385,6 +385,10 @@ UI scale. Transcript measurements refresh when typography changes.
 | Code font size | Monospace code surfaces; independent saved preference |
 | Reset appearance to defaults | Restores the default theme, font families, and sizes; preserves workspaces, sessions, and pane widths |
 
+When separate light and dark profiles are enabled, font families and sizes follow
+the active profile along with its theme. Changing typography edits the profile
+shown in Appearance; disabling profile separation keeps the active typography
+as the shared setting.
 Existing preference files retain defaults for missing typography fields. Saved
 sizes survive theme selection and are clamped to the supported bounds when loaded.
 Font selections also survive theme switches and restarts. Missing saved fonts
@@ -394,8 +398,9 @@ new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
 The Appearance dialog scrolls to keep controls reachable on smaller windows.
-Separate theme profiles retain independent light and dark theme choices; font family and size remain shared between them.
-Custom colors, per-mode typography, sidebar translucency, alternate Dock icons, and native font-smoothing overrides
+Separate theme profiles retain independent themes, font families, and sizes for
+light and dark modes. Custom colors, sidebar translucency, alternate Dock icons,
+and native font-smoothing overrides
 are not implemented in this increment.
 
 ### Component composition and visual hierarchy

@@ -2,8 +2,6 @@
 
 [Root AGENTS.md](../../../AGENTS.md) | macOS GPUI client for the local desktop protocol.
 
-## Conventions
-
 - Render on the UI thread; supervise transport asynchronously. Use GPUI's asynchronous `PathPromptOptions` picker.
 - `transcript.rs` owns rows, contiguous activity groups and measured `ListState`; remeasure grouping/expansion changes.
 - Use `vtcode-exec-events` runtime types; never duck-type JSON. File changes use bounded `DiffCard` rows.
@@ -15,6 +13,7 @@
 - Palettes (including `view/typography.rs`) retain `CommandState`; focus next frame, defer confirms, consume Cancel.
 - Kit TabBar needs scoped focus/arrow/Home/End; SidebarMenu lacks equivalent keyboard support. Keep navigation buttons.
 - Theme: brand `primary`, hover `accent`, shared `apply_theme`; Markdown keeps image blocking and Kit `syntect` highlighting.
+- Typography follows the active theme profile; disabling profile separation shares its typography.
 - Use `aa_muted` and `filled_button_foreground` over palette colors; never hardcode colors over a theme.
 - Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions, never infers subagent state.
 - `view/composer_controls.rs` owns anchored controls; service validates options. Keep drafts/sources across option changes.

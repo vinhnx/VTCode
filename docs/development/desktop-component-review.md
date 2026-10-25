@@ -78,7 +78,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [spinner](https://gpui-kit.com/component/spinner) | Do not add decorative loading/motion without an owned runtime state and reduced-motion behavior. |
 | [status-bar](https://gpui-kit.com/component/status-bar) | Retain current command and runtime surfaces; icon controls keep accessible names and shortcut hints. |
 | [stepper](https://gpui-kit.com/component/stepper) | Do not invent execution percentages or phases beyond existing runtime events. |
-| [switch](https://gpui-kit.com/component/switch) | Deferred: custom preferences require real effects, persistence, and accessibility validation. |
+| [switch](https://gpui-kit.com/component/switch) | Applied: separate light/dark appearance profiles have persisted theme and typography effects with accessible state. |
 | [table](https://gpui-kit.com/component/table) | Not needed for the current coding-workspace workflows or available data. |
 | [tabs](https://gpui-kit.com/component/tabs) | Retain inspector tabs and scoped keyboard wrapper. |
 | [tag](https://gpui-kit.com/component/tag) | Applied: neutral provider metadata and explicit tool-status tags in recessed activity cards. |

@@ -1191,11 +1191,12 @@ impl DesktopView {
             PaletteAction::SelectModel { provider, model } => self.model_is_current(provider, model),
             PaletteAction::SelectSessionOptions(options) => self.session_option_is_current(options),
             PaletteAction::SelectFont { target, family } => {
+                let typography = self.preferences.typography_for(self.theme_mode);
                 let selected = match target {
-                    FontTarget::Ui => &self.preferences.ui_font_family,
-                    FontTarget::Code => &self.preferences.code_font_family,
+                    FontTarget::Ui => typography.ui_font_family,
+                    FontTarget::Code => typography.code_font_family,
                 };
-                family == selected
+                family.as_deref() == selected
             }
             _ => false,
         }
@@ -2800,6 +2801,8 @@ impl DesktopView {
                         view.preferences.separate_theme_profiles = false;
                         view.preferences.light_theme = None;
                         view.preferences.dark_theme = None;
+                        view.preferences.light_typography = None;
+                        view.preferences.dark_typography = None;
                         view.preferences.ui_font_family = None;
                         view.preferences.code_font_family = None;
                         view.preferences.ui_font_size = None;
@@ -4560,7 +4563,7 @@ impl DesktopView {
             });
             self.preferences.follow_cli_theme = Some(false);
         }
-        self.preferences.separate_theme_profiles = enabled;
+        self.preferences.set_separate_theme_profiles(enabled, self.theme_mode);
         self.save_preferences();
         cx.notify();
     }
@@ -4592,15 +4595,13 @@ impl DesktopView {
     }
 
     fn apply_typography(&mut self, cx: &mut Context<Self>) {
-        let ui = self.preferences.ui_font_size();
-        let code = self.preferences.code_font_size();
-        let ui_family = typography::resolve_font(
-            self.preferences.ui_font_family.as_deref(),
-            ".SystemUIFont",
-            typography::installed_fonts(cx),
-        );
+        let typography = self.preferences.typography_for(self.theme_mode);
+        let ui = typography.ui_font_size;
+        let code = typography.code_font_size;
+        let ui_family =
+            typography::resolve_font(typography.ui_font_family, ".SystemUIFont", typography::installed_fonts(cx));
         let code_family = typography::resolve_font(
-            self.preferences.code_font_family.as_deref(),
+            typography.code_font_family,
             self.default_code_font.as_str(),
             typography::installed_fonts(cx),
         );
@@ -4667,7 +4668,7 @@ impl DesktopView {
                 "code",
                 "Code font size",
                 "Code, diffs, and terminal output",
-                self.preferences.code_font_size(),
+                self.preferences.typography_for(self.theme_mode).code_font_size,
                 10,
                 24,
             )
@@ -4676,7 +4677,7 @@ impl DesktopView {
                 "ui",
                 "UI font size",
                 "Base size for controls and conversation text",
-                self.preferences.ui_font_size(),
+                self.preferences.typography_for(self.theme_mode).ui_font_size,
                 12,
                 24,
             )
@@ -4709,9 +4710,9 @@ impl DesktopView {
                             .desktop_disabled(if delta < 0 { size <= minimum } else { size >= maximum })
                             .on_click(cx.listener(move |view, _, _, cx| {
                                 let current = if code {
-                                    view.preferences.code_font_size()
+                                    view.preferences.typography_for(view.theme_mode).code_font_size
                                 } else {
-                                    view.preferences.ui_font_size()
+                                    view.preferences.typography_for(view.theme_mode).ui_font_size
                                 };
                                 let next = if delta < 0 {
                                     current.saturating_sub(1)
@@ -4720,9 +4721,9 @@ impl DesktopView {
                                 }
                                 .clamp(minimum, maximum);
                                 if code {
-                                    view.preferences.code_font_size = Some(next);
+                                    view.preferences.set_code_font_size(view.theme_mode, next);
                                 } else {
-                                    view.preferences.ui_font_size = Some(next);
+                                    view.preferences.set_ui_font_size(view.theme_mode, next);
                                 }
                                 view.apply_typography(cx);
                                 view.save_preferences();

@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +40,34 @@ impl ReducedMotionPreference {
             Self::System => "system",
             Self::On => "on",
             Self::Off => "off",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub(super) struct TypographyProfile {
+    pub ui_font_family: Option<String>,
+    pub code_font_family: Option<String>,
+    pub ui_font_size: Option<u8>,
+    pub code_font_size: Option<u8>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct TypographySettings<'a> {
+    pub ui_font_family: Option<&'a str>,
+    pub code_font_family: Option<&'a str>,
+    pub ui_font_size: u8,
+    pub code_font_size: u8,
+}
+
+impl TypographySettings<'_> {
+    fn to_profile(self) -> TypographyProfile {
+        TypographyProfile {
+            ui_font_family: self.ui_font_family.map(str::to_owned),
+            code_font_family: self.code_font_family.map(str::to_owned),
+            ui_font_size: Some(self.ui_font_size),
+            code_font_size: Some(self.code_font_size),
         }
     }
 }
@@ -83,6 +112,8 @@ pub(super) struct Preferences {
     pub separate_theme_profiles: bool,
     pub light_theme: Option<String>,
     pub dark_theme: Option<String>,
+    pub light_typography: Option<TypographyProfile>,
+    pub dark_typography: Option<TypographyProfile>,
     /// None preserves legacy explicit theme choices; new profiles follow the CLI.
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
@@ -101,6 +132,101 @@ impl Preferences {
     }
     pub(super) fn code_font_size(&self) -> u8 {
         self.code_font_size.unwrap_or(14).clamp(10, 24)
+    }
+
+    pub(super) fn typography_for(&self, mode: ThemeMode) -> TypographySettings<'_> {
+        let profile = if self.separate_theme_profiles {
+            match mode {
+                ThemeMode::Light => self.light_typography.as_ref(),
+                ThemeMode::Dark => self.dark_typography.as_ref(),
+            }
+        } else {
+            None
+        };
+        match profile {
+            Some(profile) => TypographySettings {
+                ui_font_family: profile.ui_font_family.as_deref(),
+                code_font_family: profile.code_font_family.as_deref(),
+                ui_font_size: profile.ui_font_size.unwrap_or(16).clamp(12, 24),
+                code_font_size: profile.code_font_size.unwrap_or(14).clamp(10, 24),
+            },
+            None => TypographySettings {
+                ui_font_family: self.ui_font_family.as_deref(),
+                code_font_family: self.code_font_family.as_deref(),
+                ui_font_size: self.ui_font_size(),
+                code_font_size: self.code_font_size(),
+            },
+        }
+    }
+
+    pub(super) fn set_separate_theme_profiles(&mut self, enabled: bool, mode: ThemeMode) {
+        if enabled == self.separate_theme_profiles {
+            return;
+        }
+        if enabled {
+            let shared = TypographyProfile {
+                ui_font_family: self.ui_font_family.clone(),
+                code_font_family: self.code_font_family.clone(),
+                ui_font_size: self.ui_font_size,
+                code_font_size: self.code_font_size,
+            };
+            self.light_typography = Some(shared.clone());
+            self.dark_typography = Some(shared);
+        } else {
+            let shared = self.typography_for(mode).to_profile();
+            self.ui_font_family = shared.ui_font_family;
+            self.code_font_family = shared.code_font_family;
+            self.ui_font_size = shared.ui_font_size;
+            self.code_font_size = shared.code_font_size;
+            self.light_typography = None;
+            self.dark_typography = None;
+        }
+        self.separate_theme_profiles = enabled;
+    }
+
+    pub(super) fn set_ui_font_family(&mut self, mode: ThemeMode, family: Option<String>) {
+        if self.separate_theme_profiles {
+            self.typography_profile_mut(mode).ui_font_family = family;
+        } else {
+            self.ui_font_family = family;
+        }
+    }
+
+    pub(super) fn set_code_font_family(&mut self, mode: ThemeMode, family: Option<String>) {
+        if self.separate_theme_profiles {
+            self.typography_profile_mut(mode).code_font_family = family;
+        } else {
+            self.code_font_family = family;
+        }
+    }
+
+    pub(super) fn set_ui_font_size(&mut self, mode: ThemeMode, size: u8) {
+        if self.separate_theme_profiles {
+            self.typography_profile_mut(mode).ui_font_size = Some(size);
+        } else {
+            self.ui_font_size = Some(size);
+        }
+    }
+
+    pub(super) fn set_code_font_size(&mut self, mode: ThemeMode, size: u8) {
+        if self.separate_theme_profiles {
+            self.typography_profile_mut(mode).code_font_size = Some(size);
+        } else {
+            self.code_font_size = Some(size);
+        }
+    }
+
+    fn typography_profile_mut(&mut self, mode: ThemeMode) -> &mut TypographyProfile {
+        let shared = TypographyProfile {
+            ui_font_family: self.ui_font_family.clone(),
+            code_font_family: self.code_font_family.clone(),
+            ui_font_size: self.ui_font_size,
+            code_font_size: self.code_font_size,
+        };
+        match mode {
+            ThemeMode::Light => self.light_typography.get_or_insert(shared),
+            ThemeMode::Dark => self.dark_typography.get_or_insert(shared),
+        }
     }
 
     pub(super) fn sidebar_width(&self) -> f32 {
@@ -226,17 +352,73 @@ mod tests {
         let defaults: Preferences = serde_json::from_str("{}").unwrap();
         assert!(!defaults.separate_theme_profiles);
         assert!(defaults.light_theme.is_none() && defaults.dark_theme.is_none());
+        assert!(defaults.light_typography.is_none() && defaults.dark_typography.is_none());
 
         let selected = Preferences {
             separate_theme_profiles: true,
             light_theme: Some("solarized-light".into()),
             dark_theme: Some("ciapre".into()),
+            light_typography: Some(TypographyProfile {
+                ui_font_size: Some(19),
+                ..TypographyProfile::default()
+            }),
+            dark_typography: Some(TypographyProfile {
+                ui_font_size: Some(16),
+                ..TypographyProfile::default()
+            }),
             ..defaults
         };
         let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
         assert!(loaded.separate_theme_profiles);
         assert_eq!(loaded.light_theme.as_deref(), Some("solarized-light"));
         assert_eq!(loaded.dark_theme.as_deref(), Some("ciapre"));
+        assert_eq!(loaded.typography_for(ThemeMode::Light).ui_font_size, 19);
+        assert_eq!(loaded.typography_for(ThemeMode::Dark).ui_font_size, 16);
+    }
+
+    #[test]
+    fn theme_profiles_keep_typography_independent_and_merge_the_active_profile_on_disable() {
+        let mut preferences = Preferences {
+            ui_font_family: Some("Helvetica Neue".into()),
+            code_font_family: Some("Monaco".into()),
+            ui_font_size: Some(16),
+            code_font_size: Some(14),
+            ..Preferences::default()
+        };
+        preferences.set_separate_theme_profiles(true, ThemeMode::Dark);
+        preferences.set_ui_font_size(ThemeMode::Light, 19);
+        preferences.set_code_font_family(ThemeMode::Dark, Some("Menlo".into()));
+        preferences.set_ui_font_family(ThemeMode::Light, None);
+
+        let light = preferences.typography_for(ThemeMode::Light);
+        let dark = preferences.typography_for(ThemeMode::Dark);
+        assert_eq!(light.ui_font_size, 19);
+        assert_eq!(dark.ui_font_size, 16);
+        assert_eq!(light.ui_font_family, None);
+        assert_eq!(dark.ui_font_family, Some("Helvetica Neue"));
+        assert_eq!(light.code_font_family, Some("Monaco"));
+        assert_eq!(dark.code_font_family, Some("Menlo"));
+
+        preferences.set_separate_theme_profiles(false, ThemeMode::Light);
+        assert!(!preferences.separate_theme_profiles);
+        assert_eq!(preferences.ui_font_size(), 19);
+        assert_eq!(preferences.ui_font_family, None);
+        assert_eq!(preferences.code_font_family.as_deref(), Some("Monaco"));
+        assert!(preferences.light_typography.is_none() && preferences.dark_typography.is_none());
+    }
+
+    #[test]
+    fn legacy_theme_profiles_inherit_shared_typography_until_edited_and_clamp_profile_sizes() {
+        let mut preferences: Preferences =
+            serde_json::from_str(r#"{"separateThemeProfiles":true,"uiFontSize":18,"codeFontSize":13}"#).unwrap();
+        assert_eq!(preferences.typography_for(ThemeMode::Light).ui_font_size, 18);
+        assert_eq!(preferences.typography_for(ThemeMode::Dark).code_font_size, 13);
+        preferences.set_ui_font_size(ThemeMode::Dark, 0);
+        preferences.set_code_font_size(ThemeMode::Dark, 255);
+        let dark = preferences.typography_for(ThemeMode::Dark);
+        assert_eq!((dark.ui_font_size, dark.code_font_size), (12, 24));
+        let light = preferences.typography_for(ThemeMode::Light);
+        assert_eq!((light.ui_font_size, light.code_font_size), (18, 13));
     }
 
     #[test]
