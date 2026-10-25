@@ -3853,7 +3853,7 @@ impl DesktopView {
         let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
         div()
             .id(format!("transcript-row-{}", item.id))
-            .role(gpui_kit::Role::ListItem)
+            .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
             .test_support()
             .w_full()
             // MessageScroller adds three pixels of horizontal row inset.
@@ -3879,6 +3879,7 @@ impl DesktopView {
         let copy_text = item.text.clone();
         Message::new()
             .id(format!("message-{}", item.id))
+            .role(gpui_kit::Role::ListItem)
             .alignment(if user {
                 MessageAlignment::End
             } else {

@@ -3645,6 +3645,8 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
             ));
         });
         window.render_frame(cx);
+        assert_eq!(window.find("transcript-row-answer").role(), None);
+        assert_eq!(window.find("transcript-row-check").role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(window.find("message-body-answer").role(), Some(gpui_kit::Role::Label));
         assert_eq!(window.find("message-body-answer").label(), Some("VT Code: Tests passed: 7. Run cargo test."));
         assert_eq!(window.find("tool-check").label(), Some("Show details for cargo check"));
