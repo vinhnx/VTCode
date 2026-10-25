@@ -222,7 +222,8 @@ resize handles retain their own cursors.
 The composer opens a compact model/effort panel above the input. It lists the CLI's ordered recommended fallback models,
 retains the active model when it is outside that set, and **Search all models…** opens the full search.
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
-the same change through keyboard and assistive activation. Changes commit on release, and restart the idle
+the same change through keyboard and assistive activation. The slider's accessible name includes the current CLI
+level (for example, “Reasoning effort: medium”). Changes commit on release, and restart the idle
 session so the runtime receives the new effort. The header reflects the CLI's effective fast/ultrafast badge.
 The searchable model panel is anchored above the growing composer and snaps inside the window. Model names appear above
 quieter provider, canonical ID, and context-window metadata; the current model has a checkmark and is selected initially.

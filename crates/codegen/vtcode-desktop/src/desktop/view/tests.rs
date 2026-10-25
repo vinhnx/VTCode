@@ -4055,6 +4055,37 @@ fn runtime_options_config() -> vtcode_desktop_protocol::ConfigurationSnapshot {
 }
 
 #[gpui_kit::test]
+fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
+        let slider = window.find(("slider", slider_id));
+        assert_eq!(slider.role(), Some(gpui_kit::Role::Slider));
+        assert_eq!(slider.label(), Some("Reasoning effort: medium"));
+
+        view.update(cx, |view, cx| {
+            let slider = view.effort_slider.clone().unwrap();
+            slider.update(cx, |state, cx| state.set_value(2., window, cx));
+        });
+        window.render_frame(cx);
+
+        let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
+        assert_eq!(window.find(("slider", slider_id)).label(), Some("Reasoning effort: high"));
+        assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · high"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

@@ -389,7 +389,11 @@ pub(super) fn model_options_header(
                 )
                 .child(
                     gpui_kit::component::slider::Slider::new(slider)
-                        .accessibility_label("Reasoning effort")
+                        .accessibility_label(
+                            effort
+                                .map(|effort| format!("Reasoning effort: {effort}"))
+                                .unwrap_or_else(|| "Reasoning effort".to_string()),
+                        )
                         .flex_1(),
                 )
                 .child(
