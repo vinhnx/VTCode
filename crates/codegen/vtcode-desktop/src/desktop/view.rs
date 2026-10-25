@@ -30,6 +30,7 @@ use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, MessageFooter, MessageHeader};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::plot::shape::BarAlignment;
+use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::{ScrollableMask, Scrollbar};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::tag::Tag;
@@ -4442,12 +4443,6 @@ impl DesktopView {
             );
         }
         let buttons = buttons.child(model_actions);
-        let workspace = self
-            .workspace
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Choose workspace".into());
         if self.palette_kind.is_composer_popup() {
             if let Some(state) = self.palette.clone() {
                 if matches!(self.palette_kind, PaletteKind::Models | PaletteKind::ModelOptions) {
@@ -4479,22 +4474,7 @@ impl DesktopView {
                 .py_1()
                 .rounded_lg()
                 .bg(colors.background)
-                .child(
-                    desktop_button("composer-workspace")
-                        .icon(IconName::Folder)
-                        .label(workspace)
-                        .ghost()
-                        .small()
-                        .max_w(px(240.))
-                        .overflow_hidden()
-                        .accessibility_label("Choose workspace")
-                        .desktop_disabled(
-                            !self.workspace_switch_idle()
-                                || self.retained_submission.is_some()
-                                || self.workspace_picker_open,
-                        )
-                        .on_click(cx.listener(|view, _, window, cx| view.choose_workspace(window, cx))),
-                )
+                .child(self.render_workspace_picker(cx))
                 .child(
                     desktop_button("composer-cli-webmcp")
                         .icon(IconName::Terminal)

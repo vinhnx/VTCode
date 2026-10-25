@@ -3764,6 +3764,58 @@ fn navigation_accessibility_distinguishes_current_workspace_and_thread(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn composer_workspace_popover_exposes_recent_projects_and_folder_picker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.preferences.recent_workspaces = vec!["/project/alpha".into(), "/project/beta".into()];
+        cx.notify();
+    });
+
+    let alpha_id = super::opaque_path_element_id("recent-workspace-popover", "/project/alpha");
+    let beta_id = super::opaque_path_element_id("recent-workspace-popover", "/project/beta");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+
+        assert_eq!(window.find("open-workspace-folder").label(), Some("Choose folder…"));
+        assert_eq!(window.find(alpha_id).label(), Some("alpha"));
+        assert_eq!(window.find(beta_id).label(), Some("beta"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn selecting_a_recent_workspace_uses_the_existing_shutdown_transition(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let target = tempfile::tempdir().unwrap();
+    let target_path = target.path().to_path_buf();
+    let canonical_target = vtcode_commons::paths::canonicalize(&target_path).unwrap();
+    let target_display = target_path.display().to_string();
+    let (commands, mut received) = tokio::sync::mpsc::channel(1);
+    view.update(cx, |view, cx| {
+        view.preferences.recent_workspaces = vec![target_display];
+        view.backend = Some(BackendHandle { commands });
+        cx.notify();
+    });
+
+    let target_id = super::opaque_path_element_id("recent-workspace-popover", &target_path.display().to_string());
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click("composer-workspace", cx);
+        window.render_frame(cx);
+        window.click(target_id, cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).pending_workspace.as_deref(), Some(canonical_target.as_path()));
+    });
+    assert!(matches!(received.try_recv(), Ok(BackendCommand::Stop)));
+}
+
+#[gpui_kit::test]
 fn status_bar_announces_agent_state_changes(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {

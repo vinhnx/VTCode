@@ -8,6 +8,112 @@ impl PaletteKind {
 }
 
 impl DesktopView {
+    pub(super) fn render_workspace_picker(&self, cx: &mut Context<Self>) -> AnyElement {
+        let current = self.workspace.as_ref().map(|path| path.display().to_string());
+        let current_label = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Choose workspace".into());
+        let recent = self.recent_workspaces();
+        let disabled =
+            !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
+        let view = cx.entity().downgrade();
+        let trigger = desktop_button("composer-workspace")
+            .icon(IconName::Folder)
+            .label(current_label)
+            .ghost()
+            .small()
+            .max_w(px(240.))
+            .overflow_hidden()
+            .accessibility_label("Choose workspace")
+            .tooltip("Choose a workspace or recent project")
+            .desktop_disabled(disabled);
+
+        Popover::new("composer-workspace-popover")
+            .anchor(Anchor::BottomLeft)
+            .offset(px(8.))
+            .w(px(300.))
+            .max_h(px(360.))
+            .trigger(trigger)
+            .content(move |_, _, cx| {
+                let colors = cx.theme().colors;
+                let mut content = div()
+                    .id("workspace-picker-list")
+                    .w_full()
+                    .min_h_0()
+                    .max_h(px(340.))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .px_2()
+                            .py_1()
+                            .text_xs()
+                            .font_semibold()
+                            .text_color(colors.muted_foreground)
+                            .child("WORKSPACES"),
+                    );
+                let open_view = view.clone();
+                content = content.child(
+                    desktop_button("open-workspace-folder")
+                        .icon(IconName::Folder)
+                        .label("Choose folder…")
+                        .ghost()
+                        .w_full()
+                        .desktop_disabled(disabled)
+                        .on_click(cx.listener(move |popover, _, window, cx| {
+                            popover.dismiss(window, cx);
+                            let _updated = open_view.update(cx, |view, cx| view.choose_workspace(window, cx));
+                        })),
+                );
+                if recent.is_empty() {
+                    content = content.child(
+                        div()
+                            .px_2()
+                            .py_2()
+                            .text_sm()
+                            .text_color(colors.muted_foreground)
+                            .child("No recent workspaces"),
+                    );
+                } else {
+                    content = content.child(div().mx_2().my_1().h(px(1.)).bg(colors.border.opacity(0.7)));
+                    for path in &recent {
+                        let label = Path::new(path)
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or(path)
+                            .to_string();
+                        let selected = current.as_deref() == Some(path.as_str());
+                        let entry_view = view.clone();
+                        let entry_path = path.clone();
+                        content = content.child(
+                            desktop_button(opaque_path_element_id("recent-workspace-popover", path))
+                                .accessibility_label(format!(
+                                    "{label}{}",
+                                    if selected { " (current workspace)" } else { "" }
+                                ))
+                                .child(navigation_label(label, IconName::Folder, selected, colors.primary))
+                                .ghost()
+                                .w_full()
+                                .desktop_disabled(disabled)
+                                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                                .on_click(cx.listener(move |popover, _, window, cx| {
+                                    popover.dismiss(window, cx);
+                                    let path = PathBuf::from(entry_path.clone());
+                                    let _updated = entry_view.update(cx, |view, cx| view.select_workspace(path, cx));
+                                })),
+                        );
+                    }
+                }
+                content.into_any_element()
+            })
+            .into_any_element()
+    }
+
     pub(super) fn open_add_context(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.workspace.is_none() || self.attachments_picker_open || self.session_request.is_some() {
             return;
