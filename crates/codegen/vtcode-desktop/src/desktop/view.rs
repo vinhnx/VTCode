@@ -5271,9 +5271,9 @@ fn partial_history_alert(
         .rounded_md()
         .border_1()
         .border_color(colors.warning)
-        .bg(colors.warning.opacity(0.08))
+        .bg(colors.secondary)
         .text_sm()
-        .text_color(colors.warning_foreground)
+        .text_color(colors.secondary_foreground)
         .child(message)
         .into_any_element()
 }
