@@ -208,11 +208,17 @@ Common cases:
   workspace access, mirroring the CLI experience. When the model lacks function calling or the tool toggle is disabled,
   VT Code surfaces a reasoning notice and skips the invocation. Paths supplied by tools are normalised against the
   trusted workspace so relative segments stay inside the project before the request reaches the client.
+- **Command execution stays local** – `exec_command`/`run_pty_cmd` always run inside VT Code's own exec sessions, even
+  when Zed advertises the ACP `terminal` capability. The model receives the captured output, the exit status, and a
+  session id that `write_stdin` can continue; VT Code never returns a `terminal_id` placeholder. A non-zero exit status
+  is reported as a failed tool call (`status: "error"`, ACP `failed`) with the output and `exit_code` preserved, and the
+  command still passes the same command-safety, sandbox, and execution-policy preflight as the CLI.
 - **Tool policy compatibility** – VT Code advertises the current core tool suite through ACP when the model supports
   function calling, including `exec_command`, `write_stdin`, `apply_patch`, and advanced `code_search` where enabled.
   The bridge evaluates each request against the workspace's tool-policy settings before executing commands locally,
   ensuring shell access and editing tools behave the same as in the native CLI. Policy defaults and overrides defined
-  under `[tools]` in `vtcode.toml` apply to ACP sessions just like the CLI.
+  under `[tools]` in `vtcode.toml` apply to ACP sessions just like the CLI: approving a `prompt`-policy tool in the
+  client satisfies that policy for the call, while a configured `deny` still blocks it after approval.
 - **Policy persistence** – Auto-approved tool prompts in ACP mode (for example shell execution in a non-interactive
   environment) are stored in the workspace policy file so subsequent runs reuse the remembered decision instead of
   prompting on every invocation.

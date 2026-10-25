@@ -10,8 +10,6 @@
 //!   tool call may proceed.
 //! * [`ConnectionHandle::read_text_file`] — delegate a `fs/read_text_file`
 //!   call to the client.
-//! * [`ConnectionHandle::create_terminal`] — ask the client to spin up a
-//!   terminal session.
 //!
 //! Internally all RPC calls route through the SACP `send_request(...).
 //! block_task()` future, which is **only safe inside a `cx.spawn(...)`
@@ -29,8 +27,8 @@ use std::sync::Arc;
 use agent_client_protocol::{
     Client, ConnectionTo, Error,
     schema::v1::{
-        CreateTerminalRequest, CreateTerminalResponse, ReadTextFileRequest, ReadTextFileResponse,
-        RequestPermissionRequest, RequestPermissionResponse, SessionNotification,
+        ReadTextFileRequest, ReadTextFileResponse, RequestPermissionRequest, RequestPermissionResponse,
+        SessionNotification,
     },
 };
 
@@ -80,14 +78,6 @@ impl ConnectionHandle {
     /// **Only call from a `cx.spawn` task** — see
     /// [`ConnectionHandle::request_permission`].
     pub async fn read_text_file(&self, request: ReadTextFileRequest) -> Result<ReadTextFileResponse, Error> {
-        self.cx.send_request(request).block_task().await
-    }
-
-    /// Send a `terminal/create` request and await the response.
-    ///
-    /// **Only call from a `cx.spawn` task** — see
-    /// [`ConnectionHandle::request_permission`].
-    pub async fn create_terminal(&self, request: CreateTerminalRequest) -> Result<CreateTerminalResponse, Error> {
         self.cx.send_request(request).block_task().await
     }
 }

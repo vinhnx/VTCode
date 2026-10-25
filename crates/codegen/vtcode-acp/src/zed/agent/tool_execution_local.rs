@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::registry::{ExecutionPolicySnapshot, ToolExecutionRequest};
+use vtcode_core::tools::registry::{ExecutionPolicySnapshot, ToolExecutionRequest, ToolPermissionDecision};
 use vtcode_core::tools::traits::Tool;
 use vtcode_core::utils::ansi_parser::strip_ansi;
 use vtcode_core::utils::path::ensure_path_within_workspace;
@@ -22,7 +22,13 @@ use vtcode_core::utils::path::ensure_path_within_workspace;
 const RESTRICTED_LOCAL_TOOLS: &[&str] = &["debug_agent", "analyze_agent", "execute_code"];
 
 impl ZedAgent {
-    pub(super) async fn execute_local_tool(&self, tool_name: &str, args: &Value, call_id: &str) -> ToolExecutionReport {
+    pub(super) async fn execute_local_tool(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        call_id: &str,
+        permission_granted: bool,
+    ) -> ToolExecutionReport {
         if RESTRICTED_LOCAL_TOOLS.contains(&tool_name) {
             warn!(tool = tool_name, "Attempted execution of restricted tool from external ACP client");
             return ToolExecutionReport::failure(
@@ -31,18 +37,17 @@ impl ZedAgent {
             );
         }
 
+        if permission_granted {
+            self.preapprove_granted_local_tool(tool_name).await;
+        }
+
         let policy = ExecutionPolicySnapshot::default().with_invocation_id(Some(call_id.to_string()));
         let request = ToolExecutionRequest::new(tool_name, args.clone()).with_policy(policy);
         let outcome = self.local_tool_registry.execute_public_tool_request(request).await;
         match (outcome.output, outcome.error) {
             (Some(output), None) => {
                 let content = self.render_local_tool_content(tool_name, &output);
-                let payload = json!({
-                    TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
-                    TOOL_RESPONSE_KEY_TOOL: tool_name,
-                    "result": output.clone(),
-                });
-                ToolExecutionReport::success(content, Vec::new(), payload)
+                ToolExecutionReport::from_local_output(tool_name, output, content, Vec::new())
             }
             (_, Some(error)) => {
                 let message = error.user_message();
@@ -55,6 +60,34 @@ impl ZedAgent {
                 ToolExecutionReport::failure(tool_name, &message)
             }
             (None, None) => ToolExecutionReport::failure(tool_name, "Tool execution finished without output or error"),
+        }
+    }
+
+    /// Reserve the registry's one-shot approval for a call the ACP client just granted.
+    ///
+    /// The ACP permission request runs before the local registry policy gate, so a
+    /// `prompt`-policy tool (for example `apply_patch`) would otherwise be evaluated a
+    /// second time with no permission handler available to answer it, and be denied.
+    /// This mirrors the interactive CLI, which calls `mark_tool_preapproved` after the
+    /// user approves. A configured `deny` policy stays authoritative: a client approval
+    /// is not a policy override, so no reservation is made and the gate reports the
+    /// denial unchanged.
+    async fn preapprove_granted_local_tool(&self, tool_name: &str) {
+        match self.local_tool_registry.evaluate_tool_policy(tool_name).await {
+            Ok(ToolPermissionDecision::Deny) => {
+                warn!(
+                    tool = tool_name,
+                    "ACP client granted permission but the workspace tool policy denies execution; not preapproving"
+                );
+            }
+            Ok(_) => self.local_tool_registry.mark_tool_preapproved(tool_name).await,
+            Err(error) => {
+                warn!(
+                    tool = tool_name,
+                    %error,
+                    "Failed to evaluate workspace tool policy before preapproval; leaving the policy gate in place"
+                );
+            }
         }
     }
 
@@ -302,3 +335,6 @@ impl ZedAgent {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests;

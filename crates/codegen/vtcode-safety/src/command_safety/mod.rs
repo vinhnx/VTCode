@@ -317,9 +317,43 @@ mod tests {
     }
 
     #[test]
+    fn argv_validation_reads_the_unquoted_nested_script() {
+        // The `-c` argument keeps raw shell quoting here too, so the script the
+        // shell actually runs must be what gets validated — not the quoted
+        // blob, whose substitution scan is blinded by the outer quotes.
+        let quoted_benign = ["sh".to_string(), "-c".to_string(), "'echo MARKER'".to_string()];
+        let quoted_benign_result = validate_command_argv(&quoted_benign);
+        assert!(quoted_benign_result.is_ok(), "quoted benign script should pass: {quoted_benign_result:?}");
+
+        let quoted_destructive = ["sh".to_string(), "-c".to_string(), "'rm -rf /'".to_string()];
+        assert!(validate_command_argv(&quoted_destructive).is_err());
+    }
+
+    #[test]
     fn explicit_shell_script_allows_static_chaining_but_rejects_substitution() {
         assert!(validate_shell_script("printf first; printf second").is_ok());
         assert!(validate_shell_script("printf '%s' \"$(whoami)\"").is_err());
+    }
+
+    #[test]
+    fn nested_shell_script_preflight_reads_the_unquoted_script() {
+        // Issue #792: the reproduction command is a quoted `sh -c` script with a
+        // `[ -t 1 ]` test. The quotes are shell syntax, not part of the script.
+        assert!(
+            validate_shell_script(
+                "sh -c 'if [ -t 1 ]; then echo TTY_YES; else echo TTY_NO; fi; echo MARKER_7319; exit 3'"
+            )
+            .is_ok()
+        );
+        assert!(validate_shell_script("sh -c 'read line; echo GOT:$line'").is_ok());
+        assert!(validate_shell_script("[ -t 1 ]").is_ok());
+        // Nested destructive commands stay rejected after unquoting.
+        assert!(validate_shell_script("sh -c 'git status && rm -rf /'").is_err());
+        assert!(validate_shell_script("sh -c 'git reset --hard HEAD~1'").is_err());
+        // Command substitution hidden behind the outer quotes runs in the
+        // inner shell, so it must be rejected as well.
+        assert!(validate_shell_script("sh -c 'echo $(touch /tmp/probe)'").is_err());
+        assert!(validate_shell_script("sh -c 'printf %s `id`'").is_err());
     }
 
     #[test]

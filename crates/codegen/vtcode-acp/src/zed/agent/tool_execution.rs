@@ -2,18 +2,18 @@ use super::ZedAgent;
 use crate::acp;
 use crate::acp::Error as SdkError;
 use crate::permissions::PermissionToolContext;
-use crate::reports::{TOOL_RESPONSE_KEY_STATUS, TOOL_RESPONSE_KEY_TOOL, TOOL_SUCCESS_LABEL, ToolExecutionReport};
+use crate::reports::ToolExecutionReport;
 use crate::tooling::{SupportedTool, ToolDescriptor};
 use crate::zed::connection::ConnectionHandle;
 use anyhow::Result;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::time::Instant;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
 
-use super::super::types::{RunTerminalMode, SessionHandle, ToolCallResult};
+use super::super::types::{SessionHandle, ToolCallResult};
 
 impl ZedAgent {
     pub(super) async fn execute_tool_calls(
@@ -89,18 +89,24 @@ impl ZedAgent {
             .await?;
 
         let cancel_active = session.cancel_flag.load(Ordering::Relaxed);
+        let mut permission_granted = false;
         let permission_override = if let (false, Some(descriptor), Ok(args_value)) =
             (cancel_active, tool_descriptor, args_value_result.as_ref())
         {
-            self.request_tool_permission(
-                client,
-                session_id,
-                &initial_call,
-                descriptor,
-                PermissionToolContext::new(&func_ref.name, kind, initial_call.title.as_str()),
-                args_value,
-            )
-            .await?
+            let outcome = self
+                .request_tool_permission(
+                    client,
+                    session_id,
+                    &initial_call,
+                    descriptor,
+                    PermissionToolContext::new(&func_ref.name, kind, initial_call.title.as_str()),
+                    args_value,
+                )
+                .await?;
+            // `None` means the client answered the permission request with an
+            // allow option; the registry policy gate still needs that approval.
+            permission_granted = outcome.is_none();
+            outcome
         } else {
             None
         };
@@ -127,6 +133,7 @@ impl ZedAgent {
                         session_id,
                         call.id.as_str(),
                         &args_value,
+                        permission_granted,
                     )
                     .await
                 }
@@ -199,6 +206,10 @@ impl ZedAgent {
         fields
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Descriptor, ACP call context, arguments, and the permission decision form one dispatch boundary."
+    )]
     async fn execute_descriptor(
         &self,
         descriptor: ToolDescriptor,
@@ -207,16 +218,11 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         call_id: &str,
         args: &Value,
+        permission_granted: bool,
     ) -> ToolExecutionReport {
-        if should_route_terminal_via_client(tool_name, args)
-            && let Some(report) = self.execute_terminal_via_client(tool_name, client, session_id, args).await
-        {
-            return report;
-        }
-
         match descriptor {
             ToolDescriptor::Acp(tool) => self.execute_acp_tool(tool, client, session_id, args).await,
-            ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id).await,
+            ToolDescriptor::Local => self.execute_local_tool(tool_name, args, call_id, permission_granted).await,
         }
     }
 
@@ -243,79 +249,6 @@ impl ZedAgent {
         }
     }
 
-    async fn execute_terminal_via_client(
-        &self,
-        tool_name: &str,
-        client: &ConnectionHandle,
-        session_id: &acp::SessionId,
-        args: &Value,
-    ) -> Option<ToolExecutionReport> {
-        if !self.client_supports_terminal() {
-            return None;
-        }
-
-        match Self::requested_terminal_mode(args) {
-            Ok(RunTerminalMode::Terminal) => None,
-            Ok(RunTerminalMode::Pty) => {
-                Some(match self.launch_client_terminal(tool_name, client, session_id, args).await {
-                    Ok(report) => report,
-                    Err(message) => ToolExecutionReport::failure(tool_name, &message),
-                })
-            }
-            Err(message) => Some(ToolExecutionReport::failure(tool_name, &message)),
-        }
-    }
-
-    async fn launch_client_terminal(
-        &self,
-        tool_name: &str,
-        client: &ConnectionHandle,
-        session_id: &acp::SessionId,
-        args: &Value,
-    ) -> Result<ToolExecutionReport, String> {
-        let command_parts = Self::parse_terminal_command(args)?;
-        let (program, rest) = command_parts
-            .split_first()
-            .ok_or_else(|| "command array cannot be empty".to_string())?;
-
-        let working_dir = self.resolve_terminal_working_dir(args)?;
-        let location_display = self.describe_terminal_location(working_dir.as_deref());
-        let command_display = command_parts.join(" ");
-
-        let request = acp::CreateTerminalRequest::new(session_id.clone(), program.to_string())
-            .args(rest.to_vec())
-            .cwd(working_dir.clone());
-
-        let response = client
-            .create_terminal(request)
-            .await
-            .map_err(|error| format!("Failed to create terminal: {error}"))?;
-        let terminal_id = response.terminal_id;
-
-        let mut content = Vec::with_capacity(2);
-        let summary = match location_display.as_deref() {
-            Some(".") | None => format!("Started terminal command: {command_display}"),
-            Some(location) => {
-                format!("Started terminal command in {location}: {command_display}")
-            }
-        };
-        content.push(acp::ToolCallContent::from(summary));
-        content.push(acp::ToolCallContent::Terminal(acp::Terminal::new(terminal_id.clone())));
-
-        let payload = json!({
-            TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,
-            TOOL_RESPONSE_KEY_TOOL: tool_name,
-            "result": {
-                "terminal_id": terminal_id.to_string(),
-                "mode": "pty",
-                "command": command_parts,
-                "working_dir": location_display,
-            }
-        });
-
-        Ok(ToolExecutionReport::success(content, Vec::new(), payload))
-    }
-
     async fn execute_acp_tool(
         &self,
         tool: SupportedTool,
@@ -336,6 +269,5 @@ impl ZedAgent {
     }
 }
 
-fn should_route_terminal_via_client(tool_name: &str, _args: &Value) -> bool {
-    matches!(tool_name, tools::RUN_PTY_CMD | tools::EXEC_COMMAND)
-}
+#[cfg(test)]
+mod tests;

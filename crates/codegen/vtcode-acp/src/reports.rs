@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub(crate) const TOOL_FAILURE_PREFIX: &str = "Tool execution failed";
 pub(crate) const TOOL_SUCCESS_LABEL: &str = "success";
-const TOOL_ERROR_LABEL: &str = "error";
+pub(crate) const TOOL_ERROR_LABEL: &str = "error";
 pub(crate) const TOOL_RESPONSE_KEY_STATUS: &str = "status";
 pub(crate) const TOOL_RESPONSE_KEY_TOOL: &str = "tool";
 pub(crate) const TOOL_RESPONSE_KEY_PATH: &str = "path";
@@ -49,6 +49,36 @@ impl ToolExecutionReport {
         }
     }
 
+    /// Build the report for a local tool that returned registry output.
+    ///
+    /// Exec tools return `Ok` with `exit_code` in the payload even when the
+    /// command exits non-zero, so the ACP call status must be derived from the
+    /// payload instead of being assumed successful.
+    pub(crate) fn from_local_output(
+        tool_name: &str,
+        output: Value,
+        content: Vec<acp::ToolCallContent>,
+        locations: Vec<acp::ToolCallLocation>,
+    ) -> Self {
+        let exit_failed = output.get("exit_code").and_then(Value::as_i64).is_some_and(|code| code != 0);
+        let payload = json!({
+            TOOL_RESPONSE_KEY_STATUS: if exit_failed { TOOL_ERROR_LABEL } else { TOOL_SUCCESS_LABEL },
+            TOOL_RESPONSE_KEY_TOOL: tool_name,
+            "result": output,
+        });
+        Self {
+            status: if exit_failed {
+                acp::ToolCallStatus::Failed
+            } else {
+                acp::ToolCallStatus::Completed
+            },
+            llm_response: payload.to_string(),
+            content,
+            locations,
+            raw_output: Some(payload),
+        }
+    }
+
     pub(crate) fn failure(tool_name: &str, message: &str) -> Self {
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
@@ -73,4 +103,53 @@ pub(crate) fn create_diff_content(path: &str, old_text: Option<&str>, new_text: 
     acp::ToolCallContent::Diff(
         acp::Diff::new(PathBuf::from(path), new_text.to_string()).old_text(old_text.map(|s| s.to_string())),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::config::constants::tools;
+
+    fn exec_payload(exit_code: i64) -> Value {
+        json!({
+            "success": true,
+            "output": "MARKER_7319",
+            "exit_code": exit_code,
+            "session_id": "run-42",
+        })
+    }
+
+    #[test]
+    fn non_zero_exit_code_reports_a_failed_tool_call() {
+        let report =
+            ToolExecutionReport::from_local_output(tools::EXEC_COMMAND, exec_payload(3), Vec::new(), Vec::new());
+
+        assert_eq!(report.status, acp::ToolCallStatus::Failed);
+        let payload: Value = serde_json::from_str(&report.llm_response).expect("payload should be JSON");
+        assert_eq!(payload[TOOL_RESPONSE_KEY_STATUS], json!(TOOL_ERROR_LABEL));
+        assert_eq!(payload["result"]["exit_code"], json!(3));
+        assert_eq!(payload["result"]["output"], json!("MARKER_7319"));
+    }
+
+    #[test]
+    fn zero_exit_code_reports_a_completed_tool_call() {
+        let report =
+            ToolExecutionReport::from_local_output(tools::EXEC_COMMAND, exec_payload(0), Vec::new(), Vec::new());
+
+        assert_eq!(report.status, acp::ToolCallStatus::Completed);
+        let payload: Value = serde_json::from_str(&report.llm_response).expect("payload should be JSON");
+        assert_eq!(payload[TOOL_RESPONSE_KEY_STATUS], json!(TOOL_SUCCESS_LABEL));
+    }
+
+    #[test]
+    fn payload_without_an_exit_code_stays_completed() {
+        let report = ToolExecutionReport::from_local_output(
+            tools::APPLY_PATCH,
+            json!({ "path": "hello.txt", "status": "success" }),
+            Vec::new(),
+            Vec::new(),
+        );
+
+        assert_eq!(report.status, acp::ToolCallStatus::Completed);
+    }
 }
