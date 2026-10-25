@@ -21,7 +21,7 @@ pub(super) enum TranscriptLayoutChange {
 pub(super) struct TranscriptItem {
     pub id: String,
     pub role: String,
-    pub title: String,
+    pub title: SharedString,
     pub text: SharedString,
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
@@ -31,7 +31,7 @@ pub(super) struct TranscriptItem {
     pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
     /// Raw aggregated command/tool output for the Output inspector tab.
-    pub output: Option<String>,
+    pub output: Option<SharedString>,
 }
 
 /// Structured payload for a file-change activity row.
@@ -60,7 +60,7 @@ pub(super) enum DiffFileKind {
 }
 
 impl TranscriptItem {
-    pub fn new(id: String, role: String, title: String, text: String) -> Self {
+    pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
         let prepared = prepare_markdown(&text);
         Self {
@@ -182,7 +182,7 @@ impl Transcript {
     }
 
     /// Attach or replace raw command output on an existing row.
-    pub fn set_output(&mut self, id: &str, output: Option<String>) {
+    pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
         if let Some(index) = self.items.iter().position(|item| item.id == id) {
             if let Some(item) = self.items.get_mut(index) {
                 item.output = output;
@@ -256,7 +256,7 @@ mod tests {
     use super::{MAX_TRANSCRIPT_ITEMS, Transcript, TranscriptItem};
 
     fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
-        TranscriptItem::new(id.to_string(), role.to_string(), "Activity".to_string(), text.to_string())
+        TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
     }
 
     #[test]

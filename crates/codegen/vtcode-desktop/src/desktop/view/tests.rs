@@ -1690,14 +1690,14 @@ fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut 
                 view.transcript.push(TranscriptItem::new(
                     format!("message-{index}"),
                     "assistant".to_string(),
-                    "VT Code".to_string(),
+                    "VT Code".into(),
                     format!("Message {index}\n\n{}", "wrapped words ".repeat(index + 1)),
                 ));
             }
             view.transcript.push(TranscriptItem::new(
                 "stream".to_string(),
                 "assistant".to_string(),
-                "VT Code".to_string(),
+                "VT Code".into(),
                 "A tall paragraph.\n\n".repeat(100),
             ));
             view.message_scroller.clone()
@@ -1760,7 +1760,7 @@ fn transcript_eviction_preserves_reader_anchor(cx: &mut TestAppContext) {
                 view.transcript.push(TranscriptItem::new(
                     index.to_string(),
                     "assistant".to_string(),
-                    "VT Code".to_string(),
+                    "VT Code".into(),
                     format!("Message {index}"),
                 ));
             }
@@ -1778,7 +1778,7 @@ fn transcript_eviction_preserves_reader_anchor(cx: &mut TestAppContext) {
             view.transcript.push(TranscriptItem::new(
                 "newest".to_string(),
                 "assistant".to_string(),
-                "VT Code".to_string(),
+                "VT Code".into(),
                 "Newest message".to_string(),
             ));
         });
@@ -1801,7 +1801,7 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
             view.transcript.push(TranscriptItem::new(
                 "copy-test".to_string(),
                 "assistant".to_string(),
-                "VT Code".to_string(),
+                "VT Code".into(),
                 source.to_string(),
             ));
         });
@@ -1826,7 +1826,7 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
                 view.transcript.push(TranscriptItem::new(
                     "resize".to_string(),
                     "assistant".to_string(),
-                    "VT Code".to_string(),
+                    "VT Code".into(),
                     format!("## Summary\n\n{}", "A longer paragraph that wraps naturally. ".repeat(50)),
                 ));
             });
@@ -4642,7 +4642,7 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
                 view.transcript.push(TranscriptItem::new(
                     format!("tool-{index}"),
                     "tool".into(),
-                    format!("tool {index}"),
+                    format!("tool {index}").into(),
                     "completed".into(),
                 ));
             }

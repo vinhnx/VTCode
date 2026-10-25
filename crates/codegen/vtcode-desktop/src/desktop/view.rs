@@ -2323,7 +2323,7 @@ impl DesktopView {
                 self.transcript.push(TranscriptItem::new(
                     format!("runtime-error-{}", uuid_like_id()),
                     "notice".to_string(),
-                    "Runtime error".to_string(),
+                    "Runtime error".into(),
                     message,
                 ));
             }
@@ -2345,7 +2345,7 @@ impl DesktopView {
         self.transcript.push(TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
-            "Run status".to_string(),
+            "Run status".into(),
             message.to_string(),
         ));
     }
@@ -2390,12 +2390,12 @@ impl DesktopView {
                 // Keep the raw aggregated output for the inspector's Output
                 // tab; it updates in place as streaming events arrive.
                 let output = match details {
-                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.clone()),
-                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.clone()),
+                    ThreadItemDetails::CommandExecution(command) => Some(command.aggregated_output.as_str().into()),
+                    ThreadItemDetails::ToolOutput(tool_output) => Some(tool_output.output.as_str().into()),
                     _ => None,
                 };
                 if historical {
-                    let mut item = TranscriptItem::new(id, "tool".to_string(), title, text);
+                    let mut item = TranscriptItem::new(id, "tool".to_string(), title.into(), text);
                     item.output = output;
                     self.restored_activity.push(item);
                 } else {
@@ -2429,7 +2429,7 @@ impl DesktopView {
             failed: change.status == vtcode_exec_events::PatchApplyStatus::Failed,
             patch: change.unified_diff.clone().unwrap_or_default(),
         };
-        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".to_string(), card.patch.clone());
+        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".into(), card.patch.clone());
         item.diff = Some(card);
         let previous_patch = self
             .selected_change
@@ -2560,7 +2560,7 @@ impl DesktopView {
             } else {
                 "assistant".to_string()
             },
-            title.to_string(),
+            title.into(),
             text.to_string(),
         ));
     }
@@ -2615,7 +2615,7 @@ impl DesktopView {
             let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
             *occurrence = (*occurrence).saturating_add(1);
             // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(id, message.role, title, message.text);
+            let mut item = TranscriptItem::new(id, message.role, title.into(), message.text);
             item.has_activity_status = false;
             self.transcript.push(item);
         }
@@ -3798,7 +3798,7 @@ impl DesktopView {
                         .ghost()
                         .small()
                         .on_click(move |_, window, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.clone()));
+                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.to_string()));
                             super::notifications::copied_to_clipboard(window, app);
                         }),
                 ),
@@ -4368,12 +4368,17 @@ impl DesktopView {
                 })),
         );
         if item.expanded {
-            let output = item.output.as_deref().filter(|output| !output.is_empty()).unwrap_or(&item.text);
+            let output = item
+                .output
+                .as_ref()
+                .filter(|output| !output.is_empty())
+                .cloned()
+                .unwrap_or_else(|| item.text.clone());
             panel = panel.child(
                 div()
                     .id(format!("tool-output-{}", item.id))
                     .role(gpui_kit::Role::Label)
-                    .aria_label(output.to_string())
+                    .aria_label(output.clone())
                     .test_support()
                     .ml_4()
                     .pl_3()
@@ -4382,7 +4387,7 @@ impl DesktopView {
                     .border_color(colors.border)
                     .font_family(cx.theme().mono_font_family.clone())
                     .text_size(cx.theme().mono_font_size)
-                    .child(output.to_string()),
+                    .child(output),
             );
         }
         panel.into_any_element()
