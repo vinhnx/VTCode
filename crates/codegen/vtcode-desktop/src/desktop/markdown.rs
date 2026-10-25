@@ -150,8 +150,10 @@ pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool,
         // A richer renderer must not fetch URLs or local files from agent output.
         .image_source(|_| blocked_image_source())
         .on_link_click(|url, event, _, cx| {
-            if !event.is_right_click() && is_web_link(url) {
-                cx.open_url(url);
+            if !event.is_right_click()
+                && let Some(url) = external_web_url(url)
+            {
+                cx.open_url(url.as_str());
             }
         })
         .code_block_actions(|block, _, _| {
@@ -184,16 +186,24 @@ fn blocked_image_source() -> ImageSource {
     }))
 }
 
-fn is_web_link(url: &str) -> bool {
-    url.split_once(':')
-        .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("https") || scheme.eq_ignore_ascii_case("http"))
+fn external_web_url(raw_url: &str) -> Option<url::Url> {
+    if raw_url.chars().any(char::is_control) {
+        return None;
+    }
+
+    let url = url::Url::parse(raw_url).ok()?;
+    let is_web_scheme = matches!(url.scheme(), "http" | "https");
+    let has_host = url.host().is_some();
+    let has_no_embedded_credentials = url.username().is_empty() && url.password().is_none();
+
+    (is_web_scheme && has_host && has_no_embedded_credentials).then_some(url)
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
 
-    use super::{is_web_link, prepare_markdown};
+    use super::{external_web_url, prepare_markdown};
     use gpui_kit::component::theme::{ActiveTheme, Theme, ThemeMode};
     use gpui_kit::test::TestWindowExt;
     use gpui_kit::{
@@ -291,18 +301,27 @@ mod tests {
     }
 
     #[test]
-    fn external_links_only_allow_web_schemes() {
-        for url in ["https://example.test/a", "HTTP://example.test/b"] {
-            assert!(is_web_link(url));
+    fn external_links_require_valid_credential_free_web_urls() {
+        for url in [
+            "https://example.test/a",
+            "HTTP://example.test/b",
+            "http://localhost:5173/?q=vtcode",
+        ] {
+            assert!(external_web_url(url).is_some());
         }
+        assert_eq!(external_web_url("HTTP://example.test/b").unwrap().as_str(), "http://example.test/b");
         for url in [
             "file:///etc/passwd",
             "javascript:alert(1)",
             "mailto:user@example.test",
             "../file",
             "vtcode:run",
+            "https://",
+            "https://user@example.test/path",
+            "https://user:password@example.test/path",
+            "https://example.test/path\nnext",
         ] {
-            assert!(!is_web_link(url));
+            assert!(external_web_url(url).is_none(), "unexpectedly accepted {url:?}");
         }
     }
 

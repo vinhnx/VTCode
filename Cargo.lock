@@ -12236,6 +12236,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "url",
  "vtcode-commons",
  "vtcode-desktop-protocol",
  "vtcode-exec-events",

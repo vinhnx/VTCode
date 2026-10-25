@@ -24,6 +24,7 @@ pulldown-cmark = "0.13.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+url = { workspace = true }
 vtcode-commons = { workspace = true }
 vtcode-desktop-protocol = { workspace = true }
 vtcode-exec-events = { workspace = true }

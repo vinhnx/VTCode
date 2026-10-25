@@ -102,7 +102,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Resize panes | Drag the GPUI Kit splitters or Tab to one and use Left/Right; hold Shift for 50px steps. Sidebar and inspector widths clamp to 180–560px and persist. |
 | Read with assistive technology | Conversation messages expose readable text without Markdown markers, tool activity groups expose their expanded state, expanded output has named accessibility nodes, composer errors are announced as alerts, and visible navigation status changes are announced. Tool actions identify their tool; active workspaces/threads and current typography values are included in accessible labels. |
 | Copy a message or code block | Message copy retains the original Markdown; code copy contains only the code. Markdown formatting, links, lists, and tables render through GPUI Kit. |
-| Follow a link | Explicit activation opens HTTP/HTTPS links. Other URL schemes are blocked, images are not fetched, and raw HTML is removed from rendered Markdown. |
+| Follow a link | Explicit activation opens valid, credential-free HTTP(S) URLs in the system browser. Other schemes, malformed links, and URLs with embedded credentials are blocked; images are not fetched and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
 | Add context | ⌘⇧A opens the composer-anchored file/skill/plugin/command search. Selection adds context or invokes an existing native action; it never submits. |
 | Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The model popup offers CLI-ranked quick picks, full model search, and supported reasoning effort. Active work blocks changes. |
@@ -286,6 +286,8 @@ so inspecting earlier work does not pull the conversation away. Original events 
 unchanged; this is a presentation grouping over the measured transcript rows.
 The virtualized transcript uses Kit MessageScroller to preserve the reader anchor during streaming and history
 eviction, and to offer a labelled jump-to-latest control after scrolling away from new activity.
+Transcript Markdown remains a document renderer: images are blocked, and only valid HTTP(S) links without embedded
+credentials open in the system browser. WebMCP remains a separately paired browser app rather than an embedded WebView.
 
 ## Accessibility
 
