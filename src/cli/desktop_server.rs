@@ -4,6 +4,7 @@ mod session_options;
 mod shared_preferences;
 mod theme_preferences;
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ use tokio::task::AbortHandle;
 use tokio::time::timeout;
 use vtcode_config::models::{ModelId, model_catalog_entry};
 use vtcode_core::core::threads::ArchivedSessionIntent;
+use vtcode_core::tools::SpooledOutputReference;
 use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, generate_session_archive_identifier, history_persistence_enabled,
     list_recent_sessions, reserve_session_archive_identifier, session_workspace_path,
@@ -38,6 +40,8 @@ const MAX_SESSIONS: usize = 200;
 const MAX_RESTORED_MESSAGES: usize = 160;
 const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;
+const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = 32 * 1024;
+const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = "\n[Output truncated in restored history.]";
 const SESSION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const RUNLOOP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -952,6 +956,111 @@ impl BoundedHistoryItems {
     }
 }
 
+struct RestoredSpoolText {
+    text: String,
+    truncated: bool,
+}
+
+/// Read a historical tool-output spool only from the workspace's canonical
+/// tool-output directory. Event logs are durable, but spool files are bounded,
+/// optional evidence and may have been removed since the session completed.
+fn read_restored_spool_text(workspace: &Path, spool_path: &str, max_bytes: usize) -> Option<RestoredSpoolText> {
+    if max_bytes == 0 {
+        return None;
+    }
+
+    let normalized = spool_path.replace('\\', "/");
+    let has_foreign_drive_prefix = normalized.as_bytes().get(1) == Some(&b':');
+    let path = Path::new(&normalized);
+    if !path.is_absolute() && has_foreign_drive_prefix {
+        return None;
+    }
+    let relative = if path.is_absolute() {
+        path.strip_prefix(workspace).ok()?
+    } else {
+        path
+    };
+    if !SpooledOutputReference::recognizes_file_path(relative) {
+        return None;
+    }
+
+    let mut file = vtcode_commons::fs::bound_file::open_file_beneath(workspace, relative).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+
+    let mut bytes = Vec::with_capacity(max_bytes.min(MAX_RESTORED_SPOOLED_OUTPUT_BYTES));
+    (&mut file).take(max_bytes as u64).read_to_end(&mut bytes).ok()?;
+    let final_len = file.metadata().ok()?.len();
+    let truncated = final_len > bytes.len() as u64 || std::str::from_utf8(&bytes).is_err();
+    Some(RestoredSpoolText {
+        text: String::from_utf8_lossy(&bytes).into_owned(),
+        truncated,
+    })
+}
+
+/// Restore bounded spool content into a historical ToolOutput item without
+/// exposing its local path. A missing, stale, or unsafe reference leaves the
+/// inline preview in place and marks inspector history incomplete.
+fn restore_spooled_tool_output(
+    workspace: &Path,
+    item: &mut vtcode_core::exec::events::ThreadItem,
+    encoded_budget: usize,
+) -> Result<bool> {
+    use vtcode_core::exec::events::ThreadItemDetails;
+
+    let (spool_path, preview) = {
+        let ThreadItemDetails::ToolOutput(output) = &mut item.details else {
+            return Ok(false);
+        };
+        let Some(spool_path) = output.spool_path.take() else {
+            return Ok(false);
+        };
+        (spool_path, std::mem::take(&mut output.output))
+    };
+    let Some(spooled) = read_restored_spool_text(workspace, &spool_path, MAX_RESTORED_SPOOLED_OUTPUT_BYTES) else {
+        if let ThreadItemDetails::ToolOutput(output) = &mut item.details {
+            output.output = preview;
+        }
+        return Ok(true);
+    };
+
+    let baseline_size = serde_json::to_vec(item)?.len();
+    let mut prefix_bytes = spooled.text.len();
+    let mut truncated = spooled.truncated;
+    loop {
+        let visible_truncation = truncated || prefix_bytes < spooled.text.len();
+        let prefix_end = (0..=prefix_bytes)
+            .rev()
+            .find(|index| spooled.text.is_char_boundary(*index))
+            .unwrap_or(0);
+        let mut candidate = spooled.text.get(..prefix_end).unwrap_or_default().to_string();
+        if visible_truncation {
+            candidate.push_str(RESTORED_OUTPUT_TRUNCATION_SUFFIX);
+        }
+        if let ThreadItemDetails::ToolOutput(output) = &mut item.details {
+            output.output = candidate;
+        }
+        let encoded_size = serde_json::to_vec(item)?.len();
+        if encoded_size <= encoded_budget {
+            return Ok(visible_truncation);
+        }
+        if prefix_end == 0 {
+            if let ThreadItemDetails::ToolOutput(output) = &mut item.details {
+                output.output = preview;
+            }
+            return Ok(true);
+        }
+
+        // JSON escaping can expand tool text. Scale the prefix to the remaining
+        // encoded allowance, then retry at a UTF-8 boundary.
+        let payload_size = encoded_size.saturating_sub(baseline_size);
+        let payload_budget = encoded_budget.saturating_sub(baseline_size);
+        prefix_bytes = prefix_end.saturating_mul(payload_budget) / payload_size.max(1);
+        truncated = true;
+    }
+}
+
 /// Read-only review projection over the shared canonical store. Lifecycle events
 /// remain historical evidence and must never be replayed into the live runloop.
 fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<RestoredInspectorHistory> {
@@ -975,22 +1084,35 @@ fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<Rest
     let mut review = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
     let mut activity = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
     for event in tail.events.into_iter().rev() {
-        let item = match event.into_event() {
+        let mut item = match event.into_event() {
             ThreadEvent::ItemStarted(event) => event.item,
             ThreadEvent::ItemUpdated(event) => event.item,
             ThreadEvent::ItemCompleted(event) => event.item,
             _ => continue,
         };
-        match &item.details {
-            ThreadItemDetails::FileChange(_) => review.retain_latest(item, MAX_REVIEW_BYTES)?,
+
+        if matches!(&item.details, ThreadItemDetails::FileChange(_)) {
+            review.retain_latest(item, MAX_REVIEW_BYTES)?;
+            continue;
+        }
+        if matches!(&item.details, ThreadItemDetails::ToolOutput(_)) {
+            if !activity.full && !activity.seen.contains(&item.id) {
+                let remaining = MAX_ACTIVITY_BYTES.saturating_sub(activity.encoded_bytes);
+                activity.incomplete |= restore_spooled_tool_output(workspace, &mut item, remaining)?;
+            }
+            activity.retain_latest(item, MAX_ACTIVITY_BYTES)?;
+            continue;
+        }
+        if matches!(
+            &item.details,
             ThreadItemDetails::ToolInvocation(_)
-            | ThreadItemDetails::ToolOutput(_)
-            | ThreadItemDetails::CommandExecution(_)
-            | ThreadItemDetails::McpToolCall(_)
-            | ThreadItemDetails::WebSearch(_)
-            | ThreadItemDetails::Harness(_)
-            | ThreadItemDetails::Error(_) => activity.retain_latest(item, MAX_ACTIVITY_BYTES)?,
-            _ => {}
+                | ThreadItemDetails::CommandExecution(_)
+                | ThreadItemDetails::McpToolCall(_)
+                | ThreadItemDetails::WebSearch(_)
+                | ThreadItemDetails::Harness(_)
+                | ThreadItemDetails::Error(_)
+        ) {
+            activity.retain_latest(item, MAX_ACTIVITY_BYTES)?;
         }
     }
     review.items.reverse();
@@ -1173,6 +1295,27 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn tool_output_item(
+        id: &str,
+        spool_path: Option<&str>,
+        inline_preview: &str,
+    ) -> vtcode_core::exec::events::ThreadItem {
+        use vtcode_core::exec::events::*;
+        ThreadItem {
+            id: id.into(),
+            context: None,
+            details: ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
+                call_id: format!("{id}-call"),
+                tool_call_id: None,
+                spool_path: spool_path.map(str::to_owned),
+                output: inline_preview.into(),
+                exit_code: Some(0),
+                status: ToolCallStatus::Completed,
+            })),
+        }
+    }
+
+    #[cfg(unix)]
     #[test]
     fn restored_review_uses_latest_canonical_items_without_lifecycle_replay() {
         use vtcode_core::exec::events::*;
@@ -1271,6 +1414,139 @@ mod tests {
         assert_eq!(restored.activity_items[79].id, "command-80");
         assert!(restored.activity_incomplete);
         assert_eq!(restored.items.len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_activity_recovers_bounded_spooled_tool_output() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_file = workspace.join(".vtcode/context/tool_outputs/call-1.txt");
+        let spool_path = spool_file.to_string_lossy().into_owned();
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        std::fs::write(&spool_file, "complete captured tool output\nsecond line").unwrap();
+
+        let log = vtcode_memory::open(&workspace, "spooled-output", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: tool_output_item("tool-output-1", Some(&spool_path), "bounded preview"),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "spooled-output").unwrap();
+        assert!(!restored.activity_incomplete);
+        let ThreadItemDetails::ToolOutput(output) = &restored.activity_items[0].details else {
+            panic!("expected a restored tool output item");
+        };
+        assert_eq!(output.output, "complete captured tool output\nsecond line");
+        assert_eq!(output.spool_path, None, "local paths must not cross the protocol boundary");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_activity_rejects_unavailable_or_unsafe_spools_and_reports_partial_history() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let outside_file = outside.path().join("private.txt");
+        std::fs::write(&outside_file, "outside secret").unwrap();
+        std::fs::write(workspace.join("private.txt"), "workspace secret").unwrap();
+        let spool_dir = workspace.join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).unwrap();
+        std::os::unix::fs::symlink(&outside_file, spool_dir.join("linked.txt")).unwrap();
+
+        let log = vtcode_memory::open(&workspace, "unsafe-spool", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        for (id, path, preview) in [
+            ("symlink", ".vtcode/context/tool_outputs/linked.txt", "symlink preview"),
+            ("missing", ".vtcode/context/tool_outputs/missing.txt", "missing preview"),
+            ("escape", ".vtcode/context/tool_outputs/../../../private.txt", "escape preview"),
+        ] {
+            log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: tool_output_item(id, Some(path), preview),
+            }))
+            .unwrap();
+        }
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "unsafe-spool").unwrap();
+        assert!(restored.activity_incomplete);
+        assert_eq!(restored.activity_items.len(), 3);
+        for (item, expected_preview) in
+            restored
+                .activity_items
+                .iter()
+                .zip(["symlink preview", "missing preview", "escape preview"])
+        {
+            let ThreadItemDetails::ToolOutput(output) = &item.details else {
+                panic!("expected the inline preview to be retained");
+            };
+            assert_eq!(output.output, expected_preview);
+            assert_eq!(output.spool_path, None);
+            assert!(!output.output.contains("outside secret"));
+            assert!(!output.output.contains("workspace secret"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_activity_truncates_large_spooled_output_with_visible_notice() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_path = ".vtcode/context/tool_outputs/large.txt";
+        let spool_file = workspace.join(spool_path);
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        std::fs::write(&spool_file, "x".repeat(MAX_RESTORED_SPOOLED_OUTPUT_BYTES + 1)).unwrap();
+
+        let log = vtcode_memory::open(&workspace, "large-spool", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: tool_output_item("tool-output-1", Some(spool_path), "preview"),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "large-spool").unwrap();
+        assert!(restored.activity_incomplete);
+        let ThreadItemDetails::ToolOutput(output) = &restored.activity_items[0].details else {
+            panic!("expected a restored tool output item");
+        };
+        assert!(output.output.starts_with(&"x".repeat(MAX_RESTORED_SPOOLED_OUTPUT_BYTES - 64)));
+        assert!(output.output.ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_activity_fits_json_escaped_spool_text_to_the_encoded_budget() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_path = ".vtcode/context/tool_outputs/escaped.txt";
+        let spool_file = workspace.join(spool_path);
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        std::fs::write(&spool_file, "\u{0001}".repeat(MAX_RESTORED_SPOOLED_OUTPUT_BYTES)).unwrap();
+
+        let log = vtcode_memory::open(&workspace, "escaped-spool", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: tool_output_item("tool-output-1", Some(spool_path), "preview"),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "escaped-spool").unwrap();
+        assert!(restored.activity_incomplete);
+        let item = restored.activity_items.first().expect("tool output should remain visible");
+        let ThreadItemDetails::ToolOutput(output) = &item.details else {
+            panic!("expected a restored tool output item");
+        };
+        assert!(output.output.starts_with('\u{0001}'));
+        assert!(output.output.ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+        assert!(serde_json::to_vec(item).unwrap().len() <= 64 * 1024);
     }
 
     #[test]
