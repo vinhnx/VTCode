@@ -391,7 +391,7 @@ VT Code is created by me and with help from the community. Consider supporting t
 
 <div align="center">
 
-Special thanks to current sponsors: [Codemod](https://codemod.com/) and [CodeRabbitAI](https://coderabbitai.com) for ongoing support.
+**Special thanks to current sponsors: [Codemod](https://codemod.com/) and [CodeRabbit](https://www.coderabbit.ai/) for ongoing support.**
 
 [![@codemod](https://avatars.githubusercontent.com/u/78830094?s=80)](https://github.com/codemod)&nbsp;
 [![@coderabbitai](https://avatars.githubusercontent.com/u/132028505?s=80)](https://github.com/coderabbitai)&nbsp;
