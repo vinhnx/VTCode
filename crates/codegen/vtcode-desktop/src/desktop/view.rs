@@ -617,6 +617,8 @@ struct DesktopView {
     pending_submission: Option<SubmissionDraft>,
     first_submission: Option<SubmissionDraft>,
     session_request: Option<&'static str>,
+    session_load_task: Option<Task<()>>,
+    session_load_generation: u64,
     retained_submission: Option<SubmissionDraft>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
@@ -849,6 +851,8 @@ impl DesktopView {
             pending_submission: None,
             first_submission: None,
             session_request: None,
+            session_load_task: None,
+            session_load_generation: 0,
             retained_submission: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
@@ -1299,6 +1303,117 @@ impl DesktopView {
 
     fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) {
         let _sent = self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx);
+    }
+
+    /// Decode and prepare bounded historical content away from the UI thread.
+    fn begin_session_load(&mut self, result: Value, cx: &mut Context<Self>) {
+        if self.session_request != Some(protocol::method::SESSION_LOAD) {
+            return;
+        }
+        self.session_load_generation = self.session_load_generation.wrapping_add(1);
+        let generation = self.session_load_generation;
+        self.status = "Restoring conversation…".to_string();
+        self.session_load_task = Some(cx.spawn(async move |view, cx| {
+            let loaded = cx
+                .background_spawn(async move {
+                    serde_json::from_value::<SessionLoadResult>(result).map(|mut loaded| {
+                        let history =
+                            prepare_session_history(&loaded.session.session_id, std::mem::take(&mut loaded.messages));
+                        (loaded, history)
+                    })
+                })
+                .await;
+            let _updated = view.update(cx, |view, cx| {
+                if view.session_load_generation != generation
+                    || view.session_request != Some(protocol::method::SESSION_LOAD)
+                {
+                    return;
+                }
+                if let Some(task) = view.session_load_task.take() {
+                    // The completion callback is running inside this task; let it return normally.
+                    task.detach();
+                }
+                view.session_request = None;
+                match loaded {
+                    Ok((loaded, history)) => view.accept_loaded_session(loaded, history, cx),
+                    Err(_) => {
+                        view.fail_pending_navigation();
+                        view.status = "Session load failed".to_string();
+                        view.error = Some("The local service returned an invalid session load result.".into());
+                    }
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
+    }
+
+    fn accept_loaded_session(
+        &mut self,
+        loaded: SessionLoadResult,
+        history: Vec<TranscriptItem>,
+        cx: &mut Context<Self>,
+    ) {
+        if loaded.session.session_id.trim().is_empty() {
+            self.fail_pending_navigation();
+            self.status = "Session load failed".to_string();
+            self.error = Some("The local service returned an invalid session load result.".into());
+            return;
+        }
+        if let Some(pending) = self.pending_navigation
+            && self
+                .navigation_history
+                .location(pending.target_index)
+                .and_then(|location| location.session_id.as_deref())
+                != Some(loaded.session.session_id.as_str())
+        {
+            self.error = Some("The service returned a different thread than the navigation target.".into());
+            self.fail_pending_navigation();
+            return;
+        }
+        if self.retained_submission.is_some()
+            && self.selected_session_id.as_deref() != Some(loaded.session.session_id.as_str())
+        {
+            self.error = Some("The service returned a different session; the unsent message was retained.".to_string());
+            return;
+        }
+
+        let retained_submission = self.retained_submission.take();
+        self.load_history(history);
+        self.restored_review_history_incomplete = loaded.review_history_incomplete;
+        self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
+        for item in &loaded.review_items {
+            if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
+                self.update_runtime_item(item);
+            }
+        }
+        for item in &loaded.activity_items {
+            use vtcode_exec_events::ThreadItemDetails;
+            if !matches!(
+                item.details,
+                ThreadItemDetails::AgentMessage(_)
+                    | ThreadItemDetails::Plan(_)
+                    | ThreadItemDetails::Reasoning(_)
+                    | ThreadItemDetails::Decision(_)
+                    | ThreadItemDetails::FileChange(_)
+            ) {
+                self.project_runtime_item(item, true);
+            }
+        }
+        self.retained_submission = retained_submission;
+        self.selected_session_id = Some(loaded.session.session_id.clone());
+        if let Some(pending) = self.pending_navigation.take() {
+            let _moved = self.navigation_history.navigate_to(pending.target_index);
+        } else {
+            self.record_current_navigation();
+        }
+        self.status = if loaded.review_history_incomplete || loaded.activity_history_incomplete {
+            "Session loaded. Recent inspector history is partial or unavailable."
+        } else {
+            "Session loaded. Submit a prompt to continue."
+        }
+        .to_string();
+        cx.notify();
     }
 
     fn close_session(&mut self, cx: &mut Context<Self>) {
@@ -2541,10 +2656,13 @@ impl DesktopView {
                 }
             }
             BackendEvent::Response { method, result, error } => {
-                if self.session_request == Some(method.as_str()) {
+                if self.session_request == Some(method.as_str()) && method != protocol::method::SESSION_LOAD {
                     self.session_request = None;
                 }
                 if let Some(error) = error {
+                    if self.session_request == Some(method.as_str()) {
+                        self.session_request = None;
+                    }
                     if matches!(
                         method.as_str(),
                         protocol::method::INITIALIZE | protocol::method::SESSION_LIST | protocol::method::SESSION_LOAD
@@ -2818,70 +2936,7 @@ impl DesktopView {
                         self.record_current_navigation();
                         self.status = "Session closed. Start a new session to continue.".to_string();
                     }
-                    protocol::method::SESSION_LOAD => match serde_json::from_value::<SessionLoadResult>(result) {
-                        Ok(loaded) if !loaded.session.session_id.trim().is_empty() => {
-                            if let Some(pending) = self.pending_navigation
-                                && self
-                                    .navigation_history
-                                    .location(pending.target_index)
-                                    .and_then(|location| location.session_id.as_deref())
-                                    != Some(loaded.session.session_id.as_str())
-                            {
-                                self.error =
-                                    Some("The service returned a different thread than the navigation target.".into());
-                                self.fail_pending_navigation();
-                                return;
-                            }
-                            if self.retained_submission.is_some()
-                                && self.selected_session_id.as_deref() != Some(loaded.session.session_id.as_str())
-                            {
-                                self.error = Some(
-                                    "The service returned a different session; the unsent message was retained."
-                                        .to_string(),
-                                );
-                                return;
-                            }
-                            let retained_submission = self.retained_submission.take();
-                            self.load_history(&loaded.session.session_id, loaded.messages);
-                            self.restored_review_history_incomplete = loaded.review_history_incomplete;
-                            self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
-                            for item in &loaded.review_items {
-                                if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
-                                    self.update_runtime_item(item);
-                                }
-                            }
-                            for item in &loaded.activity_items {
-                                use vtcode_exec_events::ThreadItemDetails;
-                                if !matches!(
-                                    item.details,
-                                    ThreadItemDetails::AgentMessage(_)
-                                        | ThreadItemDetails::Plan(_)
-                                        | ThreadItemDetails::Reasoning(_)
-                                        | ThreadItemDetails::Decision(_)
-                                        | ThreadItemDetails::FileChange(_)
-                                ) {
-                                    self.project_runtime_item(item, true);
-                                }
-                            }
-                            self.retained_submission = retained_submission;
-                            self.selected_session_id = Some(loaded.session.session_id.clone());
-                            if let Some(pending) = self.pending_navigation.take() {
-                                let _moved = self.navigation_history.navigate_to(pending.target_index);
-                            } else {
-                                self.record_current_navigation();
-                            }
-                            self.status = if loaded.review_history_incomplete || loaded.activity_history_incomplete {
-                                "Session loaded. Recent inspector history is partial or unavailable."
-                            } else {
-                                "Session loaded. Submit a prompt to continue."
-                            }
-                            .to_string();
-                        }
-                        _ => {
-                            self.fail_pending_navigation();
-                            self.error = Some("The local service returned an invalid session load result.".into());
-                        }
-                    },
+                    protocol::method::SESSION_LOAD => self.begin_session_load(result, cx),
                     protocol::method::TURN_SUBMIT => {
                         let accepted =
                             serde_json::from_value::<protocol::TurnAccepted>(result)
@@ -2968,6 +3023,7 @@ impl DesktopView {
                 }
             }
             BackendEvent::Exited { status, authentication_required } => {
+                self.cancel_session_load_task();
                 self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();
@@ -3008,6 +3064,7 @@ impl DesktopView {
                 }
             }
             BackendEvent::LaunchFailed(error) => {
+                self.cancel_session_load_task();
                 self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                 self.fail_workspace_review("The local service could not start.".into());
                 self.clear_pending_interaction();
@@ -3344,8 +3401,14 @@ impl DesktopView {
         ));
     }
 
+    fn cancel_session_load_task(&mut self) {
+        self.session_load_generation = self.session_load_generation.wrapping_add(1);
+        self.session_load_task = None;
+    }
+
     /// Clear session-owned projections together so another conversation cannot inherit them.
     fn reset_session_state(&mut self) {
+        self.cancel_session_load_task();
         self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
@@ -3375,27 +3438,9 @@ impl DesktopView {
         self.retained_submission = None;
     }
 
-    fn load_history(&mut self, session_id: &str, messages: Vec<SessionHistoryMessage>) {
+    fn load_history(&mut self, history: Vec<TranscriptItem>) {
         self.reset_session_state();
-        let mut occurrences = std::collections::HashMap::<u64, usize>::new();
-        for message in messages {
-            let title = match message.role.as_str() {
-                "user" => "You".to_string(),
-                "assistant" => "VT Code".to_string(),
-                "tool" => "Tool result".to_string(),
-                _ => message.role.clone(),
-            };
-            let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
-            message.role.hash(&mut fingerprint);
-            message.text.hash(&mut fingerprint);
-            let occurrence = occurrences.entry(fingerprint.finish()).or_default();
-            let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
-            *occurrence = (*occurrence).saturating_add(1);
-            // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(id, message.role, title.into(), message.text);
-            item.has_activity_status = false;
-            self.transcript.push(item);
-        }
+        self.transcript.replace_prepared(history);
         self.transcript.follow_latest();
     }
 
@@ -7790,6 +7835,33 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
     text.hash(&mut hasher);
     occurrence.hash(&mut hasher);
     format!("history-{:016x}", hasher.finish())
+}
+
+/// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
+fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
+    let mut occurrences = std::collections::HashMap::<u64, usize>::new();
+    messages
+        .into_iter()
+        .map(|message| {
+            let title = match message.role.as_str() {
+                "user" => "You".to_string(),
+                "assistant" => "VT Code".to_string(),
+                "tool" => "Tool result".to_string(),
+                _ => message.role.clone(),
+            };
+            let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
+            message.role.hash(&mut fingerprint);
+            message.text.hash(&mut fingerprint);
+            let occurrence = occurrences.entry(fingerprint.finish()).or_default();
+            let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
+            *occurrence = (*occurrence).saturating_add(1);
+            // Preserve collapsed archive tool text without inventing activity status.
+            let mut item = TranscriptItem::new(id, message.role, title.into(), message.text);
+            item.has_activity_status = false;
+            item.prepare_render_content();
+            item
+        })
+        .collect()
 }
 
 /// Interactive desktop buttons use a pointing hand; disabled buttons keep the arrow.

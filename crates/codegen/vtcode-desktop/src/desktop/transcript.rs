@@ -147,7 +147,7 @@ impl TranscriptItem {
         }
     }
 
-    fn prepare_render_content(&mut self) {
+    pub(super) fn prepare_render_content(&mut self) {
         if matches!(self.role.as_str(), "tool" | "diff") {
             self.markdown = SharedString::default();
             self.accessibility_text = SharedString::default();
@@ -226,8 +226,22 @@ impl Transcript {
         self.layout_changes.push(TranscriptLayoutChange::Reset(0));
     }
 
-    pub fn push(&mut self, mut item: TranscriptItem) {
-        item.prepare_render_content();
+    pub fn push(&mut self, item: TranscriptItem) {
+        self.push_inner(item, true);
+    }
+
+    /// Replace the transcript with items whose render projections were prepared off the UI thread.
+    pub(super) fn replace_prepared(&mut self, items: Vec<TranscriptItem>) {
+        self.clear();
+        for item in items {
+            self.push_inner(item, false);
+        }
+    }
+
+    fn push_inner(&mut self, mut item: TranscriptItem, prepare_render_content: bool) {
+        if prepare_render_content {
+            item.prepare_render_content();
+        }
         let item_is_tool = item.role == "tool";
         let item_status = ToolActivityStatus::from_text(&item.text);
         if item_is_tool {

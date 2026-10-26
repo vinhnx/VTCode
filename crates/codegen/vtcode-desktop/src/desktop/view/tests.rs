@@ -1119,6 +1119,7 @@ fn malformed_session_load_preserves_the_current_conversation(cx: &mut TestAppCon
     view.update(cx, |view, _| {
         view.selected_session_id = Some("current-session".to_string());
         view.workspace = Some(PathBuf::from("/current-workspace"));
+        view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
         view.transcript.push(TranscriptItem::new(
             "current-message".into(),
             "assistant".into(),
@@ -1145,7 +1146,10 @@ fn malformed_session_load_preserves_the_current_conversation(cx: &mut TestAppCon
             },
             cx,
         );
-
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
         assert_eq!(view.selected_session_id.as_deref(), Some("current-session"));
         assert_eq!(view.workspace.as_deref(), Some(Path::new("/current-workspace")));
         assert_eq!(view.transcript.len(), 1);
@@ -1153,6 +1157,36 @@ fn malformed_session_load_preserves_the_current_conversation(cx: &mut TestAppCon
         assert_eq!(view.error.as_deref(), Some("The local service returned an invalid session load result."));
     });
     cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+}
+
+#[gpui_kit::test]
+fn disconnected_session_load_cannot_restore_stale_history(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: Some(json!({
+                    "session": { "sessionId": "stale", "title": "Stale", "workspace": "/workspace", "completed": true, "resumable": true },
+                    "messages": [{ "role": "assistant", "text": "Must not be restored after disconnect" }],
+                })),
+                error: None,
+            },
+            cx,
+        );
+        view.handle_backend_event(
+            BackendEvent::Exited { status: None, authentication_required: false },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(view.transcript.is_empty());
+        assert!(view.selected_session_id.is_none());
+        assert!(view.session_request.is_none());
+    });
 }
 
 #[gpui_kit::test]
@@ -2729,6 +2763,9 @@ fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(
                 view.interaction_answer_texts.push(Some("old answer".into()));
                 view.interaction_step_index = 2;
                 view.attachments_picker_open = true;
+                if method == vtcode_desktop_protocol::method::SESSION_LOAD {
+                    view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
+                }
                 view.handle_backend_event(
                     BackendEvent::Response {
                         method: method.into(),
@@ -2737,26 +2774,34 @@ fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(
                     },
                     cx,
                 );
-                assert!(view.last_usage.is_none(), "{method}");
-                assert!(view.changes.entries().is_empty(), "{method}");
-                assert!(view.selected_change.is_none(), "{method}");
-                assert!(view.change_viewer.is_none(), "{method}");
-                if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
-                    assert_eq!(view.attachments.len(), 1);
-                    assert_eq!(view.attachments[0].path, "old.rs");
-                } else {
-                    assert!(view.attachments.is_empty(), "{method}");
-                }
-                assert!(view.interaction_choice_ids.is_empty(), "{method}");
-                assert!(view.interaction_answer_texts.is_empty(), "{method}");
-                assert_eq!(view.interaction_step_index, 0, "{method}");
-                assert!(!view.attachments_picker_open, "{method}");
-                if method == vtcode_desktop_protocol::method::SESSION_LOAD {
-                    assert_eq!(view.transcript.get(0).unwrap().text, "Restored answer");
-                } else {
-                    assert!(view.transcript.is_empty(), "{method}");
-                }
             });
+        })
+        .unwrap();
+        if method == vtcode_desktop_protocol::method::SESSION_LOAD {
+            cx.run_until_parked();
+        }
+        cx.update_window(window, |_, _, cx| {
+            let view = view.read(cx);
+            assert!(view.last_usage.is_none(), "{method}");
+            assert!(view.changes.entries().is_empty(), "{method}");
+            assert!(view.selected_change.is_none(), "{method}");
+            assert!(view.change_viewer.is_none(), "{method}");
+            if method == vtcode_desktop_protocol::method::CONFIG_SELECT {
+                assert_eq!(view.attachments.len(), 1);
+                assert_eq!(view.attachments[0].path, "old.rs");
+            } else {
+                assert!(view.attachments.is_empty(), "{method}");
+            }
+            assert!(view.interaction_choice_ids.is_empty(), "{method}");
+            assert!(view.interaction_answer_texts.is_empty(), "{method}");
+            assert_eq!(view.interaction_step_index, 0, "{method}");
+            assert!(!view.attachments_picker_open, "{method}");
+            if method == vtcode_desktop_protocol::method::SESSION_LOAD {
+                assert_eq!(view.transcript.get(0).unwrap().text, "Restored answer");
+                assert!(view.session_request.is_none());
+            } else {
+                assert!(view.transcript.is_empty(), "{method}");
+            }
         })
         .unwrap();
     }
@@ -3470,7 +3515,14 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
             },
             cx,
         );
+        assert_eq!(view.selected_session_id.as_deref(), Some("current-session"));
+        assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
         assert_eq!(view.selected_session_id.as_deref(), Some("previous-session"));
+        assert_eq!(view.session_request, None);
         assert_eq!(view.navigation_history.back_index(), None);
         assert_eq!(view.navigation_history.forward_index(), Some(1));
     });
@@ -3540,6 +3592,11 @@ fn cross_workspace_back_waits_for_session_discovery_before_loading(cx: &mut Test
             },
             cx,
         );
+        assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
         assert_eq!(view.selected_session_id.as_deref(), Some("target-session"));
         assert!(view.pending_navigation.is_none());
         assert_eq!(view.navigation_history.back_index(), None);
@@ -3713,8 +3770,19 @@ fn session_load_blocks_submission_until_the_new_session_is_selected(cx: &mut Tes
                 result: Some(json!({ "session": { "sessionId": "new-session", "title": "New", "workspace": "/workspace", "completed": false, "resumable": true }, "messages": [] })), error: None,
             }, cx);
             view.submit_prompt(window, cx);
+            assert_eq!(view.selected_session_id.as_deref(), Some("old-session"));
+            assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
         });
     }).unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert_eq!(view.selected_session_id.as_deref(), Some("new-session"));
+            assert!(view.session_request.is_none());
+            view.submit_prompt(window, cx);
+        });
+    })
+    .unwrap();
     let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
         panic!("load")
     };
@@ -4238,15 +4306,25 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
             view.sessions = vec![serde_json::from_value(summary.clone()).unwrap(), serde_json::from_value(json!({
                 "sessionId": "other", "title": "Other", "workspace": "/workspace", "completed": true, "resumable": true,
             })).unwrap()];
-            view.composer.update(cx, |state, cx| state.set_value("Recover this request", window, cx));
-            view.attachments.push(vtcode_desktop_protocol::TurnAttachment { path: "source.rs".into(), text: "original source".into() });
+            view.composer
+                .update(cx, |state, cx| state.set_value("Recover this request", window, cx));
+            view.attachments.push(vtcode_desktop_protocol::TurnAttachment {
+                path: "source.rs".into(),
+                text: "original source".into(),
+            });
             view.submit_prompt(window, cx);
-            view.handle_backend_event(BackendEvent::Response {
-                method: vtcode_desktop_protocol::method::TURN_SUBMIT.into(), result: None,
-                error: Some("selected session runtime has stopped; reload the session to continue".into()),
-            }, cx);
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::TURN_SUBMIT.into(),
+                    result: None,
+                    error: Some("selected session runtime has stopped; reload the session to continue".into()),
+                },
+                cx,
+            );
         });
-        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else { panic!("submission") };
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("submission")
+        };
         assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
         window.render_frame(cx);
         assert_eq!(window.find("new-session").disabled(), Some(true));
@@ -4266,7 +4344,9 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         assert!(requests.try_recv().is_err(), "guards protect keyboard and palette paths too");
         window.render_frame(cx);
         window.click("session-session", cx);
-        let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else { panic!("reload") };
+        let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+            panic!("reload")
+        };
         assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
         assert_eq!(params, json!({ "sessionId": "session" }));
         window.render_frame(cx);
@@ -4279,10 +4359,22 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
             assert_eq!(draft.prompt, "Recover this request");
             assert_eq!(draft.attachments[0].text, "original source");
         });
-        view.update(cx, |view, cx| view.handle_backend_event(BackendEvent::Response {
-            method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
-            result: Some(json!({ "session": summary, "messages": [{ "role": "assistant", "text": "Restored history" }] })), error: None,
-        }, cx));
+    })
+    .unwrap();
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: Some(
+                    json!({ "session": summary, "messages": [{ "role": "assistant", "text": "Restored history" }] }),
+                ),
+                error: None,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
         assert_eq!(view.read(cx).transcript.get(0).unwrap().text, "Restored history");
         assert!(view.read(cx).retained_submission.is_some());
         window.render_frame(cx);
@@ -4294,7 +4386,8 @@ fn rejected_draft_survives_same_session_reload_and_blocks_context_changes(cx: &m
         assert_eq!(view.attachments[0].text, "original source");
         assert!(view.retained_submission.is_none());
         assert!(view.session_change_allowed(None));
-    }).unwrap();
+    })
+    .unwrap();
     assert!(requests.try_recv().is_err(), "reload and restoration never auto-resend");
 }
 
@@ -4989,8 +5082,9 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
             deletions: None,
         })),
     };
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _window, cx| {
         view.update(cx, |view, cx| {
+            view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
             view.handle_backend_event(BackendEvent::Response {
                 method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
                 error: None,
@@ -5002,6 +5096,13 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
             }, cx);
             assert!(!view.running);
             assert!(view.active_turn_id.is_none());
+            assert_eq!(view.selected_session_id, None);
+            assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+        });
+    }).unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
             assert_eq!(view.selected_session_id.as_deref(), Some("restored"));
             assert!(view.status.contains("partial"));
             assert!(view.restored_review_history_incomplete);
@@ -5032,7 +5133,8 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         assert!(modified.size.width > px(100.));
         assert!(original.right() <= modified.left());
         assert!(modified.right() <= viewport.right() + px(1.), "both wrapped split columns must remain visible");
-    }).unwrap();
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -5062,8 +5164,9 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             status: CommandExecutionStatus::Completed,
         })),
     };
-    cx.update_window(window, |_, window, cx| {
+    cx.update_window(window, |_, _window, cx| {
         view.update(cx, |view, cx| {
+            view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
             view.handle_backend_event(BackendEvent::Response {
                 method: vtcode_desktop_protocol::method::SESSION_LOAD.into(), error: None,
                 result: Some(json!({
@@ -5074,14 +5177,25 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             }, cx);
             assert!(!view.running);
             assert!(view.active_turn_id.is_none());
+            assert_eq!(view.selected_session_id, None);
+            assert_eq!(view.session_request, Some(vtcode_desktop_protocol::method::SESSION_LOAD));
+        });
+    }).unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
             assert!(view.interaction.is_none());
+            assert_eq!(view.selected_session_id.as_deref(), Some("saved"));
             assert!(view.status.contains("partial"));
             assert!(!view.restored_review_history_incomplete);
             assert!(view.restored_activity_history_incomplete);
             let rows = crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity);
             assert_eq!(rows.len(), 2, "archive text is retained without duplicating structured activity");
-            assert_eq!(view.transcript.items().filter(|item| item.role == "tool").count(), 1,
-                "only the original archive tool card remains in the conversation");
+            assert_eq!(
+                view.transcript.items().filter(|item| item.role == "tool").count(),
+                1,
+                "only the original archive tool card remains in the conversation"
+            );
             assert!(!view.transcript.get(0).unwrap().expanded);
             assert!(!view.transcript.get(0).unwrap().has_activity_status);
             assert_eq!(rows[0].state, crate::desktop::inspector::ActivityState::Completed);
@@ -5132,15 +5246,21 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         // A new live item still reports running, independent of historical display.
         view.update(cx, |view, _| {
             view.update_runtime_item(&ThreadItem {
-                id: "saved-command".into(), context: None,
+                id: "saved-command".into(),
+                context: None,
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-                    command: "live".into(), arguments: None, aggregated_output: "live output".into(),
-                    exit_code: None, status: CommandExecutionStatus::InProgress,
+                    command: "live".into(),
+                    arguments: None,
+                    aggregated_output: "live output".into(),
+                    exit_code: None,
+                    status: CommandExecutionStatus::InProgress,
                 })),
             });
-            assert!(crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None)
-                .unwrap()
-                .running);
+            assert!(
+                crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None)
+                    .unwrap()
+                    .running
+            );
             assert_eq!(view.restored_activity.len(), 1, "live identity replaces its historical projection");
             assert_eq!(crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity).len(), 2);
             view.reset_session_state();
@@ -5150,7 +5270,8 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert!(!view.restored_activity_history_incomplete);
             assert!(crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None).is_none());
         });
-    }).unwrap();
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -6123,9 +6244,10 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
     let answer = SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() };
     let answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 0);
     let repeated_answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 1);
+    let history = super::prepare_session_history(session_id, vec![prompt.clone(), answer.clone()]);
     assert_ne!(answer_id, repeated_answer_id, "repeated archive messages need distinct row identities");
     cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, _| view.load_history(session_id, vec![prompt.clone(), answer.clone()]));
+        view.update(cx, |view, _| view.load_history(history));
         window.render_frame(cx);
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
 
@@ -6133,18 +6255,17 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
             role: "user".into(),
             text: "A newer question".into(),
         };
+        let history = super::prepare_session_history(
+            session_id,
+            vec![
+                inserted,
+                prompt,
+                answer,
+                SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() },
+            ],
+        );
         // The snapshot can advance while the original row remains in its projection.
-        view.update(cx, |view, _| {
-            view.load_history(
-                session_id,
-                vec![
-                    inserted,
-                    prompt,
-                    answer,
-                    SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() },
-                ],
-            )
-        });
+        view.update(cx, |view, _| view.load_history(history));
         window.render_frame(cx);
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
         assert_eq!(window.find(format!("message-body-{repeated_answer_id}")).label(), Some("VT Code: Answer"));
