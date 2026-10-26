@@ -213,8 +213,7 @@ impl DesktopView {
         if !self.session_change_allowed(None) || self.attachments_picker_open {
             return;
         }
-        let groups = self.quick_model_groups();
-        self.show_palette(PaletteKind::ModelOptions, groups, window, cx);
+        self.show_palette(PaletteKind::ModelOptions, Vec::new(), window, cx);
         let Some(config) = self.configuration.as_ref() else {
             return;
         };
@@ -291,37 +290,6 @@ impl DesktopView {
         self.effort_slider = Some(slider);
         self._effort_slider_subscriptions = vec![slider_observation, slider_events];
         cx.notify();
-    }
-
-    fn quick_model_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
-        let active_model = self.active_model_fallback();
-        let mut recommended = self
-            .models
-            .iter()
-            .chain(active_model.iter())
-            .filter_map(|model| model.recommended_rank.map(|rank| (rank, model)))
-            .collect::<Vec<_>>();
-        recommended.sort_by_key(|(rank, _)| *rank);
-
-        let mut groups = Vec::new();
-        if !recommended.is_empty() {
-            groups.push((
-                "Recommended".into(),
-                recommended
-                    .into_iter()
-                    .map(|(_, model)| model_palette_command(model, self.model_is_current(&model.provider, &model.id)))
-                    .collect(),
-            ));
-        }
-        if let Some(current) = self
-            .models
-            .iter()
-            .chain(active_model.iter())
-            .find(|model| self.model_is_current(&model.provider, &model.id) && model.recommended_rank.is_none())
-        {
-            groups.push(("Current".into(), vec![model_palette_command(current, true)]));
-        }
-        groups
     }
 
     pub(super) fn can_select_session_options(&self) -> bool {
@@ -462,6 +430,7 @@ pub(super) fn model_options_header(
     speed_control: Option<AnyElement>,
     cx: &App,
 ) -> AnyElement {
+    let colors = cx.theme().colors;
     let options = config.and_then(|config| config.session_options.as_ref());
     let effort = options.map(|options| {
         slider
@@ -472,17 +441,58 @@ pub(super) fn model_options_header(
     let model = model_label
         .or_else(|| config.map(|config| config.model.as_str()))
         .unwrap_or("Choose a model");
-    let label = format!("{model}{}{}", effort.map(|_| " · ").unwrap_or(""), effort.unwrap_or(""));
-    let mut panel = div().p_3().flex().flex_col().gap_3().min_w_0().child(
-        div()
-            .id("model-options-summary")
-            .test_support()
-            .role(gpui_kit::Role::Label)
-            .aria_label(label.clone())
-            .font_medium()
-            .truncate()
-            .child(label),
-    );
+    let summary_label = format!("{model}{}{}", effort.map(|_| " · ").unwrap_or(""), effort.unwrap_or(""));
+    let mut summary = div()
+        .id("model-options-summary")
+        .test_support()
+        .role(gpui_kit::Role::Label)
+        .aria_label(summary_label)
+        .w_full()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(
+            div()
+                .id("model-selected-name")
+                .test_support()
+                .role(gpui_kit::Role::Label)
+                .aria_label(model)
+                .w_full()
+                .min_w_0()
+                .text_sm()
+                .font_medium()
+                .whitespace_normal()
+                .child(model.to_string()),
+        );
+    if let Some(effort) = effort {
+        summary = summary.child(
+            div()
+                .id("model-effort-row")
+                .test_support()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(div().text_xs().text_color(colors.muted_foreground).child("Reasoning effort"))
+                .child(
+                    div()
+                        .id("model-effort-value")
+                        .test_support()
+                        .role(gpui_kit::Role::Label)
+                        .aria_label(format!("Current reasoning effort: {effort}"))
+                        .px_2()
+                        .py_1()
+                        .rounded_full()
+                        .bg(colors.primary)
+                        .text_color(colors.primary_foreground)
+                        .text_xs()
+                        .font_semibold()
+                        .child(effort.to_string()),
+                ),
+        );
+    }
+    let mut panel = div().p_3().flex().flex_col().gap_3().min_w_0().child(summary);
     if let Some(slider) = slider {
         let value = slider.read(cx).value().start();
         let minimum = slider.read(cx).min_value();
@@ -576,7 +586,9 @@ fn effort_knob(
                 .h(px(32.))
                 .px(px(18.))
                 .rounded_full()
-                .bg(colors.muted)
+                .bg(colors.primary.opacity(0.14))
+                .border_1()
+                .border_color(colors.primary.opacity(0.32))
                 .child(
                     SliderIndicator::new(state)
                         .relative()
@@ -600,10 +612,10 @@ fn effort_knob(
                                 .ml(px(-18.))
                                 .size(px(36.))
                                 .rounded_full()
-                                .bg(colors.foreground)
-                                .border_1()
-                                .border_color(colors.background)
-                                .shadow_sm(),
+                                .bg(colors.primary)
+                                .border_2()
+                                .border_color(colors.primary_foreground)
+                                .shadow_md(),
                         ),
                 ),
         )

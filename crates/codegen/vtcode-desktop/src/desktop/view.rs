@@ -5726,8 +5726,8 @@ impl DesktopView {
             PaletteKind::Fonts(FontTarget::Code) => "Choose code font",
             PaletteKind::Commands => "Command palette",
         };
-        let catalog_empty = confirm_groups.is_empty();
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
+        let catalog_empty = confirm_groups.is_empty();
         let mut command = Command::new(&state)
             .placeholder(if matches!(self.palette_kind, PaletteKind::Fonts(_)) {
                 "Search installed fonts…"
@@ -5741,19 +5741,24 @@ impl DesktopView {
                 command.header(|_, _, _| div().px_3().py_2().font_semibold().child("Choose a model"))
             })
             .empty(move |_, _, _| {
-                empty_state(
-                    if models && catalog_empty {
-                        "No models available"
-                    } else {
-                        "No matching results"
-                    },
-                    if models && catalog_empty {
-                        "Reopen VT Code to reload the model catalog."
-                    } else {
-                        "Try a different search."
-                    },
-                    IconName::Search,
-                )
+                if quick_model {
+                    div().h(px(0.)).into_any_element()
+                } else {
+                    empty_state(
+                        if models && catalog_empty {
+                            "No models available"
+                        } else {
+                            "No matching results"
+                        },
+                        if models && catalog_empty {
+                            "Reopen VT Code to reload the model catalog."
+                        } else {
+                            "Try a different search."
+                        },
+                        IconName::Search,
+                    )
+                    .into_any_element()
+                }
             });
         if quick_model {
             let slider = self.effort_slider.clone();

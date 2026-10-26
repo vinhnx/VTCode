@@ -3696,6 +3696,9 @@ fn composer_model_picker_keeps_current_model_without_resetting_a_session(cx: &mu
         window.click("pick-model", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        window.click("model-search-all", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
         let current_model_item = window.find(palette_action_id(&super::PaletteAction::SelectModel {
             provider: "provider-a".into(),
             model: "custom-current-id".into(),
@@ -5930,6 +5933,7 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
         let slider = window.find(("slider", slider_id));
         assert_eq!(slider.role(), Some(gpui_kit::Role::Slider));
         assert_eq!(slider.label(), Some("Reasoning effort: medium"));
+        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
 
         view.update(cx, |view, cx| {
             let slider = view.effort_slider.clone().unwrap();
@@ -5939,7 +5943,44 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
 
         let slider_id = view.read(cx).effort_slider.as_ref().unwrap().entity_id();
         assert_eq!(window.find(("slider", slider_id)).label(), Some("Reasoning effort: high"));
+        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: high"));
         assert_eq!(window.find("model-options-summary").label(), Some("gpt-5.6-sol · high"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn compact_model_picker_wraps_long_model_names_and_labels_the_current_effort(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    let model_name = "DeepSeek V4.1 Flash 1017 (Merge Gateway Compatible Route)";
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            let mut config = runtime_options_config();
+            config.provider = "deepseek".into();
+            config.model = "deepseek-v4.1-flash-1017".into();
+            view.configuration = Some(config);
+            view.models = vec![vtcode_desktop_protocol::ModelInfo {
+                provider: "deepseek".into(),
+                id: "deepseek-v4.1-flash-1017".into(),
+                display_name: model_name.into(),
+                context_window: None,
+                current: true,
+                recommended_rank: Some(0),
+                capabilities: None,
+            }];
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        let model_label = window.find("model-selected-name");
+        assert_eq!(model_label.label(), Some(model_name));
+        assert!(model_label.bounds().size.height > px(20.), "long names should wrap instead of truncate");
+        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
+        let expected_summary = format!("{model_name} · medium");
+        assert_eq!(window.find("model-options-summary").label(), Some(expected_summary.as_str()));
     })
     .unwrap();
 }
@@ -6014,7 +6055,7 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
 }
 
 #[gpui_kit::test]
-fn quick_model_search_action_stays_visible_when_recommendations_overflow(cx: &mut TestAppContext) {
+fn quick_model_picker_omits_recommendations_and_keeps_full_search_visible(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 450., 800.);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -6045,14 +6086,12 @@ fn quick_model_search_action_stays_visible_when_recommendations_overflow(cx: &mu
         assert_eq!(search_all.label(), Some("Search all models…"));
         assert!(bounds.top() >= popup.top(), "search CTA starts above the popup: {bounds:?} {popup:?}");
         assert!(bounds.bottom() <= popup.bottom(), "search CTA is clipped by the popup: {bounds:?} {popup:?}");
-        assert!(
-            view.read(cx)
-                .palette_groups
-                .iter()
-                .flat_map(|(_, entries)| entries)
-                .all(|entry| !matches!(entry.action, super::PaletteAction::ChooseModel)),
-            "the full-search CTA should not scroll with the model recommendations"
-        );
+        let first_recommendation = palette_action_id(&super::PaletteAction::SelectModel {
+            provider: "recommended".into(),
+            model: "model-0".into(),
+        });
+        assert!(window.try_find(first_recommendation).is_none(), "quick selection does not list recommendations");
+        assert!(view.read(cx).palette_groups.is_empty(), "model browsing is reserved for full search");
 
         window.click("model-search-all", cx);
         window.render_frame(cx);
@@ -6136,7 +6175,7 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
 }
 
 #[gpui_kit::test]
-fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_the_real_route(cx: &mut TestAppContext) {
+fn compact_model_picker_shows_current_options_and_full_search_selects_the_real_route(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
@@ -6193,43 +6232,21 @@ fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_t
             provider: "anthropic".into(),
             model: "claude-sonnet-5".into(),
         });
-        assert!(
-            window
-                .find(claude_id.clone())
-                .label()
-                .unwrap()
-                .starts_with("Claude Sonnet 5 · anthropic · 200K context")
-        );
+        assert!(window.try_find(claude_id.clone()).is_none(), "model results stay out of the compact panel");
         let gemini_id = palette_action_id(&super::PaletteAction::SelectModel {
             provider: "google".into(),
             model: "gemini-3.8-flash".into(),
         });
-        let gemini_item = window.find(gemini_id.clone());
-        let gemini_row = gemini_item.label().unwrap();
-        assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
-        assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
-        let gpt_id = view
-            .read(cx)
-            .palette_groups
-            .iter()
-            .flat_map(|(_, entries)| entries)
-            .find(|entry| entry.label.contains("gpt-5.6-sol"))
-            .map(|entry| palette_action_id(&entry.action))
-            .unwrap();
-        assert!(window.find(gpt_id).label().unwrap().contains("gpt-5.6-sol"));
+        assert!(window.try_find(gemini_id.clone()).is_none(), "catalog choices appear in full search only");
+        assert_eq!(window.find("model-selected-name").label(), Some("gpt-5.6-sol"));
+        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: medium"));
+        assert!(view.read(cx).palette_groups.is_empty());
         let search_all = window.find("model-search-all");
         assert_eq!(search_all.label(), Some("Search all models…"));
         let search_all_bounds = search_all.bounds();
         let popup_bounds = window.find("command-palette").bounds();
         assert!(search_all_bounds.top() >= popup_bounds.top());
         assert!(search_all_bounds.bottom() <= popup_bounds.bottom());
-        assert!(
-            view.read(cx)
-                .palette_groups
-                .iter()
-                .flat_map(|(_, entries)| entries)
-                .all(|entry| !matches!(entry.action, super::PaletteAction::ChooseModel))
-        );
         let uncatalogued_id = palette_action_id(&super::PaletteAction::SelectModel {
             provider: "custom".into(),
             model: "not-recommended".into(),
@@ -6238,13 +6255,24 @@ fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_t
         assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
         window.click("model-search-all", cx);
         window.render_frame(cx);
+        assert!(
+            window
+                .find(claude_id)
+                .label()
+                .unwrap()
+                .starts_with("Claude Sonnet 5 · anthropic · 200K context")
+        );
+        let gemini_item = window.find(gemini_id.clone());
+        let gemini_row = gemini_item.label().unwrap().to_owned();
+        assert!(gemini_row.starts_with("Gemini 3.8 Flash · google · Reasoning · Vision · Tools"));
+        assert!(gemini_row.contains("Structured output · Pro · Audio · Video · PDF · 1M context"));
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
         window.within("command-palette").input("gemini", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).query(cx), "gemini");
         assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
-        assert_eq!(window.find(gemini_id).label(), Some(gemini_row));
+        assert_eq!(window.find(gemini_id).label(), Some(gemini_row.as_str()));
         window.within("command-palette").press("enter", cx);
     })
     .unwrap();

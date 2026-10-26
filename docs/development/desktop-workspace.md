@@ -114,7 +114,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Follow a link | Explicit activation opens valid, credential-free HTTP(S) URLs in the system browser. Other schemes, malformed links, and URLs with embedded credentials are blocked; images are not fetched and raw HTML is removed from rendered Markdown. |
 | Choose a workspace | One asynchronous native picker opens at a time. Selection is rejected if a turn started or service cleanup is pending before the picker returns. |
 | Add context | ⌘⇧A opens the composer-anchored file/skill/plugin/command search. Selection adds context or invokes an existing native action; it never submits. |
-| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The model popup offers CLI-ranked quick picks, full model search, and supported reasoning effort. Active work blocks changes. |
+| Change runtime options | Composer permission and mode controls select validated CLI options for the next session. The compact model popup shows the selected model and supported reasoning effort; Search all models opens the full catalog. Active work blocks changes. |
 | Toggle status bar | Hidden by default. Settings → Accessibility, the header menu, and ⌘⇧S share one saved visibility preference. |
 | Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
@@ -266,8 +266,9 @@ resize handles retain their own cursors.
 ### Model picker
 
 The composer opens a compact 352 px model/effort panel above the input; the full catalog search is 392 px wide.
-It lists the CLI's ordered recommended fallback models, retains the active model when it is outside that set, and
-**Search all models…** opens the full search. Catalog rows expose supported reasoning, vision, tool use,
+The compact panel shows the selected model name, its current reasoning-effort value, and a supported effort knob;
+model choices stay in the full search opened by **Search all models…**. Long model names wrap within the compact
+panel. Catalog rows expose supported reasoning, vision, tool use,
 structured output, pro tier, audio/video/PDF input, and a compact context-window size when the CLI provides them.
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer
 the same change through keyboard and assistive activation. The slider's accessible name includes the current CLI
