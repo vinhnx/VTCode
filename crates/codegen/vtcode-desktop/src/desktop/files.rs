@@ -37,10 +37,20 @@ pub(super) struct FilePreview {
 
 /// List workspace entries breadth-first, skipping dependency and VCS
 /// directories, hidden entries, and anything past the entry or depth bounds.
+#[cfg(test)]
 pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
+    scan_workspace_cancellable(root, || false).unwrap_or_default()
+}
+
+/// Scan a workspace until the caller cancels the request. A cancelled scan
+/// returns no partial listing so obsolete results cannot replace current UI.
+pub(super) fn scan_workspace_cancellable(root: &Path, is_cancelled: impl Fn() -> bool) -> Option<Vec<FileEntry>> {
     let mut entries = Vec::new();
     let mut queue = std::collections::VecDeque::from(vec![(root.to_path_buf(), 0_usize)]);
     while let Some((dir, depth)) = queue.pop_front() {
+        if is_cancelled() {
+            return None;
+        }
         if entries.len() >= MAX_ENTRIES {
             break;
         }
@@ -51,6 +61,9 @@ pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
         // Keep the sorted prefix bounded; paths are allocated only for rows that survive the cap.
         let mut children = BTreeMap::new();
         for entry in read_dir.flatten() {
+            if is_cancelled() {
+                return None;
+            }
             let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
             let name = entry.file_name();
             let Some(name_str) = name.to_str() else {
@@ -74,7 +87,7 @@ pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
             }
         }
     }
-    entries
+    Some(entries)
 }
 
 /// Read the current git branch for a workspace, walking up to the repository
@@ -207,6 +220,24 @@ mod tests {
             Some("file-399.txt"),
             "the sorted prefix remains stable when the directory is wider than the row limit"
         );
+    }
+
+    #[test]
+    fn cancelled_workspace_scan_discards_partial_results() {
+        let workspace = temp_workspace();
+        for index in 0..100 {
+            fs::write(workspace.path().join(format!("file-{index:03}.txt")), b"x").expect("write file");
+        }
+
+        let checks = std::cell::Cell::new(0);
+        let entries = scan_workspace_cancellable(workspace.path(), || {
+            let checked = checks.get();
+            checks.set(checked + 1);
+            checked >= 5
+        });
+
+        assert!(entries.is_none(), "cancelled scans must not publish a partial file tree");
+        assert!(checks.get() < 10, "the scanner should stop checking entries promptly");
     }
 
     #[test]

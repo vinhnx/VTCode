@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
@@ -97,6 +99,14 @@ struct WelcomeCopy {
     workspace_action: String,
     description: String,
     call_to_action: String,
+}
+
+struct FileScanCancellationGuard(Arc<AtomicBool>);
+
+impl Drop for FileScanCancellationGuard {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -484,6 +494,7 @@ struct DesktopView {
     expanded_file_directories: HashSet<String>,
     _file_tree_subscription: Subscription,
     files_task: Option<Task<()>>,
+    files_scan_cancel: Option<Arc<AtomicBool>>,
     preview_task: Option<Task<()>>,
     attachments_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
@@ -694,6 +705,7 @@ impl DesktopView {
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
             files_task: None,
+            files_scan_cancel: None,
             preview_task: None,
             attachments_task: None,
             file_preview: None,
@@ -1138,20 +1150,46 @@ impl DesktopView {
     }
 
     fn refresh_files(&mut self, cx: &mut Context<Self>) {
+        if let Some(previous) = self.files_scan_cancel.take() {
+            previous.store(true, Ordering::Relaxed);
+        }
         let Some(workspace) = self.workspace.clone() else {
             return;
         };
+        let cancellation = Arc::new(AtomicBool::new(false));
+        self.files_scan_cancel = Some(cancellation.clone());
+        let worker_cancellation = cancellation.clone();
         self.files_task = Some(cx.spawn(async move |view, cx| {
+            let _cancel_on_drop = FileScanCancellationGuard(cancellation.clone());
             let root = workspace.clone();
-            let (entries, branch) = cx
-                .background_spawn(async move { (files::scan_workspace(&root), files::git_branch(&root)) })
+            let result = cx
+                .background_spawn(async move {
+                    let entries =
+                        files::scan_workspace_cancellable(&root, || worker_cancellation.load(Ordering::Relaxed))?;
+                    if worker_cancellation.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    Some((entries, files::git_branch(&root)))
+                })
                 .await;
             let _updated = view.update(cx, |view, cx| {
-                if view.workspace.as_ref() == Some(&workspace) {
-                    view.replace_file_entries(entries, cx);
-                    view.git_branch = branch;
-                    cx.notify();
+                let is_current_request = view
+                    .files_scan_cancel
+                    .as_ref()
+                    .is_some_and(|active| Arc::ptr_eq(active, &cancellation));
+                if !is_current_request {
+                    return;
                 }
+                view.files_scan_cancel = None;
+                if view.workspace.as_ref() != Some(&workspace) {
+                    return;
+                }
+                let Some((entries, branch)) = result else {
+                    return;
+                };
+                view.replace_file_entries(entries, cx);
+                view.git_branch = branch;
+                cx.notify();
             });
         }));
     }
@@ -6180,9 +6218,9 @@ fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_
 
 /// Embed the shared artwork so packaged applications never depend on checkout paths.
 fn brand_logo(size: f32) -> impl IntoElement {
-    static LOGO: std::sync::OnceLock<std::sync::Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
+    static LOGO: std::sync::OnceLock<Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
     let image = LOGO.get_or_init(|| {
-        std::sync::Arc::new(gpui_kit::Image::from_bytes(
+        Arc::new(gpui_kit::Image::from_bytes(
             gpui_kit::ImageFormat::Png,
             include_bytes!("../../../../../resources/icons/vtcode-profile-120.png").to_vec(),
         ))
