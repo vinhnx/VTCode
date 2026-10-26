@@ -6,12 +6,17 @@ use gpui_kit::component::input::Textarea;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, Context, StatefulInteractiveElement, TestSupportExt, Window, div, px};
+use protocol::slash_command::{
+    WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_webmcp_slash_command,
+};
 use serde_json::{Value, json};
 use vtcode_desktop_protocol as protocol;
 
 use super::{DesktopButtonExt, DesktopView, desktop_button};
 
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
+const WEBMCP_COMMANDS_HELP: &str =
+    "Commands: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop.";
 pub(super) const WEBMCP_DISCONNECTED_NOTICE: &str =
     "The local VT Code service disconnected. Reconnect to refresh WebMCP status.";
 
@@ -21,6 +26,8 @@ enum WebmcpCommand {
     Status,
     Pair { origin: String, replace: bool },
     Stop,
+    Tools,
+    Roots,
 }
 
 fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
@@ -29,42 +36,21 @@ fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
     if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
         return None;
     }
-    let mut parts = rest.split_whitespace();
-    let command_name = parts.next();
-    let args = parts.collect::<Vec<_>>();
-    let command = match command_name {
-        None => WebmcpCommand::Status,
-        Some("status") if args.is_empty() => WebmcpCommand::Status,
-        Some("help") if args.is_empty() => WebmcpCommand::Help,
-        Some("unpair" | "stop") if args.is_empty() => WebmcpCommand::Stop,
-        Some("pair" | "connect") => {
-            let mut replace = false;
-            let mut origin = None;
-            let mut args = args.into_iter();
-            while let Some(part) = args.next() {
-                match part {
-                    "--replace" if !replace => replace = true,
-                    "--origin" if origin.is_none() => {
-                        let Some(value) = args.next() else {
-                            return Some(Err("Usage: /webmcp connect [--replace] <exact-browser-origin>"));
-                        };
-                        if value.starts_with('-') {
-                            return Some(Err("Usage: /webmcp connect [--replace] <exact-browser-origin>"));
-                        }
-                        origin = Some(value);
-                    }
-                    value if origin.is_none() && !value.starts_with('-') => origin = Some(value),
-                    _ => return Some(Err("Usage: /webmcp connect [--replace] <exact-browser-origin>")),
-                }
-            }
-            let Some(origin) = origin else {
-                return Some(Err("Usage: /webmcp connect [--replace] <exact-browser-origin>"));
-            };
-            WebmcpCommand::Pair { origin: origin.to_string(), replace }
+    let command = parse_webmcp_slash_command(rest.trim()).map_err(|error| match error {
+        WebmcpSlashCommandParseError::UnknownCommand => WEBMCP_COMMANDS_HELP,
+        WebmcpSlashCommandParseError::InvalidConnectionArguments => {
+            "Usage: /webmcp connect [--replace] <exact-browser-origin>"
         }
-        _ => return Some(Err("Use /webmcp status, /webmcp connect <origin>, /webmcp unpair, or /webmcp help.")),
-    };
-    Some(Ok(command))
+    });
+    Some(command.and_then(|command| match command {
+        WebmcpSlashCommand::Status => Ok(WebmcpCommand::Status),
+        WebmcpSlashCommand::Help => Ok(WebmcpCommand::Help),
+        WebmcpSlashCommand::Tools => Ok(WebmcpCommand::Tools),
+        WebmcpSlashCommand::Roots => Ok(WebmcpCommand::Roots),
+        WebmcpSlashCommand::ConnectHelp => Err("Usage: /webmcp connect [--replace] <exact-browser-origin>"),
+        WebmcpSlashCommand::Connect { origin, replace } => Ok(WebmcpCommand::Pair { origin, replace }),
+        WebmcpSlashCommand::Unpair => Ok(WebmcpCommand::Stop),
+    }))
 }
 
 impl DesktopView {
@@ -109,9 +95,7 @@ impl DesktopView {
         self.open_settings(window, cx);
         match command {
             WebmcpCommand::Help => {
-                self.webmcp_notice = Some(
-                    "Use /webmcp connect <origin> to pair this workspace, /webmcp status to refresh, or /webmcp unpair to disconnect.".into(),
-                );
+                self.webmcp_notice = Some(WEBMCP_COMMANDS_HELP.into());
                 self.request_webmcp_status();
             }
             WebmcpCommand::Status => self.request_webmcp_status(),
@@ -119,6 +103,12 @@ impl DesktopView {
                 self.webmcp_origin_input
                     .update(cx, |input, cx| input.set_value(origin.clone(), window, cx));
                 self.request_webmcp_pair(origin, replace);
+            }
+            WebmcpCommand::Tools => {
+                self.webmcp_notice = Some(WEBMCP_TOOLS_HELP.into());
+            }
+            WebmcpCommand::Roots => {
+                self.webmcp_notice = Some(WEBMCP_ROOTS_HELP.into());
             }
             WebmcpCommand::Stop => self.request_webmcp_stop(),
         }
@@ -516,6 +506,10 @@ mod tests {
             }
         );
         assert_eq!(parse_command("/webmcp unpair").unwrap().unwrap(), WebmcpCommand::Stop);
+        assert_eq!(parse_command("/webmcp stop").unwrap().unwrap(), WebmcpCommand::Stop);
+        assert_eq!(parse_command("/webmcp tools").unwrap().unwrap(), WebmcpCommand::Tools);
+        assert_eq!(parse_command("/webmcp roots").unwrap().unwrap(), WebmcpCommand::Roots);
+        assert!(parse_command("/webmcp pair").unwrap().is_err());
         assert!(parse_command("/webmcp pair https://a.test https://b.test").unwrap().is_err());
         assert!(parse_command("/webmcp pair --unknown https://a.test").unwrap().is_err());
         assert!(

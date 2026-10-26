@@ -2248,6 +2248,31 @@ fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(c
 }
 
 #[gpui_kit::test]
+fn webmcp_tools_and_roots_commands_show_shared_guidance_without_backend_requests(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer
+                .update(cx, |state, cx| state.set_value("/webmcp tools", window, cx));
+            view.submit_prompt(window, cx);
+            assert!(view.settings_open);
+            assert!(!view.running);
+            assert_eq!(view.webmcp_notice.as_deref(), Some(vtcode_desktop_protocol::slash_command::WEBMCP_TOOLS_HELP));
+
+            view.composer
+                .update(cx, |state, cx| state.set_value("/webmcp roots", window, cx));
+            view.submit_prompt(window, cx);
+            assert_eq!(view.webmcp_notice.as_deref(), Some(vtcode_desktop_protocol::slash_command::WEBMCP_ROOTS_HELP));
+        });
+    })
+    .unwrap();
+
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
 fn retained_submission_restores_exact_content_without_overwriting_a_new_draft(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

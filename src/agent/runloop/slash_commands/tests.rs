@@ -650,6 +650,11 @@ async fn webmcp_status_and_unpair_commands_route_to_runtime_handlers() {
         .await
         .expect("webmcp unpair should parse");
     assert!(matches!(unpair, SlashCommandOutcome::StopWebmcp));
+
+    let stop = handle_slash_command("webmcp stop", &mut renderer, &workspace)
+        .await
+        .expect("webmcp stop should parse");
+    assert!(matches!(stop, SlashCommandOutcome::StopWebmcp));
 }
 
 #[tokio::test]

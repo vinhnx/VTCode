@@ -4,6 +4,9 @@ use anyhow::Result;
 use vtcode_core::skills::CommandSkillSpec;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_desktop_protocol::slash_command::{
+    WEBMCP_ROOTS_HELP, WEBMCP_TOOLS_HELP, WebmcpSlashCommand, WebmcpSlashCommandParseError, parse_webmcp_slash_command,
+};
 
 use super::flow::{
     handle_auth_command, handle_fork_command, handle_login_command, handle_logout_command, handle_plan_command,
@@ -423,73 +426,45 @@ fn handle_vim_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCo
 }
 
 fn handle_webmcp_command(args: &str, renderer: &mut AnsiRenderer) -> Result<SlashCommandOutcome> {
-    match args.trim() {
-        "" | "status" => return Ok(SlashCommandOutcome::ShowWebmcpStatus),
-        "help" => return Ok(SlashCommandOutcome::ShowWebmcpHelp),
-        "tools" => {
-            renderer.line(MessageStyle::Info, "WebMCP tools: workspace.list_files, workspace.read_file, patch.propose, patch.apply, checks.run, patch.revert, turn.request, cancel")?;
-        }
-        "roots" => {
-            renderer.line(
-                MessageStyle::Info,
-                "Headless WebMCP roots are configured with [webmcp].allowed_roots or --allowed-root.",
-            )?;
-        }
-        "pair" | "connect" => renderer.line(
-            MessageStyle::Info,
-            "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
-        )?,
-        "unpair" => return Ok(SlashCommandOutcome::StopWebmcp),
-        pair_args if pair_args.starts_with("pair ") || pair_args.starts_with("connect ") => {
-            let pair_args = pair_args
-                .strip_prefix("pair ")
-                .or_else(|| pair_args.strip_prefix("connect "))
-                .unwrap_or_default();
-            if let Some((origin, replace)) = parse_webmcp_pair_args(pair_args) {
-                return Ok(SlashCommandOutcome::StartWebmcp { origin, replace });
-            }
+    let command = match parse_webmcp_slash_command(args) {
+        Ok(command) => command,
+        Err(WebmcpSlashCommandParseError::InvalidConnectionArguments) => {
             renderer.line(
                 MessageStyle::Error,
                 "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
             )?;
+            return Ok(SlashCommandOutcome::Handled);
         }
-        _ => {
+        Err(WebmcpSlashCommandParseError::UnknownCommand) => {
             renderer.line(
                 MessageStyle::Error,
-                "Usage: /webmcp [help|status|tools|roots|connect|pair [--replace] <origin>|unpair]",
+                "Usage: /webmcp [help|status|tools|roots|connect|pair [--replace] <origin>|unpair|stop]",
             )?;
+            return Ok(SlashCommandOutcome::Handled);
         }
-    }
-    Ok(SlashCommandOutcome::Handled)
-}
+    };
 
-fn parse_webmcp_pair_args(args: &str) -> Option<(String, bool)> {
-    let tokens = args.split_whitespace().collect::<Vec<_>>();
-    if tokens.is_empty() {
-        return None;
-    }
-
-    let mut origin = None;
-    let mut replace = false;
-    let mut index = 0;
-    while index < tokens.len() {
-        match tokens[index] {
-            "--replace" if !replace => replace = true,
-            "--origin" if origin.is_none() => {
-                index += 1;
-                let value = tokens.get(index).copied()?;
-                if value.starts_with('-') {
-                    return None;
-                }
-                origin = Some(value);
-            }
-            token if origin.is_none() && !token.starts_with('-') => origin = Some(token),
-            _ => return None,
+    match command {
+        WebmcpSlashCommand::Status => Ok(SlashCommandOutcome::ShowWebmcpStatus),
+        WebmcpSlashCommand::Help => Ok(SlashCommandOutcome::ShowWebmcpHelp),
+        WebmcpSlashCommand::Tools => {
+            renderer.line(MessageStyle::Info, WEBMCP_TOOLS_HELP)?;
+            Ok(SlashCommandOutcome::Handled)
         }
-        index += 1;
+        WebmcpSlashCommand::Roots => {
+            renderer.line(MessageStyle::Info, WEBMCP_ROOTS_HELP)?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        WebmcpSlashCommand::ConnectHelp => {
+            renderer.line(
+                MessageStyle::Info,
+                "Usage: /webmcp connect [--replace] <exact-browser-origin> (alias: pair; for example, /webmcp connect http://localhost:5173)",
+            )?;
+            Ok(SlashCommandOutcome::Handled)
+        }
+        WebmcpSlashCommand::Connect { origin, replace } => Ok(SlashCommandOutcome::StartWebmcp { origin, replace }),
+        WebmcpSlashCommand::Unpair => Ok(SlashCommandOutcome::StopWebmcp),
     }
-
-    origin.map(|origin| (origin.to_string(), replace))
 }
 
 pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_skill(
