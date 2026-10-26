@@ -6089,7 +6089,7 @@ impl DesktopView {
         }
 
         if item.expanded && !diff.patch.is_empty() {
-            let (lines, truncated) = classify_diff_lines(&diff.patch);
+            let mut lines = ClassifiedDiffLines::new(&diff.patch);
             let mut diff_view = div()
                 .id(format!("diff-lines-{}", item.id))
                 .w_full()
@@ -6100,7 +6100,7 @@ impl DesktopView {
                 .overflow_hidden()
                 .overflow_x_scroll()
                 .bg(colors.background);
-            for line in &lines {
+            for line in &mut lines {
                 let (line_color, line_bg, marker_color) = match line.kind {
                     DiffLineKind::Added => (
                         diff_foreground,
@@ -6140,7 +6140,7 @@ impl DesktopView {
                 }
                 diff_view = diff_view.child(row);
             }
-            if truncated {
+            if lines.truncated {
                 diff_view = diff_view.child(
                     div()
                         .w_full()
@@ -8239,6 +8239,49 @@ struct DiffLine<'a> {
     text: &'a str,
 }
 
+const MAX_DIFF_LINES: usize = 2_000;
+
+struct ClassifiedDiffLines<'a> {
+    lines: std::str::Lines<'a>,
+    remaining: usize,
+    checked_limit: bool,
+    truncated: bool,
+}
+
+impl<'a> ClassifiedDiffLines<'a> {
+    fn new(patch: &'a str) -> Self {
+        Self {
+            lines: patch.lines(),
+            remaining: MAX_DIFF_LINES,
+            checked_limit: false,
+            truncated: false,
+        }
+    }
+}
+
+impl<'a> Iterator for ClassifiedDiffLines<'a> {
+    type Item = DiffLine<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            if !self.checked_limit {
+                self.truncated = self.lines.next().is_some();
+                self.checked_limit = true;
+            }
+            return None;
+        }
+
+        let Some(text) = self.lines.next() else {
+            self.remaining = 0;
+            self.checked_limit = true;
+            return None;
+        };
+        self.remaining -= 1;
+        Some(DiffLine { kind: classify_diff_line(text), text })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DiffLineKind {
     Header,
     Hunk,
@@ -8247,31 +8290,18 @@ enum DiffLineKind {
     Context,
 }
 
-/// Split a unified diff into classified lines, bounded to keep one transcript
-/// row renderable regardless of patch size.
-fn classify_diff_lines(patch: &str) -> (Vec<DiffLine<'_>>, bool) {
-    const MAX_DIFF_LINES: usize = 2_000;
-    let mut lines = Vec::new();
-    let mut truncated = false;
-    for line in patch.lines() {
-        if lines.len() == MAX_DIFF_LINES {
-            truncated = true;
-            break;
-        }
-        let kind = if line.starts_with("+++") || line.starts_with("---") || line.starts_with("diff ") {
-            DiffLineKind::Header
-        } else if line.starts_with("@@") {
-            DiffLineKind::Hunk
-        } else if line.starts_with('+') {
-            DiffLineKind::Added
-        } else if line.starts_with('-') {
-            DiffLineKind::Removed
-        } else {
-            DiffLineKind::Context
-        };
-        lines.push(DiffLine { kind, text: line });
+fn classify_diff_line(line: &str) -> DiffLineKind {
+    if line.starts_with("+++") || line.starts_with("---") || line.starts_with("diff ") {
+        DiffLineKind::Header
+    } else if line.starts_with("@@") {
+        DiffLineKind::Hunk
+    } else if line.starts_with('+') {
+        DiffLineKind::Added
+    } else if line.starts_with('-') {
+        DiffLineKind::Removed
+    } else {
+        DiffLineKind::Context
     }
-    (lines, truncated)
 }
 
 fn desktop_window_options() -> WindowOptions {

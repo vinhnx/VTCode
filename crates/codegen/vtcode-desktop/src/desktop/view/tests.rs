@@ -2506,6 +2506,40 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
     .unwrap();
 }
 
+#[test]
+fn transcript_diff_classification_is_bounded_and_preserves_line_kinds() {
+    let patch = "diff --git a/file.rs b/file.rs\n--- a/file.rs\n+++ b/file.rs\n@@ -1 +1 @@\n-old\n+new\n context\n";
+    let mut lines = super::ClassifiedDiffLines::new(patch);
+    let classified = lines.by_ref().map(|line| (line.kind, line.text)).collect::<Vec<_>>();
+    assert!(!lines.truncated);
+    assert_eq!(
+        classified,
+        [
+            (super::DiffLineKind::Header, "diff --git a/file.rs b/file.rs"),
+            (super::DiffLineKind::Header, "--- a/file.rs"),
+            (super::DiffLineKind::Header, "+++ b/file.rs"),
+            (super::DiffLineKind::Hunk, "@@ -1 +1 @@"),
+            (super::DiffLineKind::Removed, "-old"),
+            (super::DiffLineKind::Added, "+new"),
+            (super::DiffLineKind::Context, " context"),
+        ]
+    );
+
+    let at_limit = (0..super::MAX_DIFF_LINES)
+        .map(|index| format!("+line-{index}\n"))
+        .collect::<String>();
+    let mut lines = super::ClassifiedDiffLines::new(&at_limit);
+    assert_eq!(lines.by_ref().count(), super::MAX_DIFF_LINES);
+    assert!(!lines.truncated);
+
+    let oversized = (0..super::MAX_DIFF_LINES + 1)
+        .map(|index| format!("+line-{index}\n"))
+        .collect::<String>();
+    let mut lines = super::ClassifiedDiffLines::new(&oversized);
+    assert_eq!(lines.by_ref().count(), super::MAX_DIFF_LINES);
+    assert!(lines.truncated);
+}
+
 #[gpui_kit::test]
 fn measured_transcript_follows_tall_messages_and_preserves_scroll_away(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
