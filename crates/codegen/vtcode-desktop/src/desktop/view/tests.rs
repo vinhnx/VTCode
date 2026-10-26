@@ -1403,8 +1403,21 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
             .and_then(|editor| editor.option_select.clone())
             .expect("enum settings use a Kit select");
         assert!(select.read(cx).focus_handle(cx).is_focused(window), "the enum picker receives initial focus");
-        select.update(cx, |state, cx| state.set_selected_value(&"fast".to_string(), window, cx));
+        window.within("cli-config-option-select").click("input", cx);
+        window.press("down", cx);
+        window.press("enter", cx);
         window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        let select = view
+            .read(cx)
+            .config_editor
+            .as_ref()
+            .and_then(|editor| editor.option_select.clone())
+            .expect("enum settings retain their Kit select state");
+        assert_eq!(select.read(cx).selected_value().map(String::as_str), Some("fast"));
         window.click("save-cli-config-edit", cx);
     })
     .unwrap();
