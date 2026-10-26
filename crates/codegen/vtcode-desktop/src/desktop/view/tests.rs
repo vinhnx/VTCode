@@ -5746,6 +5746,9 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
                 gpui_kit::component::diff::DiffMode::Split
             );
         });
+        window.click("copy-workspace-review", cx);
+        let reordered = "diff --git a/b.rs b/b.rs\n--- a/b.rs\n+++ b/b.rs\n@@ -1 +1 @@\n-before\n+after\ndiff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n";
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(reordered));
         window.render_frame(cx);
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · b.rs"));
         window.click("refresh-workspace-review", cx);

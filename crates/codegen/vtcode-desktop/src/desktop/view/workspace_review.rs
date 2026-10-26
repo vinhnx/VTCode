@@ -184,7 +184,11 @@ impl DesktopView {
         let diff_foreground =
             super::themes::diff_text_foreground(colors.background, colors.foreground, colors.success, colors.danger);
         let mut body = div().flex().flex_col().w_full().flex_1().min_h_0();
-        let patch = review.snapshot.as_ref().and_then(|snapshot| snapshot.patch.clone());
+        let can_copy_patch = review
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.patch.as_deref())
+            .is_some_and(|patch| !patch.is_empty());
         let has_viewer = review.viewer.is_some();
         body = body.child(
             div()
@@ -285,13 +289,20 @@ impl DesktopView {
                         .icon(IconName::Copy)
                         .ghost()
                         .small()
-                        .desktop_disabled(patch.as_ref().is_none_or(String::is_empty))
-                        .on_click(move |_, window, app| {
-                            if let Some(patch) = &patch {
-                                app.write_to_clipboard(ClipboardItem::new_string(patch.clone()));
-                                super::super::notifications::copied_to_clipboard(window, app);
-                            }
-                        }),
+                        .desktop_disabled(!can_copy_patch)
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            let Some(patch) = view
+                                .workspace_review
+                                .as_ref()
+                                .and_then(|review| review.snapshot.as_ref())
+                                .and_then(|snapshot| snapshot.patch.as_deref())
+                                .filter(|patch| !patch.is_empty())
+                            else {
+                                return;
+                            };
+                            cx.write_to_clipboard(ClipboardItem::new_string(patch.to_owned()));
+                            super::super::notifications::copied_to_clipboard(window, cx);
+                        })),
                 ),
         );
         if review.pending && review.snapshot.is_none() {
