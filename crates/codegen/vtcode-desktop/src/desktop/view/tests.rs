@@ -2235,6 +2235,8 @@ fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(c
             assert!(!view.running);
             assert!(view.composer.read(cx).value().is_empty());
         });
+        window.render_frame(cx);
+        assert!(window.try_find("connections-settings").is_some());
     })
     .unwrap();
 
@@ -2244,6 +2246,26 @@ fn webmcp_connect_command_issues_a_pair_request_without_starting_an_agent_turn(c
     assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_PAIR);
     assert_eq!(params["origin"], "https://vtcode.vinhnx.chatgpt.site");
     assert_eq!(params["replace"], false);
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn composer_cli_webmcp_button_opens_connections_settings(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| view.backend = Some(BackendHandle { commands }));
+        window.render_frame(cx);
+        window.click("composer-cli-webmcp", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("connections-settings").is_some());
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
+        panic!("WebMCP button should refresh connection status");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
     assert!(requests.try_recv().is_err());
 }
 
