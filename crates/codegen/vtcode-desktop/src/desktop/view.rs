@@ -5497,19 +5497,23 @@ impl DesktopView {
         }
     }
 
+    fn activity_status_color(state: ActivityState, colors: gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
+        match state {
+            ActivityState::Running => colors.primary,
+            ActivityState::Completed => colors.success,
+            ActivityState::Failed => colors.danger,
+            ActivityState::Interrupted => colors.warning,
+            ActivityState::Other => colors.muted_foreground,
+        }
+    }
+
     fn render_activity_row(
         row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,
         row_height: f32,
         output_action: Option<AnyElement>,
     ) -> impl IntoElement {
-        let status_color = match row.state {
-            ActivityState::Failed => colors.danger,
-            ActivityState::Running => colors.primary,
-            ActivityState::Interrupted => colors.warning,
-            ActivityState::Completed => colors.success,
-            ActivityState::Other => colors.muted_foreground,
-        };
+        let status_color = Self::activity_status_color(row.state, colors);
         let status = gpui_kit::SharedString::from(row.status.as_str());
         let mut row_element = div()
             .id(format!("activity-{}", row.id))
@@ -5896,6 +5900,15 @@ impl DesktopView {
         let summary = head.activity_group_summary;
         let failed = summary.failed;
         let running = summary.running;
+        let colors = cx.theme().colors;
+        let status = if failed > 0 {
+            ActivityState::Failed
+        } else if running > 0 {
+            ActivityState::Running
+        } else {
+            ActivityState::Other
+        };
+        let status_color = Self::activity_status_color(status, colors);
         let mut label = format!("{} tool actions", summary.total);
         if running > 0 {
             label.push_str(&format!(" · {running} running"));
@@ -5913,6 +5926,21 @@ impl DesktopView {
                     .justify_start()
                     .gap_2()
                     .child(Icon::new(IconName::Wrench).small())
+                    .when(running > 0, |row| {
+                        row.child(
+                            div()
+                                .id(format!("activity-group-running-indicator-{}", head.id))
+                                .test_support()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(
+                                    Spinner::new()
+                                        .small()
+                                        .color(Self::activity_status_color(ActivityState::Running, colors)),
+                                ),
+                        )
+                    })
                     .child(
                         div()
                             .id(format!("activity-group-label-{}", head.id))
@@ -5936,11 +5964,7 @@ impl DesktopView {
             .small()
             .max_w_full()
             .justify_start()
-            .text_color(if failed > 0 {
-                cx.theme().colors.danger
-            } else {
-                cx.theme().colors.muted_foreground
-            })
+            .text_color(status_color)
             .on_click(cx.listener(move |view, _, _, cx| {
                 view.transcript.toggle_activity_group(&id);
                 cx.notify();
@@ -5957,11 +5981,7 @@ impl DesktopView {
             "Archived output"
         };
         let state = ActivityState::from_status(status);
-        let status_color = if state == ActivityState::Failed {
-            colors.danger
-        } else {
-            colors.muted_foreground
-        };
+        let status_color = Self::activity_status_color(state, colors);
         let mut panel = div().w_full().max_w(px(CONTENT_WIDTH)).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
                 .accessibility_label(format!(

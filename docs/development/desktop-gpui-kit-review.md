@@ -121,9 +121,11 @@ no workspace is selected. The skeleton helper is shared with Git review and fall
 static theme-colored shape when reduced motion is enabled. See [Skeleton](https://gpui-kit.com/component/skeleton/),
 [Empty](https://gpui-kit.com/component/empty/), and [Tree](https://gpui-kit.com/component/tree/).
 
-Running tool rows now use Kit's reduced-motion-aware `Spinner` in both the transcript and
-activity inspector; completed and failed rows keep static status icons. The shared helper keeps
-those states consistent without adding animation to archived or idle rows. See
+Running tool rows now use Kit's reduced-motion-aware `Spinner` in the transcript, collapsed
+activity-group summaries, and activity inspector; completed and failed rows keep static status
+icons. A shared semantic status-color mapping keeps running, completed, failed, interrupted, and
+other states consistent across the transcript and inspector. Spinners appear only while work is
+running, so archived or idle rows do not animate. See
 [Spinner](https://gpui-kit.com/component/spinner/).
 
 Follow-up (2026-10-27): Multi-step runtime questions now render their single-choice options with

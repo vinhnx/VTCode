@@ -14,7 +14,7 @@ use serde_json::json;
 
 use super::navigation_history::{NavigationLocation, PendingNavigation};
 use super::{
-    DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, WelcomePeriod,
+    ActivityState, DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, WelcomePeriod,
     append_restored_output_page, restored_output_for_copy, scale_row_height_for_ui_font, workspace_picker_options,
 };
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
@@ -5442,9 +5442,9 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             );
             assert!(!view.transcript.get(0).unwrap().expanded);
             assert!(!view.transcript.get(0).unwrap().has_activity_status);
-            assert_eq!(rows[0].state, crate::desktop::inspector::ActivityState::Completed);
+            assert_eq!(rows[0].state, ActivityState::Completed);
             assert_eq!(rows[1].status, "interrupted");
-            assert_eq!(rows[1].state, crate::desktop::inspector::ActivityState::Interrupted);
+            assert_eq!(rows[1].state, ActivityState::Interrupted);
             assert!(rows[0].has_output);
             assert!(rows[1].has_output);
             assert!(view.transcript.items().any(|item| item.text == "Unstructured archive result"));
@@ -7111,6 +7111,7 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").label(), Some("Expand 2 tool actions · 1 failed"));
         assert_eq!(window.find("activity-group-read").checked(), Some(false));
+        assert!(window.try_find("activity-group-running-indicator-read").is_none());
         assert_eq!(window.find("message-body-comment").label(), Some("VT Code: The build needs a fix."));
         assert_eq!(window.find("tool-retry").label(), Some("Show details for cargo check, status: in progress"));
         assert!(!view.read(cx).transcript.get(1).unwrap().activity_expanded);
@@ -7137,6 +7138,7 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").label(), Some("Collapse 2 tool actions · 1 running · 1 failed"));
         assert_eq!(window.find("activity-group-read").checked(), Some(true));
+        assert!(window.try_find("activity-group-running-indicator-read").is_some());
         window.click("activity-group-read", cx);
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").checked(), Some(false));
@@ -7144,6 +7146,35 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         assert!(view.read(cx).transcript.get(2).unwrap().expanded, "group collapse preserves detail choice");
     })
     .unwrap();
+}
+
+#[test]
+fn activity_status_colors_follow_semantic_theme_tokens() {
+    for palette in super::themes::all_themes() {
+        let colors = gpui_kit::component::theme::ThemeColor {
+            primary: palette.accent,
+            success: palette.success,
+            danger: palette.danger,
+            warning: palette.warning,
+            muted_foreground: palette.foreground,
+            ..Default::default()
+        };
+
+        for (state, expected) in [
+            (ActivityState::Running, colors.primary),
+            (ActivityState::Completed, colors.success),
+            (ActivityState::Failed, colors.danger),
+            (ActivityState::Interrupted, colors.warning),
+            (ActivityState::Other, colors.muted_foreground),
+        ] {
+            assert_eq!(
+                DesktopView::activity_status_color(state, colors),
+                expected,
+                "{} maps {state:?} to its semantic theme color",
+                palette.id
+            );
+        }
+    }
 }
 
 #[gpui_kit::test]
