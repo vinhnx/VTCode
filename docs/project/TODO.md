@@ -963,11 +963,11 @@ The plan above was written before the `gpui-kit` and `gpui-kit-design-guides` sk
 
 **1. Degradation has three tiers, not two.** The original plan assumed "renders" or "does not render". The desktop app can do something in between: `TextView::html(id, text)` exists in the pinned kit and parses with `html5ever` into a retained text document. It strips `script`/`style` (both in the `BLOCK_ELEMENTS` skip list at `gpui-base-0.8.0/src/text/format/html.rs:52-53`) and renders block/inline structure, tables, links, and images. That is not an app — no JS, no interactivity, no `postMessage` — but it is far more than a `text/html` dump. It is a legitimate static preview tier that costs very little.
 
-**2. The TUI non-goal was too blunt.** The TUI cannot host an app, and still must not try. But it can do better than a bare `[resource: ui://…]` row: it can show *which* app a tool belongs to, its declared MIME type, and — via increment 1 — the declared CSP domains and permissions, so a user can judge what the app would ask for before trusting it. That is the honest terminal ceiling, and it lives on the TUI's strongest ground: disclosure, not simulation.
+**2. The TUI non-goal was too blunt.** The TUI cannot host an app, and still must not try. But it can do better than a bare `[resource: ui://…]` row: it can show _which_ app a tool belongs to, its declared MIME type, and — via increment 1 — the declared CSP domains and permissions, so a user can judge what the app would ask for before trusting it. That is the honest terminal ceiling, and it lives on the TUI's strongest ground: disclosure, not simulation.
 
 **3. Desktop-visual-inspection needs a security gate, not just a component.** `TextView::html` accepting third-party HTML is a real decision. It is text-only and script-inert by construction, so the risk is bounded, but it must be an explicit opt-in with a size cap, not a default path that any server can trigger.
 
-**4. `desktop-component-review.md` already rules.** `text-view` is recorded as *Retain rich Markdown, owned input state, raw copy, and image/security policy.* Introducing an HTML mode is a change to a recorded decision, so it must be appended to that file rather than decided implicitly mid-implementation.
+**4. `desktop-component-review.md` already rules.** `text-view` is recorded as _Retain rich Markdown, owned input state, raw copy, and image/security policy._ Introducing an HTML mode is a change to a recorded decision, so it must be appended to that file rather than decided implicitly mid-implementation.
 
 ## Shared spine (unchanged, all surfaces)
 
@@ -1022,11 +1022,11 @@ Rules:
 
 Goal: **three tiers, chosen by config, with the safety decision written down.**
 
-| Tier | What the user sees | When |
-| --- | --- | --- |
-| `off` | Linkage row, as today's TUI | Default |
-| `static` | Sanitized HTML rendered as text structure via `TextView::html` | Opt-in |
-| `interactive` | Sandboxed webview app | Deferred, separate project |
+| Tier          | What the user sees                                             | When                       |
+| ------------- | -------------------------------------------------------------- | -------------------------- |
+| `off`         | Linkage row, as today's TUI                                    | Default                    |
+| `static`      | Sanitized HTML rendered as text structure via `TextView::html` | Opt-in                     |
+| `interactive` | Sandboxed webview app                                          | Deferred, separate project |
 
 ### D0 — Tier plumbing
 
@@ -1071,16 +1071,16 @@ Requires a webview engine. No `wry`, `cef`, or `webkit` dependency exists in the
 
 ## Revised sequencing
 
-| # | Increment | Surface | Effort | Reversible |
-| - | --------- | ------- | ------ | ---------- |
-| 0 | `_meta.ui` plumbing + linkage row | shared | ~1 day | Yes |
-| 1 | `mcp resources` / `mcp app <uri>` | shared | ~0.5 day | Yes |
-| 2 | Gated capability advertisement | shared | ~0.5 day | Yes |
-| T1 | App disclosure block | TUI | ~0.5 day | Yes |
-| D0 | `apps` tier config | desktop | ~0.5 day | Yes |
-| D1 | Static HTML preview | desktop | ~2 days | Yes, config-gated |
-| D2 | Component review record | desktop | ~0.5 hour | Yes |
-| 3 | Interactive webview | desktop or browser | weeks | Separate project |
+| #   | Increment                         | Surface            | Effort    | Reversible        |
+| --- | --------------------------------- | ------------------ | --------- | ----------------- |
+| 0   | `_meta.ui` plumbing + linkage row | shared             | ~1 day    | Yes               |
+| 1   | `mcp resources` / `mcp app <uri>` | shared             | ~0.5 day  | Yes               |
+| 2   | Gated capability advertisement    | shared             | ~0.5 day  | Yes               |
+| T1  | App disclosure block              | TUI                | ~0.5 day  | Yes               |
+| D0  | `apps` tier config                | desktop            | ~0.5 day  | Yes               |
+| D1  | Static HTML preview               | desktop            | ~2 days   | Yes, config-gated |
+| D2  | Component review record           | desktop            | ~0.5 hour | Yes               |
+| 3   | Interactive webview               | desktop or browser | weeks     | Separate project  |
 
 T1 and D0/D1 are independent and can land in either order once the spine exists.
 
@@ -1097,3 +1097,11 @@ T1 and D0/D1 are independent and can land in either order once the spine exists.
 - Webview in the desktop app before D3's sandbox and licensing decision.
 - Treating `static` as app support: it cannot round-trip a tool call, so it must not advertise the extension.
 - Any HTML parser outside the pinned kit's `TextView::html`; do not hand-roll sanitization.
+
+---
+
+https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01a174f2-dc40-7df0-8c9d-54dbc531603d/diff
+
+---
+
+https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01a174f1-ed7a-72a5-a6a5-3c5e81252ec2/diff
