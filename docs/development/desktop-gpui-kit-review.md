@@ -130,6 +130,19 @@ accessible name while Kit owns each radio's selection semantics. See
 [Radio](https://gpui-kit.com/component/radio/) and
 [Questionnaire](https://gpui-kit.com/component/questionnaire/).
 
+Follow-up (2026-10-27): Rechecked the [current component catalog](https://gpui-kit.com/component/),
+which now documents Kit 0.8.1, against VT Code's exact 0.8.0 lock. Keep API decisions grounded in
+the locked 0.8.0 source; a newer docs page does not authorize a dependency upgrade. The app already
+uses the catalog components that fit its workflows, including virtualized transcript and activity
+lists, protocol-backed `Radio` choices, and shared `Button`/`Tooltip` actions. Do not add catalog
+controls such as calendars, ratings, or avatars without a matching desktop workflow and data source.
+
+The app-owned alert wrapper remains intentional. Kit 0.8.0 `Alert` provides the semantic alert
+role, but its `RenderOnce` interface does not expose the test-support registration used to verify
+the app's stable alert ID and accessible message. Keep that narrow wrapper for its tested identity
+and app-specific warning/error contrast; replacing it with the visual component alone would weaken
+the current regression coverage.
+
 ## Verification boundaries
 
 Focused review checks passed. The full
