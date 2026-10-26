@@ -720,6 +720,7 @@ struct DesktopView {
     pending_submission: Option<SubmissionDraft>,
     first_submission: Option<SubmissionDraft>,
     session_request: Option<&'static str>,
+    pending_new_thread: bool,
     session_load_task: Option<Task<()>>,
     session_load_generation: u64,
     history_start_index: usize,
@@ -978,6 +979,7 @@ impl DesktopView {
             pending_submission: None,
             first_submission: None,
             session_request: None,
+            pending_new_thread: false,
             session_load_task: None,
             session_load_generation: 0,
             history_start_index: 0,
@@ -1163,13 +1165,13 @@ impl DesktopView {
                 self.pending_navigation = None;
             }
         } else {
-            let attachments = std::mem::take(&mut self.attachments);
-            self.selected_session_id = None;
-            self.reset_session_state();
-            self.attachments = attachments;
-            let _moved = self.navigation_history.navigate_to(index);
-            self.status = "Workspace ready. Start a new thread to continue.".into();
-            cx.notify();
+            let Some(session_id) = self.selected_session_id.clone() else {
+                return;
+            };
+            self.pending_navigation = Some(PendingNavigation { target_index: index, workspace_switch: false });
+            if !self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx) {
+                self.pending_navigation = None;
+            }
         }
     }
 
@@ -1437,8 +1439,38 @@ impl DesktopView {
         sent
     }
 
+    fn begin_new_thread(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.session_change_allowed(None) {
+            if self.retained_submission.is_some() && self.session_change_idle() {
+                self.error = Some("Restore or dismiss the unsent message before changing sessions or models.".into());
+                cx.notify();
+            }
+            return false;
+        }
+        if let Some(session_id) = self.selected_session_id.clone() {
+            if !self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx) {
+                return false;
+            }
+            self.pending_new_thread = true;
+        } else {
+            let attachments = std::mem::take(&mut self.attachments);
+            self.reset_session_state();
+            self.attachments = attachments;
+            self.clear_error();
+            self.record_current_navigation();
+        }
+        self.status = if self.pending_new_thread {
+            "Preparing a new thread…"
+        } else {
+            "New thread ready. Submit a prompt to begin."
+        }
+        .into();
+        cx.notify();
+        true
+    }
+
     fn create_session(&mut self, cx: &mut Context<Self>) {
-        let _sent = self.request_session_change(protocol::method::SESSION_CREATE, json!({ "title": null }), cx);
+        let _started = self.begin_new_thread(cx);
     }
 
     fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) {
@@ -3235,9 +3267,15 @@ impl DesktopView {
                     }
                     if matches!(
                         method.as_str(),
-                        protocol::method::INITIALIZE | protocol::method::SESSION_LIST | protocol::method::SESSION_LOAD
+                        protocol::method::INITIALIZE
+                            | protocol::method::SESSION_LIST
+                            | protocol::method::SESSION_LOAD
+                            | protocol::method::SESSION_CLOSE
                     ) {
                         self.fail_pending_navigation();
+                    }
+                    if method == protocol::method::SESSION_CLOSE {
+                        self.pending_new_thread = false;
                     }
                     if method == protocol::method::CONFIG_OPTIONS {
                         self.pending_permission_choice = None;
@@ -3501,10 +3539,26 @@ impl DesktopView {
                         }
                     }
                     protocol::method::SESSION_CLOSE => {
+                        let pending_navigation = self.pending_navigation.take();
+                        let new_thread = self.pending_new_thread;
+                        let attachments =
+                            (new_thread || pending_navigation.is_some()).then(|| std::mem::take(&mut self.attachments));
                         self.selected_session_id = None;
                         self.reset_session_state();
-                        self.record_current_navigation();
-                        self.status = "Session closed. Start a new session to continue.".to_string();
+                        if let Some(attachments) = attachments {
+                            self.attachments = attachments;
+                        }
+                        if let Some(pending) = pending_navigation {
+                            let _moved = self.navigation_history.navigate_to(pending.target_index);
+                        } else {
+                            self.record_current_navigation();
+                        }
+                        self.status = if new_thread || pending_navigation.is_some() {
+                            "New thread ready. Submit a prompt to begin."
+                        } else {
+                            "Session closed. Start a new session to continue."
+                        }
+                        .to_string();
                     }
                     protocol::method::SESSION_LOAD => self.begin_session_load(result, cx),
                     protocol::method::SESSION_HISTORY => self.begin_session_history_page(result, cx),
@@ -3625,6 +3679,7 @@ impl DesktopView {
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;
+                self.pending_new_thread = false;
                 if let Some(draft) = self.first_submission.take() {
                     self.retained_submission = Some(draft);
                 }
@@ -3666,6 +3721,7 @@ impl DesktopView {
                 self.fail_workspace_review("The local service could not start.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;
+                self.pending_new_thread = false;
                 if let Some(draft) = self.first_submission.take() {
                     self.retained_submission = Some(draft);
                 }
@@ -4064,6 +4120,7 @@ impl DesktopView {
         self.pending_submission = None;
         self.first_submission = None;
         self.session_request = None;
+        self.pending_new_thread = false;
         self.retained_submission = None;
     }
 
@@ -5951,7 +6008,21 @@ impl DesktopView {
 
     fn render_transcript(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_transcript_layout(cx);
-        let content = if self.transcript.is_empty() {
+        let content = if self.pending_blank_transition() {
+            let label = rust_i18n::t!("app.session.preparing_new_thread").to_string();
+            div()
+                .id("new-thread-pending")
+                .test_support()
+                .role(gpui_kit::Role::Status)
+                .aria_label(label.clone())
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(cx.theme().colors.foreground)
+                .child(label)
+                .into_any_element()
+        } else if self.transcript.is_empty() {
             let colors = cx.theme().colors;
             let welcome_copy = welcome_copy(self.welcome_copy_index);
             let greeting = welcome_greeting(self.welcome_period);
@@ -6113,6 +6184,11 @@ impl DesktopView {
             .w_full()
             .overflow_hidden()
             .child(content)
+    }
+
+    fn pending_blank_transition(&self) -> bool {
+        self.session_request == Some(protocol::method::SESSION_CLOSE)
+            && (self.pending_new_thread || self.pending_navigation.is_some())
     }
 
     fn render_transcript_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -8172,7 +8248,9 @@ impl Render for DesktopView {
             .h_full()
             .flex()
             .flex_col()
-            .when(!self.transcript.is_empty() && !self.zen_mode, |column| column.child(self.render_thread_header()))
+            .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
+                column.child(self.render_thread_header())
+            })
             .child(self.render_transcript(cx))
             .child(self.render_composer(window, cx));
         let workspace = div()

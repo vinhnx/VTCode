@@ -92,6 +92,10 @@ app:
       select_folder:
         en: Select a folder
         vi: Chọn thư mục
+  session:
+    preparing_new_thread:
+      en: Preparing a new thread…
+      vi: Đang chuẩn bị một cuộc hội thoại mới…
   files:
     scanning:
       en: Scanning workspace files

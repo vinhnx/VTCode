@@ -58,6 +58,7 @@ struct ServerState {
     session_id: Option<String>,
     runtime: Option<RuntimeSession>,
     active_turn_id: Option<String>,
+    session_transitioning: bool,
     cancel_requested_turn: Option<String>,
     pending_interactions: std::collections::HashMap<String, PendingInteraction>,
     interaction_registry: InteractionRegistry,
@@ -161,7 +162,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
         }
     }
 
-    shutdown_current_session(&context, true).await;
+    shutdown_current_session(&context, true).await?;
     stop_webmcp_bridge(&context).await;
     let _ = stdout.flush().await;
     Ok(())
@@ -211,6 +212,36 @@ where
 }
 
 async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
+    let transition = matches!(
+        request.method.as_str(),
+        protocol::method::SHUTDOWN
+            | protocol::method::CONFIG_SETTINGS_WRITE
+            | protocol::method::CONFIG_SELECT
+            | protocol::method::CONFIG_OPTIONS
+            | protocol::method::CONFIG_THEME
+            | protocol::method::SESSION_CREATE
+            | protocol::method::SESSION_LOAD
+            | protocol::method::SESSION_CLOSE
+    );
+    if !transition {
+        return handle_request_inner(context, request).await;
+    }
+    {
+        let mut state = context.state.lock().await;
+        if state.session_transitioning {
+            bail!("a session change is already in progress");
+        }
+        if request.method != protocol::method::SHUTDOWN && state.active_turn_id.is_some() {
+            bail!("cancel the active turn and wait for cleanup before switching sessions");
+        }
+        state.session_transitioning = true;
+    }
+    let result = handle_request_inner(context, request).await;
+    context.state.lock().await.session_transitioning = false;
+    result
+}
+
+async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Result<(Value, bool)> {
     use protocol::method;
 
     if request.method == method::INITIALIZE {
@@ -233,7 +264,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
     }
 
     if request.method == method::SHUTDOWN {
-        shutdown_current_session(context, true).await;
+        shutdown_current_session(context, true).await?;
         return Ok((json!({ "shutdown": true }), true));
     }
 
@@ -293,7 +324,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 bail!("Resolve the pending CLI interaction before changing configuration");
             }
             let result = config_settings::write(context.workspace.clone(), params).await?;
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             stop_webmcp_bridge(context).await;
             context.state.lock().await.session_id = None;
             Ok((serde_json::to_value(result)?, false))
@@ -328,7 +359,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             {
                 bail!("unknown provider/model selection");
             }
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
@@ -363,7 +394,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 )
                 .await?;
             }
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
@@ -379,7 +410,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             let params: protocol::ThemePreferenceSelectParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
             let theme = theme_preferences::persist(context.workspace.clone(), params.theme).await?;
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
@@ -411,7 +442,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             ensure_no_active_turn(context).await?;
             let create_started = Instant::now();
             let shutdown_started = Instant::now();
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             let shutdown_elapsed = shutdown_started.elapsed();
             let workspace_label = workspace_label(&context.workspace);
             let identifier_started = Instant::now();
@@ -460,7 +491,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             let resume = load_resume_session(&params.session_id, ArchivedSessionIntent::ResumeInPlace)
                 .await?
                 .ok_or_else(|| anyhow!("saved session could not be loaded"))?;
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             let workspace = context.workspace.clone();
             let history_session_id = params.session_id.clone();
             let inspector_history =
@@ -570,7 +601,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 bail!("session is not selected");
             }
             ensure_no_active_turn(context).await?;
-            shutdown_current_session(context, false).await;
+            shutdown_current_session(context, false).await?;
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
@@ -650,6 +681,9 @@ async fn enqueue_turn(
     let turn_id = uuid::Uuid::new_v4().to_string();
     let input = {
         let mut state = state.lock().await;
+        if state.session_transitioning {
+            bail!("a session change is in progress");
+        }
         if state.session_id.as_deref() != Some(session_id) {
             bail!("session is not selected");
         }
@@ -693,7 +727,8 @@ async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus
     let (session_id, turns_available) = {
         let state = context.state.lock().await;
         let session_id = state.session_id.clone();
-        let turns_available = state.active_turn_id.is_none()
+        let turns_available = !state.session_transitioning
+            && state.active_turn_id.is_none()
             && state.runtime.as_ref().is_some_and(|runtime| {
                 Some(runtime.session_id.as_str()) == session_id.as_deref() && !runtime.input.is_closed()
             });
@@ -824,7 +859,8 @@ impl RuntimeAdapter for DesktopWebmcpRuntime {
     async fn status(&self) -> vtcode_webmcp::Result<RuntimeStatus> {
         let mut status = self.workspace.status().await?;
         let state = self.state.lock().await;
-        status.turns_available = state.active_turn_id.is_none()
+        status.turns_available = !state.session_transitioning
+            && state.active_turn_id.is_none()
             && state.session_id.as_deref().is_some_and(|session_id| {
                 state
                     .runtime
@@ -1245,12 +1281,12 @@ fn dispatch_interaction_response(
     Ok(())
 }
 
-async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) {
+async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool) -> Result<()> {
     let (session_id, input, active_turn, should_send_cancel, mut runtime) = {
         let mut state = context.state.lock().await;
         let active_turn = state.active_turn_id.clone();
         if active_turn.is_some() && !cancel_active {
-            return;
+            bail!("cancel the active turn and wait for cleanup before switching sessions");
         }
         let should_send_cancel = active_turn
             .as_ref()
@@ -1308,6 +1344,7 @@ async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool)
         crate::main_helpers::set_runtime_archive_session_id(None);
     }
     context.turn_finished.notify_waiters();
+    Ok(())
 }
 
 async fn wait_for_active_turn_to_finish(context: &ServiceContext) {
@@ -2000,6 +2037,92 @@ mod tests {
             .output()
             .expect("Git executable");
         assert!(output.status.success(), "Git setup failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[tokio::test]
+    async fn session_close_excludes_webmcp_turns_until_shutdown_finishes() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let (context, _) = test_service_context(test_startup_context(&workspace), workspace);
+        let context = std::sync::Arc::new(context);
+        let (input, mut input_receiver) = mpsc::unbounded_channel();
+        let (exit_sender, exit) = oneshot::channel();
+        let runtime_task = tokio::spawn(std::future::pending::<()>());
+        {
+            let mut state = context.state.lock().await;
+            state.initialized = true;
+            state.session_id = Some("current".into());
+            state.runtime = Some(RuntimeSession {
+                session_id: "current".into(),
+                input,
+                exit,
+                abort: runtime_task.abort_handle(),
+                command_forwarder: std::thread::spawn(|| {}),
+            });
+        }
+        let close_context = std::sync::Arc::clone(&context);
+        let close = tokio::spawn(async move {
+            handle_request(
+                &close_context,
+                &Request {
+                    jsonrpc: "2.0".into(),
+                    id: RequestId::String("close".into()),
+                    method: protocol::method::SESSION_CLOSE.into(),
+                    params: json!({ "sessionId": "current" }),
+                },
+            )
+            .await
+        });
+        assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Exit)));
+        assert!(!webmcp_status(&context).await.turns_available);
+        let error = enqueue_turn(&context.state, &context.notifications, "current", "Inspect".into(), Vec::new())
+            .await
+            .expect_err("a transition must reject a browser turn");
+        assert!(error.to_string().contains("session change"));
+        exit_sender.send(Ok(())).expect("finish shutdown");
+        close.await.expect("close task").expect("close request");
+        let state = context.state.lock().await;
+        assert!(!state.session_transitioning);
+        assert!(state.session_id.is_none());
+        drop(state);
+        runtime_task.abort();
+    }
+
+    #[tokio::test]
+    async fn failed_session_transition_releases_the_turn_gate() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let (context, _) = test_service_context(test_startup_context(&workspace), workspace);
+        context.state.lock().await.initialized = true;
+        let request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("bad-close".into()),
+            method: protocol::method::SESSION_CLOSE.into(),
+            params: json!({ "sessionId": "missing" }),
+        };
+        assert!(handle_request(&context, &request).await.is_err());
+        assert!(!context.state.lock().await.session_transitioning);
+    }
+
+    #[tokio::test]
+    async fn shutdown_rechecks_active_turn_before_taking_the_runtime() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let (context, _) = test_service_context(test_startup_context(&workspace), workspace);
+        {
+            let mut state = context.state.lock().await;
+            state.session_id = Some("current".into());
+        }
+        ensure_no_active_turn(&context).await.expect("initially idle");
+        context.state.lock().await.active_turn_id = Some("webmcp-turn".into());
+
+        let error = shutdown_current_session(&context, false)
+            .await
+            .expect_err("new turn must prevent shutdown");
+        assert!(error.to_string().contains("active turn"));
+        let state = context.state.lock().await;
+        assert_eq!(state.session_id.as_deref(), Some("current"));
+        assert_eq!(state.active_turn_id.as_deref(), Some("webmcp-turn"));
     }
 
     #[tokio::test]

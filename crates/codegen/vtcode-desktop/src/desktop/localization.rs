@@ -63,6 +63,14 @@ mod tests {
     fn app_catalog_covers_language_controls_and_kit_overrides() {
         assert_eq!(rust_i18n::t!("app.settings.title", locale = "en").to_string(), "Settings");
         assert_eq!(rust_i18n::t!("app.settings.title", locale = "vi").to_string(), "Cài đặt");
+        assert_eq!(
+            rust_i18n::t!("app.session.preparing_new_thread", locale = "en").to_string(),
+            "Preparing a new thread…"
+        );
+        assert_eq!(
+            rust_i18n::t!("app.session.preparing_new_thread", locale = "vi").to_string(),
+            "Đang chuẩn bị một cuộc hội thoại mới…"
+        );
         assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "vi").to_string(), "Sao chép");
     }
 

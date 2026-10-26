@@ -1843,10 +1843,7 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         assert!(view.read(cx).palette_query.is_empty(), "closing resets the search highlight");
     })
     .unwrap();
-    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
-        panic!("expected session create request");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+    assert!(requests.try_recv().is_err(), "a blank thread does not start a runtime");
 }
 
 #[gpui_kit::test]
@@ -3958,14 +3955,30 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
         });
         window.render_frame(cx);
         window.press("cmd-n", cx);
-        view.update(cx, |view, cx| view.handle_backend_event(BackendEvent::Response {
-            method: vtcode_desktop_protocol::method::SESSION_CREATE.into(),
-            result: Some(json!({ "sessionId": "session", "title": null, "workspace": "/workspace", "completed": false, "resumable": true })), error: None,
-        }, cx));
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                    result: Some(json!({ "closed": true })),
+                    error: None,
+                },
+                cx,
+            );
+            view.selected_session_id = Some("session".into());
+            cx.notify();
+        });
+        window.render_frame(cx);
         window.press("cmd-shift-w", cx);
-        view.update(cx, |view, cx| view.handle_backend_event(BackendEvent::Response {
-            method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(), result: Some(json!({ "closed": true })), error: None,
-        }, cx));
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                    result: Some(json!({ "closed": true })),
+                    error: None,
+                },
+                cx,
+            )
+        });
         window.press("cmd-shift-i", cx);
         assert!(!view.read(cx).inspector_open);
         assert_eq!(view.read(cx).preferences.inspector_open, Some(false));
@@ -3987,7 +4000,7 @@ fn keyboard_shortcuts_share_session_and_cancellation_guards(cx: &mut TestAppCont
     })
     .unwrap();
     for expected in [
-        vtcode_desktop_protocol::method::SESSION_CREATE,
+        vtcode_desktop_protocol::method::SESSION_CLOSE,
         vtcode_desktop_protocol::method::SESSION_CLOSE,
         vtcode_desktop_protocol::method::TURN_CANCEL,
     ] {
@@ -4121,6 +4134,47 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "current-session" }));
+}
+
+#[gpui_kit::test]
+fn navigating_back_to_a_blank_thread_closes_the_service_session(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            let workspace = view.workspace.clone().unwrap();
+            view.navigation_history
+                .record(NavigationLocation { workspace: workspace.clone(), session_id: None });
+            view.navigation_history
+                .record(NavigationLocation { workspace, session_id: Some("current".into()) });
+            view.selected_session_id = Some("current".into());
+            view.navigate_back(cx);
+            assert_eq!(view.selected_session_id.as_deref(), Some("current"));
+            assert_eq!(view.pending_navigation.map(|pending| pending.target_index), Some(0));
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("new-thread-pending").role(), Some(gpui_kit::Role::Status));
+        let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+            panic!("close")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+        assert_eq!(params, json!({ "sessionId": "current" }));
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                    result: Some(json!({ "closed": true })),
+                    error: None,
+                },
+                cx,
+            );
+            assert!(view.selected_session_id.is_none());
+            assert!(view.pending_navigation.is_none());
+            assert_eq!(view.navigation_history.forward_index(), Some(1));
+        });
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -4288,6 +4342,105 @@ fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut Tes
         assert_eq!(params, json!({ "sessionId": "created", "prompt": "First request", "attachments": [{ "path": "first.rs", "text": "first content" }] }));
         assert!(requests.try_recv().is_err(), "exactly one turn is submitted");
     }).unwrap();
+}
+
+#[gpui_kit::test]
+fn new_thread_shows_pending_then_creates_a_runtime_on_first_send(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("old".into());
+            view.transcript.push(TranscriptItem::new(
+                "old-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Old conversation".into(),
+            ));
+            view.attachments
+                .push(vtcode_desktop_protocol::TurnAttachment { path: "notes.txt".into(), text: "source".into() });
+            view.composer.update(cx, |input, cx| input.set_value("New draft", window, cx));
+            view.create_session(cx);
+        });
+        window.render_frame(cx);
+        let pending = window.find("new-thread-pending");
+        assert_eq!(pending.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(pending.label(), Some("Preparing a new thread…"));
+        assert!(window.try_find("message-old-message").is_none());
+        assert_eq!(
+            view.read(cx).selected_session_id.as_deref(),
+            Some("old"),
+            "old session remains recoverable until close succeeds"
+        );
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |input, cx| input.set_value("Edited while closing", window, cx));
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                    result: Some(json!({ "closed": true })),
+                    error: None,
+                },
+                cx,
+            );
+            assert!(view.selected_session_id.is_none());
+            assert!(view.transcript.is_empty());
+            assert_eq!(view.attachments[0].path, "notes.txt");
+            assert_eq!(view.composer.read(cx).value(), "Edited while closing");
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("new-thread-pending").is_none());
+        assert!(window.try_find("welcome").is_some());
+        let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+            panic!("close")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+        assert_eq!(params, json!({ "sessionId": "old" }));
+        assert!(requests.try_recv().is_err(), "opening a draft must not create a runtime");
+        view.update(cx, |view, cx| view.submit_prompt(window, cx));
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("create")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+        assert_eq!(view.read(cx).first_submission.as_ref().unwrap().prompt, "Edited while closing");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn failed_new_thread_close_restores_the_previous_conversation(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("old".into());
+            view.transcript.push(TranscriptItem::new(
+                "old-message".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Old conversation".into(),
+            ));
+            view.create_session(cx);
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                    result: None,
+                    error: Some("Close failed".into()),
+                },
+                cx,
+            );
+            assert_eq!(view.selected_session_id.as_deref(), Some("old"));
+            assert_eq!(view.transcript.len(), 1);
+            assert_eq!(view.error.as_deref(), Some("Close failed"));
+            assert!(!view.pending_new_thread);
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("new-thread-pending").is_none());
+        assert!(window.try_find("welcome").is_none(), "the previous transcript remains selected");
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -9633,10 +9786,10 @@ fn slash_new_and_stop_use_desktop_session_lifecycle(cx: &mut TestAppContext) {
     })
     .unwrap();
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
-        panic!("/new should create a desktop session");
+        panic!("/new should close the current desktop session");
     };
-    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
-    assert_eq!(params, json!({ "title": null }));
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
+    assert_eq!(params, json!({ "sessionId": "existing-session" }));
 
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);

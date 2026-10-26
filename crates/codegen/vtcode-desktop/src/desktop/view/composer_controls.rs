@@ -307,7 +307,7 @@ impl DesktopView {
                 true
             }
             DesktopSlashAction::NewSession => {
-                if self.request_session_change(protocol::method::SESSION_CREATE, json!({ "title": null }), cx) {
+                if self.begin_new_thread(cx) {
                     self.clear_submitted_command(window, cx);
                 }
                 true

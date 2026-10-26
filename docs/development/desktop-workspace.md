@@ -63,8 +63,11 @@ the current session through `session/close` without starting a replacement.
 The transcript follows new output while it is at the latest position and preserves the reader's position after they
 scroll upward.
 
+New Thread immediately shows a transition while the previous session closes, and the draft remains editable; a
+replacement runtime starts only when the first prompt is submitted. Attached sources remain available throughout.
 Session creation, loading, closing, and model changes run one at a time. While a transition is pending, submission,
-attachments, and further session/model/workspace changes wait for its response. A first message waits for confirmed
+attachments, and further session/model/workspace changes wait for its response; WebMCP turns are rejected until it
+completes. A first message waits for confirmed
 session creation before any turn is sent. Failed creation or submission leaves the original content recoverable;
 an empty prompt does not create a session.
 
