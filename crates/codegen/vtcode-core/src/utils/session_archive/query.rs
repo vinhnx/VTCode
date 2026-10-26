@@ -8,7 +8,7 @@ use super::SESSION_FILE_EXTENSION;
 use super::identifier::session_archive_path_for_identifier;
 use super::retention::apply_session_retention_best_effort;
 use super::settings::{SESSION_DIR_ENV, read_env_var_os};
-use super::snapshot::{SessionListing, SessionSnapshot};
+use super::snapshot::{SessionListing, SessionSnapshot, session_listing_matches_workspace};
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::fs::read_private_json_file;
 
@@ -81,6 +81,14 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     }
 
     Ok(all_listings)
+}
+
+/// List the most recent archives for a workspace, applying the limit after workspace filtering.
+pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -> Result<Vec<SessionListing>> {
+    let mut listings = list_recent_sessions(0).await?;
+    listings.retain(|listing| session_listing_matches_workspace(listing, workspace));
+    listings.truncate(limit);
+    Ok(listings)
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.
@@ -173,3 +181,6 @@ pub(crate) fn is_session_file(path: &Path) -> bool {
                 || ext.eq_ignore_ascii_case("log")
     )
 }
+
+#[cfg(test)]
+mod tests;

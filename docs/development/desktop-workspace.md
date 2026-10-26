@@ -376,7 +376,7 @@ by the service pump.
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
 | `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
-| `session/list`, `session/create`, `session/load`, `session/close` | Select, create, and restore durable messages, canonical change reviews, activity, and captured output. |
+| `session/list`, `session/create`, `session/load`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, and restore durable messages, canonical change reviews, activity, and captured output. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |
