@@ -972,6 +972,7 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                 )),
             });
             assert!(!view.running, "turn completion re-enables session controls");
+            assert!(view.sessions[0].completed, "the selected session row reflects completion locally");
         });
 
         window.click("close-session", cx);
@@ -981,10 +982,6 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
-        panic!("expected session list refresh");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("expected close request");
     };
@@ -1545,6 +1542,32 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         panic!("expected session create request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+}
+
+#[gpui_kit::test]
+fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_command_palette(window, cx);
+            assert!(
+                view.palette_groups[0]
+                    .1
+                    .iter()
+                    .any(|entry| entry.label == "Refresh recent threads")
+            );
+            view.run_palette_action(super::PaletteAction::RefreshSessions, window, cx);
+        });
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected recent thread refresh request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    assert_eq!(params, json!({}));
 }
 
 #[gpui_kit::test]

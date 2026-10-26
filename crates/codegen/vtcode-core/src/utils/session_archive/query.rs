@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -28,6 +29,7 @@ pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -
 }
 
 async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -> Result<Vec<SessionListing>> {
+    let total_started = Instant::now();
     let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
@@ -40,6 +42,7 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
     // `std::fs::read_dir` is a blocking directory scan; run it off the async
     // executor and collect paths before spawning parallel read tasks. See `# Blocking`
     // docs in `src/agent/runloop/git.rs`.
+    let scan_started = Instant::now();
     let session_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
         for entry in fs::read_dir(&sessions_dir)
@@ -55,11 +58,13 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
     })
     .await
     .context("session directory scan task panicked")??;
+    let scan_elapsed = scan_started.elapsed();
 
     // Process session files in parallel for better performance with large archives
     // Batch processing to avoid overwhelming the system with too many concurrent tasks
     const BATCH_SIZE: usize = 10;
     let mut all_listings = Vec::new();
+    let reads_started = Instant::now();
 
     for batch in session_paths.chunks(BATCH_SIZE) {
         let mut tasks = Vec::with_capacity(batch.len());
@@ -91,12 +96,26 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
             }
         }
     }
+    let reads_elapsed = reads_started.elapsed();
 
     // Sort and limit results
     all_listings.sort_by_key(|a| std::cmp::Reverse(a.snapshot.ended_at));
+    let matching_sessions = all_listings.len();
     if limit > 0 && all_listings.len() > limit {
         all_listings.truncate(limit);
     }
+
+    tracing::debug!(
+        target: "vtcode::session_archive",
+        scanned_files = session_paths.len(),
+        matching_sessions,
+        returned_sessions = all_listings.len(),
+        workspace_filtered = workspace.is_some(),
+        directory_scan = ?scan_elapsed,
+        snapshot_reads = ?reads_elapsed,
+        total = ?total_started.elapsed(),
+        "listed session archives"
+    );
 
     Ok(all_listings)
 }

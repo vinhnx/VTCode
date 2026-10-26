@@ -372,6 +372,7 @@ enum PaletteAction {
     CloseSession,
     ChooseModel,
     ChooseWorkspace,
+    RefreshSessions,
     RefreshFiles,
     ToggleInspector,
     ToggleTheme,
@@ -1462,6 +1463,7 @@ impl DesktopView {
                 command("New session", PaletteAction::NewSession),
                 command("Close session", PaletteAction::CloseSession),
                 command("Switch workspace…", PaletteAction::ChooseWorkspace),
+                command("Refresh recent threads", PaletteAction::RefreshSessions),
                 command("Refresh workspace files", PaletteAction::RefreshFiles),
                 command("Choose a model…", PaletteAction::ChooseModel),
             ],
@@ -1635,6 +1637,9 @@ impl DesktopView {
             PaletteAction::CloseSession => self.close_session(cx),
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
+            PaletteAction::RefreshSessions => {
+                let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+            }
             PaletteAction::RefreshFiles => self.refresh_files(cx),
             PaletteAction::ToggleInspector => self.toggle_inspector(cx),
             PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
@@ -1678,6 +1683,7 @@ impl DesktopView {
             PaletteAction::ChooseWorkspace => {
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open
             }
+            PaletteAction::RefreshSessions => self.backend.is_some(),
             PaletteAction::RefreshFiles | PaletteAction::ToggleInspector | PaletteAction::PreviewFile(_) => {
                 self.workspace.is_some()
             }
@@ -2485,6 +2491,7 @@ impl DesktopView {
                 self.pending_submission = None;
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
+                self.set_selected_session_completed(false);
                 self.status = "Running".to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
@@ -2495,7 +2502,7 @@ impl DesktopView {
                 self.cancel_request_sent = false;
                 self.status = "Completed".to_string();
                 self.last_usage = Some(event.usage.clone());
-                self.refresh_sessions_after_turn();
+                self.set_selected_session_completed(true);
             }
             ThreadEvent::TurnFailed(event) => {
                 self.finish_unverified_turn(&event.message);
@@ -2534,7 +2541,7 @@ impl DesktopView {
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.status = "Turn ended without verified completion".to_string();
-        self.refresh_sessions_after_turn();
+        self.set_selected_session_completed(false);
         self.transcript.push(TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
@@ -2543,11 +2550,13 @@ impl DesktopView {
         ));
     }
 
-    /// Reload the session list once a turn ends so archive-derived titles
-    /// and completion flags replace the local placeholders.
-    fn refresh_sessions_after_turn(&mut self) {
-        if self.backend.is_some() {
-            let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+    /// Keep the selected sidebar row current without rereading every archive.
+    fn set_selected_session_completed(&mut self, completed: bool) {
+        let Some(session_id) = self.selected_session_id.as_deref() else {
+            return;
+        };
+        if let Some(session) = self.sessions.iter_mut().find(|session| session.session_id == session_id) {
+            session.completed = completed;
         }
     }
 
@@ -6321,6 +6330,7 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::CloseSession
         | PaletteAction::ChooseModel
         | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshSessions
         | PaletteAction::RefreshFiles
         | PaletteAction::ToggleInspector
         | PaletteAction::ToggleTheme
