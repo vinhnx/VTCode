@@ -85,6 +85,19 @@ in the directory are retained, so use a fresh staging directory when packaging.
 runs the editor typecheck and tests in `parallel:`, builds the Vite app, and publishes it to
 GitHub Pages.
 
+### hotpath Cloud benchmark (`hotpath-benchmark.yml`, `hotpath-relay.yml`)
+
+**Triggers:** push to `main` and every pull request; the relay runs on `workflow_run` of
+`Benchmark`, always from the default branch.
+
+**Jobs:** `upload` (push) builds `vtcode-ui`'s `tui_hotpath` example once with the `x-prod`
+profile and `--features profiling,hotpath-cloud,hotpath-callgrind`, runs it natively and then
+under pinned Valgrind Callgrind, and uploads the merged report with the job's OIDC token.
+`report` (pull requests, forks included) runs the same pair without `id-token` and stores
+`report.json` as the `hotpath-report` artifact, which the SHA-pinned hotpath relay uploads.
+Policy lives in `hotpath/policy.toml`. Renaming the `Benchmark` workflow silently stops the
+relay. See [performance](performance.md#hotpath-cloud-ci).
+
 ### Release build contracts
 
 Release runs are not rate-limited by the release script: every invocation may dispatch the

@@ -4,6 +4,13 @@ use super::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, Normalized
 use futures::StreamExt as _;
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]
+#[cfg_attr(
+    feature = "profiling",
+    allow(
+        unsafe_code,
+        reason = "hotpath `label =` emits an `#[unsafe(export_name)]` marker so duplicate labels fail to link."
+    )
+)]
 pub async fn collect_single_response(
     provider: &(impl LLMProvider + ?Sized),
     request: LLMRequest,
