@@ -295,8 +295,7 @@ actions!(
     ]
 );
 
-fn init_keybindings(cx: &mut App) {
-    let preferences = preferences::Preferences::load();
+fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
     match shortcuts::bindings(&preferences.shortcuts) {
         Ok(bindings) => cx.bind_keys(bindings),
         Err(error) => {
@@ -439,26 +438,32 @@ enum PaletteAction {
 }
 
 pub(crate) fn run() {
-    super::localization::initialize(preferences::Preferences::load().ui_language());
+    let preferences = preferences::Preferences::load();
+    super::localization::initialize(preferences.ui_language());
     let application = gpui_kit::application().with_assets(super::assets::DesktopAssets);
     let _application = application.on_reopen(show_main_window);
-    application.run(|cx: &mut App| {
+    application.run(move |cx: &mut App| {
         gpui_kit::init(cx);
         super::notifications::initialize(cx);
-        init_keybindings(cx);
+        init_keybindings(cx, &preferences);
         init_native_menus(cx);
-        show_main_window(cx);
+        if let Err(error) = open_or_activate_main_window(cx, Some(preferences)) {
+            vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
+        }
     });
 }
 
 fn show_main_window(cx: &mut App) {
-    if let Err(error) = open_or_activate_main_window(cx) {
+    if let Err(error) = open_or_activate_main_window(cx, None) {
         vtcode_commons::diagnostics::stderr(format_args!("failed to open VT Code Desktop window: {error}"));
     }
 }
 
 /// Reopening must preserve an existing window's draft, session, and backend.
-fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
+fn open_or_activate_main_window(
+    cx: &mut App,
+    preferences: Option<preferences::Preferences>,
+) -> anyhow::Result<gpui_kit::AnyWindowHandle> {
     // A dock/Finder reopen should return to the user's focused workspace when
     // multiple windows exist; keep the first-window fallback for the current
     // single-window lifecycle when the platform has no active window.
@@ -468,12 +473,15 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
         return Ok(window);
     }
     // Saved preferences decide the starting theme; Ciapre is the default.
-    let preferences = preferences::Preferences::load();
-    let start_theme = preferences.theme.unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
-    let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, |window, cx| {
+    let preferences = preferences.unwrap_or_else(preferences::Preferences::load);
+    let start_theme = preferences
+        .theme
+        .clone()
+        .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+    let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
         window.set_window_title("VT Code");
         let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
-        let view = cx.new(|cx| DesktopView::new(window, cx, theme_mode));
+        let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
     })?;
@@ -688,7 +696,17 @@ fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a Tree
 }
 
 impl DesktopView {
+    #[cfg(test)]
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
+        Self::new_with_preferences(window, cx, theme_mode, preferences::Preferences::load())
+    }
+
+    fn new_with_preferences(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        theme_mode: ThemeMode,
+        preferences: preferences::Preferences,
+    ) -> Self {
         let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
         let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
@@ -699,7 +717,6 @@ impl DesktopView {
         });
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
-        let preferences = preferences::Preferences::load();
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
         let shortcut_inputs = shortcuts::inputs(&preferences.shortcuts, window, cx);
         let message_scroller = cx.new(|cx| MessageScrollerState::new(0, cx));

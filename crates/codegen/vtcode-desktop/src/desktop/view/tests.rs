@@ -35,7 +35,8 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
     crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
     cx.update(gpui_kit::init);
     cx.update(super::super::notifications::initialize);
-    cx.update(super::init_keybindings);
+    let preferences = crate::desktop::preferences::Preferences::load();
+    cx.update(|cx| super::init_keybindings(cx, &preferences));
     cx.update(super::init_native_menus);
     cx.update(|cx| {
         gpui_kit::open_window(
@@ -59,6 +60,20 @@ fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyW
         )
         .unwrap()
     })
+}
+
+#[gpui_kit::test]
+fn desktop_view_uses_the_supplied_startup_preferences(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let mut preferences = crate::desktop::preferences::Preferences::default();
+    preferences.set_ui_language(crate::desktop::localization::UiLanguage::Vietnamese);
+    let (view, cx) = cx.add_window_view(move |window, cx| {
+        DesktopView::new_with_preferences(window, cx, ThemeMode::Light, preferences)
+    });
+
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert_eq!(view.preferences.ui_language(), crate::desktop::localization::UiLanguage::Vietnamese);
+    });
 }
 
 fn connected_webmcp_status() -> vtcode_desktop_protocol::WebmcpBridgeStatus {
@@ -586,7 +601,7 @@ fn reopening_preserves_the_existing_window_and_draft(cx: &mut TestAppContext) {
     })
     .unwrap();
     cx.update(|cx| {
-        let reopened = super::open_or_activate_main_window(cx).unwrap();
+        let reopened = super::open_or_activate_main_window(cx, None).unwrap();
         assert_eq!(reopened, window);
         assert_eq!(cx.windows().len(), 1);
         assert_eq!(view.read(cx).composer.read(cx).value(), "Keep this unsent draft");
@@ -605,7 +620,7 @@ fn reopening_activates_the_focused_window_when_multiple_are_open(cx: &mut TestAp
         .unwrap();
     cx.update(|cx| {
         assert_eq!(cx.active_window(), Some(second_window));
-        assert_eq!(super::open_or_activate_main_window(cx).unwrap(), second_window);
+        assert_eq!(super::open_or_activate_main_window(cx, None).unwrap(), second_window);
         assert_eq!(cx.windows().len(), 2, "reopening activates a window instead of duplicating it");
     });
 
@@ -661,10 +676,10 @@ fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppCon
     cx.update_window(closed, |_, window, _| window.remove_window()).unwrap();
     cx.update(|cx| {
         assert!(cx.windows().is_empty());
-        let reopened = super::open_or_activate_main_window(cx).unwrap();
+        let reopened = super::open_or_activate_main_window(cx, None).unwrap();
         assert_ne!(reopened, closed);
         assert_eq!(cx.windows(), vec![reopened]);
-        assert_eq!(super::open_or_activate_main_window(cx).unwrap(), reopened);
+        assert_eq!(super::open_or_activate_main_window(cx, None).unwrap(), reopened);
         assert_eq!(cx.windows().len(), 1);
     });
 }
