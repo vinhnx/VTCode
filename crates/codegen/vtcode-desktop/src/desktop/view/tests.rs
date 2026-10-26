@@ -2252,6 +2252,46 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
+fn transcript_content_column_is_centered_for_messages_and_tool_output(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1600., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.transcript.push(TranscriptItem::new(
+                "assistant-center".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "An assistant message.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "user-center".into(),
+                "user".into(),
+                "You".into(),
+                "A user message.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "tool-center".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "Finished successfully".into(),
+            ));
+        });
+        window.render_frame(cx);
+
+        let viewport_center = window.find("transcript-scroll").bounds().center().x;
+        for id in ["assistant-center", "user-center", "tool-center"] {
+            let column = window.find(format!("transcript-content-{id}")).bounds();
+            assert!(
+                (column.center().x - viewport_center).abs() <= px(1.),
+                "transcript column {id} should be centered in the conversation viewport: column={column:?}, viewport_center={viewport_center:?}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppContext) {
     let first = tempfile::TempDir::new().unwrap();
     let second = tempfile::TempDir::new().unwrap();

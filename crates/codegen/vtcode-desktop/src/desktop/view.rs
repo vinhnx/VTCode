@@ -4441,17 +4441,28 @@ impl DesktopView {
             .flatten()
             .map(|range| self.render_activity_group(range, cx));
         let show_item = !item.activity_grouped || item.activity_expanded;
+        let content = div()
+            .id(format!("transcript-content-{}", item.id))
+            .test_support()
+            .w_full()
+            .max_w(px(CONTENT_WIDTH))
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .children(group_header)
+            .when(show_item, |column| column.child(self.render_transcript_item(item, cx)));
         div()
             .id(format!("transcript-row-{}", item.id))
             .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
             .test_support()
             .w_full()
+            .flex()
+            .justify_center()
             // MessageScroller adds three pixels of horizontal row inset.
             .px_5()
             .when(item.role == "tool", |row| row.pb_1())
             .when(item.role != "tool", |row| row.pb_4())
-            .children(group_header)
-            .when(show_item, |row| row.child(self.render_transcript_item(item, cx)))
+            .child(content)
             .into_any_element()
     }
 
