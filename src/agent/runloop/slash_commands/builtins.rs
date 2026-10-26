@@ -487,6 +487,7 @@ pub(in crate::agent::runloop::slash_commands) async fn execute_built_in_command_
         "compact" | "context" => handle_compact_command(args, renderer),
         "copy" => handle_copy_command(args, renderer),
         "status" => Ok(SlashCommandOutcome::ShowStatus),
+        "splash" => Ok(SlashCommandOutcome::ShowSplash),
         "stop" => Ok(SlashCommandOutcome::StopAgent),
         "pause" => handle_pause_command(renderer),
         "update" => handle_update_command(args),

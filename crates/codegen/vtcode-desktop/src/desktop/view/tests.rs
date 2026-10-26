@@ -3102,6 +3102,56 @@ fn composer_cli_webmcp_button_opens_connections_settings(cx: &mut TestAppContext
 }
 
 #[gpui_kit::test]
+fn splash_command_opens_connection_status_and_refreshes_webmcp(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer.update(cx, |state, cx| state.set_value("/splash", window, cx));
+            view.submit_prompt(window, cx);
+            assert!(view.settings_open);
+            assert_eq!(view.settings_tab, super::settings::SettingsTab::Connections);
+            assert!(!view.running, "a diagnostics command must not start an agent turn");
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("connections-settings").is_some());
+        assert!(window.try_find("local-service-status").is_some());
+        assert!(window.try_find("local-service-unavailable").is_some());
+    })
+    .unwrap();
+
+    let Some(BackendCommand::Request { method, .. }) = requests.try_recv().ok() else {
+        panic!("/splash should refresh WebMCP status");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn local_service_settings_expose_the_negotiated_connection(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(1);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.settings_tab = super::settings::SettingsTab::Connections;
+            view.backend = Some(BackendHandle { commands });
+            view.service_info = Some(vtcode_desktop_protocol::InitializeResult {
+                protocol: vtcode_desktop_protocol::PROTOCOL_VERSION,
+                workspace: "/workspace/vtcode".into(),
+                server_version: "0.2.0".into(),
+                slash_commands: Vec::new(),
+            });
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("local-service-status").label(), Some("CLI service connection is active"));
+        assert!(window.try_find("local-service-unavailable").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn webmcp_tools_and_roots_commands_show_shared_guidance_without_backend_requests(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);

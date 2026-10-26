@@ -138,6 +138,36 @@ pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<S
     Ok(SlashCommandControl::Continue)
 }
 
+pub(crate) async fn handle_show_splash(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    let tool_count = ctx.tools.read().await.len();
+    ctx.renderer.line(MessageStyle::Info, "VT Code connection wiring")?;
+    ctx.renderer.line(MessageStyle::Info, "CLI runtime: ready")?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Workspace: {}", ctx.config.workspace.display()))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Session: {}", ctx.active_thread_label))?;
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Registered tools: {tool_count}"))?;
+    if let Some(bridge) = ctx.webmcp_bridge.as_ref() {
+        if bridge.is_running() {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("WebMCP bridge: listening at {} for {}", bridge.endpoint(), bridge.pairing_origin()),
+            )?;
+        } else {
+            ctx.renderer.line(MessageStyle::Warning, "WebMCP bridge: listener stopped")?;
+        }
+    } else {
+        ctx.renderer
+            .line(MessageStyle::Info, "WebMCP bridge: not started in this CLI session")?;
+    }
+    ctx.renderer.line(
+        MessageStyle::Info,
+        "Desktop handshake: inspect VT Code Desktop → Settings → Connections; a CLI session cannot observe a separate desktop client.",
+    )?;
+    Ok(SlashCommandControl::Continue)
+}
+
 pub(crate) async fn handle_show_memory_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if !ctx.renderer.supports_inline_ui() {
         memory::render_memory_config_lines(&mut ctx).await?;

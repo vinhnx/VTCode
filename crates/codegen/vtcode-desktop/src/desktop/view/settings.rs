@@ -614,6 +614,39 @@ impl DesktopView {
     }
 
     fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
+        let service_info = self.service_info.as_ref().filter(|_| self.backend.is_some());
+        let service_connected = service_info.is_some();
+        let service_status = if service_connected {
+            Tag::success().outline().small().child("Connected")
+        } else {
+            Tag::warning().outline().small().child("Not connected")
+        };
+        let service_status_label = if service_connected {
+            "CLI service connection is active"
+        } else {
+            "CLI service has not completed a protocol handshake"
+        };
+        let service_details = if let Some(info) = service_info {
+            DescriptionList::horizontal()
+                .columns(1)
+                .label_width(px(128.))
+                .bordered(false)
+                .item("Runtime", "VT Code", 1)
+                .item("Version", info.server_version.clone(), 1)
+                .item("Protocol", format!("{}.{}", info.protocol.major, info.protocol.minor), 1)
+                .item("Workspace", info.workspace.clone(), 1)
+                .into_any_element()
+        } else {
+            div()
+                .id("local-service-unavailable")
+                .test_support()
+                .min_w_0()
+                .text_sm()
+                .text_color(cx.theme().colors.muted_foreground)
+                .child("The local CLI service will appear here after VT Code Desktop connects.")
+                .into_any_element()
+        };
+
         div()
             .id("connections-settings")
             .test_support()
@@ -622,28 +655,29 @@ impl DesktopView {
             .gap_4()
             .child(self.render_webmcp_settings(false, cx))
             .child(self.render_webmcp_settings(true, cx))
-            .when_some(self.service_info.as_ref(), |content, info| {
-                content.child(accessible_group_box(
-                    "local-service-settings-group",
-                    "Local service",
-                    GroupBox::new().flex_shrink_0().outline().title("Local service").child(
-                        div()
-                            .id("local-service-details")
-                            .test_support()
-                            .role(gpui_kit::Role::Group)
-                            .aria_label("Local service connection details")
-                            .child(
-                                DescriptionList::horizontal()
-                                    .columns(1)
-                                    .label_width(px(128.))
-                                    .bordered(false)
-                                    .item("Runtime", "VT Code", 1)
-                                    .item("Version", info.server_version.clone(), 1)
-                                    .item("Protocol", format!("{}.{}", info.protocol.major, info.protocol.minor), 1),
-                            ),
-                    ),
-                ))
-            })
+            .child(accessible_group_box(
+                "local-service-settings-group",
+                "Local service",
+                GroupBox::new().flex_shrink_0().outline().title("Local service").child(
+                    div()
+                        .id("local-service-details")
+                        .test_support()
+                        .role(gpui_kit::Role::Group)
+                        .aria_label("Local service connection details")
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .id("local-service-status")
+                                .test_support()
+                                .role(gpui_kit::Role::Status)
+                                .aria_label(service_status_label)
+                                .child(service_status),
+                        )
+                        .child(service_details),
+                ),
+            ))
             .into_any_element()
     }
 

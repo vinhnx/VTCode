@@ -162,6 +162,7 @@ pub(crate) enum SlashCommandOutcome {
     ToggleTasksPanel,
     ShowJobsPanel,
     ShowStatus,
+    ShowSplash,
     ShowWebmcpStatus,
     ShowWebmcpHelp,
     StartWebmcp {

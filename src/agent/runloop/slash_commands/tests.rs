@@ -641,6 +641,11 @@ async fn webmcp_status_and_unpair_commands_route_to_runtime_handlers() {
         .expect("webmcp status should parse");
     assert!(matches!(status, SlashCommandOutcome::ShowWebmcpStatus));
 
+    let splash = handle_slash_command("splash", &mut renderer, &workspace)
+        .await
+        .expect("splash should parse");
+    assert!(matches!(splash, SlashCommandOutcome::ShowSplash));
+
     let help = handle_slash_command("webmcp help", &mut renderer, &workspace)
         .await
         .expect("webmcp help should parse");

@@ -208,6 +208,7 @@ const COMMAND_SKILL_SPECS: &[CommandSkillSpec] = &[
         "tools"
     ),
     built_in_command_spec!("status", "Show model, provider, workspace, and tool status", "/status", "status"),
+    built_in_command_spec!("splash", "Show CLI, Desktop, and WebMCP connection wiring status", "/splash", "status"),
     built_in_command_spec!("stop", "Stop the active turn immediately", "/stop", "status"),
     built_in_command_spec!("pause", "Pause the active turn at the next safe boundary", "/pause", "status"),
     built_in_command_spec!(
@@ -460,6 +461,10 @@ mod tests {
         let status = find_command_skill_by_slash_name("status").expect("status spec");
         assert!(status.is_built_in());
         assert_eq!(status.skill_name, "cmd-status");
+
+        let splash = find_command_skill_by_slash_name("splash").expect("splash spec");
+        assert!(splash.is_built_in());
+        assert_eq!(splash.usage, "/splash");
     }
 
     #[test]

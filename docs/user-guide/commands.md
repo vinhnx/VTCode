@@ -250,6 +250,10 @@ VT Code provides several quick actions directly in the chat input for faster wor
 - **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/files`,
   `/status`, and many more.
 
+Run `/splash` to inspect the current CLI workspace, session, tool registry, and WebMCP listener. It omits pairing
+credentials. In VT Code Desktop the same command opens Settings → Connections, refreshes bridge status, and shows the
+Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe another process's Desktop connection.
+
 ## Configuration quick reference
 
 | Action                         | Command                         | Result                                                                       |
@@ -325,8 +329,8 @@ interactive TUI session. Use `/webmcp help` to print the guide without the statu
 /webmcp unpair
 ```
 
-Use `/webmcp connect <origin>` (or its `/webmcp pair` alias) when the browser must submit real agent turns to this same VT Code session. The printed
-WebSocket URL and one-time pairing code belong to that running TUI process.
+Use `/webmcp connect <origin>` (or its `/webmcp pair` alias) when the browser must submit real agent turns to this same
+VT Code session. The printed WebSocket URL and one-time pairing code belong to that running TUI process.
 
 For the published WebMCP app, use `https://vtcode.vinhnx.chatgpt.site` for the ChatGPT Site or
 `https://vinhnx.github.io` for the GitHub Pages page at `https://vinhnx.github.io/VTCode/`. The path is not part of the

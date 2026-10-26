@@ -29,6 +29,7 @@ pub(super) enum DesktopSlashAction {
     Files(String),
     FastMode(Option<bool>),
     Theme(Option<String>),
+    Splash,
     Help,
 }
 
@@ -47,6 +48,7 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
         "stop" if args.is_empty() => Some(DesktopSlashAction::StopTurn),
         "model" | "models" if args.is_empty() => Some(DesktopSlashAction::ModelPicker),
         "history" if args.is_empty() => Some(DesktopSlashAction::History),
+        "splash" if args.is_empty() => Some(DesktopSlashAction::Splash),
         "help" if args.is_empty() => Some(DesktopSlashAction::Help),
         "mode" if args.is_empty() => Some(DesktopSlashAction::Modes),
         "files" => Some(DesktopSlashAction::Files(args.to_string())),
@@ -418,6 +420,11 @@ impl DesktopView {
             DesktopSlashAction::Help => {
                 self.clear_submitted_command(window, cx);
                 self.open_command_palette(window, cx);
+                true
+            }
+            DesktopSlashAction::Splash => {
+                self.clear_submitted_command(window, cx);
+                self.open_webmcp_settings(window, cx);
                 true
             }
         }
@@ -1489,6 +1496,7 @@ mod tests {
         assert_eq!(desktop_slash_action("/stop"), Some(DesktopSlashAction::StopTurn));
         assert_eq!(desktop_slash_action("/models"), Some(DesktopSlashAction::ModelPicker));
         assert_eq!(desktop_slash_action("/history"), Some(DesktopSlashAction::History));
+        assert_eq!(desktop_slash_action("/splash"), Some(DesktopSlashAction::Splash));
         assert_eq!(
             desktop_slash_action("/config"),
             Some(DesktopSlashAction::Settings(Some(super::super::settings::SettingsTab::VtCode)))
@@ -1505,7 +1513,13 @@ mod tests {
         assert_eq!(desktop_slash_action("/theme ciapre"), Some(DesktopSlashAction::Theme(Some("ciapre".into()))));
         assert_eq!(desktop_slash_action("/theme"), Some(DesktopSlashAction::Theme(None)));
 
-        for input in ["/new please", "/fast maybe", "/config reset", "/files\nother"] {
+        for input in [
+            "/new please",
+            "/fast maybe",
+            "/config reset",
+            "/splash now",
+            "/files\nother",
+        ] {
             assert_eq!(desktop_slash_action(input), None, "{input:?} stays with the CLI runtime");
         }
     }

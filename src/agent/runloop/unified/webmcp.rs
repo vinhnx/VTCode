@@ -110,6 +110,11 @@ impl ActiveWebmcpBridge {
         &self.endpoint
     }
 
+    /// Whether the listener task is still serving requests.
+    pub(crate) fn is_running(&self) -> bool {
+        !self.task.is_finished()
+    }
+
     /// The exact browser origin bound to the displayed pairing code.
     pub(crate) fn pairing_origin(&self) -> &str {
         &self.pairing_origin
