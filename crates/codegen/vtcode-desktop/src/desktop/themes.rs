@@ -9,9 +9,12 @@
 //! the matching light/dark base; derived tokens (border, panels, muted text)
 //! are mixed from the palette so every theme stays legible by construction.
 
-use gpui_kit::component::theme::{Theme, ThemeMode};
+use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
+
+const SURFACE_BORDER_MIX: f32 = 0.16;
+const INPUT_BORDER_MIX: f32 = 0.20;
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
@@ -291,11 +294,13 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
     match id {
         SYSTEM_LIGHT_ID => {
             Theme::change(ThemeMode::Light, window, cx);
+            apply_system_surface_borders(cx);
             cx.refresh_windows();
             ThemeMode::Light
         }
         SYSTEM_DARK_ID => {
             Theme::change(ThemeMode::Dark, window, cx);
+            apply_system_surface_borders(cx);
             cx.refresh_windows();
             ThemeMode::Dark
         }
@@ -308,13 +313,23 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
     }
 }
 
+fn apply_system_surface_borders(cx: &mut App) {
+    Theme::update(cx, |kit_theme| apply_surface_borders(&mut kit_theme.colors));
+}
+
+fn apply_surface_borders(colors: &mut ThemeColor) {
+    colors.border = mix(colors.background, colors.foreground, SURFACE_BORDER_MIX);
+    colors.sidebar_border = colors.border;
+    colors.input = mix(colors.background, colors.foreground, INPUT_BORDER_MIX);
+}
+
 fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App) -> ThemeMode {
     Theme::change(theme.mode, window, cx);
     Theme::update(cx, |kit_theme| {
         let colors = &mut kit_theme.colors;
         colors.background = theme.background;
         colors.foreground = theme.foreground;
-        colors.border = mix(theme.background, theme.foreground, 0.20);
+        colors.border = mix(theme.background, theme.foreground, SURFACE_BORDER_MIX);
         colors.muted_foreground = aa_muted(theme.background, theme.foreground);
         // Recessed surfaces move away from the foreground, preserving text contrast.
         let surface = mix(theme.background, filled_button_foreground(theme.foreground), 0.10);
@@ -334,7 +349,7 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         colors.list_hover = surface;
         colors.list_active = surface;
         colors.list_active_border = theme.accent;
-        colors.input = colors.border;
+        colors.input = mix(theme.background, theme.foreground, INPUT_BORDER_MIX);
         colors.button = surface;
         colors.button_foreground = theme.foreground;
         colors.button_hover = surface;
@@ -481,6 +496,9 @@ mod tests {
                 );
                 assert_eq!(base.tokens.colors.background, palette.background, "{}", palette.id);
                 assert_eq!(base.tokens.colors.primary, palette.accent, "{}", palette.id);
+                assert_eq!(kit.colors.border, mix(palette.background, palette.foreground, SURFACE_BORDER_MIX));
+                assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
+                assert_eq!(kit.colors.input, mix(palette.background, palette.foreground, INPUT_BORDER_MIX));
                 for foreground in [kit.colors.tab_foreground, kit.colors.tab_active_foreground] {
                     assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
                 }
@@ -521,6 +539,20 @@ mod tests {
                 assert_eq!(kit.colors.button_primary_foreground, kit.colors.primary_foreground);
                 assert_eq!(kit.colors.button_primary_hover, kit.colors.primary_hover);
                 assert_eq!(kit.colors.button_primary_active, kit.colors.primary_active);
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn system_themes_use_the_same_subtle_surface_and_input_borders(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                assert_eq!(colors.border, mix(colors.background, colors.foreground, SURFACE_BORDER_MIX), "{id}");
+                assert_eq!(colors.sidebar_border, colors.border, "{id}");
+                assert_eq!(colors.input, mix(colors.background, colors.foreground, INPUT_BORDER_MIX), "{id}");
             }
         });
     }

@@ -3093,7 +3093,7 @@ impl DesktopView {
             )
             .rounded_lg()
             .border_1()
-            .border_color(theme.colors.border.opacity(0.85))
+            .border_color(theme.colors.border)
             .child(
                 div()
                     .flex()
@@ -4625,7 +4625,12 @@ impl DesktopView {
                             BubbleContent::new()
                                 .rounded_xl()
                                 .when(user, |surface| {
-                                    surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_3()
+                                    surface
+                                        .border_color(colors.border)
+                                        .bg(colors.secondary)
+                                        .text_color(colors.foreground)
+                                        .px_4()
+                                        .py_3()
                                 })
                                 .child(
                                     div()
@@ -4786,10 +4791,12 @@ impl DesktopView {
                             .aria_label(output_excerpt.clone())
                             .test_support()
                             .ml_4()
-                            .pl_3()
+                            .px_3()
                             .py_2()
-                            .border_l_1()
+                            .rounded_md()
+                            .border_1()
                             .border_color(colors.border)
+                            .bg(colors.background)
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
                             .child(output_excerpt),
@@ -6277,7 +6284,7 @@ impl Render for DesktopView {
             .bg(colors.background)
             .rounded_xl()
             .border_1()
-            .border_color(colors.border.opacity(0.85))
+            .border_color(colors.border)
             .child(conversation)
             .when(inspector_visible, |workspace| {
                 workspace.child(
