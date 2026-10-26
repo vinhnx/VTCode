@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::mpsc::SyncSender;
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 use tokio::time::timeout;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{InteractionRequest, RequestId, ThreadEventNotification};
@@ -47,13 +48,47 @@ pub(crate) struct BackendHandle {
     pub commands: mpsc::Sender<BackendCommand>,
 }
 
+#[derive(Clone)]
+pub(crate) struct BackendEventSender {
+    sender: SyncSender<BackendEvent>,
+    wake: Arc<Notify>,
+}
+
+impl BackendEventSender {
+    pub(crate) fn channel(capacity: usize) -> (Self, Receiver<BackendEvent>) {
+        let (sender, receiver) = sync_channel(capacity);
+        (Self { sender, wake: Arc::default() }, receiver)
+    }
+
+    pub(crate) fn send(&self, event: BackendEvent) -> Result<(), Box<std::sync::mpsc::SendError<BackendEvent>>> {
+        self.sender.send(event).map_err(Box::new)?;
+        self.wake.notify_one();
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn try_send(&self, event: BackendEvent) -> Result<(), Box<std::sync::mpsc::TrySendError<BackendEvent>>> {
+        self.sender.try_send(event).map_err(Box::new)?;
+        self.wake.notify_one();
+        Ok(())
+    }
+
+    pub(crate) async fn notified(&self) {
+        self.wake.notified().await;
+    }
+
+    pub(crate) fn wake(&self) {
+        self.wake.notify_one();
+    }
+}
+
 /// Include JSON escaping and the largest issued request ID in the wire-size check.
 pub(super) fn request_fits_frame(method: &str, params: &Value) -> bool {
     let request = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": params });
     serde_json::to_vec(&request).is_ok_and(|bytes| bytes.len() <= protocol::MAX_FRAME_BYTES)
 }
 
-pub(crate) fn launch_backend(workspace: PathBuf, ui_events: SyncSender<BackendEvent>) -> Result<BackendHandle, String> {
+pub(crate) fn launch_backend(workspace: PathBuf, ui_events: BackendEventSender) -> Result<BackendHandle, String> {
     let executable = resolve_backend_executable()?;
     let (commands, command_rx) = mpsc::channel(CLIENT_QUEUE_CAPACITY);
 
@@ -87,7 +122,7 @@ async fn run_client(
     executable: PathBuf,
     workspace: PathBuf,
     mut commands: mpsc::Receiver<BackendCommand>,
-    ui_events: SyncSender<BackendEvent>,
+    ui_events: BackendEventSender,
 ) {
     let mut child = match spawn_backend(&executable, &workspace).await {
         Ok(child) => child,
@@ -368,7 +403,7 @@ fn decode_frame(
     }
 }
 
-fn send_ui_event(sender: &SyncSender<BackendEvent>, event: BackendEvent) -> bool {
+fn send_ui_event(sender: &BackendEventSender, event: BackendEvent) -> bool {
     sender.send(event).is_ok()
 }
 

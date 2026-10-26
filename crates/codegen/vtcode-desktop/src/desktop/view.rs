@@ -2,8 +2,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
-use std::time::Duration;
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
@@ -65,7 +64,8 @@ use super::preferences;
 use super::themes;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{
-    BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend, request_fits_frame,
+    BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
+    request_fits_frame,
 };
 
 mod composer_controls;
@@ -452,7 +452,7 @@ struct DesktopView {
     workspace_picker_task: Option<Task<()>>,
     backend: Option<BackendHandle>,
     event_rx: Receiver<BackendEvent>,
-    event_tx: SyncSender<BackendEvent>,
+    event_tx: BackendEventSender,
     event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
@@ -616,7 +616,7 @@ fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a Tree
 
 impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
-        let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
+        let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
         let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
             let target = window
@@ -978,14 +978,14 @@ impl DesktopView {
             return;
         }
 
+        let event_tx = self.event_tx.clone();
         self.event_drain_task = Some(cx.spawn(async move |weak_view, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_millis(24)).await;
-                if weak_view
-                    .update_in(cx, |view, window, cx| view.drain_events(window, cx))
-                    .is_err()
-                {
-                    break;
+                event_tx.notified().await;
+                match weak_view.update_in(cx, |view, window, cx| view.drain_events(window, cx)) {
+                    Ok(batch_full) if batch_full => event_tx.wake(),
+                    Ok(_) => {}
+                    Err(_) => break,
                 }
             }
         }));
@@ -1909,11 +1909,15 @@ impl DesktopView {
         }
     }
 
-    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Drain one bounded event batch. A full batch asks the async waiter to schedule
+    /// another foreground update without returning to a periodic polling loop.
+    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let mut changed = false;
+        let mut processed = 0;
         for _ in 0..MAX_UI_EVENTS_PER_TICK {
             match self.event_rx.try_recv() {
                 Ok(event) => {
+                    processed += 1;
                     changed = true;
                     if matches!(&event, BackendEvent::Exited { .. } | BackendEvent::LaunchFailed(_)) {
                         self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -1937,6 +1941,7 @@ impl DesktopView {
         if changed {
             cx.notify();
         }
+        processed == MAX_UI_EVENTS_PER_TICK
     }
 
     fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {

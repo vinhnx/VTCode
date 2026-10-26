@@ -155,7 +155,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             view.active_turn_id = Some("turn-1".into());
             view.running = true;
             view.event_tx.send(completed_turn("turn-1")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(!view.running);
         });
         window.render_frame(cx);
@@ -166,7 +166,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.event_tx.send(completed_turn("stale-turn")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
         });
     })
     .unwrap();
@@ -187,7 +187,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     })),
                 }))
                 .unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             view.active_turn_id = Some("turn-3".into());
             view.running = true;
@@ -206,7 +206,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     selected_choice_ids: Vec::new(),
                 }))
                 .unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(view.interaction.is_some());
         });
         window.render_frame(cx);
@@ -244,7 +244,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             view.active_turn_id = Some("turn-4".into());
             view.running = true;
             view.event_tx.send(completed_turn("turn-4")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(!view.running);
         });
     })
@@ -539,6 +539,30 @@ fn event_drain_task_is_owned_by_the_desktop_view(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn event_drain_wakes_on_events_and_reschedules_full_batches(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.start_event_drain(cx);
+            for index in 0..MAX_UI_EVENTS_PER_TICK + 3 {
+                view.event_tx
+                    .try_send(BackendEvent::TurnStatus(
+                        json!({ "sessionId": "session", "status": format!("event-{index}") }),
+                    ))
+                    .unwrap();
+            }
+        });
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
+    });
+}
+
+#[gpui_kit::test]
 fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppContext) {
     let (closed, view) = open_desktop(cx);
     drop(view);
@@ -584,9 +608,9 @@ fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
                     ))
                     .unwrap();
             }
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK - 1));
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
         });
     });
@@ -2627,7 +2651,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
                 .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
                 .unwrap();
 
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             assert!(view.interaction.is_none());
             assert!(view.interaction_choice_ids.is_empty());
@@ -2654,7 +2678,7 @@ fn service_exit_discards_stale_webmcp_state_and_refreshes_after_reconnect(cx: &m
                 .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
                 .unwrap();
 
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             assert!(view.webmcp_status.is_none());
             assert!(view.webmcp_pairing.is_none(), "pairing codes belong to the exited service process");
@@ -4108,7 +4132,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
         view.update(cx, |view, cx| {
             view.event_tx.send(notification("edit", "src/app.rs", "invalid patch")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(view.selected_change.is_none());
             assert!(view.change_viewer.is_none());
             assert!(!view.review_open);
