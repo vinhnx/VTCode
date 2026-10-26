@@ -11,6 +11,8 @@ pub struct SlashCommandInfo {
     pub name: &'static str,
     /// Short human-readable description shown in autocomplete.
     pub description: &'static str,
+    /// Catalog category used to hide commands that only apply to terminals.
+    pub category: &'static str,
 }
 
 /// Collection of slash command definitions in the order they should be displayed.
@@ -20,6 +22,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         .map(|spec| SlashCommandInfo {
             name: spec.slash_name,
             description: spec.description,
+            category: spec.category(),
         })
         .collect()
 });
@@ -43,6 +46,14 @@ pub fn visible_commands_for_terminal(terminal: TerminalType) -> Vec<&'static Sla
         .iter()
         .filter(|command| command_visible_for_terminal(command, terminal))
         .collect()
+}
+
+/// Return slash commands supported by the native desktop surface.
+///
+/// Desktop shares the CLI command dispatcher, but terminal configuration commands
+/// cannot be acted on by the native composer and should not be suggested there.
+pub fn visible_commands_for_desktop() -> Vec<&'static SlashCommandInfo> {
+    SLASH_COMMANDS.iter().filter(|command| command.category != "terminal").collect()
 }
 
 /// Find a visible slash command by exact name for the auto-detected terminal.
@@ -232,6 +243,19 @@ mod tests {
             .map(|info| info.name)
             .collect();
         assert!(!names.contains(&"terminal-setup"));
+    }
+
+    #[test]
+    fn desktop_catalog_excludes_terminal_only_commands() {
+        let commands = visible_commands_for_desktop();
+        let names = commands.iter().map(|command| command.name).collect::<Vec<_>>();
+        for name in ["terminal-setup", "statusline", "title", "vim"] {
+            assert!(!names.contains(&name), "desktop catalog must not suggest /{name}");
+        }
+        for name in ["config", "model", "files", "review", "webmcp", "resume", "rewind"] {
+            assert!(names.contains(&name), "desktop catalog must retain /{name}");
+        }
+        assert!(commands.iter().all(|command| command.category != "terminal"));
     }
 
     #[test]

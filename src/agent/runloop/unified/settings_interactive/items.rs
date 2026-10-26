@@ -171,6 +171,38 @@ pub(super) fn curated_groups() -> &'static [CuratedSettingsGroup] {
     CURATED_GROUPS
 }
 
+pub(super) fn curated_group_for_path(path: &str) -> Option<&'static CuratedSettingsGroup> {
+    curated_groups().iter().find(|group| {
+        group.paths.iter().any(|candidate| {
+            path == *candidate
+                || path
+                    .strip_prefix(candidate)
+                    .is_some_and(|suffix| suffix.starts_with('.') || suffix.starts_with('['))
+        })
+    })
+}
+
+pub(super) fn advanced_paths(draft: &TomlValue) -> BTreeSet<String> {
+    let mut paths = BTreeSet::new();
+    collect_advanced_paths(draft, "", &mut paths);
+    for path in FIELD_DOCS.sorted_paths() {
+        paths.insert(path.to_string());
+    }
+    paths
+}
+
+pub(super) fn path_is_editable(path: &str, draft: &TomlValue) -> bool {
+    if is_schema_path(path) || path.contains('[') || path.contains(']') {
+        return false;
+    }
+
+    if let Some(value) = get_node(draft, path) {
+        return item_for_value(&advanced_label(path), path, value, draft).selection.is_some();
+    }
+
+    FIELD_DOCS.lookup(path).is_some_and(|doc| !doc.options.is_empty())
+}
+
 pub(super) fn build_settings_items(state: &SettingsPaletteState, draft: &TomlValue) -> Result<Vec<InlineListItem>> {
     let mut items = Vec::new();
 
@@ -370,15 +402,6 @@ fn append_advanced_items(items: &mut Vec<InlineListItem>, view_path: &str, draft
     Ok(())
 }
 
-fn advanced_paths(draft: &TomlValue) -> BTreeSet<String> {
-    let mut paths = BTreeSet::new();
-    collect_advanced_paths(draft, "", &mut paths);
-    for path in FIELD_DOCS.sorted_paths() {
-        paths.insert(path.to_string());
-    }
-    paths
-}
-
 fn advanced_editable_count(draft: &TomlValue) -> usize {
     advanced_paths(draft)
         .into_iter()
@@ -419,7 +442,7 @@ fn append_advanced_path_item(
     Err(anyhow!("Could not resolve advanced settings path {path}"))
 }
 
-fn is_schema_path(path: &str) -> bool {
+pub(super) fn is_schema_path(path: &str) -> bool {
     path.contains("[]") || path.split('.').any(|segment| segment == "*")
 }
 
@@ -480,7 +503,7 @@ fn advanced_schema_item(path: &str, doc: &FieldDoc) -> InlineListItem {
         .with_search_value(terms.join(" ").to_ascii_lowercase())
 }
 
-fn advanced_label(path: &str) -> String {
+pub(super) fn advanced_label(path: &str) -> String {
     let fallback = path
         .strip_suffix("[]")
         .or_else(|| path.strip_suffix(".*"))

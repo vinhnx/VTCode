@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ConfigValueKind {
+    Boolean,
     String,
     Integer,
     Float,
@@ -17,22 +18,57 @@ pub(super) struct ConfigEditor {
     kind: ConfigValueKind,
     target: protocol::ConfigTarget,
     expected_layer_version: Option<String>,
+    options: Vec<String>,
 }
 
 impl ConfigValueKind {
     fn for_value(value: &Value) -> Option<Self> {
         match value {
+            Value::Bool(_) => Some(Self::Boolean),
             Value::String(_) => Some(Self::String),
             Value::Number(number) if number.is_i64() || number.is_u64() => Some(Self::Integer),
             Value::Number(_) => Some(Self::Float),
             Value::Array(_) => Some(Self::Array),
             Value::Object(_) => Some(Self::Object),
-            Value::Null | Value::Bool(_) => None,
+            Value::Null => None,
         }
+    }
+
+    fn for_setting(setting: &protocol::ConfigSetting) -> Option<Self> {
+        Self::for_value(&setting.value).or_else(|| {
+            if !setting.options.is_empty() {
+                return Some(Self::String);
+            }
+            let type_name = setting.type_name.as_deref()?.to_ascii_lowercase();
+            let has_type = |types: &[&str]| {
+                type_name
+                    .split(|character: char| !character.is_ascii_alphanumeric())
+                    .any(|token| types.contains(&token))
+            };
+            if has_type(&["bool", "boolean"]) {
+                Some(Self::Boolean)
+            } else if has_type(&[
+                "int", "integer", "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize",
+                "usize",
+            ]) {
+                Some(Self::Integer)
+            } else if has_type(&["float", "number", "f32", "f64"]) {
+                Some(Self::Float)
+            } else if has_type(&["array", "vec", "list"]) {
+                Some(Self::Array)
+            } else if has_type(&["table", "object", "map", "hashmap", "btreemap"]) {
+                Some(Self::Object)
+            } else if has_type(&["string", "str", "path", "pathbuf", "enum"]) {
+                Some(Self::String)
+            } else {
+                None
+            }
+        })
     }
 
     fn editor_value(self, value: &Value) -> String {
         match self {
+            Self::Boolean => value.as_bool().unwrap_or(false).to_string(),
             Self::String => value.as_str().unwrap_or_default().to_owned(),
             Self::Integer | Self::Float => value.to_string(),
             Self::Array | Self::Object => serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
@@ -41,6 +77,14 @@ impl ConfigValueKind {
 
     fn parse(self, text: &str) -> Result<Value, String> {
         match self {
+            Self::Boolean => {
+                let value = serde_json::from_str::<Value>(text).map_err(|error| error.to_string())?;
+                if value.is_boolean() {
+                    Ok(value)
+                } else {
+                    Err("Enter true or false.".into())
+                }
+            }
             Self::String => Ok(Value::String(text.to_owned())),
             Self::Integer => {
                 let value = serde_json::from_str::<Value>(text).map_err(|error| error.to_string())?;
@@ -83,9 +127,11 @@ impl DesktopView {
     pub(super) fn render_cli_configuration(&self, cx: &Context<Self>) -> AnyElement {
         let snapshot = self.cli_config_settings.as_ref();
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
+        let editable_count =
+            snapshot.map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count());
         let mut group = GroupBox::new().flex_shrink_0().fill().title("CLI configuration");
         group = group.child(div().text_sm().child(match snapshot {
-            Some(_) => format!("{count} settings · values follow the active CLI config layers"),
+            Some(_) => format!("{editable_count} editable settings across {count} CLI config fields · values follow the active config layers"),
             None if self.workspace.is_some() => "Loading shared CLI settings…".into(),
             None => "Choose a workspace to browse CLI settings.".into(),
         }));
@@ -134,6 +180,12 @@ impl DesktopView {
             if snapshot.omitted_large > 0 || snapshot.omitted_limit > 0 {
                 note.push_str(" Some unusually large or numerous settings are omitted from this browser.");
             }
+            let read_only = snapshot.settings.iter().filter(|setting| !setting.editable).count();
+            if read_only > 0 {
+                note.push_str(&format!(
+                    " {read_only} documented schema entries are reference-only until they have a concrete value."
+                ));
+            }
         }
         group = group.footer(note);
         accessible_group_box("cli-configuration-group", "CLI configuration", group)
@@ -157,31 +209,8 @@ impl DesktopView {
         if !self.can_edit_cli_settings() {
             return;
         }
-        let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
-        if let Some(snapshot) = self.cli_config_settings.as_ref() {
-            for setting in &snapshot.settings {
-                let mut entry = command(setting.path.clone(), PaletteAction::EditConfigSetting(setting.path.clone()));
-                entry.description = Some(format!(
-                    "{}{}{}",
-                    value_summary(&setting.value),
-                    setting
-                        .origin
-                        .as_deref()
-                        .map_or(String::new(), |origin| format!(" · from {origin}")),
-                    setting.value.as_bool().map_or_else(String::new, |value| {
-                        if value {
-                            " · click to turn off".into()
-                        } else {
-                            " · click to turn on".into()
-                        }
-                    })
-                ));
-                entry.keywords = vec![value_summary(&setting.value)];
-                let group = setting.path.split('.').next().unwrap_or("Settings").to_owned();
-                groups.entry(group).or_default().push(entry);
-            }
-        }
-        self.show_palette(PaletteKind::Commands, groups.into_iter().collect(), window, cx);
+        let groups = self.cli_config_settings.as_ref().map(config_palette_groups).unwrap_or_default();
+        self.show_palette(PaletteKind::ConfigSettings, groups, window, cx);
     }
 
     pub(super) fn open_cli_config_editor(&mut self, path: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -199,15 +228,29 @@ impl DesktopView {
             return;
         };
 
-        if let Some(value) = setting.value.as_bool() {
-            self.save_cli_config_value(path, Value::Bool(!value), cx);
+        if !setting.editable {
+            self.error = Some(format!("{} is a schema reference and is not directly editable.", setting.path));
+            cx.notify();
             return;
         }
-        let Some(kind) = ConfigValueKind::for_value(&setting.value) else {
+
+        let Some(kind) = ConfigValueKind::for_setting(setting) else {
             return;
         };
+        if kind == ConfigValueKind::Boolean {
+            self.save_cli_config_value(path, Value::Bool(!setting.value.as_bool().unwrap_or(false)), cx);
+            return;
+        }
 
-        let current_value = setting.value.clone();
+        let current_value = if setting.value.is_null() {
+            setting
+                .default_value
+                .as_deref()
+                .and_then(|default| serde_json::from_str::<Value>(default).ok())
+                .unwrap_or_else(|| Value::String(String::new()))
+        } else {
+            setting.value.clone()
+        };
         let text = kind.editor_value(&current_value);
         self.config_value_input
             .update(cx, |input, cx| input.set_value(text, window, cx));
@@ -217,6 +260,7 @@ impl DesktopView {
             kind,
             target: self.config_target,
             expected_layer_version: self.target_version(self.config_target),
+            options: setting.options.clone(),
         });
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| view.config_editor_focus.focus(window, cx));
@@ -229,6 +273,7 @@ impl DesktopView {
         };
         let colors = cx.theme().colors;
         let format_hint = match editor.kind {
+            ConfigValueKind::Boolean => "Boolean",
             ConfigValueKind::String => "Text",
             ConfigValueKind::Integer => "Whole number",
             ConfigValueKind::Float => "Decimal number",
@@ -260,7 +305,7 @@ impl DesktopView {
                     .rounded_xl()
                     .border_1()
                     .border_color(colors.border)
-                    .bg(colors.background)
+                    .bg(colors.secondary)
                     .shadow_lg()
                     .track_focus(&self.config_editor_focus)
                     .child(
@@ -268,11 +313,26 @@ impl DesktopView {
                             .child(DialogTitle::new().child("Edit CLI setting"))
                             .child(DialogDescription::new().child(editor.path.clone())),
                     )
-                    .child(div().text_xs().text_color(colors.muted_foreground).child(format_hint))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(if editor.options.is_empty() {
+                                format_hint.to_string()
+                            } else {
+                                format!("{format_hint} · Options: {}", editor.options.join(", "))
+                            }),
+                    )
                     .child(
                         Textarea::new(&self.config_value_input)
                             .aria_label(format!("Value for {}", editor.path))
                             .cursor_text()
+                            .bg(colors.popover)
+                            .rounded_md()
+                            .border_1()
+                            .border_color(colors.border)
+                            .px_3()
+                            .py_2()
                             .w_full(),
                     )
                     .when_some(self.config_editor_error.as_ref(), |dialog, error| {
@@ -315,7 +375,7 @@ impl DesktopView {
             return;
         };
         let raw = self.config_value_input.read(cx).value().to_string();
-        match editor.kind.parse(&raw) {
+        match editor.parse(&raw) {
             Ok(value) => self.save_cli_config_value_at(
                 editor.path.clone(),
                 value,
@@ -424,6 +484,21 @@ impl DesktopView {
     }
 }
 
+impl ConfigEditor {
+    fn parse(&self, text: &str) -> Result<Value, String> {
+        let value = self.kind.parse(text)?;
+        if !self.options.is_empty() {
+            let Some(selected) = value.as_str() else {
+                return Err("Choose one of the documented string options.".into());
+            };
+            if !self.options.iter().any(|option| option == selected) {
+                return Err(format!("Choose one of the documented values: {}.", self.options.join(", ")));
+            }
+        }
+        Ok(value)
+    }
+}
+
 fn target_label(target: protocol::ConfigTarget) -> &'static str {
     match target {
         protocol::ConfigTarget::User => "user",
@@ -432,8 +507,61 @@ fn target_label(target: protocol::ConfigTarget) -> &'static str {
     }
 }
 
+pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot) -> Vec<(String, Vec<PaletteCommand>)> {
+    let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
+    for setting in &snapshot.settings {
+        if !setting.editable {
+            continue;
+        }
+        let label = setting.label.as_deref().unwrap_or(&setting.path);
+        let mut entry = command(label.to_string(), PaletteAction::EditConfigSetting(setting.path.clone()));
+        let summary = if setting.value.is_null() {
+            "<unset>".to_string()
+        } else {
+            value_summary(&setting.value)
+        };
+        let origin = setting
+            .origin
+            .as_deref()
+            .map_or(String::new(), |origin| format!(" · from {origin}"));
+        let action_hint = setting.value.as_bool().map_or_else(String::new, |value| {
+            if value {
+                " · click to turn off".into()
+            } else {
+                " · click to turn on".into()
+            }
+        });
+        let description = setting.description.as_deref().unwrap_or_default();
+        let default = setting
+            .default_value
+            .as_deref()
+            .map_or(String::new(), |value| format!(" · default {value}"));
+        let options = if setting.options.is_empty() {
+            String::new()
+        } else {
+            format!(" · options {}", setting.options.join(", "))
+        };
+        entry.description = Some(format!("{summary}{origin}{action_hint} · {description}{default}{options}"));
+        entry.keywords = vec![setting.path.clone(), summary];
+        entry.keywords.extend(setting.options.iter().cloned());
+        if let Some(origin) = setting.origin.as_ref() {
+            entry.keywords.push(origin.clone());
+        }
+        if let Some(default) = setting.default_value.as_ref() {
+            entry.keywords.push(default.clone());
+        }
+        if let Some(description) = setting.description.as_ref() {
+            entry.keywords.push(description.clone());
+        }
+        let group = setting.group.clone().unwrap_or_else(|| "Advanced settings".into());
+        groups.entry(group).or_default().push(entry);
+    }
+    groups.into_iter().collect()
+}
+
 fn value_summary(value: &Value) -> String {
     let rendered = match value {
+        Value::Null => "<unset>".to_string(),
         Value::String(value) => {
             let safe = value
                 .chars()
@@ -454,7 +582,7 @@ fn value_summary(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::ConfigValueKind;
+    use super::{ConfigValueKind, config_palette_groups};
     use serde_json::json;
 
     #[test]
@@ -466,5 +594,66 @@ mod tests {
         assert_eq!(ConfigValueKind::Array.parse("[\"a\", 2]"), Ok(json!(["a", 2])));
         assert!(ConfigValueKind::Array.parse("{\"a\": 2}").is_err());
         assert_eq!(ConfigValueKind::Object.parse("{\"enabled\": true}"), Ok(json!({"enabled": true})));
+    }
+
+    #[test]
+    fn config_editor_enforces_the_shared_cli_options() {
+        let editor = super::ConfigEditor {
+            path: "provider.openai.service_tier".into(),
+            kind: ConfigValueKind::String,
+            target: super::protocol::ConfigTarget::User,
+            expected_layer_version: None,
+            options: vec!["auto".into(), "fast".into()],
+        };
+        assert_eq!(editor.parse("fast"), Ok(json!("fast")));
+        assert!(editor.parse("ultrafast").is_err());
+    }
+
+    #[test]
+    fn unset_documented_fields_keep_the_cli_type_and_read_only_schema_is_not_editable() {
+        let optional_string = super::protocol::ConfigSetting {
+            path: "provider.openai.service_tier".into(),
+            value: json!(null),
+            origin: None,
+            label: Some("Service tier".into()),
+            type_name: Some("Option<String>".into()),
+            default_value: Some("\"auto\"".into()),
+            description: Some("Choose a service tier.".into()),
+            options: vec!["auto".into(), "fast".into()],
+            group: Some("Model & Provider".into()),
+            group_description: None,
+            editable: true,
+        };
+        assert_eq!(ConfigValueKind::for_setting(&optional_string), Some(ConfigValueKind::String));
+        let optional_enum = super::protocol::ConfigSetting {
+            type_name: Some("ReasoningEffortLevel | null".into()),
+            options: vec!["low".into(), "high".into()],
+            ..optional_string.clone()
+        };
+        assert_eq!(ConfigValueKind::for_setting(&optional_enum), Some(ConfigValueKind::String));
+        let unknown_struct = super::protocol::ConfigSetting {
+            type_name: Some("PointConfig".into()),
+            options: Vec::new(),
+            ..optional_string.clone()
+        };
+        assert_eq!(ConfigValueKind::for_setting(&unknown_struct), None);
+
+        let read_only = super::protocol::ConfigSetting {
+            path: "mcp.providers.*.command".into(),
+            editable: false,
+            ..optional_string.clone()
+        };
+        let snapshot = super::protocol::ConfigSettingsSnapshot {
+            settings: vec![optional_string, read_only],
+            target_versions: Vec::new(),
+            omitted_sensitive: 0,
+            omitted_large: 0,
+            omitted_limit: 0,
+        };
+        let groups = config_palette_groups(&snapshot);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].0, "Model & Provider");
+        assert_eq!(groups[0].1.len(), 1);
+        assert_eq!(groups[0].1[0].label, "Service tier");
     }
 }

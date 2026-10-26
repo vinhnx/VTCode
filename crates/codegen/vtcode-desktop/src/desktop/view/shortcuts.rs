@@ -4,7 +4,7 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
-const COMMANDS: [(&str, &str, &str); 21] = [
+const COMMANDS: [(&str, &str, &str); 25] = [
     ("commands", "Search commands", "cmd-k"),
     ("new_session", "New thread", "cmd-n"),
     ("close_session", "Close thread", "cmd-shift-w"),
@@ -12,9 +12,11 @@ const COMMANDS: [(&str, &str, &str); 21] = [
     ("composer", "Focus composer", "cmd-l"),
     ("sidebar", "Toggle navigation", "cmd-b"),
     ("inspector", "Toggle inspector", "cmd-shift-i"),
+    ("zen_mode", "Toggle Zen mode", "ctrl-cmd-z"),
     ("cancel", "Cancel run", "cmd-."),
     ("dismiss", "Dismiss overlay", "escape"),
     ("settings", "Settings", "cmd-,"),
+    ("settings_search", "Search settings and CLI config", "cmd-f"),
     ("model", "Choose model", "cmd-shift-m"),
     ("permissions", "Command permissions", "cmd-shift-p"),
     ("agent_mode", "Choose agent mode", "cmd-shift-b"),
@@ -26,6 +28,8 @@ const COMMANDS: [(&str, &str, &str); 21] = [
     ("workspace_files", "Open workspace files", "cmd-shift-e"),
     ("workspace_review", "Review working tree", "cmd-shift-g"),
     ("refresh_workspace", "Refresh current workspace view", "cmd-r"),
+    ("navigate_back", "Navigate back", "cmd-["),
+    ("navigate_forward", "Navigate forward", "cmd-]"),
 ];
 
 fn action(id: &str) -> Box<dyn gpui_kit::Action> {
@@ -37,8 +41,10 @@ fn action(id: &str) -> Box<dyn gpui_kit::Action> {
         "composer" => Box::new(FocusComposer),
         "sidebar" => Box::new(ToggleSidebar),
         "inspector" => Box::new(ToggleInspector),
+        "zen_mode" => Box::new(ToggleZenMode),
         "cancel" => Box::new(CancelRun),
         "dismiss" => Box::new(DismissOverlay),
+        "settings_search" => Box::new(OpenSettingsSearch),
         "model" => Box::new(OpenModelPicker),
         "permissions" => Box::new(OpenPermissions),
         "agent_mode" => Box::new(OpenModePicker),
@@ -50,6 +56,8 @@ fn action(id: &str) -> Box<dyn gpui_kit::Action> {
         "workspace_files" => Box::new(OpenWorkspaceFiles),
         "workspace_review" => Box::new(OpenWorkspaceReview),
         "refresh_workspace" => Box::new(RefreshWorkspace),
+        "navigate_back" => Box::new(NavigateBack),
+        "navigate_forward" => Box::new(NavigateForward),
         _ => Box::new(OpenSettings),
     }
 }
@@ -64,7 +72,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
         .map(|(id, label, default)| {
             let source = overrides.get(*id).map(String::as_str).unwrap_or(default);
             if source.is_empty() {
-                return Ok(None);
+                return Ok(Vec::new());
             }
             if source.trim().is_empty() || source.split_whitespace().count() != 1 {
                 return Err(format!("{label}: enter one key combination"));
@@ -102,9 +110,26 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             }
             let context =
                 gpui_kit::KeyBindingContextPredicate::parse("VTCodeDesktop").map_err(|error| error.to_string())?;
-            KeyBinding::load(source, action(id), Some(context.into()), false, None, &gpui_kit::DummyKeyboardMapper)
-                .map(Some)
-                .map_err(|error| format!("{label}: invalid shortcut: {error}"))
+            let mut bindings = vec![
+                KeyBinding::load(source, action(id), Some(context.into()), false, None, &gpui_kit::DummyKeyboardMapper)
+                    .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
+            ];
+            if *id == "settings_search" {
+                let context =
+                    gpui_kit::KeyBindingContextPredicate::parse("VTCodeSettings").map_err(|error| error.to_string())?;
+                bindings.push(
+                    KeyBinding::load(
+                        source,
+                        action(id),
+                        Some(context.into()),
+                        false,
+                        None,
+                        &gpui_kit::DummyKeyboardMapper,
+                    )
+                    .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
+                );
+            }
+            Ok(bindings)
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|bindings| bindings.into_iter().flatten().collect())
@@ -228,6 +253,7 @@ impl DesktopView {
                                 .w(px(220.))
                                 .max_w_full()
                                 .cursor_text()
+                                .bg(cx.theme().colors.popover)
                                 .id(format!("shortcut-input-{id}"))
                                 .accessibility_id(format!("shortcut-{id}"))
                                 .aria_label(format!("Shortcut for {label}")),
@@ -359,14 +385,23 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 21);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 26);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 20);
+        assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
+        assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 25);
+        assert_eq!(
+            bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
+                .unwrap()
+                .len(),
+            24
+        );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [
             ("commands", "cmd-n"),
             ("commands", "cmd-q"),
             ("commands", "k"),
+            ("zen_mode", "cmd-shift-z"),
             ("unknown", "ctrl-k"),
         ] {
             assert!(bindings(&BTreeMap::from([(action.into(), key.into())])).is_err(), "{action}: {key}");

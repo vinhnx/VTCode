@@ -55,6 +55,11 @@ specific nested field directly; nested selections are restored when returning to
 The palette header shows the current write target and configuration source; individual setting rows keep their current
 value and description.
 
+In VT Code Desktop, `/config` opens Settings → VT Code. **Browse all settings** opens the same catalog with the CLI's
+typed defaults, curated groups, field labels, descriptions, and documented choices; optional documented fields can be
+set before they have an explicit value. Documented choices are validated by both the editor and shared writer.
+Credential-bearing fields remain hidden, and schema templates without a concrete key are read-only references.
+
 The palette's **Reset configuration** action shows the exact target file and requires confirmation. `/config reset`
 opens the same confirmation view. A reset clears only that target layer by replacing its contents with an empty TOML
 document. Lower-precedence layers and credentials are preserved.

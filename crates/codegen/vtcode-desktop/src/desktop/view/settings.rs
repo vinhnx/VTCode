@@ -1,7 +1,7 @@
 use super::*;
 use crate::desktop::localization::UiLanguage;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum SettingsTab {
     Appearance,
     Accessibility,
@@ -29,9 +29,81 @@ impl SettingsTab {
         }
         .to_string()
     }
+
+    fn search_keywords(self) -> &'static [&'static str] {
+        match self {
+            Self::Appearance => &[
+                "appearance",
+                "theme",
+                "themes",
+                "color",
+                "font",
+                "typography",
+                "visual style",
+                "language",
+                "navigation",
+                "sidebar",
+                "layout",
+            ],
+            Self::Accessibility => &[
+                "accessibility",
+                "contrast",
+                "reduce motion",
+                "motion",
+                "display",
+                "status bar",
+                "trợ năng",
+            ],
+            Self::Shortcuts => &[
+                "shortcuts",
+                "shortcut",
+                "keyboard",
+                "keybinding",
+                "bindings",
+                "phím tắt",
+            ],
+            Self::VtCode => &[
+                "vt code",
+                "config",
+                "configuration",
+                "provider",
+                "model",
+                "agent",
+                "cli",
+                "permissions",
+            ],
+            Self::Connections => &["connections", "mcp", "webmcp", "server", "bridge"],
+        }
+    }
 }
 
 impl DesktopView {
+    pub(super) fn open_settings_search_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::SettingsSearch {
+            self.close_palette(window, cx);
+            return;
+        }
+
+        let settings = SettingsTab::ALL
+            .into_iter()
+            .map(|tab| {
+                let mut entry = command(tab.label(), PaletteAction::SelectSettingsTab(tab));
+                entry.keywords = tab.search_keywords().iter().map(|keyword| (*keyword).to_owned()).collect();
+                entry
+            })
+            .collect();
+        let mut groups = vec![(rust_i18n::t!("app.settings.search.group_settings").to_string(), settings)];
+        if let Some(snapshot) = self.cli_config_settings.as_ref() {
+            let config_group = rust_i18n::t!("app.settings.search.group_cli_config").to_string();
+            groups.extend(
+                configuration::config_palette_groups(snapshot)
+                    .into_iter()
+                    .map(|(section, entries)| (format!("{config_group} · {section}"), entries)),
+            );
+        }
+        self.show_palette(PaletteKind::SettingsSearch, groups, window, cx);
+    }
+
     pub(super) fn render_settings_tabs(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         // The sheet title row scales with the active UI font (40px at 16px).
@@ -97,12 +169,33 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &PreviousSettingsTab, window, cx| {
                         view.cycle_settings_tab(false, window, cx)
                     }))
+                    .on_action(cx.listener(|view, _: &OpenSettingsSearch, window, cx| {
+                        view.open_settings_search_palette(window, cx)
+                    }))
                     .on_action(cx.listener(|view, _: &FirstSettingsTab, window, cx| {
                         view.select_settings_tab_from_keyboard(0, window, cx)
                     }))
                     .on_action(cx.listener(|view, _: &LastSettingsTab, window, cx| {
                         view.select_settings_tab_from_keyboard(SettingsTab::ALL.len().saturating_sub(1), window, cx)
                     }))
+                    .child(
+                        desktop_button("settings-filter-search")
+                            .icon(IconName::Search)
+                            .label(rust_i18n::t!("app.settings.search.button").to_string())
+                            .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
+                            .tooltip_with_action(
+                                "Search settings and CLI config",
+                                &OpenSettingsSearch,
+                                Some("VTCodeDesktop"),
+                            )
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .border_1()
+                            .border_color(colors.border)
+                            .bg(colors.background)
+                            .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
+                    )
                     .child(
                         TabBar::new("settings-tabs")
                             .segmented()
@@ -329,6 +422,37 @@ impl DesktopView {
             ),
         ));
 
+        content = content.child(accessible_group_box(
+            "appearance-layout-group",
+            "Layout",
+            GroupBox::new()
+                .flex_shrink_0()
+                .fill()
+                .title("Layout")
+                .child(
+                    gpui_kit::component::switch::Switch::new("navigation-visible")
+                        .label("Show side navigation")
+                        .checked(self.preferences.navigation_visible())
+                        .on_click(cx.listener(|view, checked, _, cx| {
+                            view.set_navigation_visible(*checked, cx);
+                        })),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.muted_foreground)
+                        .child("When hidden, project, thread, and workspace actions stay in the top bar."),
+                )
+                .child(
+                    gpui_kit::component::switch::Switch::new("navigation-on-right")
+                        .label("Place navigation on the right")
+                        .checked(self.preferences.navigation_on_right())
+                        .on_click(cx.listener(|view, checked, _, cx| {
+                            view.set_navigation_on_right(*checked, cx);
+                        })),
+                ),
+        ));
+
         content = content.child(desktop_button("reset-appearance").label("Reset appearance").ghost().on_click(
             cx.listener(|view, _, window, cx| {
                 view.preferences.separate_theme_profiles = false;
@@ -359,6 +483,27 @@ impl DesktopView {
         // subsequently opened palette reads the newly selected locale.
         self.clear_palette_state();
         self.preferences.save();
+        cx.notify();
+    }
+
+    fn set_navigation_on_right(&mut self, on_right: bool, cx: &mut Context<Self>) {
+        if self.preferences.navigation_on_right() == on_right {
+            return;
+        }
+
+        self.preferences.navigation_on_right = Some(on_right);
+        self.save_preferences();
+        cx.notify();
+    }
+
+    fn set_navigation_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        if self.preferences.navigation_visible() == visible {
+            return;
+        }
+
+        self.preferences.navigation_visible = Some(visible);
+        self.navigation_peek = false;
+        self.save_preferences();
         cx.notify();
     }
 

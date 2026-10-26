@@ -5,6 +5,9 @@ GUI sends typed JSON-RPC commands; the existing unified runloop remains responsi
 verification, cancellation, and durable session events. The desktop service does not initialize a terminal or emit
 terminal presentation output to its protocol stream.
 
+The [GPUI Kit guide review](desktop-gpui-kit-review.md) records coverage of all 41 main guide topics,
+the applicable ownership/lifecycle improvements, and verification boundaries.
+
 ## Build and launch
 
 For local development, build the service and launch the GUI from the workspace root:
@@ -82,20 +85,24 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Connect to a workspace | Initialization validates the negotiated protocol before configuration and session discovery. Session commands and Send wait for this handshake; incompatible helpers disconnect with the initialization error preserved. |
 | Recover a disconnected service | Startup failures and unexpected local-service exits announce an accessible error and direct you to Settings → VT Code → Reload CLI settings. Pending interactions are dismissed when the service exits, so they cannot block recovery or carry answers into a later question. Repair provider credentials in Terminal when requested. If delivery was uncertain, restore or dismiss the retained message first; it is never resent automatically. |
 | Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
+| Navigate back or forward | Header arrows and ⌘[ / ⌘] move through recent workspace/thread history. Cross-workspace navigation waits for the local service to reconnect before restoring the destination thread. If a saved thread is no longer available, Desktop keeps the destination workspace open without selecting a thread. |
 | Open Utilities | The Utilities inspector tab summarizes session changes, recent tool activity, and draft source attachments, with actions into Changes, Activity, Files, and previews. Press ⌘⇧U or use the navigation rail button to open it. |
 | Inspect tool activity | Expand a consecutive tool-action summary, then open an action for its bounded output excerpt. Copy full output from that action when you need its complete captured text. Running and failed counts remain visible while collapsed. |
 | Receive a background notice | When the main window is inactive, run completion, run failure/blocking, or a pending decision posts a generic system notification. Its click returns to the owning window; app state remains available if OS notification delivery is suppressed. |
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
+| Read the conversation | User messages use trailing, filled neutral bubbles; agent prose has no visible speaker label or avatar. Speaker identity remains available to assistive technology. Compact tool summaries stay between the agent messages that surround them; expanded tools keep their title and disclosure together, with status text reserved for active, failed, or archived activity. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. Send creates a session automatically when none is selected, then submits the exact captured prompt and attachments. A newer draft typed while creation is pending stays in the composer. |
+| Use CLI composer completions | Typing `@` at a token boundary opens filtered workspace-file mentions; selecting one inserts `@path` into the draft and leaves file loading to the shared runtime. A leading `/` opens commands from the CLI's visible slash-command catalog. Up/Down changes the highlighted command, Tab completes without submitting, and Enter completes the selected command and sends it through the normal desktop turn path. Email addresses and package-manager scopes such as `npm install @types/node` do not open file mentions. |
+| Run CLI slash commands | Desktop uses VT Code's shared slash-command dispatcher for runtime, workspace, safety, integration, history, and auth commands. Exact native equivalents route `/new`, `/exit`, `/stop`, `/files [filter]`, `/history`, `/model`, `/fast`, `/mode`, `/theme`, `/config`, and `/help` into desktop session controls, palettes, or settings; bare `/config` opens Settings → VT Code, where Browse all settings uses the CLI's curated groups and Advanced field catalog. `/files` opens the filtered `@` file picker, and `/history` restores a recent user prompt from the selected thread without submitting it. Terminal-only commands (`/terminal-setup`, `/statusline`, `/title`, `/vim`) are omitted from Desktop suggestions. Commands without a native equivalent continue through the shared CLI runtime and its bridged choice dialogs. |
 | Recover a submission | The app retains the submitted prompt and attachments until acknowledgement. A rejected request offers Restore draft, Copy prompt, and Dismiss; restoration requires an empty composer so newer work is preserved. A disconnect before acknowledgement warns that delivery is uncertain. Recovery never resends automatically. |
 | Attach files | "+ Attach" opens a native multi-select picker limited to workspace UTF-8 text files (at most 5 per prompt, 64 KiB each). Oversized files are rejected rather than silently truncated. Send waits for attachment loading. Chips above the composer remove items; the transcript echoes attached paths. |
 | Switch models | The composer's Model button opens a searchable kit Command picker, grouped by provider. Search names, providers, or exact IDs; rows show context token counts and preselect the current model, including configured models outside the built-in catalog. Arrow keys and Enter choose a model through `config/select`. Choosing the current model preserves the session. Escape clears a nonempty query, then dismisses without changes. |
-| Track the active agent | The composer mode control follows primary-agent changes from live slash commands. Its picker still edits the Build/Plan setting for the next session. |
+| Track the active agent | The composer mode control follows primary-agent changes from live slash commands. Its picker lists the CLI-discovered primary agents and saves the workspace default for the next session. |
 | Expand tool details | The changed row is remeasured while the reading position is preserved. |
 | Review file changes | File-change events render as a diff card: per-file kind, +/− counts, apply status, and a collapsible line-colored unified diff (mono font, bounded to 2,000 rendered lines) with copy-patch. |
 | Inspect changes | The inspector's Changes tab aggregates every change-set: per-file kind and +/− counts, and selecting a file opens it in the kit's syntax-highlighted Diff viewer with Copy patch and Open file. |
-| Browse files | ⌘⇧E opens the inspector's Files tab and focuses its read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
+| Browse files | ⌘⇧E opens the inspector's Files tab and focuses its read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). The first scan shows a reduced-motion-aware loading skeleton; empty results explain whether a workspace is missing or contains no browseable files. Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | ⌘⇧G or Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh or ⌘R updates the capture. |
 | Follow activity | The inspector's Activity tab shows an accessible, theme-colored status chart and a virtualized tool/command list, retaining the newest 300 rows in chronological order. Rows with captured output have a keyboard-accessible action that opens that exact capture in Output. The chart's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
 | Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
@@ -103,9 +110,11 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
 | Open the command palette | ⌘K searches session commands, view toggles, all loaded sessions (up to 200), and file previews from the bounded workspace scan (up to 400 entries). Use Refresh recent threads to sync sessions created by the CLI; the desktop updates the active session from runtime events instead of rescanning archives after every turn. Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
-| Expand navigation | The toolbar toggle or ⌘B pins/unpins the project/thread sidebar. Hover the rail’s project icon for a transient list; leaving navigation or pressing Escape dismisses the peek. Clicking the icon also pins it for keyboard use. |
+| Expand navigation | Appearance → Layout places navigation on the left or right (right by default), or hides it while keeping New Thread and Utilities in the header. The toolbar toggle or ⌘B shows/hides the rail; hover its project icon for a transient list, and leave navigation or press Escape to dismiss the peek. |
+| Focus the conversation | Use the navigation rail's Focus control, View, the command palette, or configurable Ctrl+⌘Z to toggle Zen mode; when navigation is hidden, its Focus control is in the header. Zen hides the side panels, thread heading, status bar, and auxiliary composer controls while preserving the transcript, message input, and send/cancel action. A highlighted Focus control in the configured navigation position exits Zen; the native title bar remains available for window controls. |
 | Navigate settings | Settings opens in a responsive right-side Kit Sheet and groups Appearance, Accessibility, Shortcuts, VT Code, and Connections into tabs. Left/Right moves between categories; Home and End select the first and last. Each category scrolls within the sheet so its title and navigation remain available; Escape, the close button, or an overlay click dismisses it. |
-| Configure shortcuts | Settings → Shortcuts shows current bindings as GPUI Kit `Kbd` badges. Choose Edit shortcuts to change twenty-one main desktop commands; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
+| Search settings and CLI config | ⌘F or the Settings search control filters settings categories and the loaded, bounded CLI config catalog. Selecting a category opens that page; selecting a config path opens its existing editor. Escape returns to Settings. |
+| Configure shortcuts | Settings → Shortcuts shows current bindings as GPUI Kit `Kbd` badges. Choose Edit shortcuts to change twenty-five main desktop commands, including navigation, settings/config search, and Zen mode; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
 | Use keyboard commands | ⌘N creates a session, ⌘⇧W closes the selected session, ⌘O chooses a workspace, ⌘L focuses the composer, ⌘⇧I toggles the inspector, ⌘⇧U opens Utilities, ⌘⇧E opens Workspace Files, ⌘⇧G reviews the working tree, ⌘R refreshes the active workspace view, and ⌘. cancels the active run. The same active-turn and cleanup guards apply as for buttons. |
 | Dismiss an overlay | Escape closes the topmost CLI config editor, Settings Sheet, palette, or file preview and restores prior keyboard focus. ⌘L dismisses supported overlays and focuses the composer. Escape alone does not cancel agent work. |
 | Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. When enabled, a Kit Marker announces agent state and shows a compact loading spinner while work is running; its text remains visible. |
@@ -121,7 +130,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Toggle status bar | Hidden by default. Settings → Accessibility, the header menu, and ⌘⇧S share one saved visibility preference. |
 | Sync theme to CLI | Settings → VT Code → CLI preferences or ⌘⇧T saves the selected built-in theme with the CLI's layered config writer. New CLI sessions use the saved theme; Desktop switches to following the CLI theme after the save succeeds. |
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
-| Edit CLI settings | Settings → VT Code → CLI configuration searches effective CLI values. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields are excluded. |
+| Edit CLI settings | Settings → VT Code → CLI configuration searches the complete typed CLI config, including defaults, optional documented fields, labels, descriptions, choices, and the CLI's seven curated groups. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields stay excluded; schema templates without concrete values are shown as read-only references. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews and typography; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status. |
 | Change interface language | Settings → Appearance offers English and Tiếng Việt. The selection updates supported settings navigation and GPUI Kit control labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |
@@ -152,16 +161,24 @@ draft recovery retain their existing ownership and safeguards.
 workspace file list, the existing native file picker, CLI skills, installed Agent Plugins, and native commands.
 Skills insert their explicit `$skill-name` mention. Plugins insert a plain-language request to use the installed
 plugin; this does not grant new access or install anything. Commands reuse the existing model, workspace,
-inspector, and file-refresh actions. No prompt is submitted automatically. File selection reuses workspace
+inspector, file-refresh, and CLI slash-command actions. Typing `@` or a leading `/` also opens inline completion
+without moving focus from the composer; file selection inserts a workspace-relative `@path`, while slash-command
+selection follows the CLI's Tab-complete and Enter-run behavior. No prompt is submitted automatically by the Add
+popup. File selection reuses workspace
 containment, UTF-8, 64 KiB, and five-file limits. Discovery uses shared CLI loaders on a blocking worker while
 idle, a three-second request deadline, bounded wire metadata, and the retained query state.
 
 The permission control (⌘⇧P) chooses **Ask before protected actions** or **Auto-approve commands**. It controls the
-CLI's command confirmation flag and preserves sandbox/tool authorization. **Mode** (⌘⇧B) selects Build or Plan
-through the CLI's primary-agent configuration and planning entry point. Mode, effort, and permission changes
+CLI's command confirmation flag and preserves sandbox/tool authorization. This explicit choice is saved per recent
+workspace in Desktop preferences and restored after service initialization; other workspaces keep their CLI startup
+default. Ask is a confirmation policy, separate from the agent mode. **Mode** (⌘⇧B) lists the CLI-discovered primary
+agents (Build, Plan, Auto, Duck, Coordinator, and custom primary agents) and uses the CLI's primary-agent configuration
+and planning entry point. Mode changes save `default_primary_agent` through the shared layered CLI config writer.
+Mode, effort, and permission changes
 require an idle service, validate before shutting down the old session, and apply to the next session. The current
-draft and attached files survive the change, including model switches. Model changes wait for file loading. These
-are helper-lifetime overrides; they do not write `vtcode.toml`. The mode label follows the active primary agent
+draft and attached files survive the change, including model switches. Model changes wait for file loading.
+Reasoning effort remains a helper-lifetime override. Mode and fast-processing choices persist through CLI configuration;
+permission choices are workspace-scoped Desktop preferences. The mode label follows the active primary agent
 when it changes through CLI slash commands or agent selection. The picker still edits the configured mode for the
 next session, and stale updates from another session are ignored.
 
@@ -218,14 +235,17 @@ be written as CLI themes. A failed write leaves Desktop's current appearance unc
 Font families and sizes remain independent of theme inheritance, and theme updates preserve the draft.
 Unsupported CLI themes produce an explicit error rather than silently substituting a palette.
 
-**CLI configuration** reads a bounded, searchable projection of effective values from the shared `ConfigService`.
-The value type is preserved: booleans toggle, strings and numbers use typed fields, and arrays or maps use a JSON
-editor. Writes select the existing User, Workspace, or Project layer, carry its observed version for conflict
-detection, and pass through the CLI's normal config validation and safe writer. Credential-bearing branches are
-never sent to the GUI or accepted as write values; use `vtcode auth` and configured environment variables for
-credentials. Large values and catalogs beyond the UI bound are omitted and called out in Settings. A successful
-write restarts the local service to reload all CLI layers while retaining the draft, attached files, and history.
-If a higher-precedence layer still overrides the saved value, Settings reports that after reloading.
+**CLI configuration** reads a bounded, searchable projection of the typed CLI configuration from the shared
+`ConfigService`, fills in CLI defaults, and reuses the same curated group and field metadata as the CLI `/config`
+catalog. The value type is preserved: booleans toggle, strings and numbers use typed fields, and arrays or maps use a
+JSON editor. Documented optional fields can be set when no value is currently configured; schema templates without a
+concrete key remain read-only references. Writes select the existing User, Workspace, or Project layer, carry its
+observed version for conflict detection, and pass through the CLI's normal config validation and safe writer.
+Credential-bearing branches are never sent to the GUI or accepted as write values; use `vtcode auth` and configured
+environment variables for credentials. Large values and catalogs beyond the UI bound are omitted and called out in
+Settings. A successful write restarts the local service to reload all CLI layers while retaining the draft, attached
+files, and history. If a higher-precedence layer still overrides the saved value, Settings reports that after
+reloading.
 
 **CLI preferences → Reload CLI settings** remains available to refresh configuration changed outside Desktop.
 It starts a fresh conversation and resets helper-lifetime model, effort, and permission overrides. The editable
@@ -244,7 +264,7 @@ An explicit empty list unbinds that command. Invalid bindings are reported rathe
 an unbind; reserved/native editing shortcuts and conflicts reject the whole import. Unsaved edits to
 other shortcut fields are retained. Credentials and full configuration documents are not transferred.
 
-The shortcut editor covers command search, new/close thread, workspace/model choice, composer focus,
+The shortcut editor covers command search, settings/config search, new/close thread, workspace/model choice, composer focus,
 sidebar/inspector toggles, cancellation, overlay dismissal, Settings, Utilities, Workspace Files, Working Tree Review,
 and workspace refresh. Searchable palette rows highlight matching label text while keeping the command name
 accessible. Leave a shortcut field empty to unbind it.
@@ -269,8 +289,12 @@ resize handles retain their own cursors.
 ### Model picker
 
 The composer opens a compact 352 px model/effort panel above the input; the full catalog search is 392 px wide.
-The compact panel shows the selected model name, its current reasoning-effort value, and a supported effort knob;
-model choices stay in the full search opened by **Search all models…**. Long model names wrap within the compact
+The compact panel shows the selected model name, its current reasoning-effort value, and a supported effort knob.
+The composer model button also shows the acknowledged effort and effective Fast or Ultrafast tier. Ultrafast
+uses a filled theme-accent badge and active toggle; Fast uses a quieter surface. Both labels are capitalized.
+Both refresh from the CLI configuration response after a selection is accepted. Long model names truncate in
+the composer button while the accessible name retains the complete model, effort, and speed.
+Model choices stay in the full search opened by **Search all models…**. Long model names wrap within the compact
 panel. Catalog rows expose supported reasoning, vision, tool use,
 structured output, pro tier, audio/video/PDF input, and a compact context-window size when the CLI provides them.
 The effort knob appears only for advertised provider/model capabilities. Native decrease/increase buttons offer

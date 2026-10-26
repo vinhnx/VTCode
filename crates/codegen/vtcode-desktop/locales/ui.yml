@@ -7,6 +7,22 @@ app:
     categories:
       en: Settings categories
       vi: Danh mục cài đặt
+    search:
+      button:
+        en: Search settings and CLI config…
+        vi: Tìm cài đặt và cấu hình CLI…
+      title:
+        en: Search settings and CLI config
+        vi: Tìm kiếm cài đặt và cấu hình CLI
+      placeholder:
+        en: Filter settings, categories, and CLI config paths…
+        vi: Lọc cài đặt, danh mục và đường dẫn cấu hình CLI…
+      group_settings:
+        en: Settings
+        vi: Cài đặt
+      group_cli_config:
+        en: CLI config
+        vi: Cấu hình CLI
     tab:
       appearance:
         en: Appearance
@@ -66,16 +82,6 @@ app:
       explore_in_workspace:
         en: What are we exploring in
         vi: Chúng ta muốn khám phá gì trong
-    description:
-      build:
-        en: Start with a task, a question, or an idea.
-        vi: Bắt đầu bằng một nhiệm vụ, câu hỏi hoặc ý tưởng.
-      improve:
-        en: Bring a bug, a feature, or a rough idea.
-        vi: Bắt đầu với một lỗi, tính năng hoặc ý tưởng phác thảo.
-      explore:
-        en: Choose a project and start with a prompt.
-        vi: Chọn một dự án rồi mô tả yêu cầu đầu tiên.
     cta:
       choose_workspace:
         en: Choose a workspace
@@ -86,6 +92,24 @@ app:
       select_folder:
         en: Select a folder
         vi: Chọn thư mục
+  files:
+    scanning:
+      en: Scanning workspace files
+      vi: Đang quét tệp trong không gian làm việc
+    empty:
+      title:
+        en: No workspace files
+        vi: Không có tệp trong không gian làm việc
+      description:
+        en: There are no files available to browse in this workspace.
+        vi: Không có tệp nào để duyệt trong không gian làm việc này.
+    no_workspace:
+      title:
+        en: Choose a workspace
+        vi: Chọn không gian làm việc
+      description:
+        en: Select a workspace to browse its files.
+        vi: Chọn không gian làm việc để duyệt tệp.
 gpui_component:
   Input:
     Copy:

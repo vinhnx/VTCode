@@ -14,7 +14,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 13 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 14 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -148,6 +148,19 @@ pub struct InitializeResult {
     pub workspace: String,
     /// Server version.
     pub server_version: String,
+    /// CLI slash commands shown by the native composer.
+    #[serde(default)]
+    pub slash_commands: Vec<SlashCommandInfo>,
+}
+
+/// Display metadata for a slash command exposed by the CLI chat input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlashCommandInfo {
+    /// Command name without the leading slash.
+    pub name: String,
+    /// Short description shown in composer completion.
+    pub description: String,
 }
 
 /// Basic workspace and provider configuration exposed to the GUI.
@@ -225,6 +238,9 @@ pub struct SessionOptionsSnapshot {
     pub permission_mode: PermissionMode,
     /// Selected primary agent, such as build or plan.
     pub mode: String,
+    /// Primary agents discovered by the CLI for this workspace.
+    #[serde(default)]
+    pub available_modes: Vec<AgentModeInfo>,
     /// CLI reasoning effort identifier.
     pub reasoning_effort: String,
     /// Efforts supported by this exact provider/model route.
@@ -240,6 +256,18 @@ pub struct SessionOptionsSnapshot {
     /// Label used by the CLI for the selected fast tier on this route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fast_mode_label: Option<String>,
+}
+
+/// Non-secret metadata for a selectable CLI primary agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModeInfo {
+    /// Canonical CLI primary-agent name.
+    pub name: String,
+    /// CLI display name.
+    pub display_name: String,
+    /// Short description of the agent's role.
+    pub description: String,
 }
 
 /// An explicit idle-session option change. Omitted values preserve existing choices.
@@ -282,10 +310,38 @@ pub enum ConfigTarget {
 pub struct ConfigSetting {
     /// Stable dotted path accepted by the CLI config writer.
     pub path: String,
-    /// Effective value from the merged CLI configuration.
+    /// Effective CLI value after defaults; null represents an unset documented optional field.
     pub value: Value,
     /// Safe layer label such as `workspace` or `user`; never a filesystem path.
     pub origin: Option<String>,
+    /// CLI `/config` display label, when documented.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// CLI schema type used when a setting has no explicit effective value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub type_name: Option<String>,
+    /// Documented default value, rendered as plain text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_value: Option<String>,
+    /// Description from the shared CLI configuration reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Documented choices, if the CLI exposes a finite set.
+    #[serde(default)]
+    pub options: Vec<String>,
+    /// Curated CLI `/config` group or `Advanced settings`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// Purpose of the curated group.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_description: Option<String>,
+    /// Whether the current CLI catalog considers this a writable setting.
+    #[serde(default = "config_setting_editable_default")]
+    pub editable: bool,
+}
+
+const fn config_setting_editable_default() -> bool {
+    true
 }
 
 /// Version of one writable config layer, for optimistic write protection.
@@ -298,11 +354,11 @@ pub struct ConfigTargetVersion {
     pub version: Option<String>,
 }
 
-/// Bounded, credential-filtered settings catalog returned by the CLI.
+/// Bounded, credential-filtered catalog of the CLI's effective and documented settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigSettingsSnapshot {
-    /// Effective values that can be edited through the shared config writer.
+    /// Effective settings and documented schema entries from the shared CLI `/config` catalog.
     pub settings: Vec<ConfigSetting>,
     /// Fingerprints for user, workspace, and project layers.
     pub target_versions: Vec<ConfigTargetVersion>,
@@ -322,7 +378,7 @@ pub struct ConfigSettingsWriteParams {
     pub target: ConfigTarget,
     /// Dotted setting path from `ConfigSettingsSnapshot`.
     pub path: String,
-    /// Replacement value. Its type must match the effective setting.
+    /// Replacement value. Its type must match the effective setting or documented schema type.
     pub value: Value,
     /// Version observed when the setting editor opened.
     pub expected_layer_version: Option<String>,
@@ -1248,6 +1304,19 @@ mod tests {
     }
 
     #[test]
+    fn legacy_cli_settings_rows_default_to_editable_without_metadata() {
+        let setting: ConfigSetting = serde_json::from_value(serde_json::json!({
+            "path": "agent.default_model",
+            "value": "model-a",
+            "origin": "workspace"
+        }))
+        .expect("legacy settings row");
+        assert!(setting.editable);
+        assert!(setting.description.is_none());
+        assert!(setting.options.is_empty());
+    }
+
+    #[test]
     fn interaction_responses_are_session_turn_scoped_and_single_use() {
         let mut registry = InteractionRegistry::default();
         let interaction = InteractionRequest {
@@ -1375,6 +1444,7 @@ mod tests {
         assert!(!legacy_options.fast_mode_supported);
         assert!(!legacy_options.fast_mode_enabled);
         assert_eq!(legacy_options.fast_mode_label, None);
+        assert!(legacy_options.available_modes.is_empty());
 
         let value = serde_json::to_value(ConfigurationSnapshot {
             provider: "ollama".to_string(),
