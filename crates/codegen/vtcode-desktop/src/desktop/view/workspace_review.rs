@@ -15,8 +15,8 @@ use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
-    DesktopButtonExt, DesktopView, NextReviewFile, PreviousReviewFile, RefreshWorkspace, desktop_button, empty_state,
-    skeleton_line, uuid_like_id, warning_alert,
+    DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
+    command, desktop_button, empty_state, skeleton_line, uuid_like_id, warning_alert,
 };
 
 pub(super) struct WorkspaceReviewState {
@@ -165,6 +165,51 @@ impl DesktopView {
         let path = file.path().to_string();
         viewer.update(cx, |viewer, cx| viewer.scroll_to_file(&path, cx));
         review.selected_file = Some(path);
+        cx.notify();
+    }
+
+    pub(super) fn open_workspace_review_file_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(entries) = self
+            .workspace_review
+            .as_ref()
+            .and_then(|review| review.viewer.as_ref())
+            .map(|viewer| {
+                viewer
+                    .read(cx)
+                    .files()
+                    .iter()
+                    .map(|file| {
+                        let path = file.path().to_string();
+                        let mut entry = command(path.clone(), PaletteAction::SelectWorkspaceReviewFile(path));
+                        entry.description = Some(format!("+{} · −{} lines", file.additions(), file.deletions()));
+                        entry.keywords = vec!["working tree".into(), "changed file".into()];
+                        entry
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|entries| !entries.is_empty())
+        else {
+            return;
+        };
+        self.show_palette(PaletteKind::ReviewFiles, vec![("Changed files".into(), entries)], window, cx);
+    }
+
+    pub(super) fn select_workspace_review_file(&mut self, path: String, cx: &mut Context<Self>) {
+        let Some(viewer) = self
+            .workspace_review
+            .as_ref()
+            .and_then(|review| review.viewer.as_ref())
+            .cloned()
+        else {
+            return;
+        };
+        if !viewer.read(cx).files().iter().any(|file| file.path().as_str() == path) {
+            return;
+        }
+        viewer.update(cx, |viewer, cx| viewer.scroll_to_file(&path, cx));
+        if let Some(review) = self.workspace_review.as_mut() {
+            review.selected_file = Some(path);
+        }
         cx.notify();
     }
 
@@ -418,16 +463,16 @@ impl DesktopView {
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_workspace_review_file(false, cx))),
                     )
                     .child(
-                        div()
-                            .id("workspace-review-current-file")
-                            .test_support()
-                            .role(gpui_kit::Role::Status)
-                            .aria_label(label.clone())
+                        desktop_button("workspace-review-current-file")
+                            .label(label.clone())
+                            .icon(IconName::ChevronDown)
+                            .tooltip("Choose a changed file")
+                            .ghost()
+                            .small()
                             .flex_1()
-                            .min_w_0()
-                            .text_sm()
-                            .truncate()
-                            .child(label),
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.open_workspace_review_file_palette(window, cx);
+                            })),
                     )
                     .child(
                         desktop_button("workspace-review-next-file")

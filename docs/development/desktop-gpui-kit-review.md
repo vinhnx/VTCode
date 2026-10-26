@@ -108,7 +108,7 @@ backend was introduced.
 
 The [v0.8.0 component catalog](https://gpui-kit.com/component/) lists 79 components.
 VT Code already uses the catalog components that match its workflows: `Message`/`Bubble` and
-`MessageScroller` for conversations, `Command` for searchable actions, `InputGroup` and
+`MessageScroller` for conversations, `Command` for searchable actions and changed-file selection, `InputGroup` and
 `Attachment` for the composer, `Tree` for workspace files, `Diff` for code review, and
 `GroupBox`, `DescriptionList`, `TabBar`, `Popover`, `Toggle`, `Checkbox`, `Marker`, `Tag`, and
 `StatusBar` in their respective settings, review, and navigation surfaces. No replacement of these

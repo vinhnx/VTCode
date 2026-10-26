@@ -408,6 +408,7 @@ enum PaletteKind {
     Modes,
     Fonts(FontTarget),
     SettingsSearch,
+    ReviewFiles,
 }
 
 /// What confirming a palette entry does. Executed through existing methods so
@@ -436,6 +437,7 @@ enum PaletteAction {
     CompleteSlashCommand(String),
     InsertHistoryPrompt(String),
     InsertDraft(String),
+    SelectWorkspaceReviewFile(String),
 }
 
 pub(crate) fn run() {
@@ -2159,10 +2161,10 @@ impl DesktopView {
             cx.notify();
         } else if self.settings_open {
             self.close_settings(window, cx);
-        } else if self.review_open {
-            self.close_review(window, cx);
         } else if self.palette.is_some() {
             self.close_palette(window, cx);
+        } else if self.review_open {
+            self.close_review(window, cx);
         } else if self.file_preview.is_some() {
             self.close_file_preview(window, cx);
         } else {
@@ -2306,6 +2308,10 @@ impl DesktopView {
                 family.as_deref() == selected
             }
             PaletteAction::SelectSettingsTab(tab) => self.settings_tab == *tab,
+            PaletteAction::SelectWorkspaceReviewFile(path) => self
+                .workspace_review
+                .as_ref()
+                .is_some_and(|review| review.selected_file.as_deref() == Some(path)),
             _ => false,
         }
     }
@@ -2317,7 +2323,7 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.review_open {
+        if self.review_open && kind != PaletteKind::ReviewFiles {
             self.close_review(window, cx);
         }
         if self.palette.is_some() {
@@ -2359,6 +2365,7 @@ impl DesktopView {
                     | PaletteKind::Modes
                     | PaletteKind::Fonts(_)
                     | PaletteKind::SettingsSearch
+                    | PaletteKind::ReviewFiles
             ))
             .then(|| {
                 self.palette_groups.iter().enumerate().find_map(|(section, (_, entries))| {
@@ -2442,6 +2449,7 @@ impl DesktopView {
             ),
             PaletteAction::LoadSession(session_id) => self.load_session(session_id, cx),
             PaletteAction::PreviewFile(rel_path) => self.open_file_preview(rel_path, window, cx),
+            PaletteAction::SelectWorkspaceReviewFile(path) => self.select_workspace_review_file(path, cx),
             PaletteAction::SelectModel { provider, model } => {
                 if !self.model_is_current(&provider, &model) {
                     self.select_model(provider, model, cx);
@@ -2463,6 +2471,9 @@ impl DesktopView {
             | PaletteAction::InsertHistoryPrompt(_) => true,
             PaletteAction::CloseSession => self.selected_session_id.is_some() && self.session_change_allowed(None),
             PaletteAction::LoadSession(session_id) => self.session_change_allowed(Some(session_id)),
+            PaletteAction::SelectWorkspaceReviewFile(_) => {
+                self.review_open && self.workspace_review.as_ref().is_some_and(|review| review.viewer.is_some())
+            }
             PaletteAction::ChooseWorkspace => {
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open
             }
@@ -7295,6 +7306,7 @@ impl DesktopView {
             PaletteKind::Fonts(FontTarget::Code) => "Choose code font".to_owned(),
             PaletteKind::SettingsSearch => rust_i18n::t!("app.settings.search.title").to_string(),
             PaletteKind::ConfigSettings => "VT Code configuration".to_owned(),
+            PaletteKind::ReviewFiles => "Choose changed file".to_owned(),
             PaletteKind::Commands => "Command palette".to_owned(),
         };
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
@@ -7311,6 +7323,8 @@ impl DesktopView {
             "Filter workspace files…".to_owned()
         } else if self.palette_kind == PaletteKind::SlashCommands {
             "Filter VT Code commands…".to_owned()
+        } else if self.palette_kind == PaletteKind::ReviewFiles {
+            "Search changed files…".to_owned()
         } else if prompt_history {
             "Search prompts in this thread…".to_owned()
         } else if modes {
@@ -7947,6 +7961,7 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         PaletteAction::EditConfigSetting(value)
         | PaletteAction::LoadSession(value)
         | PaletteAction::PreviewFile(value)
+        | PaletteAction::SelectWorkspaceReviewFile(value)
         | PaletteAction::AttachFile(value)
         | PaletteAction::InsertFileMention(value)
         | PaletteAction::CompleteSlashCommand(value)
