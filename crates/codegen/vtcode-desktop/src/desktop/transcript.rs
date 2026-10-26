@@ -67,15 +67,20 @@ pub(super) enum DiffFileKind {
 impl TranscriptItem {
     pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
-        let prepared = prepare_markdown(&text);
+        let (markdown, accessibility_text) = if matches!(role.as_str(), "tool" | "diff") {
+            (SharedString::default(), SharedString::default())
+        } else {
+            let prepared = prepare_markdown(&text);
+            (prepared.markdown, prepared.accessible_text)
+        };
         Self {
             id,
             has_activity_status: role == "tool",
             role,
             title,
             text,
-            markdown: prepared.markdown,
-            accessibility_text: prepared.accessible_text,
+            markdown,
+            accessibility_text,
             expanded: false,
             activity_expanded: false,
             activity_grouped: false,
@@ -399,6 +404,19 @@ mod tests {
 
     fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
         TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
+    }
+
+    #[test]
+    fn tool_and_diff_rows_skip_unused_markdown_projections() {
+        for role in ["tool", "diff"] {
+            let row = item(1, role, "status\n\nmetadata");
+            assert!(row.markdown.is_empty());
+            assert!(row.accessibility_text.is_empty());
+        }
+
+        let message = item(2, "assistant", "A **readable** response.");
+        assert_eq!(message.markdown.as_str(), "A **readable** response.");
+        assert!(message.accessibility_text.contains("readable"));
     }
 
     #[test]
