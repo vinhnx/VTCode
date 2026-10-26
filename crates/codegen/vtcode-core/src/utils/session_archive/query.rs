@@ -19,6 +19,15 @@ pub(crate) async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf>
 }
 
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
+    list_recent_sessions_matching(limit, None).await
+}
+
+/// List the most recent archives for a workspace, applying the limit after workspace filtering.
+pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -> Result<Vec<SessionListing>> {
+    list_recent_sessions_matching(limit, Some(workspace)).await
+}
+
+async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -> Result<Vec<SessionListing>> {
     let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
@@ -57,11 +66,20 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
 
         for path in batch {
             let path = path.clone();
+            let workspace = workspace.map(Path::to_path_buf);
             let task = tokio::task::spawn(async move {
-                read_private_json_file::<SessionSnapshot>(&path)
-                    .await
-                    .ok()
-                    .map(|snapshot| SessionListing { path, snapshot })
+                let snapshot = match read_private_json_file::<SessionSnapshot>(&path).await {
+                    Ok(snapshot) => snapshot,
+                    Err(_) => return None,
+                };
+                let listing = SessionListing { path, snapshot };
+                if workspace
+                    .as_deref()
+                    .is_some_and(|workspace| !session_listing_matches_workspace(&listing, workspace))
+                {
+                    return None;
+                }
+                Some(listing)
             });
             tasks.push(task);
         }
@@ -81,14 +99,6 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     }
 
     Ok(all_listings)
-}
-
-/// List the most recent archives for a workspace, applying the limit after workspace filtering.
-pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -> Result<Vec<SessionListing>> {
-    let mut listings = list_recent_sessions(0).await?;
-    listings.retain(|listing| session_listing_matches_workspace(listing, workspace));
-    listings.truncate(limit);
-    Ok(listings)
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.
