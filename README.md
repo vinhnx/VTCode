@@ -264,7 +264,7 @@ graph LR
 Build with Rust 1.99.1+ (edition 2024) and install `cargo-nextest` to run tests. Context handling separates session
 history from provider request projections; see [context architecture](./docs/ARCHITECTURE.md#request-projection-and-context-budgets)
 and the [compaction guide](./docs/development/compaction.md). The [architecture guide](./docs/ARCHITECTURE.md) maps all
-23 crates.
+25 crates.
 
 ```bash
 git clone https://github.com/vinhnx/VTCode.git

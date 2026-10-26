@@ -1105,3 +1105,13 @@ https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01
 ---
 
 https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01a174f1-ed7a-72a5-a6a5-3c5e81252ec2/diff
+
+--
+
+revamp this UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-26 at 4.34.02 PM.png' --> remove the background for the UI heading section
+
+---
+
+update the selected reasoning effort and trait (ultrafast/fast) in the model picker in the chat input.
+
+also update the ULTRAFAST UI -> keep it special and premium also capitalize the text labe.
