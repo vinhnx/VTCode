@@ -4,7 +4,7 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
-const COMMANDS: [(&str, &str, &str); 25] = [
+const COMMANDS: [(&str, &str, &str); 29] = [
     ("commands", "Search commands", "cmd-k"),
     ("new_session", "New thread", "cmd-n"),
     ("close_session", "Close thread", "cmd-shift-w"),
@@ -30,6 +30,10 @@ const COMMANDS: [(&str, &str, &str); 25] = [
     ("refresh_workspace", "Refresh current workspace view", "cmd-r"),
     ("navigate_back", "Navigate back", "cmd-["),
     ("navigate_forward", "Navigate forward", "cmd-]"),
+    ("next_review_change", "Next review change", "f7"),
+    ("previous_review_change", "Previous review change", "shift-f7"),
+    ("next_review_file", "Next changed file", "alt-f7"),
+    ("previous_review_file", "Previous changed file", "alt-shift-f7"),
 ];
 
 fn action(id: &str) -> Box<dyn gpui_kit::Action> {
@@ -58,6 +62,10 @@ fn action(id: &str) -> Box<dyn gpui_kit::Action> {
         "refresh_workspace" => Box::new(RefreshWorkspace),
         "navigate_back" => Box::new(NavigateBack),
         "navigate_forward" => Box::new(NavigateForward),
+        "next_review_change" => Box::new(NextReviewChange),
+        "previous_review_change" => Box::new(PreviousReviewChange),
+        "next_review_file" => Box::new(NextReviewFile),
+        "previous_review_file" => Box::new(PreviousReviewFile),
         _ => Box::new(OpenSettings),
     }
 }
@@ -102,14 +110,15 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
                 && !source.contains("cmd-")
                 && !source.contains("ctrl-")
                 && !source.contains("alt-")
+                && !is_function_key(&normalized)
             {
-                return Err(format!("{label}: include cmd, ctrl, or alt so typing remains available"));
+                return Err(format!("{label}: include cmd, ctrl, alt, or use a function key"));
             }
             if !seen.insert(normalized) {
                 return Err(format!("{label}: shortcut is already assigned"));
             }
             let context =
-                gpui_kit::KeyBindingContextPredicate::parse("VTCodeDesktop").map_err(|error| error.to_string())?;
+                gpui_kit::KeyBindingContextPredicate::parse(context_for(id)).map_err(|error| error.to_string())?;
             let mut bindings = vec![
                 KeyBinding::load(source, action(id), Some(context.into()), false, None, &gpui_kit::DummyKeyboardMapper)
                     .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
@@ -133,6 +142,23 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
         })
         .collect::<Result<Vec<_>, _>>()
         .map(|bindings| bindings.into_iter().flatten().collect())
+}
+
+fn is_function_key(shortcut: &str) -> bool {
+    shortcut
+        .rsplit('-')
+        .next()
+        .and_then(|key| key.strip_prefix('f'))
+        .and_then(|number| number.parse::<u8>().ok())
+        .is_some_and(|number| (1..=24).contains(&number))
+}
+
+fn context_for(id: &str) -> &'static str {
+    if matches!(id, "next_review_change" | "previous_review_change" | "next_review_file" | "previous_review_file") {
+        "VTCodeDiffReview"
+    } else {
+        "VTCodeDesktop"
+    }
 }
 
 pub(super) fn inputs(
@@ -338,7 +364,7 @@ impl DesktopView {
 }
 
 fn active_binding(id: &str, window: &Window) -> Option<gpui_kit::Keystroke> {
-    let context = gpui_kit::KeyContext::parse("VTCodeDesktop").ok()?;
+    let context = gpui_kit::KeyContext::parse(context_for(id)).ok()?;
     let action = action(id);
     window
         .highest_precedence_binding_for_action_in_context(action.as_ref(), context)?
@@ -385,16 +411,16 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 26);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 30);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 25);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 29);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
                 .unwrap()
                 .len(),
-            24
+            28
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [
@@ -406,5 +432,27 @@ mod tests {
         ] {
             assert!(bindings(&BTreeMap::from([(action.into(), key.into())])).is_err(), "{action}: {key}");
         }
+    }
+
+    #[test]
+    fn review_navigation_accepts_configurable_function_key_bindings() {
+        let configured = BTreeMap::from([
+            ("next_review_change".into(), "f8".into()),
+            ("previous_review_change".into(), "shift-f8".into()),
+            ("next_review_file".into(), "alt-f9".into()),
+            ("previous_review_file".into(), "alt-shift-f9".into()),
+        ]);
+        assert!(bindings(&configured).is_ok());
+        assert_eq!(context_for("next_review_change"), "VTCodeDiffReview");
+        assert_eq!(context_for("previous_review_file"), "VTCodeDiffReview");
+        assert_eq!(context_for("navigate_back"), "VTCodeDesktop");
+        assert!(bindings(&BTreeMap::from([("next_review_change".into(), "f25".into())])).is_err());
+        assert!(
+            bindings(&BTreeMap::from([
+                ("next_review_change".into(), "f8".into()),
+                ("previous_review_change".into(), "f8".into()),
+            ]))
+            .is_err()
+        );
     }
 }

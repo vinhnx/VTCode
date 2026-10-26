@@ -307,10 +307,6 @@ fn init_keybindings(cx: &mut App) {
         }
     }
     cx.bind_keys([
-        KeyBinding::new("f7", NextReviewChange, Some("VTCodeDiffReview")),
-        KeyBinding::new("shift-f7", PreviousReviewChange, Some("VTCodeDiffReview")),
-        KeyBinding::new("alt-f7", NextReviewFile, Some("VTCodeDiffReview")),
-        KeyBinding::new("alt-shift-f7", PreviousReviewFile, Some("VTCodeDiffReview")),
         KeyBinding::new("cmd-w", CloseWindow, Some("VTCodeDesktop")),
         KeyBinding::new("cmd-m", MinimizeWindow, Some("VTCodeDesktop")),
         KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
@@ -2338,41 +2334,36 @@ impl DesktopView {
     fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let mut changed = false;
         let mut processed = 0;
+        let mut pending_item_update = None;
         for _ in 0..MAX_UI_EVENTS_PER_TICK {
             match self.event_rx.try_recv() {
                 Ok(event) => {
                     processed += 1;
                     changed = true;
-                    let accepted_decision = matches!(&event,
-                        BackendEvent::InteractionResponded { identity, error: None }
-                            if self.pending_interaction_response.as_deref() == Some(identity.interaction_id.as_str()))
-                        && self.interaction_focus.contains_focused(window, cx);
-                    let new_interaction = matches!(&event, BackendEvent::Interaction(_));
-                    let previous_interaction_id = new_interaction
-                        .then(|| self.interaction.as_ref().map(|interaction| interaction.interaction_id.clone()))
-                        .flatten();
-                    self.notify_background_activity(&event, window, cx);
-                    self.handle_backend_event(event, cx);
-                    let interaction_replaced = new_interaction
-                        && previous_interaction_id.as_deref()
-                            != self.interaction.as_ref().map(|interaction| interaction.interaction_id.as_str());
-                    if (self.interaction.is_none() || interaction_replaced)
-                        && !self.question_answer.read(cx).value().is_empty()
+                    if pending_item_update
+                        .as_ref()
+                        .is_some_and(|pending| can_coalesce_item_updates(pending, &event))
                     {
-                        self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
+                        // ItemUpdated carries a full snapshot, so intermediate
+                        // snapshots for this item need not be rendered in one
+                        // UI tick. The service persists every event separately.
+                        pending_item_update = Some(event);
+                        continue;
                     }
-                    if accepted_decision
-                        && self.interaction.is_none()
-                        && !self.settings_open
-                        && self.palette.is_none()
-                        && !self.review_open
-                    {
-                        self.focus_composer(window, cx);
+                    if let Some(pending) = pending_item_update.take() {
+                        self.process_drained_event(pending, window, cx);
                     }
-                    self.restore_focus_after_review_close(window, cx);
+                    if is_item_update_event(&event) {
+                        pending_item_update = Some(event);
+                    } else {
+                        self.process_drained_event(event, window, cx);
+                    }
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
+                    if let Some(pending) = pending_item_update.take() {
+                        self.process_drained_event(pending, window, cx);
+                    }
                     self.backend = None;
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -2385,10 +2376,41 @@ impl DesktopView {
                 }
             }
         }
+        if let Some(pending) = pending_item_update {
+            self.process_drained_event(pending, window, cx);
+        }
         if changed {
             cx.notify();
         }
         processed == MAX_UI_EVENTS_PER_TICK
+    }
+
+    fn process_drained_event(&mut self, event: BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let accepted_decision = matches!(&event,
+            BackendEvent::InteractionResponded { identity, error: None }
+                if self.pending_interaction_response.as_deref() == Some(identity.interaction_id.as_str()))
+            && self.interaction_focus.contains_focused(window, cx);
+        let new_interaction = matches!(&event, BackendEvent::Interaction(_));
+        let previous_interaction_id = new_interaction
+            .then(|| self.interaction.as_ref().map(|interaction| interaction.interaction_id.clone()))
+            .flatten();
+        self.notify_background_activity(&event, window, cx);
+        self.handle_backend_event(event, cx);
+        let interaction_replaced = new_interaction
+            && previous_interaction_id.as_deref()
+                != self.interaction.as_ref().map(|interaction| interaction.interaction_id.as_str());
+        if (self.interaction.is_none() || interaction_replaced) && !self.question_answer.read(cx).value().is_empty() {
+            self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
+        }
+        if accepted_decision
+            && self.interaction.is_none()
+            && !self.settings_open
+            && self.palette.is_none()
+            && !self.review_open
+        {
+            self.focus_composer(window, cx);
+        }
+        self.restore_focus_after_review_close(window, cx);
     }
 
     fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -4028,7 +4050,6 @@ impl DesktopView {
                 div()
                     .id("inspector-navigation")
                     .test_support()
-                    .track_focus(&self.inspector_focus)
                     .key_context("VTCodeInspector")
                     .role(gpui_kit::Role::Group)
                     .aria_label("Context inspector tabs")
@@ -4051,21 +4072,29 @@ impl DesktopView {
                         view.select_inspector_tab_from_keyboard(InspectorTab::ALL.len().saturating_sub(1), window, cx)
                     }))
                     .child(
-                        TabBar::new("inspector-tabs")
-                            .underline()
-                            .small()
-                            .w_full()
-                            .track_scroll(&self.inspector_tabs_scroll)
-                            .selected_index(
-                                InspectorTab::ALL
-                                    .iter()
-                                    .position(|tab| *tab == self.inspector_tab)
-                                    .unwrap_or_default(),
-                            )
-                            .on_click(cx.listener(|view, index: &usize, window, cx| {
-                                view.select_inspector_tab(*index, window, cx)
-                            }))
-                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
+                        div()
+                            .id("inspector-tabs-focus")
+                            .test_support()
+                            .track_focus(&self.inspector_focus)
+                            .child(
+                                TabBar::new("inspector-tabs")
+                                    .underline()
+                                    .small()
+                                    .w_full()
+                                    .track_scroll(&self.inspector_tabs_scroll)
+                                    .selected_index(
+                                        InspectorTab::ALL
+                                            .iter()
+                                            .position(|tab| *tab == self.inspector_tab)
+                                            .unwrap_or_default(),
+                                    )
+                                    .on_click(cx.listener(|view, index: &usize, window, cx| {
+                                        view.select_inspector_tab(*index, window, cx)
+                                    }))
+                                    .children(
+                                        InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer()),
+                                    ),
+                            ),
                     ),
             );
 
@@ -4076,7 +4105,15 @@ impl DesktopView {
             InspectorTab::Output => self.render_output_tab(cx),
             InspectorTab::Utilities => self.render_utilities(cx),
         };
-        panel.child(content).into_any_element()
+        panel
+            .child(content)
+            .when(self.inspector_tab == InspectorTab::Changes, |panel| {
+                panel
+                    .key_context("VTCodeDiffReview")
+                    .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_change_file(true, cx)))
+                    .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_change_file(false, cx)))
+            })
+            .into_any_element()
     }
 
     fn render_changes_tab(
@@ -4104,6 +4141,7 @@ impl DesktopView {
             )));
         }
         div()
+            .id("inspector-changes-tab")
             .w_full()
             .flex_1()
             .min_h_0()
@@ -4122,6 +4160,7 @@ impl DesktopView {
                 ),
             )
             .child(content_panel.child(content))
+            .test_support()
             .into_any_element()
     }
 
@@ -4172,7 +4211,11 @@ impl DesktopView {
                             desktop_button("previous-change-file")
                                 .icon(IconName::ChevronLeft)
                                 .accessibility_label("Previous changed file")
-                                .tooltip("Previous changed file")
+                                .tooltip_with_action(
+                                    "Previous changed file",
+                                    &PreviousReviewFile,
+                                    Some("VTCodeDiffReview"),
+                                )
                                 .ghost()
                                 .small()
                                 .desktop_disabled(self.changes.entries().len() < 2)
@@ -4182,7 +4225,7 @@ impl DesktopView {
                             desktop_button("next-change-file")
                                 .icon(IconName::ChevronRight)
                                 .accessibility_label("Next changed file")
-                                .tooltip("Next changed file")
+                                .tooltip_with_action("Next changed file", &NextReviewFile, Some("VTCodeDiffReview"))
                                 .ghost()
                                 .small()
                                 .desktop_disabled(self.changes.entries().len() < 2)
@@ -7653,6 +7696,28 @@ fn desktop_window_options() -> WindowOptions {
 
 fn chrome_background(colors: &gpui_kit::component::theme::ThemeColor) -> gpui_kit::Hsla {
     themes::navigation_surfaces(colors.background, colors.secondary, colors.foreground).rail
+}
+
+fn item_update_identity(event: &BackendEvent) -> Option<(&str, Option<&str>, &str)> {
+    let BackendEvent::ThreadEvent(notification) = event else {
+        return None;
+    };
+    let vtcode_exec_events::ThreadEvent::ItemUpdated(update) = notification.event.event() else {
+        return None;
+    };
+    Some((&notification.session_id, notification.turn_id.as_deref(), &update.item.id))
+}
+
+fn is_item_update_event(event: &BackendEvent) -> bool {
+    item_update_identity(event).is_some()
+}
+
+fn can_coalesce_item_updates(previous: &BackendEvent, next: &BackendEvent) -> bool {
+    matches!(
+        (item_update_identity(previous), item_update_identity(next)),
+        (Some((previous_session, previous_turn, previous_item)), Some((next_session, next_turn, next_item)))
+            if previous_session == next_session && previous_turn == next_turn && previous_item == next_item
+    )
 }
 
 /// Keep local paths out of element IDs while preserving path-based identity across sorting.

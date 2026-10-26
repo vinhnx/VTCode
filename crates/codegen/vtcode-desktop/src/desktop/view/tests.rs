@@ -85,6 +85,65 @@ fn palette_action_id(action: &super::PaletteAction) -> String {
     super::palette_entry_element_id(action)
 }
 
+fn agent_message_update_event(session_id: &str, turn_id: &str, item_id: &str, text: &str) -> BackendEvent {
+    use vtcode_exec_events::{AgentMessageItem, ItemUpdatedEvent, ThreadEvent, ThreadItem, ThreadItemDetails};
+
+    BackendEvent::ThreadEvent(vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemUpdated(ItemUpdatedEvent {
+            item: ThreadItem {
+                context: None,
+                id: item_id.into(),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.into() }),
+            },
+        })),
+    })
+}
+
+#[test]
+fn item_update_coalescing_requires_the_same_session_turn_and_item() {
+    let first = agent_message_update_event("session-a", "turn-a", "item-a", "first snapshot");
+    let next = agent_message_update_event("session-a", "turn-a", "item-a", "latest snapshot");
+    assert!(super::can_coalesce_item_updates(&first, &next));
+    assert!(!super::can_coalesce_item_updates(
+        &first,
+        &agent_message_update_event("session-b", "turn-a", "item-a", "other session")
+    ));
+    assert!(!super::can_coalesce_item_updates(
+        &first,
+        &agent_message_update_event("session-a", "turn-b", "item-a", "other turn")
+    ));
+    assert!(!super::can_coalesce_item_updates(
+        &first,
+        &agent_message_update_event("session-a", "turn-a", "item-b", "other item")
+    ));
+}
+
+#[gpui_kit::test]
+fn event_drain_projects_the_latest_adjacent_item_snapshot(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.active_turn_id = Some("turn".into());
+            view.running = true;
+            view.event_tx
+                .send(agent_message_update_event("session", "turn", "message", "Earlier snapshot"))
+                .unwrap();
+            view.event_tx
+                .send(agent_message_update_event("session", "turn", "message", "Latest snapshot"))
+                .unwrap();
+
+            assert!(!view.drain_events(window, cx));
+            let item = view.transcript.get(0).expect("the updated message is projected");
+            assert_eq!(item.text.as_ref(), "Latest snapshot");
+            assert_eq!(item.markdown.as_ref(), "Latest snapshot");
+        });
+    })
+    .unwrap();
+}
+
 #[test]
 fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
     let mut enabled = super::desktop_button("native-cursor-enabled");
@@ -6197,6 +6256,7 @@ fn sidebar_changed_file_navigation_wraps_and_copies_the_selected_patch(cx: &mut 
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.inspector_open = true;
             let mut item = TranscriptItem::new("edits".into(), "diff".into(), "Edits".into(), String::new());
             item.diff = Some(super::DiffCard {
                 files: Vec::new(), additions: Some(2), deletions: Some(2), incomplete: false, failed: false,
@@ -6207,6 +6267,16 @@ fn sidebar_changed_file_navigation_wraps_and_copies_the_selected_patch(cx: &mut 
             view.select_change("first.rs".into(), cx);
         });
         window.render_frame(cx);
+        view.update(cx, |view, cx| view.inspector_focus.focus(window, cx));
+        window.within("inspector-navigation").press("alt-f7", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("second.rs"));
+        window.within("inspector-navigation").press("alt-shift-f7", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("first.rs"));
+        focus_element_by_tab(window, "next-change-file", cx);
+        window.within("inspector-changes-tab").press("alt-f7", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("second.rs"));
+        window.within("inspector-changes-tab").press("alt-shift-f7", cx);
+        assert_eq!(view.read(cx).selected_change.as_deref(), Some("first.rs"));
         window.click("next-change-file", cx);
         assert_eq!(view.read(cx).selected_change.as_deref(), Some("second.rs"));
         window.render_frame(cx);
