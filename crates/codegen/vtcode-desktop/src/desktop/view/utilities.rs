@@ -19,8 +19,8 @@ impl DesktopView {
                 )
             },
         );
-        let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
-        let counts = ActivityCounts::from_rows(&rows);
+        let activity = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let counts = ActivityCounts::from_rows(&activity.rows);
         let summary = if counts.total() == 0 {
             "No activity yet".to_string()
         } else {

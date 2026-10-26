@@ -110,6 +110,14 @@ app:
       description:
         en: Select a workspace to browse its files.
         vi: Chọn không gian làm việc để duyệt tệp.
+  activity:
+    history:
+      notice:
+        en: Showing the latest %{count} tool actions.
+        vi: Đang hiển thị %{count} tác vụ công cụ mới nhất.
+      search:
+        en: Search conversation
+        vi: Tìm trong hội thoại
 gpui_component:
   Input:
     Copy:

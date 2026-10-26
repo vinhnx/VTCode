@@ -5611,8 +5611,9 @@ impl DesktopView {
         colors: &gpui_kit::component::theme::ThemeColor,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
-        let counts = ActivityCounts::from_rows(&rows);
+        let activity = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let counts = ActivityCounts::from_rows(&activity.rows);
+        let has_older_activity = activity.has_older;
         let mut body = div()
             .id("activity-list")
             .w_full()
@@ -5626,7 +5627,7 @@ impl DesktopView {
         if self.restored_activity_history_incomplete {
             body = body.child(warning_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
         }
-        if rows.is_empty() {
+        if activity.rows.is_empty() {
             return body
                 .child(empty_state(
                     "No activity yet",
@@ -5696,9 +5697,55 @@ impl DesktopView {
                 ),
         );
 
+        if has_older_activity {
+            let notice = rust_i18n::t!("app.activity.history.notice", count = inspector::MAX_ACTIVITY_ROWS).to_string();
+            let search_label = rust_i18n::t!("app.activity.history.search").to_string();
+            body = body.child(
+                div()
+                    .id("activity-history-notice")
+                    .test_support()
+                    .w_full()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .rounded_md()
+                    .bg(colors.secondary)
+                    .px_2()
+                    .py_1()
+                    .child(
+                        div()
+                            .id("activity-history-status")
+                            .test_support()
+                            .role(gpui_kit::Role::Status)
+                            .aria_label(notice.clone())
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(notice),
+                    )
+                    .child(
+                        desktop_button("activity-search-history")
+                            .icon(IconName::Search)
+                            .ghost()
+                            .small()
+                            .accessibility_label(search_label.clone())
+                            .tooltip(search_label)
+                            .desktop_disabled(self.selected_session_id.is_none())
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                if let Some(session_id) = view.selected_session_id.clone() {
+                                    view.open_conversation_search(session_id, window, cx);
+                                }
+                            })),
+                    ),
+            );
+        }
+
         let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
-        let item_sizes = self.activity_row_sizes.get(rows.len(), activity_row_height);
-        let activity_count = rows.len();
+        let item_sizes = self.activity_row_sizes.get(activity.rows.len(), activity_row_height);
+        let activity_count = activity.rows.len();
+        let activity_rows = activity.rows;
         let row_colors = *colors;
         let weak_view = cx.entity().downgrade();
         body = body.child(
@@ -5716,7 +5763,7 @@ impl DesktopView {
                     v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
                         visible_range
                             .map(|index| {
-                                rows.get(index).map_or_else(
+                                activity_rows.get(index).map_or_else(
                                     || div().into_any_element(),
                                     |row| {
                                         let output_action = row.has_output.then(|| {

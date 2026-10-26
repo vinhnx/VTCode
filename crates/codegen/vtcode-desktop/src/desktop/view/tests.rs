@@ -5884,7 +5884,7 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             assert!(!view.restored_review_history_incomplete);
             assert!(view.restored_activity_history_incomplete);
             let rows = crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity);
-            assert_eq!(rows.len(), 2, "archive text is retained without duplicating structured activity");
+            assert_eq!(rows.rows.len(), 2, "archive text is retained without duplicating structured activity");
             assert_eq!(
                 view.transcript.items().filter(|item| item.role == "tool").count(),
                 1,
@@ -5892,11 +5892,11 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
             );
             assert!(!view.transcript.get(0).unwrap().expanded);
             assert!(!view.transcript.get(0).unwrap().has_activity_status);
-            assert_eq!(rows[0].state, ActivityState::Completed);
-            assert_eq!(rows[1].status, "interrupted");
-            assert_eq!(rows[1].state, ActivityState::Interrupted);
-            assert!(rows[0].has_output);
-            assert!(rows[1].has_output);
+            assert_eq!(rows.rows[0].state, ActivityState::Completed);
+            assert_eq!(rows.rows[1].status, "interrupted");
+            assert_eq!(rows.rows[1].state, ActivityState::Interrupted);
+            assert!(rows.rows[0].has_output);
+            assert!(rows.rows[1].has_output);
             assert!(view.transcript.items().any(|item| item.text == "Unstructured archive result"));
             let restored_output =
                 crate::desktop::inspector::output_for(&view.transcript, &view.restored_activity, None).unwrap();
@@ -5956,7 +5956,12 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
                     .running
             );
             assert_eq!(view.restored_activity.len(), 1, "live identity replaces its historical projection");
-            assert_eq!(crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity).len(), 2);
+            assert_eq!(
+                crate::desktop::inspector::activity_rows(&view.transcript, &view.restored_activity)
+                    .rows
+                    .len(),
+                2
+            );
             view.reset_session_state();
             assert!(view.restored_activity.is_empty());
             assert!(view.selected_output_id.is_none());
@@ -7869,7 +7874,14 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
         view.update(cx, |view, _| {
             view.inspector_open = true;
             view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
-            for index in 0..300 {
+            view.selected_session_id = Some("activity-history-thread".into());
+            view.transcript.push(TranscriptItem::new(
+                "activity-history-prompt".into(),
+                "user".into(),
+                "You".into(),
+                "Review older tool actions".into(),
+            ));
+            for index in 0..=300 {
                 view.transcript.push(TranscriptItem::new(
                     format!("tool-{index}"),
                     "tool".into(),
@@ -7883,7 +7895,14 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
         let list = window.find("activity-rows");
         assert_eq!(list.role(), Some(gpui_kit::Role::List));
         assert_eq!(list.label(), Some("Recent activity"));
-        let rendered_row_indexes = (0..300)
+        let status = window.find("activity-history-status");
+        assert_eq!(status.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(status.label(), Some("Showing the latest 300 tool actions."));
+        let search = window.find("activity-search-history");
+        assert_eq!(search.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(search.label(), Some("Search conversation"));
+
+        let rendered_row_indexes = (0..=300)
             .filter(|index| window.try_find(format!("activity-tool-{index}")).is_some())
             .collect::<Vec<_>>();
         assert!(!rendered_row_indexes.is_empty(), "visible tool activity is rendered");
@@ -7896,6 +7915,10 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
             "borrowing the row projection preserves its accessible label"
         );
         assert_eq!(window.find(format!("activity-tool-{first_visible}")).role(), Some(gpui_kit::Role::ListItem));
+
+        window.click("activity-search-history", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Find in conversation"));
     })
     .unwrap();
 }

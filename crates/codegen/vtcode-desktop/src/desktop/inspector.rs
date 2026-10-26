@@ -12,7 +12,7 @@ use gpui_kit::component::diff::{DiffFile, DiffFileStatus};
 use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 
 /// Cap so a long-running session cannot grow the projection without bound.
-const MAX_ACTIVITY_ROWS: usize = 300;
+pub(super) const MAX_ACTIVITY_ROWS: usize = 300;
 const MAX_OUTPUT_LINES: usize = 1_000;
 const MAX_OUTPUT_BYTES: usize = 128 * 1024;
 const OUTPUT_TRUNCATION_NOTICE: &str = "… Earlier output truncated; showing a bounded tail.\n";
@@ -66,6 +66,11 @@ pub(super) struct ActivityRow {
     pub status: String,
     pub state: ActivityState,
     pub has_output: bool,
+}
+
+pub(super) struct ActivityProjection {
+    pub rows: Vec<ActivityRow>,
+    pub has_older: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -268,12 +273,14 @@ impl ChangesProjection {
 }
 
 /// One tool row projected for the Activity tab, with its latest status.
-pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]) -> Vec<ActivityRow> {
-    let mut rows: Vec<_> = restored
+pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]) -> ActivityProjection {
+    let mut activities = restored
         .iter()
         .chain(transcript.items())
         .rev()
-        .filter(|item| item.has_activity_status)
+        .filter(|item| item.has_activity_status);
+    let mut rows: Vec<_> = activities
+        .by_ref()
         .take(MAX_ACTIVITY_ROWS)
         .map(|item| {
             let status = item.text.lines().next().unwrap_or_default().to_string();
@@ -286,8 +293,9 @@ pub(super) fn activity_rows(transcript: &Transcript, restored: &[TranscriptItem]
             }
         })
         .collect();
+    let has_older = activities.next().is_some();
     rows.reverse();
-    rows
+    ActivityProjection { rows, has_older }
 }
 
 /// The selected or newest aggregated command/tool output for the Output tab.
@@ -564,10 +572,11 @@ mod tests {
             "not an activity".to_string(),
         ));
         let rows = activity_rows(&transcript, &[]);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].title, "read_file");
-        assert_eq!(rows[0].status, "completed");
-        assert!(!rows[0].has_output);
+        assert_eq!(rows.rows.len(), 1);
+        assert!(!rows.has_older);
+        assert_eq!(rows.rows[0].title, "read_file");
+        assert_eq!(rows.rows[0].status, "completed");
+        assert!(!rows.rows[0].has_output);
     }
 
     #[test]
@@ -582,9 +591,27 @@ mod tests {
             ));
         }
         let rows = activity_rows(&transcript, &[]);
-        assert_eq!(rows.len(), MAX_ACTIVITY_ROWS);
-        assert_eq!(rows[0].id, "tool-1");
-        assert_eq!(rows[MAX_ACTIVITY_ROWS - 1].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+        assert_eq!(rows.rows.len(), MAX_ACTIVITY_ROWS);
+        assert!(rows.has_older);
+        assert_eq!(rows.rows[0].id, "tool-1");
+        assert_eq!(rows.rows[MAX_ACTIVITY_ROWS - 1].id, format!("tool-{MAX_ACTIVITY_ROWS}"));
+    }
+
+    #[test]
+    fn activity_limit_does_not_report_omitted_rows_at_the_boundary() {
+        let mut transcript = Transcript::default();
+        for index in 0..MAX_ACTIVITY_ROWS {
+            transcript.push(TranscriptItem::new(
+                format!("tool-{index}"),
+                "tool".into(),
+                format!("command {index}").into(),
+                "completed".into(),
+            ));
+        }
+
+        let projection = activity_rows(&transcript, &[]);
+        assert_eq!(projection.rows.len(), MAX_ACTIVITY_ROWS);
+        assert!(!projection.has_older);
     }
 
     #[test]
@@ -612,8 +639,8 @@ mod tests {
         assert_eq!(output.text, "running output");
         assert!(output.running, "in-progress status is reflected");
         let rows = activity_rows(&transcript, &[]);
-        assert!(rows[0].has_output);
-        assert!(rows[1].has_output);
+        assert!(rows.rows[0].has_output);
+        assert!(rows.rows[1].has_output);
     }
 
     #[test]
