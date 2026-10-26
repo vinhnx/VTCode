@@ -359,6 +359,12 @@ agent loop or bypass VT Code's approval and execution policy.
 Multi-question requests validate the current choice before advancing. **Previous** returns to earlier questions
 with the selected option and typed answer intact; advancing again restores later drafts. Selected choices show
 a checkmark and an accessible selected label. Only **Submit answers** sends the ordered choices and answers to the CLI.
+Submitted decisions remain visible with disabled controls until the CLI acknowledges them. Rejections preserve
+the selected choices and answer drafts for manual retry. Replies are correlated with the original session, turn,
+and interaction, so an older reply cannot dismiss a newer question. Duplicate notifications preserve drafts.
+Accepted decisions clear private answer text. Focus returns to the composer when it is still inside the decision
+panel and no overlay is open; choosing another area while waiting preserves that focus.
+Cancelling sends no answer drafts; oversized submissions remain editable instead of disconnecting the service.
 
 ## Local service protocol
 

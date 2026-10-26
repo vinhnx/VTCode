@@ -2760,6 +2760,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
                 selected_choice_ids: Vec::new(),
             });
             view.interaction_choice_ids = vec![Some("approve".into())];
+            view.pending_interaction_response = Some("approval".into());
             view.interaction_answer_texts = vec![Some("private answer".into())];
             view.question_answer
                 .update(cx, |state, cx| state.set_value("private answer", window, cx));
@@ -2770,6 +2771,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
             let _batch_full = view.drain_events(window, cx);
 
             assert!(view.interaction.is_none());
+            assert!(view.pending_interaction_response.is_none());
             assert!(view.interaction_choice_ids.is_empty());
             assert!(view.interaction_answer_texts.is_empty());
             assert!(view.question_answer.read(cx).value().is_empty());
@@ -3565,6 +3567,152 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
     assert_eq!(params["choiceIds"], json!(["workspace", "task", "review"]));
     assert_eq!(params["answerTexts"], json!(["Revised workspace answer", "Task draft", null]));
     assert!(requests.try_recv().is_err(), "editing questions sends only the final response");
+}
+
+#[gpui_kit::test]
+fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_questions(cx: &mut TestAppContext) {
+    use crate::desktop::transport::InteractionResponseIdentity;
+    use vtcode_desktop_protocol::{InteractionChoice, InteractionKind, InteractionRequest, InteractionStep};
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    let question = |id: &str| {
+        BackendEvent::Interaction(InteractionRequest {
+            session_id: "session".into(),
+            turn_id: "session-start".into(),
+            interaction_id: id.into(),
+            kind: InteractionKind::Question,
+            wizard: false,
+            title: "Choose an approach".into(),
+            details: Vec::new(),
+            choices: Vec::new(),
+            selected_choice_id: None,
+            selected_choice_ids: Vec::new(),
+            steps: vec![InteractionStep {
+                title: "Approach".into(),
+                question: "How should we proceed?".into(),
+                allow_freeform: true,
+                choices: vec![InteractionChoice {
+                    id: "accept".into(),
+                    label: "Proceed".into(),
+                    description: None,
+                    recommended: false,
+                }],
+                selected_choice_id: None,
+            }],
+        })
+    };
+    let reply = |id: &str, cancelled, error: Option<&str>| BackendEvent::InteractionResponded {
+        identity: InteractionResponseIdentity {
+            session_id: "session".into(),
+            turn_id: "session-start".into(),
+            interaction_id: id.into(),
+            cancelled,
+        },
+        error: error.map(str::to_owned),
+    };
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".into());
+            view.event_tx.send(question("question-a")).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            view.question_answer.update(cx, |input, cx| {
+                input.set_value("x".repeat(vtcode_desktop_protocol::MAX_FRAME_BYTES), window, cx)
+            });
+        });
+        window.render_frame(cx);
+        window.click("choice-accept", cx);
+        window.click("continue-question", cx);
+        assert!(requests.try_recv().is_err(), "oversized answers stay local and retryable");
+        assert!(view.read(cx).error.as_deref().unwrap().contains("request limit"));
+        view.update(cx, |view, cx| {
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("Keep this answer", window, cx));
+        });
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert!(requests.try_recv().is_ok());
+        assert!(window.find("interaction-response-status").visible());
+        assert_eq!(window.find("continue-question").disabled(), Some(true));
+        assert_eq!(window.find("choice-accept").disabled(), Some(true));
+        assert_eq!(window.find("cancel-interaction").disabled(), Some(true));
+        view.update(cx, |view, cx| {
+            view.submit_interaction(vec!["accept".into()], false, window, cx);
+            view.event_tx.send(question("question-a")).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert_eq!(
+                view.question_answer.read(cx).value(),
+                "Keep this answer",
+                "duplicate notifications preserve drafts"
+            );
+            view.event_tx
+                .send(reply("question-a", false, Some("Runtime is temporarily busy")))
+                .unwrap();
+            let _batch_full = view.drain_events(window, cx);
+        });
+        assert!(requests.try_recv().is_err(), "pending decisions cannot be submitted twice");
+        window.render_frame(cx);
+        assert_ne!(window.find("continue-question").disabled(), Some(true));
+        assert_eq!(window.find("choice-accept").label(), Some("Proceed (Selected)"));
+        assert_eq!(view.read(cx).question_answer.read(cx).value(), "Keep this answer");
+        window.click("continue-question", cx);
+        let BackendCommand::Request { params, .. } = requests.try_recv().expect("retry response") else {
+            panic!("request")
+        };
+        assert_eq!(params["interactionId"], "question-a");
+        assert_eq!(params["answerTexts"], json!(["Keep this answer"]));
+
+        view.update(cx, |view, cx| {
+            view.event_tx.send(question("question-b")).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert!(
+                view.question_answer.read(cx).value().is_empty(),
+                "replacement questions never inherit private answers"
+            );
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("New answer", window, cx));
+        });
+        window.render_frame(cx);
+        window.click("choice-accept", cx);
+        window.click("continue-question", cx);
+        assert!(requests.try_recv().is_ok());
+        view.update(cx, |view, cx| {
+            view.event_tx.send(reply("question-a", false, None)).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert_eq!(view.pending_interaction_response.as_deref(), Some("question-b"));
+            assert_eq!(view.question_answer.read(cx).value(), "New answer");
+            view.focus_handle.focus(window, cx);
+            view.event_tx.send(reply("question-b", false, None)).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert!(view.interaction.is_none());
+            assert!(view.pending_interaction_response.is_none());
+            assert!(view.question_answer.read(cx).value().is_empty());
+            assert_eq!(view.status, "Decision accepted");
+            assert!(view.focus_handle.is_focused(window), "acceptance cannot steal focus from another area");
+            view.event_tx.send(question("question-c")).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("Private unsubmitted draft", window, cx));
+        });
+        window.render_frame(cx);
+        window.click("cancel-interaction", cx);
+        let BackendCommand::Request { params, .. } = requests.try_recv().expect("cancel response") else {
+            panic!("request")
+        };
+        assert_eq!(params["cancelled"], true);
+        assert_eq!(params["answerTexts"], json!([]));
+        assert!(params["text"].is_null(), "cancellation never transmits the private answer draft");
+        view.update(cx, |view, cx| {
+            view.interaction_focus.focus(window, cx);
+            view.event_tx.send(reply("question-c", true, None)).unwrap();
+            let _batch_full = view.drain_events(window, cx);
+            assert!(view.interaction.is_none());
+            assert_eq!(view.status, "Interaction cancelled");
+            assert!(view.composer.read(cx).focus_handle(cx).is_focused(window));
+        });
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

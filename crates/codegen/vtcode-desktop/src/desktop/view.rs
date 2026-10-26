@@ -484,6 +484,8 @@ struct DesktopView {
     configuration: Option<ConfigurationSnapshot>,
     service_info: Option<protocol::InitializeResult>,
     interaction: Option<InteractionRequest>,
+    interaction_focus: FocusHandle,
+    pending_interaction_response: Option<String>,
     interaction_choice_ids: Vec<Option<String>>,
     interaction_answer_texts: Vec<Option<String>>,
     interaction_step_index: usize,
@@ -690,6 +692,8 @@ impl DesktopView {
             configuration: None,
             service_info: None,
             interaction: None,
+            interaction_focus: cx.focus_handle(),
+            pending_interaction_response: None,
             interaction_choice_ids: Vec::new(),
             interaction_answer_texts: Vec::new(),
             interaction_step_index: 0,
@@ -1859,6 +1863,7 @@ impl DesktopView {
 
     fn clear_pending_interaction(&mut self) {
         self.interaction = None;
+        self.pending_interaction_response = None;
         self.interaction_choice_ids.clear();
         self.interaction_answer_texts.clear();
         self.interaction_step_index = 0;
@@ -1868,14 +1873,22 @@ impl DesktopView {
         &mut self,
         choice_ids: Vec<String>,
         cancelled: bool,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
         let Some(interaction) = self.interaction.clone() else {
             return;
         };
         self.store_current_interaction_answer(cx);
-        let answer_texts = self.interaction_answer_texts.clone();
+        let answer_texts = if cancelled {
+            Vec::new()
+        } else {
+            self.interaction_answer_texts.clone()
+        };
+        let choice_ids = if cancelled { Vec::new() } else { choice_ids };
         let response = InteractionResponse {
             session_id: interaction.session_id,
             turn_id: interaction.turn_id,
@@ -1886,18 +1899,17 @@ impl DesktopView {
             answer_texts,
             cancelled,
         };
-        if self.request(protocol::method::INTERACTION_RESPOND, json!(response)) {
-            self.interaction = None;
-            self.interaction_choice_ids.clear();
-            self.interaction_answer_texts.clear();
-            self.interaction_step_index = 0;
-            self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
-            self.status = if cancelled {
-                "Interaction cancelled"
-            } else {
-                "Decision sent"
-            }
-            .to_string();
+        let params = json!(response);
+        if !request_fits_frame(protocol::method::INTERACTION_RESPOND, &params) {
+            self.error =
+                Some("These answers exceed the local service request limit. Shorten them before submitting.".into());
+            cx.notify();
+            return;
+        }
+        if self.request(protocol::method::INTERACTION_RESPOND, params) {
+            self.pending_interaction_response = Some(response.interaction_id);
+            self.clear_error();
+            self.status = "Sending decision to VT Code…".into();
         } else {
             self.error = Some("The decision could not be sent to the local service.".to_string());
         }
@@ -1911,6 +1923,9 @@ impl DesktopView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
         let Some(interaction) = self.interaction.as_ref() else {
             return;
         };
@@ -1944,7 +1959,8 @@ impl DesktopView {
     }
 
     fn show_interaction_step(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index == self.interaction_step_index
+        if self.pending_interaction_response.is_some()
+            || index == self.interaction_step_index
             || self.interaction.as_ref().is_none_or(|interaction| {
                 interaction.kind != protocol::InteractionKind::Question || interaction.steps.get(index).is_none()
             })
@@ -1964,6 +1980,9 @@ impl DesktopView {
     }
 
     fn advance_interaction_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.pending_interaction_response.is_some() {
+            return;
+        }
         let Some(interaction) = self.interaction.as_ref() else {
             return;
         };
@@ -2004,16 +2023,39 @@ impl DesktopView {
                 Ok(event) => {
                     processed += 1;
                     changed = true;
-                    if matches!(&event, BackendEvent::Exited { .. } | BackendEvent::LaunchFailed(_)) {
-                        self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
-                    }
+                    let accepted_decision = matches!(&event,
+                        BackendEvent::InteractionResponded { identity, error: None }
+                            if self.pending_interaction_response.as_deref() == Some(identity.interaction_id.as_str()))
+                        && self.interaction_focus.contains_focused(window, cx);
+                    let new_interaction = matches!(&event, BackendEvent::Interaction(_));
+                    let previous_interaction_id = new_interaction
+                        .then(|| self.interaction.as_ref().map(|interaction| interaction.interaction_id.clone()))
+                        .flatten();
                     self.notify_background_activity(&event, window, cx);
                     self.handle_backend_event(event, cx);
+                    let interaction_replaced = new_interaction
+                        && previous_interaction_id.as_deref()
+                            != self.interaction.as_ref().map(|interaction| interaction.interaction_id.as_str());
+                    if (self.interaction.is_none() || interaction_replaced)
+                        && !self.question_answer.read(cx).value().is_empty()
+                    {
+                        self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
+                    }
+                    if accepted_decision
+                        && self.interaction.is_none()
+                        && !self.settings_open
+                        && self.palette.is_none()
+                        && !self.review_open
+                    {
+                        self.focus_composer(window, cx);
+                    }
                     self.restore_focus_after_review_close(window, cx);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     self.backend = None;
+                    self.clear_pending_interaction();
+                    self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
                     self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
                     self.fail_workspace_review("Local service disconnected.".into());
                     self.running = false;
@@ -2081,6 +2123,31 @@ impl DesktopView {
 
     fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {
         match event {
+            BackendEvent::InteractionResponded { identity, error } => {
+                if self.pending_interaction_response.as_deref() != Some(identity.interaction_id.as_str())
+                    || !self.interaction.as_ref().is_some_and(|interaction| {
+                        interaction.interaction_id == identity.interaction_id
+                            && interaction.session_id == identity.session_id
+                            && interaction.turn_id == identity.turn_id
+                    })
+                {
+                    return;
+                }
+                self.pending_interaction_response = None;
+                if let Some(error) = error {
+                    self.error = Some(error);
+                    self.status = "The decision was not accepted. Review it and try again.".into();
+                } else {
+                    self.clear_pending_interaction();
+                    self.clear_error();
+                    self.status = if identity.cancelled {
+                        "Interaction cancelled"
+                    } else {
+                        "Decision accepted"
+                    }
+                    .into();
+                }
+            }
             BackendEvent::Response { method, result, error } => {
                 if self.session_request == Some(method.as_str()) {
                     self.session_request = None;
@@ -2396,9 +2463,6 @@ impl DesktopView {
                     protocol::method::TURN_CANCEL => {
                         self.status = "Cancellation accepted; waiting for cleanup…".to_string();
                     }
-                    protocol::method::INTERACTION_RESPOND => {
-                        self.status = "Decision accepted".to_string();
-                    }
                     _ => {}
                 }
             }
@@ -2426,6 +2490,10 @@ impl DesktopView {
                 if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
                     || (interaction.turn_id != "session-start"
                         && !self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)))
+                    || self
+                        .interaction
+                        .as_ref()
+                        .is_some_and(|current| current.interaction_id == interaction.interaction_id)
                 {
                     return;
                 }
@@ -2436,6 +2504,7 @@ impl DesktopView {
                 }
                 self.interaction_answer_texts = vec![None; interaction.steps.len()];
                 self.interaction_step_index = 0;
+                self.pending_interaction_response = None;
                 self.interaction = Some(interaction);
                 self.status = "Waiting for your decision".to_string();
             }
@@ -5607,7 +5676,13 @@ impl DesktopView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let colors = cx.theme().colors;
+        let submitting = self.pending_interaction_response.as_deref() == Some(interaction.interaction_id.as_str());
         let mut panel = div()
+            .id("runtime-interaction")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label(interaction.title.clone())
+            .track_focus(&self.interaction_focus)
             .w_full()
             .max_w(px(CONTENT_WIDTH))
             .flex()
@@ -5621,6 +5696,17 @@ impl DesktopView {
             .child(div().font_semibold().child(interaction.title.clone()));
         for detail in &interaction.details {
             panel = panel.child(div().text_sm().child(detail.clone()));
+        }
+        if submitting {
+            panel = panel.child(
+                div()
+                    .id("interaction-response-status")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label("Sending decision to VT Code")
+                    .text_sm()
+                    .child("Sending decision to VT Code…"),
+            );
         }
 
         if interaction.kind == protocol::InteractionKind::Question && interaction.steps.len() > 1 {
@@ -5682,9 +5768,13 @@ impl DesktopView {
                 .items_center()
                 .justify_between()
                 .child(
-                    desktop_button("cancel-interaction").label("Cancel request").ghost().on_click(
-                        cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
-                    ),
+                    desktop_button("cancel-interaction")
+                        .label("Cancel request")
+                        .ghost()
+                        .desktop_disabled(submitting)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.submit_interaction(Vec::new(), true, window, cx)),
+                        ),
                 )
                 .when(
                     interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty(),
@@ -5700,6 +5790,7 @@ impl DesktopView {
                                             .label("Previous")
                                             .icon(IconName::ChevronLeft)
                                             .ghost()
+                                            .desktop_disabled(submitting)
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.show_interaction_step(
                                                     this.interaction_step_index.saturating_sub(1),
@@ -5717,6 +5808,7 @@ impl DesktopView {
                                             "Next question"
                                         })
                                         .primary()
+                                        .desktop_disabled(submitting)
                                         .on_click(
                                             cx.listener(|this, _, window, cx| {
                                                 this.advance_interaction_step(window, cx)
@@ -5764,6 +5856,7 @@ impl DesktopView {
                         .accessibility_id("question-answer")
                         .aria_label("Your answer")
                         .cursor_text()
+                        .disabled(self.pending_interaction_response.is_some())
                         .h(px(72.)),
                 ),
             );
@@ -5798,6 +5891,7 @@ impl DesktopView {
             .label(label)
             .w_full()
             .ghost()
+            .desktop_disabled(self.pending_interaction_response.is_some())
             .selected(selected)
             .when(selected, |button| button.icon(IconName::Check));
         if let Some(description) = choice.description.as_ref() {
