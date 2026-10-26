@@ -5909,9 +5909,6 @@ impl DesktopView {
                                             )
                                         }),
                                 )
-                                .when(selected, |row| {
-                                    row.child(Icon::new(IconName::Check).small().text_color(colors.foreground))
-                                })
                         }),
                 );
             }
