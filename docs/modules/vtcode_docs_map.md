@@ -695,6 +695,12 @@ below based on the topic area.
   - **User Questions**: "What can you tell me about Cohesivity MCP?", "How does Configure the provider work?", "How does
     Verify and use work?"
 
+- **File**: `docs/guides/deedpage-mcp.md`
+  - **Content**: deed.page MCP
+  - **Topics**: Configure the provider, Verify and use, Troubleshooting and removal
+  - **User Questions**: "What can you tell me about deed.page MCP?", "How does Configure the provider work?", "How does
+    Verify and use work?"
+
 - **File**: `docs/guides/status-line.md`
   - **Content**: Configuring the inline status line
   - **Topics**: Available modes, Command payload structure, Example script
