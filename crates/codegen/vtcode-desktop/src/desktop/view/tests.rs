@@ -5808,6 +5808,7 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
         let first_item = window.find(super::opaque_path_element_id("change-list-item", "src/file-0.rs"));
         assert_eq!(first_item.role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(first_item.label(), Some("Modified src/file-0.rs, +1 −1"));
+        assert_eq!(first_item.selected(), Some(false));
         assert!(window.try_find(first_row.clone()).is_some(), "the first changed file is visible initially");
         assert!(
             window.try_find(last_row.clone()).is_none(),
@@ -5819,6 +5820,13 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
 
         assert!(window.try_find(last_row).is_some(), "selecting a file scrolls its row into view");
         assert!(window.try_find(first_row).is_none(), "rows outside the selected range leave the UI tree");
+        assert_eq!(
+            window
+                .find(super::opaque_path_element_id("change-list-item", "src/file-119.rs"))
+                .selected(),
+            Some(true),
+            "the selected state is exposed to assistive technology"
+        );
     })
     .unwrap();
 }
