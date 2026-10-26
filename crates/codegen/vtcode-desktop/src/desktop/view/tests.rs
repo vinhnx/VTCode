@@ -5761,6 +5761,63 @@ fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{FileChangeItem, FileUpdateChange, PatchApplyStatus, PatchChangeKind};
+
+    let (window, view) = open_desktop(cx);
+    let file_count = 120;
+    let changes = (0..file_count)
+        .map(|index| FileUpdateChange {
+            path: format!("src/file-{index}.rs"),
+            kind: PatchChangeKind::Update,
+        })
+        .collect::<Vec<_>>();
+    let patch = (0..file_count)
+        .map(|index| {
+            format!(
+                "diff --git a/src/file-{index}.rs b/src/file-{index}.rs\n--- a/src/file-{index}.rs\n+++ b/src/file-{index}.rs\n@@ -1 +1 @@\n-before\n+after\n"
+            )
+        })
+        .collect::<String>();
+
+    view.update(cx, |view, cx| {
+        view.inspector_open = true;
+        view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
+        view.upsert_diff_card(
+            "many-changes".into(),
+            &FileChangeItem {
+                diff_incomplete: Some(false),
+                changes,
+                status: PatchApplyStatus::Completed,
+                unified_diff: Some(patch),
+                additions: Some(file_count as u64),
+                deletions: Some(file_count as u64),
+            },
+        );
+        assert_eq!(view.changes.entries().len(), file_count);
+        cx.notify();
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let first_row = super::opaque_path_element_id("change-row", "src/file-0.rs");
+        let last_row = super::opaque_path_element_id("change-row", "src/file-119.rs");
+        assert!(window.try_find(first_row.clone()).is_some(), "the first changed file is visible initially");
+        assert!(
+            window.try_find(last_row.clone()).is_none(),
+            "offscreen changed files are not built into the UI tree"
+        );
+
+        view.update(cx, |view, cx| view.select_change("src/file-119.rs".into(), cx));
+        window.render_frame(cx);
+
+        assert!(window.try_find(last_row).is_some(), "selecting a file scrolls its row into view");
+        assert!(window.try_find(first_row).is_none(), "rows outside the selected range leave the UI tree");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut TestAppContext) {
     use vtcode_exec_events::*;
     let (window, view) = open_desktop(cx);

@@ -102,6 +102,7 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
+const CHANGE_ROW_HEIGHT: f32 = 28.;
 
 struct WelcomeCopy {
     action: String,
@@ -691,8 +692,10 @@ struct DesktopView {
     settings_tabs_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
+    change_list_scroll: VirtualListScrollHandle,
     session_row_sizes: FixedRowSizeCache,
     activity_row_sizes: FixedRowSizeCache,
+    change_row_sizes: FixedRowSizeCache,
     settings_focus: FocusHandle,
     settings_navigation_focus: FocusHandle,
     settings_tab: settings::SettingsTab,
@@ -943,8 +946,10 @@ impl DesktopView {
             settings_tabs_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
+            change_list_scroll: VirtualListScrollHandle::new(),
             session_row_sizes: FixedRowSizeCache::default(),
             activity_row_sizes: FixedRowSizeCache::default(),
+            change_row_sizes: FixedRowSizeCache::default(),
             settings_focus: cx.focus_handle().tab_stop(true),
             settings_navigation_focus: cx.focus_handle().tab_stop(true),
             settings_tab: settings::SettingsTab::Appearance,
@@ -3890,6 +3895,9 @@ impl DesktopView {
         let Some(file) = self.changes.select(&path) else {
             return;
         };
+        if let Some(index) = self.changes.entries().iter().position(|entry| entry.path == path) {
+            self.change_list_scroll.scroll_to_item(index, gpui_kit::ScrollStrategy::Top);
+        }
         let mode = self
             .change_viewer
             .as_ref()
@@ -4034,6 +4042,7 @@ impl DesktopView {
         self.output_page_error = None;
         self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
+        self.change_list_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
         self.restored_activity_history_incomplete = false;
         self.changes = ChangesProjection::default();
@@ -4971,74 +4980,111 @@ impl DesktopView {
                 ),
         );
 
+        let change_row_height = scale_row_height_for_ui_font(CHANGE_ROW_HEIGHT, cx.theme().font_size);
+        let change_sizes = self.change_row_sizes.get(self.changes.entries().len(), change_row_height);
+        let max_height = if expanded { 220. } else { 112. };
+        let mut visible_rows = 0;
+        let mut list_height = 0.;
+        while visible_rows < self.changes.entries().len() && list_height + change_row_height <= max_height {
+            visible_rows += 1;
+            list_height += change_row_height;
+        }
+        if visible_rows == 0 {
+            list_height = change_row_height;
+        }
+        let change_row_colors = *colors;
         body = body.child(
             div()
                 .id("change-list")
+                .test_support()
+                .role(gpui_kit::Role::List)
+                .aria_label("Changed files")
+                .relative()
                 .w_full()
-                .max_h(px(if expanded { 220. } else { 112. }))
+                .h(px(list_height))
+                .max_h(px(max_height))
                 .min_h_0()
-                .overflow_y_scroll()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .px_2()
-                .pb_2()
-                .children(self.changes.entries().iter().map(|entry| {
-                    let path = entry.path.clone();
-                    let selected = self.selected_change.as_deref() == Some(entry.path.as_str());
-                    let preview_available = self.changes.has_preview(&path);
-                    let file_summary = match (entry.additions, entry.deletions) {
-                        (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
-                        _ if entry.preview_incomplete => "Partial diff".to_string(),
-                        _ => "Preview unavailable".to_string(),
-                    };
-                    let kind_label = match entry.kind {
-                        DiffFileKind::Add => ("A", colors.success),
-                        DiffFileKind::Delete => ("D", colors.danger),
-                        DiffFileKind::Update => ("M", colors.muted_foreground),
-                    };
-                    div()
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .when(selected, |row| row.bg(colors.secondary))
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_semibold()
-                                .w(px(14.))
-                                .text_color(kind_label.1)
-                                .child(kind_label.0),
-                        )
-                        .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
-                        .child(div().text_xs().text_color(colors.muted_foreground).child(file_summary))
-                        .child(
-                            desktop_button(opaque_path_element_id("change-row", &path))
-                                .icon(IconName::ChevronRight)
-                                .accessibility_label(format!(
-                                    "{} {path}{}",
-                                    if preview_available {
-                                        "Review"
-                                    } else {
-                                        "Diff preview unavailable for"
-                                    },
-                                    if selected { " (selected)" } else { "" },
-                                ))
-                                .tooltip(if preview_available {
-                                    path.clone()
-                                } else {
-                                    format!("Diff preview unavailable for {path}")
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(
+                        cx.entity(),
+                        "change-virtual-list",
+                        change_sizes,
+                        move |view, visible_range, _, cx| {
+                            visible_range
+                                .filter_map(|index| {
+                                    let entry = view.changes.entries().get(index)?;
+                                    let path = entry.path.clone();
+                                    let selected = view.selected_change.as_deref() == Some(entry.path.as_str());
+                                    let preview_available = view.changes.has_preview(&path);
+                                    let file_summary = match (entry.additions, entry.deletions) {
+                                        (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
+                                        _ if entry.preview_incomplete => "Partial diff".to_string(),
+                                        _ => "Preview unavailable".to_string(),
+                                    };
+                                    let kind_label = match entry.kind {
+                                        DiffFileKind::Add => ("A", change_row_colors.success),
+                                        DiffFileKind::Delete => ("D", change_row_colors.danger),
+                                        DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
+                                    };
+                                    Some(
+                                        div()
+                                            .h(px(change_row_height))
+                                            .w_full()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .px_2()
+                                            .rounded_md()
+                                            .when(selected, |row| row.bg(change_row_colors.secondary))
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .font_semibold()
+                                                    .w(px(14.))
+                                                    .text_color(kind_label.1)
+                                                    .child(kind_label.0),
+                                            )
+                                            .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(change_row_colors.muted_foreground)
+                                                    .child(file_summary),
+                                            )
+                                            .child(
+                                                desktop_button(opaque_path_element_id("change-row", &path))
+                                                    .icon(IconName::ChevronRight)
+                                                    .accessibility_label(format!(
+                                                        "{} {path}{}",
+                                                        if preview_available {
+                                                            "Review"
+                                                        } else {
+                                                            "Diff preview unavailable for"
+                                                        },
+                                                        if selected { " (selected)" } else { "" },
+                                                    ))
+                                                    .tooltip(if preview_available {
+                                                        path.clone()
+                                                    } else {
+                                                        format!("Diff preview unavailable for {path}")
+                                                    })
+                                                    .ghost()
+                                                    .small()
+                                                    .desktop_disabled(!preview_available)
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        this.select_change(path.clone(), cx)
+                                                    })),
+                                            )
+                                            .into_any_element(),
+                                    )
                                 })
-                                .ghost()
-                                .small()
-                                .desktop_disabled(!preview_available)
-                                .on_click(cx.listener(move |this, _, _, cx| this.select_change(path.clone(), cx))),
-                        )
-                })),
+                                .collect::<Vec<_>>()
+                        },
+                    )
+                    .track_scroll(&self.change_list_scroll),
+                )
+                .child(Scrollbar::vertical(&self.change_list_scroll)),
         );
 
         // Full syntax-highlighted diff of the selected file.
