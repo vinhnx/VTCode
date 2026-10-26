@@ -300,7 +300,14 @@ impl DesktopView {
             option_select,
         });
         self.config_editor_return_focus = Some(self.settings_focus.clone());
-        cx.on_next_frame(window, |view, window, cx| view.config_editor_focus.focus(window, cx));
+        cx.on_next_frame(window, |view, window, cx| {
+            let option_select = view.config_editor.as_ref().and_then(|editor| editor.option_select.clone());
+            if let Some(option_select) = option_select {
+                option_select.update(cx, |state, cx| state.focus(window, cx));
+            } else {
+                view.config_value_input.read(cx).focus_handle(cx).focus(window, cx);
+            }
+        });
         cx.notify();
     }
 

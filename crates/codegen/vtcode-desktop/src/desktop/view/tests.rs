@@ -1344,7 +1344,12 @@ fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppCon
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert!(window.simulate_next_frame(cx) > 0);
         assert!(view.read(cx).config_editor.is_some());
+        assert!(
+            view.read(cx).config_value_input.read(cx).focus_handle(cx).is_focused(window),
+            "free-form values receive initial focus"
+        );
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_none());
@@ -1389,6 +1394,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
             view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
         });
         window.render_frame(cx);
+        assert!(window.simulate_next_frame(cx) > 0);
         assert_eq!(window.find("cli-config-option-select").label(), Some("Value for provider.openai.service_tier"));
         let select = view
             .read(cx)
@@ -1396,6 +1402,7 @@ fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mu
             .as_ref()
             .and_then(|editor| editor.option_select.clone())
             .expect("enum settings use a Kit select");
+        assert!(select.read(cx).focus_handle(cx).is_focused(window), "the enum picker receives initial focus");
         select.update(cx, |state, cx| state.set_selected_value(&"fast".to_string(), window, cx));
         window.render_frame(cx);
         window.click("save-cli-config-edit", cx);
