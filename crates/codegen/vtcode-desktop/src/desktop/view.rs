@@ -37,6 +37,7 @@ use gpui_kit::component::message::{Message, MessageAlignment, MessageContent, Me
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::plot::shape::BarAlignment;
 use gpui_kit::component::popover::Popover;
+use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::skeleton::Skeleton;
@@ -6469,10 +6470,63 @@ impl DesktopView {
         step: &InteractionStep,
         index: usize,
         total: usize,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
         let colors = cx.theme().colors;
+        let selected_choice_id = self.interaction_choice_ids.get(index).and_then(Option::as_deref);
+        let selected_choice_index =
+            selected_choice_id.and_then(|selected| step.choices.iter().position(|choice| choice.id == selected));
+        let choice_radios = step.choices.iter().enumerate().map(|(choice_index, choice)| {
+            let label = if choice.recommended {
+                format!("{} (Recommended)", choice.label)
+            } else {
+                choice.label.clone()
+            };
+            let selected = selected_choice_index == Some(choice_index);
+            let mut radio = Radio::new(format!("interaction-question-choice-{choice_index}"))
+                .label(label.clone())
+                .accessibility_label(label)
+                .checked(selected)
+                .disabled(self.pending_interaction_response.is_some())
+                .w_full()
+                .p_3()
+                .rounded_md()
+                .border_1()
+                .border_color(if selected {
+                    colors.primary.opacity(0.6)
+                } else {
+                    colors.border
+                })
+                .bg(if selected {
+                    colors.primary.opacity(0.08)
+                } else {
+                    colors.popover
+                });
+            let choice_id = choice.id.clone();
+            radio = radio
+                .aria_position_in_set(choice_index + 1)
+                .aria_size_of_set(step.choices.len())
+                .on_change(cx.listener(move |this, checked: &bool, window, cx| {
+                    if *checked {
+                        this.choose_interaction_option(index, choice_id.clone(), window, cx);
+                    }
+                }));
+            if let Some(description) = choice.description.as_ref() {
+                radio = radio.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
+            }
+            radio
+        });
+        let options = div()
+            .id("interaction-question-options")
+            .test_support()
+            .role(gpui_kit::Role::RadioGroup)
+            .aria_label(step.question.clone())
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .children(choice_radios);
         let mut content = div()
             .w_full()
             .flex()
@@ -6489,8 +6543,8 @@ impl DesktopView {
                     .child(format!("Question {} of {total}", index + 1)),
             )
             .child(div().font_medium().child(step.question.clone()));
-        for choice in &step.choices {
-            content = content.child(self.render_choice(choice, index, window, cx));
+        if !step.choices.is_empty() {
+            content = content.child(options);
         }
         if step.allow_freeform {
             content = content.child(
@@ -6512,7 +6566,7 @@ impl DesktopView {
                     ),
             );
         }
-        content
+        content.into_any_element()
     }
 
     fn render_choice(

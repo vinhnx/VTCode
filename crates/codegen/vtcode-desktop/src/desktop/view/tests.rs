@@ -3901,12 +3901,19 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         ("Review", "Review the plan", "review"),
     ]
     .into_iter()
-    .map(|(title, question, choice_id)| InteractionStep {
-        title: title.into(),
-        question: question.into(),
-        choices: vec![make_choice(choice_id)],
-        selected_choice_id: None,
-        allow_freeform: true,
+    .enumerate()
+    .map(|(index, (title, question, choice_id))| {
+        let mut choices = vec![make_choice(choice_id)];
+        if index == 0 {
+            choices.push(make_choice("another-workspace"));
+        }
+        InteractionStep {
+            title: title.into(),
+            question: question.into(),
+            choices,
+            selected_choice_id: None,
+            allow_freeform: true,
+        }
     })
     .collect();
     view.update(cx, |view, cx| {
@@ -3940,6 +3947,12 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         assert_eq!(stepper.role(), Some(gpui_kit::Role::List));
         assert_eq!(stepper.label(), Some("Question steps"));
         assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        let options = window.find("interaction-question-options");
+        assert_eq!(options.role(), Some(gpui_kit::Role::RadioGroup));
+        assert_eq!(options.label(), Some("Choose a workspace"));
+        let workspace_choice = window.find("interaction-question-choice-0");
+        assert_eq!(workspace_choice.role(), Some(gpui_kit::Role::RadioButton));
+        assert_eq!(workspace_choice.selected(), Some(false));
         assert!(window.try_find("previous-question").is_none());
         window.click("continue-question", cx);
         window.render_frame(cx);
@@ -3949,9 +3962,28 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
             view.question_answer
                 .update(cx, |input, cx| input.set_value("Original workspace answer", window, cx));
         });
-        window.click("choice-workspace", cx);
+        window.click("interaction-question-choice-0", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("choice-workspace").label(), Some("Choose workspace (Selected)"));
+        assert_eq!(
+            view.read(cx).interaction_choice_ids[0].as_deref(),
+            Some("workspace"),
+            "selecting a radio must update VT Code's controlled interaction state"
+        );
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
+        window.click("interaction-question-choice-1", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(false));
+        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(true));
+        assert_eq!(
+            view.read(cx).interaction_choice_ids[0].as_deref(),
+            Some("another-workspace"),
+            "selecting another radio must update the controlled interaction state"
+        );
+        window.click("interaction-question-choice-0", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-1").selected(), Some(false));
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 2 of 3"));
@@ -3963,7 +3995,7 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Original workspace answer");
-        assert_eq!(window.find("choice-workspace").label(), Some("Choose workspace (Selected)"));
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
         view.update(cx, |view, cx| {
             view.question_answer
                 .update(cx, |input, cx| input.set_value("Revised workspace answer", window, cx));
@@ -3971,11 +4003,11 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Task draft");
-        window.click("choice-task", cx);
+        window.click("interaction-question-choice-0", cx);
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 3 of 3"));
-        window.click("choice-review", cx);
+        window.click("interaction-question-choice-0", cx);
         window.click("continue-question", cx);
     })
     .unwrap();
@@ -4041,7 +4073,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
             });
         });
         window.render_frame(cx);
-        window.click("choice-accept", cx);
+        window.click("interaction-question-choice-0", cx);
         window.click("continue-question", cx);
         assert!(requests.try_recv().is_err(), "oversized answers stay local and retryable");
         assert!(view.read(cx).error.as_deref().unwrap().contains("request limit"));
@@ -4054,7 +4086,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
         assert!(requests.try_recv().is_ok());
         assert!(window.find("interaction-response-status").visible());
         assert_eq!(window.find("continue-question").disabled(), Some(true));
-        assert_eq!(window.find("choice-accept").disabled(), Some(true));
+        assert_eq!(window.find("interaction-question-choice-0").disabled(), Some(true));
         assert_eq!(window.find("cancel-interaction").disabled(), Some(true));
         view.update(cx, |view, cx| {
             view.submit_interaction(vec!["accept".into()], false, window, cx);
@@ -4073,7 +4105,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
         assert!(requests.try_recv().is_err(), "pending decisions cannot be submitted twice");
         window.render_frame(cx);
         assert_ne!(window.find("continue-question").disabled(), Some(true));
-        assert_eq!(window.find("choice-accept").label(), Some("Proceed (Selected)"));
+        assert_eq!(window.find("interaction-question-choice-0").selected(), Some(true));
         assert_eq!(view.read(cx).question_answer.read(cx).value(), "Keep this answer");
         window.click("continue-question", cx);
         let BackendCommand::Request { params, .. } = requests.try_recv().expect("retry response") else {
@@ -4093,7 +4125,7 @@ fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_que
                 .update(cx, |input, cx| input.set_value("New answer", window, cx));
         });
         window.render_frame(cx);
-        window.click("choice-accept", cx);
+        window.click("interaction-question-choice-0", cx);
         window.click("continue-question", cx);
         assert!(requests.try_recv().is_ok());
         view.update(cx, |view, cx| {

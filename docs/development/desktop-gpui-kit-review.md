@@ -121,6 +121,15 @@ no workspace is selected. The skeleton helper is shared with Git review and fall
 static theme-colored shape when reduced motion is enabled. See [Skeleton](https://gpui-kit.com/component/skeleton/),
 [Empty](https://gpui-kit.com/component/empty/), and [Tree](https://gpui-kit.com/component/tree/).
 
+Follow-up (2026-10-27): Multi-step runtime questions now render their single-choice options with
+Kit `Radio` controls inside a labeled radio group. The checked index still derives from the
+view's protocol-backed interaction state, and selection uses the existing validated response
+path; the Kit `QuestionnaireState` would duplicate that runtime-owned answer state. The locked
+Kit 0.8.0 `RadioGroup` has no group-label builder, so the view supplies the semantic group and
+accessible name while Kit owns each radio's selection semantics. See
+[Radio](https://gpui-kit.com/component/radio/) and
+[Questionnaire](https://gpui-kit.com/component/questionnaire/).
+
 ## Verification boundaries
 
 Focused review checks passed. The full
