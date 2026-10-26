@@ -84,24 +84,7 @@ use workspace_review::WorkspaceReviewState;
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 const CONTENT_WIDTH: f32 = 720.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
-const DEFAULT_WELCOME_COPY: WelcomeCopy = WelcomeCopy {
-    action: "What should we build",
-    description: "Start with a task, a question, or an idea.",
-    call_to_action: "Choose a workspace",
-};
-const WELCOME_COPIES: [WelcomeCopy; 3] = [
-    DEFAULT_WELCOME_COPY,
-    WelcomeCopy {
-        action: "What are we improving",
-        description: "Bring a bug, a feature, or a rough idea.",
-        call_to_action: "Open a project",
-    },
-    WelcomeCopy {
-        action: "What are we exploring",
-        description: "Choose a project and start with a prompt.",
-        call_to_action: "Select a folder",
-    },
-];
+const WELCOME_COPY_COUNT: usize = 3;
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
@@ -109,24 +92,63 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 
-#[derive(Clone, Copy)]
 struct WelcomeCopy {
-    action: &'static str,
-    description: &'static str,
-    call_to_action: &'static str,
+    action: String,
+    workspace_action: String,
+    description: String,
+    call_to_action: String,
 }
 
-fn welcome_greeting_for_hour(hour: u32) -> &'static str {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WelcomePeriod {
+    Morning,
+    Afternoon,
+    Evening,
+}
+
+fn welcome_period_for_hour(hour: u32) -> WelcomePeriod {
     match hour % 24 {
-        5..=11 => "Good morning",
-        12..=16 => "Good afternoon",
-        _ => "Good evening",
+        5..=11 => WelcomePeriod::Morning,
+        12..=16 => WelcomePeriod::Afternoon,
+        _ => WelcomePeriod::Evening,
     }
 }
 
-fn welcome_prompt(greeting: &str, action: &str, workspace_name: Option<&str>) -> String {
+fn welcome_greeting(period: WelcomePeriod) -> String {
+    match period {
+        WelcomePeriod::Morning => rust_i18n::t!("app.welcome.greeting.morning"),
+        WelcomePeriod::Afternoon => rust_i18n::t!("app.welcome.greeting.afternoon"),
+        WelcomePeriod::Evening => rust_i18n::t!("app.welcome.greeting.evening"),
+    }
+    .to_string()
+}
+
+fn welcome_copy(index: usize) -> WelcomeCopy {
+    match index {
+        1 => WelcomeCopy {
+            action: rust_i18n::t!("app.welcome.action.improve").to_string(),
+            workspace_action: rust_i18n::t!("app.welcome.action.improve_in_workspace").to_string(),
+            description: rust_i18n::t!("app.welcome.description.improve").to_string(),
+            call_to_action: rust_i18n::t!("app.welcome.cta.open_project").to_string(),
+        },
+        2 => WelcomeCopy {
+            action: rust_i18n::t!("app.welcome.action.explore").to_string(),
+            workspace_action: rust_i18n::t!("app.welcome.action.explore_in_workspace").to_string(),
+            description: rust_i18n::t!("app.welcome.description.explore").to_string(),
+            call_to_action: rust_i18n::t!("app.welcome.cta.select_folder").to_string(),
+        },
+        _ => WelcomeCopy {
+            action: rust_i18n::t!("app.welcome.action.build").to_string(),
+            workspace_action: rust_i18n::t!("app.welcome.action.build_in_workspace").to_string(),
+            description: rust_i18n::t!("app.welcome.description.build").to_string(),
+            call_to_action: rust_i18n::t!("app.welcome.cta.choose_workspace").to_string(),
+        },
+    }
+}
+
+fn welcome_prompt(greeting: &str, action: &str, workspace_action: &str, workspace_name: Option<&str>) -> String {
     match workspace_name {
-        Some(name) => format!("{greeting}. {action} in {name}?"),
+        Some(name) => format!("{greeting}. {workspace_action} {name}?"),
         None => format!("{greeting}. {action}?"),
     }
 }
@@ -422,7 +444,7 @@ struct ActivePrimaryAgentDisplay {
 struct DesktopView {
     focus_handle: FocusHandle,
     _focus_lost_subscription: Subscription,
-    welcome_greeting: &'static str,
+    welcome_period: WelcomePeriod,
     welcome_copy_index: usize,
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
@@ -627,8 +649,8 @@ impl DesktopView {
             default_code_font: typography::default_code_font(cx),
             focus_handle,
             _focus_lost_subscription: focus_lost_subscription,
-            welcome_greeting: welcome_greeting_for_hour(chrono::Local::now().hour()),
-            welcome_copy_index: rand::random_range(0..WELCOME_COPIES.len()),
+            welcome_period: welcome_period_for_hour(chrono::Local::now().hour()),
+            welcome_copy_index: rand::random_range(0..WELCOME_COPY_COUNT),
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
@@ -2072,7 +2094,10 @@ impl DesktopView {
                         let _handled = self.handle_webmcp_response(&method, result, cx);
                     }
                     protocol::method::CONFIG_MODELS => {
-                        self.models = serde_json::from_value::<Vec<protocol::ModelInfo>>(result).unwrap_or_default();
+                        match serde_json::from_value::<Vec<protocol::ModelInfo>>(result) {
+                            Ok(models) => self.models = models,
+                            Err(_) => self.error = Some("The local service returned an invalid model catalog.".into()),
+                        }
                     }
                     protocol::method::COMPOSER_RESOURCES => {
                         self.resources_loading = false;
@@ -2150,19 +2175,32 @@ impl DesktopView {
                         self.status = format!("Switched to {model}. Start a new session to use it.");
                     }
                     protocol::method::SESSION_LIST => {
-                        let mut refreshed = serde_json::from_value::<Vec<SessionSummary>>(result).unwrap_or_default();
-                        // Keep a locally derived title when the archive has
-                        // not persisted its own preview yet.
-                        for session in &mut refreshed {
-                            if session.title.as_deref().is_none_or(str::is_empty) {
-                                session.title = self
-                                    .sessions
-                                    .iter()
-                                    .find(|existing| existing.session_id == session.session_id)
-                                    .and_then(|existing| existing.title.clone());
+                        match serde_json::from_value::<Vec<SessionSummary>>(result) {
+                            Ok(mut refreshed) => {
+                                let mut session_ids = HashSet::with_capacity(refreshed.len());
+                                let has_invalid_session_id = refreshed.iter().any(|session| {
+                                    session.session_id.trim().is_empty()
+                                        || !session_ids.insert(session.session_id.as_str())
+                                });
+                                if has_invalid_session_id {
+                                    self.error = Some("The local service returned an invalid session list.".into());
+                                } else {
+                                    // Keep a locally derived title when the archive has
+                                    // not persisted its own preview yet.
+                                    for session in &mut refreshed {
+                                        if session.title.as_deref().is_none_or(str::is_empty) {
+                                            session.title = self
+                                                .sessions
+                                                .iter()
+                                                .find(|existing| existing.session_id == session.session_id)
+                                                .and_then(|existing| existing.title.clone());
+                                        }
+                                    }
+                                    self.sessions = refreshed;
+                                }
                             }
+                            Err(_) => self.error = Some("The local service returned an invalid session list.".into()),
                         }
-                        self.sessions = refreshed;
                     }
                     protocol::method::SESSION_CREATE => {
                         let first_submission = self.first_submission.take();
@@ -2194,8 +2232,8 @@ impl DesktopView {
                         self.reset_session_state();
                         self.status = "Session closed. Start a new session to continue.".to_string();
                     }
-                    protocol::method::SESSION_LOAD => {
-                        if let Ok(loaded) = serde_json::from_value::<SessionLoadResult>(result) {
+                    protocol::method::SESSION_LOAD => match serde_json::from_value::<SessionLoadResult>(result) {
+                        Ok(loaded) if !loaded.session.session_id.trim().is_empty() => {
                             if self.retained_submission.is_some()
                                 && self.selected_session_id.as_deref() != Some(loaded.session.session_id.as_str())
                             {
@@ -2236,7 +2274,8 @@ impl DesktopView {
                             }
                             .to_string();
                         }
-                    }
+                        _ => self.error = Some("The local service returned an invalid session load result.".into()),
+                    },
                     protocol::method::TURN_SUBMIT => {
                         let accepted =
                             serde_json::from_value::<protocol::TurnAccepted>(result)
@@ -4213,16 +4252,19 @@ impl DesktopView {
         self.sync_transcript_layout(cx);
         let content = if self.transcript.is_empty() {
             let colors = cx.theme().colors;
-            let welcome_copy = WELCOME_COPIES
-                .get(self.welcome_copy_index)
-                .copied()
-                .unwrap_or(DEFAULT_WELCOME_COPY);
+            let welcome_copy = welcome_copy(self.welcome_copy_index);
+            let greeting = welcome_greeting(self.welcome_period);
             let workspace_name = self
                 .workspace
                 .as_ref()
                 .and_then(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned());
-            let prompt = welcome_prompt(self.welcome_greeting, welcome_copy.action, workspace_name.as_deref());
+            let prompt = welcome_prompt(
+                &greeting,
+                &welcome_copy.action,
+                &welcome_copy.workspace_action,
+                workspace_name.as_deref(),
+            );
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
                 .font_weight(gpui_kit::FontWeight::NORMAL)
@@ -4239,7 +4281,7 @@ impl DesktopView {
                         .justify_center()
                         .gap_2()
                         .child(if workspace_name.is_some() {
-                            format!("{}. {} in", self.welcome_greeting, welcome_copy.action)
+                            format!("{greeting}. {}", welcome_copy.workspace_action)
                         } else {
                             prompt
                         })
@@ -4295,7 +4337,7 @@ impl DesktopView {
                             welcome.content(
                                 EmptyContent::new().child(
                                     desktop_button("open-first-workspace")
-                                        .label(welcome_copy.call_to_action)
+                                        .label(welcome_copy.call_to_action.clone())
                                         .accessibility_label(welcome_copy.call_to_action)
                                         .primary()
                                         .desktop_disabled(

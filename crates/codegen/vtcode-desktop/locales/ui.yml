@@ -36,6 +36,56 @@ app:
       select:
         en: Set interface language to %{language}
         vi: Đặt ngôn ngữ giao diện thành %{language}
+  welcome:
+    greeting:
+      morning:
+        en: Good morning
+        vi: Chào buổi sáng
+      afternoon:
+        en: Good afternoon
+        vi: Chào buổi chiều
+      evening:
+        en: Good evening
+        vi: Chào buổi tối
+    action:
+      build:
+        en: What should we build
+        vi: Chúng ta sẽ xây dựng gì
+      build_in_workspace:
+        en: What should we build in
+        vi: Chúng ta sẽ xây dựng gì trong
+      improve:
+        en: What are we improving
+        vi: Chúng ta sẽ cải thiện gì
+      improve_in_workspace:
+        en: What are we improving in
+        vi: Chúng ta sẽ cải thiện gì trong
+      explore:
+        en: What are we exploring
+        vi: Chúng ta muốn khám phá gì
+      explore_in_workspace:
+        en: What are we exploring in
+        vi: Chúng ta muốn khám phá gì trong
+    description:
+      build:
+        en: Start with a task, a question, or an idea.
+        vi: Bắt đầu bằng một nhiệm vụ, câu hỏi hoặc ý tưởng.
+      improve:
+        en: Bring a bug, a feature, or a rough idea.
+        vi: Bắt đầu với một lỗi, tính năng hoặc ý tưởng phác thảo.
+      explore:
+        en: Choose a project and start with a prompt.
+        vi: Chọn một dự án rồi mô tả yêu cầu đầu tiên.
+    cta:
+      choose_workspace:
+        en: Choose a workspace
+        vi: Chọn không gian làm việc
+      open_project:
+        en: Open a project
+        vi: Mở dự án
+      select_folder:
+        en: Select a folder
+        vi: Chọn thư mục
 gpui_component:
   Input:
     Copy:

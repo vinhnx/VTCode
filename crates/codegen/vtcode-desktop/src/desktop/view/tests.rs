@@ -1,7 +1,7 @@
 use gpui_kit::Focusable;
 use gpui_kit::Styled;
 use gpui_kit::component::theme::ActiveTheme;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gpui_kit::component::WindowExt as _;
@@ -12,8 +12,8 @@ use gpui_kit::{
 use serde_json::json;
 
 use super::{
-    DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, scale_row_height_for_ui_font,
-    workspace_picker_options,
+    DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, WelcomePeriod,
+    scale_row_height_for_ui_font, workspace_picker_options,
 };
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
@@ -930,6 +930,112 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CLOSE);
     assert_eq!(params, json!({ "sessionId": "session-e" }));
+}
+
+#[gpui_kit::test]
+fn malformed_catalog_responses_preserve_the_last_valid_sessions_and_models(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session = vtcode_desktop_protocol::SessionSummary {
+        session_id: "saved-session".to_string(),
+        title: Some("Keep this session".to_string()),
+        workspace: std::env::temp_dir().display().to_string(),
+        completed: true,
+        resumable: true,
+    };
+    let model = vtcode_desktop_protocol::ModelInfo {
+        provider: "openai".to_string(),
+        id: "gpt-test".to_string(),
+        display_name: "Test model".to_string(),
+        context_window: None,
+        current: true,
+        recommended_rank: None,
+        capabilities: None,
+    };
+
+    view.update(cx, |view, _| {
+        view.sessions = vec![session.clone()];
+        view.models = vec![model.clone()];
+    });
+
+    for result in [
+        json!({ "unexpected": "object" }),
+        json!([{
+            "sessionId": "",
+            "title": "Invalid row",
+            "workspace": std::env::temp_dir().display().to_string(),
+            "completed": false,
+            "resumable": true,
+        }]),
+    ] {
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::SESSION_LIST.to_string(),
+                    result: Some(result),
+                    error: None,
+                },
+                cx,
+            );
+            assert_eq!(view.sessions.as_slice(), std::slice::from_ref(&session));
+            assert_eq!(view.error.as_deref(), Some("The local service returned an invalid session list."));
+        });
+    }
+
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::CONFIG_MODELS.to_string(),
+                result: Some(json!({ "unexpected": "object" })),
+                error: None,
+            },
+            cx,
+        );
+        assert_eq!(view.models.as_slice(), std::slice::from_ref(&model));
+        assert_eq!(view.error.as_deref(), Some("The local service returned an invalid model catalog."));
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
+}
+
+#[gpui_kit::test]
+fn malformed_session_load_preserves_the_current_conversation(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("current-session".to_string());
+        view.workspace = Some(PathBuf::from("/current-workspace"));
+        view.transcript.push(TranscriptItem::new(
+            "current-message".into(),
+            "assistant".into(),
+            "Assistant".into(),
+            "Keep this conversation".into(),
+        ));
+    });
+
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.to_string(),
+                result: Some(json!({
+                    "session": {
+                        "sessionId": "   ",
+                        "title": "Invalid session",
+                        "workspace": "/replacement-workspace",
+                        "completed": false,
+                        "resumable": true,
+                    },
+                    "messages": [{ "role": "assistant", "text": "Do not replace history" }],
+                })),
+                error: None,
+            },
+            cx,
+        );
+
+        assert_eq!(view.selected_session_id.as_deref(), Some("current-session"));
+        assert_eq!(view.workspace.as_deref(), Some(Path::new("/current-workspace")));
+        assert_eq!(view.transcript.len(), 1);
+        assert_eq!(view.transcript.get(0).unwrap().text, "Keep this conversation");
+        assert_eq!(view.error.as_deref(), Some("The local service returned an invalid session load result."));
+    });
+    cx.update_window(window, |_, window, cx| window.render_frame(cx)).unwrap();
 }
 
 #[gpui_kit::test]
@@ -3813,7 +3919,7 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         view.update(cx, |view, _| {
             view.sidebar_open = false;
             view.inspector_open = false;
-            view.welcome_greeting = "Good morning";
+            view.welcome_period = WelcomePeriod::Morning;
             view.welcome_copy_index = 0;
             view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
         });
@@ -3834,7 +3940,7 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
         view.update(cx, |view, _| {
             view.workspace_picker_open = false;
-            view.welcome_greeting = "Good evening";
+            view.welcome_period = WelcomePeriod::Evening;
             view.welcome_copy_index = 2;
             view.workspace = None;
         });
@@ -3861,22 +3967,14 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
 
 #[test]
 fn welcome_greeting_uses_local_day_period_boundaries() {
-    assert_eq!(super::welcome_greeting_for_hour(5), "Good morning");
-    assert_eq!(super::welcome_greeting_for_hour(11), "Good morning");
-    assert_eq!(super::welcome_greeting_for_hour(12), "Good afternoon");
-    assert_eq!(super::welcome_greeting_for_hour(16), "Good afternoon");
-    assert_eq!(super::welcome_greeting_for_hour(17), "Good evening");
-    assert_eq!(super::welcome_greeting_for_hour(4), "Good evening");
-}
+    use super::WelcomePeriod::{Afternoon, Evening, Morning};
 
-#[test]
-fn welcome_copy_variants_pair_distinct_actions_and_calls_to_action() {
-    for first in 0..super::WELCOME_COPIES.len() {
-        for second in first + 1..super::WELCOME_COPIES.len() {
-            assert_ne!(super::WELCOME_COPIES[first].action, super::WELCOME_COPIES[second].action);
-            assert_ne!(super::WELCOME_COPIES[first].call_to_action, super::WELCOME_COPIES[second].call_to_action);
-        }
-    }
+    assert_eq!(super::welcome_period_for_hour(5), Morning);
+    assert_eq!(super::welcome_period_for_hour(11), Morning);
+    assert_eq!(super::welcome_period_for_hour(12), Afternoon);
+    assert_eq!(super::welcome_period_for_hour(16), Afternoon);
+    assert_eq!(super::welcome_period_for_hour(17), Evening);
+    assert_eq!(super::welcome_period_for_hour(4), Evening);
 }
 
 #[gpui_kit::test]

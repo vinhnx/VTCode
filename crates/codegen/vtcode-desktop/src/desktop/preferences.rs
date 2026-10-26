@@ -313,7 +313,11 @@ static TEST_PREFERENCES_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mut
 pub(super) fn install_test_preferences_path() -> PathBuf {
     let mut guard = TEST_PREFERENCES_PATH.lock().expect("test prefs lock");
     guard.clone().unwrap_or_else(|| {
-        let path = std::env::temp_dir().join(format!("vtcode-desktop-test-prefs-{}.json", std::process::id()));
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("vtcode-desktop-test-prefs-{}-{nonce}.json", std::process::id()));
         *guard = Some(path.clone());
         path
     })

@@ -65,4 +65,39 @@ mod tests {
         assert_eq!(rust_i18n::t!("app.settings.title", locale = "vi").to_string(), "Cài đặt");
         assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "vi").to_string(), "Sao chép");
     }
+
+    #[test]
+    fn welcome_copy_is_translated_and_actions_remain_distinct() {
+        for (locale, morning, afternoon, evening) in [
+            ("en", "Good morning", "Good afternoon", "Good evening"),
+            ("vi", "Chào buổi sáng", "Chào buổi chiều", "Chào buổi tối"),
+        ] {
+            assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
+            assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);
+            assert_eq!(rust_i18n::t!("app.welcome.greeting.evening", locale = locale).to_string(), evening);
+
+            let actions = [
+                rust_i18n::t!("app.welcome.action.build", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.action.improve", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.action.explore", locale = locale).to_string(),
+            ];
+            let workspace_actions = [
+                rust_i18n::t!("app.welcome.action.build_in_workspace", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.action.improve_in_workspace", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.action.explore_in_workspace", locale = locale).to_string(),
+            ];
+            let calls_to_action = [
+                rust_i18n::t!("app.welcome.cta.choose_workspace", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.cta.open_project", locale = locale).to_string(),
+                rust_i18n::t!("app.welcome.cta.select_folder", locale = locale).to_string(),
+            ];
+            for first in 0..actions.len() {
+                for second in first + 1..actions.len() {
+                    assert_ne!(actions[first], actions[second]);
+                    assert_ne!(workspace_actions[first], workspace_actions[second]);
+                    assert_ne!(calls_to_action[first], calls_to_action[second]);
+                }
+            }
+        }
+    }
 }
