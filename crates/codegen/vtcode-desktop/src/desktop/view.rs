@@ -4498,16 +4498,10 @@ impl DesktopView {
             return div().into_any_element();
         };
         let id = head.id.clone();
-        let mut failed = 0;
-        let mut running = 0;
-        for item in range.clone().filter_map(|index| self.transcript.get(index)) {
-            match ActivityState::from_status(item.text.lines().next().unwrap_or_default()) {
-                ActivityState::Failed => failed += 1,
-                ActivityState::Running => running += 1,
-                _ => {}
-            }
-        }
-        let mut label = format!("{} tool actions", range.len());
+        let summary = head.activity_group_summary;
+        let failed = summary.failed;
+        let running = summary.running;
+        let mut label = format!("{} tool actions", summary.total);
         if running > 0 {
             label.push_str(&format!(" · {running} running"));
         }
