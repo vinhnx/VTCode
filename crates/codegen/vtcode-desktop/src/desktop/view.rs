@@ -6475,17 +6475,7 @@ impl DesktopView {
                             .small()
                             .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
                     )
-                    .child(self.render_mode_button(cx))
-                    .child(
-                        desktop_button("composer-settings")
-                            .icon(IconName::Settings2)
-                            .ghost()
-                            .small()
-                            .ml_auto()
-                            .accessibility_label("Composer settings")
-                            .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
-                            .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
-                    ),
+                    .child(self.render_mode_button(cx)),
             );
         }
         div().w_full().flex().justify_center().child(

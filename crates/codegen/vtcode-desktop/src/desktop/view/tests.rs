@@ -7418,7 +7418,8 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
         assert!(compact.size.width <= px(960.));
         assert!(compact.size.height <= px(120.), "empty composer height: {:?}", compact.size.height);
         assert_eq!(window.find("send-prompt").disabled(), Some(true));
-        assert_eq!(window.find("composer-settings").label(), Some("Composer settings"));
+        assert!(window.find_all("composer-settings").is_empty(), "global settings has one header entry");
+        assert_eq!(window.find_all("open-settings").len(), 1);
         assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
         view.update(cx, |view, cx| {
             view.composer
@@ -7443,7 +7444,7 @@ fn compact_composer_caps_width_grows_with_text_and_preserves_controls(cx: &mut T
                 .update(cx, |input, cx| input.set_value("first\nsecond\nthird\nfourth\nfifth", window, cx));
         });
         window.render_frame(cx);
-        window.click("composer-settings", cx);
+        window.click("open-settings", cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(view.read(cx).composer.read(cx).value(), "first\nsecond\nthird\nfourth\nfifth");
     })
