@@ -4,8 +4,9 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
-const COMMANDS: [(&str, &str, &str); 29] = [
+const COMMANDS: [(&str, &str, &str); 30] = [
     ("commands", "Search commands", "cmd-k"),
+    ("conversation_search", "Find in conversation", "cmd-shift-f"),
     ("new_session", "New thread", "cmd-n"),
     ("close_session", "Close thread", "cmd-shift-w"),
     ("workspace", "Choose workspace", "cmd-o"),
@@ -39,6 +40,7 @@ const COMMANDS: [(&str, &str, &str); 29] = [
 fn action(id: &str) -> Box<dyn gpui_kit::Action> {
     match id {
         "commands" => Box::new(OpenCommandPalette),
+        "conversation_search" => Box::new(OpenConversationSearch),
         "new_session" => Box::new(NewSession),
         "close_session" => Box::new(CloseSession),
         "workspace" => Box::new(ChooseWorkspace),
@@ -411,16 +413,16 @@ mod tests {
 
     #[test]
     fn rejects_conflicting_reserved_typing_and_unknown_shortcuts() {
-        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 30);
+        assert_eq!(bindings(&BTreeMap::new()).unwrap().len(), 31);
         assert!(bindings(&BTreeMap::from([("commands".into(), "ctrl-shift-k".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("settings_search".into(), "ctrl-alt-f".into())])).is_ok());
         assert!(bindings(&BTreeMap::from([("zen_mode".into(), "ctrl-alt-z".into())])).is_ok());
-        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 29);
+        assert_eq!(bindings(&BTreeMap::from([("model".into(), String::new())])).unwrap().len(), 30);
         assert_eq!(
             bindings(&BTreeMap::from([("settings_search".into(), String::new())]))
                 .unwrap()
                 .len(),
-            28
+            29
         );
         assert!(bindings(&BTreeMap::from([("dismiss".into(), "x".into())])).is_err());
         for (action, key) in [

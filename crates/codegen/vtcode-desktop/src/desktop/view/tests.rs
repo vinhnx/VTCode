@@ -2022,6 +2022,105 @@ fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session_id = "search-thread".to_string();
+    let target_id = "message-08".to_string();
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some(session_id.clone());
+        for index in 0..40 {
+            let id = format!("message-{index:02}");
+            let (role, text) = if index == 8 {
+                ("user", "Needle phrase in a user message")
+            } else if index == 9 {
+                ("tool", "Needle phrase in a tool row")
+            } else {
+                ("assistant", "An ordinary conversation message")
+            };
+            view.transcript
+                .push(TranscriptItem::new(id, role.into(), "VT Code".into(), text.into()));
+        }
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        let open_search = super::PaletteAction::OpenConversationSearch { session_id: session_id.clone() };
+        window.within("command-palette").input("Find in conversation", cx);
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(palette.read(cx).matched_count(), 1);
+        assert!(window.try_find(palette_action_id(&open_search)).is_some());
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Find in conversation"));
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+
+        let target_action = super::PaletteAction::JumpToTranscriptItem {
+            session_id: session_id.clone(),
+            item_id: target_id.clone(),
+        };
+        window.within("command-palette").input("Needle phrase", cx);
+        window.render_frame(cx);
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(palette.read(cx).matched_count(), 1, "tool activity is not treated as a chat message");
+        assert!(window.try_find(palette_action_id(&target_action)).is_some());
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none());
+        assert_eq!(view.read(cx).message_scroller.read(cx).logical_scroll_top().item_ix, 8);
+        assert!(window.try_find(format!("transcript-row-{target_id}")).is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn conversation_search_shortcut_opens_the_loaded_message_palette(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some("search-shortcut-thread".into());
+        view.transcript.push(TranscriptItem::new(
+            "message-shortcut".into(),
+            "user".into(),
+            "You".into(),
+            "Searchable message".into(),
+        ));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("cmd-shift-f", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Find in conversation"));
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette_focus.contains_focused(window, cx));
+    })
+    .unwrap();
+}
+
+#[test]
+fn conversation_search_snippet_is_single_line_and_bounded() {
+    assert_eq!(super::transcript_search_snippet("\n  First line\nsecond line"), "First line");
+    assert_eq!(super::transcript_search_snippet(&"x".repeat(98)), format!("{}…", "x".repeat(96)));
+}
+
+#[gpui_kit::test]
 fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(4);

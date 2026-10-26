@@ -249,6 +249,7 @@ actions!(
     desktop,
     [
         OpenCommandPalette,
+        OpenConversationSearch,
         OpenSettingsSearch,
         OpenModelPicker,
         OpenAddContext,
@@ -361,6 +362,7 @@ fn init_native_menus(cx: &mut App) {
         ]),
         Menu::new("View").items([
             MenuItem::action("Command Palette…", OpenCommandPalette),
+            MenuItem::action("Find in Conversation…", OpenConversationSearch),
             MenuItem::action("Focus Composer", FocusComposer),
             MenuItem::action("Toggle Inspector", ToggleInspector),
             MenuItem::action("Toggle Zen Mode", ToggleZenMode),
@@ -382,6 +384,7 @@ struct PaletteCommand {
     label: String,
     description: Option<String>,
     keywords: Vec<String>,
+    shared_keywords: Vec<gpui_kit::SharedString>,
     action: PaletteAction,
 }
 
@@ -398,6 +401,7 @@ fn share_palette_commands(groups: Vec<(String, Vec<PaletteCommand>)>) -> Palette
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PaletteKind {
     Commands,
+    ConversationSearch,
     ConfigSettings,
     Models,
     ModelOptions,
@@ -418,6 +422,8 @@ enum PaletteKind {
 enum PaletteAction {
     NewSession,
     CloseSession,
+    OpenConversationSearch { session_id: String },
+    JumpToTranscriptItem { session_id: String, item_id: String },
     ChooseModel,
     ChooseWorkspace,
     RefreshSessions,
@@ -2243,6 +2249,17 @@ impl DesktopView {
                 ),
             ],
         ));
+        if let Some(session_id) = self.selected_session_id.clone()
+            && self.has_searchable_conversation_messages()
+        {
+            groups.push((
+                "Conversation".into(),
+                vec![command(
+                    "Find in conversation…",
+                    PaletteAction::OpenConversationSearch { session_id },
+                )],
+            ));
+        }
         let slash_commands = self
             .slash_commands
             .iter()
@@ -2283,6 +2300,51 @@ impl DesktopView {
         }
 
         self.show_palette(PaletteKind::Commands, groups, window, cx);
+    }
+
+    fn open_conversation_search(&mut self, session_id: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_session_id.as_deref() != Some(session_id.as_str())
+            || !self.has_searchable_conversation_messages()
+        {
+            return;
+        }
+        if self.palette.is_some() && self.palette_kind == PaletteKind::ConversationSearch {
+            self.close_palette(window, cx);
+            return;
+        }
+
+        let messages = self
+            .transcript
+            .items_newest_first()
+            .filter(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
+            .map(|item| {
+                let speaker = if item.role == "user" {
+                    "You"
+                } else if item.title.trim().is_empty() {
+                    "VT Code"
+                } else {
+                    item.title.as_str()
+                };
+                let label = format!("{speaker} · {}", transcript_search_snippet(&item.text));
+                let mut entry = command(
+                    label,
+                    PaletteAction::JumpToTranscriptItem {
+                        session_id: session_id.clone(),
+                        item_id: item.id.clone(),
+                    },
+                );
+                entry.shared_keywords.extend([item.text.clone(), item.title.clone()]);
+                entry
+            })
+            .collect::<Vec<_>>();
+
+        self.show_palette(PaletteKind::ConversationSearch, vec![("Loaded messages".into(), messages)], window, cx);
+    }
+
+    fn has_searchable_conversation_messages(&self) -> bool {
+        self.transcript
+            .items()
+            .any(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
     }
 
     fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2432,6 +2494,16 @@ impl DesktopView {
         match action {
             PaletteAction::NewSession => self.create_session(cx),
             PaletteAction::CloseSession => self.close_session(cx),
+            PaletteAction::OpenConversationSearch { session_id } => {
+                self.open_conversation_search(session_id, window, cx);
+            }
+            PaletteAction::JumpToTranscriptItem { item_id, .. } => {
+                if let Some(index) = self.transcript.position_by_id(&item_id) {
+                    self.message_scroller.update(cx, |state, cx| {
+                        let _scrolled = state.scroll_to_item(index, cx);
+                    });
+                }
+            }
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
             PaletteAction::RefreshSessions => {
@@ -2499,6 +2571,18 @@ impl DesktopView {
     fn palette_action_available(&self, action: &PaletteAction) -> bool {
         match action {
             PaletteAction::NewSession | PaletteAction::ChooseModel => self.session_change_allowed(None),
+            PaletteAction::OpenConversationSearch { session_id } => {
+                self.selected_session_id.as_deref() == Some(session_id.as_str())
+                    && self.has_searchable_conversation_messages()
+            }
+            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+                self.selected_session_id.as_deref() == Some(session_id.as_str())
+                    && self.transcript.position_by_id(item_id).is_some_and(|index| {
+                        self.transcript
+                            .get(index)
+                            .is_some_and(|item| matches!(item.role.as_str(), "user" | "assistant"))
+                    })
+            }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
             PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {
                 self.workspace.is_some() && !self.attachments_picker_open && self.session_request.is_none()
@@ -7386,10 +7470,12 @@ impl DesktopView {
         let models = self.palette_kind == PaletteKind::Models;
         let prompt_history = self.palette_kind == PaletteKind::PromptHistory;
         let modes = self.palette_kind == PaletteKind::Modes;
+        let conversation_search = self.palette_kind == PaletteKind::ConversationSearch;
         let composer_popup = self.palette_kind.is_composer_popup();
         let inline_completion = matches!(self.palette_kind, PaletteKind::FileMentions | PaletteKind::SlashCommands);
         let title = match self.palette_kind {
             PaletteKind::Models => "Choose a model".to_owned(),
+            PaletteKind::ConversationSearch => "Find in conversation".to_owned(),
             PaletteKind::ModelOptions => "Select model".to_owned(),
             PaletteKind::AddContext => "Add files and more @".to_owned(),
             PaletteKind::FileMentions => "Mention a workspace file".to_owned(),
@@ -7420,6 +7506,8 @@ impl DesktopView {
             "Filter VT Code commands…".to_owned()
         } else if self.palette_kind == PaletteKind::ReviewFiles {
             "Search changed files…".to_owned()
+        } else if conversation_search {
+            "Search loaded messages…".to_owned()
         } else if prompt_history {
             "Search prompts in this thread…".to_owned()
         } else if modes {
@@ -7432,6 +7520,17 @@ impl DesktopView {
             .max_h(px(360.))
             .when(models, |command| {
                 command.header(|_, _, _| div().px_3().py_2().font_semibold().child("Choose a model"))
+            })
+            .when(conversation_search, |command| {
+                let muted_foreground = colors.muted_foreground;
+                command.header(move |_, _, _| {
+                    div()
+                        .px_3()
+                        .py_2()
+                        .text_xs()
+                        .text_color(muted_foreground)
+                        .child("Searches messages currently loaded in this thread")
+                })
             })
             .empty(move |_, _, _| {
                 if quick_model {
@@ -7597,6 +7696,7 @@ impl DesktopView {
                         .label(label.clone())
                         .checked(selected)
                         .keywords(entry.keywords.clone())
+                        .keywords(entry.shared_keywords.clone())
                         .child(move |_, _| {
                             div()
                                 .id(id.clone())
@@ -7881,6 +7981,11 @@ impl Render for DesktopView {
             .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
             .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
             .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
+                if let Some(session_id) = view.selected_session_id.clone() {
+                    view.open_conversation_search(session_id, window, cx);
+                }
+            }))
             .on_action(
                 cx.listener(|view, _: &OpenSettingsSearch, window, cx| view.open_settings_search_palette(window, cx)),
             )
@@ -8035,7 +8140,19 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
         label: label.into(),
         description: None,
         keywords: Vec::new(),
+        shared_keywords: Vec::new(),
         action,
+    }
+}
+
+fn transcript_search_snippet(text: &str) -> String {
+    let line = text.lines().find(|line| !line.trim().is_empty()).unwrap_or_default().trim();
+    let mut chars = line.chars();
+    let snippet = chars.by_ref().take(96).collect::<String>();
+    if chars.next().is_some() {
+        format!("{snippet}…")
+    } else {
+        snippet
     }
 }
 
@@ -8062,6 +8179,11 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::CompleteSlashCommand(value)
         | PaletteAction::InsertHistoryPrompt(value)
         | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
+        PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
+        PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+        }
         PaletteAction::SelectSettingsTab(tab) => std::mem::discriminant(tab).hash(&mut hasher),
         PaletteAction::SelectModel { provider, model } => {
             provider.hash(&mut hasher);

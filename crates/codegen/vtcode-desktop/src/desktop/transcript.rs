@@ -189,7 +189,7 @@ impl Transcript {
         self.items.get(index)
     }
 
-    fn position_by_id(&self, id: &str) -> Option<usize> {
+    pub(super) fn position_by_id(&self, id: &str) -> Option<usize> {
         let last_index = self.items.len().checked_sub(1)?;
         if self.items.back().is_some_and(|item| item.id == id) {
             return Some(last_index);
