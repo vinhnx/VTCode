@@ -321,7 +321,6 @@ impl DesktopView {
         {
             groups.push(("Current".into(), vec![model_palette_command(current, true)]));
         }
-        groups.push(("Browse".into(), vec![command("Search all models…", PaletteAction::ChooseModel)]));
         groups
     }
 

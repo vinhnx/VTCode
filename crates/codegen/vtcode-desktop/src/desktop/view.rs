@@ -5732,6 +5732,37 @@ impl DesktopView {
                     cx,
                 )
             });
+            let search_all_view = weak.clone();
+            let search_all_palette_id = state.entity_id();
+            command = command.footer(move |_, _, _| {
+                let view = search_all_view.clone();
+                div()
+                    .id("model-search-all-footer")
+                    .border_t_1()
+                    .border_color(colors.border)
+                    .px_3()
+                    .py_2()
+                    .child(
+                        desktop_button("model-search-all")
+                            .label("Search all models…")
+                            .icon(IconName::Search)
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .on_click(move |_, window, cx| {
+                                let _updated = view.update(cx, |view, cx| {
+                                    if view.palette_kind == PaletteKind::ModelOptions
+                                        && view
+                                            .palette
+                                            .as_ref()
+                                            .is_some_and(|palette| palette.entity_id() == search_all_palette_id)
+                                    {
+                                        view.open_model_palette(window, cx);
+                                    }
+                                });
+                            }),
+                    )
+            });
         }
         let palette_query = self.palette_query.clone();
         for (label, entries) in &confirm_groups {

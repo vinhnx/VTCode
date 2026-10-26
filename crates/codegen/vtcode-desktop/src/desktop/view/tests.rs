@@ -5886,6 +5886,54 @@ fn permission_picker_emits_typed_selection_and_preserves_draft_sources(cx: &mut 
 }
 
 #[gpui_kit::test]
+fn quick_model_search_action_stays_visible_when_recommendations_overflow(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 450., 800.);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+            view.models = (0..12)
+                .map(|rank| vtcode_desktop_protocol::ModelInfo {
+                    provider: "recommended".into(),
+                    id: format!("model-{rank}"),
+                    display_name: format!("Recommended model {rank}"),
+                    context_window: None,
+                    current: false,
+                    recommended_rank: Some(rank),
+                    capabilities: None,
+                })
+                .collect();
+            view.sidebar_open = false;
+            view.inspector_open = false;
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+
+        let popup = window.find("command-palette").bounds();
+        let search_all = window.find("model-search-all");
+        let bounds = search_all.bounds();
+        assert_eq!(search_all.label(), Some("Search all models…"));
+        assert!(bounds.top() >= popup.top(), "search CTA starts above the popup: {bounds:?} {popup:?}");
+        assert!(bounds.bottom() <= popup.bottom(), "search CTA is clipped by the popup: {bounds:?} {popup:?}");
+        assert!(
+            view.read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .all(|entry| !matches!(entry.action, super::PaletteAction::ChooseModel)),
+            "the full-search CTA should not scroll with the model recommendations"
+        );
+
+        window.click("model-search-all", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn quick_model_step_control_sends_supported_effort_and_full_search_remains_available(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
@@ -5932,13 +5980,20 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
         view.update(cx, |view, _| view.session_request = None);
         window.click("pick-model", cx);
         window.render_frame(cx);
-        assert_eq!(
-            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
-            Some("Search all models…")
+        let search_all = window.find("model-search-all");
+        let search_all_bounds = search_all.bounds();
+        let popup_bounds = window.find("command-palette").bounds();
+        assert_eq!(search_all.label(), Some("Search all models…"));
+        assert!(search_all_bounds.top() >= popup_bounds.top());
+        assert!(search_all_bounds.bottom() <= popup_bounds.bottom());
+        assert!(
+            view.read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .all(|entry| !matches!(entry.action, super::PaletteAction::ChooseModel))
         );
-        view.update(cx, |view, cx| {
-            view.run_palette_action(super::PaletteAction::ChooseModel, window, cx);
-        });
+        window.click("model-search-all", cx);
         window.render_frame(cx);
         assert_eq!(window.find("command-palette").label(), Some("Choose a model"));
         assert!(
@@ -6034,9 +6089,18 @@ fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_t
             .map(|entry| palette_action_id(&entry.action))
             .unwrap();
         assert!(window.find(gpt_id).label().unwrap().contains("gpt-5.6-sol"));
-        assert_eq!(
-            window.find(palette_action_id(&super::PaletteAction::ChooseModel)).label(),
-            Some("Search all models…")
+        let search_all = window.find("model-search-all");
+        assert_eq!(search_all.label(), Some("Search all models…"));
+        let search_all_bounds = search_all.bounds();
+        let popup_bounds = window.find("command-palette").bounds();
+        assert!(search_all_bounds.top() >= popup_bounds.top());
+        assert!(search_all_bounds.bottom() <= popup_bounds.bottom());
+        assert!(
+            view.read(cx)
+                .palette_groups
+                .iter()
+                .flat_map(|(_, entries)| entries)
+                .all(|entry| !matches!(entry.action, super::PaletteAction::ChooseModel))
         );
         let uncatalogued_id = palette_action_id(&super::PaletteAction::SelectModel {
             provider: "custom".into(),
@@ -6044,7 +6108,7 @@ fn compact_model_picker_keeps_recommendations_and_filtered_full_search_selects_t
         });
         assert!(window.try_find(uncatalogued_id).is_none(), "uncurated catalog entries stay in full search");
         assert_eq!(window.find("fast-mode-toggle").label(), Some("Disable Ultrafast processing"));
-        view.update(cx, |view, cx| view.run_palette_action(super::PaletteAction::ChooseModel, window, cx));
+        window.click("model-search-all", cx);
         window.render_frame(cx);
         view.update(cx, |view, cx| view.focus_palette_state(window, cx));
         window.render_frame(cx);
