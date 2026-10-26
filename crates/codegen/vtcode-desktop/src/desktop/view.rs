@@ -8,7 +8,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
-use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
+use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, Selectable, StyledExt};
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::attachment::{
@@ -1874,13 +1874,8 @@ impl DesktopView {
         let Some(interaction) = self.interaction.clone() else {
             return;
         };
-        let mut answer_texts = self.interaction_answer_texts.clone();
-        if !interaction.steps.is_empty() {
-            let current_answer = self.question_answer.read(cx).value().to_string();
-            if let Some(answer) = answer_texts.get_mut(self.interaction_step_index) {
-                *answer = (!current_answer.trim().is_empty()).then_some(current_answer);
-            }
-        }
+        self.store_current_interaction_answer(cx);
+        let answer_texts = self.interaction_answer_texts.clone();
         let response = InteractionResponse {
             session_id: interaction.session_id,
             turn_id: interaction.turn_id,
@@ -1920,22 +1915,70 @@ impl DesktopView {
             return;
         };
         if interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty() {
+            if step_index != self.interaction_step_index
+                || !interaction
+                    .steps
+                    .get(step_index)
+                    .is_some_and(|step| step.choices.iter().any(|choice| choice.id == choice_id))
+            {
+                return;
+            }
             if let Some(selected) = self.interaction_choice_ids.get_mut(step_index) {
                 *selected = Some(choice_id);
             }
+            self.clear_error();
             cx.notify();
             return;
         }
         self.submit_interaction(vec![choice_id], false, window, cx);
     }
 
+    fn store_current_interaction_answer(&mut self, cx: &App) {
+        if self.interaction.as_ref().is_none_or(|interaction| interaction.steps.is_empty()) {
+            return;
+        }
+        let answer = self.question_answer.read(cx).value().to_string();
+        if let Some(stored) = self.interaction_answer_texts.get_mut(self.interaction_step_index) {
+            *stored = (!answer.trim().is_empty()).then_some(answer);
+        }
+    }
+
+    fn show_interaction_step(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index == self.interaction_step_index
+            || self.interaction.as_ref().is_none_or(|interaction| {
+                interaction.kind != protocol::InteractionKind::Question || interaction.steps.get(index).is_none()
+            })
+        {
+            return;
+        }
+        self.store_current_interaction_answer(cx);
+        self.interaction_step_index = index;
+        let answer = self
+            .interaction_answer_texts
+            .get(index)
+            .and_then(Clone::clone)
+            .unwrap_or_default();
+        self.question_answer.update(cx, |state, cx| state.set_value(answer, window, cx));
+        self.clear_error();
+        cx.notify();
+    }
+
     fn advance_interaction_step(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(interaction) = self.interaction.as_ref() else {
             return;
         };
-        let answer = self.question_answer.read(cx).value().to_string();
-        if let Some(stored) = self.interaction_answer_texts.get_mut(self.interaction_step_index) {
-            *stored = (!answer.trim().is_empty()).then_some(answer);
+        let selected = self
+            .interaction_choice_ids
+            .get(self.interaction_step_index)
+            .and_then(Option::as_deref);
+        if !interaction
+            .steps
+            .get(self.interaction_step_index)
+            .is_some_and(|step| step.choices.iter().any(|choice| Some(choice.id.as_str()) == selected))
+        {
+            self.error = Some("Choose an option for this question before continuing.".into());
+            cx.notify();
+            return;
         }
         let final_step = self.interaction_step_index + 1 >= interaction.steps.len();
         if final_step {
@@ -1947,9 +1990,7 @@ impl DesktopView {
             }
             self.submit_interaction(selections, false, window, cx);
         } else {
-            self.interaction_step_index += 1;
-            self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
-            cx.notify();
+            self.show_interaction_step(self.interaction_step_index + 1, window, cx);
         }
     }
 
@@ -5649,14 +5690,39 @@ impl DesktopView {
                     interaction.kind == protocol::InteractionKind::Question && !interaction.steps.is_empty(),
                     |row| {
                         row.child(
-                            desktop_button("continue-question")
-                                .label(if self.interaction_step_index + 1 == interaction.steps.len() {
-                                    "Submit answers"
-                                } else {
-                                    "Next question"
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .when(self.interaction_step_index > 0, |row| {
+                                    row.child(
+                                        desktop_button("previous-question")
+                                            .label("Previous")
+                                            .icon(IconName::ChevronLeft)
+                                            .ghost()
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.show_interaction_step(
+                                                    this.interaction_step_index.saturating_sub(1),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    )
                                 })
-                                .primary()
-                                .on_click(cx.listener(|this, _, window, cx| this.advance_interaction_step(window, cx))),
+                                .child(
+                                    desktop_button("continue-question")
+                                        .label(if self.interaction_step_index + 1 == interaction.steps.len() {
+                                            "Submit answers"
+                                        } else {
+                                            "Next question"
+                                        })
+                                        .primary()
+                                        .on_click(
+                                            cx.listener(|this, _, window, cx| {
+                                                this.advance_interaction_step(window, cx)
+                                            }),
+                                        ),
+                                ),
                         )
                     },
                 ),
@@ -5718,11 +5784,25 @@ impl DesktopView {
         } else {
             choice.label.clone()
         };
-        let mut button = desktop_button(format!("choice-{}", choice.id)).label(label).w_full().ghost();
+        let selected = self
+            .interaction
+            .as_ref()
+            .is_some_and(|interaction| interaction.kind == protocol::InteractionKind::Question)
+            && self.interaction_choice_ids.get(step_index).and_then(Option::as_deref) == Some(choice.id.as_str());
+        let mut button = desktop_button(format!("choice-{}", choice.id))
+            .accessibility_label(if selected {
+                format!("{label} (Selected)")
+            } else {
+                label.clone()
+            })
+            .label(label)
+            .w_full()
+            .ghost()
+            .selected(selected)
+            .when(selected, |button| button.icon(IconName::Check));
         if let Some(description) = choice.description.as_ref() {
             button = button.tooltip(description.clone());
         }
-        let _ = step_index;
         div().w_full().child(button.on_click(cx.listener(move |this, _, window, cx| {
             this.choose_interaction_option(step_index, choice_id.clone(), window, cx);
         })))

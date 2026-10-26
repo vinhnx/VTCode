@@ -356,6 +356,9 @@ a turn, a later acknowledgement cannot restart it or offer its accepted input fo
 Approval, plan approval, and question panels return the exact opaque option identities supplied by the service. Wizard
 steps retain their order and collect free-form answers separately from display labels. The GUI does not create its own
 agent loop or bypass VT Code's approval and execution policy.
+Multi-question requests validate the current choice before advancing. **Previous** returns to earlier questions
+with the selected option and typed answer intact; advancing again restores later drafts. Selected choices show
+a checkmark and an accessible selected label. Only **Submit answers** sends the ordered choices and answers to the CLI.
 
 ## Local service protocol
 

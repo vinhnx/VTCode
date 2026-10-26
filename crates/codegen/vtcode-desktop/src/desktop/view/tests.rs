@@ -3467,6 +3467,7 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
     use vtcode_desktop_protocol::{InteractionChoice, InteractionKind, InteractionRequest, InteractionStep};
 
     let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     let make_choice = |id: &str| InteractionChoice {
         id: id.into(),
         label: format!("Choose {id}"),
@@ -3484,10 +3485,11 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         question: question.into(),
         choices: vec![make_choice(choice_id)],
         selected_choice_id: None,
-        allow_freeform: false,
+        allow_freeform: true,
     })
     .collect();
     view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
         view.interaction = Some(InteractionRequest {
             session_id: "session".into(),
             turn_id: "turn".into(),
@@ -3517,12 +3519,52 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
         assert_eq!(stepper.role(), Some(gpui_kit::Role::List));
         assert_eq!(stepper.label(), Some("Question steps"));
         assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        assert!(window.try_find("previous-question").is_none());
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        assert!(requests.try_recv().is_err(), "an unanswered step cannot submit or advance");
+        view.update(cx, |view, cx| {
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("Original workspace answer", window, cx));
+        });
         window.click("choice-workspace", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("choice-workspace").label(), Some("Choose workspace (Selected)"));
         window.click("continue-question", cx);
         window.render_frame(cx);
         assert_eq!(window.find("question-step-counter").label(), Some("Question 2 of 3"));
+        view.update(cx, |view, cx| {
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("Task draft", window, cx));
+        });
+        window.click("previous-question", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 1 of 3"));
+        assert_eq!(view.read(cx).question_answer.read(cx).value(), "Original workspace answer");
+        assert_eq!(window.find("choice-workspace").label(), Some("Choose workspace (Selected)"));
+        view.update(cx, |view, cx| {
+            view.question_answer
+                .update(cx, |input, cx| input.set_value("Revised workspace answer", window, cx));
+        });
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).question_answer.read(cx).value(), "Task draft");
+        window.click("choice-task", cx);
+        window.click("continue-question", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("question-step-counter").label(), Some("Question 3 of 3"));
+        window.click("choice-review", cx);
+        window.click("continue-question", cx);
     })
     .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("completed question response") else {
+        panic!("expected interaction response");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::INTERACTION_RESPOND);
+    assert_eq!(params["choiceIds"], json!(["workspace", "task", "review"]));
+    assert_eq!(params["answerTexts"], json!(["Revised workspace answer", "Task draft", null]));
+    assert!(requests.try_recv().is_err(), "editing questions sends only the final response");
 }
 
 #[gpui_kit::test]
