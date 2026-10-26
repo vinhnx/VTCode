@@ -53,8 +53,9 @@ impl InspectorTab {
 pub(super) struct ChangeEntry {
     pub path: String,
     pub kind: DiffFileKind,
-    pub additions: u64,
-    pub deletions: u64,
+    pub additions: Option<u64>,
+    pub deletions: Option<u64>,
+    pub preview_incomplete: bool,
 }
 
 /// One row in the Activity tab.
@@ -132,66 +133,107 @@ pub(super) struct ChangesProjection {
     /// File rows in newest-change-set-first order.
     entries: Vec<ChangeEntry>,
     /// Parsed diff per path, kept for the review viewer.
-    parsed: HashMap<String, ProjectedDiff>,
-    /// Totals across the newest state of each file.
-    additions: u64,
-    deletions: u64,
+    projected: HashMap<String, ProjectedChange>,
+    /// Totals across the newest state of each file, absent if any file's
+    /// preview cannot provide trustworthy counts.
+    totals: Option<(u64, u64)>,
 }
 
-/// The exact transcript item that owns a successfully parsed file preview.
-struct ProjectedDiff {
-    file: DiffFile,
+/// The newest metadata and optional parsed preview for one changed path.
+struct ProjectedChange {
+    preview: Option<DiffFile>,
     source_item_id: String,
+    kind: DiffFileKind,
+    additions: Option<u64>,
+    deletions: Option<u64>,
+    preview_incomplete: bool,
 }
 
 impl ChangesProjection {
-    /// Rebuild from the transcript. Unparseable or missing patches are
-    /// skipped; later change-sets overwrite the per-file state.
+    /// Rebuild from the transcript. Structured file paths remain visible when
+    /// a preview is absent or unparseable; later change-sets overwrite them.
     pub(super) fn rebuild(transcript: &Transcript) -> Self {
-        let mut parsed: HashMap<String, ProjectedDiff> = HashMap::new();
+        let mut projected: HashMap<String, ProjectedChange> = HashMap::new();
         let mut order: Vec<String> = Vec::new();
         for item in transcript.items_newest_first() {
             let Some(diff) = item.diff.as_ref() else { continue };
-            if diff.patch.trim().is_empty() {
-                continue;
+            let mut parsed_files = HashMap::new();
+            let mut parsed_order = Vec::new();
+            if !diff.patch.trim().is_empty()
+                && let Ok(files) = DiffFile::parse(&diff.patch)
+            {
+                parsed_files.reserve(files.len());
+                parsed_order.reserve(files.len());
+                for file in files {
+                    let path = file.path().to_string();
+                    if let Entry::Vacant(entry) = parsed_files.entry(path.clone()) {
+                        parsed_order.push(path);
+                        let _inserted = entry.insert(file);
+                    }
+                }
             }
-            let Ok(files) = DiffFile::parse(&diff.patch) else {
-                continue;
-            };
-            for file in files {
-                let path = file.path().to_string();
-                if let Entry::Vacant(entry) = parsed.entry(path.clone()) {
+
+            for file in &diff.files {
+                let path = file.path.clone();
+                if let Entry::Vacant(entry) = projected.entry(path.clone()) {
+                    let preview = parsed_files.remove(&path);
+                    let (additions, deletions) = preview_counts(preview.as_ref(), diff.incomplete);
                     order.push(path);
-                    let _inserted = entry.insert(ProjectedDiff { file, source_item_id: item.id.clone() });
+                    let _inserted = entry.insert(ProjectedChange {
+                        preview,
+                        source_item_id: item.id.clone(),
+                        kind: file.kind,
+                        additions,
+                        deletions,
+                        preview_incomplete: diff.incomplete,
+                    });
+                }
+            }
+
+            // Older event versions may omit structured paths. Preserve the
+            // parsed-patch fallback, in parser order, for those events.
+            for path in parsed_order {
+                if let Entry::Vacant(entry) = projected.entry(path.clone()) {
+                    let Some(preview) = parsed_files.remove(&path) else {
+                        continue;
+                    };
+                    let (additions, deletions) = preview_counts(Some(&preview), diff.incomplete);
+                    order.push(path);
+                    let _inserted = entry.insert(ProjectedChange {
+                        kind: change_kind(preview.status()),
+                        additions,
+                        deletions,
+                        preview: Some(preview),
+                        source_item_id: item.id.clone(),
+                        preview_incomplete: diff.incomplete,
+                    });
                 }
             }
         }
         let mut entries = Vec::with_capacity(order.len());
-        let mut additions = 0;
-        let mut deletions = 0;
+        let mut totals = Some((0_u64, 0_u64));
         for path in order {
-            let Some(projected) = parsed.get(&path) else { continue };
-            let file = &projected.file;
-            let file_additions = file.additions() as u64;
-            let file_deletions = file.deletions() as u64;
-            additions += file_additions;
-            deletions += file_deletions;
+            let Some(change) = projected.get(&path) else { continue };
+            totals = totals.and_then(|(additions, deletions)| {
+                Some((additions.checked_add(change.additions?)?, deletions.checked_add(change.deletions?)?))
+            });
             entries.push(ChangeEntry {
                 path,
-                kind: change_kind(file.status()),
-                additions: file_additions,
-                deletions: file_deletions,
+                kind: change.kind,
+                additions: change.additions,
+                deletions: change.deletions,
+                preview_incomplete: change.preview_incomplete,
             });
         }
-        Self { entries, parsed, additions, deletions }
+        Self { entries, projected, totals }
     }
 
     pub(super) fn entries(&self) -> &[ChangeEntry] {
         &self.entries
     }
 
-    pub(super) fn totals(&self) -> (u64, u64) {
-        (self.additions, self.deletions)
+    pub(super) fn totals(&self) -> Option<(u64, u64)> {
+        self.totals.or_else(|| self.entries.is_empty().then_some((0, 0)))
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -200,12 +242,18 @@ impl ChangesProjection {
 
     /// The parsed diff for one file, for the review viewer.
     pub(super) fn select(&self, path: &str) -> Option<DiffFile> {
-        self.parsed.get(path).map(|projected| projected.file.clone())
+        self.projected.get(path)?.preview.clone()
+    }
+
+    pub(super) fn has_preview(&self, path: &str) -> bool {
+        self.projected.get(path).is_some_and(|projected| projected.preview.is_some())
     }
 
     /// The full raw patch text for the change-set that last touched a path.
     pub(super) fn patch_for(&self, transcript: &Transcript, path: &str) -> Option<String> {
-        let source = &self.parsed.get(path)?.source_item_id;
+        let projected = self.projected.get(path)?;
+        let _preview = projected.preview.as_ref()?;
+        let source = &projected.source_item_id;
         transcript
             .items_newest_first()
             .find(|item| item.id == *source)?
@@ -317,6 +365,15 @@ fn change_kind(status: DiffFileStatus) -> DiffFileKind {
     }
 }
 
+fn preview_counts(preview: Option<&DiffFile>, incomplete: bool) -> (Option<u64>, Option<u64>) {
+    if incomplete {
+        return (None, None);
+    }
+    preview
+        .map(|file| (Some(file.additions() as u64), Some(file.deletions() as u64)))
+        .unwrap_or((None, None))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,7 +448,7 @@ mod tests {
         let projection = ChangesProjection::rebuild(&transcript);
         let paths: Vec<&str> = projection.entries().iter().map(|entry| entry.path.as_str()).collect();
         assert_eq!(paths, vec!["src/main.rs", "src/old.rs"], "newest change-set first");
-        assert_eq!(projection.totals(), (3, 1));
+        assert_eq!(projection.totals(), Some((3, 1)));
         assert!(projection.select("src/main.rs").is_some());
         assert!(projection.select("missing.rs").is_none());
     }
@@ -407,10 +464,62 @@ mod tests {
 
         let projection = ChangesProjection::rebuild(&transcript);
         assert_eq!(projection.entries().len(), 1, "one row per file");
-        assert_eq!(projection.entries()[0].additions, 1);
-        assert_eq!(projection.entries()[0].deletions, 0);
-        assert_eq!(projection.totals(), (1, 0));
+        assert_eq!(projection.entries()[0].additions, Some(1));
+        assert_eq!(projection.entries()[0].deletions, Some(0));
+        assert_eq!(projection.totals(), Some((1, 0)));
         assert_eq!(projection.patch_for(&transcript, "src/app.rs").as_deref(), Some(newer));
+    }
+
+    #[test]
+    fn newest_file_metadata_replaces_stale_preview_when_diff_is_unavailable() {
+        let mut transcript = Transcript::default();
+        transcript.push(diff_item("older", "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1 @@\n-old\n+new\n"));
+        let mut latest =
+            TranscriptItem::new("newer".to_string(), "diff".to_string(), "File changes".into(), String::new());
+        latest.diff = Some(crate::desktop::transcript::DiffCard {
+            files: vec![crate::desktop::transcript::DiffFile {
+                path: "src/app.rs".to_string(),
+                kind: DiffFileKind::Delete,
+            }],
+            additions: None,
+            deletions: None,
+            incomplete: true,
+            failed: false,
+            patch: String::new(),
+        });
+        transcript.push(latest);
+
+        let projection = ChangesProjection::rebuild(&transcript);
+
+        assert_eq!(projection.entries().len(), 1, "metadata keeps the changed path visible");
+        assert_eq!(projection.entries()[0].path, "src/app.rs");
+        assert_eq!(projection.entries()[0].kind, DiffFileKind::Delete);
+        assert_eq!(projection.entries()[0].additions, None);
+        assert_eq!(projection.entries()[0].deletions, None);
+        assert!(projection.entries()[0].preview_incomplete);
+        assert!(projection.select("src/app.rs").is_none(), "stale preview is not reused");
+        assert!(projection.patch_for(&transcript, "src/app.rs").is_none());
+        assert_eq!(projection.totals(), None, "unknown line counts are not reported as zero");
+    }
+
+    #[test]
+    fn incomplete_preview_remains_openable_without_claiming_partial_counts() {
+        let patch = "--- a/src/app.rs\n+++ b/src/app.rs\n@@ -1 +1,2 @@\n-old\n+new\n+another\n";
+        let mut transcript = Transcript::default();
+        let mut item = diff_item("partial", patch);
+        if let Some(diff) = item.diff.as_mut() {
+            diff.incomplete = true;
+        }
+        transcript.push(item);
+
+        let projection = ChangesProjection::rebuild(&transcript);
+
+        assert!(projection.has_preview("src/app.rs"));
+        assert_eq!(projection.entries()[0].additions, None);
+        assert_eq!(projection.entries()[0].deletions, None);
+        assert!(projection.entries()[0].preview_incomplete);
+        assert_eq!(projection.patch_for(&transcript, "src/app.rs").as_deref(), Some(patch));
+        assert_eq!(projection.totals(), None);
     }
 
     #[test]

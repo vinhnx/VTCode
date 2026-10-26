@@ -9,7 +9,16 @@ impl DesktopView {
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "No workspace".into());
-        let (additions, deletions) = self.changes.totals();
+        let totals = self.changes.totals();
+        let change_accessibility_label = totals.map_or_else(
+            || format!("Session changes: {} files; line counts unavailable", self.changes.entries().len()),
+            |(additions, deletions)| {
+                format!(
+                    "Session changes: {} files, {additions} additions, {deletions} deletions",
+                    self.changes.entries().len()
+                )
+            },
+        );
         let rows = inspector::activity_rows(&self.transcript, &self.restored_activity);
         let counts = ActivityCounts::from_rows(&rows);
         let summary = if counts.total() == 0 {
@@ -38,10 +47,7 @@ impl DesktopView {
                             .ghost()
                             .w_full()
                             .justify_start()
-                            .accessibility_label(format!(
-                                "Session changes: {} files, {additions} additions, {deletions} deletions",
-                                self.changes.entries().len()
-                            ))
+                            .accessibility_label(change_accessibility_label)
                             .child(
                                 div()
                                     .flex()
@@ -50,8 +56,20 @@ impl DesktopView {
                                     .w_full()
                                     .child(Icon::new(IconName::GitCompare).small())
                                     .child(div().flex_1().child("Changes"))
-                                    .child(div().text_sm().text_color(colors.success).child(format!("+{additions}")))
-                                    .child(div().text_sm().text_color(colors.danger).child(format!("−{deletions}"))),
+                                    .when_some(totals, |row, (additions, deletions)| {
+                                        row.child(
+                                            div().text_sm().text_color(colors.success).child(format!("+{additions}")),
+                                        )
+                                        .child(div().text_sm().text_color(colors.danger).child(format!("−{deletions}")))
+                                    })
+                                    .when(totals.is_none(), |row| {
+                                        row.child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(colors.muted_foreground)
+                                                .child("Counts unavailable"),
+                                        )
+                                    }),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.set_inspector_tab(InspectorTab::Changes, cx);

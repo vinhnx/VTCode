@@ -1699,7 +1699,7 @@ fn inspector_changes_list_files_and_open_a_diff_viewer(cx: &mut TestAppContext) 
             });
             assert_eq!(view.changes.entries().len(), 1);
             assert_eq!(view.changes.entries()[0].path, "src/app.rs");
-            assert_eq!(view.changes.totals(), (80, 80));
+            assert_eq!(view.changes.totals(), Some((80, 80)));
         });
         window.render_frame(cx);
         window.click(super::opaque_path_element_id("change-row", "src/app.rs"), cx);
@@ -5720,6 +5720,40 @@ fn loaded_session_restores_review_without_replaying_live_run_state(cx: &mut Test
         assert!(modified.size.width > px(100.));
         assert!(original.right() <= modified.left());
         assert!(modified.right() <= viewport.right() + px(1.), "both wrapped split columns must remain visible");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(std::env::temp_dir());
+            view.inspector_open = true;
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Changes;
+            view.upsert_diff_card(
+                "change-no-preview".into(),
+                &vtcode_exec_events::FileChangeItem {
+                    diff_incomplete: Some(true),
+                    changes: vec![vtcode_exec_events::FileUpdateChange {
+                        path: "src/updated.rs".into(),
+                        kind: vtcode_exec_events::PatchChangeKind::Update,
+                    }],
+                    status: vtcode_exec_events::PatchApplyStatus::Completed,
+                    unified_diff: None,
+                    additions: None,
+                    deletions: None,
+                },
+            );
+            assert_eq!(view.changes.entries().len(), 1);
+            assert_eq!(view.changes.totals(), None);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        let row = window.find(super::opaque_path_element_id("change-row", "src/updated.rs"));
+        assert_eq!(row.disabled(), Some(true));
+        assert_eq!(row.label(), Some("Diff preview unavailable for src/updated.rs"));
     })
     .unwrap();
 }

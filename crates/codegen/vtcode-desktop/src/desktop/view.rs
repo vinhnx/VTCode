@@ -4900,7 +4900,7 @@ impl DesktopView {
             .into_any_element();
         }
 
-        let (additions, deletions) = self.changes.totals();
+        let totals = self.changes.totals();
         body = body.child(
             div()
                 .flex()
@@ -4916,8 +4916,18 @@ impl DesktopView {
                         .gap_2()
                         .text_xs()
                         .child(format!("{} files", self.changes.entries().len()))
-                        .child(div().text_color(colors.success).child(format!("+{additions}")))
-                        .child(div().text_color(colors.danger).child(format!("−{deletions}"))),
+                        .when_some(totals, |summary, (additions, deletions)| {
+                            summary
+                                .child(div().text_color(colors.success).child(format!("+{additions}")))
+                                .child(div().text_color(colors.danger).child(format!("−{deletions}")))
+                        })
+                        .when(totals.is_none(), |summary| {
+                            summary.child(
+                                div()
+                                    .text_color(colors.muted_foreground)
+                                    .child("Line counts unavailable for some files"),
+                            )
+                        }),
                 )
                 .child(
                     div()
@@ -4966,6 +4976,12 @@ impl DesktopView {
                 .children(self.changes.entries().iter().map(|entry| {
                     let path = entry.path.clone();
                     let selected = self.selected_change.as_deref() == Some(entry.path.as_str());
+                    let preview_available = self.changes.has_preview(&path);
+                    let file_summary = match (entry.additions, entry.deletions) {
+                        (Some(additions), Some(deletions)) => format!("+{additions} −{deletions}"),
+                        _ if entry.preview_incomplete => "Partial diff".to_string(),
+                        _ => "Preview unavailable".to_string(),
+                    };
                     let kind_label = match entry.kind {
                         DiffFileKind::Add => ("A", colors.success),
                         DiffFileKind::Delete => ("D", colors.danger),
@@ -4989,22 +5005,27 @@ impl DesktopView {
                                 .child(kind_label.0),
                         )
                         .child(div().flex_1().min_w_0().text_sm().truncate().child(path.clone()))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(colors.muted_foreground)
-                                .child(format!("+{} −{}", entry.additions, entry.deletions)),
-                        )
+                        .child(div().text_xs().text_color(colors.muted_foreground).child(file_summary))
                         .child(
                             desktop_button(opaque_path_element_id("change-row", &path))
                                 .icon(IconName::ChevronRight)
                                 .accessibility_label(format!(
-                                    "Review {path}{}",
-                                    if selected { " (selected)" } else { "" }
+                                    "{} {path}{}",
+                                    if preview_available {
+                                        "Review"
+                                    } else {
+                                        "Diff preview unavailable for"
+                                    },
+                                    if selected { " (selected)" } else { "" },
                                 ))
-                                .tooltip(path.clone())
+                                .tooltip(if preview_available {
+                                    path.clone()
+                                } else {
+                                    format!("Diff preview unavailable for {path}")
+                                })
                                 .ghost()
                                 .small()
+                                .desktop_disabled(!preview_available)
                                 .on_click(cx.listener(move |this, _, _, cx| this.select_change(path.clone(), cx))),
                         )
                 })),
