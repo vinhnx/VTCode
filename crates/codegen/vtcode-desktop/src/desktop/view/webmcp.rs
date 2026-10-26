@@ -58,6 +58,7 @@ impl DesktopView {
         self.webmcp_status = None;
         self.webmcp_pairing = None;
         self.webmcp_request_pending = None;
+        self.webmcp_status_dirty = false;
         self.webmcp_notice = notice.map(str::to_owned);
     }
 
@@ -202,6 +203,13 @@ impl DesktopView {
             }
         } else {
             let status_label = match status {
+                Some(status) if status.running && (self.session_request.is_some() || self.running) => {
+                    "Connected · the selected desktop session cannot accept a turn right now"
+                }
+                Some(status) if status.running && busy => "Connected · checking desktop session availability",
+                Some(status) if status.running && self.webmcp_status_dirty => {
+                    "Connected · desktop session availability unavailable"
+                }
                 Some(status) if status.running && status.turns_available => "Connected · desktop session ready",
                 Some(status) if status.running && status.session_id.is_some() => {
                     "Connected · the selected desktop session cannot accept a turn right now"
@@ -224,7 +232,17 @@ impl DesktopView {
                         .items_center()
                         .justify_between()
                         .gap_2()
-                        .child(div().min_w_0().text_sm().text_color(colors.foreground).child(status_label))
+                        .child(
+                            div()
+                                .id("webmcp-session-status")
+                                .test_support()
+                                .role(gpui_kit::Role::Status)
+                                .aria_label(status_label)
+                                .min_w_0()
+                                .text_sm()
+                                .text_color(colors.foreground)
+                                .child(status_label),
+                        )
                         .child(
                             desktop_button("refresh-webmcp-status")
                                 .icon(IconName::RefreshCw)
@@ -351,7 +369,20 @@ impl DesktopView {
         self.webmcp_request_pending = Some(protocol::method::WEBMCP_STATUS);
         if !self.request(protocol::method::WEBMCP_STATUS, json!({})) {
             self.webmcp_request_pending = None;
+            self.webmcp_status_dirty = true;
             self.webmcp_notice = Some("The local service request queue is unavailable.".into());
+        } else {
+            self.webmcp_status_dirty = false;
+        }
+    }
+
+    pub(super) fn invalidate_webmcp_status(&mut self) {
+        if self.webmcp_status.is_none() && self.webmcp_request_pending.is_none() && !self.webmcp_status_dirty {
+            return;
+        }
+        self.webmcp_status_dirty = true;
+        if self.webmcp_request_pending.is_none() {
+            self.request_webmcp_status();
         }
     }
 
@@ -395,14 +426,25 @@ impl DesktopView {
         }
         self.webmcp_request_pending = None;
         match method {
+            protocol::method::WEBMCP_STATUS if self.webmcp_status_dirty => {
+                self.request_webmcp_status();
+            }
             protocol::method::WEBMCP_STATUS => match serde_json::from_value::<protocol::WebmcpBridgeStatus>(result) {
                 Ok(status) => {
                     self.webmcp_status = Some(status);
-                    if self.webmcp_notice.as_deref() == Some(WEBMCP_DISCONNECTED_NOTICE) {
+                    if matches!(
+                        self.webmcp_notice.as_deref(),
+                        Some(WEBMCP_DISCONNECTED_NOTICE)
+                            | Some("The desktop service returned an invalid WebMCP status.")
+                            | Some("The local service request queue is unavailable.")
+                    ) {
                         self.webmcp_notice = None;
                     }
                 }
-                Err(_) => self.webmcp_notice = Some("The desktop service returned an invalid WebMCP status.".into()),
+                Err(_) => {
+                    self.webmcp_status_dirty = true;
+                    self.webmcp_notice = Some("The desktop service returned an invalid WebMCP status.".into());
+                }
             },
             protocol::method::WEBMCP_PAIR => match serde_json::from_value::<protocol::WebmcpPairResult>(result) {
                 Ok(pairing) => {
@@ -433,6 +475,7 @@ impl DesktopView {
             return false;
         }
         self.webmcp_request_pending = None;
+        self.webmcp_status_dirty = true;
         self.webmcp_notice = Some(error.to_string());
         self.error = Some(error.to_string());
         true

@@ -704,6 +704,7 @@ struct DesktopView {
     webmcp_pairing: Option<protocol::WebmcpPairResult>,
     webmcp_origin_input: Entity<TextareaState>,
     webmcp_request_pending: Option<&'static str>,
+    webmcp_status_dirty: bool,
     webmcp_notice: Option<String>,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
     config_target: protocol::ConfigTarget,
@@ -963,6 +964,7 @@ impl DesktopView {
                     .placeholder("https://vtcode.vinhnx.chatgpt.site")
             }),
             webmcp_request_pending: None,
+            webmcp_status_dirty: false,
             webmcp_notice: None,
             cli_config_settings: None,
             config_target: protocol::ConfigTarget::Workspace,
@@ -3227,6 +3229,21 @@ impl DesktopView {
     }
 
     fn handle_backend_event(&mut self, event: BackendEvent, cx: &mut Context<Self>) {
+        if let BackendEvent::Response { method, .. } = &event
+            && matches!(
+                method.as_str(),
+                protocol::method::SESSION_CREATE
+                    | protocol::method::SESSION_LOAD
+                    | protocol::method::SESSION_CLOSE
+                    | protocol::method::CONFIG_SELECT
+                    | protocol::method::CONFIG_OPTIONS
+                    | protocol::method::CONFIG_THEME
+                    | protocol::method::CONFIG_SETTINGS_WRITE
+                    | protocol::method::TURN_SUBMIT
+            )
+        {
+            self.invalidate_webmcp_status();
+        }
         match event {
             BackendEvent::InteractionResponded { identity, error } => {
                 if self.pending_interaction_response.as_deref() != Some(identity.interaction_id.as_str())
@@ -3625,7 +3642,11 @@ impl DesktopView {
                 if !self.notification_matches(&notification.session_id, notification.turn_id.as_deref()) {
                     return;
                 }
+                let was_running = self.running;
                 self.handle_thread_event(notification);
+                if was_running != self.running {
+                    self.invalidate_webmcp_status();
+                }
                 self.refresh_selected_change(cx);
                 self.handle_cancel_state_after_turn_event();
             }
@@ -3671,6 +3692,7 @@ impl DesktopView {
                 }
                 if let Some(label) = status.get("status").and_then(Value::as_str) {
                     self.status = label.to_string();
+                    self.invalidate_webmcp_status();
                 }
             }
             BackendEvent::Exited { status, authentication_required } => {

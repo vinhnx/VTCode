@@ -70,6 +70,8 @@ attachments, and further session/model/workspace changes wait for its response; 
 completes. A first message waits for confirmed
 session creation before any turn is sent. Failed creation or submission leaves the original content recoverable;
 an empty prompt does not create a session.
+The Connections panel refreshes WebMCP availability after session and turn changes. A status response superseded by
+a newer change is discarded and refreshed; a failed refresh is shown as unavailable rather than as a ready session.
 
 When the main window is inactive, a completed or failed/blocked run, or a request waiting for a decision, posts a
 system notification through GPUI Kit. Notifications contain only generic status text; the transcript and interaction

@@ -87,6 +87,64 @@ fn connected_webmcp_status() -> vtcode_desktop_protocol::WebmcpBridgeStatus {
     }
 }
 
+#[gpui_kit::test]
+fn webmcp_status_discards_snapshots_superseded_by_session_changes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.webmcp_status = Some(connected_webmcp_status());
+            view.selected_session_id = Some("session-old".into());
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_CLOSE.into(),
+                result: Some(json!({ "closed": true })), error: None,
+            }, cx);
+            assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_CREATE.into(),
+                result: Some(json!({ "sessionId": "new", "title": null, "workspace": "/workspace", "completed": false, "resumable": true })), error: None,
+            }, cx);
+            assert!(view.webmcp_status_dirty);
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                result: Some(serde_json::to_value(connected_webmcp_status()).unwrap()), error: None,
+            }, cx);
+            assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            let mut fresh = connected_webmcp_status();
+            fresh.session_id = Some("new".into());
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                result: Some(serde_json::to_value(fresh.clone()).unwrap()), error: None,
+            }, cx);
+            assert_eq!(view.webmcp_status, Some(fresh));
+            assert!(!view.webmcp_status_dirty);
+            view.handle_backend_event(BackendEvent::TurnStatus(json!({ "sessionId": "new", "turnId": "browser-turn", "status": "running" })), cx);
+            assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                result: Some(json!({})), error: None,
+            }, cx);
+            assert!(view.webmcp_status_dirty, "an invalid refresh cannot validate the old snapshot");
+            assert!(view.webmcp_notice.as_deref().unwrap().contains("invalid WebMCP status"));
+            view.request_webmcp_status();
+            view.handle_backend_event(BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                result: Some(serde_json::to_value(connected_webmcp_status()).unwrap()), error: None,
+            }, cx);
+            assert!(!view.webmcp_status_dirty);
+            assert!(view.webmcp_notice.is_none());
+        });
+    }).unwrap();
+    for _ in 0..4 {
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("status request")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
+    }
+    assert!(requests.try_recv().is_err());
+}
+
 fn pending_webmcp_pairing() -> vtcode_desktop_protocol::WebmcpPairResult {
     vtcode_desktop_protocol::WebmcpPairResult {
         endpoint: "ws://127.0.0.1:4000/webmcp".into(),
@@ -10231,6 +10289,7 @@ fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mu
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
+            view.webmcp_status = Some(connected_webmcp_status());
             view.webmcp_pairing = Some(vtcode_desktop_protocol::WebmcpPairResult {
                 endpoint: "ws://127.0.0.1:43719/mcp".into(),
                 origin: "https://example.test".into(),
@@ -10247,6 +10306,17 @@ fn settings_shortcut_opens_webmcp_sections_with_unique_accessibility_ids(cx: &mu
         assert_eq!(window.find_all("webmcp-pairing").len(), 1);
         assert_eq!(window.find_all("refresh-webmcp-status").len(), 1);
         assert_eq!(window.find_all("webmcp-pairing-details").len(), 1);
+        assert_eq!(window.find("webmcp-session-status").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(window.find("webmcp-session-status").label(), Some("Connected · desktop session ready"));
+        view.update(cx, |view, cx| {
+            view.webmcp_status_dirty = true;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert_eq!(
+            window.find("webmcp-session-status").label(),
+            Some("Connected · desktop session availability unavailable")
+        );
     })
     .unwrap();
 }
