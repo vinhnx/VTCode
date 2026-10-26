@@ -566,6 +566,7 @@ fn effort_knob(
                 .map(|effort| format!("Reasoning effort: {effort}"))
                 .unwrap_or_else(|| "Reasoning effort".to_string()),
         )
+        .cursor_pointer()
         .flex_1()
         .min_w_0()
         .py_2()

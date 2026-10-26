@@ -160,6 +160,7 @@ pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool,
             let code = block.code();
             Button::new("copy-code")
                 .tab_stop(true)
+                .cursor_pointer()
                 .label("Copy code")
                 .ghost()
                 .on_click(move |_, window, cx| {

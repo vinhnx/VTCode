@@ -220,6 +220,8 @@ impl DesktopView {
                         .accessibility_id("workspace-review-scope")
                         .aria_label("Review folder (optional)")
                         .disabled(review.pending)
+                        .when(review.pending, |input| input.cursor_default())
+                        .when(!review.pending, |input| input.cursor_text())
                         .flex_1(),
                 ),
         );
@@ -229,6 +231,8 @@ impl DesktopView {
                     .label("Include untracked text files")
                     .checked(review.include_untracked)
                     .disabled(review.pending)
+                    .when(review.pending, |checkbox| checkbox.cursor_default())
+                    .when(!review.pending, |checkbox| checkbox.cursor_pointer())
                     .on_change(cx.listener(|view, checked: &bool, _, cx| {
                         if let Some(review) = view.workspace_review.as_mut().filter(|review| !review.pending) {
                             review.include_untracked = *checked;

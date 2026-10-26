@@ -7,7 +7,8 @@ use std::time::Duration;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
-    AnyWindowHandle, AppContext, Bounds, Entity, TestAppContext, WindowBounds, WindowOptions, point, px, size,
+    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, TestAppContext, WindowBounds, WindowOptions, point, px,
+    size,
 };
 use serde_json::json;
 
@@ -84,12 +85,15 @@ fn palette_action_id(action: &super::PaletteAction) -> String {
 }
 
 #[test]
-fn desktop_buttons_keep_the_native_arrow_cursor_policy() {
+fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
     let mut enabled = super::desktop_button("native-cursor-enabled");
-    assert_eq!(enabled.style().mouse_cursor, None);
+    assert_eq!(enabled.style().mouse_cursor, Some(CursorStyle::PointingHand));
 
     let mut disabled = super::desktop_button("native-cursor-disabled").desktop_disabled(true);
-    assert_eq!(disabled.style().mouse_cursor, None);
+    assert_eq!(disabled.style().mouse_cursor, Some(CursorStyle::Arrow));
+
+    let mut reenabled = super::desktop_button("native-cursor-reenabled").desktop_disabled(false);
+    assert_eq!(reenabled.style().mouse_cursor, Some(CursorStyle::PointingHand));
 }
 
 #[test]

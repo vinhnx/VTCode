@@ -103,7 +103,7 @@ impl DesktopView {
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_settings_tab(*index, window, cx)
                             }))
-                            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
                     ),
             )
             .child(
@@ -306,6 +306,7 @@ impl DesktopView {
                             .outline()
                             .small()
                             .checked(selected)
+                            .cursor_pointer()
                             .on_click(cx.listener(move |view, checked: &bool, _, cx| {
                                 if *checked {
                                     view.set_ui_language(option, cx);

@@ -286,6 +286,7 @@ impl DesktopView {
                     Textarea::new(&self.webmcp_origin_input)
                         .accessibility_id("webmcp-origin")
                         .aria_label("Browser app origin")
+                        .cursor_text()
                         .w_full(),
                 ),
         );

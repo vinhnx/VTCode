@@ -272,6 +272,7 @@ impl DesktopView {
                     .child(
                         Textarea::new(&self.config_value_input)
                             .aria_label(format!("Value for {}", editor.path))
+                            .cursor_text()
                             .w_full(),
                     )
                     .when_some(self.config_editor_error.as_ref(), |dialog, error| {

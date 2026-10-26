@@ -45,10 +45,10 @@ use gpui_kit::component::tree::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::{Icon, Sizable, VirtualListScrollHandle, v_virtual_list};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, DragMoveEvent, Entity, FocusHandle, Focusable,
-    KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction, PathPromptOptions,
-    Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window, WindowOptions,
-    actions, anchored, deferred, div, point, px, size,
+    Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle,
+    Focusable, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent, OsAction,
+    PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task, TestSupportExt, Window,
+    WindowOptions, actions, anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -3439,7 +3439,7 @@ impl DesktopView {
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_inspector_tab(*index, window, cx)
                             }))
-                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()))),
+                            .children(InspectorTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
                     ),
             );
 
@@ -3878,6 +3878,7 @@ impl DesktopView {
                     let open_path = rel_path.clone();
                     ListItem::new(format!("workspace-file-{rel_path}"))
                         .selected(selected)
+                        .cursor_pointer()
                         .accessibility_label(format!("{} {rel_path}", if is_dir { "Folder" } else { "File" }))
                         .child(
                             div()
@@ -5643,6 +5644,7 @@ impl DesktopView {
                     Textarea::new(&self.question_answer)
                         .accessibility_id("question-answer")
                         .aria_label("Your answer")
+                        .cursor_text()
                         .h(px(72.)),
                 ),
             );
@@ -5795,6 +5797,7 @@ impl DesktopView {
                         .outline()
                         .small()
                         .checked(enabled)
+                        .cursor_pointer()
                         .on_click(move |checked, window, cx| {
                             let _updated = weak.update(cx, |view, cx| {
                                 if view.palette_kind != PaletteKind::ModelOptions
@@ -5863,6 +5866,7 @@ impl DesktopView {
                 let description = entry.description.clone();
                 let query = palette_query.clone();
                 let selected = self.is_current_palette_action(&entry.action);
+                let enabled = self.palette_action_available(&entry.action);
                 let id = palette_entry_element_id(&entry.action);
                 let accessible_label = description
                     .as_ref()
@@ -5870,7 +5874,7 @@ impl DesktopView {
                     .unwrap_or_else(|| label.clone());
                 group = group.item(
                     CommandItem::new()
-                        .disabled(!self.palette_action_available(&entry.action))
+                        .disabled(!enabled)
                         .label(label.clone())
                         .checked(selected)
                         .keywords(entry.keywords.clone())
@@ -5880,6 +5884,7 @@ impl DesktopView {
                                 .test_support()
                                 .flex_1()
                                 .min_w_0()
+                                .when(enabled, |row| row.cursor_pointer())
                                 .flex()
                                 .items_center()
                                 .gap_3()
@@ -6568,9 +6573,9 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
     format!("history-{:016x}", hasher.finish())
 }
 
-/// Native buttons use GPUI's arrow cursor; links opt into a pointing hand.
+/// Interactive desktop buttons use a pointing hand; disabled buttons keep the arrow.
 fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
-    Button::new(id).tab_stop(true)
+    Button::new(id).tab_stop(true).cursor_pointer()
 }
 
 trait DesktopButtonExt {
@@ -6580,7 +6585,11 @@ trait DesktopButtonExt {
 
 impl DesktopButtonExt for Button {
     fn desktop_disabled(self, disabled: bool) -> Self {
-        self.disabled(disabled)
+        self.disabled(disabled).cursor(if disabled {
+            CursorStyle::Arrow
+        } else {
+            CursorStyle::PointingHand
+        })
     }
 
     fn dispatches_desktop_action(self, action: impl gpui_kit::Action + 'static, focus: FocusHandle) -> Self {

@@ -227,6 +227,7 @@ impl DesktopView {
                             Input::new(input)
                                 .w(px(220.))
                                 .max_w_full()
+                                .cursor_text()
                                 .id(format!("shortcut-input-{id}"))
                                 .accessibility_id(format!("shortcut-{id}"))
                                 .aria_label(format!("Shortcut for {label}")),
