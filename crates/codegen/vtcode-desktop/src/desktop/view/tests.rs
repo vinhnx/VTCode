@@ -1358,6 +1358,59 @@ fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppCon
 }
 
 #[gpui_kit::test]
+fn cli_config_enum_editor_uses_kit_select_and_writes_the_selected_option(cx: &mut TestAppContext) {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                    path: "provider.openai.service_tier".into(),
+                    value: json!("auto"),
+                    origin: Some("user".into()),
+                    label: Some("Service tier".into()),
+                    type_name: Some("string".into()),
+                    default_value: None,
+                    description: Some("Choose the request service tier.".into()),
+                    options: vec!["auto".into(), "fast".into()],
+                    group: Some("Model & Provider".into()),
+                    group_description: None,
+                    editable: true,
+                }],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.open_settings(window, cx);
+            view.open_cli_config_editor("provider.openai.service_tier".into(), window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("cli-config-option-select").label(), Some("Value for provider.openai.service_tier"));
+        let select = view
+            .read(cx)
+            .config_editor
+            .as_ref()
+            .and_then(|editor| editor.option_select.clone())
+            .expect("enum settings use a Kit select");
+        select.update(cx, |state, cx| state.set_selected_value(&"fast".to_string(), window, cx));
+        window.render_frame(cx);
+        window.click("save-cli-config-edit", cx);
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("config write request") else {
+        panic!("expected config write request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SETTINGS_WRITE);
+    assert_eq!(params["path"], "provider.openai.service_tier");
+    assert_eq!(params["value"], "fast");
+}
+
+#[gpui_kit::test]
 fn sync_cli_theme_persists_through_the_protocol_and_preserves_composer_draft(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().expect("workspace");
     let (window, view) = open_desktop(cx);

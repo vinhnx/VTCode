@@ -1,6 +1,32 @@
 //! Searchable, typed edits for the CLI configuration shared with Desktop.
 
 use super::*;
+use gpui_kit::component::IndexPath;
+use gpui_kit::component::searchable_list::SearchableListItem;
+use gpui_kit::component::select::{SearchableVec, Select, SelectState};
+
+#[derive(Clone, Debug)]
+pub(super) struct ConfigOption {
+    value: String,
+}
+
+impl SearchableListItem for ConfigOption {
+    type Value = String;
+
+    fn title(&self) -> gpui_kit::SharedString {
+        if self.value.is_empty() {
+            "Use CLI default".into()
+        } else {
+            self.value.clone().into()
+        }
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.value
+    }
+}
+
+pub(super) type ConfigOptionSelectState = SelectState<SearchableVec<ConfigOption>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ConfigValueKind {
@@ -19,6 +45,7 @@ pub(super) struct ConfigEditor {
     target: protocol::ConfigTarget,
     expected_layer_version: Option<String>,
     options: Vec<String>,
+    pub(super) option_select: Option<Entity<ConfigOptionSelectState>>,
 }
 
 impl ConfigValueKind {
@@ -252,15 +279,25 @@ impl DesktopView {
             setting.value.clone()
         };
         let text = kind.editor_value(&current_value);
-        self.config_value_input
-            .update(cx, |input, cx| input.set_value(text, window, cx));
+        let options = setting.options.clone();
+        let option_select = (kind == ConfigValueKind::String && !options.is_empty()).then(|| {
+            let items = options.iter().cloned().map(|value| ConfigOption { value }).collect::<Vec<_>>();
+            let selected = items.iter().position(|option| option.value == text).map(IndexPath::new);
+            let items = SearchableVec::new(items);
+            cx.new(|cx| SelectState::new(items, selected, window, cx).searchable(options.len() > 8))
+        });
+        if option_select.is_none() {
+            self.config_value_input
+                .update(cx, |input, cx| input.set_value(text, window, cx));
+        }
         self.config_editor_error = None;
         self.config_editor = Some(ConfigEditor {
             path,
             kind,
             target: self.config_target,
             expected_layer_version: self.target_version(self.config_target),
-            options: setting.options.clone(),
+            options,
+            option_select,
         });
         self.config_editor_return_focus = Some(self.settings_focus.clone());
         cx.on_next_frame(window, |view, window, cx| view.config_editor_focus.focus(window, cx));
@@ -313,28 +350,37 @@ impl DesktopView {
                             .child(DialogTitle::new().child("Edit CLI setting"))
                             .child(DialogDescription::new().child(editor.path.clone())),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child(if editor.options.is_empty() {
-                                format_hint.to_string()
-                            } else {
-                                format!("{format_hint} · Options: {}", editor.options.join(", "))
-                            }),
-                    )
-                    .child(
-                        Textarea::new(&self.config_value_input)
-                            .aria_label(format!("Value for {}", editor.path))
-                            .cursor_text()
-                            .bg(colors.popover)
-                            .rounded_md()
-                            .border_1()
-                            .border_color(colors.border)
-                            .px_3()
-                            .py_2()
-                            .w_full(),
-                    )
+                    .child(div().text_xs().text_color(colors.muted_foreground).child(
+                        if editor.option_select.is_some() {
+                            "Choose one of the documented values.".to_string()
+                        } else {
+                            format_hint.to_string()
+                        },
+                    ))
+                    .when_some(editor.option_select.as_ref(), |dialog, state| {
+                        dialog.child(
+                            Select::new(state)
+                                .id("cli-config-option-select")
+                                .placeholder("Choose a documented value")
+                                .accessibility_label(format!("Value for {}", editor.path))
+                                .menu_max_h(px(320.))
+                                .w_full(),
+                        )
+                    })
+                    .when(editor.option_select.is_none(), |dialog| {
+                        dialog.child(
+                            Textarea::new(&self.config_value_input)
+                                .aria_label(format!("Value for {}", editor.path))
+                                .cursor_text()
+                                .bg(colors.popover)
+                                .rounded_md()
+                                .border_1()
+                                .border_color(colors.border)
+                                .px_3()
+                                .py_2()
+                                .w_full(),
+                        )
+                    })
                     .when_some(self.config_editor_error.as_ref(), |dialog, error| {
                         dialog.child(div().text_sm().text_color(colors.danger).child(error.clone()))
                     })
@@ -374,7 +420,18 @@ impl DesktopView {
         let Some(editor) = self.config_editor.as_ref() else {
             return;
         };
-        let raw = self.config_value_input.read(cx).value().to_string();
+        let raw = if let Some(state) = self.config_editor.as_ref().and_then(|editor| editor.option_select.as_ref()) {
+            let Some(value) = state.read(cx).selected_value().cloned() else {
+                self.config_editor_error = Some("Choose a documented value before saving.".into());
+                let state = state.clone();
+                state.update(cx, |state, cx| state.focus(window, cx));
+                cx.notify();
+                return;
+            };
+            value
+        } else {
+            self.config_value_input.read(cx).value().to_string()
+        };
         match editor.parse(&raw) {
             Ok(value) => self.save_cli_config_value_at(
                 editor.path.clone(),
@@ -604,6 +661,7 @@ mod tests {
             target: super::protocol::ConfigTarget::User,
             expected_layer_version: None,
             options: vec!["auto".into(), "fast".into()],
+            option_select: None,
         };
         assert_eq!(editor.parse("fast"), Ok(json!("fast")));
         assert!(editor.parse("ultrafast").is_err());
