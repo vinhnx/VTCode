@@ -18,9 +18,11 @@ workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 anyhow = { workspace = true }
+chrono = { workspace = true }
 dirs = { workspace = true }
 gpui-kit = { version = "=0.8.0", features = ["syntect"] }
 pulldown-cmark = "0.13.4"
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 rust-i18n = "=4.2.4"

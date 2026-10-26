@@ -3813,6 +3813,8 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         view.update(cx, |view, _| {
             view.sidebar_open = false;
             view.inspector_open = false;
+            view.welcome_greeting = "Good morning";
+            view.welcome_copy_index = 0;
             view.workspace = Some(PathBuf::from("/projects").join(workspace_name));
         });
         window.render_frame(cx);
@@ -3825,18 +3827,21 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         assert_eq!(window.find("welcome-prompt").role(), Some(gpui_kit::Role::Heading));
         assert_eq!(
             window.find("welcome-prompt").label(),
-            Some(format!("What should we build in {workspace_name}?").as_str())
+            Some(format!("Good morning. What should we build in {workspace_name}?").as_str())
         );
         view.update(cx, |view, _| view.workspace_picker_open = true);
         window.render_frame(cx);
         assert_eq!(window.find("welcome-workspace").disabled(), Some(true));
         view.update(cx, |view, _| {
             view.workspace_picker_open = false;
+            view.welcome_greeting = "Good evening";
+            view.welcome_copy_index = 2;
             view.workspace = None;
         });
         window.render_frame(cx);
         assert!(window.find_all("welcome-workspace").is_empty());
-        assert_eq!(window.find("welcome-prompt").label(), Some("What should we build?"));
+        assert_eq!(window.find("welcome-prompt").label(), Some("Good evening. What are we exploring?"));
+        assert_eq!(window.find("open-first-workspace").label(), Some("Select a folder"));
         window.within("welcome").click("open-first-workspace", cx);
         assert!(view.read(cx).workspace_picker_open, "the welcome action opens the native workspace picker");
     })
@@ -3852,6 +3857,26 @@ fn welcome_workspace_prompt_wraps_long_names_and_preserves_workspace_guards(cx: 
         assert!(!view.read(cx).workspace_picker_open, "canceling the picker restores the welcome state");
     })
     .unwrap();
+}
+
+#[test]
+fn welcome_greeting_uses_local_day_period_boundaries() {
+    assert_eq!(super::welcome_greeting_for_hour(5), "Good morning");
+    assert_eq!(super::welcome_greeting_for_hour(11), "Good morning");
+    assert_eq!(super::welcome_greeting_for_hour(12), "Good afternoon");
+    assert_eq!(super::welcome_greeting_for_hour(16), "Good afternoon");
+    assert_eq!(super::welcome_greeting_for_hour(17), "Good evening");
+    assert_eq!(super::welcome_greeting_for_hour(4), "Good evening");
+}
+
+#[test]
+fn welcome_copy_variants_pair_distinct_actions_and_calls_to_action() {
+    for first in 0..super::WELCOME_COPIES.len() {
+        for second in first + 1..super::WELCOME_COPIES.len() {
+            assert_ne!(super::WELCOME_COPIES[first].action, super::WELCOME_COPIES[second].action);
+            assert_ne!(super::WELCOME_COPIES[first].call_to_action, super::WELCOME_COPIES[second].call_to_action);
+        }
+    }
 }
 
 #[gpui_kit::test]
@@ -3873,9 +3898,10 @@ fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_sess
         view.update(cx, |view, _| {
             view.workspace = None;
             view.inspector_open = false;
+            view.welcome_copy_index = 0;
         });
         window.render_frame(cx);
-        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace folder"));
+        assert_eq!(window.within("welcome").find("open-first-workspace").label(), Some("Choose a workspace"));
         view.update(cx, |view, _| {
             view.workspace = Some(std::env::temp_dir());
             view.transcript.push(TranscriptItem::new(

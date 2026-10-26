@@ -12229,9 +12229,11 @@ name = "vtcode-desktop"
 version = "0.180.6"
 dependencies = [
  "anyhow",
+ "chrono",
  "dirs 7.0.0",
  "gpui-kit",
  "pulldown-cmark",
+ "rand 0.10.3",
  "rust-i18n",
  "serde",
  "serde_json",

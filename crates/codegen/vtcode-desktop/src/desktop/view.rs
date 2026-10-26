@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
 use std::time::Duration;
 
+use chrono::Timelike;
 use gpui_kit::assets::IconName;
 use gpui_kit::base::{Disableable, FocusTrapElement, InteractiveElementExt, StyledExt};
 use gpui_kit::component::TitleBar;
@@ -83,12 +84,52 @@ use workspace_review::WorkspaceReviewState;
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 const CONTENT_WIDTH: f32 = 720.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
+const DEFAULT_WELCOME_COPY: WelcomeCopy = WelcomeCopy {
+    action: "What should we build",
+    description: "Start with a task, a question, or an idea.",
+    call_to_action: "Choose a workspace",
+};
+const WELCOME_COPIES: [WelcomeCopy; 3] = [
+    DEFAULT_WELCOME_COPY,
+    WelcomeCopy {
+        action: "What are we improving",
+        description: "Bring a bug, a feature, or a rough idea.",
+        call_to_action: "Open a project",
+    },
+    WelcomeCopy {
+        action: "What are we exploring",
+        description: "Choose a project and start with a prompt.",
+        call_to_action: "Select a folder",
+    },
+];
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
     "Saved change history is partial. Some historical patches are unavailable.";
 const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
     "Saved tool history is partial. Some output may be missing or shortened.";
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
+
+#[derive(Clone, Copy)]
+struct WelcomeCopy {
+    action: &'static str,
+    description: &'static str,
+    call_to_action: &'static str,
+}
+
+fn welcome_greeting_for_hour(hour: u32) -> &'static str {
+    match hour % 24 {
+        5..=11 => "Good morning",
+        12..=16 => "Good afternoon",
+        _ => "Good evening",
+    }
+}
+
+fn welcome_prompt(greeting: &str, action: &str, workspace_name: Option<&str>) -> String {
+    match workspace_name {
+        Some(name) => format!("{greeting}. {action} in {name}?"),
+        None => format!("{greeting}. {action}?"),
+    }
+}
 
 fn service_reconnect_guidance(has_retained_submission: bool) -> &'static str {
     if has_retained_submission {
@@ -381,6 +422,8 @@ struct ActivePrimaryAgentDisplay {
 struct DesktopView {
     focus_handle: FocusHandle,
     _focus_lost_subscription: Subscription,
+    welcome_greeting: &'static str,
+    welcome_copy_index: usize,
     workspace: Option<PathBuf>,
     pending_workspace: Option<PathBuf>,
     workspace_picker_open: bool,
@@ -584,6 +627,8 @@ impl DesktopView {
             default_code_font: typography::default_code_font(cx),
             focus_handle,
             _focus_lost_subscription: focus_lost_subscription,
+            welcome_greeting: welcome_greeting_for_hour(chrono::Local::now().hour()),
+            welcome_copy_index: rand::random_range(0..WELCOME_COPIES.len()),
             workspace: None,
             pending_workspace: None,
             workspace_picker_open: false,
@@ -4168,14 +4213,16 @@ impl DesktopView {
         self.sync_transcript_layout(cx);
         let content = if self.transcript.is_empty() {
             let colors = cx.theme().colors;
+            let welcome_copy = WELCOME_COPIES
+                .get(self.welcome_copy_index)
+                .copied()
+                .unwrap_or(DEFAULT_WELCOME_COPY);
             let workspace_name = self
                 .workspace
                 .as_ref()
                 .and_then(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned());
-            let prompt = workspace_name
-                .as_ref()
-                .map_or_else(|| "What should we build?".to_owned(), |name| format!("What should we build in {name}?"));
+            let prompt = welcome_prompt(self.welcome_greeting, welcome_copy.action, workspace_name.as_deref());
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
                 .font_weight(gpui_kit::FontWeight::NORMAL)
@@ -4185,16 +4232,16 @@ impl DesktopView {
                         .id("welcome-prompt")
                         .test_support()
                         .role(gpui_kit::Role::Heading)
-                        .aria_label(prompt)
+                        .aria_label(prompt.clone())
                         .flex()
                         .flex_wrap()
                         .items_center()
                         .justify_center()
                         .gap_2()
                         .child(if workspace_name.is_some() {
-                            "What should we build in"
+                            format!("{}. {} in", self.welcome_greeting, welcome_copy.action)
                         } else {
-                            "What should we build?"
+                            prompt
                         })
                         .when_some(workspace_name, |title, name| {
                             title.child(
@@ -4240,14 +4287,16 @@ impl DesktopView {
                                 .max_w(px(CONTENT_WIDTH))
                                 .gap_6()
                                 .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
-                                .title(title),
+                                .title(title)
+                                .description(EmptyDescription::new().child(welcome_copy.description)),
                         )
                         .size_full()
                         .when(self.workspace.is_none(), |welcome| {
                             welcome.content(
                                 EmptyContent::new().child(
                                     desktop_button("open-first-workspace")
-                                        .label("Choose a workspace folder")
+                                        .label(welcome_copy.call_to_action)
+                                        .accessibility_label(welcome_copy.call_to_action)
                                         .primary()
                                         .desktop_disabled(
                                             self.workspace_picker_open
