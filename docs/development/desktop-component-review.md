@@ -29,7 +29,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [collapsible](https://gpui-kit.com/component/collapsible) | Retain app-owned pane visibility; no extra disclosure or animated layer needed. |
 | [color-picker](https://gpui-kit.com/component/color-picker) | Applied to provider-supported reasoning effort with native step buttons and typed runtime updates. |
 | [combobox](https://gpui-kit.com/component/combobox) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |
-| [command](https://gpui-kit.com/component/command) | Applied: retained filtered context/model palettes and loaded-message search; stable IDs route a match through the measured MessageScroller. |
+| [command](https://gpui-kit.com/component/command) | Applied: retained filtered context/model palettes and conversation search; stable message IDs jump through the measured MessageScroller, and its footer loads bounded older-history pages without replacing the archive pager. |
 | [data-table](https://gpui-kit.com/component/data-table) | Not needed for the current coding-workspace workflows or available data. |
 | [date-picker](https://gpui-kit.com/component/date-picker) | Not needed for the current coding-workspace workflows or available data. |
 | [description-list](https://gpui-kit.com/component/description-list) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |
@@ -90,5 +90,5 @@ measured-list, approval, persistence, or accessibility owners.
 | [toggle](https://gpui-kit.com/component/toggle) | Applied to model speed selection as a controlled, accessible toolbar toggle; preference controls continue to use Switch. |
 | [toolbar](https://gpui-kit.com/component/toolbar) | Applied to the header workspace actions with named grouping, compact Kit controls, and arrow-key focus navigation. |
 | [tooltip](https://gpui-kit.com/component/tooltip) | Applied Kit-managed tooltips to action buttons; shortcut hints resolve from the active keymap, while icon controls retain explicit accessible names. Keep fixed Enter guidance only where the action is not configurable. |
-| [tree](https://gpui-kit.com/component/tree) | Deferred: richer navigation/editing is a separate functional increment. |
+| [tree](https://gpui-kit.com/component/tree) | Applied: workspace browsing uses the Kit Tree with stable relative-path IDs, keyboard expand/select, bounded discovery, and read-only previews. |
 | [virtual-list](https://gpui-kit.com/component/virtual-list) | Retain measured transcript ListState and existing anchoring/following behavior. |

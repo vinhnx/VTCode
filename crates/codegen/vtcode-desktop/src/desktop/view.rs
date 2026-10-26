@@ -1699,6 +1699,7 @@ impl DesktopView {
                         view.history_page_error = Some("The local service returned an invalid history page.".into());
                     }
                 }
+                view.refresh_conversation_search(&session_id);
                 cx.notify();
             });
         }));
@@ -2313,8 +2314,12 @@ impl DesktopView {
             return;
         }
 
-        let messages = self
-            .transcript
+        let messages = self.conversation_search_messages(&session_id);
+        self.show_palette(PaletteKind::ConversationSearch, vec![("Loaded messages".into(), messages)], window, cx);
+    }
+
+    fn conversation_search_messages(&self, session_id: &str) -> Vec<PaletteCommand> {
+        self.transcript
             .items_newest_first()
             .filter(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
             .map(|item| {
@@ -2329,16 +2334,24 @@ impl DesktopView {
                 let mut entry = command(
                     label,
                     PaletteAction::JumpToTranscriptItem {
-                        session_id: session_id.clone(),
+                        session_id: session_id.to_string(),
                         item_id: item.id.clone(),
                     },
                 );
                 entry.shared_keywords.extend([item.text.clone(), item.title.clone()]);
                 entry
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
 
-        self.show_palette(PaletteKind::ConversationSearch, vec![("Loaded messages".into(), messages)], window, cx);
+    fn refresh_conversation_search(&mut self, session_id: &str) {
+        if self.palette_kind != PaletteKind::ConversationSearch
+            || self.selected_session_id.as_deref() != Some(session_id)
+        {
+            return;
+        }
+        let messages = self.conversation_search_messages(session_id);
+        self.palette_groups = share_palette_commands(vec![("Loaded messages".into(), messages)]);
     }
 
     fn has_searchable_conversation_messages(&self) -> bool {
@@ -7471,6 +7484,10 @@ impl DesktopView {
         let prompt_history = self.palette_kind == PaletteKind::PromptHistory;
         let modes = self.palette_kind == PaletteKind::Modes;
         let conversation_search = self.palette_kind == PaletteKind::ConversationSearch;
+        let older_history_available = self.history_has_earlier;
+        let history_page_loading = self.history_page_loading;
+        let history_page_failed = self.history_page_error.is_some();
+        let transcript_has_capacity = self.transcript.remaining_capacity() > 0;
         let composer_popup = self.palette_kind.is_composer_popup();
         let inline_completion = matches!(self.palette_kind, PaletteKind::FileMentions | PaletteKind::SlashCommands);
         let title = match self.palette_kind {
@@ -7543,6 +7560,8 @@ impl DesktopView {
                             "No prompt history yet"
                         } else if modes && catalog_empty {
                             "Agent modes unavailable"
+                        } else if conversation_search && older_history_available {
+                            "No match in loaded messages"
                         } else {
                             "No matching results"
                         },
@@ -7552,6 +7571,8 @@ impl DesktopView {
                             "Prompts sent in this thread will appear here."
                         } else if modes && catalog_empty {
                             "Rebuild VT Code Desktop and its bundled CLI together, then reload CLI settings."
+                        } else if conversation_search && older_history_available {
+                            "Load earlier messages below to search older parts of this conversation."
                         } else {
                             "Try a different search."
                         },
@@ -7562,6 +7583,64 @@ impl DesktopView {
             });
         if inline_completion {
             command = command.searchable(false);
+        }
+        let show_history_control =
+            conversation_search && (older_history_available || history_page_loading || history_page_failed);
+        if show_history_control {
+            let weak = weak.clone();
+            let palette_id = state.entity_id();
+            let session_id = self.selected_session_id.clone();
+            let can_load_history =
+                older_history_available && transcript_has_capacity && !history_page_loading && !self.running;
+            let history_label = if history_page_loading {
+                "Loading earlier messages…"
+            } else if !transcript_has_capacity && older_history_available {
+                "Message limit reached"
+            } else if history_page_failed {
+                "Retry loading earlier messages"
+            } else {
+                "Load earlier messages"
+            };
+            command = command.footer(move |_, _, _| {
+                let weak = weak.clone();
+                let session_id = session_id.clone();
+                div()
+                    .border_t_1()
+                    .border_color(colors.border)
+                    .px_3()
+                    .py_2()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .when(history_page_failed, |footer| {
+                        footer.child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.danger)
+                                .child("Could not load older messages. You can retry."),
+                        )
+                    })
+                    .child(
+                        desktop_button("conversation-search-load-earlier")
+                            .label(history_label)
+                            .icon(IconName::ArrowUp)
+                            .ghost()
+                            .small()
+                            .desktop_disabled(!can_load_history)
+                            .on_click(move |_, _, cx| {
+                                let _updated = weak.update(cx, |view, cx| {
+                                    if view.palette_kind != PaletteKind::ConversationSearch
+                                        || view.palette.as_ref().is_none_or(|palette| palette.entity_id() != palette_id)
+                                        || view.selected_session_id != session_id
+                                    {
+                                        return;
+                                    }
+                                    view.request_earlier_history(cx);
+                                });
+                            }),
+                    )
+            });
         }
         if quick_model {
             let slider = self.effort_slider.clone();

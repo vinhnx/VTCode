@@ -2090,6 +2090,105 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
 }
 
 #[gpui_kit::test]
+fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{SessionHistoryMessage, SessionHistoryPage};
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    let session_id = "search-archive-thread".to_string();
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some(session_id.clone());
+        view.history_start_index = 2;
+        view.history_has_earlier = true;
+        view.transcript.push(TranscriptItem::new(
+            "current-message".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Current page only".into(),
+        ));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_conversation_search(session_id.clone(), window, cx));
+        window.render_frame(cx);
+        assert_eq!(window.find("conversation-search-load-earlier").role(), Some(gpui_kit::Role::Button));
+        window.click("conversation-search-load-earlier", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "loading older messages keeps search open");
+        assert!(view.read(cx).history_page_loading);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("earlier history request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_HISTORY);
+    assert_eq!(params["sessionId"], session_id);
+    assert_eq!(params["beforeIndex"], 2);
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let page = SessionHistoryPage {
+        session_id: session_id.clone(),
+        request_id,
+        start_index: 1,
+        messages: vec![SessionHistoryMessage {
+            archive_index: Some(1),
+            role: "user".into(),
+            text: "Older page contains the needle".into(),
+        }],
+        has_earlier: true,
+    };
+    view.update(cx, |view, cx| view.begin_session_history_page(json!(page), cx));
+    cx.run_until_parked();
+
+    let mut target_row_id = None;
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some(), "loading an archive page keeps the search palette open");
+        assert_eq!(view.read(cx).history_start_index, 1);
+        assert!(window.try_find("conversation-search-load-earlier").is_some());
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("needle", cx);
+        window.render_frame(cx);
+
+        let palette = view.read(cx).palette.as_ref().unwrap().clone();
+        let target_action = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries)
+            .find(|entry| {
+                entry.label.contains("Older page")
+                    && matches!(&entry.action, super::PaletteAction::JumpToTranscriptItem { .. })
+            })
+            .unwrap()
+            .action
+            .clone();
+        let super::PaletteAction::JumpToTranscriptItem { item_id, .. } = &target_action else {
+            panic!("message result action")
+        };
+        target_row_id = Some(format!("transcript-row-{item_id}"));
+        assert_eq!(palette.read(cx).matched_count(), 1);
+        assert!(window.try_find(palette_action_id(&target_action)).is_some());
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    let target_row_id = target_row_id.unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none());
+        assert_eq!(view.read(cx).message_scroller.read(cx).logical_scroll_top().item_ix, 0);
+        assert!(window.try_find(target_row_id.clone()).is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn conversation_search_shortcut_opens_the_loaded_message_palette(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
