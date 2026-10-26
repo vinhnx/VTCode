@@ -33,6 +33,9 @@ The optional first argument selects the output `.app` path. The script builds th
 places the service in `Contents/Helpers`, signs both executables before signing the app, and verifies the bundle. The
 default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
 development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
+The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
+reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
+check the workspace `target/release` and `target/debug` outputs.
 
 Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "dist/VT Code.app"`. The launcher asks
 macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps

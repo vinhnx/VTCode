@@ -5538,6 +5538,38 @@ fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn settings_tab_bar_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_font_size(view.theme_mode, 24);
+            view.apply_typography(cx);
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        window.render_frame(cx);
+
+        let sheet = window.find("sheet-content").bounds();
+        let panel = window.find("settings-panel").bounds();
+        assert!(
+            panel.origin.y + panel.size.height <= sheet.origin.y + sheet.size.height,
+            "large UI typography should keep settings within the sheet: panel={panel:?}, sheet={sheet:?}"
+        );
+        let navigation_before = window.find("settings-navigation").bounds();
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        window.render_frame(cx);
+
+        let offset = view.read(cx).settings_scroll.offset().y;
+        assert!(offset != px(0.), "settings content should scroll independently");
+        assert_eq!(window.find("settings-navigation").bounds(), navigation_before);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn settings_sheet_tracks_window_width_after_open(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 1_100., 900.);
     cx.update_window(window, |_, window, cx| {

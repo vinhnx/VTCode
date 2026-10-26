@@ -34,6 +34,11 @@ impl SettingsTab {
 impl DesktopView {
     pub(super) fn render_settings_tabs(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        // The sheet title row scales with the active UI font (40px at 16px).
+        // Leave 8px beneath it so only settings-content scrolls in the sheet.
+        let sheet_header_height = cx.theme().font_size * 2.5;
+        let panel_height =
+            (window.viewport_size().height - cx.theme().sheet.margin_top - sheet_header_height - px(8.)).max(px(0.));
         let selected_index = SettingsTab::ALL
             .iter()
             .position(|tab| *tab == self.settings_tab)
@@ -59,7 +64,7 @@ impl DesktopView {
             .aria_label(rust_i18n::t!("app.settings.title").to_string())
             .relative()
             .w_full()
-            .flex_1()
+            .h(panel_height)
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
@@ -78,6 +83,11 @@ impl DesktopView {
                     .role(gpui_kit::Role::Group)
                     .aria_label(rust_i18n::t!("app.settings.categories").to_string())
                     .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
+                    .w_full()
+                    .flex_shrink_0()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
                     .border_1()
                     .border_color(colors.border.opacity(0.))
                     .focus_visible(|style| style.border_color(colors.ring))
@@ -95,8 +105,7 @@ impl DesktopView {
                     }))
                     .child(
                         TabBar::new("settings-tabs")
-                            .underline()
-                            .small()
+                            .segmented()
                             .w_full()
                             .track_scroll(&self.settings_tabs_scroll)
                             .selected_index(selected_index)
@@ -104,7 +113,8 @@ impl DesktopView {
                                 view.select_settings_tab(*index, window, cx)
                             }))
                             .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
-                    ),
+                    )
+                    .child(div().w_full().h(px(1.)).bg(colors.border)),
             )
             .child(
                 div()
