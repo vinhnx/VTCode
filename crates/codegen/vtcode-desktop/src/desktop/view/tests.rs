@@ -5693,7 +5693,7 @@ fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
         let marker = char::from(b'a' + u8::try_from(index).expect("test index fits in u8"));
         let text = marker.to_string().repeat(page_len);
         complete_output.push_str(&text);
-        let page = vtcode_desktop_protocol::SessionOutputPage {
+        let mut page = vtcode_desktop_protocol::SessionOutputPage {
             session_id: "session-1".into(),
             request_id: format!("request-{index}"),
             item_id: "output-1".into(),
@@ -5703,7 +5703,7 @@ fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
             text,
             has_more,
         };
-        assert!(append_restored_output_page(&mut item, &mut pages_by_item, &page));
+        assert!(append_restored_output_page(&mut item, &mut pages_by_item, &mut page));
     }
 
     let preview = item.output.as_ref().expect("restored output remains available");

@@ -540,7 +540,7 @@ fn valid_session_output_page(
 fn append_restored_output_page(
     item: &mut TranscriptItem,
     pages_by_item: &mut HashMap<String, Vec<gpui_kit::SharedString>>,
-    page: &SessionOutputPage,
+    page: &mut SessionOutputPage,
 ) -> bool {
     let Some(current_output) = item.output.as_ref() else {
         return false;
@@ -551,7 +551,6 @@ fn append_restored_output_page(
     let pages = pages_by_item
         .entry(item.id.clone())
         .or_insert_with(|| vec![current_preview.into()]);
-    pages.push(page.text.clone().into());
 
     let mut next_preview = String::with_capacity(
         current_preview
@@ -566,6 +565,7 @@ fn append_restored_output_page(
         next_preview.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
     }
     item.output = Some(next_preview.into());
+    pages.push(std::mem::take(&mut page.text).into());
     true
 }
 
@@ -1535,7 +1535,7 @@ impl DesktopView {
                 if let Some(task) = view.output_page_task.take() {
                     task.detach();
                 }
-                let Ok(page) = page else {
+                let Ok(mut page) = page else {
                     view.fail_output_page(cx);
                     return;
                 };
@@ -1554,7 +1554,7 @@ impl DesktopView {
                     view.fail_output_page(cx);
                     return;
                 };
-                let updated_output = append_restored_output_page(item, &mut view.restored_output_pages, &page);
+                let updated_output = append_restored_output_page(item, &mut view.restored_output_pages, &mut page);
                 if !updated_output {
                     view.fail_output_page(cx);
                     return;
