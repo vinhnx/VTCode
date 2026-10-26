@@ -98,7 +98,9 @@ fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
 
 #[test]
 fn activity_details_omit_tool_output_from_the_metadata_copy() {
-    use vtcode_exec_events::{ThreadItemDetails, ToolCallStatus, ToolOutputItem};
+    use vtcode_exec_events::{
+        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
+    };
 
     let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
         call_id: "call-1".into(),
@@ -112,6 +114,36 @@ fn activity_details_omit_tool_output_from_the_metadata_copy() {
 
     assert!(payload.contains("call-1"), "tool identity remains available in metadata");
     assert!(!payload.contains("large captured result"), "the separate output field owns captured text");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+        json!({
+            "type": "tool_output",
+            "call_id": "call-1",
+            "tool_call_id": "provider-call-1",
+            "spool_path": ".vtcode/tool-outputs/call-1",
+            "exit_code": 0,
+            "status": "completed"
+        })
+    );
+
+    let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+        command: "cargo check".into(),
+        arguments: Some(json!({ "cwd": "/workspace" })),
+        aggregated_output: "discarded command output".repeat(64),
+        exit_code: None,
+        status: CommandExecutionStatus::InProgress,
+    }));
+    let payload = super::activity_details_payload(&command);
+    assert!(!payload.contains("discarded command output"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+        json!({
+            "type": "command_execution",
+            "command": "cargo check",
+            "arguments": { "cwd": "/workspace" },
+            "status": "in_progress"
+        })
+    );
 }
 
 #[test]

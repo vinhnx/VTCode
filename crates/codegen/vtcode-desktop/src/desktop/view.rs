@@ -6475,23 +6475,50 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
     }
 }
 
-/// Keep tool output in its dedicated field so activity metadata does not retain another full copy.
+#[derive(serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ActivityDetailsMetadata<'a> {
+    CommandExecution {
+        command: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        arguments: Option<&'a Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<&'a i32>,
+        status: &'a vtcode_exec_events::CommandExecutionStatus,
+    },
+    ToolOutput {
+        call_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_call_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spool_path: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<&'a i32>,
+        status: &'a vtcode_exec_events::ToolCallStatus,
+    },
+}
+
+/// Keep large tool output out of the metadata serialization path.
 fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> String {
     use vtcode_exec_events::ThreadItemDetails;
 
-    let output_field = match details {
-        ThreadItemDetails::CommandExecution(_) => Some("aggregated_output"),
-        ThreadItemDetails::ToolOutput(_) => Some("output"),
-        _ => None,
-    };
-    let serialized = if let Some(output_field) = output_field {
-        let mut value = serde_json::to_value(details).unwrap_or(Value::Null);
-        if let Some(fields) = value.as_object_mut() {
-            let _removed = fields.remove(output_field);
+    let serialized = match details {
+        ThreadItemDetails::CommandExecution(command) => {
+            serde_json::to_string_pretty(&ActivityDetailsMetadata::CommandExecution {
+                command: &command.command,
+                arguments: command.arguments.as_ref(),
+                exit_code: command.exit_code.as_ref(),
+                status: &command.status,
+            })
         }
-        serde_json::to_string_pretty(&value)
-    } else {
-        serde_json::to_string_pretty(details)
+        ThreadItemDetails::ToolOutput(output) => serde_json::to_string_pretty(&ActivityDetailsMetadata::ToolOutput {
+            call_id: &output.call_id,
+            tool_call_id: output.tool_call_id.as_deref(),
+            spool_path: output.spool_path.as_deref(),
+            exit_code: output.exit_code.as_ref(),
+            status: &output.status,
+        }),
+        _ => serde_json::to_string_pretty(details),
     };
     serialized.unwrap_or_else(|_| "{}".to_string())
 }

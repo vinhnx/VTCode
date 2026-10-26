@@ -35,7 +35,7 @@ pub(super) struct TranscriptItem {
 }
 
 /// Structured payload for a file-change activity row.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct DiffCard {
     pub files: Vec<DiffFile>,
     pub additions: Option<u64>,
@@ -46,7 +46,7 @@ pub(super) struct DiffCard {
 }
 
 /// One file inside a [`DiffCard`], with its change kind.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct DiffFile {
     pub path: String,
     pub kind: DiffFileKind,
@@ -151,7 +151,7 @@ impl Transcript {
 
     /// Remove a local unsent echo together with its measured row.
     pub fn remove(&mut self, id: &str) {
-        if let Some(index) = self.items.iter().position(|item| item.id == id) {
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id) {
             let _removed = self.items.remove(index);
             self.layout_changes
                 .push(TranscriptLayoutChange::Splice { range: index..index + 1, count: 0 });
@@ -163,13 +163,30 @@ impl Transcript {
     }
 
     pub fn upsert(&mut self, mut item: TranscriptItem) {
-        if let Some(index) = self.items.iter().position(|existing| existing.id == item.id) {
-            let role_changed = self.items.get(index).is_some_and(|existing| existing.role != item.role);
-            if let Some(existing) = self.items.get_mut(index) {
-                item.expanded = existing.expanded;
-                item.activity_expanded = existing.activity_expanded;
-                *existing = item;
+        if let Some(index) = self.items.iter().rposition(|existing| existing.id == item.id) {
+            let Some(existing) = self.items.get_mut(index) else {
+                return;
+            };
+            let role_changed = existing.role != item.role;
+            let layout_changed = role_changed
+                || existing.role != "tool"
+                || existing.title != item.title
+                || existing.text != item.text
+                || existing.has_activity_status != item.has_activity_status
+                || existing.diff != item.diff;
+            if !layout_changed {
+                if item.output.is_some() {
+                    existing.output = item.output;
+                }
+                return;
             }
+
+            item.expanded = existing.expanded;
+            item.activity_expanded = existing.activity_expanded;
+            if item.output.is_none() {
+                item.output.clone_from(&existing.output);
+            }
+            *existing = item;
             if role_changed {
                 self.layout_changes.push(TranscriptLayoutChange::Remeasure);
             } else {
@@ -181,14 +198,14 @@ impl Transcript {
         }
     }
 
-    /// Attach or replace raw command output on an existing row.
+    /// Attach or replace raw command output, which is presented outside the transcript row.
     pub fn set_output(&mut self, id: &str, output: Option<SharedString>) {
-        if let Some(index) = self.items.iter().position(|item| item.id == id) {
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id) {
             if let Some(item) = self.items.get_mut(index) {
-                item.output = output;
+                if item.output != output {
+                    item.output = output;
+                }
             }
-            self.layout_changes
-                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
         }
     }
 
@@ -209,7 +226,7 @@ impl Transcript {
     }
 
     pub fn toggle_activity_group(&mut self, id: &str) {
-        if let Some(index) = self.items.iter().position(|item| item.id == id)
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id)
             && let Some(range) = self.activity_group(index)
         {
             if let Some(head) = self.items.get_mut(range.start) {
@@ -221,7 +238,7 @@ impl Transcript {
     }
 
     pub fn toggle_tool(&mut self, id: &str) {
-        if let Some(index) = self.items.iter().position(|item| item.id == id && item.role == "tool") {
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id && item.role == "tool") {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
@@ -232,7 +249,7 @@ impl Transcript {
     }
 
     pub fn toggle_diff(&mut self, id: &str) {
-        if let Some(index) = self.items.iter().position(|item| item.id == id && item.role == "diff") {
+        if let Some(index) = self.items.iter().rposition(|item| item.id == id && item.role == "diff") {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
             }
@@ -306,5 +323,25 @@ mod tests {
         assert!(transcript.is_empty());
         assert_eq!(transcript.len(), 0);
         assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Reset(0)]);
+    }
+
+    #[test]
+    fn output_only_updates_preserve_transcript_geometry_and_existing_capture() {
+        let mut transcript = Transcript::default();
+        transcript.push(item(1, "tool", "running\n\nmetadata"));
+        let _initial_layout = transcript.take_layout_changes();
+
+        transcript.set_output("1", Some("first output".into()));
+        assert!(transcript.take_layout_changes().is_empty());
+
+        transcript.upsert(item(1, "tool", "running\n\nmetadata"));
+        assert!(transcript.take_layout_changes().is_empty());
+        let output = transcript.get(0).and_then(|row| row.output.as_ref()).map(ToString::to_string);
+        assert_eq!(output.as_deref(), Some("first output"));
+
+        transcript.set_output("1", Some("updated output".into()));
+        assert!(transcript.take_layout_changes().is_empty());
+        let output = transcript.get(0).and_then(|row| row.output.as_ref()).map(ToString::to_string);
+        assert_eq!(output.as_deref(), Some("updated output"));
     }
 }
