@@ -5802,6 +5802,12 @@ fn changes_inspector_virtualizes_file_rows_and_scrolls_to_the_selected_path(cx: 
         window.render_frame(cx);
         let first_row = super::opaque_path_element_id("change-row", "src/file-0.rs");
         let last_row = super::opaque_path_element_id("change-row", "src/file-119.rs");
+        let list = window.find("change-list");
+        assert_eq!(list.role(), Some(gpui_kit::Role::List));
+        assert_eq!(list.label(), Some("Changed files"));
+        let first_item = window.find(super::opaque_path_element_id("change-list-item", "src/file-0.rs"));
+        assert_eq!(first_item.role(), Some(gpui_kit::Role::ListItem));
+        assert_eq!(first_item.label(), Some("Modified src/file-0.rs, +1 −1"));
         assert!(window.try_find(first_row.clone()).is_some(), "the first changed file is visible initially");
         assert!(
             window.try_find(last_row.clone()).is_none(),

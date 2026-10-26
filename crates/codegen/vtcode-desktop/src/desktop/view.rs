@@ -5027,8 +5027,18 @@ impl DesktopView {
                                         DiffFileKind::Delete => ("D", change_row_colors.danger),
                                         DiffFileKind::Update => ("M", change_row_colors.muted_foreground),
                                     };
+                                    let kind_name = match entry.kind {
+                                        DiffFileKind::Add => "Added",
+                                        DiffFileKind::Delete => "Deleted",
+                                        DiffFileKind::Update => "Modified",
+                                    };
+                                    let row_accessibility_label = format!("{kind_name} {path}, {file_summary}");
                                     Some(
                                         div()
+                                            .id(opaque_path_element_id("change-list-item", &path))
+                                            .test_support()
+                                            .role(gpui_kit::Role::ListItem)
+                                            .aria_label(row_accessibility_label)
                                             .h(px(change_row_height))
                                             .w_full()
                                             .flex()
