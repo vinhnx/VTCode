@@ -73,6 +73,8 @@ an empty prompt does not create a session.
 The Connections panel refreshes WebMCP availability after session and turn changes. A status response superseded by
 a newer change is discarded and refreshed; a failed refresh is shown as unavailable rather than as a ready session.
 Pending CLI questions and approvals also block new desktop or WebMCP turns and session changes until answered.
+Early runtime notifications remain in the bounded event queue while restored history is prepared, then are applied to
+the selected session in order.
 
 When the main window is inactive, a completed or failed/blocked run, or a request waiting for a decision, posts a
 system notification through GPUI Kit. Notifications contain only generic status text; the transcript and interaction

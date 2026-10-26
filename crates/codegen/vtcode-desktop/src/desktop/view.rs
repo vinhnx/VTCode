@@ -1663,6 +1663,7 @@ impl DesktopView {
                         view.error = Some("The local service returned an invalid session load result.".into());
                     }
                 }
+                view.event_tx.wake();
                 cx.notify();
             });
         }));
@@ -3096,6 +3097,9 @@ impl DesktopView {
     /// Drain one bounded event batch. A full batch asks the async waiter to schedule
     /// another foreground update without returning to a periodic polling loop.
     fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.session_load_task.is_some() {
+            return false;
+        }
         let mut changed = false;
         let mut processed = 0;
         let mut pending_item_update = None;
@@ -3122,6 +3126,9 @@ impl DesktopView {
                     } else {
                         self.process_drained_event(event, window, cx);
                     }
+                    if self.session_load_task.is_some() {
+                        break;
+                    }
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -3147,7 +3154,7 @@ impl DesktopView {
         if changed {
             cx.notify();
         }
-        processed == MAX_UI_EVENTS_PER_TICK
+        self.session_load_task.is_none() && processed == MAX_UI_EVENTS_PER_TICK
     }
 
     fn process_drained_event(&mut self, event: BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -4098,7 +4105,9 @@ impl DesktopView {
 
     fn cancel_session_load_task(&mut self) {
         self.session_load_generation = self.session_load_generation.wrapping_add(1);
-        self.session_load_task = None;
+        if self.session_load_task.take().is_some() {
+            self.event_tx.wake();
+        }
         self.history_page_generation = self.history_page_generation.wrapping_add(1);
         self.history_page_request_id = None;
         self.history_page_limit = 0;

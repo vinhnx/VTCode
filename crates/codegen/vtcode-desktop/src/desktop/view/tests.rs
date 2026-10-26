@@ -1238,6 +1238,42 @@ fn malformed_catalog_responses_preserve_the_last_valid_sessions_and_models(cx: &
 }
 
 #[gpui_kit::test]
+fn session_load_defers_startup_interaction_until_history_is_ready(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{InteractionKind, InteractionRequest};
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.start_event_drain(cx);
+            view.selected_session_id = Some("old".into());
+            view.session_request = Some(vtcode_desktop_protocol::method::SESSION_LOAD);
+            view.event_tx.send(BackendEvent::Response { method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: Some(json!({ "session": { "sessionId": "restored", "title": null, "workspace": "/workspace", "completed": false, "resumable": true }, "messages": [] })), error: None }).unwrap();
+            view.event_tx.send(BackendEvent::Interaction(InteractionRequest {
+                session_id: "restored".into(), turn_id: "session-start".into(), interaction_id: "startup".into(),
+                kind: InteractionKind::Question, wizard: false, title: "Question".into(), details: Vec::new(),
+                choices: Vec::new(), steps: Vec::new(), selected_choice_id: None, selected_choice_ids: Vec::new(),
+            })).unwrap();
+            assert!(!view.drain_events(window, cx));
+            assert!(view.session_load_task.is_some());
+            assert!(view.interaction.is_none());
+            assert!(!view.drain_events(window, cx), "the pending load must not consume later events");
+        });
+    }).unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _window, cx| {
+        view.update(cx, |view, _cx| {
+            assert_eq!(view.selected_session_id.as_deref(), Some("restored"));
+            assert!(view.session_load_task.is_none());
+            assert_eq!(
+                view.interaction.as_ref().map(|interaction| interaction.interaction_id.as_str()),
+                Some("startup")
+            );
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn malformed_session_load_preserves_the_current_conversation(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {

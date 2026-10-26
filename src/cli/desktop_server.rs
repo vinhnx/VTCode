@@ -920,13 +920,13 @@ impl RuntimeAdapter for DesktopWebmcpRuntime {
 }
 
 async fn start_session(context: &ServiceContext, session_id: String, resume: Option<ResumeSession>) -> Result<()> {
-    crate::main_helpers::set_runtime_archive_session_id(Some(session_id.clone()));
     let vtcode_ui::tui::app::HostSession { session, input, commands } = new_host_session();
     let (command_sender, command_receiver) = mpsc::channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let command_forwarder = std::thread::Builder::new()
         .name("vtcode-desktop-host-commands".to_string())
         .spawn(move || forward_host_commands(commands, command_sender))
         .context("failed to start desktop host command bridge")?;
+    crate::main_helpers::set_runtime_archive_session_id(Some(session_id.clone()));
     let (event_sender, event_receiver) = protocol::live_event_channel(protocol::DEFAULT_QUEUE_CAPACITY);
     let config = active_agent_config(context).await;
     let mut vt_config = effective_speed_config(context, &config).await;
@@ -964,16 +964,36 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
         };
         let _ = exit_sender.send(result);
     });
-    spawn_session_pump(
-        session_id.clone(),
+    install_session_runtime(
+        context,
+        RuntimeSession { session_id, input, exit, abort, command_forwarder },
         command_receiver,
         event_receiver,
+    )
+    .await;
+    Ok(())
+}
+
+async fn install_session_runtime(
+    context: &ServiceContext,
+    runtime: RuntimeSession,
+    commands: mpsc::Receiver<InlineCommand>,
+    events: protocol::LiveEventReceiver,
+) {
+    let session_id = runtime.session_id.clone();
+    {
+        let mut state = context.state.lock().await;
+        state.session_id = Some(session_id.clone());
+        state.runtime = Some(runtime);
+    }
+    spawn_session_pump(
+        session_id,
+        commands,
+        events,
         std::sync::Arc::clone(&context.state),
         context.notifications.clone(),
         std::sync::Arc::clone(&context.turn_finished),
     );
-    context.state.lock().await.runtime = Some(RuntimeSession { session_id, input, exit, abort, command_forwarder });
-    Ok(())
 }
 
 fn forward_host_commands(commands: HostCommandReceiver, sender: mpsc::Sender<InlineCommand>) {
@@ -2286,6 +2306,59 @@ mod tests {
             },
         )
         .expect("WebMCP server")
+    }
+
+    #[tokio::test]
+    async fn session_install_delivers_a_queued_startup_interaction() {
+        use vtcode_ui::tui::app::{ListOverlayRequest, TransientRequest};
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let (context, mut notifications) = test_service_context(test_startup_context(&workspace), workspace);
+        let (commands, command_receiver) = mpsc::channel(2);
+        commands
+            .send(InlineCommand::ShowTransient {
+                request: Box::new(TransientRequest::List(ListOverlayRequest {
+                    title: "Startup question".into(),
+                    lines: Vec::new(),
+                    footer_hint: None,
+                    items: Vec::new(),
+                    selected: None,
+                    search: None,
+                    hotkeys: Vec::new(),
+                    status: None,
+                })),
+            })
+            .await
+            .expect("queue startup question");
+        let (_events, event_receiver) = protocol::live_event_channel(2);
+        let (input, _input_receiver) = mpsc::unbounded_channel();
+        let (exit_sender, exit) = oneshot::channel();
+        let runtime_task = tokio::spawn(std::future::pending::<()>());
+        install_session_runtime(
+            &context,
+            RuntimeSession {
+                session_id: "new-session".into(),
+                input,
+                exit,
+                abort: runtime_task.abort_handle(),
+                command_forwarder: std::thread::spawn(|| {}),
+            },
+            command_receiver,
+            event_receiver,
+        )
+        .await;
+        let notification = timeout(Duration::from_secs(1), notifications.recv())
+            .await
+            .expect("pump timeout")
+            .expect("notification");
+        assert_eq!(notification.method, protocol::method::INTERACTION_REQUESTED);
+        let interaction: InteractionRequest = serde_json::from_value(notification.params).expect("interaction");
+        assert_eq!(interaction.session_id, "new-session");
+        assert_eq!(interaction.turn_id, "session-start");
+        assert_eq!(context.state.lock().await.pending_interactions.len(), 1);
+        drop(commands);
+        drop(exit_sender);
+        runtime_task.abort();
     }
 
     #[tokio::test]
