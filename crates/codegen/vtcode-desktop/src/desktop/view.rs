@@ -4385,18 +4385,15 @@ impl DesktopView {
         let Some(item) = self.transcript.get(index) else {
             return div().into_any_element();
         };
-        let group = self.transcript.activity_group(index);
-        let group_head = group.as_ref().and_then(|range| self.transcript.get(range.start));
-        if group.as_ref().is_some_and(|range| index != range.start)
-            && group_head.is_some_and(|head| !head.activity_expanded)
-        {
+        if item.activity_grouped && !item.activity_group_head && !item.activity_expanded {
             return div().into_any_element();
         }
-        let group_header = group
-            .as_ref()
-            .filter(|range| index == range.start)
-            .map(|range| self.render_activity_group(range.clone(), cx));
-        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
+        let group_header = item
+            .activity_group_head
+            .then(|| self.transcript.activity_group(index))
+            .flatten()
+            .map(|range| self.render_activity_group(range, cx));
+        let show_item = !item.activity_grouped || item.activity_expanded;
         div()
             .id(format!("transcript-row-{}", item.id))
             .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))

@@ -26,7 +26,12 @@ pub(super) struct TranscriptItem {
     pub markdown: SharedString,
     pub accessibility_text: SharedString,
     pub expanded: bool,
+    /// Shared expansion state copied to each row so virtualized rendering stays constant-time.
     pub activity_expanded: bool,
+    /// Whether this tool row is part of a consecutive group of at least two rows.
+    pub activity_grouped: bool,
+    /// Whether this row owns the visible header for its tool group.
+    pub activity_group_head: bool,
     /// Whether this row carries structured activity status rather than archive text.
     pub has_activity_status: bool,
     pub diff: Option<DiffCard>,
@@ -73,6 +78,8 @@ impl TranscriptItem {
             accessibility_text: prepared.accessible_text,
             expanded: false,
             activity_expanded: false,
+            activity_grouped: false,
+            activity_group_head: false,
             diff: None,
             output: None,
         }
@@ -85,6 +92,8 @@ pub(super) struct Transcript {
     items: VecDeque<TranscriptItem>,
     layout_changes: Vec<TranscriptLayoutChange>,
     layout_initialized: bool,
+    /// Head index of the trailing consecutive tool group, including single-row groups.
+    trailing_tool_group_start: Option<usize>,
 }
 
 impl Transcript {
@@ -131,33 +140,93 @@ impl Transcript {
     pub fn clear(&mut self) {
         self.items.clear();
         self.layout_changes.clear();
+        self.trailing_tool_group_start = None;
         self.layout_changes.push(TranscriptLayoutChange::Reset(0));
     }
 
-    pub fn push(&mut self, item: TranscriptItem) {
-        if self.items.len() == MAX_TRANSCRIPT_ITEMS {
-            let _removed = self.items.pop_front();
+    pub fn push(&mut self, mut item: TranscriptItem) {
+        let item_is_tool = item.role == "tool";
+        let extends_tool_group = item_is_tool && self.items.back().is_some_and(|row| row.role == "tool");
+        let previous_group_start = self.trailing_tool_group_start;
+        let evict_oldest = self.items.len() == MAX_TRANSCRIPT_ITEMS;
+        let mut promoted_group_head = false;
+        if evict_oldest {
+            let removed_group_expanded = self
+                .items
+                .pop_front()
+                .and_then(|item| item.activity_group_head.then_some(item.activity_expanded));
+            if let Some(expanded) = removed_group_expanded {
+                let next_tool = self.items.get(1).is_some_and(|item| item.role == "tool");
+                if let Some(head) = self.items.front_mut().filter(|item| item.role == "tool") {
+                    head.activity_grouped = next_tool;
+                    head.activity_group_head = next_tool;
+                    head.activity_expanded = next_tool && expanded;
+                    promoted_group_head = true;
+                }
+            }
             self.layout_changes
                 .push(TranscriptLayoutChange::Splice { range: 0..1, count: 0 });
+            if let Some(start) = self.trailing_tool_group_start {
+                self.trailing_tool_group_start = Some(start.saturating_sub(1));
+            }
         }
         let index = self.items.len();
+        debug_assert!(
+            !extends_tool_group || previous_group_start.is_some(),
+            "the trailing tool-group head stays in sync with transcript rows"
+        );
+        let group_head = extends_tool_group.then(|| {
+            previous_group_start
+                .unwrap_or_else(|| index.saturating_sub(1))
+                .saturating_sub(usize::from(evict_oldest))
+        });
+        if let Some(head_index) = group_head
+            && let Some(head) = self.items.get_mut(head_index)
+        {
+            head.activity_grouped = true;
+            head.activity_group_head = true;
+            item.activity_grouped = true;
+            item.activity_expanded = head.activity_expanded;
+        }
+        self.trailing_tool_group_start = if item_is_tool {
+            Some(group_head.unwrap_or(index))
+        } else {
+            None
+        };
         self.items.push_back(item);
         self.layout_changes
             .push(TranscriptLayoutChange::Splice { range: index..index, count: 1 });
-        if let Some(group) = self.activity_group(index) {
-            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(group));
+        if promoted_group_head {
+            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(0..1));
+        }
+        if let Some(head) = group_head {
+            // A new tool row changes the shared group header and inserts only
+            // one new row. Existing tool rows keep their measured geometry.
+            if !promoted_group_head || head != 0 {
+                self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(head..head + 1));
+            }
         }
     }
 
     /// Remove a local unsent echo together with its measured row.
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.items.iter().rposition(|item| item.id == id) {
-            let _removed = self.items.remove(index);
+            let removed_was_tool = self.items.remove(index).is_some_and(|item| item.role == "tool");
+            self.rebuild_activity_group_flags();
+            self.refresh_trailing_tool_group_start();
             self.layout_changes
                 .push(TranscriptLayoutChange::Splice { range: index..index + 1, count: 0 });
             let affected = index.saturating_sub(1)..(index + 1).min(self.items.len());
             if !affected.is_empty() {
                 self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(affected));
+            }
+            if removed_was_tool
+                && let Some(group) = [index.saturating_sub(1), index]
+                    .into_iter()
+                    .find_map(|probe| self.activity_group(probe))
+            {
+                self.layout_changes
+                    .push(TranscriptLayoutChange::RemeasureItems(group.start..group.start + 1));
             }
         }
     }
@@ -168,6 +237,7 @@ impl Transcript {
                 return;
             };
             let role_changed = existing.role != item.role;
+            let updated_is_tool = item.role == "tool";
             let layout_changed = role_changed
                 || existing.role != "tool"
                 || existing.title != item.title
@@ -183,15 +253,26 @@ impl Transcript {
 
             item.expanded = existing.expanded;
             item.activity_expanded = existing.activity_expanded;
+            item.activity_grouped = existing.activity_grouped;
+            item.activity_group_head = existing.activity_group_head;
             if item.output.is_none() {
                 item.output.clone_from(&existing.output);
             }
             *existing = item;
             if role_changed {
+                self.rebuild_activity_group_flags();
+                self.refresh_trailing_tool_group_start();
                 self.layout_changes.push(TranscriptLayoutChange::Remeasure);
             } else {
                 self.layout_changes
                     .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+                if updated_is_tool
+                    && let Some(group) = self.activity_group(index)
+                    && index != group.start
+                {
+                    self.layout_changes
+                        .push(TranscriptLayoutChange::RemeasureItems(group.start..group.start + 1));
+                }
             }
         } else {
             self.push(item);
@@ -211,7 +292,7 @@ impl Transcript {
 
     /// Consecutive tool rows form a presentation group without changing event identities or ordering.
     pub fn activity_group(&self, index: usize) -> Option<Range<usize>> {
-        if self.items.get(index)?.role != "tool" {
+        if !self.items.get(index).is_some_and(|item| item.activity_grouped) {
             return None;
         }
         let mut start = index;
@@ -222,15 +303,59 @@ impl Transcript {
         while self.items.get(end).is_some_and(|item| item.role == "tool") {
             end += 1;
         }
-        (end - start > 1).then_some(start..end)
+        Some(start..end)
+    }
+
+    fn rebuild_activity_group_flags(&mut self) {
+        let mut start = 0;
+        while start < self.items.len() {
+            if !self.items.get(start).is_some_and(|item| item.role == "tool") {
+                if let Some(item) = self.items.get_mut(start) {
+                    item.activity_grouped = false;
+                    item.activity_group_head = false;
+                    item.activity_expanded = false;
+                }
+                start += 1;
+                continue;
+            }
+
+            let mut end = start + 1;
+            while self.items.get(end).is_some_and(|item| item.role == "tool") {
+                end += 1;
+            }
+            let expanded = self.items.get(start).is_some_and(|item| item.activity_expanded);
+            for index in start..end {
+                if let Some(item) = self.items.get_mut(index) {
+                    item.activity_grouped = end - start > 1;
+                    item.activity_group_head = end - start > 1 && index == start;
+                    item.activity_expanded = end - start > 1 && expanded;
+                }
+            }
+            start = end;
+        }
+    }
+
+    fn refresh_trailing_tool_group_start(&mut self) {
+        if !self.items.back().is_some_and(|item| item.role == "tool") {
+            self.trailing_tool_group_start = None;
+            return;
+        }
+        let mut start = self.items.len().saturating_sub(1);
+        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.role == "tool") {
+            start -= 1;
+        }
+        self.trailing_tool_group_start = Some(start);
     }
 
     pub fn toggle_activity_group(&mut self, id: &str) {
         if let Some(index) = self.items.iter().rposition(|item| item.id == id)
             && let Some(range) = self.activity_group(index)
         {
-            if let Some(head) = self.items.get_mut(range.start) {
-                head.activity_expanded = !head.activity_expanded;
+            let expanded = !self.items.get(range.start).is_some_and(|head| head.activity_expanded);
+            for index in range.clone() {
+                if let Some(item) = self.items.get_mut(index) {
+                    item.activity_expanded = expanded;
+                }
             }
             self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
             self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
@@ -299,6 +424,14 @@ mod tests {
         assert_eq!(transcript.activity_group(0), Some(0..MAX_TRANSCRIPT_ITEMS));
         assert_eq!(transcript.len(), MAX_TRANSCRIPT_ITEMS);
         assert_eq!(transcript.get(MAX_TRANSCRIPT_ITEMS - 1).unwrap().text, "completed");
+
+        transcript.toggle_activity_group("5");
+        transcript.push(item(MAX_TRANSCRIPT_ITEMS + 5, "tool", "completed"));
+        let promoted_head = transcript.get(0).unwrap();
+        assert_eq!(promoted_head.id, "6");
+        assert!(promoted_head.activity_group_head);
+        assert!(promoted_head.activity_expanded, "the promoted group head retains expansion state");
+        assert_eq!(transcript.activity_group(0), Some(0..MAX_TRANSCRIPT_ITEMS));
     }
 
     #[test]
@@ -323,6 +456,47 @@ mod tests {
         assert!(transcript.is_empty());
         assert_eq!(transcript.len(), 0);
         assert_eq!(transcript.take_layout_changes(), vec![super::TranscriptLayoutChange::Reset(0)]);
+    }
+
+    #[test]
+    fn appending_tool_rows_remeasures_only_the_shared_group_header() {
+        let mut transcript = Transcript::default();
+        transcript.push(item(0, "user", "prompt"));
+        let _initial_layout = transcript.take_layout_changes();
+
+        for id in 1..=100 {
+            transcript.push(item(id, "tool", "completed"));
+        }
+
+        let changes = transcript.take_layout_changes();
+        let remeasured_ranges = changes
+            .iter()
+            .filter_map(|change| match change {
+                super::TranscriptLayoutChange::RemeasureItems(range) => Some(range.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(remeasured_ranges.len(), 99, "each added row updates the existing group header");
+        assert!(remeasured_ranges.iter().all(|range| *range == (1..2)));
+    }
+
+    #[test]
+    fn tool_status_updates_remeasure_the_group_header_and_changed_row() {
+        let mut transcript = Transcript::default();
+        transcript.push(item(1, "tool", "running"));
+        transcript.push(item(2, "tool", "running"));
+        let _initial_layout = transcript.take_layout_changes();
+
+        transcript.upsert(item(2, "tool", "failed"));
+
+        let changes = transcript.take_layout_changes();
+        assert!(transcript.get(1).unwrap().activity_grouped, "status updates preserve group membership");
+        assert!(changes.iter().any(|change| {
+            matches!(change, super::TranscriptLayoutChange::RemeasureItems(range) if *range == (1..2))
+        }));
+        assert!(changes.iter().any(|change| {
+            matches!(change, super::TranscriptLayoutChange::RemeasureItems(range) if *range == (0..1))
+        }));
     }
 
     #[test]
