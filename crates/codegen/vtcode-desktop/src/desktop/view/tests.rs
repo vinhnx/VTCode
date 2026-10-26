@@ -5545,8 +5545,11 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     let prefix = "old page";
+    let middle = " tail界";
+    let final_page = " complete";
     let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
-    let total_bytes = (prefix.len() + " tail".len()) as u64;
+    let middle_end = u64::try_from(prefix.len() + middle.len()).expect("test page length fits in u64");
+    let total_bytes = middle_end + u64::try_from(final_page.len()).expect("test page length fits in u64");
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.backend = Some(BackendHandle { commands });
@@ -5604,9 +5607,48 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
         request_id: request_id.clone(),
         item_id: "historical-output".into(),
         offset: prefix.len() as u64,
+        next_offset: middle_end,
+        total_bytes,
+        text: middle.into(),
+        has_more: true,
+    };
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse { request_id, result: Some(json!(page)), error: None },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, _| {
+            assert_eq!(view.restored_activity[0].output.as_deref(), Some(format!("{prefix}{middle}{suffix}").as_str()));
+            assert_eq!(view.restored_output_cursors["historical-output"].next_offset, middle_end);
+            assert!(view.output_page_pending.is_none());
+            assert!(view.output_page_error.is_none());
+        });
+        window.click("load-more-output", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("second captured output page request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_OUTPUT_READ);
+    assert_eq!(params["sessionId"], "archive-session");
+    assert_eq!(params["itemId"], "historical-output");
+    assert_eq!(params["offset"], middle_end);
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "archive-session".into(),
+        request_id: request_id.clone(),
+        item_id: "historical-output".into(),
+        offset: middle_end,
         next_offset: total_bytes,
         total_bytes,
-        text: " tail".into(),
+        text: final_page.into(),
         has_more: false,
     };
     view.update(cx, |view, cx| {
@@ -5619,10 +5661,10 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(window.find("output-body").label(), Some("old page tail"));
+        assert_eq!(window.find("output-body").label(), Some("old page tail界 complete"));
         assert!(window.try_find("load-more-output").is_none());
         view.update(cx, |view, _| {
-            assert_eq!(view.restored_activity[0].output.as_deref(), Some("old page tail"));
+            assert_eq!(view.restored_activity[0].output.as_deref(), Some("old page tail界 complete"));
             assert!(!view.restored_output_cursors.contains_key("historical-output"));
             assert!(view.output_page_pending.is_none());
             assert!(view.output_page_error.is_none());

@@ -563,6 +563,7 @@ review containers clip overflow instead of introducing a competing scroll area.
 | Previous change / `Shift+F7` | Navigates to the previous changed group |
 | Next file / `Option+F7` | In working-tree review, selects the next captured file |
 | Previous file / `Option+Shift+F7` | In working-tree review, selects the previous captured file |
+| Choose changed file | Opens a searchable file list; type a path, then use Up/Down and Enter |
 | Copy patch | Copies the exact change-set owning the parsed file preview |
 | Open file | Leaves review and opens the bounded read-only workspace preview |
 | Close / `Escape` | Returns to the inspector and restores previous focus |
@@ -663,6 +664,9 @@ ends; the navigation row shows the selected path and its position. Refresh keeps
 that path when it remains in the patch, even if files reorder, and otherwise
 selects the first remaining file. Navigation is disabled for a single-file patch
 and unavailable for raw or truncated previews.
+Choose the current path to search all captured files without closing the review;
+Escape first clears a non-empty query, then closes the picker and returns to the
+same review snapshot.
 **Copy preview** copies the captured redacted text. A truncated or
 unsupported patch is shown as raw text with an explicit notice rather than as a
 complete structured diff. Clean tracked state is distinct from invalid or
