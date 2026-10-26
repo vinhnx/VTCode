@@ -5371,6 +5371,162 @@ fn output_tab_bounds_rendered_large_output_but_copies_the_full_capture(cx: &mut 
     .unwrap();
 }
 
+#[test]
+fn restored_output_page_validation_only_allows_utf8_eof_slack() {
+    let pending = super::PendingOutputPage {
+        request_id: "request-1".into(),
+        session_id: "session-1".into(),
+        item_id: "output-1".into(),
+        offset: 32_768,
+    };
+    let cursor = |total_bytes| vtcode_desktop_protocol::SessionOutputCursor {
+        item_id: pending.item_id.clone(),
+        next_offset: pending.offset,
+        total_bytes,
+    };
+    let page = |next_offset, text: &str, has_more, total_bytes| vtcode_desktop_protocol::SessionOutputPage {
+        session_id: pending.session_id.clone(),
+        request_id: pending.request_id.clone(),
+        item_id: pending.item_id.clone(),
+        offset: pending.offset,
+        next_offset,
+        total_bytes,
+        text: text.into(),
+        has_more,
+    };
+
+    assert!(super::valid_session_output_page(
+        &page(pending.offset + 3, "界", true, pending.offset + 12),
+        &pending,
+        &cursor(pending.offset + 12)
+    ));
+    assert!(super::valid_session_output_page(
+        &page(pending.offset + 7, "four", false, pending.offset + 7),
+        &pending,
+        &cursor(pending.offset + 7)
+    ));
+    assert!(!super::valid_session_output_page(
+        &page(pending.offset + 8, "four", false, pending.offset + 8),
+        &pending,
+        &cursor(pending.offset + 8)
+    ));
+}
+
+#[gpui_kit::test]
+fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let prefix = "old page";
+    let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    let total_bytes = (prefix.len() + " tail".len()) as u64;
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("archive-session".into());
+            view.selected_output_id = Some("historical-output".into());
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+            let mut item = TranscriptItem::new(
+                "historical-output".into(),
+                "tool".into(),
+                "Archived command".into(),
+                "completed".into(),
+            );
+            item.output = Some(format!("{prefix}{suffix}").into());
+            view.restored_activity.push(item);
+            let _previous = view.restored_output_cursors.insert(
+                "historical-output".into(),
+                vtcode_desktop_protocol::SessionOutputCursor {
+                    item_id: "historical-output".into(),
+                    next_offset: prefix.len() as u64,
+                    total_bytes,
+                },
+            );
+            assert!(view.restored_output_cursors.contains_key("historical-output"));
+            let output = crate::desktop::inspector::output_for(
+                &view.transcript,
+                &view.restored_activity,
+                view.selected_output_id.as_deref(),
+            )
+            .unwrap();
+            assert_eq!(output.id, "historical-output");
+            cx.notify();
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).restored_output_cursors.contains_key("historical-output"));
+        assert_eq!(view.read(cx).selected_output_id.as_deref(), Some("historical-output"));
+        assert!(view.read(cx).output_page_pending.is_none());
+        assert!(view.read(cx).output_page_error.is_none());
+        assert_eq!(window.find("copy-output").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("load-more-output").role(), Some(gpui_kit::Role::Button));
+        window.click("load-more-output", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("captured output page request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_OUTPUT_READ);
+    assert_eq!(params["sessionId"], "archive-session");
+    assert_eq!(params["itemId"], "historical-output");
+    assert_eq!(params["offset"], prefix.len());
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let page = vtcode_desktop_protocol::SessionOutputPage {
+        session_id: "archive-session".into(),
+        request_id: request_id.clone(),
+        item_id: "historical-output".into(),
+        offset: prefix.len() as u64,
+        next_offset: total_bytes,
+        total_bytes,
+        text: " tail".into(),
+        has_more: false,
+    };
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse { request_id, result: Some(json!(page)), error: None },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("output-body").label(), Some("old page tail"));
+        assert!(window.try_find("load-more-output").is_none());
+        view.update(cx, |view, _| {
+            assert_eq!(view.restored_activity[0].output.as_deref(), Some("old page tail"));
+            assert!(!view.restored_output_cursors.contains_key("historical-output"));
+            assert!(view.output_page_pending.is_none());
+            assert!(view.output_page_error.is_none());
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn stale_output_page_error_does_not_clear_the_current_request(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        let pending = super::PendingOutputPage {
+            request_id: "output-current".into(),
+            session_id: "archive-session".into(),
+            item_id: "historical-output".into(),
+            offset: 32_768,
+        };
+        view.output_page_pending = Some(pending.clone());
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse {
+                request_id: "output-stale".into(),
+                result: None,
+                error: Some("old page failed".into()),
+            },
+            cx,
+        );
+        assert_eq!(view.output_page_pending.as_ref(), Some(&pending));
+        assert!(view.output_page_error.is_none());
+    });
+}
+
 #[gpui_kit::test]
 fn partial_history_warnings_remain_visible_when_no_rows_were_restored(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);

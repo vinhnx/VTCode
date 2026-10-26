@@ -105,7 +105,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Browse files | ⌘⇧E opens the inspector's Files tab and focuses its read-only, collapsed tree (at most 400 entries, directory traversal through depth 8, dependency/VCS/hidden directories skipped). The first scan shows a reduced-motion-aware loading skeleton; empty results explain whether a workspace is missing or contains no browseable files. Tab to Workspace files and press Enter to focus the tree; Up/Down moves selection and Left/Right collapses or expands folders. Clicking a folder also toggles it. Enter or a click opens a file's UTF-8 preview (64 KiB cap). Expansion and selection survive refresh. Scans and reads run off the UI thread; paths and symlinks resolving outside the workspace are rejected. |
 | Review current Git changes | ⌘⇧G or Changes → Review working tree opens a read-only snapshot viewer. Choose an optional folder and untracked-text inclusion, then Load changes; Refresh or ⌘R updates the capture. |
 | Follow activity | The inspector's Activity tab shows an accessible, theme-colored status chart and a virtualized tool/command list, retaining the newest 300 rows in chronological order. Rows with captured output have a keyboard-accessible action that opens that exact capture in Output. The chart's spoken label includes counts for running, completed, failed, interrupted, and unclassified activity. |
-| Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy preserves the complete capture when available; restored spool reads are capped at 32 KiB and show an omission notice when partial. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
+| Watch command output | The inspector's Output tab shows the newest capture by default or the activity row selected from history. Choose Follow latest output to resume the live tail. Expanded activity rows show the same mono tail, capped at 1,000 lines and 128 KiB. Copy includes all output loaded so far. Restored spools load an initial 32 KiB at session restore; choose Load more captured output to fetch another bounded page. If archived activity history is incomplete, Changes, Activity, and Output show an accessible warning even when no rows were recovered. Historical unfinished work is marked interrupted. |
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
@@ -598,12 +598,15 @@ inspector history when these limits omit evidence. Malformed complete records or
 unsafe paths fail loading explicitly. Platforms without handle-bound reads restore
 messages and report inspector history unavailable. No desktop-specific history store is written.
 
-Historical tool-output rows also recover their spool contents when the reference
-resolves beneath the workspace's `.vtcode/context/tool_outputs` directory. Each
-read is bounded to 32 KiB and the existing activity budget; symlinks, outside
-paths, missing files, and oversized output never expose a local path and report
-partial inspector history. The captured inline preview remains available when a
-spool cannot be read.
+Historical tool-output rows recover a bounded prefix when the reference resolves
+beneath the workspace's `.vtcode/context/tool_outputs` directory. Each session
+restore and explicit **Load more captured output** action reads at most 32 KiB;
+remaining pages are fetched only when requested. UTF-8 boundaries are kept
+between pages. Spool paths stay inside the service and are reopened with
+handle-bound workspace checks for every page. Symlinks, outside paths, missing
+files, invalid text, and activity-budget truncation never expose a local path and
+report partial inspector history. The captured inline preview remains available
+when a spool cannot be read.
 
 Restored activity uses the same projection and GPUI Kit cards as live tool events,
 but stays in the inspector so historical tools do not crowd out the conversation.
@@ -616,8 +619,8 @@ choose **Follow latest output** to resume the live tail. New live activity is th
 default when no row is selected. Restoring never starts a command,
 reopens an approval, or marks a turn running. Unstructured archive tool text remains
 in its collapsed transcript card but is not classified as structured activity. The Output tab shows
-the selected or newest retained command/tool output and copies its exact captured text; spool
-files are not followed or fetched automatically.
+the selected or newest retained command/tool output and copies all recovered text; remaining spool
+content is loaded only through the explicit bounded page action.
 
 ### Git working-tree review
 

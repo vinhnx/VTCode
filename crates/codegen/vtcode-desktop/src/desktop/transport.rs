@@ -37,6 +37,11 @@ pub(crate) enum BackendEvent {
         result: Option<Value>,
         error: Option<String>,
     },
+    SessionOutputResponse {
+        request_id: String,
+        result: Option<Value>,
+        error: Option<String>,
+    },
     InteractionResponded {
         identity: InteractionResponseIdentity,
         error: Option<String>,
@@ -65,6 +70,7 @@ struct PendingRequest {
     method: String,
     interaction: Option<InteractionResponseIdentity>,
     session_history_request_id: Option<String>,
+    session_output_request_id: Option<String>,
 }
 
 impl PendingRequest {
@@ -82,12 +88,23 @@ impl PendingRequest {
         let session_history_request_id = (method == protocol::method::SESSION_HISTORY)
             .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
             .flatten();
-        Self { method, interaction, session_history_request_id }
+        let session_output_request_id = (method == protocol::method::SESSION_OUTPUT_READ)
+            .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+            .flatten();
+        Self {
+            method,
+            interaction,
+            session_history_request_id,
+            session_output_request_id,
+        }
     }
 
     fn finish(self, result: Option<Value>, error: Option<String>) -> BackendEvent {
         if let Some(request_id) = self.session_history_request_id {
             return BackendEvent::SessionHistoryResponse { request_id, result, error };
+        }
+        if let Some(request_id) = self.session_output_request_id {
+            return BackendEvent::SessionOutputResponse { request_id, result, error };
         }
         match self.interaction {
             Some(identity) => BackendEvent::InteractionResponded { identity, error },
@@ -518,6 +535,25 @@ mod tests {
             event,
             BackendEvent::SessionHistoryResponse { request_id, result: None, error: Some(error) }
                 if request_id == "page-current" && error == "page failed"
+        ));
+    }
+
+    #[test]
+    fn session_output_responses_retain_the_page_request_identity() {
+        let mut pending = HashMap::from([(
+            RequestId::Number(11),
+            PendingRequest::new(
+                protocol::method::SESSION_OUTPUT_READ.into(),
+                &json!({ "requestId": "output-current", "itemId": "tool-output" }),
+            ),
+        )]);
+        let event = decode_frame(br#"{"jsonrpc":"2.0","id":11,"error":{"message":"page failed"}}"#, &mut pending)
+            .expect("valid response")
+            .expect("decoded response");
+        assert!(matches!(
+            event,
+            BackendEvent::SessionOutputResponse { request_id, result: None, error: Some(error) }
+                if request_id == "output-current" && error == "page failed"
         ));
     }
 

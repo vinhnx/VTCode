@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -61,7 +61,8 @@ use tokio::sync::mpsc;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
     ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse, InteractionStep,
-    SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionSummary, ThreadEventNotification,
+    SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionOutputCursor, SessionOutputPage,
+    SessionSummary, ThreadEventNotification,
 };
 
 use super::files::{self, FileEntry, FilePreview};
@@ -503,6 +504,37 @@ struct SubmissionDraft {
     delivery_uncertain: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PendingOutputPage {
+    request_id: String,
+    session_id: String,
+    item_id: String,
+    offset: u64,
+}
+
+fn valid_session_output_page(
+    page: &SessionOutputPage,
+    pending: &PendingOutputPage,
+    cursor: &SessionOutputCursor,
+) -> bool {
+    let Some(byte_delta) = page.next_offset.checked_sub(page.offset) else {
+        return false;
+    };
+    page.session_id == pending.session_id
+        && page.request_id == pending.request_id
+        && page.item_id == pending.item_id
+        && page.offset == pending.offset
+        && page.total_bytes == cursor.total_bytes
+        && page.offset == cursor.next_offset
+        && page.next_offset > page.offset
+        && page.next_offset <= page.total_bytes
+        && byte_delta <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES as u64
+        && page.text.len() <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES
+        && page.has_more == (page.next_offset < page.total_bytes)
+        && (!page.has_more || byte_delta == page.text.len() as u64)
+        && (page.has_more || (byte_delta >= page.text.len() as u64 && byte_delta - page.text.len() as u64 <= 3))
+}
+
 struct ActivePrimaryAgentDisplay {
     session_id: String,
     display_name: String,
@@ -635,6 +667,10 @@ struct DesktopView {
     history_page_generation: u64,
     history_page_loading: bool,
     history_page_error: Option<String>,
+    restored_output_cursors: HashMap<String, SessionOutputCursor>,
+    output_page_pending: Option<PendingOutputPage>,
+    output_page_task: Option<Task<()>>,
+    output_page_error: Option<(String, String)>,
     retained_submission: Option<SubmissionDraft>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
@@ -886,6 +922,10 @@ impl DesktopView {
             history_page_generation: 0,
             history_page_loading: false,
             history_page_error: None,
+            restored_output_cursors: HashMap::new(),
+            output_page_pending: None,
+            output_page_task: None,
+            output_page_error: None,
             retained_submission: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
@@ -1383,6 +1423,123 @@ impl DesktopView {
         cx.notify();
     }
 
+    fn request_more_captured_output(&mut self, item_id: &str, cx: &mut Context<Self>) {
+        if self.output_page_pending.is_some() {
+            return;
+        }
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+        let Some(cursor) = self.restored_output_cursors.get(item_id) else {
+            return;
+        };
+        let pending = PendingOutputPage {
+            request_id: uuid_like_id(),
+            session_id,
+            item_id: item_id.to_string(),
+            offset: cursor.next_offset,
+        };
+        if self.request(
+            protocol::method::SESSION_OUTPUT_READ,
+            json!({
+                "sessionId": pending.session_id,
+                "requestId": pending.request_id,
+                "itemId": pending.item_id,
+                "offset": pending.offset,
+            }),
+        ) {
+            self.output_page_pending = Some(pending);
+            self.output_page_error = None;
+        } else {
+            self.output_page_error =
+                Some((item_id.to_string(), "The local service request queue is full. Try again.".into()));
+        }
+        cx.notify();
+    }
+
+    fn fail_output_page(&mut self, cx: &mut Context<Self>) {
+        let item_id = self.output_page_pending.take().map(|pending| pending.item_id);
+        self.output_page_task = None;
+        self.output_page_error =
+            item_id.map(|item_id| (item_id, "Could not load more captured output. Try again.".into()));
+        cx.notify();
+    }
+
+    fn begin_session_output_page(&mut self, result: Value, cx: &mut Context<Self>) {
+        let Some(pending) = self.output_page_pending.clone() else {
+            return;
+        };
+        self.output_page_task = Some(cx.spawn(async move |view, cx| {
+            let page = cx
+                .background_spawn(async move { serde_json::from_value::<SessionOutputPage>(result) })
+                .await;
+            let _updated = view.update(cx, |view, cx| {
+                if view.output_page_pending.as_ref() != Some(&pending) {
+                    return;
+                }
+                if let Some(task) = view.output_page_task.take() {
+                    task.detach();
+                }
+                let Ok(page) = page else {
+                    view.fail_output_page(cx);
+                    return;
+                };
+                let Some(cursor) = view.restored_output_cursors.get(&pending.item_id).cloned() else {
+                    view.fail_output_page(cx);
+                    return;
+                };
+                if view.selected_session_id.as_deref() != Some(pending.session_id.as_str())
+                    || !valid_session_output_page(&page, &pending, &cursor)
+                {
+                    view.fail_output_page(cx);
+                    return;
+                }
+
+                let mut updated_output = false;
+                if let Some(item) = view.restored_activity.iter_mut().find(|item| item.id == pending.item_id)
+                    && let Some(output) = item.output.as_ref()
+                {
+                    let output = output
+                        .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+                        .unwrap_or(output.as_ref());
+                    let mut combined = String::with_capacity(
+                        output
+                            .len()
+                            .saturating_add(page.text.len())
+                            .saturating_add(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX.len()),
+                    );
+                    combined.push_str(output);
+                    combined.push_str(&page.text);
+                    if page.has_more {
+                        combined.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
+                    }
+                    item.output = Some(combined.into());
+                    updated_output = true;
+                }
+                if !updated_output {
+                    view.fail_output_page(cx);
+                    return;
+                }
+
+                view.output_page_pending = None;
+                view.output_page_error = None;
+                if page.has_more {
+                    let _previous = view.restored_output_cursors.insert(
+                        pending.item_id,
+                        SessionOutputCursor {
+                            item_id: page.item_id,
+                            next_offset: page.next_offset,
+                            total_bytes: page.total_bytes,
+                        },
+                    );
+                } else {
+                    let _previous = view.restored_output_cursors.remove(&pending.item_id);
+                }
+                cx.notify();
+            });
+        }));
+    }
+
     /// Decode and prepare bounded historical content away from the UI thread.
     fn begin_session_load(&mut self, result: Value, cx: &mut Context<Self>) {
         if self.session_request != Some(protocol::method::SESSION_LOAD) {
@@ -1538,6 +1695,27 @@ impl DesktopView {
         self.history_has_earlier = loaded.history_has_earlier && loaded.history_start_index > 0;
         self.restored_review_history_incomplete = loaded.review_history_incomplete;
         self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
+        let output_item_ids = loaded
+            .activity_items
+            .iter()
+            .filter(|item| matches!(&item.details, vtcode_exec_events::ThreadItemDetails::ToolOutput(_)))
+            .map(|item| item.id.as_str())
+            .collect::<HashSet<_>>();
+        self.restored_output_cursors.clear();
+        for cursor in loaded.activity_output_cursors {
+            if !cursor.item_id.is_empty()
+                && cursor.item_id.len() <= 512
+                && cursor.next_offset > 0
+                && cursor.next_offset <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES as u64
+                && cursor.next_offset < cursor.total_bytes
+                && output_item_ids.contains(cursor.item_id.as_str())
+            {
+                let _previous = self.restored_output_cursors.insert(cursor.item_id.clone(), cursor);
+            }
+        }
+        self.output_page_pending = None;
+        self.output_page_task = None;
+        self.output_page_error = None;
         for item in &loaded.review_items {
             if matches!(item.details, vtcode_exec_events::ThreadItemDetails::FileChange(_)) {
                 self.update_runtime_item(item);
@@ -3144,6 +3322,20 @@ impl DesktopView {
                     self.fail_history_page("The local service returned an empty history response.".into(), cx);
                 }
             }
+            BackendEvent::SessionOutputResponse { request_id, result, error } => {
+                if self.output_page_pending.as_ref().map(|pending| pending.request_id.as_str())
+                    != Some(request_id.as_str())
+                {
+                    return;
+                }
+                if error.is_some() {
+                    self.fail_output_page(cx);
+                } else if let Some(result) = result {
+                    self.begin_session_output_page(result, cx);
+                } else {
+                    self.fail_output_page(cx);
+                }
+            }
             BackendEvent::ThreadEvent(notification) => {
                 if !self.notification_matches(&notification.session_id, notification.turn_id.as_deref()) {
                     return;
@@ -3354,6 +3546,16 @@ impl DesktopView {
 
     fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
         self.restored_activity.retain(|restored| restored.id != item.id);
+        let _cursor = self.restored_output_cursors.remove(&item.id);
+        if self
+            .output_page_pending
+            .as_ref()
+            .is_some_and(|pending| pending.item_id == item.id)
+        {
+            self.output_page_pending = None;
+            self.output_page_task = None;
+            self.output_page_error = None;
+        }
         self.project_runtime_item(item, false);
     }
 
@@ -3593,6 +3795,10 @@ impl DesktopView {
         self.restored_activity.clear();
         self.history_start_index = 0;
         self.history_has_earlier = false;
+        self.restored_output_cursors.clear();
+        self.output_page_pending = None;
+        self.output_page_task = None;
+        self.output_page_error = None;
         self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
@@ -4942,6 +5148,15 @@ impl DesktopView {
         };
         let tail = inspector::output_tail(&output.text);
         let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
+        let has_more_output = self.restored_output_cursors.contains_key(&output.id);
+        let output_page_loading = self
+            .output_page_pending
+            .as_ref()
+            .is_some_and(|pending| pending.item_id == output.id);
+        let output_page_error = self
+            .output_page_error
+            .as_ref()
+            .and_then(|(item_id, error)| (item_id == &output.id).then(|| error.clone()));
         let output_header = div()
             .flex()
             .items_center()
@@ -4999,23 +5214,62 @@ impl DesktopView {
                         super::notifications::copied_to_clipboard(window, app);
                     }),
             );
-        pane.child(output_header)
-            .child(
-                div()
-                    .id("output-body")
-                    .test_support()
-                    .role(gpui_kit::Role::Label)
-                    .aria_label(tail.clone())
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .p_2()
-                    .text_xs()
-                    .font_family(mono)
-                    .text_size(theme.mono_font_size)
-                    .child(tail),
-            )
-            .into_any_element()
+        pane = pane.child(output_header);
+        if has_more_output || output_page_loading || output_page_error.is_some() {
+            let output_id = output.id.clone();
+            let mut recovery = div().w_full().px_3().py_1().flex().items_center().gap_2();
+            if has_more_output {
+                recovery = recovery.child(
+                    desktop_button("load-more-output")
+                        .label(if output_page_loading {
+                            "Loading captured output…"
+                        } else {
+                            "Load more captured output"
+                        })
+                        .ghost()
+                        .small()
+                        .accessibility_label(if output_page_loading {
+                            "Loading more captured output"
+                        } else {
+                            "Load more captured output"
+                        })
+                        .desktop_disabled(self.output_page_pending.is_some())
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.request_more_captured_output(&output_id, cx);
+                        })),
+                );
+            }
+            if output_page_loading {
+                recovery = recovery.child(
+                    div()
+                        .id("output-page-loading")
+                        .role(gpui_kit::Role::Status)
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("Reading the next bounded page…"),
+                );
+            }
+            if let Some(error) = output_page_error {
+                recovery = recovery.child(warning_alert("output-page-error", error, &colors));
+            }
+            pane = pane.child(recovery);
+        }
+        pane.child(
+            div()
+                .id("output-body")
+                .test_support()
+                .role(gpui_kit::Role::Label)
+                .aria_label(tail.clone())
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .p_2()
+                .text_xs()
+                .font_family(mono)
+                .text_size(theme.mono_font_size)
+                .child(tail),
+        )
+        .into_any_element()
     }
 
     fn render_activity_tab(
@@ -8067,7 +8321,7 @@ fn restored_archive_element_id(session_id: &str, archive_index: usize) -> String
 
 /// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
 fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
-    let mut occurrences = std::collections::HashMap::<u64, usize>::new();
+    let mut occurrences = HashMap::<u64, usize>::new();
     messages
         .into_iter()
         .map(|message| {

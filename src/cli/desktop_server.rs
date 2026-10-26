@@ -5,7 +5,7 @@ mod session_preferences;
 mod shared_preferences;
 mod theme_preferences;
 
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -47,8 +47,8 @@ const MAX_SESSIONS: usize = 200;
 const MAX_RESTORED_MESSAGES: usize = protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES;
 const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;
-const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = 32 * 1024;
-const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = "\n[Output truncated in restored history.]";
+const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = protocol::MAX_SESSION_OUTPUT_PAGE_BYTES;
+const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
 const SESSION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const RUNLOOP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -67,6 +67,9 @@ struct ServerState {
     session_options: protocol::SessionOptionsSelectParams,
     /// Recent Desktop changes layered over the process-start CLI config until restart.
     fast_mode_overrides: std::collections::HashMap<String, bool>,
+    /// Canonical spool paths for the selected session's paged historical outputs.
+    /// Paths stay inside the service and are revalidated before each bounded read.
+    restored_output_spools: std::collections::HashMap<String, String>,
     theme_override: Option<String>,
     webmcp_event_hub: Option<vtcode_webmcp::WebmcpEventHub>,
 }
@@ -421,7 +424,11 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             let runtime_started = Instant::now();
             start_session(context, session_id.clone(), None).await?;
             let runtime_elapsed = runtime_started.elapsed();
-            context.state.lock().await.session_id = Some(session_id.clone());
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = Some(session_id.clone());
+                state.restored_output_spools.clear();
+            }
             tracing::debug!(
                 target: "vtcode.desktop",
                 shutdown_ms = shutdown_elapsed.as_millis(),
@@ -461,17 +468,30 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                     .await
                     .context("inspector history task failed")??;
             start_session(context, params.session_id.clone(), Some(resume)).await?;
-            context.state.lock().await.session_id = Some(params.session_id.clone());
+            let RestoredInspectorHistory {
+                items: review_items,
+                incomplete: review_history_incomplete,
+                activity_items,
+                activity_incomplete: activity_history_incomplete,
+                activity_output_cursors,
+                output_spools,
+            } = inspector_history;
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = Some(params.session_id.clone());
+                state.restored_output_spools = output_spools;
+            }
             let history = restored_history_page(&listing.snapshot.messages, None, MAX_RESTORED_MESSAGES);
             let result = protocol::SessionLoadResult {
                 session: session_summary(&listing),
                 messages: history.messages,
                 history_start_index: history.start_index,
                 history_has_earlier: history.has_earlier,
-                review_items: inspector_history.items,
-                review_history_incomplete: inspector_history.incomplete,
-                activity_items: inspector_history.activity_items,
-                activity_history_incomplete: inspector_history.activity_incomplete,
+                review_items,
+                review_history_incomplete,
+                activity_items,
+                activity_output_cursors,
+                activity_history_incomplete,
             };
             Ok((serde_json::to_value(result)?, false))
         }
@@ -506,6 +526,43 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             };
             Ok((serde_json::to_value(result)?, false))
         }
+        method::SESSION_OUTPUT_READ => {
+            let params: protocol::SessionOutputReadParams = parse_params(&request.params)?;
+            if params.request_id.is_empty() || params.request_id.len() > 128 {
+                bail!("invalid session output request identity");
+            }
+            if params.item_id.is_empty() || params.item_id.len() > 512 {
+                bail!("invalid session output item identity");
+            }
+            let spool_path = {
+                let state = context.state.lock().await;
+                if state.session_id.as_deref() != Some(params.session_id.as_str()) {
+                    bail!("session is not selected");
+                }
+                state
+                    .restored_output_spools
+                    .get(&params.item_id)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("no more captured output is available"))?
+            };
+            let workspace = context.workspace.clone();
+            let offset = params.offset;
+            let text_page =
+                tokio::task::spawn_blocking(move || read_restored_spool_page(&workspace, &spool_path, offset))
+                    .await
+                    .context("tool output page task failed")??;
+            let page = protocol::SessionOutputPage {
+                session_id: params.session_id,
+                request_id: params.request_id,
+                item_id: params.item_id,
+                offset,
+                next_offset: text_page.next_offset,
+                total_bytes: text_page.total_bytes,
+                text: text_page.text,
+                has_more: text_page.next_offset < text_page.total_bytes,
+            };
+            Ok((serde_json::to_value(page)?, false))
+        }
         method::SESSION_CLOSE => {
             let params: protocol::SessionIdParams = parse_params(&request.params)?;
             let selected_id = context.state.lock().await.session_id.clone();
@@ -514,7 +571,11 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             }
             ensure_no_active_turn(context).await?;
             shutdown_current_session(context, false).await;
-            context.state.lock().await.session_id = None;
+            {
+                let mut state = context.state.lock().await;
+                state.session_id = None;
+                state.restored_output_spools.clear();
+            }
             Ok((json!({ "closed": true }), false))
         }
         method::TURN_SUBMIT => {
@@ -1238,6 +1299,7 @@ async fn shutdown_current_session(context: &ServiceContext, cancel_active: bool)
         let mut state = context.state.lock().await;
         if state.session_id.as_deref() == Some(session_id.as_str()) {
             state.session_id = None;
+            state.restored_output_spools.clear();
             state.active_turn_id = None;
             state.cancel_requested_turn = None;
             state.interaction_registry.close_session(&session_id);
@@ -1318,6 +1380,8 @@ struct RestoredInspectorHistory {
     incomplete: bool,
     activity_items: Vec<vtcode_core::exec::events::ThreadItem>,
     activity_incomplete: bool,
+    activity_output_cursors: Vec<protocol::SessionOutputCursor>,
+    output_spools: std::collections::HashMap<String, String>,
 }
 
 #[derive(Default)]
@@ -1349,16 +1413,26 @@ impl BoundedHistoryItems {
 struct RestoredSpoolText {
     text: String,
     truncated: bool,
+    total_bytes: u64,
+    pageable: bool,
+}
+
+struct RestoredSpoolPage {
+    text: String,
+    next_offset: u64,
+    total_bytes: u64,
+}
+
+struct RestoredOutputProjection {
+    incomplete: bool,
+    cursor: Option<protocol::SessionOutputCursor>,
+    spool_path: Option<String>,
 }
 
 /// Read a historical tool-output spool only from the workspace's canonical
 /// tool-output directory. Event logs are durable, but spool files are bounded,
 /// optional evidence and may have been removed since the session completed.
-fn read_restored_spool_text(workspace: &Path, spool_path: &str, max_bytes: usize) -> Option<RestoredSpoolText> {
-    if max_bytes == 0 {
-        return None;
-    }
-
+fn open_restored_spool_file(workspace: &Path, spool_path: &str) -> Option<std::fs::File> {
     let normalized = spool_path.replace('\\', "/");
     let has_foreign_drive_prefix = normalized.as_bytes().get(1) == Some(&b':');
     let path = Path::new(&normalized);
@@ -1374,19 +1448,72 @@ fn read_restored_spool_text(workspace: &Path, spool_path: &str, max_bytes: usize
         return None;
     }
 
-    let mut file = vtcode_commons::fs::bound_file::open_file_beneath(workspace, relative).ok()?;
+    let file = vtcode_commons::fs::bound_file::open_file_beneath(workspace, relative).ok()?;
     if !file.metadata().ok()?.is_file() {
         return None;
     }
+    Some(file)
+}
+
+fn read_restored_spool_text(workspace: &Path, spool_path: &str, max_bytes: usize) -> Option<RestoredSpoolText> {
+    if max_bytes == 0 {
+        return None;
+    }
+    let mut file = open_restored_spool_file(workspace, spool_path)?;
+    let total_bytes = file.metadata().ok()?.len();
 
     let mut bytes = Vec::with_capacity(max_bytes.min(MAX_RESTORED_SPOOLED_OUTPUT_BYTES));
     (&mut file).take(max_bytes as u64).read_to_end(&mut bytes).ok()?;
-    let final_len = file.metadata().ok()?.len();
-    let truncated = final_len > bytes.len() as u64 || std::str::from_utf8(&bytes).is_err();
+    let (visible_bytes, pageable) = match std::str::from_utf8(&bytes) {
+        Ok(_) => (bytes.len(), true),
+        Err(error) if error.error_len().is_none() => (error.valid_up_to(), true),
+        Err(_) => (bytes.len(), false),
+    };
+    let truncated = total_bytes > bytes.len() as u64 || !pageable || visible_bytes < bytes.len();
+    let visible = if pageable { &bytes[..visible_bytes] } else { &bytes[..] };
     Some(RestoredSpoolText {
-        text: String::from_utf8_lossy(&bytes).into_owned(),
+        text: String::from_utf8_lossy(visible).into_owned(),
         truncated,
+        total_bytes,
+        pageable,
     })
+}
+
+fn read_restored_spool_page(workspace: &Path, spool_path: &str, offset: u64) -> Result<RestoredSpoolPage> {
+    let mut file = open_restored_spool_file(workspace, spool_path)
+        .ok_or_else(|| anyhow!("captured output is no longer available"))?;
+    let total_bytes = file.metadata().context("failed to inspect captured output")?.len();
+    if offset > total_bytes {
+        bail!("captured output cursor is out of range");
+    }
+    file.seek(SeekFrom::Start(offset)).context("failed to seek captured output")?;
+    let mut bytes = Vec::with_capacity(protocol::MAX_SESSION_OUTPUT_PAGE_BYTES);
+    (&mut file)
+        .take(protocol::MAX_SESSION_OUTPUT_PAGE_BYTES as u64)
+        .read_to_end(&mut bytes)
+        .context("failed to read captured output")?;
+    let visible_bytes = match std::str::from_utf8(&bytes) {
+        Ok(_) => bytes.len(),
+        Err(error) if error.error_len().is_none() => error.valid_up_to(),
+        Err(_) => bail!("captured output is not valid UTF-8 text"),
+    };
+    let bytes_read = bytes.len() as u64;
+    let reached_eof = offset.saturating_add(bytes_read) >= total_bytes;
+    let consumed_bytes = if reached_eof && visible_bytes < bytes.len() {
+        bytes_read
+    } else {
+        visible_bytes as u64
+    };
+    let next_offset = offset
+        .checked_add(consumed_bytes)
+        .ok_or_else(|| anyhow!("captured output cursor overflowed"))?;
+    if next_offset == offset && offset < total_bytes {
+        bail!("captured output could not advance at a UTF-8 boundary");
+    }
+    let text = std::str::from_utf8(&bytes[..visible_bytes])
+        .context("captured output page ended at an invalid UTF-8 boundary")?
+        .to_owned();
+    Ok(RestoredSpoolPage { text, next_offset, total_bytes })
 }
 
 /// Restore bounded spool content into a historical ToolOutput item without
@@ -1396,15 +1523,15 @@ fn restore_spooled_tool_output(
     workspace: &Path,
     item: &mut vtcode_core::exec::events::ThreadItem,
     encoded_budget: usize,
-) -> Result<bool> {
+) -> Result<RestoredOutputProjection> {
     use vtcode_core::exec::events::ThreadItemDetails;
 
     let (spool_path, preview) = {
         let ThreadItemDetails::ToolOutput(output) = &mut item.details else {
-            return Ok(false);
+            return Ok(RestoredOutputProjection { incomplete: false, cursor: None, spool_path: None });
         };
         let Some(spool_path) = output.spool_path.take() else {
-            return Ok(false);
+            return Ok(RestoredOutputProjection { incomplete: false, cursor: None, spool_path: None });
         };
         (spool_path, std::mem::take(&mut output.output))
     };
@@ -1412,7 +1539,7 @@ fn restore_spooled_tool_output(
         if let ThreadItemDetails::ToolOutput(output) = &mut item.details {
             output.output = preview;
         }
-        return Ok(true);
+        return Ok(RestoredOutputProjection { incomplete: true, cursor: None, spool_path: None });
     };
 
     let baseline_size = serde_json::to_vec(item)?.len();
@@ -1433,13 +1560,26 @@ fn restore_spooled_tool_output(
         }
         let encoded_size = serde_json::to_vec(item)?.len();
         if encoded_size <= encoded_budget {
-            return Ok(visible_truncation);
+            let cursor = (spooled.pageable
+                && prefix_end > 0
+                && (prefix_end as u64) < spooled.total_bytes
+                && item.id.len() <= 512)
+                .then(|| protocol::SessionOutputCursor {
+                    item_id: item.id.clone(),
+                    next_offset: prefix_end as u64,
+                    total_bytes: spooled.total_bytes,
+                });
+            return Ok(RestoredOutputProjection {
+                incomplete: visible_truncation,
+                spool_path: cursor.as_ref().map(|_| spool_path),
+                cursor,
+            });
         }
         if prefix_end == 0 {
             if let ThreadItemDetails::ToolOutput(output) = &mut item.details {
                 output.output = preview;
             }
-            return Ok(true);
+            return Ok(RestoredOutputProjection { incomplete: true, cursor: None, spool_path: None });
         }
 
         // JSON escaping can expand tool text. Scale the prefix to the remaining
@@ -1473,6 +1613,8 @@ fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<Rest
     };
     let mut review = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
     let mut activity = BoundedHistoryItems { incomplete: tail.truncated, ..Default::default() };
+    let mut activity_output_cursors = Vec::new();
+    let mut output_spools = std::collections::HashMap::new();
     for event in tail.events.into_iter().rev() {
         let mut item = match event.into_event() {
             ThreadEvent::ItemStarted(event) => event.item,
@@ -1486,11 +1628,20 @@ fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<Rest
             continue;
         }
         if matches!(&item.details, ThreadItemDetails::ToolOutput(_)) {
+            let mut restored_output = RestoredOutputProjection { incomplete: false, cursor: None, spool_path: None };
             if !activity.full && !activity.seen.contains(&item.id) {
                 let remaining = MAX_ACTIVITY_BYTES.saturating_sub(activity.encoded_bytes);
-                activity.incomplete |= restore_spooled_tool_output(workspace, &mut item, remaining)?;
+                restored_output = restore_spooled_tool_output(workspace, &mut item, remaining)?;
+                activity.incomplete |= restored_output.incomplete;
             }
+            let item_id = item.id.clone();
             activity.retain_latest(item, MAX_ACTIVITY_BYTES)?;
+            if activity.items.last().is_some_and(|item| item.id == item_id) {
+                if let (Some(cursor), Some(spool_path)) = (restored_output.cursor, restored_output.spool_path) {
+                    output_spools.insert(cursor.item_id.clone(), spool_path);
+                    activity_output_cursors.push(cursor);
+                }
+            }
             continue;
         }
         if matches!(
@@ -1507,11 +1658,14 @@ fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<Rest
     }
     review.items.reverse();
     activity.items.reverse();
+    activity_output_cursors.reverse();
     Ok(RestoredInspectorHistory {
         items: review.items,
         incomplete: review.incomplete,
         activity_items: activity.items,
         activity_incomplete: activity.incomplete,
+        activity_output_cursors,
+        output_spools,
     })
 }
 
@@ -2385,6 +2539,7 @@ mod tests {
             ("missing", ".vtcode/context/tool_outputs/missing.txt", "missing preview"),
             ("escape", ".vtcode/context/tool_outputs/../../../private.txt", "escape preview"),
         ] {
+            assert!(read_restored_spool_page(&workspace, path, 0).is_err());
             log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
                 item: tool_output_item(id, Some(path), preview),
             }))
@@ -2413,6 +2568,34 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn malformed_spooled_output_uses_lossy_text_and_marks_history_incomplete() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_path = ".vtcode/context/tool_outputs/malformed.txt";
+        let spool_file = workspace.join(spool_path);
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        std::fs::write(&spool_file, [b'a', 0xff, b'b']).unwrap();
+
+        let log = vtcode_memory::open(&workspace, "malformed-spool", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: tool_output_item("malformed-output", Some(spool_path), "preview"),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "malformed-spool").unwrap();
+        assert!(restored.activity_incomplete);
+        assert!(restored.activity_output_cursors.is_empty());
+        let ThreadItemDetails::ToolOutput(output) = &restored.activity_items[0].details else {
+            panic!("expected a restored tool output item");
+        };
+        assert_eq!(output.output, format!("a�b{RESTORED_OUTPUT_TRUNCATION_SUFFIX}"));
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn restored_activity_truncates_large_spooled_output_with_visible_notice() {
         use vtcode_core::exec::events::*;
 
@@ -2437,6 +2620,59 @@ mod tests {
         };
         assert!(output.output.starts_with(&"x".repeat(MAX_RESTORED_SPOOLED_OUTPUT_BYTES - 64)));
         assert!(output.output.ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+        assert_eq!(restored.activity_output_cursors.len(), 1);
+        let cursor = &restored.activity_output_cursors[0];
+        assert_eq!(cursor.item_id, "tool-output-1");
+        assert!(cursor.next_offset > 0 && cursor.next_offset < cursor.total_bytes);
+        assert_eq!(restored.output_spools.get(&cursor.item_id).map(String::as_str), Some(spool_path));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_spooled_output_pages_resume_on_utf8_boundaries() {
+        use vtcode_core::exec::events::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_path = ".vtcode/context/tool_outputs/multibyte.txt";
+        let spool_file = workspace.join(spool_path);
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        let full_output = format!("{}{}", "a".repeat(MAX_RESTORED_SPOOLED_OUTPUT_BYTES - 1), "界".repeat(27_000));
+        std::fs::write(&spool_file, &full_output).unwrap();
+
+        let log = vtcode_memory::open(&workspace, "paged-spool", vtcode_memory::DEFAULT_MAX_EVENTS).unwrap();
+        log.append(&ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: tool_output_item("tool-output-paged", Some(spool_path), "preview"),
+        }))
+        .unwrap();
+        log.flush().unwrap();
+
+        let restored = restored_inspector_history(&workspace, "paged-spool").unwrap();
+        let ThreadItemDetails::ToolOutput(output) = &restored.activity_items[0].details else {
+            panic!("expected a restored tool output item");
+        };
+        let mut assembled = output
+            .output
+            .strip_suffix(RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+            .unwrap()
+            .to_owned();
+        let cursor = &restored.activity_output_cursors[0];
+        let mut offset = cursor.next_offset;
+        assert_eq!(cursor.total_bytes, full_output.len() as u64);
+
+        while offset < cursor.total_bytes {
+            let page = read_restored_spool_page(&workspace, &restored.output_spools[&cursor.item_id], offset).unwrap();
+            assert!(page.text.len() <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES);
+            assert!(page.next_offset > offset);
+            if page.next_offset < page.total_bytes {
+                assert_eq!(page.next_offset - offset, page.text.len() as u64);
+            }
+            assembled.push_str(&page.text);
+            offset = page.next_offset;
+        }
+
+        assert_eq!(assembled, full_output);
+        assert!(read_restored_spool_page(&workspace, spool_path, cursor.total_bytes + 1).is_err());
     }
 
     #[cfg(unix)]

@@ -14,7 +14,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 14 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 15 };
 
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
@@ -522,6 +522,9 @@ pub struct SessionLoadResult {
     /// Recent canonical tool, command, and supporting activity snapshots.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub activity_items: Vec<vtcode_exec_events::ThreadItem>,
+    /// Bounded cursors for archived tool output that can be loaded on demand.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activity_output_cursors: Vec<SessionOutputCursor>,
     /// Whether bounded history projection omitted activity or output evidence.
     #[serde(default)]
     pub activity_history_incomplete: bool,
@@ -555,6 +558,54 @@ pub struct SessionHistoryPage {
     pub messages: Vec<SessionHistoryMessage>,
     /// Whether the archive contains messages before this page.
     pub has_earlier: bool,
+}
+
+/// Cursor for reading more of a restored tool-output capture.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionOutputCursor {
+    /// Stable canonical activity item identity.
+    pub item_id: String,
+    /// Byte offset to request next; always a UTF-8 boundary for text output.
+    pub next_offset: u64,
+    /// Captured spool size observed during session restore.
+    pub total_bytes: u64,
+}
+
+/// Request one bounded page from a restored tool-output capture.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionOutputReadParams {
+    /// Durable session that owns the output item.
+    pub session_id: String,
+    /// Request identity echoed by the service to reject stale pages.
+    pub request_id: String,
+    /// Stable canonical activity item identity.
+    pub item_id: String,
+    /// UTF-8 byte offset supplied by the current cursor.
+    pub offset: u64,
+}
+
+/// One bounded page from an archived tool-output capture.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionOutputPage {
+    /// Durable session that owns the output item.
+    pub session_id: String,
+    /// Request identity echoed from [`SessionOutputReadParams`].
+    pub request_id: String,
+    /// Stable canonical activity item identity.
+    pub item_id: String,
+    /// Requested starting offset.
+    pub offset: u64,
+    /// Next UTF-8 boundary after the returned text.
+    pub next_offset: u64,
+    /// Captured spool size observed during this read.
+    pub total_bytes: u64,
+    /// Text captured in this page.
+    pub text: String,
+    /// Whether more captured bytes remain.
+    pub has_more: bool,
 }
 
 /// Request identity for one bounded read-only Git snapshot.
@@ -835,6 +886,8 @@ pub mod method {
     pub const SESSION_LOAD: &str = "session/load";
     /// Load one bounded earlier page from the selected durable session.
     pub const SESSION_HISTORY: &str = "session/history";
+    /// Read one bounded page of archived tool output on demand.
+    pub const SESSION_OUTPUT_READ: &str = "session/output/read";
     /// Close the selected session after cleanup.
     pub const SESSION_CLOSE: &str = "session/close";
     /// Submit a user turn.
@@ -879,6 +932,12 @@ pub mod method {
 
 /// Maximum message count accepted by one desktop archive-history page request.
 pub const MAX_SESSION_HISTORY_PAGE_MESSAGES: usize = 160;
+
+/// Maximum captured output returned by one on-demand desktop page.
+pub const MAX_SESSION_OUTPUT_PAGE_BYTES: usize = 32 * 1024;
+
+/// Marker appended while more archived tool output is available.
+pub const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = "\n[Output truncated in restored history.]";
 
 /// Error raised by protocol framing, negotiation, or identity validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1291,6 +1350,7 @@ mod tests {
         assert!(loaded.review_items.is_empty());
         assert!(!loaded.review_history_incomplete);
         assert!(loaded.activity_items.is_empty());
+        assert!(loaded.activity_output_cursors.is_empty());
         assert!(!loaded.activity_history_incomplete);
         assert_eq!(loaded.history_start_index, 0);
         assert!(!loaded.history_has_earlier);
@@ -1324,6 +1384,57 @@ mod tests {
         let decoded_page: SessionHistoryPage = serde_json::from_value(serde_json::to_value(&page).unwrap()).unwrap();
         assert_eq!(decoded_params, params);
         assert_eq!(decoded_page, page);
+    }
+
+    #[test]
+    fn session_output_page_round_trips_bounded_cursor_and_request_identity() {
+        let params = SessionOutputReadParams {
+            session_id: "saved-session".into(),
+            request_id: "output-page-2".into(),
+            item_id: "tool-output-1".into(),
+            offset: 32_768,
+        };
+        let page = SessionOutputPage {
+            session_id: params.session_id.clone(),
+            request_id: params.request_id.clone(),
+            item_id: params.item_id.clone(),
+            offset: params.offset,
+            next_offset: params.offset + 3,
+            total_bytes: params.offset + 8,
+            text: "界".into(),
+            has_more: true,
+        };
+        let loaded = SessionLoadResult {
+            session: SessionSummary {
+                session_id: params.session_id.clone(),
+                title: None,
+                workspace: "/workspace".into(),
+                completed: true,
+                resumable: true,
+            },
+            messages: Vec::new(),
+            history_start_index: 0,
+            history_has_earlier: false,
+            review_items: Vec::new(),
+            review_history_incomplete: false,
+            activity_items: Vec::new(),
+            activity_output_cursors: vec![SessionOutputCursor {
+                item_id: params.item_id.clone(),
+                next_offset: params.offset,
+                total_bytes: page.total_bytes,
+            }],
+            activity_history_incomplete: true,
+        };
+
+        assert_eq!(
+            serde_json::from_value::<SessionOutputReadParams>(serde_json::to_value(&params).unwrap()).unwrap(),
+            params
+        );
+        assert_eq!(serde_json::from_value::<SessionOutputPage>(serde_json::to_value(&page).unwrap()).unwrap(), page);
+        assert_eq!(
+            serde_json::from_value::<SessionLoadResult>(serde_json::to_value(&loaded).unwrap()).unwrap(),
+            loaded
+        );
     }
 
     #[test]
