@@ -7,6 +7,7 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::tag::Tag;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Window, div, px};
@@ -363,9 +364,37 @@ impl DesktopView {
         }
         if let Some(viewer) = &review.viewer {
             let files = viewer.read(cx).files();
-            let position = files
-                .iter()
-                .position(|file| Some(file.path().as_str()) == review.selected_file.as_deref());
+            let (additions, deletions, position) = files.iter().enumerate().fold(
+                (0_usize, 0_usize, None),
+                |(additions, deletions, position), (index, file)| {
+                    let position = position
+                        .or_else(|| (Some(file.path().as_str()) == review.selected_file.as_deref()).then_some(index));
+                    (additions.saturating_add(file.additions()), deletions.saturating_add(file.deletions()), position)
+                },
+            );
+            let file_count = files.len();
+            let file_label = if file_count == 1 { "file" } else { "files" };
+            body = body.child(
+                div()
+                    .id("workspace-review-summary")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(format!("{file_count} {file_label} changed · +{additions} · −{deletions}"))
+                    .aria_description("Added and deleted lines in the captured working tree preview.")
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .px_4()
+                    .py_1()
+                    .child(
+                        Tag::secondary()
+                            .outline()
+                            .small()
+                            .child(format!("{file_count} {file_label} changed")),
+                    )
+                    .child(Tag::success().outline().small().child(format!("+{additions}")))
+                    .child(Tag::danger().outline().small().child(format!("−{deletions}"))),
+            );
             let label = format!(
                 "File {} of {} · {}",
                 position.map_or(0, |index| index + 1),

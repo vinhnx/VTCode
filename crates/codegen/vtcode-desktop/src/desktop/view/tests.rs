@@ -5723,6 +5723,7 @@ fn untracked_review_renders_added_empty_and_spaced_paths_and_reports_omissions(c
             assert_eq!(viewer.files()[1].additions(), 1);
         });
         window.render_frame(cx);
+        assert_eq!(window.find("workspace-review-summary").label(), Some("2 files changed · +1 · −0"));
         window.click("copy-workspace-review", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(patch));
         window.click("refresh-workspace-review", cx);
@@ -5820,6 +5821,9 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-unified").checked(), Some(true));
         assert_eq!(window.find("workspace-review-split").checked(), Some(false));
         assert!(window.find("workspace-review-diff").bounds().size.width > px(900.));
+        let summary = window.find("workspace-review-summary");
+        assert_eq!(summary.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(summary.label(), Some("2 files changed · +2 · −2"));
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
         focus_element_by_tab(window, "workspace-review-next-file", cx);
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));

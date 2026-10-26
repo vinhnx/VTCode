@@ -110,8 +110,8 @@ The [v0.8.0 component catalog](https://gpui-kit.com/component/) lists 79 compone
 VT Code already uses the catalog components that match its workflows: `Message`/`Bubble` and
 `MessageScroller` for conversations, `Command` for searchable actions, `InputGroup` and
 `Attachment` for the composer, `Tree` for workspace files, `Diff` for code review, and
-`GroupBox`, `DescriptionList`, `TabBar`, `Popover`, `Toggle`, `Checkbox`, `Marker`, and
-`StatusBar` in their respective settings and navigation surfaces. No replacement of these
+`GroupBox`, `DescriptionList`, `TabBar`, `Popover`, `Toggle`, `Checkbox`, `Marker`, `Tag`, and
+`StatusBar` in their respective settings, review, and navigation surfaces. No replacement of these
 established compositions was justified by the catalog examples.
 
 The Files inspector was the confirmed gap: its first asynchronous workspace scan rendered an
