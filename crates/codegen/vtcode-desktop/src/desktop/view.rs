@@ -5985,6 +5985,7 @@ impl DesktopView {
         } else {
             "applied"
         };
+        let toggle_id = id.clone();
         let mut stats = div().flex().items_center().gap_2().text_xs();
         if let Some(additions) = diff.additions {
             stats = stats.child(div().text_color(colors.success).child(format!("+{additions}")));
@@ -6024,21 +6025,31 @@ impl DesktopView {
                     .label(if item.expanded { "Hide diff" } else { "Show diff" })
                     .ghost()
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.transcript.toggle_diff(&id);
+                        this.transcript.toggle_diff(&toggle_id);
                         cx.notify();
                     })),
             );
 
         if !diff.patch.is_empty() {
-            let copy_patch = diff.patch.clone();
+            let copy_id = id.clone();
             header = header.child(
                 desktop_button(format!("copy-patch-{}", item.id))
                     .label("Copy patch")
                     .ghost()
-                    .on_click(move |_, window, app| {
-                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_patch.to_string()));
-                        super::notifications::copied_to_clipboard(window, app);
-                    }),
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        let Some(patch) = view
+                            .transcript
+                            .items_newest_first()
+                            .find(|candidate| candidate.id == copy_id)
+                            .and_then(|candidate| candidate.diff.as_ref())
+                            .map(|diff| diff.patch.clone())
+                            .filter(|patch| !patch.is_empty())
+                        else {
+                            return;
+                        };
+                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(patch));
+                        super::notifications::copied_to_clipboard(window, cx);
+                    })),
             );
         }
 

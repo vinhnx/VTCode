@@ -2478,6 +2478,27 @@ fn file_change_items_render_as_toggleable_diff_cards(cx: &mut TestAppContext) {
             .then_some(())
             .expect("diff expanded");
 
+        let updated_patch = "@@ -1 +1 @@\n-old line\n+latest line\n";
+        view.update(cx, |view, cx| {
+            view.upsert_diff_card(
+                "change-1".into(),
+                &FileChangeItem {
+                    diff_incomplete: Some(false),
+                    changes: vec![FileUpdateChange {
+                        path: "src/main.rs".into(),
+                        kind: PatchChangeKind::Update,
+                    }],
+                    status: PatchApplyStatus::Completed,
+                    unified_diff: Some(updated_patch.into()),
+                    additions: Some(1),
+                    deletions: Some(1),
+                },
+            );
+            cx.notify();
+        });
+        window.click("copy-patch-change-1", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(updated_patch));
+
         // Collapsing again hides the patch view but keeps the card.
         window.click("diff-change-1", cx);
         assert!(!view.read(cx).transcript.get(0).unwrap().expanded);
