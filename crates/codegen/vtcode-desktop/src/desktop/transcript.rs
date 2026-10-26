@@ -584,6 +584,41 @@ impl Transcript {
         }
     }
 
+    /// Expand a tool row and its containing activity group so a search result is visible.
+    pub(super) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
+        let index = self.position_by_id(id)?;
+        if !self.items.get(index).is_some_and(|item| item.role == "tool") {
+            return None;
+        }
+
+        let group = self.activity_group(index);
+        let expand_group = group
+            .as_ref()
+            .is_some_and(|range| !self.items.get(range.start).is_some_and(|item| item.activity_expanded));
+        let expand_item = self.items.get(index).is_some_and(|item| !item.expanded);
+        if !expand_group && !expand_item {
+            return Some(index);
+        }
+
+        self.layout_changes.push(TranscriptLayoutChange::PauseFollowingTail);
+        if expand_group && let Some(range) = group {
+            for group_index in range.clone() {
+                if let Some(item) = self.items.get_mut(group_index) {
+                    item.activity_expanded = true;
+                }
+            }
+            self.layout_changes.push(TranscriptLayoutChange::RemeasureItems(range));
+        }
+        if expand_item {
+            if let Some(item) = self.items.get_mut(index) {
+                item.expanded = true;
+            }
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(index..index + 1));
+        }
+        Some(index)
+    }
+
     pub fn toggle_tool(&mut self, id: &str) {
         let last_index = self.items.len().checked_sub(1);
         let index = last_index

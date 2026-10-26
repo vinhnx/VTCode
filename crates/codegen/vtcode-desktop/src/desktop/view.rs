@@ -2321,12 +2321,14 @@ impl DesktopView {
     fn conversation_search_messages(&self, session_id: &str) -> Vec<PaletteCommand> {
         self.transcript
             .items_newest_first()
-            .filter(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
+            .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
             .map(|item| {
                 let speaker = if item.role == "user" {
                     "You"
-                } else if item.title.trim().is_empty() {
+                } else if item.title.trim().is_empty() && item.role == "assistant" {
                     "VT Code"
+                } else if item.title.trim().is_empty() {
+                    "Tool activity"
                 } else {
                     item.title.as_str()
                 };
@@ -2357,7 +2359,7 @@ impl DesktopView {
     fn has_searchable_conversation_messages(&self) -> bool {
         self.transcript
             .items()
-            .any(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
+            .any(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
     }
 
     fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2510,11 +2512,32 @@ impl DesktopView {
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
             }
-            PaletteAction::JumpToTranscriptItem { item_id, .. } => {
+            PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+                if self.selected_session_id.as_deref() != Some(session_id.as_str()) {
+                    return;
+                }
                 if let Some(index) = self.transcript.position_by_id(&item_id) {
-                    self.message_scroller.update(cx, |state, cx| {
-                        let _scrolled = state.scroll_to_item(index, cx);
-                    });
+                    if self.transcript.get(index).is_some_and(|item| item.role == "tool") {
+                        if self.transcript.reveal_tool_item(&item_id).is_none() {
+                            return;
+                        }
+                        cx.notify();
+                        let session_id = session_id.clone();
+                        cx.on_next_frame(window, move |view, _, cx| {
+                            if view.selected_session_id.as_deref() != Some(session_id.as_str()) {
+                                return;
+                            }
+                            if let Some(index) = view.transcript.position_by_id(&item_id) {
+                                view.message_scroller.update(cx, |state, cx| {
+                                    let _scrolled = state.scroll_to_item(index, cx);
+                                });
+                            }
+                        });
+                    } else {
+                        self.message_scroller.update(cx, |state, cx| {
+                            let _scrolled = state.scroll_to_item(index, cx);
+                        });
+                    }
                 }
             }
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
@@ -2593,7 +2616,7 @@ impl DesktopView {
                     && self.transcript.position_by_id(item_id).is_some_and(|index| {
                         self.transcript
                             .get(index)
-                            .is_some_and(|item| matches!(item.role.as_str(), "user" | "assistant"))
+                            .is_some_and(|item| is_searchable_conversation_role(&item.role))
                     })
             }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
@@ -7524,7 +7547,7 @@ impl DesktopView {
         } else if self.palette_kind == PaletteKind::ReviewFiles {
             "Search changed files…".to_owned()
         } else if conversation_search {
-            "Search loaded messages…".to_owned()
+            "Search messages and tool activity…".to_owned()
         } else if prompt_history {
             "Search prompts in this thread…".to_owned()
         } else if modes {
@@ -7546,7 +7569,7 @@ impl DesktopView {
                         .py_2()
                         .text_xs()
                         .text_color(muted_foreground)
-                        .child("Searches messages currently loaded in this thread")
+                        .child("Searches loaded user, VT Code, and tool activity")
                 })
             })
             .empty(move |_, _, _| {
@@ -8233,6 +8256,10 @@ fn transcript_search_snippet(text: &str) -> String {
     } else {
         snippet
     }
+}
+
+fn is_searchable_conversation_role(role: &str) -> bool {
+    matches!(role, "user" | "assistant" | "tool")
 }
 
 /// Keep palette label identity attached to the command when search/filtering changes row order.

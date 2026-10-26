@@ -2033,7 +2033,7 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
             let (role, text) = if index == 8 {
                 ("user", "Needle phrase in a user message")
             } else if index == 9 {
-                ("tool", "Needle phrase in a tool row")
+                ("tool", "A separate tool activity row")
             } else {
                 ("assistant", "An ordinary conversation message")
             };
@@ -2073,7 +2073,7 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
         window.within("command-palette").input("Needle phrase", cx);
         window.render_frame(cx);
         let palette = view.read(cx).palette.as_ref().unwrap().clone();
-        assert_eq!(palette.read(cx).matched_count(), 1, "tool activity is not treated as a chat message");
+        assert_eq!(palette.read(cx).matched_count(), 1, "unmatched tool activity does not pollute the message results");
         assert!(window.try_find(palette_action_id(&target_action)).is_some());
         window.within("command-palette").press("enter", cx);
     })
@@ -2085,6 +2085,73 @@ fn conversation_search_filters_loaded_messages_and_jumps_to_the_selected_row(cx:
         assert!(view.read(cx).palette.is_none());
         assert_eq!(view.read(cx).message_scroller.read(cx).logical_scroll_top().item_ix, 8);
         assert!(window.try_find(format!("transcript-row-{target_id}")).is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn conversation_search_includes_tool_activity_and_reveals_the_matching_row(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session_id = "tool-search-thread".to_string();
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some(session_id.clone());
+        for index in 0..40 {
+            view.transcript.push(TranscriptItem::new(
+                format!("search-context-{index}"),
+                "assistant".into(),
+                "VT Code".into(),
+                "Intermediate conversation message".into(),
+            ));
+        }
+        view.transcript.push(TranscriptItem::new(
+            "tool-before".into(),
+            "tool".into(),
+            "Read file".into(),
+            "completed: read notes.md".into(),
+        ));
+        view.transcript.push(TranscriptItem::new(
+            "tool-target".into(),
+            "tool".into(),
+            "Run command".into(),
+            "completed: archived output needle-marker".into(),
+        ));
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_conversation_search(session_id.clone(), window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("needle-marker", cx);
+        window.render_frame(cx);
+
+        let target_action = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries)
+            .find(|entry| entry.label.contains("needle-marker"))
+            .unwrap()
+            .action
+            .clone();
+        assert!(matches!(target_action, super::PaletteAction::JumpToTranscriptItem { .. }));
+        assert_eq!(view.read(cx).palette.as_ref().unwrap().read(cx).matched_count(), 1);
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert!(view_state.palette.is_none());
+        assert!(view_state.transcript.get(40).unwrap().activity_expanded);
+        assert!(view_state.transcript.get(41).unwrap().activity_expanded);
+        assert!(view_state.transcript.get(41).unwrap().expanded);
+        let scroll_top = view_state.message_scroller.read(cx).logical_scroll_top().item_ix;
+        assert!(scroll_top > 0 && scroll_top <= 41, "tool result should move into the viewport: {scroll_top}");
     })
     .unwrap();
 }
@@ -2135,8 +2202,8 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
         start_index: 1,
         messages: vec![SessionHistoryMessage {
             archive_index: Some(1),
-            role: "user".into(),
-            text: "Older page contains the needle".into(),
+            role: "tool".into(),
+            text: "Archived tool entry contains the needle".into(),
         }],
         has_earlier: true,
     };
@@ -2161,7 +2228,7 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
             .iter()
             .flat_map(|(_, entries)| entries)
             .find(|entry| {
-                entry.label.contains("Older page")
+                entry.label.contains("Archived tool entry")
                     && matches!(&entry.action, super::PaletteAction::JumpToTranscriptItem { .. })
             })
             .unwrap()
@@ -2181,9 +2248,13 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
     let target_row_id = target_row_id.unwrap();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).palette.is_none());
-        assert_eq!(view.read(cx).message_scroller.read(cx).logical_scroll_top().item_ix, 0);
+        let view_state = view.read(cx);
+        assert!(view_state.palette.is_none());
+        assert_eq!(view_state.message_scroller.read(cx).logical_scroll_top().item_ix, 0);
         assert!(window.try_find(target_row_id.clone()).is_some());
+        let tool = view_state.transcript.get(0).unwrap();
+        assert!(tool.expanded);
+        assert!(window.try_find(format!("tool-output-{}", tool.id)).is_some());
     })
     .unwrap();
 }
