@@ -537,6 +537,57 @@ fn valid_session_output_page(
         && (page.has_more || (byte_delta >= page.text.len() as u64 && byte_delta - page.text.len() as u64 <= 3))
 }
 
+fn append_restored_output_page(
+    item: &mut TranscriptItem,
+    pages_by_item: &mut HashMap<String, Vec<gpui_kit::SharedString>>,
+    page: &SessionOutputPage,
+) -> bool {
+    let Some(current_output) = item.output.as_ref() else {
+        return false;
+    };
+    let current_preview = current_output
+        .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+        .unwrap_or(current_output.as_ref());
+    let pages = pages_by_item
+        .entry(item.id.clone())
+        .or_insert_with(|| vec![current_preview.into()]);
+    pages.push(page.text.clone().into());
+
+    let mut next_preview = String::with_capacity(
+        current_preview
+            .len()
+            .saturating_add(page.text.len())
+            .saturating_add(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX.len()),
+    );
+    next_preview.push_str(current_preview);
+    next_preview.push_str(&page.text);
+    let mut next_preview = inspector::output_tail(&next_preview.into()).to_string();
+    if page.has_more {
+        next_preview.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
+    }
+    item.output = Some(next_preview.into());
+    true
+}
+
+fn restored_output_for_copy(
+    item_id: &str,
+    preview: &gpui_kit::SharedString,
+    pages_by_item: &HashMap<String, Vec<gpui_kit::SharedString>>,
+) -> String {
+    let Some(pages) = pages_by_item.get(item_id) else {
+        return preview
+            .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
+            .unwrap_or(preview.as_ref())
+            .to_owned();
+    };
+    let capacity = pages.iter().fold(0usize, |length, page| length.saturating_add(page.len()));
+    let mut output = String::with_capacity(capacity);
+    for page in pages {
+        output.push_str(page);
+    }
+    output
+}
+
 struct ActivePrimaryAgentDisplay {
     session_id: String,
     display_name: String,
@@ -670,6 +721,7 @@ struct DesktopView {
     history_page_loading: bool,
     history_page_error: Option<String>,
     restored_output_cursors: HashMap<String, SessionOutputCursor>,
+    restored_output_pages: HashMap<String, Vec<gpui_kit::SharedString>>,
     output_page_pending: Option<PendingOutputPage>,
     output_page_task: Option<Task<()>>,
     output_page_error: Option<(String, String)>,
@@ -925,6 +977,7 @@ impl DesktopView {
             history_page_loading: false,
             history_page_error: None,
             restored_output_cursors: HashMap::new(),
+            restored_output_pages: HashMap::new(),
             output_page_pending: None,
             output_page_task: None,
             output_page_error: None,
@@ -1497,27 +1550,11 @@ impl DesktopView {
                     return;
                 }
 
-                let mut updated_output = false;
-                if let Some(item) = view.restored_activity.iter_mut().find(|item| item.id == pending.item_id)
-                    && let Some(output) = item.output.as_ref()
-                {
-                    let output = output
-                        .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
-                        .unwrap_or(output.as_ref());
-                    let mut combined = String::with_capacity(
-                        output
-                            .len()
-                            .saturating_add(page.text.len())
-                            .saturating_add(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX.len()),
-                    );
-                    combined.push_str(output);
-                    combined.push_str(&page.text);
-                    if page.has_more {
-                        combined.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
-                    }
-                    item.output = Some(combined.into());
-                    updated_output = true;
-                }
+                let Some(item) = view.restored_activity.iter_mut().find(|item| item.id == pending.item_id) else {
+                    view.fail_output_page(cx);
+                    return;
+                };
+                let updated_output = append_restored_output_page(item, &mut view.restored_output_pages, &page);
                 if !updated_output {
                     view.fail_output_page(cx);
                     return;
@@ -1704,6 +1741,7 @@ impl DesktopView {
             .map(|item| item.id.as_str())
             .collect::<HashSet<_>>();
         self.restored_output_cursors.clear();
+        self.restored_output_pages.clear();
         for cursor in loaded.activity_output_cursors {
             if !cursor.item_id.is_empty()
                 && cursor.item_id.len() <= 512
@@ -3558,6 +3596,7 @@ impl DesktopView {
     fn update_runtime_item(&mut self, item: &vtcode_exec_events::ThreadItem) {
         self.restored_activity.retain(|restored| restored.id != item.id);
         let _cursor = self.restored_output_cursors.remove(&item.id);
+        let _pages = self.restored_output_pages.remove(&item.id);
         if self
             .output_page_pending
             .as_ref()
@@ -3807,6 +3846,7 @@ impl DesktopView {
         self.history_start_index = 0;
         self.history_has_earlier = false;
         self.restored_output_cursors.clear();
+        self.restored_output_pages.clear();
         self.output_page_pending = None;
         self.output_page_task = None;
         self.output_page_error = None;
@@ -5168,6 +5208,8 @@ impl DesktopView {
             .output_page_error
             .as_ref()
             .and_then(|(item_id, error)| (item_id == &output.id).then(|| error.clone()));
+        let copy_output_id = output.id.clone();
+        let copy_output_preview = output.text.clone();
         let output_header = div()
             .flex()
             .items_center()
@@ -5220,10 +5262,15 @@ impl DesktopView {
                     .tooltip("Copy captured output")
                     .ghost()
                     .small()
-                    .on_click(move |_, window, app| {
-                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(output.text.to_string()));
-                        super::notifications::copied_to_clipboard(window, app);
-                    }),
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        let text = restored_output_for_copy(
+                            &copy_output_id,
+                            &copy_output_preview,
+                            &view.restored_output_pages,
+                        );
+                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
+                        super::notifications::copied_to_clipboard(window, cx);
+                    })),
             );
         pane = pane.child(output_header);
         if has_more_output || output_page_loading || output_page_error.is_some() {

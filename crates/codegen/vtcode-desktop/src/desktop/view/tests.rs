@@ -15,7 +15,7 @@ use serde_json::json;
 use super::navigation_history::{NavigationLocation, PendingNavigation};
 use super::{
     DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, WelcomePeriod,
-    scale_row_height_for_ui_font, workspace_picker_options,
+    append_restored_output_page, restored_output_for_copy, scale_row_height_for_ui_font, workspace_picker_options,
 };
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
@@ -5589,6 +5589,8 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
         assert!(view.read(cx).output_page_error.is_none());
         assert_eq!(window.find("copy-output").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("load-more-output").role(), Some(gpui_kit::Role::Button));
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(prefix));
         window.click("load-more-output", cx);
     })
     .unwrap();
@@ -5628,6 +5630,8 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
             assert!(view.output_page_pending.is_none());
             assert!(view.output_page_error.is_none());
         });
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(format!("{prefix}{middle}").as_str()));
         window.click("load-more-output", cx);
     })
     .unwrap();
@@ -5669,8 +5673,46 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
             assert!(view.output_page_pending.is_none());
             assert!(view.output_page_error.is_none());
         });
+        window.click("copy-output", cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("old page tail界 complete"));
     })
     .unwrap();
+}
+
+#[test]
+fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
+    let page_len = vtcode_desktop_protocol::MAX_SESSION_OUTPUT_PAGE_BYTES;
+    let prefix = "p".repeat(page_len);
+    let truncation_suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    let mut item = TranscriptItem::new("output-1".into(), "tool".into(), "Command".into(), "completed".into());
+    item.output = Some(format!("{prefix}{truncation_suffix}").into());
+    let mut pages_by_item = std::collections::HashMap::new();
+    let mut complete_output = prefix;
+
+    for (index, has_more) in [(0, true), (1, true), (2, true), (3, true), (4, false)] {
+        let marker = char::from(b'a' + u8::try_from(index).expect("test index fits in u8"));
+        let text = marker.to_string().repeat(page_len);
+        complete_output.push_str(&text);
+        let page = vtcode_desktop_protocol::SessionOutputPage {
+            session_id: "session-1".into(),
+            request_id: format!("request-{index}"),
+            item_id: "output-1".into(),
+            offset: 0,
+            next_offset: u64::try_from(text.len()).expect("page length fits in u64"),
+            total_bytes: u64::try_from(text.len()).expect("page length fits in u64"),
+            text,
+            has_more,
+        };
+        assert!(append_restored_output_page(&mut item, &mut pages_by_item, &page));
+    }
+
+    let preview = item.output.as_ref().expect("restored output remains available");
+    assert!(preview.len() < 128 * 1024 + 1024);
+    assert!(preview.contains("Earlier output truncated"));
+    assert!(preview.ends_with(&"e".repeat(page_len)));
+    let copied = restored_output_for_copy("output-1", preview, &pages_by_item);
+    assert_eq!(copied, complete_output);
+    assert!(!copied.ends_with(truncation_suffix));
 }
 
 #[gpui_kit::test]
