@@ -5754,6 +5754,8 @@ fn changes_inspector_lists_structured_paths_without_diff_previews(cx: &mut TestA
         let row = window.find(super::opaque_path_element_id("change-row", "src/updated.rs"));
         assert_eq!(row.disabled(), Some(true));
         assert_eq!(row.label(), Some("Diff preview unavailable for src/updated.rs"));
+        assert_eq!(window.find("previous-change-file").disabled(), Some(true));
+        assert_eq!(window.find("next-change-file").disabled(), Some(true));
     })
     .unwrap();
 }
@@ -7656,7 +7658,18 @@ fn sidebar_changed_file_navigation_wraps_and_copies_the_selected_patch(cx: &mut 
                 patch: "--- a/first.rs\n+++ b/first.rs\n@@ -1 +1 @@\n-old\n+first\n--- a/second.rs\n+++ b/second.rs\n@@ -1 +1 @@\n-before\n+second\n".into(),
             });
             view.transcript.push(item);
+            let mut unavailable = TranscriptItem::new("unavailable".into(), "diff".into(), "Edits".into(), String::new());
+            unavailable.diff = Some(super::DiffCard {
+                files: vec![super::DiffFile { path: "unavailable.rs".into(), kind: super::DiffFileKind::Update }],
+                additions: None,
+                deletions: None,
+                incomplete: true,
+                failed: false,
+                patch: String::new(),
+            });
+            view.transcript.push(unavailable);
             view.changes = super::ChangesProjection::rebuild(&view.transcript);
+            assert_eq!(view.changes.preview_count(), 2);
             view.select_change("first.rs".into(), cx);
         });
         window.render_frame(cx);

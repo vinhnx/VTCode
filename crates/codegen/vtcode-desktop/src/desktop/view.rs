@@ -3910,21 +3910,26 @@ impl DesktopView {
     }
 
     fn navigate_change_file(&mut self, next: bool, cx: &mut Context<Self>) {
-        let entries = self.changes.entries();
-        if entries.is_empty() {
+        let available = self
+            .changes
+            .entries()
+            .iter()
+            .filter(|entry| self.changes.has_preview(&entry.path))
+            .collect::<Vec<_>>();
+        if available.len() < 2 {
             return;
         }
         let current = self
             .selected_change
             .as_deref()
-            .and_then(|path| entries.iter().position(|entry| entry.path == path));
+            .and_then(|path| available.iter().position(|entry| entry.path.as_str() == path));
         let index = match current {
-            Some(index) if next => (index + 1) % entries.len(),
-            Some(0) => entries.len() - 1,
+            Some(index) if next => (index + 1) % available.len(),
+            Some(0) => available.len() - 1,
             Some(index) => index - 1,
             None => 0,
         };
-        if let Some(entry) = entries.get(index) {
+        if let Some(entry) = available.get(index) {
             self.select_change(entry.path.clone(), cx);
         }
     }
@@ -4912,6 +4917,8 @@ impl DesktopView {
                 .child(
                     div()
                         .flex()
+                        .flex_1()
+                        .min_w_0()
                         .items_center()
                         .gap_2()
                         .text_xs()
@@ -4924,14 +4931,17 @@ impl DesktopView {
                         .when(totals.is_none(), |summary| {
                             summary.child(
                                 div()
+                                    .min_w_0()
+                                    .truncate()
                                     .text_color(colors.muted_foreground)
-                                    .child("Line counts unavailable for some files"),
+                                    .child("Partial totals"),
                             )
                         }),
                 )
                 .child(
                     div()
                         .flex()
+                        .flex_shrink_0()
                         .items_center()
                         .gap_1()
                         .child(
@@ -4945,7 +4955,7 @@ impl DesktopView {
                                 )
                                 .ghost()
                                 .small()
-                                .desktop_disabled(self.changes.entries().len() < 2)
+                                .desktop_disabled(self.changes.preview_count() < 2)
                                 .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(false, cx))),
                         )
                         .child(
@@ -4955,7 +4965,7 @@ impl DesktopView {
                                 .tooltip_with_action("Next changed file", &NextReviewFile, Some("VTCodeDiffReview"))
                                 .ghost()
                                 .small()
-                                .desktop_disabled(self.changes.entries().len() < 2)
+                                .desktop_disabled(self.changes.preview_count() < 2)
                                 .on_click(cx.listener(|view, _, _, cx| view.navigate_change_file(true, cx))),
                         ),
                 ),

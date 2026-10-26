@@ -249,6 +249,10 @@ impl ChangesProjection {
         self.projected.get(path).is_some_and(|projected| projected.preview.is_some())
     }
 
+    pub(super) fn preview_count(&self) -> usize {
+        self.entries.iter().filter(|entry| self.has_preview(&entry.path)).count()
+    }
+
     /// The full raw patch text for the change-set that last touched a path.
     pub(super) fn patch_for(&self, transcript: &Transcript, path: &str) -> Option<String> {
         let projected = self.projected.get(path)?;
