@@ -1,4 +1,4 @@
-//! Persist desktop fast-mode changes through the CLI's layered config writer.
+//! Persist desktop mode and fast-mode changes through the CLI's layered config writer.
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -7,18 +7,28 @@ use vtcode_core::config::types::AgentConfig;
 
 use crate::agent::runloop::unified::fast_mode::set_fast_mode_preference;
 
-pub(super) async fn persist(workspace: PathBuf, agent: AgentConfig, enabled: bool) -> Result<()> {
+pub(super) async fn persist(
+    workspace: PathBuf,
+    agent: AgentConfig,
+    fast_mode: Option<bool>,
+    mode: Option<String>,
+) -> Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut manager = ConfigManager::load_from_workspace(&workspace)
-            .context("failed to load CLI config for fast-mode synchronization")?;
+            .context("failed to load CLI config for runtime preference synchronization")?;
         let mut config = manager.config().clone();
-        set_fast_mode_preference(&agent, &mut config, enabled)?;
+        if let Some(enabled) = fast_mode {
+            set_fast_mode_preference(&agent, &mut config, enabled)?;
+        }
+        if let Some(mode) = mode {
+            config.default_primary_agent = mode;
+        }
         manager
             .save_config(&config)
-            .context("failed to save fast-mode preference to CLI configuration")
+            .context("failed to save runtime preferences to CLI configuration")
     })
     .await
-    .context("CLI fast-mode persistence task failed")?
+    .context("CLI runtime preference persistence task failed")?
 }
 
 #[cfg(test)]
@@ -51,20 +61,22 @@ mod tests {
             openai_chatgpt_auth: None,
         };
 
-        persist(directory.path().to_path_buf(), agent.clone(), true)
+        persist(directory.path().to_path_buf(), agent.clone(), Some(true), Some("duck".into()))
             .await
             .expect("save eligible CLI fast-mode preference");
 
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("load saved CLI config");
         assert_eq!(manager.config().provider.openai.service_tier, Some(vtcode_config::OpenAIServiceTier::Ultrafast));
-        persist(directory.path().to_path_buf(), agent.clone(), false)
+        assert_eq!(manager.config().default_primary_agent, "duck");
+        persist(directory.path().to_path_buf(), agent.clone(), Some(false), Some("build".into()))
             .await
             .expect("disable fast processing");
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("reload saved CLI config");
         assert_eq!(manager.config().provider.openai.service_tier, None);
+        assert_eq!(manager.config().default_primary_agent, "build");
 
         agent.model = "gpt-5.6-sol".into();
-        assert!(persist(directory.path().to_path_buf(), agent, true).await.is_err());
+        assert!(persist(directory.path().to_path_buf(), agent, Some(true), None).await.is_err());
         let manager = ConfigManager::load_from_workspace(directory.path()).expect("reload after rejected route");
         assert_eq!(manager.config().provider.openai.service_tier, None);
     }

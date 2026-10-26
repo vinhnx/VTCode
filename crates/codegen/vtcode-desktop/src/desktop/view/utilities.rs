@@ -50,7 +50,7 @@ impl DesktopView {
                                     .w_full()
                                     .child(Icon::new(IconName::GitCompare).small())
                                     .child(div().flex_1().child("Changes"))
-                                    .child(div().text_sm().text_color(colors.primary).child(format!("+{additions}")))
+                                    .child(div().text_sm().text_color(colors.success).child(format!("+{additions}")))
                                     .child(div().text_sm().text_color(colors.danger).child(format!("−{deletions}"))),
                             )
                             .on_click(cx.listener(|view, _, _, cx| {

@@ -9,9 +9,12 @@
 //! the matching light/dark base; derived tokens (border, panels, muted text)
 //! are mixed from the palette so every theme stays legible by construction.
 
-use gpui_kit::component::theme::{Theme, ThemeMode};
+use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
+
+const SURFACE_BORDER_MIX: f32 = 0.16;
+const INPUT_BORDER_MIX: f32 = 0.20;
 
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
@@ -53,6 +56,8 @@ pub(super) struct DesktopTheme {
     pub accent: Hsla,
     /// Quieter companion accent for secondary panels and badges.
     pub secondary: Hsla,
+    /// Semantic addition color used by diff views.
+    pub success: Hsla,
     pub danger: Hsla,
     pub warning: Hsla,
 }
@@ -65,15 +70,23 @@ fn theme(
     mode: ThemeMode,
     [background, foreground, accent, secondary, danger, warning]: [u32; 6],
 ) -> DesktopTheme {
+    let background = rgb(background).into();
+    let foreground = rgb(foreground).into();
+    let success_seed = rgb(match mode {
+        ThemeMode::Dark => 0x63C779,
+        ThemeMode::Light => 0x237A45,
+    })
+    .into();
     DesktopTheme {
         id,
         label,
         mode,
-        background: rgb(background).into(),
-        foreground: rgb(foreground).into(),
+        background,
+        foreground,
         accent: rgb(accent).into(),
         secondary: rgb(secondary).into(),
-        danger: rgb(danger).into(),
+        success: readable_semantic_color(background, foreground, success_seed),
+        danger: readable_semantic_color(background, foreground, rgb(danger).into()),
         warning: rgb(warning).into(),
     }
 }
@@ -82,7 +95,7 @@ fn theme(
 /// into a desktop row.
 fn ported(spec: (&'static str, bool, UiThemeColors)) -> DesktopTheme {
     let (id, dark, colors) = spec;
-    theme(
+    let mut theme = theme(
         id,
         theme::gpui_kit_theme_label(id).unwrap_or(id),
         if dark { ThemeMode::Dark } else { ThemeMode::Light },
@@ -94,7 +107,10 @@ fn ported(spec: (&'static str, bool, UiThemeColors)) -> DesktopTheme {
             theme::rgb_u32(colors.danger),
             theme::rgb_u32(colors.warning),
         ],
-    )
+    );
+    theme.success =
+        readable_semantic_color(theme.background, theme.foreground, rgb(theme::rgb_u32(colors.success)).into());
+    theme
 }
 
 /// Resolve a theme id; the sentinel system ids map to the kit defaults and
@@ -291,11 +307,15 @@ pub(super) fn apply_by_id(id: &str, window: Option<&mut Window>, cx: &mut App) -
     match id {
         SYSTEM_LIGHT_ID => {
             Theme::change(ThemeMode::Light, window, cx);
+            apply_system_surface_borders(cx);
+            normalize_system_interaction_colors(cx);
             cx.refresh_windows();
             ThemeMode::Light
         }
         SYSTEM_DARK_ID => {
             Theme::change(ThemeMode::Dark, window, cx);
+            apply_system_surface_borders(cx);
+            normalize_system_interaction_colors(cx);
             cx.refresh_windows();
             ThemeMode::Dark
         }
@@ -314,46 +334,18 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         let colors = &mut kit_theme.colors;
         colors.background = theme.background;
         colors.foreground = theme.foreground;
-        colors.border = mix(theme.background, theme.foreground, 0.20);
-        colors.muted_foreground = aa_muted(theme.background, theme.foreground);
-        // Recessed surfaces move away from the foreground, preserving text contrast.
-        let surface = mix(theme.background, filled_button_foreground(theme.foreground), 0.10);
-        colors.secondary = surface;
-        colors.muted = surface;
+        apply_surface_borders(colors);
+        apply_filled_surfaces(colors);
         colors.chart_2 = theme.secondary;
-        colors.group_box = surface;
-        colors.group_box_foreground = theme.foreground;
-        colors.sidebar = surface;
-        colors.sidebar_foreground = theme.foreground;
-        colors.sidebar_border = colors.border;
-        colors.sidebar_accent = surface;
-        colors.sidebar_accent_foreground = theme.foreground;
         colors.sidebar_primary = theme.accent;
         colors.sidebar_primary_foreground = filled_button_foreground(theme.accent);
         colors.list = theme.background;
-        colors.list_hover = surface;
-        colors.list_active = surface;
         colors.list_active_border = theme.accent;
-        colors.input = colors.border;
-        colors.button = surface;
-        colors.button_foreground = theme.foreground;
-        colors.button_hover = surface;
-        colors.button_active = surface;
-        colors.button_secondary = surface;
-        colors.button_secondary_foreground = theme.foreground;
-        colors.button_secondary_hover = surface;
-        colors.button_secondary_active = surface;
-        colors.secondary_hover = surface;
-        colors.secondary_active = surface;
-        colors.secondary_foreground = theme.foreground;
-        // Kit accent is the neutral hover/selection surface; brand emphasis is primary.
-        colors.accent = surface;
-        colors.accent_foreground = theme.foreground;
+        colors.success = theme.success;
+        colors.success_foreground = filled_button_foreground(theme.success);
         colors.danger = theme.danger;
         colors.danger_foreground = filled_button_foreground(theme.danger);
         colors.warning = theme.warning;
-        colors.popover = surface;
-        colors.popover_foreground = theme.foreground;
         colors.primary = theme.accent;
         colors.primary_foreground = filled_button_foreground(theme.accent);
         let contrast_end = filled_button_foreground(colors.primary_foreground);
@@ -366,8 +358,204 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         colors.ring = theme.accent;
         colors.tab_foreground = colors.muted_foreground;
         colors.tab_active_foreground = theme.foreground;
+        apply_unified_hover_surface(colors, hover_surface(theme.background, theme.foreground));
+        colors.ring = accessible_focus_color(theme.accent, colors);
     });
     theme.mode
+}
+
+/// Keep keyboard focus visible while retaining brand color when it has enough contrast.
+fn accessible_focus_color(accent: Hsla, colors: &ThemeColor) -> Hsla {
+    let surfaces = [colors.background, colors.secondary, colors.popover];
+    if surfaces.iter().all(|surface| contrast_ratio(accent, *surface) >= 3.0) {
+        accent
+    } else {
+        colors.foreground
+    }
+}
+
+fn normalize_system_interaction_colors(cx: &mut App) {
+    Theme::update(cx, |kit_theme| {
+        let colors = &mut kit_theme.colors;
+        apply_filled_surfaces(colors);
+        let surface = hover_surface(colors.background, colors.foreground);
+        apply_unified_hover_surface(colors, surface);
+        colors.success = readable_semantic_color(colors.background, colors.foreground, colors.success);
+        colors.danger = readable_semantic_color(colors.background, colors.foreground, colors.danger);
+        colors.success_foreground = filled_button_foreground(colors.success);
+        colors.danger_foreground = filled_button_foreground(colors.danger);
+        colors.ring = accessible_focus_color(colors.primary, colors);
+    });
+}
+
+fn apply_system_surface_borders(cx: &mut App) {
+    Theme::update(cx, |kit_theme| apply_surface_borders(&mut kit_theme.colors));
+}
+
+/// Keep card outlines quiet while retaining a slightly stronger input stroke.
+/// The shared tokens cover GPUI Kit controls as well as desktop-owned surfaces.
+fn apply_surface_borders(colors: &mut ThemeColor) {
+    colors.border = mix(colors.background, colors.foreground, SURFACE_BORDER_MIX);
+    colors.sidebar_border = colors.border;
+    colors.input = mix(colors.background, colors.foreground, INPUT_BORDER_MIX);
+}
+
+/// Give panels and controls a visible neutral fill while keeping their text at
+/// WCAG AA. Popovers and input fields use a stronger layer than resting panels.
+fn apply_filled_surfaces(colors: &mut ThemeColor) {
+    let surface = filled_surface(colors.background, colors.foreground, 10);
+    let raised_surface = filled_surface(colors.background, colors.foreground, 24);
+
+    colors.secondary = surface;
+    colors.secondary_foreground = colors.foreground;
+    colors.muted = surface;
+    colors.group_box = surface;
+    colors.group_box_foreground = colors.foreground;
+    colors.sidebar = surface;
+    colors.sidebar_foreground = colors.foreground;
+    colors.muted_foreground = aa_muted(raised_surface, colors.foreground);
+    colors.list_active = surface;
+    colors.button = surface;
+    colors.button_foreground = colors.foreground;
+    colors.button_active = surface;
+    colors.button_secondary = surface;
+    colors.button_secondary_foreground = colors.foreground;
+    colors.button_secondary_active = surface;
+    colors.secondary_active = surface;
+    colors.popover = raised_surface;
+    colors.popover_foreground = colors.foreground;
+}
+
+fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8) -> Hsla {
+    for step in (4_u8..=maximum_step).rev() {
+        let candidate = mix(background, foreground, f32::from(step) / 100.0);
+        if contrast_ratio(foreground, candidate) >= 4.5 && contrast_ratio(background, candidate) >= 1.04 {
+            return candidate;
+        }
+    }
+    background
+}
+
+fn hover_surface(background: Hsla, foreground: Hsla) -> Hsla {
+    for step in (4_u8..=18).rev() {
+        let candidate = mix(background, foreground, f32::from(step) / 100.0);
+        if contrast_ratio(foreground, candidate) >= 4.5 {
+            return candidate;
+        }
+    }
+    background
+}
+
+fn apply_unified_hover_surface(colors: &mut ThemeColor, surface: Hsla) {
+    // Keep the same soft neutral hover across buttons, list rows, and selected
+    // command items; the brand accent remains reserved for primary actions.
+    colors.accent = surface;
+    colors.accent_foreground = colors.foreground;
+    colors.button_hover = surface;
+    colors.button_secondary_hover = surface;
+    colors.secondary_hover = surface;
+    colors.list_hover = surface;
+    colors.sidebar_accent = surface;
+    colors.sidebar_accent_foreground = colors.foreground;
+}
+
+pub(super) fn readable_semantic_color(background: Hsla, foreground: Hsla, color: Hsla) -> Hsla {
+    const AA_RATIO: f32 = 4.5;
+    adjust_color_until_readable(background, foreground, color, |candidate| {
+        diff_marker_is_readable(background, candidate, AA_RATIO)
+    })
+}
+
+pub(super) fn readable_indicator_color(background: Hsla, foreground: Hsla, color: Hsla) -> Hsla {
+    const AA_RATIO: f32 = 4.5;
+    adjust_color_until_readable(background, foreground, color, |candidate| {
+        contrast_ratio(candidate, background) >= AA_RATIO
+    })
+}
+
+fn adjust_color_until_readable(
+    background: Hsla,
+    foreground: Hsla,
+    color: Hsla,
+    is_readable: impl Fn(Hsla) -> bool,
+) -> Hsla {
+    if is_readable(color) {
+        return color;
+    }
+    let lighten = relative_luminance(foreground) > relative_luminance(background);
+    for step in 1_u8..=100 {
+        let amount = f32::from(step) / 100.0;
+        let lightness = if lighten {
+            color.l + (1.0 - color.l) * amount
+        } else {
+            color.l * (1.0 - amount)
+        };
+        let candidate = Hsla { l: lightness, ..color };
+        if is_readable(candidate) {
+            return candidate;
+        }
+    }
+    foreground
+}
+
+fn diff_marker_is_readable(background: Hsla, marker: Hsla, minimum_contrast: f32) -> bool {
+    contrast_ratio(marker, background) >= minimum_contrast
+        && contrast_ratio(marker, composite_status_surface(background, marker, 0.12)) >= minimum_contrast
+}
+
+/// Opaque, hue-tinted line surface with as much color as the foreground can
+/// retain while meeting WCAG AA. The strong marker color carries the semantic
+/// distinction when a palette has little contrast headroom for a larger tint.
+pub(super) fn diff_line_background(background: Hsla, foreground: Hsla, status: Hsla) -> Hsla {
+    for step in (8_u8..=22).rev() {
+        let opacity = f32::from(step) / 100.0;
+        let candidate = composite_status_surface(background, status, opacity);
+        if contrast_ratio(foreground, candidate) >= 4.5 && contrast_ratio(status, candidate) >= 4.5 {
+            return candidate;
+        }
+    }
+    background
+}
+
+pub(super) fn diff_text_foreground(background: Hsla, foreground: Hsla, addition: Hsla, deletion: Hsla) -> Hsla {
+    const AA_RATIO: f32 = 4.5;
+    let statuses = [addition, deletion];
+    let readable = |candidate: Hsla| {
+        contrast_ratio(candidate, background) >= AA_RATIO
+            && statuses.iter().all(|status| {
+                contrast_ratio(candidate, composite_status_surface(background, *status, 0.22)) >= AA_RATIO
+            })
+    };
+    if readable(foreground) {
+        return foreground;
+    }
+
+    let lighten = relative_luminance(foreground) > relative_luminance(background);
+    for step in 1_u8..=100 {
+        let amount = f32::from(step) / 100.0;
+        let lightness = if lighten {
+            foreground.l + (1.0 - foreground.l) * amount
+        } else {
+            foreground.l * (1.0 - amount)
+        };
+        let candidate = Hsla { l: lightness, ..foreground };
+        if readable(candidate) {
+            return candidate;
+        }
+    }
+    foreground
+}
+
+fn composite_status_surface(background: Hsla, status: Hsla, opacity: f32) -> Hsla {
+    let background = gpui_kit::Rgba::from(background);
+    let status = gpui_kit::Rgba::from(status);
+    gpui_kit::Rgba {
+        r: background.r * (1.0 - opacity) + status.r * opacity,
+        g: background.g * (1.0 - opacity) + status.g * opacity,
+        b: background.b * (1.0 - opacity) + status.b * opacity,
+        a: 1.0,
+    }
+    .into()
 }
 
 /// Foreground for a filled control: the standard white/black choice at the
@@ -435,7 +623,7 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
     } else {
         NavigationSurfaces {
             rail: secondary,
-            panel: mix(background, secondary, 0.85),
+            panel: mix(background, secondary, 0.55),
         }
     }
 }
@@ -481,6 +669,9 @@ mod tests {
                 );
                 assert_eq!(base.tokens.colors.background, palette.background, "{}", palette.id);
                 assert_eq!(base.tokens.colors.primary, palette.accent, "{}", palette.id);
+                assert_eq!(kit.colors.border, mix(palette.background, palette.foreground, SURFACE_BORDER_MIX));
+                assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
+                assert_eq!(kit.colors.input, mix(palette.background, palette.foreground, INPUT_BORDER_MIX));
                 for foreground in [kit.colors.tab_foreground, kit.colors.tab_active_foreground] {
                     assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
                 }
@@ -525,6 +716,20 @@ mod tests {
         });
     }
 
+    #[gpui_kit::test]
+    fn system_themes_use_the_same_subtle_surface_and_input_borders(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                assert_eq!(colors.border, mix(colors.background, colors.foreground, SURFACE_BORDER_MIX), "{id}");
+                assert_eq!(colors.sidebar_border, colors.border, "{id}");
+                assert_eq!(colors.input, mix(colors.background, colors.foreground, INPUT_BORDER_MIX), "{id}");
+            }
+        });
+    }
+
     #[test]
     fn every_theme_keeps_wcag_aa_foreground_contrast() {
         for theme in all_themes() {
@@ -534,6 +739,139 @@ mod tests {
             let muted_ratio = contrast_ratio(muted, theme.background);
             assert!(muted_ratio >= 4.5, "{}: muted text contrast {muted_ratio:.2} is below WCAG AA", theme.id);
         }
+    }
+
+    #[gpui_kit::test]
+    fn focus_indicators_remain_visible_on_interactive_surfaces(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                for (name, surface) in [
+                    ("canvas", colors.background),
+                    ("panel", colors.secondary),
+                    ("popover", colors.popover),
+                ] {
+                    let ratio = contrast_ratio(colors.ring, surface);
+                    assert!(ratio >= 3.0, "{id}: focus indicator contrast on {name} is {ratio:.2}");
+                }
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn diff_colors_and_line_surfaces_are_readable_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                for (kind, status, status_foreground) in [
+                    ("addition", colors.success, colors.success_foreground),
+                    ("deletion", colors.danger, colors.danger_foreground),
+                ] {
+                    let status_ratio = contrast_ratio(status, colors.background);
+                    assert!(status_ratio >= 4.5, "{id}: {kind} marker contrast {status_ratio:.2}");
+                    assert!(
+                        contrast_ratio(status_foreground, status) >= 4.5,
+                        "{id}: {kind} filled status contrast is below WCAG AA"
+                    );
+                    let diff_foreground =
+                        diff_text_foreground(colors.background, colors.foreground, colors.success, colors.danger);
+                    let kit_line_background = composite_status_surface(colors.background, status, 0.12);
+                    let kit_text_ratio = contrast_ratio(diff_foreground, kit_line_background);
+                    assert!(kit_text_ratio >= 4.5, "{id}: {kind} Kit diff text contrast {kit_text_ratio:.2}");
+                    let kit_marker_ratio = contrast_ratio(status, kit_line_background);
+                    assert!(kit_marker_ratio >= 4.5, "{id}: {kind} Kit diff marker contrast {kit_marker_ratio:.2}");
+                    let line_background = diff_line_background(colors.background, diff_foreground, status);
+                    let line_ratio = contrast_ratio(diff_foreground, line_background);
+                    assert!(line_ratio >= 4.5, "{id}: {kind} diff text contrast {line_ratio:.2}");
+                    let marker_ratio = contrast_ratio(status, line_background);
+                    assert!(marker_ratio >= 4.5, "{id}: {kind} marker on diff surface contrast {marker_ratio:.2}");
+                }
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn hover_surfaces_are_unified_and_contrast_safe_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let hover = hover_surface(colors.background, colors.foreground);
+                for (name, actual) in [
+                    ("accent", colors.accent),
+                    ("button", colors.button_hover),
+                    ("secondary button", colors.button_secondary_hover),
+                    ("secondary", colors.secondary_hover),
+                    ("list", colors.list_hover),
+                    ("sidebar", colors.sidebar_accent),
+                ] {
+                    assert_eq!(actual, hover, "{id}: {name} hover uses the shared surface");
+                }
+                let text_ratio = contrast_ratio(colors.foreground, hover);
+                assert!(text_ratio >= 4.5, "{id}: hover text contrast {text_ratio:.2}");
+                assert!(
+                    contrast_ratio(colors.background, hover) >= 1.01,
+                    "{id}: hover surface is too close to the surrounding background"
+                );
+                assert_eq!(
+                    (hover.l - colors.background.l).signum(),
+                    (colors.foreground.l - colors.background.l).signum(),
+                    "{id}: hover should move gently toward the foreground"
+                );
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn filled_surfaces_are_distinct_and_readable_in_every_theme(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                for (name, surface, foreground) in [
+                    ("panel", colors.secondary, colors.secondary_foreground),
+                    ("group box", colors.group_box, colors.group_box_foreground),
+                    ("sidebar", colors.sidebar, colors.sidebar_foreground),
+                    ("popover and input", colors.popover, colors.popover_foreground),
+                ] {
+                    assert!(
+                        contrast_ratio(colors.background, surface) >= 1.04,
+                        "{id}: {name} fill is too close to the canvas"
+                    );
+                    assert!(contrast_ratio(foreground, surface) >= 4.5, "{id}: {name} text contrast is below WCAG AA");
+                    assert!(
+                        contrast_ratio(colors.muted_foreground, surface) >= 4.5,
+                        "{id}: muted {name} text contrast is below WCAG AA"
+                    );
+                }
+                assert!(
+                    contrast_ratio(colors.muted_foreground, colors.background) >= 4.5,
+                    "{id}: muted text contrast is below WCAG AA on the canvas"
+                );
+                assert!(
+                    contrast_ratio(colors.secondary, colors.popover) >= 1.01,
+                    "{id}: input/popover fill should be distinct from panels"
+                );
+            }
+        });
     }
 
     #[gpui_kit::test]
@@ -620,16 +958,27 @@ mod tests {
     fn ported_rows_use_the_shared_palette_colors() {
         for (id, _dark, colors) in theme::gpui_kit_theme_colors_all() {
             let row = find(id).unwrap_or_else(|| panic!("{id} missing"));
+            let background = rgb(theme::rgb_u32(colors.background)).into();
+            let foreground = rgb(theme::rgb_u32(colors.foreground)).into();
             for (field, expected, actual) in [
                 ("background", colors.background, row.background),
                 ("foreground", colors.foreground, row.foreground),
                 ("accent", colors.accent, row.accent),
                 ("secondary", colors.secondary, row.secondary),
-                ("danger", colors.danger, row.danger),
                 ("warning", colors.warning, row.warning),
             ] {
                 assert_eq!(rgb_hex(actual), theme::rgb_u32(expected), "{id}: {field} must match the shared palette");
             }
+            assert_eq!(
+                row.success,
+                readable_semantic_color(background, foreground, rgb(theme::rgb_u32(colors.success)).into()),
+                "{id}: addition color must use the shared semantic color at readable contrast"
+            );
+            assert_eq!(
+                row.danger,
+                readable_semantic_color(background, foreground, rgb(theme::rgb_u32(colors.danger)).into()),
+                "{id}: deletion color must use the shared semantic color at readable contrast"
+            );
             assert_eq!(row.label, theme::gpui_kit_theme_label(id).unwrap_or(id), "{id} label");
         }
     }

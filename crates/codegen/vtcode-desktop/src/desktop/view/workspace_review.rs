@@ -7,15 +7,15 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::diff::{Diff, DiffFile, DiffMode, DiffState};
 use gpui_kit::component::input::{Input, InputState};
-use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
-use gpui_kit::{AnyElement, App, ClipboardItem, Context, Entity, Pixels, TestSupportExt, Window, div, px};
+use gpui_kit::{AnyElement, ClipboardItem, Context, Entity, TestSupportExt, Window, div, px};
 use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
-    DesktopButtonExt, DesktopView, RefreshWorkspace, desktop_button, empty_state, uuid_like_id, warning_alert,
+    DesktopButtonExt, DesktopView, RefreshWorkspace, desktop_button, empty_state, skeleton_line, uuid_like_id,
+    warning_alert,
 };
 
 pub(super) struct WorkspaceReviewState {
@@ -47,29 +47,6 @@ fn review_message(
         .flex_1()
         .min_h_0()
         .child(empty_state(title, description, icon))
-        .into_any_element()
-}
-
-fn review_skeleton_line(id: &'static str, width: Pixels, cx: &App) -> AnyElement {
-    let placeholder = if cx.reduce_motion() {
-        div()
-            .w(width)
-            .max_w_full()
-            .h_4()
-            .rounded_md()
-            .bg(cx.theme().skeleton)
-            .into_any_element()
-    } else {
-        Skeleton::new().w(width).max_w_full().h_4().rounded_md().into_any_element()
-    };
-
-    div()
-        .id(id)
-        .test_support()
-        .w(width)
-        .max_w_full()
-        .h_4()
-        .child(placeholder)
         .into_any_element()
 }
 
@@ -204,6 +181,8 @@ impl DesktopView {
             return div().into_any_element();
         };
         let colors = cx.theme().colors;
+        let diff_foreground =
+            super::themes::diff_text_foreground(colors.background, colors.foreground, colors.success, colors.danger);
         let mut body = div().flex().flex_col().w_full().flex_1().min_h_0();
         let patch = review.snapshot.as_ref().and_then(|snapshot| snapshot.patch.clone());
         let has_viewer = review.viewer.is_some();
@@ -219,6 +198,7 @@ impl DesktopView {
                     Input::new(&review.scope_input)
                         .accessibility_id("workspace-review-scope")
                         .aria_label("Review folder (optional)")
+                        .bg(colors.popover)
                         .disabled(review.pending)
                         .when(review.pending, |input| input.cursor_default())
                         .when(!review.pending, |input| input.cursor_text())
@@ -340,18 +320,18 @@ impl DesktopView {
                         .rounded_lg()
                         .border_1()
                         .border_color(colors.border)
-                        .bg(colors.background)
+                        .bg(colors.secondary)
                         .p_4()
                         .flex()
                         .flex_col()
                         .gap_3()
-                        .child(review_skeleton_line("workspace-review-placeholder-file", px(180.), cx))
-                        .child(review_skeleton_line("workspace-review-placeholder-hunk", px(120.), cx))
+                        .child(skeleton_line("workspace-review-placeholder-file", px(180.), cx))
+                        .child(skeleton_line("workspace-review-placeholder-hunk", px(120.), cx))
                         .child(div().h(px(1.)).w_full().bg(colors.border.opacity(0.7)))
-                        .child(review_skeleton_line("workspace-review-placeholder-line-1", px(320.), cx))
-                        .child(review_skeleton_line("workspace-review-placeholder-line-2", px(248.), cx))
-                        .child(review_skeleton_line("workspace-review-placeholder-line-3", px(286.), cx))
-                        .child(review_skeleton_line("workspace-review-placeholder-line-4", px(196.), cx)),
+                        .child(skeleton_line("workspace-review-placeholder-line-1", px(320.), cx))
+                        .child(skeleton_line("workspace-review-placeholder-line-2", px(248.), cx))
+                        .child(skeleton_line("workspace-review-placeholder-line-3", px(286.), cx))
+                        .child(skeleton_line("workspace-review-placeholder-line-4", px(196.), cx)),
                 );
             return body.child(loading).into_any_element();
         }
@@ -490,7 +470,7 @@ impl DesktopView {
                             .flex_1()
                             .min_h_0()
                             .w_full()
-                            .child(Diff::new(viewer).line_number(true).soft_wrap(true)),
+                            .child(Diff::new(viewer).line_number(true).soft_wrap(true).text_color(diff_foreground)),
                     )
                     .into_any_element()
                 } else {

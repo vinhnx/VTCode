@@ -32,6 +32,10 @@ pub(crate) enum BackendEvent {
         result: Option<Value>,
         error: Option<String>,
     },
+    InteractionResponded {
+        identity: InteractionResponseIdentity,
+        error: Option<String>,
+    },
     ThreadEvent(ThreadEventNotification),
     PrimaryAgentChanged(protocol::PrimaryAgentChanged),
     Interaction(InteractionRequest),
@@ -41,6 +45,43 @@ pub(crate) enum BackendEvent {
         authentication_required: bool,
     },
     LaunchFailed(String),
+}
+
+#[derive(Debug)]
+pub(crate) struct InteractionResponseIdentity {
+    pub session_id: String,
+    pub turn_id: String,
+    pub interaction_id: String,
+    pub cancelled: bool,
+}
+
+#[derive(Debug)]
+struct PendingRequest {
+    method: String,
+    interaction: Option<InteractionResponseIdentity>,
+}
+
+impl PendingRequest {
+    fn new(method: String, params: &Value) -> Self {
+        let interaction = (method == protocol::method::INTERACTION_RESPOND)
+            .then(|| {
+                Some(InteractionResponseIdentity {
+                    session_id: params.get("sessionId")?.as_str()?.to_owned(),
+                    turn_id: params.get("turnId")?.as_str()?.to_owned(),
+                    interaction_id: params.get("interactionId")?.as_str()?.to_owned(),
+                    cancelled: params.get("cancelled")?.as_bool()?,
+                })
+            })
+            .flatten();
+        Self { method, interaction }
+    }
+
+    fn finish(self, result: Option<Value>, error: Option<String>) -> BackendEvent {
+        match self.interaction {
+            Some(identity) => BackendEvent::InteractionResponded { identity, error },
+            None => BackendEvent::Response { method: self.method, result, error },
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -171,7 +212,7 @@ async fn run_client(
     let mut reader = BufReader::new(stdout);
     let mut writer = BufWriter::new(stdin);
     let mut next_request_id = 1_i64;
-    let mut pending = HashMap::<RequestId, String>::new();
+    let mut pending = HashMap::<RequestId, PendingRequest>::new();
     let mut stopping = false;
 
     loop {
@@ -179,14 +220,11 @@ async fn run_client(
             command = commands.recv(), if !stopping => {
                 match command {
                     Some(BackendCommand::Request { method, params }) => {
+                        let request_context = PendingRequest::new(method.clone(), &params);
                         if pending.len() >= MAX_PENDING_REQUESTS {
                             if !send_ui_event(
                                 &ui_events,
-                                BackendEvent::Response {
-                                    method,
-                                    result: None,
-                                    error: Some("The desktop service request backlog is full.".to_string()),
-                                },
+                                request_context.finish(None, Some("The desktop service request backlog is full.".to_string())),
                             ) {
                                 break;
                             }
@@ -200,7 +238,7 @@ async fn run_client(
                             break;
                         };
                         next_request_id = next_id;
-                        let _replaced = pending.insert(id.clone(), method.clone());
+                        let _replaced = pending.insert(id.clone(), request_context);
                         let request = json!({
                             "jsonrpc": "2.0",
                             "id": id,
@@ -357,7 +395,7 @@ struct ProtocolDecodeError;
 
 fn decode_frame(
     frame: &[u8],
-    pending: &mut HashMap<RequestId, String>,
+    pending: &mut HashMap<RequestId, PendingRequest>,
 ) -> Result<Option<BackendEvent>, ProtocolDecodeError> {
     let value = serde_json::from_slice::<Value>(frame).map_err(|_error| ProtocolDecodeError)?;
     if value.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
@@ -385,7 +423,7 @@ fn decode_frame(
 
     let id_value = value.get("id").ok_or(ProtocolDecodeError)?.clone();
     let id = serde_json::from_value::<RequestId>(id_value).map_err(|_error| ProtocolDecodeError)?;
-    let method = pending.remove(&id).ok_or(ProtocolDecodeError)?;
+    let request = pending.remove(&id).ok_or(ProtocolDecodeError)?;
     if let Some(error) = value.get("error") {
         let safe_message = error
             .get("message")
@@ -396,10 +434,10 @@ fn decode_frame(
             .filter(|character| !character.is_control())
             .take(240)
             .collect();
-        Ok(Some(BackendEvent::Response { method, result: None, error: Some(message) }))
+        Ok(Some(request.finish(None, Some(message))))
     } else {
         let result = value.get("result").cloned().ok_or(ProtocolDecodeError)?;
-        Ok(Some(BackendEvent::Response { method, result: Some(result), error: None }))
+        Ok(Some(request.finish(Some(result), None)))
     }
 }
 
@@ -441,13 +479,41 @@ mod tests {
 
     #[test]
     fn protocol_responses_are_correlated_with_the_request_method() {
-        let mut pending = HashMap::from([(RequestId::Number(9), "session/list".to_string())]);
+        let mut pending =
+            HashMap::from([(RequestId::Number(9), PendingRequest::new("session/list".into(), &Value::Null))]);
         let event = decode_frame(br#"{"jsonrpc":"2.0","id":9,"result":[]}"#, &mut pending)
             .expect("valid response")
             .expect("decoded response");
         assert!(
             matches!(event, BackendEvent::Response { method, result: Some(_), error: None } if method == "session/list")
         );
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn interaction_replies_retain_request_identity_when_responses_arrive_out_of_order() {
+        let request = |interaction_id: &str, cancelled| {
+            PendingRequest::new(
+                protocol::method::INTERACTION_RESPOND.into(),
+                &json!({ "sessionId": "session", "turnId": "turn", "interactionId": interaction_id, "cancelled": cancelled }),
+            )
+        };
+        let mut pending = HashMap::from([
+            (RequestId::Number(7), request("old-question", false)),
+            (RequestId::Number(8), request("new-question", true)),
+        ]);
+        let rejected =
+            decode_frame(br#"{"jsonrpc":"2.0","id":8,"error":{"message":"Retry this decision"}}"#, &mut pending)
+                .expect("valid rejection")
+                .expect("correlated event");
+        assert!(matches!(rejected, BackendEvent::InteractionResponded { identity, error: Some(error) }
+            if identity.interaction_id == "new-question" && identity.session_id == "session"
+                && identity.turn_id == "turn" && identity.cancelled && error == "Retry this decision"));
+        let accepted = decode_frame(br#"{"jsonrpc":"2.0","id":7,"result":{}}"#, &mut pending)
+            .expect("valid acceptance")
+            .expect("correlated event");
+        assert!(matches!(accepted, BackendEvent::InteractionResponded { identity, error: None }
+            if identity.interaction_id == "old-question" && !identity.cancelled));
         assert!(pending.is_empty());
     }
 

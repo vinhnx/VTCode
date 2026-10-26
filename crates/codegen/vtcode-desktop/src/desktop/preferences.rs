@@ -1,7 +1,7 @@
 //! Persisted desktop preferences in `~/.vtcode/desktop/preferences.json`.
 //!
-//! Everything here is a UI comfort setting: a missing or corrupt file is not
-//! an error and falls back to defaults.
+//! A missing or corrupt file falls back to defaults. Permission choices are
+//! explicit per-workspace overrides of the CLI confirmation flag.
 
 use std::path::PathBuf;
 
@@ -127,8 +127,15 @@ pub(super) struct Preferences {
     pub follow_cli_theme: Option<bool>,
     /// Recently opened workspaces, most recent first.
     pub recent_workspaces: Vec<String>,
+    /// Explicit confirmation choices, retained alongside recent workspace paths.
+    pub workspace_permissions: std::collections::BTreeMap<String, vtcode_desktop_protocol::PermissionMode>,
     /// Last inspector state, retained for compatibility; launch always starts collapsed.
     pub inspector_open: Option<bool>,
+    /// Place the project and thread navigation on the right side of the workspace.
+    /// Missing values keep existing installs on the new right-side default.
+    pub navigation_on_right: Option<bool>,
+    /// Show the project and thread navigation panel. Its actions remain in the header when hidden.
+    pub navigation_visible: Option<bool>,
     /// Sidebar width in logical pixels.
     pub sidebar_width: Option<f32>,
     /// Inspector width in logical pixels.
@@ -149,6 +156,14 @@ impl Preferences {
     }
     pub(super) fn code_font_size(&self) -> u8 {
         self.code_font_size.unwrap_or(14).clamp(10, 24)
+    }
+
+    pub(super) fn navigation_on_right(&self) -> bool {
+        self.navigation_on_right.unwrap_or(true)
+    }
+
+    pub(super) fn navigation_visible(&self) -> bool {
+        self.navigation_visible.unwrap_or(true)
     }
 
     pub(super) fn typography_for(&self, mode: ThemeMode) -> TypographySettings<'_> {
@@ -259,6 +274,8 @@ impl Preferences {
         self.recent_workspaces.retain(|existing| existing != path);
         self.recent_workspaces.insert(0, path.to_string());
         self.recent_workspaces.truncate(MAX_RECENT_WORKSPACES);
+        self.workspace_permissions
+            .retain(|path, _| self.recent_workspaces.contains(path));
     }
 
     /// The saved pane widths, applied without clamping surprises.
@@ -519,6 +536,8 @@ mod tests {
         let mut preferences = Preferences {
             theme: Some("ciapre".to_string()),
             inspector_open: Some(false),
+            navigation_on_right: Some(false),
+            navigation_visible: Some(false),
             ..Preferences::default()
         };
         preferences.touch_workspace("/tmp/ws");
@@ -529,11 +548,15 @@ mod tests {
         assert_eq!(parsed.theme.as_deref(), Some("ciapre"));
         assert_eq!(parsed.recent_workspaces, vec!["/tmp/ws"]);
         assert_eq!(parsed.inspector_open, Some(false));
+        assert!(!parsed.navigation_on_right());
+        assert!(!parsed.navigation_visible());
         assert!((parsed.sidebar_width() - 240.0).abs() < f32::EPSILON);
         assert!((parsed.inspector_width() - 380.0).abs() < f32::EPSILON);
 
         let empty: Preferences = serde_json::from_str("{}").expect("defaults");
         assert_eq!(empty.theme, None);
         assert!(empty.recent_workspaces.is_empty());
+        assert!(empty.navigation_on_right(), "new and legacy preferences default navigation to the right");
+        assert!(empty.navigation_visible(), "new and legacy preferences show navigation by default");
     }
 }

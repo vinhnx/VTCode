@@ -17,7 +17,6 @@ use vtcode_core::config::{ConfigResetRequest, ConfigService, ConfigWriteTarget};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_ui::tui::app::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
-#[cfg(test)]
 use docs::FIELD_DOCS;
 use items::build_settings_items;
 pub(crate) use mutations::reload_state_from_disk;
@@ -99,6 +98,129 @@ pub(crate) struct SettingsApplyOutcome {
     pub(crate) saved: bool,
     /// Tone for the in-modal status strip (`None` maps to Success when saved).
     pub(crate) tone: Option<vtcode_commons::ui_protocol::InlineTone>,
+}
+
+/// CLI-owned metadata used by native clients to render the same `/config` catalog.
+#[derive(Clone, Debug)]
+pub(crate) struct DesktopConfigField {
+    pub(crate) path: String,
+    pub(crate) label: String,
+    pub(crate) type_name: String,
+    pub(crate) default_value: String,
+    pub(crate) description: String,
+    pub(crate) options: Vec<String>,
+    pub(crate) group: String,
+    pub(crate) group_description: String,
+    pub(crate) editable: bool,
+}
+
+/// Build the native client's catalog from the exact field docs and paths used by `/config`.
+pub(crate) fn desktop_config_catalog(config: &VTCodeConfig) -> Result<Vec<DesktopConfigField>> {
+    let draft = TomlValue::try_from(config.clone()).context("Failed to serialize effective configuration")?;
+    let mut fields = Vec::new();
+
+    for path in items::advanced_paths(&draft) {
+        // The native editor edits an array as one typed JSON value, matching its
+        // CLI behavior without inventing a second indexed-path writer.
+        if path.contains('[') || path.contains(']') {
+            continue;
+        }
+
+        let doc = FIELD_DOCS.lookup(&path);
+        let group = items::curated_group_for_path(&path);
+        let type_name = doc
+            .map(|entry| entry.type_name.clone())
+            .filter(|value| !value.is_empty())
+            .or_else(|| get_node(&draft, &path).map(config_value_type))
+            .unwrap_or_else(|| "documented setting".to_string());
+        let options = doc
+            .map(|entry| entry.options.clone())
+            .filter(|options| !options.is_empty())
+            .unwrap_or_else(|| {
+                get_node(&draft, &path)
+                    .and_then(TomlValue::as_str)
+                    .map(|current| mutations::resolve_cycle_options(Some(&draft), &path, current))
+                    .filter(|options| options.len() > 1)
+                    .unwrap_or_default()
+            });
+        let editable = items::path_is_editable(&path, &draft)
+            || (!items::is_schema_path(&path)
+                && get_node(&draft, &path).is_none()
+                && desktop_type_is_editable(&type_name));
+
+        fields.push(DesktopConfigField {
+            label: items::advanced_label(&path),
+            editable,
+            default_value: doc.map_or_else(String::new, |entry| entry.default_value.clone()),
+            description: doc.map_or_else(String::new, |entry| entry.description.clone()),
+            options,
+            group: group.map_or_else(|| "Advanced settings".to_string(), |group| group.title.to_string()),
+            group_description: group.map_or_else(
+                || "Search all documented CLI settings.".to_string(),
+                |group| group.description.to_string(),
+            ),
+            path,
+            type_name,
+        });
+    }
+
+    Ok(fields)
+}
+
+fn config_value_type(value: &TomlValue) -> String {
+    match value {
+        TomlValue::String(_) => "string",
+        TomlValue::Integer(_) => "integer",
+        TomlValue::Float(_) => "number",
+        TomlValue::Boolean(_) => "boolean",
+        TomlValue::Array(_) => "array",
+        TomlValue::Table(_) => "table",
+        TomlValue::Datetime(_) => "datetime",
+    }
+    .to_string()
+}
+
+fn desktop_type_is_editable(type_name: &str) -> bool {
+    let type_name = type_name.to_ascii_lowercase();
+    type_name
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|token| {
+            matches!(
+                token,
+                "bool"
+                    | "boolean"
+                    | "int"
+                    | "integer"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "u8"
+                    | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "isize"
+                    | "usize"
+                    | "float"
+                    | "f32"
+                    | "f64"
+                    | "number"
+                    | "string"
+                    | "str"
+                    | "path"
+                    | "pathbuf"
+                    | "array"
+                    | "vec"
+                    | "list"
+                    | "table"
+                    | "object"
+                    | "map"
+                    | "hashmap"
+                    | "btreemap"
+            )
+        })
 }
 
 pub(crate) fn create_settings_palette_state(
@@ -1815,6 +1937,57 @@ api_key_env = "TRUSTED_API_KEY"
         assert_eq!(
             short_display_path(Path::new("/opt/other/vtcode.toml"), Path::new("/elsewhere")),
             "/opt/other/vtcode.toml"
+        );
+    }
+
+    #[test]
+    fn desktop_config_catalog_reuses_cli_advanced_fields_and_curated_groups() {
+        let config = VTCodeConfig::default();
+        let draft = TomlValue::try_from(config.clone()).expect("default config draft");
+        let fields = desktop_config_catalog(&config).expect("desktop CLI config catalog");
+        let default_model = fields
+            .iter()
+            .find(|field| field.path == "agent.default_model")
+            .expect("default model field");
+        assert_eq!(default_model.group, "Model & Provider");
+        assert!(!default_model.description.is_empty());
+        assert!(fields.len() > 100, "all typed and documented CLI settings are included");
+        assert!(fields.iter().any(|field| !field.options.is_empty()));
+        let optional_storage = fields
+            .iter()
+            .find(|field| field.path == "agent.checkpointing.storage_dir")
+            .expect("unset documented CLI setting");
+        assert!(optional_storage.type_name.contains("string"));
+        assert!(optional_storage.editable, "typed optional fields can be initialized from Desktop");
+        let theme = fields
+            .iter()
+            .find(|field| field.path == "agent.theme")
+            .expect("CLI theme field");
+        assert_eq!(
+            theme.options,
+            mutations::resolve_cycle_options(Some(&draft), "agent.theme", "ciapre"),
+            "dynamic CLI choices are shared with the desktop editor"
+        );
+        for group in items::curated_groups() {
+            assert!(
+                fields.iter().any(|field| field.group == group.title),
+                "desktop catalog should include CLI group {}",
+                group.title
+            );
+        }
+        assert!(
+            fields
+                .iter()
+                .filter(|field| items::is_schema_path(&field.path))
+                .all(|field| !field.editable),
+            "wildcard schema paths remain reference-only"
+        );
+        assert!(desktop_type_is_editable("null | string"));
+        assert!(!desktop_type_is_editable("PointConfig"));
+        assert!(
+            fields
+                .iter()
+                .all(|field| !field.path.contains('[') && !field.path.contains(']'))
         );
     }
 }

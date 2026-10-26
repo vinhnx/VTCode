@@ -59,6 +59,17 @@ where
 }
 
 pub(crate) fn apply_session_retention_best_effort(sessions_dir: &Path) {
+    let sessions_dir = sessions_dir.to_path_buf();
+    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+        // Dropping a Tokio join handle detaches this best-effort cleanup task.
+        drop(runtime.spawn_blocking(move || apply_session_retention_and_log(&sessions_dir)));
+        return;
+    }
+
+    apply_session_retention_and_log(&sessions_dir);
+}
+
+fn apply_session_retention_and_log(sessions_dir: &Path) {
     if let Err(err) = apply_session_retention(sessions_dir) {
         tracing::warn!(
             sessions_dir = %sessions_dir.display(),

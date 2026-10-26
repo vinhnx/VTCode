@@ -34,6 +34,11 @@ pub struct CommandSkillSpec {
 }
 
 impl CommandSkillSpec {
+    /// Category used to group the command in host-specific command surfaces.
+    pub const fn category(self) -> &'static str {
+        self.category
+    }
+
     const fn is_traditional(self) -> bool {
         matches!(self.backend, CommandSkillBackend::TraditionalSkill { .. })
     }

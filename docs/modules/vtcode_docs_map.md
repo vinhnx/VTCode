@@ -247,6 +247,13 @@ below based on the topic area.
   - **Topics**: Scope, Oracles, Fuzzer-first fixes, Basic Commands, Corpus and Artifacts
   - **User Questions**: "What can you tell me about Fuzzing Guide?", "How does Scope work?", "How does Oracles work?"
 
+- **File**: `docs/development/desktop-gpui-kit-review.md`
+  - **Content**: GPUI Kit desktop guide review
+  - **Topics**: Scope and method, Confirmed findings and changes, Guide coverage and application decisions, Component
+    catalog review, Verification boundaries
+  - **User Questions**: "What can you tell me about GPUI Kit desktop guide review?", "How does Scope and method work?",
+    "How does Confirmed findings and changes work?"
+
 - **File**: `docs/development/hypothesis-revision-validation.md`
   - **Content**: Hypothesis revision validation
   - **Topics**: Acceptance, Deterministic checks, Live replay pilot

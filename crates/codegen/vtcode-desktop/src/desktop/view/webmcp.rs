@@ -184,7 +184,7 @@ impl DesktopView {
                         .flex_col()
                         .gap_2()
                         .rounded_md()
-                        .bg(colors.background)
+                        .bg(colors.secondary)
                         .p_3()
                         .child(div().text_sm().font_semibold().child("Pair this browser"))
                         .child(
@@ -279,7 +279,7 @@ impl DesktopView {
                 .rounded_md()
                 .border_1()
                 .border_color(colors.border)
-                .bg(colors.background)
+                .bg(colors.popover)
                 .px_2()
                 .py_1()
                 .child(
@@ -287,6 +287,7 @@ impl DesktopView {
                         .accessibility_id("webmcp-origin")
                         .aria_label("Browser app origin")
                         .cursor_text()
+                        .bg(colors.popover)
                         .w_full(),
                 ),
         );

@@ -1,4 +1,7 @@
-use super::{list_recent_session_summaries_in_workspace, list_recent_sessions_in_workspace};
+use super::{
+    list_recent_session_summaries_in_workspace, list_recent_sessions_in_workspace,
+    resolve_sessions_dir_for_archive_writes,
+};
 use crate::llm::provider::MessageRole;
 use crate::utils::session_archive::{
     SessionArchiveMetadata, SessionMessage, SessionSnapshot, clear_sessions_dir_override_for_tests,
@@ -6,6 +9,29 @@ use crate::utils::session_archive::{
 };
 use chrono::Utc;
 use tempfile::TempDir;
+
+#[tokio::test]
+#[serial_test::serial(session_dir_override)]
+async fn archive_directory_resolution_does_not_prune_session_history() {
+    let sessions_dir = TempDir::new().expect("sessions directory");
+    override_sessions_dir_for_tests(sessions_dir.path());
+    for index in 0..101 {
+        std::fs::write(sessions_dir.path().join(format!("session-{index:03}.json")), b"{}")
+            .expect("seed session archive");
+    }
+
+    let resolved = resolve_sessions_dir_for_archive_writes()
+        .await
+        .expect("resolve archive directory");
+    let archive_count = std::fs::read_dir(&resolved)
+        .expect("read archive directory")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|extension| extension.to_str()) == Some("json"))
+        .count();
+
+    clear_sessions_dir_override_for_tests();
+    assert_eq!(archive_count, 101, "directory setup should not run retention scans");
+}
 
 #[tokio::test]
 #[serial_test::serial(session_dir_override)]

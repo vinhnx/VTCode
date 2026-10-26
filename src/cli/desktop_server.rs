@@ -1,13 +1,13 @@
 mod composer_resources;
 mod config_settings;
-mod fast_mode_preferences;
 mod session_options;
+mod session_preferences;
 mod shared_preferences;
 mod theme_preferences;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -217,6 +217,13 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             protocol: selected,
             workspace: context.workspace.to_string_lossy().into_owned(),
             server_version: env!("CARGO_PKG_VERSION").to_string(),
+            slash_commands: vtcode_core::ui::slash::visible_commands_for_desktop()
+                .into_iter()
+                .map(|command| protocol::SlashCommandInfo {
+                    name: command.name.to_string(),
+                    description: command.description.to_string(),
+                })
+                .collect(),
         };
         context.state.lock().await.initialized = true;
         return Ok((serde_json::to_value(result)?, false));
@@ -269,7 +276,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
         }
         method::CONFIG_DISCOVER => {
             let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent).await;
+            let snapshot = configuration_snapshot(context, &agent).await?;
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::CONFIG_SETTINGS_READ => {
@@ -326,7 +333,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 state.session_options.reasoning_effort = None;
             }
             let agent = active_agent_config(context).await;
-            let snapshot = configuration_snapshot(context, &agent).await;
+            let snapshot = configuration_snapshot(context, &agent).await?;
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::COMPOSER_RESOURCES => {
@@ -342,9 +349,16 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             let agent = active_agent_config(context).await;
             let speed_supported =
                 crate::agent::runloop::unified::fast_mode::supports_fast_mode(&agent, &context.startup.config);
-            session_options::validate(&params, &agent.provider, &agent.model, speed_supported)?;
-            if let Some(enabled) = params.fast_mode {
-                fast_mode_preferences::persist(context.workspace.clone(), agent.clone(), enabled).await?;
+            let modes = session_options::discover_modes(context.workspace.clone()).await?;
+            session_options::validate(&params, &agent.provider, &agent.model, speed_supported, &modes)?;
+            if params.fast_mode.is_some() || params.mode.is_some() {
+                session_preferences::persist(
+                    context.workspace.clone(),
+                    agent.clone(),
+                    params.fast_mode,
+                    params.mode.clone(),
+                )
+                .await?;
             }
             shutdown_current_session(context, false).await;
             {
@@ -356,7 +370,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 session_options::merge(&mut state.session_options, params);
             }
             let agent = active_agent_config(context).await;
-            Ok((serde_json::to_value(configuration_snapshot(context, &agent).await)?, false))
+            Ok((serde_json::to_value(configuration_snapshot(context, &agent).await?)?, false))
         }
         method::CONFIG_THEME => {
             let params: protocol::ThemePreferenceSelectParams = parse_params(&request.params)?;
@@ -369,7 +383,7 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                 state.theme_override = Some(theme.clone());
             }
             let agent = active_agent_config(context).await;
-            let mut snapshot = configuration_snapshot(context, &agent).await;
+            let mut snapshot = configuration_snapshot(context, &agent).await?;
             if let Some(shared) = snapshot.shared_ui.as_mut() {
                 shared.theme = theme;
             }
@@ -392,15 +406,30 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
         method::SESSION_CREATE => {
             let params: protocol::SessionCreateParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
+            let create_started = Instant::now();
+            let shutdown_started = Instant::now();
             shutdown_current_session(context, false).await;
+            let shutdown_elapsed = shutdown_started.elapsed();
             let workspace_label = workspace_label(&context.workspace);
+            let identifier_started = Instant::now();
             let session_id = if history_persistence_enabled() {
                 reserve_session_archive_identifier(&workspace_label, None).await?
             } else {
                 generate_session_archive_identifier(&workspace_label, None)
             };
+            let identifier_elapsed = identifier_started.elapsed();
+            let runtime_started = Instant::now();
             start_session(context, session_id.clone(), None).await?;
+            let runtime_elapsed = runtime_started.elapsed();
             context.state.lock().await.session_id = Some(session_id.clone());
+            tracing::debug!(
+                target: "vtcode.desktop",
+                shutdown_ms = shutdown_elapsed.as_millis(),
+                archive_identifier_ms = identifier_elapsed.as_millis(),
+                runtime_start_ms = runtime_elapsed.as_millis(),
+                total_ms = create_started.elapsed().as_millis(),
+                "desktop session created"
+            );
             Ok((
                 serde_json::to_value(SessionSummary {
                     session_id,
@@ -1545,7 +1574,7 @@ async fn effective_speed_config(
 async fn configuration_snapshot(
     context: &ServiceContext,
     agent: &vtcode_core::config::types::AgentConfig,
-) -> ConfigurationSnapshot {
+) -> Result<ConfigurationSnapshot> {
     // Tool-capable startup already ran the shared provider-auth preflight.
     // Reaching the config surface means required credentials are available,
     // or the selected provider does not require a credential.
@@ -1560,16 +1589,30 @@ async fn configuration_snapshot(
     let fast_mode_enabled =
         fast_mode_supported && crate::agent::runloop::unified::fast_mode::fast_mode_selected(agent, &speed_config);
     let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
-    ConfigurationSnapshot {
+    let modes = session_options::discover_modes(context.workspace.clone()).await?;
+    let primary = vtcode_core::primary_agent::ActivePrimaryAgentState::from_specs_with_default(
+        &modes,
+        options.mode.as_deref().unwrap_or(&context.startup.config.default_primary_agent),
+    );
+    Ok(ConfigurationSnapshot {
         session_options: Some(protocol::SessionOptionsSnapshot {
             permission_mode: if skip_confirmations {
                 protocol::PermissionMode::AutoApproveCommands
             } else {
                 protocol::PermissionMode::Ask
             },
-            mode: options
-                .mode
-                .unwrap_or_else(|| context.startup.config.default_primary_agent.clone()),
+            mode: primary.active().name().to_owned(),
+            available_modes: modes
+                .iter()
+                .map(|spec| {
+                    let agent = vtcode_core::primary_agent::ActivePrimaryAgent::from_spec(spec);
+                    protocol::AgentModeInfo {
+                        name: spec.name.clone(),
+                        display_name: agent.display_name,
+                        description: spec.description.chars().take(500).collect(),
+                    }
+                })
+                .collect(),
             reasoning_effort: agent.reasoning_effort.as_str().into(),
             supported_efforts: session_options::supported_efforts(&agent.provider, &agent.model),
             speed: crate::agent::runloop::effective_speed_label(agent, &speed_config).map(str::to_owned),
@@ -1595,7 +1638,7 @@ async fn configuration_snapshot(
         ),
         shared_ui: Some(shared_preferences::snapshot(&context.startup.config.ui.keybindings, &agent.theme)),
         context_window: model_catalog_entry(&agent.provider, &agent.model).map(|entry| entry.context_window as u64),
-    }
+    })
 }
 
 /// The selectable model catalog, mirroring the TUI picker's source.
@@ -1720,6 +1763,59 @@ mod tests {
             .output()
             .expect("Git executable");
         assert!(output.status.success(), "Git setup failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[tokio::test]
+    async fn desktop_mode_snapshot_uses_the_cli_default_and_resolution_fallback() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = vtcode_commons::canonicalize(directory.path()).expect("canonical workspace");
+        let mut startup = test_startup_context(&workspace);
+        startup.config.default_primary_agent = "auto".into();
+        let (context, _) = test_service_context(startup, workspace);
+        let agent = active_agent_config(&context).await;
+        let snapshot = configuration_snapshot(&context, &agent).await.expect("snapshot");
+        let options = snapshot.session_options.expect("options");
+        assert_eq!(options.mode, "auto");
+        for name in ["build", "plan", "auto", "duck", "coordinator"] {
+            assert!(options.available_modes.iter().any(|mode| mode.name == name));
+        }
+        context.state.lock().await.session_options.mode = Some("missing-agent".into());
+        let snapshot = configuration_snapshot(&context, &agent).await.expect("fallback snapshot");
+        assert_eq!(snapshot.session_options.expect("fallback options").mode, "build");
+    }
+
+    #[tokio::test]
+    async fn initialize_exposes_the_desktop_slash_command_catalog() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = vtcode_commons::canonicalize(directory.path()).expect("canonical workspace");
+        let (context, _notifications) = test_service_context(test_startup_context(&workspace), workspace.clone());
+        let request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("initialize".into()),
+            method: protocol::method::INITIALIZE.into(),
+            params: serde_json::to_value(protocol::InitializeParams {
+                protocol: protocol::ProtocolRange {
+                    minimum: protocol::ProtocolVersion { major: 1, minor: 0 },
+                    maximum: protocol::PROTOCOL_VERSION,
+                },
+                client_name: "desktop-test".into(),
+                client_version: env!("CARGO_PKG_VERSION").into(),
+            })
+            .expect("initialize params"),
+        };
+
+        let (result, should_stop) = handle_request(&context, &request).await.expect("initialize service");
+        assert!(!should_stop);
+        let initialized: protocol::InitializeResult = serde_json::from_value(result).expect("initialize result");
+        let expected = vtcode_core::ui::slash::visible_commands_for_desktop()
+            .into_iter()
+            .map(|command| protocol::SlashCommandInfo {
+                name: command.name.to_string(),
+                description: command.description.to_string(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(initialized.slash_commands, expected);
+        assert!(initialized.slash_commands.iter().any(|command| command.name == "config"));
     }
 
     #[tokio::test]

@@ -11,11 +11,15 @@ icon_assets!(
         Activity,
         FileCode,
         FolderGit2,
+        Focus,
+        GitBranch,
         GitCompare,
+        House,
         Maximize2,
         MessageSquare,
         Shield,
         Terminal,
+        Wrench,
         X
     ]
 );
@@ -50,6 +54,8 @@ mod tests {
     const DESKTOP_ICONS: &[IconName] = &[
         IconName::Activity,
         IconName::ArrowDown,
+        IconName::ArrowLeft,
+        IconName::ArrowRight,
         IconName::ArrowUp,
         IconName::Bot,
         IconName::Check,
@@ -65,8 +71,11 @@ mod tests {
         IconName::Folder,
         IconName::FolderClosed,
         IconName::FolderGit2,
+        IconName::Focus,
         IconName::FolderOpen,
+        IconName::GitBranch,
         IconName::GitCompare,
+        IconName::House,
         IconName::Maximize2,
         IconName::MessageSquare,
         IconName::Minus,
@@ -79,6 +88,7 @@ mod tests {
         IconName::Shield,
         IconName::Square,
         IconName::Terminal,
+        IconName::Wrench,
         IconName::X,
     ];
 

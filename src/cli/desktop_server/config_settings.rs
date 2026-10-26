@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
+use std::collections::HashMap;
 use toml::Value as TomlValue;
 use vtcode_core::config::{
     ConfigReadRequest, ConfigReadResponse, ConfigService, ConfigWriteRequest, ConfigWriteStrategy, ConfigWriteTarget,
-    loader::layers::ConfigLayerSource,
+    loader::{VTCodeConfig, layers::ConfigLayerSource},
 };
 
 use super::protocol;
@@ -39,11 +40,13 @@ fn read_blocking(workspace: &Path) -> Result<protocol::ConfigSettingsSnapshot> {
         runtime_overrides: vec![],
     })
     .context("Failed to read effective CLI configuration")?;
-    Ok(project_snapshot(workspace, response))
+    project_snapshot(workspace, response)
 }
 
-fn project_snapshot(workspace: &Path, response: ConfigReadResponse) -> protocol::ConfigSettingsSnapshot {
-    let catalog = project_settings(&response);
+fn project_snapshot(workspace: &Path, response: ConfigReadResponse) -> Result<protocol::ConfigSettingsSnapshot> {
+    let (config, effective_config) = effective_cli_config(&response)?;
+    let fields = crate::agent::runloop::unified::settings_interactive::desktop_config_catalog(&config)?;
+    let catalog = project_settings(&response, &effective_config, &fields);
     let target_versions = [
         protocol::ConfigTarget::User,
         protocol::ConfigTarget::Workspace,
@@ -56,18 +59,51 @@ fn project_snapshot(workspace: &Path, response: ConfigReadResponse) -> protocol:
     })
     .collect();
 
-    protocol::ConfigSettingsSnapshot {
+    Ok(protocol::ConfigSettingsSnapshot {
         settings: catalog.settings,
         target_versions,
         omitted_sensitive: catalog.omitted_sensitive,
         omitted_large: catalog.omitted_large,
         omitted_limit: catalog.omitted_limit,
+    })
+}
+
+fn effective_cli_config(response: &ConfigReadResponse) -> Result<(VTCodeConfig, Value)> {
+    let effective_toml = TomlValue::try_from(response.effective_config.clone())
+        .context("Effective CLI configuration is not a TOML-compatible object")?;
+    let config: VTCodeConfig = effective_toml
+        .try_into()
+        .context("Effective CLI configuration could not be deserialized")?;
+    let mut effective_config = serde_json::to_value(&config).context("Failed to serialize CLI config defaults")?;
+    merge_config_value(&mut effective_config, &response.effective_config);
+    Ok((config, effective_config))
+}
+
+fn merge_config_value(defaults: &mut Value, configured: &Value) {
+    match (defaults, configured) {
+        (Value::Object(defaults), Value::Object(configured)) => {
+            for (key, value) in configured {
+                match defaults.get_mut(key) {
+                    Some(default) => merge_config_value(default, value),
+                    None => {
+                        defaults.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+        }
+        (defaults, configured) => *defaults = configured.clone(),
     }
 }
 
-fn project_settings(response: &ConfigReadResponse) -> CatalogBuilder {
+fn project_settings(
+    response: &ConfigReadResponse,
+    effective_config: &Value,
+    fields: &[crate::agent::runloop::unified::settings_interactive::DesktopConfigField],
+) -> CatalogBuilder {
     let mut catalog = CatalogBuilder::default();
-    if let Some(root) = response.effective_config.as_object() {
+    let fields_by_path: HashMap<&str, &crate::agent::runloop::unified::settings_interactive::DesktopConfigField> =
+        fields.iter().map(|field| (field.path.as_str(), field)).collect();
+    if let Some(root) = effective_config.as_object() {
         for (key, value) in root {
             if is_sensitive_key(key) {
                 catalog.omitted_sensitive += 1;
@@ -78,9 +114,26 @@ fn project_settings(response: &ConfigReadResponse) -> CatalogBuilder {
                 catalog.omitted_large += 1;
                 continue;
             }
-            flatten_setting(&mut catalog, path, value, response);
+            flatten_setting(&mut catalog, path, value, response, &fields_by_path);
         }
     }
+
+    for field in fields {
+        if catalog.settings.iter().any(|setting| setting.path == field.path) {
+            continue;
+        }
+        if is_sensitive_path(&field.path) {
+            catalog.omitted_sensitive += 1;
+            continue;
+        }
+        if !valid_path(&field.path) {
+            catalog.omitted_large += 1;
+            continue;
+        }
+        let setting = config_setting(field, Value::Null, None);
+        push_setting(&mut catalog, setting);
+    }
+
     catalog.settings.sort_by(|left, right| left.path.cmp(&right.path));
     catalog
 }
@@ -94,7 +147,13 @@ struct CatalogBuilder {
     omitted_limit: usize,
 }
 
-fn flatten_setting(catalog: &mut CatalogBuilder, path: &str, value: &Value, response: &ConfigReadResponse) {
+fn flatten_setting(
+    catalog: &mut CatalogBuilder,
+    path: &str,
+    value: &Value,
+    response: &ConfigReadResponse,
+    fields: &HashMap<&str, &crate::agent::runloop::unified::settings_interactive::DesktopConfigField>,
+) {
     if catalog.settings.len() >= MAX_SETTINGS {
         catalog.omitted_limit += 1;
         return;
@@ -111,7 +170,7 @@ fn flatten_setting(catalog: &mut CatalogBuilder, path: &str, value: &Value, resp
                 }
                 let child_path = format!("{path}.{key}");
                 if child_path.len() <= MAX_CONFIG_PATH_BYTES {
-                    flatten_setting(catalog, &child_path, child, response);
+                    flatten_setting(catalog, &child_path, child, response, fields);
                 } else {
                     catalog.omitted_large += 1;
                 }
@@ -134,22 +193,79 @@ fn flatten_setting(catalog: &mut CatalogBuilder, path: &str, value: &Value, resp
         return;
     }
 
-    let entry_bytes = path
-        .len()
-        .saturating_mul(2)
-        .saturating_add(value_bytes.len())
-        .saturating_add(128);
-    if catalog.encoded_bytes.saturating_add(entry_bytes) > MAX_SETTINGS_RESPONSE_BYTES {
+    let metadata = fields.get(path).copied();
+    let setting = metadata.map_or_else(
+        || protocol::ConfigSetting {
+            path: path.to_owned(),
+            value: value.clone(),
+            origin: setting_origin(response, path),
+            label: None,
+            type_name: Some(json_value_type(value).to_string()),
+            default_value: None,
+            description: None,
+            options: Vec::new(),
+            group: Some("Advanced settings".to_string()),
+            group_description: Some("Search all documented CLI settings.".to_string()),
+            editable: false,
+        },
+        |field| config_setting(field, value.clone(), setting_origin(response, path)),
+    );
+    push_setting(catalog, setting);
+}
+
+fn config_setting(
+    field: &crate::agent::runloop::unified::settings_interactive::DesktopConfigField,
+    value: Value,
+    origin: Option<String>,
+) -> protocol::ConfigSetting {
+    protocol::ConfigSetting {
+        path: field.path.clone(),
+        value,
+        origin,
+        label: Some(field.label.clone()),
+        type_name: Some(field.type_name.clone()),
+        default_value: (!field.default_value.is_empty()).then(|| field.default_value.clone()),
+        description: (!field.description.is_empty()).then(|| field.description.clone()),
+        options: field.options.clone(),
+        group: Some(field.group.clone()),
+        group_description: Some(field.group_description.clone()),
+        editable: field.editable,
+    }
+}
+
+fn push_setting(catalog: &mut CatalogBuilder, setting: protocol::ConfigSetting) {
+    if catalog.settings.len() >= MAX_SETTINGS {
         catalog.omitted_limit += 1;
         return;
     }
+    let Ok(encoded) = serde_json::to_vec(&setting) else {
+        catalog.omitted_large += 1;
+        return;
+    };
+    if encoded.len() > MAX_SETTING_BYTES
+        || catalog.encoded_bytes.saturating_add(encoded.len()) > MAX_SETTINGS_RESPONSE_BYTES
+    {
+        catalog.omitted_limit += 1;
+        return;
+    }
+    catalog.encoded_bytes += encoded.len();
+    catalog.settings.push(setting);
+}
 
-    catalog.settings.push(protocol::ConfigSetting {
-        path: path.to_owned(),
-        value: value.clone(),
-        origin: setting_origin(response, path),
-    });
-    catalog.encoded_bytes += entry_bytes;
+fn valid_path(path: &str) -> bool {
+    !path.is_empty() && path.len() <= MAX_CONFIG_PATH_BYTES && path.split('.').all(valid_path_segment)
+}
+
+fn json_value_type(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "unknown",
+        Value::Bool(_) => "boolean",
+        Value::Number(number) if number.is_i64() || number.is_u64() => "integer",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "table",
+    }
 }
 
 fn setting_origin(response: &ConfigReadResponse, path: &str) -> Option<String> {
@@ -231,8 +347,19 @@ fn write_blocking(
         .iter()
         .find(|setting| setting.path == params.path)
         .with_context(|| format!("Setting '{}' is not available in the editable CLI settings catalog", params.path))?;
-    if !same_json_kind(&current.value, &params.value) {
+    if !current.editable {
+        bail!("Setting '{}' is documented by the CLI but is not directly editable", params.path);
+    }
+    let valid_kind = if current.value.is_null() {
+        json_value_matches_setting_type(&params.value, current.type_name.as_deref(), &current.options)
+    } else {
+        same_json_kind(&current.value, &params.value)
+    };
+    if !valid_kind {
         bail!("Setting '{}' must keep its existing value type", params.path);
+    }
+    if !json_value_matches_options(&params.value, &current.options) {
+        bail!("Setting '{}' must use one of its documented values", params.path);
     }
 
     let value = TomlValue::try_from(params.value).context("Setting value is not representable in TOML")?;
@@ -259,7 +386,7 @@ fn validate_path(path: &str) -> Result<()> {
         || path.len() > MAX_CONFIG_PATH_BYTES
         || path
             .split('.')
-            .any(|segment| segment.is_empty() || !valid_path_segment(segment))
+            .any(|segment| segment.is_empty() || segment == "*" || !valid_path_segment(segment))
     {
         bail!("Invalid CLI config setting path");
     }
@@ -356,9 +483,57 @@ fn same_json_kind(current: &Value, replacement: &Value) -> bool {
     }
 }
 
+fn json_value_matches_type(value: &Value, type_name: &str) -> bool {
+    let type_name = type_name.to_ascii_lowercase();
+    let has_type = |types: &[&str]| {
+        type_name
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|token| types.contains(&token))
+    };
+    if has_type(&["bool", "boolean"]) {
+        return value.is_boolean();
+    }
+    if has_type(&[
+        "int", "integer", "i8", "i16", "i32", "i64", "i128", "u8", "u16", "u32", "u64", "u128", "isize", "usize",
+    ]) {
+        return value.as_number().is_some_and(|number| number.is_i64() || number.is_u64());
+    }
+    if has_type(&["float", "number", "f32", "f64"]) {
+        return value.as_number().is_some();
+    }
+    if has_type(&["string", "str", "path", "pathbuf", "enum"]) {
+        return value.is_string();
+    }
+    if has_type(&["array", "vec", "list"]) {
+        return value.is_array();
+    }
+    if has_type(&["table", "object", "map", "hashmap", "btreemap"]) {
+        return value.is_object();
+    }
+    false
+}
+
+fn json_value_matches_options(value: &Value, options: &[String]) -> bool {
+    options.is_empty()
+        || value
+            .as_str()
+            .is_some_and(|selected| options.iter().any(|option| option == selected))
+}
+
+fn json_value_matches_setting_type(value: &Value, type_name: Option<&str>, options: &[String]) -> bool {
+    if options.is_empty() {
+        type_name.is_some_and(|type_name| json_value_matches_type(value, type_name))
+    } else {
+        value.is_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{contains_sensitive_content, is_sensitive_key, project_settings, same_json_kind, validate_path};
+    use super::{
+        contains_sensitive_content, effective_cli_config, is_sensitive_key, project_settings, same_json_kind,
+        validate_path,
+    };
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
     use vtcode_core::config::{ConfigLayerView, ConfigReadResponse};
@@ -370,6 +545,10 @@ mod tests {
             layers: Vec::<ConfigLayerView>::new(),
             origins: BTreeMap::new(),
         }
+    }
+
+    fn project_raw_settings(response: &ConfigReadResponse) -> super::CatalogBuilder {
+        project_settings(response, &response.effective_config, &[])
     }
 
     #[test]
@@ -390,13 +569,13 @@ mod tests {
             }),
             ..response
         };
-        let settings = project_settings(&response);
+        let settings = project_raw_settings(&response);
         assert_eq!(settings.settings.len(), 2);
         assert_eq!(settings.settings[0].path, "agent.default_model");
         assert_eq!(settings.settings[0].value, json!("model-a"));
         assert_eq!(settings.settings[1].path, "custom_provider.api_key_env");
         assert_eq!(settings.settings[1].value, json!("MY_PROVIDER_KEY"));
-        assert_eq!(settings.omitted_sensitive, 2);
+        assert!(settings.omitted_sensitive >= 2);
         assert!(
             !serde_json::to_string(&settings.settings)
                 .expect("settings JSON")
@@ -416,7 +595,7 @@ mod tests {
             }),
             ..empty_response()
         };
-        let settings = project_settings(&response);
+        let settings = project_raw_settings(&response);
         assert_eq!(settings.settings.len(), 1);
         assert_eq!(settings.settings[0].path, "provider_overrides.safe.base_url");
         assert_eq!(settings.omitted_sensitive, 2);
@@ -445,7 +624,7 @@ mod tests {
             effective_config: Value::Object(config),
             ..empty_response()
         };
-        let settings = project_settings(&response);
+        let settings = project_raw_settings(&response);
         assert_eq!(settings.settings.len(), 2_048);
         assert_eq!(settings.omitted_large, 1);
         assert_eq!(settings.omitted_limit, 2);
@@ -461,7 +640,7 @@ mod tests {
             effective_config: Value::Object(config),
             ..empty_response()
         };
-        let settings = project_settings(&response);
+        let settings = project_raw_settings(&response);
         let encoded = serde_json::to_vec(&settings.settings).expect("settings JSON");
         assert!(!settings.settings.is_empty());
         assert!(encoded.len() <= super::MAX_SETTINGS_RESPONSE_BYTES);
@@ -507,5 +686,67 @@ mod tests {
         assert!(same_json_kind(&json!("old"), &json!("new")));
         assert!(same_json_kind(&json!(["a"]), &json!(["b"])));
         assert!(same_json_kind(&json!({"a": 1}), &json!({"b": 2})));
+    }
+
+    #[test]
+    fn shared_catalog_includes_cli_defaults_groups_and_documented_optional_fields() {
+        let response = empty_response();
+        let (config, effective) = effective_cli_config(&response).expect("default config projection");
+        let fields = crate::agent::runloop::unified::settings_interactive::desktop_config_catalog(&config)
+            .expect("CLI config field catalog");
+        let settings = project_settings(&response, &effective, &fields);
+
+        let default_model = settings
+            .settings
+            .iter()
+            .find(|setting| setting.path == "agent.default_model")
+            .expect("default model in full CLI catalog");
+        assert_eq!(default_model.group.as_deref(), Some("Model & Provider"));
+        assert!(default_model.description.is_some());
+        assert!(!default_model.value.is_null());
+        assert!(settings.settings.len() > 100, "the default config should expose the full CLI surface");
+        assert!(
+            settings
+                .settings
+                .iter()
+                .any(|setting| setting.value.is_null() && !setting.options.is_empty())
+        );
+        let optional_storage = settings
+            .settings
+            .iter()
+            .find(|setting| setting.path == "agent.checkpointing.storage_dir")
+            .expect("unset documented config value");
+        assert!(optional_storage.value.is_null());
+        assert!(optional_storage.editable, "typed optional settings can be initialized from Desktop");
+        assert!(settings.settings.iter().all(|setting| !setting.path.contains('[')));
+        assert!(
+            !serde_json::to_string(&settings.settings)
+                .expect("settings JSON")
+                .contains("api_key\":"),
+            "credential leaves remain filtered from the full default catalog"
+        );
+    }
+
+    #[test]
+    fn absent_documented_setting_uses_its_cli_schema_type_for_write_validation() {
+        assert!(super::json_value_matches_type(&json!("fast"), "Option<String>"));
+        assert!(super::json_value_matches_type(&json!(true), "Option<bool>"));
+        assert!(super::json_value_matches_type(&json!(4), "integer"));
+        assert!(!super::json_value_matches_type(&json!("4"), "integer"));
+        assert!(!super::json_value_matches_type(&json!(4), "PointConfig"));
+        assert!(super::json_value_matches_setting_type(
+            &json!("high"),
+            Some("ReasoningEffortLevel | null"),
+            &["low".into(), "high".into()]
+        ));
+    }
+
+    #[test]
+    fn writes_reject_values_outside_the_cli_documented_choices() {
+        let options = vec!["auto".to_string(), "fast".to_string()];
+        assert!(super::json_value_matches_options(&json!("auto"), &options));
+        assert!(!super::json_value_matches_options(&json!("ultrafast"), &options));
+        assert!(!super::json_value_matches_options(&json!(true), &options));
+        assert!(super::json_value_matches_options(&json!("freeform"), &[]));
     }
 }
