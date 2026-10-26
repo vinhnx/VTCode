@@ -76,6 +76,7 @@ impl DesktopView {
                             } else {
                                 "Projects and threads"
                             })
+                            .toggled(expanded)
                             .tooltip_with_action("Projects and threads", &ToggleSidebar, Some("VTCodeDesktop"))
                             .when(expanded, |button| button.bg(colors.secondary).text_color(colors.foreground))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),

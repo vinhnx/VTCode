@@ -4333,6 +4333,7 @@ impl DesktopView {
                     .child(
                         desktop_button("toggle-sidebar")
                             .accessibility_label(navigation_label)
+                            .toggled(navigation_visible && self.sidebar_open)
                             .icon(navigation_icon)
                             .ghost()
                             .tooltip_with_action(navigation_label, &ToggleSidebar, Some("VTCodeDesktop"))

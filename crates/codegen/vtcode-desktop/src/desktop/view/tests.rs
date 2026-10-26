@@ -4944,15 +4944,18 @@ fn navigation_can_collapse_and_restore_without_losing_the_composer(cx: &mut Test
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         assert_eq!(window.find("toggle-sidebar").label(), Some("Toggle navigation"));
+        assert_eq!(window.find("toggle-sidebar").checked(), Some(true));
         window.press("cmd-l", cx);
         window.input("keep this draft", cx);
         window.press("cmd-b", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).sidebar_open);
+        assert_eq!(window.find("toggle-sidebar").checked(), Some(false));
         assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
         window.click("toggle-sidebar", cx);
         window.render_frame(cx);
         assert!(view.read(cx).sidebar_open);
+        assert_eq!(window.find("toggle-sidebar").checked(), Some(true));
         assert_eq!(view.read(cx).composer.read(cx).value(), "keep this draft");
     })
     .unwrap();
@@ -7472,11 +7475,13 @@ fn startup_collapses_panels_and_navigation_peek_is_transient(cx: &mut TestAppCon
         window.render_frame(cx);
         assert!(view.read(cx).navigation_peek);
         assert_eq!(window.find("nav-home").label(), Some("Projects and threads (expanded)"));
+        assert_eq!(window.find("nav-home").checked(), Some(true));
         assert!(!view.read(cx).sidebar_open, "hover does not pin the sidebar");
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(!view.read(cx).navigation_peek);
         assert_eq!(window.find("nav-home").label(), Some("Projects and threads"));
+        assert_eq!(window.find("nav-home").checked(), Some(false));
         window.click("toggle-sidebar", cx);
         assert!(view.read(cx).sidebar_open);
         window.press("cmd-b", cx);

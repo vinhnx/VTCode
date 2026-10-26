@@ -144,6 +144,14 @@ uses the catalog components that fit its workflows, including virtualized transc
 lists, protocol-backed `Radio` choices, and shared `Button`/`Tooltip` actions. Do not add catalog
 controls such as calendars, ratings, or avatars without a matching desktop workflow and data source.
 
+Follow-up (2026-10-27): The toolbar navigation control and collapsed Home preview now expose their
+pressed state as Kit toggle buttons, in addition to their accessible names. The rendered tests check
+both states while navigation opens and closes, including the transient hover preview. Kit 0.8.0
+Button exposes toggle state but not `aria-expanded`; using the supported toggle state keeps the
+existing Button semantics and avoids wrapping it in a conflicting nested control. See
+[Button](https://gpui-kit.com/component/button/) and
+[Accessibility](https://gpui-kit.com/docs/accessibility/).
+
 The app-owned alert wrapper remains intentional. Kit 0.8.0 `Alert` provides the semantic alert
 role, but its `RenderOnce` interface does not expose the test-support registration used to verify
 the app's stable alert ID and accessible message. Keep that narrow wrapper for its tested identity
