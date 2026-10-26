@@ -203,7 +203,10 @@ impl DesktopView {
             }
         } else {
             let status_label = match status {
-                Some(status) if status.running && (self.session_request.is_some() || self.running) => {
+                Some(status)
+                    if status.running
+                        && (self.session_request.is_some() || self.running || self.interaction.is_some()) =>
+                {
                     "Connected · the selected desktop session cannot accept a turn right now"
                 }
                 Some(status) if status.running && busy => "Connected · checking desktop session availability",

@@ -4943,6 +4943,67 @@ fn multi_step_question_progress_tracks_the_runtime_step_order(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
+fn startup_interaction_refreshes_webmcp_availability_on_question_and_answer(cx: &mut TestAppContext) {
+    use crate::desktop::transport::InteractionResponseIdentity;
+    use vtcode_desktop_protocol::{InteractionKind, InteractionRequest};
+    let (_window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("session-old".into());
+        view.webmcp_status = Some(connected_webmcp_status());
+        view.handle_backend_event(
+            BackendEvent::Interaction(InteractionRequest {
+                session_id: "session-old".into(),
+                turn_id: "session-start".into(),
+                interaction_id: "question".into(),
+                kind: InteractionKind::Question,
+                wizard: false,
+                title: "Question".into(),
+                details: Vec::new(),
+                choices: Vec::new(),
+                steps: Vec::new(),
+                selected_choice_id: None,
+                selected_choice_ids: Vec::new(),
+            }),
+            cx,
+        );
+        assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+        let mut busy = connected_webmcp_status();
+        busy.turns_available = false;
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
+                result: Some(serde_json::to_value(busy).unwrap()),
+                error: None,
+            },
+            cx,
+        );
+        view.pending_interaction_response = Some("question".into());
+        view.handle_backend_event(
+            BackendEvent::InteractionResponded {
+                identity: InteractionResponseIdentity {
+                    session_id: "session-old".into(),
+                    turn_id: "session-start".into(),
+                    interaction_id: "question".into(),
+                    cancelled: true,
+                },
+                error: None,
+            },
+            cx,
+        );
+        assert!(view.interaction.is_none());
+        assert_eq!(view.webmcp_request_pending, Some(vtcode_desktop_protocol::method::WEBMCP_STATUS));
+    });
+    for _ in 0..2 {
+        let BackendCommand::Request { method, .. } = requests.try_recv().unwrap() else {
+            panic!("status request")
+        };
+        assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
+    }
+}
+
+#[gpui_kit::test]
 fn interaction_acknowledgements_preserve_retry_drafts_and_cannot_dismiss_new_questions(cx: &mut TestAppContext) {
     use crate::desktop::transport::InteractionResponseIdentity;
     use vtcode_desktop_protocol::{InteractionChoice, InteractionKind, InteractionRequest, InteractionStep};

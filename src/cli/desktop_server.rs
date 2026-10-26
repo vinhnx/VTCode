@@ -234,6 +234,9 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
         if request.method != protocol::method::SHUTDOWN && state.active_turn_id.is_some() {
             bail!("cancel the active turn and wait for cleanup before switching sessions");
         }
+        if request.method != protocol::method::SHUTDOWN && !state.pending_interactions.is_empty() {
+            bail!("resolve the pending CLI interaction before switching sessions or settings");
+        }
         state.session_transitioning = true;
     }
     let result = handle_request_inner(context, request).await;
@@ -690,6 +693,9 @@ async fn enqueue_turn(
         if state.active_turn_id.is_some() {
             bail!("another turn is already running");
         }
+        if !state.pending_interactions.is_empty() {
+            bail!("resolve the pending CLI interaction before submitting a turn");
+        }
         let runtime = state
             .runtime
             .as_ref()
@@ -728,6 +734,7 @@ async fn webmcp_status(context: &ServiceContext) -> protocol::WebmcpBridgeStatus
         let state = context.state.lock().await;
         let session_id = state.session_id.clone();
         let turns_available = !state.session_transitioning
+            && state.pending_interactions.is_empty()
             && state.active_turn_id.is_none()
             && state.runtime.as_ref().is_some_and(|runtime| {
                 Some(runtime.session_id.as_str()) == session_id.as_deref() && !runtime.input.is_closed()
@@ -860,6 +867,7 @@ impl RuntimeAdapter for DesktopWebmcpRuntime {
         let mut status = self.workspace.status().await?;
         let state = self.state.lock().await;
         status.turns_available = !state.session_transitioning
+            && state.pending_interactions.is_empty()
             && state.active_turn_id.is_none()
             && state.session_id.as_deref().is_some_and(|session_id| {
                 state
@@ -2278,6 +2286,96 @@ mod tests {
             },
         )
         .expect("WebMCP server")
+    }
+
+    #[tokio::test]
+    async fn startup_interaction_blocks_turns_and_session_changes_until_answered() {
+        let directory = tempfile::tempdir().expect("workspace");
+        let workspace = directory.path().to_path_buf();
+        let (context, mut notifications) = test_service_context(test_startup_context(&workspace), workspace);
+        let adapter = DesktopWebmcpRuntime {
+            workspace: FilesystemWorkspace::new(&context.workspace, [], false)
+                .await
+                .expect("workspace adapter"),
+            state: std::sync::Arc::clone(&context.state),
+            notifications: context.notifications.clone(),
+        };
+        let (input, mut input_receiver) = mpsc::unbounded_channel();
+        let (exit_sender, exit) = oneshot::channel();
+        let runtime_task = tokio::spawn(std::future::pending::<()>());
+        {
+            let mut state = context.state.lock().await;
+            state.initialized = true;
+            state.session_id = Some("session".into());
+            state.runtime = Some(RuntimeSession {
+                session_id: "session".into(),
+                input,
+                exit,
+                abort: runtime_task.abort_handle(),
+                command_forwarder: std::thread::spawn(|| {}),
+            });
+        }
+        publish_interaction(
+            "session",
+            HostInteraction {
+                kind: vtcode_ui::tui::app::HostInteractionKind::Question,
+                wizard: false,
+                title: "Startup question".into(),
+                details: Vec::new(),
+                steps: Vec::new(),
+                selected_choice_ids: Vec::new(),
+            },
+            &context.state,
+            &context.notifications,
+        )
+        .await
+        .expect("publish question");
+        let notification = notifications.recv().await.expect("question notification");
+        let interaction: InteractionRequest = serde_json::from_value(notification.params).expect("question");
+        assert_eq!(interaction.turn_id, "session-start");
+        assert!(!webmcp_status(&context).await.turns_available);
+        assert!(!adapter.status().await.expect("browser status").turns_available);
+        let error = enqueue_turn(&context.state, &context.notifications, "session", "hello".into(), Vec::new())
+            .await
+            .expect_err("pending question blocks turns");
+        assert!(error.to_string().contains("pending CLI interaction"));
+        let close = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("close".into()),
+            method: protocol::method::SESSION_CLOSE.into(),
+            params: json!({ "sessionId": "session" }),
+        };
+        assert!(
+            handle_request(&context, &close)
+                .await
+                .expect_err("pending question blocks close")
+                .to_string()
+                .contains("pending CLI interaction")
+        );
+        respond_to_interaction(
+            &context,
+            protocol::InteractionResponse {
+                session_id: "session".into(),
+                turn_id: interaction.turn_id,
+                interaction_id: interaction.interaction_id,
+                choice_id: None,
+                choice_ids: Vec::new(),
+                text: None,
+                answer_texts: Vec::new(),
+                cancelled: true,
+            },
+        )
+        .await
+        .expect("answer question");
+        assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Transient(_))));
+        assert!(webmcp_status(&context).await.turns_available);
+        assert!(adapter.status().await.expect("browser status").turns_available);
+        enqueue_turn(&context.state, &context.notifications, "session", "hello".into(), Vec::new())
+            .await
+            .expect("turn accepted after answer");
+        assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Submit(_))));
+        drop(exit_sender);
+        runtime_task.abort();
     }
 
     #[tokio::test]

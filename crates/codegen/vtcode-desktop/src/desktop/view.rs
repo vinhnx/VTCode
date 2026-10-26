@@ -3261,6 +3261,7 @@ impl DesktopView {
                     self.status = "The decision was not accepted. Review it and try again.".into();
                 } else {
                     self.clear_pending_interaction();
+                    self.invalidate_webmcp_status();
                     self.clear_error();
                     self.status = if identity.cancelled {
                         "Interaction cancelled"
@@ -3682,6 +3683,7 @@ impl DesktopView {
                 self.interaction_step_index = 0;
                 self.pending_interaction_response = None;
                 self.interaction = Some(interaction);
+                self.invalidate_webmcp_status();
                 self.status = "Waiting for your decision".to_string();
             }
             BackendEvent::TurnStatus(status) => {
