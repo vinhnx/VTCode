@@ -4458,8 +4458,7 @@ impl DesktopView {
             .w_full()
             .flex()
             .justify_center()
-            // MessageScroller adds three pixels of horizontal row inset.
-            .px_5()
+            // MessageScroller owns the shared horizontal row inset.
             .when(item.role == "tool", |row| row.pb_1())
             .when(item.role != "tool", |row| row.pb_4())
             .child(content)

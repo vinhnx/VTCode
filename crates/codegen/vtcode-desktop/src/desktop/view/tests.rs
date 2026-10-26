@@ -2252,7 +2252,7 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
-fn transcript_content_column_is_centered_for_messages_and_tool_output(cx: &mut TestAppContext) {
+fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 1600., 900.);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
@@ -2287,6 +2287,27 @@ fn transcript_content_column_is_centered_for_messages_and_tool_output(cx: &mut T
                 "transcript column {id} should be centered in the conversation viewport: column={column:?}, viewport_center={viewport_center:?}"
             );
         }
+        let assistant_column = window.find("transcript-content-assistant-center").bounds();
+        let assistant_body = window.find("message-body-assistant-center").bounds();
+        assert!(
+            (assistant_body.origin.x - assistant_column.origin.x).abs() <= px(1.),
+            "assistant text should begin at the centered transcript column inset: body={assistant_body:?}, column={assistant_column:?}"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(640.), px(900.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let row = window.find("transcript-row-assistant-center").bounds();
+        let column = window.find("transcript-content-assistant-center").bounds();
+        let viewport = window.find("transcript-scroll").bounds();
+        assert!(
+            (column.origin.x - row.origin.x).abs() <= px(1.)
+                && (column.right() - row.right()).abs() <= px(1.),
+            "the content column should use the scroller's inset without adding another row inset: row={row:?}, column={column:?}"
+        );
+        assert!(column.origin.x >= viewport.origin.x && column.right() <= viewport.right());
     })
     .unwrap();
 }
