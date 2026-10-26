@@ -20,7 +20,9 @@ on:
       - "tests/desktop_server.rs"
       - "crates/codegen/vtcode-ui/AGENTS.md"
       - "scripts/package-desktop-macos.sh"
+      - "scripts/open-desktop-macos.sh"
       - "scripts/tests/test_package_desktop_macos.sh"
+      - "scripts/tests/test_open_desktop_macos.sh"
       - ".github/workflows/desktop-macos.yml"
   push:
     branches: [main]
@@ -38,7 +40,9 @@ on:
       - "src/startup/**"
       - "tests/desktop_server.rs"
       - "scripts/package-desktop-macos.sh"
+      - "scripts/open-desktop-macos.sh"
       - "scripts/tests/test_package_desktop_macos.sh"
+      - "scripts/tests/test_open_desktop_macos.sh"
       - ".github/workflows/desktop-macos.yml"
 
 permissions:
@@ -85,6 +89,9 @@ jobs:
 
       - name: Test macOS bundle assembly safeguards
         run: bash scripts/tests/test_package_desktop_macos.sh
+
+      - name: Test exact-path desktop launch
+        run: bash scripts/tests/test_open_desktop_macos.sh
 
       - name: Build and verify the app bundle
         run: scripts/package-desktop-macos.sh "$RUNNER_TEMP/VT Code.app"

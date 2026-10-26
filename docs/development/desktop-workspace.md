@@ -34,6 +34,10 @@ places the service in `Contents/Helpers`, signs both executables before signing 
 default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
 development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
 
+Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "dist/VT Code.app"`. The launcher asks
+macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps
+share the same display name or bundle identifier.
+
 The GUI crate is non-publishable and outside Cargo's default members. It uses the pinned [`gpui-kit` 0.8.0 setup](https://gpui-kit.com/docs/installation/).
 
 ## Runtime and session behavior
