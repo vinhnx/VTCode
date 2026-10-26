@@ -7029,6 +7029,7 @@ impl DesktopView {
             } else {
                 entry.label().to_owned()
             })
+            .toggled(selected)
             .ghost()
             .w(px(104.))
             .flex_shrink_0()

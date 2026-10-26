@@ -2474,8 +2474,12 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "ciapre", "Ciapre is the default theme");
+        assert_eq!(window.find("theme-ciapre").checked(), Some(true));
         scroll_theme_into_view(window, &view, "theme-github-dark", cx);
         window.click("theme-github-dark", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-ciapre").checked(), Some(false));
+        assert_eq!(window.find("theme-github-dark").checked(), Some(true));
         {
             let view = view.read(cx);
             assert_eq!(view.theme_id, "github-dark");
@@ -2483,6 +2487,9 @@ fn settings_theme_picker_applies_a_theme_live(cx: &mut TestAppContext) {
         }
         scroll_theme_into_view(window, &view, "theme-solarized-light", cx);
         window.click("theme-solarized-light", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("theme-github-dark").checked(), Some(false));
+        assert_eq!(window.find("theme-solarized-light").checked(), Some(true));
         {
             let view = view.read(cx);
             assert_eq!(view.theme_id, "solarized-light");
