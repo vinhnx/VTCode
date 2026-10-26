@@ -7,16 +7,13 @@ use serde::Serialize;
 
 use super::SESSION_FILE_EXTENSION;
 use super::identifier::session_archive_path_for_identifier;
-use super::retention::apply_session_retention_best_effort;
 use super::settings::{SESSION_DIR_ENV, read_env_var_os};
 use super::snapshot::{SessionArchiveSummary, SessionListing, SessionSnapshot, session_listing_matches_workspace};
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::fs::read_private_json_file;
 
 pub(crate) async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf> {
-    let sessions_dir = resolve_sessions_dir().await?;
-    apply_session_retention_best_effort(&sessions_dir);
-    Ok(sessions_dir)
+    resolve_sessions_dir().await
 }
 
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
