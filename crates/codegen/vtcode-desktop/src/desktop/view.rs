@@ -41,6 +41,7 @@ use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
 use gpui_kit::component::skeleton::Skeleton;
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::stepper::{Stepper, StepperItem};
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -5471,18 +5472,43 @@ impl DesktopView {
         body.into_any_element()
     }
 
+    fn render_activity_status_indicator(
+        id_prefix: &str,
+        row_id: &str,
+        state: ActivityState,
+        color: gpui_kit::Hsla,
+    ) -> AnyElement {
+        if state == ActivityState::Running {
+            div()
+                .id(format!("{id_prefix}-{row_id}-spinner"))
+                .test_support()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(Spinner::new().small().color(color))
+                .into_any_element()
+        } else {
+            let icon = match state {
+                ActivityState::Completed => IconName::Check,
+                ActivityState::Failed | ActivityState::Interrupted => IconName::X,
+                ActivityState::Running | ActivityState::Other => IconName::Activity,
+            };
+            Icon::new(icon).small().text_color(color).into_any_element()
+        }
+    }
+
     fn render_activity_row(
         row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,
         row_height: f32,
         output_action: Option<AnyElement>,
     ) -> impl IntoElement {
-        let (status_color, status_icon) = match row.state {
-            ActivityState::Failed => (colors.danger, IconName::X),
-            ActivityState::Running => (colors.primary, IconName::Activity),
-            ActivityState::Interrupted => (colors.warning, IconName::X),
-            ActivityState::Completed => (colors.success, IconName::Check),
-            ActivityState::Other => (colors.muted_foreground, IconName::Activity),
+        let status_color = match row.state {
+            ActivityState::Failed => colors.danger,
+            ActivityState::Running => colors.primary,
+            ActivityState::Interrupted => colors.warning,
+            ActivityState::Completed => colors.success,
+            ActivityState::Other => colors.muted_foreground,
         };
         let status = gpui_kit::SharedString::from(row.status.as_str());
         let mut row_element = div()
@@ -5510,7 +5536,12 @@ impl DesktopView {
                     .flex_shrink_0()
                     .rounded_full()
                     .bg(colors.secondary)
-                    .child(Icon::new(status_icon).small().text_color(status_color)),
+                    .child(Self::render_activity_status_indicator(
+                        "activity-indicator",
+                        &row.id,
+                        row.state,
+                        status_color,
+                    )),
             )
             .child(
                 div()
@@ -5926,15 +5957,15 @@ impl DesktopView {
             "Archived output"
         };
         let state = ActivityState::from_status(status);
-        let icon = match state {
-            ActivityState::Completed => IconName::Check,
-            ActivityState::Failed | ActivityState::Interrupted => IconName::X,
-            ActivityState::Running | ActivityState::Other => IconName::Activity,
+        let status_color = if state == ActivityState::Failed {
+            colors.danger
+        } else {
+            colors.muted_foreground
         };
         let mut panel = div().w_full().max_w(px(CONTENT_WIDTH)).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
                 .accessibility_label(format!(
-                    "{} for {}",
+                    "{} for {}, status: {status}",
                     if item.expanded { "Hide details" } else { "Show details" },
                     item.title
                 ))
@@ -5950,12 +5981,8 @@ impl DesktopView {
                         .gap_2()
                         .min_w_0()
                         .w_full()
-                        .text_color(if state == ActivityState::Failed {
-                            colors.danger
-                        } else {
-                            colors.muted_foreground
-                        })
-                        .child(Icon::new(icon).small())
+                        .text_color(status_color)
+                        .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
                         .child(div().min_w_0().truncate().child(item.title.clone()))
                         .when(state != ActivityState::Completed, |row| {
                             row.child(div().min_w_0().truncate().text_xs().child(status.to_string()))

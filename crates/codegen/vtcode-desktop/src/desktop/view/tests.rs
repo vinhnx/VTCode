@@ -6268,10 +6268,16 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
         assert_eq!(window.find("transcript-row-check").role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(window.find("message-body-answer").role(), Some(gpui_kit::Role::Label));
         assert_eq!(window.find("message-body-answer").label(), Some("VT Code: Tests passed: 7. Run cargo test."));
-        assert_eq!(window.find("tool-check").label(), Some("Show details for cargo check"));
+        assert_eq!(
+            window.find("tool-check").label(),
+            Some("Show details for cargo check, status: Finished successfully")
+        );
         window.click("tool-check", cx);
         window.render_frame(cx);
-        assert_eq!(window.find("tool-check").label(), Some("Hide details for cargo check"));
+        assert_eq!(
+            window.find("tool-check").label(),
+            Some("Hide details for cargo check, status: Finished successfully")
+        );
         assert_eq!(window.find("tool-output-check").label(), Some("Finished successfully"));
         window.click("tool-check", cx);
         assert!(!view.read(cx).transcript.get(1).unwrap().expanded);
@@ -7056,12 +7062,12 @@ fn activity_groups_preserve_commentary_order_and_expand_live_output(cx: &mut Tes
         assert_eq!(window.find("activity-group-read").label(), Some("Expand 2 tool actions · 1 failed"));
         assert_eq!(window.find("activity-group-read").checked(), Some(false));
         assert_eq!(window.find("message-body-comment").label(), Some("VT Code: The build needs a fix."));
-        assert_eq!(window.find("tool-retry").label(), Some("Show details for cargo check"));
+        assert_eq!(window.find("tool-retry").label(), Some("Show details for cargo check, status: in progress"));
         assert!(!view.read(cx).transcript.get(1).unwrap().activity_expanded);
         window.click("activity-group-read", cx);
         window.render_frame(cx);
         assert_eq!(window.find("activity-group-read").checked(), Some(true));
-        assert_eq!(window.find("tool-read").label(), Some("Show details for Read Cargo.toml"));
+        assert_eq!(window.find("tool-read").label(), Some("Show details for Read Cargo.toml, status: completed"));
         window.click("tool-build", cx);
         window.render_frame(cx);
         assert_eq!(window.find("tool-output-build").label(), Some("compiler error: missing name"));
@@ -7334,6 +7340,34 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
             Some(expected_label.as_str()),
             "borrowing the row projection preserves its accessible label"
         );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn running_activity_uses_the_kit_spinner_while_finished_rows_stay_static(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.inspector_tab = crate::desktop::inspector::InspectorTab::Activity;
+            view.transcript.push(TranscriptItem::new(
+                "running".into(),
+                "tool".into(),
+                "Running check".into(),
+                "in progress\ncommand output".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "finished".into(),
+                "tool".into(),
+                "Finished check".into(),
+                "completed\ncommand output".into(),
+            ));
+        });
+        window.render_frame(cx);
+
+        assert!(window.try_find("activity-indicator-running-spinner").is_some());
+        assert!(window.try_find("activity-indicator-finished-spinner").is_none());
+        assert_eq!(window.find("activity-running").label(), Some("Running check"));
     })
     .unwrap();
 }
