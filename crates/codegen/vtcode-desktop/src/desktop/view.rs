@@ -547,6 +547,7 @@ struct DesktopView {
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
+    file_directory_paths: Arc<HashSet<String>>,
     file_tree: Entity<TreeState>,
     expanded_file_directories: HashSet<String>,
     _file_tree_subscription: Subscription,
@@ -772,6 +773,7 @@ impl DesktopView {
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
+            file_directory_paths: Arc::new(HashSet::new()),
             file_tree,
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
@@ -1159,6 +1161,7 @@ impl DesktopView {
         self.status = "Starting local VT Code service…".to_string();
         if !same_workspace {
             self.files.clear();
+            self.file_directory_paths = Arc::new(HashSet::new());
             self.expanded_file_directories.clear();
             self.file_tree.update(cx, |tree, cx| tree.set_items(Vec::new(), cx));
         }
@@ -1443,6 +1446,7 @@ impl DesktopView {
             tree.set_selected_item(selected_item.as_ref(), cx);
         });
         self.files = entries;
+        self.file_directory_paths = Arc::new(directory_paths);
     }
 
     fn open_selected_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -4469,12 +4473,7 @@ impl DesktopView {
                         .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 ),
         );
-        let directory_paths: HashSet<_> = self
-            .files
-            .iter()
-            .filter(|entry| entry.is_dir)
-            .map(|entry| entry.rel_path.clone())
-            .collect();
+        let directory_paths = self.file_directory_paths.clone();
         let file_tree = self.file_tree.clone();
         let weak_view = cx.entity().downgrade();
         if self.files.is_empty() && self.files_scan_cancel.is_some() {

@@ -1299,6 +1299,13 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
         window.within("inspector-tabs").click(1usize, cx);
         window.render_frame(cx);
         assert_eq!(file_tree_paths(&view, cx), vec!["src", "README.md"]);
+        let directory_index = view.read(cx).file_directory_paths.clone();
+        assert!(directory_index.contains("src"), "the retained tree index records directories");
+        window.render_frame(cx);
+        assert!(
+            std::sync::Arc::ptr_eq(&directory_index, &view.read(cx).file_directory_paths),
+            "redrawing the inspector should reuse the directory index"
+        );
         let tree_id = format!("tree-{}", view.read(cx).file_tree.entity_id());
         let tree = window
             .find_all(tree_id)
