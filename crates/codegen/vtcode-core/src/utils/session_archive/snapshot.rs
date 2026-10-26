@@ -57,6 +57,21 @@ pub struct SessionListing {
     pub snapshot: SessionSnapshot,
 }
 
+/// Small archive metadata retained by desktop session-list queries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionArchiveSummary {
+    /// Stable archive identifier.
+    pub identifier: String,
+    /// First user prompt preview, when present.
+    pub title: Option<String>,
+    /// Workspace path recorded in the archive.
+    pub workspace_path: String,
+    /// Whether the saved archive is terminal rather than in progress.
+    pub completed: bool,
+    /// Whether saved messages are available to resume.
+    pub resumable: bool,
+}
+
 /// An archive identifier derived from a loaded session listing.
 ///
 /// The inner value is crate-private so callers cannot mark an arbitrary
@@ -141,6 +156,22 @@ impl SessionListing {
 
     pub fn first_reply_preview(&self) -> Option<String> {
         self.preview_for_role(MessageRole::Assistant)
+    }
+
+    /// Project the fields needed for recent-session navigation and release the full transcript.
+    pub(crate) fn into_summary(self) -> SessionArchiveSummary {
+        let identifier = self.identifier();
+        let title = self.first_prompt_preview();
+        let workspace_path = self.snapshot.metadata.workspace_path;
+        let completed = self.snapshot.progress.is_none();
+        let resumable = !self.snapshot.messages.is_empty();
+        SessionArchiveSummary {
+            identifier,
+            title,
+            workspace_path,
+            completed,
+            resumable,
+        }
     }
 
     fn preview_for_role(&self, role: MessageRole) -> Option<String> {

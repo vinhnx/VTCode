@@ -9,7 +9,7 @@ use super::SESSION_FILE_EXTENSION;
 use super::identifier::session_archive_path_for_identifier;
 use super::retention::apply_session_retention_best_effort;
 use super::settings::{SESSION_DIR_ENV, read_env_var_os};
-use super::snapshot::{SessionListing, SessionSnapshot, session_listing_matches_workspace};
+use super::snapshot::{SessionArchiveSummary, SessionListing, SessionSnapshot, session_listing_matches_workspace};
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::fs::read_private_json_file;
 
@@ -20,15 +20,31 @@ pub(crate) async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf>
 }
 
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
-    list_recent_sessions_matching(limit, None).await
+    list_recent_sessions_matching(limit, None, |listing| listing).await
 }
 
 /// List the most recent archives for a workspace, applying the limit after workspace filtering.
 pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -> Result<Vec<SessionListing>> {
-    list_recent_sessions_matching(limit, Some(workspace)).await
+    list_recent_sessions_matching(limit, Some(workspace), |listing| listing).await
 }
 
-async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -> Result<Vec<SessionListing>> {
+/// List recent archives for a workspace while retaining only their navigation metadata.
+pub async fn list_recent_session_summaries_in_workspace(
+    limit: usize,
+    workspace: &Path,
+) -> Result<Vec<SessionArchiveSummary>> {
+    list_recent_sessions_matching(limit, Some(workspace), SessionListing::into_summary).await
+}
+
+async fn list_recent_sessions_matching<T, Project>(
+    limit: usize,
+    workspace: Option<&Path>,
+    project: Project,
+) -> Result<Vec<T>>
+where
+    T: Send + 'static,
+    Project: Fn(SessionListing) -> T + Copy + Send + 'static,
+{
     let total_started = Instant::now();
     let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
@@ -63,7 +79,7 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
     // Process session files in parallel for better performance with large archives
     // Batch processing to avoid overwhelming the system with too many concurrent tasks
     const BATCH_SIZE: usize = 10;
-    let mut all_listings = Vec::new();
+    let mut all_sessions = Vec::new();
     let reads_started = Instant::now();
 
     for batch in session_paths.chunks(BATCH_SIZE) {
@@ -84,7 +100,7 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
                 {
                     return None;
                 }
-                Some(listing)
+                Some((listing.snapshot.ended_at, project(listing)))
             });
             tasks.push(task);
         }
@@ -92,24 +108,24 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
         // Collect results from this batch
         for task in tasks {
             if let Ok(Some(listing)) = task.await {
-                all_listings.push(listing);
+                all_sessions.push(listing);
             }
         }
     }
     let reads_elapsed = reads_started.elapsed();
 
     // Sort and limit results
-    all_listings.sort_by_key(|a| std::cmp::Reverse(a.snapshot.ended_at));
-    let matching_sessions = all_listings.len();
-    if limit > 0 && all_listings.len() > limit {
-        all_listings.truncate(limit);
+    all_sessions.sort_by_key(|(ended_at, _)| std::cmp::Reverse(*ended_at));
+    let matching_sessions = all_sessions.len();
+    if limit > 0 && all_sessions.len() > limit {
+        all_sessions.truncate(limit);
     }
 
     tracing::debug!(
         target: "vtcode::session_archive",
         scanned_files = session_paths.len(),
         matching_sessions,
-        returned_sessions = all_listings.len(),
+        returned_sessions = all_sessions.len(),
         workspace_filtered = workspace.is_some(),
         directory_scan = ?scan_elapsed,
         snapshot_reads = ?reads_elapsed,
@@ -117,7 +133,7 @@ async fn list_recent_sessions_matching(limit: usize, workspace: Option<&Path>) -
         "listed session archives"
     );
 
-    Ok(all_listings)
+    Ok(all_sessions.into_iter().map(|(_, session)| session).collect())
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.

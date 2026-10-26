@@ -1,4 +1,4 @@
-use super::list_recent_sessions_in_workspace;
+use super::{list_recent_session_summaries_in_workspace, list_recent_sessions_in_workspace};
 use crate::llm::provider::MessageRole;
 use crate::utils::session_archive::{
     SessionArchiveMetadata, SessionMessage, SessionSnapshot, clear_sessions_dir_override_for_tests,
@@ -44,8 +44,6 @@ async fn workspace_session_limit_ignores_newer_archives_from_other_workspaces() 
     let sessions = list_recent_sessions_in_workspace(2, &workspace)
         .await
         .expect("list workspace sessions");
-    clear_sessions_dir_override_for_tests();
-
     assert_eq!(
         sessions
             .iter()
@@ -53,4 +51,17 @@ async fn workspace_session_limit_ignores_newer_archives_from_other_workspaces() 
             .collect::<Vec<_>>(),
         ["session-09", "session-10"]
     );
+
+    let summaries = list_recent_session_summaries_in_workspace(2, &workspace)
+        .await
+        .expect("list workspace session summaries");
+    assert_eq!(
+        summaries.iter().map(|session| session.identifier.as_str()).collect::<Vec<_>>(),
+        ["session-09", "session-10"]
+    );
+    assert_eq!(summaries[0].title.as_deref(), Some("message 9"));
+    assert_eq!(summaries[0].workspace_path, workspace.display().to_string());
+    assert!(summaries[0].completed);
+    assert!(summaries[0].resumable);
+    clear_sessions_dir_override_for_tests();
 }
