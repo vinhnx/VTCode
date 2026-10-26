@@ -5916,7 +5916,7 @@ fn loaded_activity_restores_output_and_interrupts_unfinished_history(cx: &mut Te
         let warning = window.find("activity-history-warning");
         assert_eq!(warning.role(), Some(gpui_kit::Role::Alert));
         assert_eq!(warning.label(), Some(super::PARTIAL_ACTIVITY_HISTORY_MESSAGE));
-        assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::Group));
+        assert_eq!(window.find("activity-saved-command").role(), Some(gpui_kit::Role::ListItem));
         assert_eq!(window.find("activity-saved-command").label(), Some("cargo check --locked"));
         let output_action = window.find("activity-output-finished-command");
         assert_eq!(output_action.role(), Some(gpui_kit::Role::Button));
@@ -7050,10 +7050,20 @@ fn recent_threads_virtualize_rows_and_scroll_to_older_sessions(cx: &mut TestAppC
             resumable: true,
         })
         .collect();
-    view.update(cx, |view, _| view.sessions = sessions);
+    view.update(cx, |view, _| {
+        view.sessions = sessions;
+        view.selected_session_id = Some("thread-0".into());
+    });
 
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        let list = window.find("session-list");
+        assert_eq!(list.role(), Some(gpui_kit::Role::List));
+        assert_eq!(list.label(), Some("Recent threads"));
+        let first_thread = window.find("session-row-thread-0");
+        assert_eq!(first_thread.role(), Some(gpui_kit::Role::ListItem));
+        assert_eq!(first_thread.label(), Some("Thread 0"));
+        assert_eq!(first_thread.selected(), Some(true));
         assert!(window.try_find("session-thread-0").is_some(), "the first thread is visible at the top");
         assert!(window.try_find("session-thread-119").is_none(), "offscreen threads are not built into the UI tree");
 
@@ -7870,6 +7880,9 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
         });
         window.render_frame(cx);
 
+        let list = window.find("activity-rows");
+        assert_eq!(list.role(), Some(gpui_kit::Role::List));
+        assert_eq!(list.label(), Some("Recent activity"));
         let rendered_row_indexes = (0..300)
             .filter(|index| window.try_find(format!("activity-tool-{index}")).is_some())
             .collect::<Vec<_>>();
@@ -7882,6 +7895,7 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
             Some(expected_label.as_str()),
             "borrowing the row projection preserves its accessible label"
         );
+        assert_eq!(window.find(format!("activity-tool-{first_visible}")).role(), Some(gpui_kit::Role::ListItem));
     })
     .unwrap();
 }

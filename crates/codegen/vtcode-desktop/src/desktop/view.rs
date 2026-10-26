@@ -4350,6 +4350,9 @@ impl DesktopView {
         sidebar = sidebar.child(
             div()
                 .id("session-list")
+                .test_support()
+                .role(gpui_kit::Role::List)
+                .aria_label("Recent threads")
                 .relative()
                 .flex_1()
                 .min_h_0()
@@ -4374,6 +4377,11 @@ impl DesktopView {
                                         div()
                                             .id(format!("session-row-{session_id}"))
                                             .test_support()
+                                            .role(gpui_kit::Role::ListItem)
+                                            .aria_label(label.clone())
+                                            .aria_position_in_set(index + 1)
+                                            .aria_size_of_set(view.sessions.len())
+                                            .aria_selected(selected)
                                             .h(px(session_row_height))
                                             .w_full()
                                             .child(
@@ -5690,11 +5698,15 @@ impl DesktopView {
 
         let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
         let item_sizes = self.activity_row_sizes.get(rows.len(), activity_row_height);
+        let activity_count = rows.len();
         let row_colors = *colors;
         let weak_view = cx.entity().downgrade();
         body = body.child(
             div()
                 .id("activity-rows")
+                .test_support()
+                .role(gpui_kit::Role::List)
+                .aria_label("Recent activity")
                 .relative()
                 .w_full()
                 .flex_1()
@@ -5726,8 +5738,15 @@ impl DesktopView {
                                                 })
                                                 .into_any_element()
                                         });
-                                        Self::render_activity_row(row, row_colors, activity_row_height, output_action)
-                                            .into_any_element()
+                                        Self::render_activity_row(
+                                            row,
+                                            row_colors,
+                                            activity_row_height,
+                                            index + 1,
+                                            activity_count,
+                                            output_action,
+                                        )
+                                        .into_any_element()
                                     },
                                 )
                             })
@@ -5779,6 +5798,8 @@ impl DesktopView {
         row: &ActivityRow,
         colors: gpui_kit::component::theme::ThemeColor,
         row_height: f32,
+        position: usize,
+        set_size: usize,
         output_action: Option<AnyElement>,
     ) -> impl IntoElement {
         let status_color = Self::activity_status_color(row.state, colors);
@@ -5786,9 +5807,11 @@ impl DesktopView {
         let mut row_element = div()
             .id(format!("activity-{}", row.id))
             .test_support()
-            .role(gpui_kit::Role::Group)
+            .role(gpui_kit::Role::ListItem)
             .aria_label(row.title.clone())
             .aria_description(status.clone())
+            .aria_position_in_set(position)
+            .aria_size_of_set(set_size)
             .w_full()
             .h(px(row_height))
             .flex()
