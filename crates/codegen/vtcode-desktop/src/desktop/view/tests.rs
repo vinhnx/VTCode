@@ -5981,9 +5981,85 @@ fn selecting_a_recent_workspace_uses_the_existing_shutdown_transition(cx: &mut T
     .unwrap();
 
     cx.update(|cx| {
+        assert!(view.read(cx).workspace_selection_pending);
+        assert_eq!(view.read(cx).workspace.as_deref(), Some(std::env::temp_dir().as_path()));
+    });
+    cx.run_until_parked();
+    cx.update(|cx| {
+        assert!(!view.read(cx).workspace_selection_pending);
         assert_eq!(view.read(cx).pending_workspace.as_deref(), Some(canonical_target.as_path()));
     });
     assert!(matches!(received.try_recv(), Ok(BackendCommand::Stop)));
+}
+
+#[gpui_kit::test]
+fn workspace_path_validation_runs_before_switching_the_service(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let target = tempfile::tempdir().unwrap();
+    let target_path = target.path().to_path_buf();
+    let canonical_target = vtcode_commons::paths::canonicalize(&target_path).unwrap();
+    let original_workspace = std::env::temp_dir();
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.select_workspace(target_path, cx);
+        assert!(view.workspace_selection_pending);
+        assert_eq!(view.workspace.as_deref(), Some(original_workspace.as_path()));
+        assert!(requests.try_recv().is_err(), "the worker has not switched the service during the UI callback");
+    });
+
+    cx.update(|cx| assert!(!view.read(cx).workspace_switch_idle()));
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.workspace_selection_pending);
+        assert_eq!(view.workspace.as_deref(), Some(original_workspace.as_path()));
+        assert_eq!(view.pending_workspace.as_deref(), Some(canonical_target.as_path()));
+    });
+    assert!(matches!(requests.try_recv(), Ok(BackendCommand::Stop)));
+}
+
+#[gpui_kit::test]
+fn workspace_switch_revalidates_state_after_async_folder_check(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let target = tempfile::tempdir().unwrap();
+    let original_workspace = std::env::temp_dir();
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+
+    view.update(cx, |view, cx| {
+        view.backend = Some(BackendHandle { commands });
+        view.select_workspace(target.path().to_path_buf(), cx);
+        view.running = true;
+    });
+
+    cx.run_until_parked();
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.workspace_selection_pending);
+        assert_eq!(view.workspace.as_deref(), Some(original_workspace.as_path()));
+        assert!(view.pending_workspace.is_none());
+        assert!(view.error.as_deref().unwrap().contains("Cancel the active turn"));
+    });
+    assert!(requests.try_recv().is_err(), "a stale selection must not stop the active service");
+}
+
+#[gpui_kit::test]
+fn stale_startup_workspace_is_skipped_without_a_folder_error(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let missing_workspace = tempfile::tempdir().unwrap();
+    let missing = missing_workspace.path().to_path_buf();
+    drop(missing_workspace);
+
+    view.update(cx, |view, cx| view.select_workspace_on_startup(missing, cx));
+    cx.run_until_parked();
+
+    cx.update(|cx| {
+        let view = view.read(cx);
+        assert!(!view.workspace_selection_pending);
+        assert!(view.error.is_none());
+        assert_eq!(view.workspace.as_deref(), Some(std::env::temp_dir().as_path()));
+    });
 }
 
 #[gpui_kit::test]

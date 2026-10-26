@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Bounds on retained sidebar rows and recursive traversal depth.
 const MAX_ENTRIES: usize = 400;
@@ -13,6 +13,13 @@ const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 
 /// Directories that never carry interesting source and can be enormous.
 const SKIPPED_DIR_NAMES: &[&str] = &["target", "node_modules", ".git", ".venv", "dist", "build"];
+
+/// Canonicalize a workspace candidate and confirm it is a directory.
+/// Call from a GPUI background task because both operations access the filesystem.
+pub(super) fn canonicalize_workspace_folder(path: &Path) -> Option<PathBuf> {
+    let canonical = vtcode_commons::paths::canonicalize(path).ok()?;
+    canonical.is_dir().then_some(canonical)
+}
 
 /// One workspace entry for the sidebar listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -178,6 +185,20 @@ mod tests {
 
     fn temp_workspace() -> tempfile::TempDir {
         tempfile::TempDir::new().expect("temp dir")
+    }
+
+    #[test]
+    fn workspace_folder_validation_canonicalizes_directories_only() {
+        let workspace = temp_workspace();
+        let nested = workspace.path().join("nested");
+        fs::create_dir(&nested).expect("create nested directory");
+        fs::write(workspace.path().join("file.txt"), b"text").expect("write file");
+
+        let candidate = nested.join("..").join("nested");
+        let expected = vtcode_commons::paths::canonicalize(&nested).unwrap();
+        assert_eq!(canonicalize_workspace_folder(&candidate), Some(expected));
+        assert_eq!(canonicalize_workspace_folder(&workspace.path().join("file.txt")), None);
+        assert_eq!(canonicalize_workspace_folder(&workspace.path().join("missing")), None);
     }
 
     #[test]

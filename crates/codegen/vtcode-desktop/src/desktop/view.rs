@@ -479,11 +479,8 @@ fn open_or_activate_main_window(cx: &mut App) -> anyhow::Result<gpui_kit::AnyWin
     })?;
     // Reopen the most recent workspace when it still exists.
     let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
-    if let Some(path) = last_workspace
-        && path.is_dir()
-    {
-        window
-            .update(cx, |_, window, cx| view.update(cx, |view, cx| view.select_workspace_from_ui(path, window, cx)))?;
+    if let Some(path) = last_workspace {
+        window.update(cx, |_, _, cx| view.update(cx, |view, cx| view.select_workspace_on_startup(path, cx)))?;
     }
     view.update(cx, |view, cx| view.start_event_drain(cx));
     cx.activate(true);
@@ -512,6 +509,8 @@ struct DesktopView {
     pending_workspace: Option<PathBuf>,
     navigation_history: NavigationHistory,
     pending_navigation: Option<PendingNavigation>,
+    workspace_selection_pending: bool,
+    workspace_selection_task: Option<Task<()>>,
     workspace_picker_open: bool,
     workspace_picker_task: Option<Task<()>>,
     backend: Option<BackendHandle>,
@@ -738,6 +737,8 @@ impl DesktopView {
             pending_workspace: None,
             navigation_history: NavigationHistory::default(),
             pending_navigation: None,
+            workspace_selection_pending: false,
+            workspace_selection_task: None,
             workspace_picker_open: false,
             workspace_picker_task: None,
             backend: None,
@@ -937,7 +938,10 @@ impl DesktopView {
     }
 
     fn workspace_switch_idle(&self) -> bool {
-        !self.running && self.pending_workspace.is_none() && self.session_request.is_none()
+        !self.running
+            && self.pending_workspace.is_none()
+            && !self.workspace_selection_pending
+            && self.session_request.is_none()
     }
 
     fn current_navigation_location(&self) -> Option<NavigationLocation> {
@@ -991,6 +995,7 @@ impl DesktopView {
             self.select_workspace(target.workspace.clone(), cx);
             if self.workspace.as_ref() != Some(&target.workspace)
                 && self.pending_workspace.as_ref() != Some(&target.workspace)
+                && !self.workspace_selection_pending
             {
                 self.pending_navigation = None;
             }
@@ -1064,11 +1069,24 @@ impl DesktopView {
     }
 
     fn select_workspace_from_ui(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
-        self.select_workspace(path, cx);
+        self.select_workspace_with_invalid_path_feedback(path, true, cx);
         self.restore_focus_after_review_close(window, cx);
     }
 
     fn select_workspace(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.select_workspace_with_invalid_path_feedback(path, true, cx);
+    }
+
+    fn select_workspace_on_startup(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.select_workspace_with_invalid_path_feedback(path, false, cx);
+    }
+
+    fn select_workspace_with_invalid_path_feedback(
+        &mut self,
+        path: PathBuf,
+        show_invalid_path_error: bool,
+        cx: &mut Context<Self>,
+    ) {
         // A turn may have started while the asynchronous picker was open.
         if self.retained_submission.is_some() {
             self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
@@ -1083,15 +1101,46 @@ impl DesktopView {
             cx.notify();
             return;
         }
-        let canonical = match vtcode_commons::paths::canonicalize(&path) {
-            Ok(path) if path.is_dir() => path,
-            _ => {
-                self.error = Some("Choose an existing workspace folder.".to_string());
+        self.workspace_selection_pending = true;
+        self.error = None;
+        self.workspace_selection_task = Some(cx.spawn(async move |view, cx| {
+            let canonical = cx
+                .background_spawn(async move { files::canonicalize_workspace_folder(&path) })
+                .await;
+            let _updated = view.update(cx, |view, cx| {
+                view.workspace_selection_pending = false;
+                match canonical {
+                    Some(canonical) => view.select_canonical_workspace(canonical, cx),
+                    None => {
+                        view.fail_pending_navigation();
+                        if show_invalid_path_error {
+                            view.error = Some("Choose an existing workspace folder.".to_string());
+                        }
+                    }
+                }
                 cx.notify();
-                return;
-            }
-        };
+            });
+        }));
+        cx.notify();
+    }
+
+    fn select_canonical_workspace(&mut self, canonical: PathBuf, cx: &mut Context<Self>) {
+        // Revalidate because a turn or session transition may start while the path is checked.
+        if self.retained_submission.is_some() {
+            self.fail_pending_navigation();
+            self.error = Some("Restore or dismiss the unsent message before changing workspaces.".to_string());
+            return;
+        }
+        if !self.workspace_switch_idle() {
+            self.fail_pending_navigation();
+            self.error = Some(
+                "Cancel the active turn or wait for the pending session change before switching workspaces."
+                    .to_string(),
+            );
+            return;
+        }
         if self.workspace.as_ref() == Some(&canonical) {
+            self.continue_pending_workspace_navigation(cx);
             return;
         }
         if let Some(backend) = self.backend.as_ref() {
@@ -1099,6 +1148,7 @@ impl DesktopView {
             self.status = "Shutting down the current workspace service…".to_string();
             if backend.commands.try_send(BackendCommand::Stop).is_err() {
                 self.pending_workspace = None;
+                self.fail_pending_navigation();
                 self.error = Some("The local service request queue is full. Try again.".to_string());
             }
             cx.notify();
@@ -3516,7 +3566,13 @@ impl DesktopView {
                     .child(
                         desktop_button("choose-workspace")
                             .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
-                            .label(if self.workspace.is_some() { "Change" } else { "Open" })
+                            .label(if self.workspace_selection_pending {
+                                "Checking…"
+                            } else if self.workspace.is_some() {
+                                "Change"
+                            } else {
+                                "Open"
+                            })
                             .ghost()
                             .desktop_disabled(
                                 self.workspace_picker_open
