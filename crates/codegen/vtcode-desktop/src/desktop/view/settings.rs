@@ -284,6 +284,7 @@ impl DesktopView {
                                             "Edit {id} appearance profile{}",
                                             if selected { " (selected)" } else { "" }
                                         ))
+                                        .toggled(selected)
                                         .ghost()
                                         .when(selected, |button| {
                                             button.bg(colors.secondary).text_color(colors.foreground)

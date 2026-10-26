@@ -2372,12 +2372,16 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile (selected)"));
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile"));
+        assert_eq!(window.find("edit-dark-profile").checked(), Some(true));
+        assert_eq!(window.find("edit-light-profile").checked(), Some(false));
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert!(view.read(cx).settings_open);
         assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile (selected)"));
         assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile"));
+        assert_eq!(window.find("edit-light-profile").checked(), Some(true));
+        assert_eq!(window.find("edit-dark-profile").checked(), Some(false));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
         assert_eq!(view.read(cx).theme_id, "catppuccin-latte");
         window.within("settings-panel").click("font-ui-1", cx);

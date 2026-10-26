@@ -152,6 +152,10 @@ existing Button semantics and avoids wrapping it in a conflicting nested control
 [Button](https://gpui-kit.com/component/button/) and
 [Accessibility](https://gpui-kit.com/docs/accessibility/).
 
+Theme swatches and light/dark appearance-profile selectors also expose their current choice with
+Kit Button's toggle state. Their rendered tests verify that selecting a new theme or profile clears
+the previous pressed state.
+
 The app-owned alert wrapper remains intentional. Kit 0.8.0 `Alert` provides the semantic alert
 role, but its `RenderOnce` interface does not expose the test-support registration used to verify
 the app's stable alert ID and accessible message. Keep that narrow wrapper for its tested identity
