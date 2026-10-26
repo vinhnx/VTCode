@@ -321,8 +321,10 @@ configured code font, with structured event details as a fallback when plain out
 Streaming updates retain group and detail expansion. Collapsing activity pauses automatic tail following,
 so inspecting earlier work does not pull the conversation away. Original events and inspector history remain
 unchanged; this is a presentation grouping over the measured transcript rows.
-The virtualized transcript uses Kit MessageScroller to preserve the reader anchor during streaming and history
-eviction, and to offer a labelled jump-to-latest control after scrolling away from new activity.
+The virtualized transcript uses Kit MessageScroller to preserve the reader anchor during streaming, history
+eviction, and loading earlier archived messages. Restored conversations page backward in bounded batches with a
+labelled “Load earlier messages” action; the local transcript remains capped at 2,000 rows. A labelled jump-to-latest
+control appears after scrolling away from new activity.
 Transcript Markdown remains a document renderer: images are blocked, and only valid HTTP(S) links without embedded
 credentials open in the system browser. WebMCP remains a separately paired browser app rather than an embedded WebView.
 
@@ -411,7 +413,7 @@ checkpoints remain persistence-only, and the completed plan snapshot replaces th
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
 | `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
-| `session/list`, `session/create`, `session/load`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, and restore durable messages, canonical change reviews, activity, and captured output. |
+| `session/list`, `session/create`, `session/load`, `session/history`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, restore durable messages, canonical change reviews, activity, and captured output, and page backward through archived conversation messages. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |

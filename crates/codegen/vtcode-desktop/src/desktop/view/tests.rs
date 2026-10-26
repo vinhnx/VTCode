@@ -6306,8 +6306,16 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
 
     let (window, view) = open_desktop(cx);
     let session_id = "archive-session";
-    let prompt = SessionHistoryMessage { role: "user".into(), text: "Question".into() };
-    let answer = SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() };
+    let prompt = SessionHistoryMessage {
+        archive_index: None,
+        role: "user".into(),
+        text: "Question".into(),
+    };
+    let answer = SessionHistoryMessage {
+        archive_index: None,
+        role: "assistant".into(),
+        text: "Answer".into(),
+    };
     let answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 0);
     let repeated_answer_id = super::restored_history_element_id(session_id, &answer.role, &answer.text, 1);
     let history = super::prepare_session_history(session_id, vec![prompt.clone(), answer.clone()]);
@@ -6318,6 +6326,7 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
 
         let inserted = SessionHistoryMessage {
+            archive_index: None,
             role: "user".into(),
             text: "A newer question".into(),
         };
@@ -6327,7 +6336,11 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
                 inserted,
                 prompt,
                 answer,
-                SessionHistoryMessage { role: "assistant".into(), text: "Answer".into() },
+                SessionHistoryMessage {
+                    archive_index: None,
+                    role: "assistant".into(),
+                    text: "Answer".into(),
+                },
             ],
         );
         // The snapshot can advance while the original row remains in its projection.
@@ -6337,6 +6350,150 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
         assert_eq!(window.find(format!("message-body-{repeated_answer_id}")).label(), Some("VT Code: Answer"));
     })
     .unwrap();
+}
+
+#[test]
+fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
+    use vtcode_desktop_protocol::SessionHistoryMessage;
+
+    let session_id = "archive-session";
+    let recent = super::prepare_session_history(
+        session_id,
+        vec![
+            SessionHistoryMessage {
+                archive_index: Some(160),
+                role: "assistant".into(),
+                text: "Repeated".into(),
+            },
+            SessionHistoryMessage {
+                archive_index: Some(161),
+                role: "assistant".into(),
+                text: "Repeated".into(),
+            },
+        ],
+    );
+    let previous_id = recent[0].id.clone();
+    assert_ne!(previous_id, recent[1].id, "identical archived messages have distinct stable identities");
+
+    let page = super::prepare_session_history(
+        session_id,
+        vec![
+            SessionHistoryMessage {
+                archive_index: Some(158),
+                role: "user".into(),
+                text: "Earlier".into(),
+            },
+            SessionHistoryMessage {
+                archive_index: Some(159),
+                role: "assistant".into(),
+                text: "Context".into(),
+            },
+            SessionHistoryMessage {
+                archive_index: Some(160),
+                role: "assistant".into(),
+                text: "Repeated".into(),
+            },
+        ],
+    );
+    assert_eq!(page[2].id, previous_id);
+}
+
+#[gpui_kit::test]
+fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::{SessionHistoryMessage, SessionHistoryPage};
+
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    let scroller = view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.selected_session_id = Some("archive-session".into());
+        view.history_start_index = 160;
+        view.history_has_earlier = true;
+        let messages = (160..170)
+            .map(|index| SessionHistoryMessage {
+                archive_index: Some(index),
+                role: "assistant".into(),
+                text: format!("Message {index}\n\n{}", "A tall archived row.\n\n".repeat(32)),
+            })
+            .collect();
+        view.transcript
+            .replace_prepared(super::prepare_session_history("archive-session", messages));
+        view.transcript.follow_latest();
+        view.message_scroller.clone()
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("load-earlier-history").role(), Some(gpui_kit::Role::Button));
+        scroller.update(cx, |state, cx| assert!(state.scroll_to_item(5, cx)));
+        window.render_frame(cx);
+        window.click("load-earlier-history", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("earlier history request")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_HISTORY);
+    assert_eq!(params["sessionId"], "archive-session");
+    assert_eq!(params["beforeIndex"], 160);
+    assert!(params["limit"].as_u64().is_some_and(|limit| limit > 0 && limit <= 160));
+    let request_id = params["requestId"].as_str().unwrap().to_string();
+    let before = cx.update(|cx| scroller.read(cx).logical_scroll_top());
+
+    let page = SessionHistoryPage {
+        session_id: "archive-session".into(),
+        request_id,
+        start_index: 157,
+        messages: (157..160)
+            .map(|index| SessionHistoryMessage {
+                archive_index: Some(index),
+                role: "assistant".into(),
+                text: format!("Earlier {index}\n\n{}", "Earlier archived row.\n\n".repeat(24)),
+            })
+            .collect(),
+        has_earlier: true,
+    };
+    view.update(cx, |view, cx| view.begin_session_history_page(json!(page), cx));
+    cx.run_until_parked();
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let after = scroller.read(cx).logical_scroll_top();
+        assert_eq!(after.item_ix, before.item_ix + 3);
+        assert!((after.offset_in_item - before.offset_in_item).abs() <= px(1.));
+        view.update(cx, |view, _| {
+            assert_eq!(view.history_start_index, 157);
+            assert!(view.history_has_earlier);
+            assert!(!view.history_page_loading);
+            assert_eq!(view.transcript.len(), 13);
+            assert_eq!(view.transcript.get(3).unwrap().text.as_ref().lines().next(), Some("Message 160"));
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn stale_history_page_error_does_not_clear_the_current_request(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.history_page_request_id = Some("current-page".into());
+        view.history_page_limit = 80;
+        view.history_page_loading = true;
+        view.handle_backend_event(
+            BackendEvent::SessionHistoryResponse {
+                request_id: "stale-page".into(),
+                result: None,
+                error: Some("old session failed".into()),
+            },
+            cx,
+        );
+        assert_eq!(view.history_page_request_id.as_deref(), Some("current-page"));
+        assert_eq!(view.history_page_limit, 80);
+        assert!(view.history_page_loading);
+        assert!(view.history_page_error.is_none());
+    });
 }
 
 #[gpui_kit::test]

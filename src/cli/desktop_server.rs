@@ -44,7 +44,7 @@ use crate::agent::runloop::unified::turn::run_single_agent_loop_unified_with_hos
 use crate::startup::StartupContext;
 
 const MAX_SESSIONS: usize = 200;
-const MAX_RESTORED_MESSAGES: usize = 160;
+const MAX_RESTORED_MESSAGES: usize = protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES;
 const MAX_RESTORED_MESSAGE_BYTES: usize = 4 * 1024;
 const MAX_RESTORED_HISTORY_BYTES: usize = 700 * 1024;
 const MAX_RESTORED_SPOOLED_OUTPUT_BYTES: usize = 32 * 1024;
@@ -462,13 +462,47 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
                     .context("inspector history task failed")??;
             start_session(context, params.session_id.clone(), Some(resume)).await?;
             context.state.lock().await.session_id = Some(params.session_id.clone());
+            let history = restored_history_page(&listing.snapshot.messages, None, MAX_RESTORED_MESSAGES);
             let result = protocol::SessionLoadResult {
                 session: session_summary(&listing),
-                messages: restored_history(&listing),
+                messages: history.messages,
+                history_start_index: history.start_index,
+                history_has_earlier: history.has_earlier,
                 review_items: inspector_history.items,
                 review_history_incomplete: inspector_history.incomplete,
                 activity_items: inspector_history.activity_items,
                 activity_history_incomplete: inspector_history.activity_incomplete,
+            };
+            Ok((serde_json::to_value(result)?, false))
+        }
+        method::SESSION_HISTORY => {
+            let params: protocol::SessionHistoryParams = parse_params(&request.params)?;
+            if params.request_id.is_empty() || params.request_id.len() > 128 {
+                bail!("invalid session history request identity");
+            }
+            if params.limit == 0 || params.limit > protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES {
+                bail!("invalid session history page size");
+            }
+            let selected_id = context.state.lock().await.session_id.clone();
+            if selected_id.as_deref() != Some(params.session_id.as_str()) {
+                bail!("session is not selected");
+            }
+            let listing = find_session_by_identifier(&params.session_id)
+                .await?
+                .ok_or_else(|| anyhow!("saved session was not found"))?;
+            if !listing_matches_workspace(&listing, &context.workspace) {
+                bail!("saved session belongs to a different workspace");
+            }
+            if params.before_index > listing.snapshot.messages.len() {
+                bail!("session history cursor is out of range");
+            }
+            let page = restored_history_page(&listing.snapshot.messages, Some(params.before_index), params.limit);
+            let result = protocol::SessionHistoryPage {
+                session_id: params.session_id,
+                request_id: params.request_id,
+                start_index: page.start_index,
+                messages: page.messages,
+                has_earlier: page.has_earlier,
             };
             Ok((serde_json::to_value(result)?, false))
         }
@@ -1481,23 +1515,45 @@ fn restored_inspector_history(workspace: &Path, session_id: &str) -> Result<Rest
     })
 }
 
-fn restored_history(listing: &SessionListing) -> Vec<protocol::SessionHistoryMessage> {
+struct RestoredHistoryPage {
+    start_index: usize,
+    messages: Vec<protocol::SessionHistoryMessage>,
+    has_earlier: bool,
+}
+
+fn restored_history_page(
+    archived_messages: &[vtcode_core::utils::session_archive::SessionMessage],
+    before_index: Option<usize>,
+    limit: usize,
+) -> RestoredHistoryPage {
+    let end = before_index.unwrap_or(archived_messages.len()).min(archived_messages.len());
+    let page_start = end.saturating_sub(limit);
     let mut messages = Vec::new();
     let mut total_bytes = 0_usize;
+    let mut start_index = end;
 
-    for message in listing.snapshot.messages.iter().rev().take(MAX_RESTORED_MESSAGES) {
+    for (archive_index, message) in archived_messages.iter().enumerate().take(end).skip(page_start).rev() {
         let text = bounded_text_projection(&message.content.as_text(), MAX_RESTORED_MESSAGE_BYTES);
-        let restored = protocol::SessionHistoryMessage { role: message.role.to_string(), text };
+        let restored = protocol::SessionHistoryMessage {
+            archive_index: Some(archive_index),
+            role: message.role.to_string(),
+            text,
+        };
         let encoded_size = serde_json::to_vec(&restored).map_or(MAX_RESTORED_MESSAGE_BYTES, |bytes| bytes.len());
         if total_bytes.saturating_add(encoded_size) > MAX_RESTORED_HISTORY_BYTES {
             break;
         }
         total_bytes = total_bytes.saturating_add(encoded_size);
+        start_index = archive_index;
         messages.push(restored);
     }
 
     messages.reverse();
-    messages
+    RestoredHistoryPage {
+        start_index,
+        messages,
+        has_earlier: start_index > 0,
+    }
 }
 
 fn bounded_text_projection(text: &str, max_bytes: usize) -> String {
@@ -1690,6 +1746,30 @@ fn sanitize_public_error(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restored_history_pages_are_bounded_ordered_and_non_overlapping() {
+        use vtcode_core::llm::provider::Message;
+        use vtcode_core::utils::session_archive::SessionMessage;
+
+        let messages = (0..MAX_RESTORED_MESSAGES + 5)
+            .map(|index| SessionMessage::from(&Message::user(format!("message-{index}"))))
+            .collect::<Vec<_>>();
+
+        let recent = restored_history_page(&messages, None, MAX_RESTORED_MESSAGES);
+        assert_eq!(recent.messages.len(), MAX_RESTORED_MESSAGES);
+        assert_eq!(recent.start_index, 5);
+        assert!(recent.has_earlier);
+        assert_eq!(recent.messages.first().unwrap().archive_index, Some(5));
+        assert_eq!(recent.messages.last().unwrap().archive_index, Some(MAX_RESTORED_MESSAGES + 4));
+
+        let earlier = restored_history_page(&messages, Some(recent.start_index), MAX_RESTORED_MESSAGES);
+        assert_eq!(earlier.messages.len(), 5);
+        assert_eq!(earlier.start_index, 0);
+        assert!(!earlier.has_earlier);
+        assert_eq!(earlier.messages.first().unwrap().archive_index, Some(0));
+        assert_eq!(earlier.messages.last().unwrap().archive_index, Some(4));
+    }
 
     fn test_startup_context(workspace: &Path) -> StartupContext {
         use std::collections::BTreeMap;

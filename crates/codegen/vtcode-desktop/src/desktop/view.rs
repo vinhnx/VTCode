@@ -61,7 +61,7 @@ use tokio::sync::mpsc;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
     ConfigurationSnapshot, InteractionChoice, InteractionRequest, InteractionResponse, InteractionStep,
-    SessionHistoryMessage, SessionLoadResult, SessionSummary, ThreadEventNotification,
+    SessionHistoryMessage, SessionHistoryPage, SessionLoadResult, SessionSummary, ThreadEventNotification,
 };
 
 use super::files::{self, FileEntry, FilePreview};
@@ -627,6 +627,14 @@ struct DesktopView {
     session_request: Option<&'static str>,
     session_load_task: Option<Task<()>>,
     session_load_generation: u64,
+    history_start_index: usize,
+    history_has_earlier: bool,
+    history_page_request_id: Option<String>,
+    history_page_limit: usize,
+    history_page_task: Option<Task<()>>,
+    history_page_generation: u64,
+    history_page_loading: bool,
+    history_page_error: Option<String>,
     retained_submission: Option<SubmissionDraft>,
     last_usage: Option<vtcode_exec_events::Usage>,
     theme_id: String,
@@ -870,6 +878,14 @@ impl DesktopView {
             session_request: None,
             session_load_task: None,
             session_load_generation: 0,
+            history_start_index: 0,
+            history_has_earlier: false,
+            history_page_request_id: None,
+            history_page_limit: 0,
+            history_page_task: None,
+            history_page_generation: 0,
+            history_page_loading: false,
+            history_page_error: None,
             retained_submission: None,
             last_usage: None,
             theme_id: themes::DEFAULT_THEME_ID.to_string(),
@@ -1322,6 +1338,51 @@ impl DesktopView {
         let _sent = self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx);
     }
 
+    fn request_earlier_history(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+        if !self.history_has_earlier || self.running || self.history_page_loading {
+            return;
+        }
+        let limit = self
+            .transcript
+            .remaining_capacity()
+            .min(protocol::MAX_SESSION_HISTORY_PAGE_MESSAGES);
+        if limit == 0 {
+            return;
+        }
+        let request_id = uuid_like_id();
+        if self.request(
+            protocol::method::SESSION_HISTORY,
+            json!({
+                "sessionId": session_id,
+                "requestId": request_id,
+                "beforeIndex": self.history_start_index,
+                "limit": limit,
+            }),
+        ) {
+            self.history_page_generation = self.history_page_generation.wrapping_add(1);
+            self.history_page_request_id = Some(request_id);
+            self.history_page_limit = limit;
+            self.history_page_loading = true;
+            self.history_page_error = None;
+        } else {
+            self.history_page_error = Some("The local service request queue is full. Try again.".into());
+        }
+        cx.notify();
+    }
+
+    fn fail_history_page(&mut self, error: String, cx: &mut Context<Self>) {
+        self.history_page_generation = self.history_page_generation.wrapping_add(1);
+        self.history_page_request_id = None;
+        self.history_page_limit = 0;
+        self.history_page_task = None;
+        self.history_page_loading = false;
+        self.history_page_error = Some(error);
+        cx.notify();
+    }
+
     /// Decode and prepare bounded historical content away from the UI thread.
     fn begin_session_load(&mut self, result: Value, cx: &mut Context<Self>) {
         if self.session_request != Some(protocol::method::SESSION_LOAD) {
@@ -1365,6 +1426,82 @@ impl DesktopView {
         cx.notify();
     }
 
+    /// Decode and prepare one bounded archive-history page off the UI thread.
+    fn begin_session_history_page(&mut self, result: Value, cx: &mut Context<Self>) {
+        let Some(request_id) = self.history_page_request_id.clone() else {
+            return;
+        };
+        let Some(session_id) = self.selected_session_id.clone() else {
+            return;
+        };
+        let generation = self.history_page_generation;
+        let before_index = self.history_start_index;
+        let limit = self.history_page_limit;
+        self.history_page_task = Some(cx.spawn(async move |view, cx| {
+            let page = cx
+                .background_spawn(async move {
+                    serde_json::from_value::<SessionHistoryPage>(result).map(|mut page| {
+                        let valid_indices = page.messages.iter().enumerate().all(|(offset, message)| {
+                            page.start_index.checked_add(offset) == message.archive_index
+                        });
+                        let valid = !page.messages.is_empty()
+                            && page.messages.len() <= limit
+                            && page.start_index < before_index
+                            && valid_indices
+                            && page
+                                .messages
+                                .last()
+                                .and_then(|message| message.archive_index)
+                                .is_some_and(|index| index < before_index)
+                            && page.has_earlier == (page.start_index > 0);
+                        valid.then(|| {
+                            let history = prepare_session_history(&page.session_id, std::mem::take(&mut page.messages));
+                            (page, history)
+                        })
+                    })
+                })
+                .await;
+            let _updated = view.update(cx, |view, cx| {
+                if view.history_page_generation != generation
+                    || view.history_page_request_id.as_deref() != Some(request_id.as_str())
+                {
+                    return;
+                }
+                if let Some(task) = view.history_page_task.take() {
+                    task.detach();
+                }
+                view.history_page_request_id = None;
+                view.history_page_limit = 0;
+                view.history_page_loading = false;
+                match page {
+                    Ok(Some((page, history)))
+                        if page.request_id == request_id
+                            && page.session_id == session_id
+                            && view.selected_session_id.as_deref() == Some(session_id.as_str()) =>
+                    {
+                        let inserted = view.transcript.prepend_prepared(history);
+                        if inserted == 0 {
+                            view.history_page_error = Some(
+                                "The transcript reached its local message limit. Start a new session to continue browsing.".into(),
+                            );
+                        } else {
+                            view.history_start_index = page.start_index;
+                            view.history_has_earlier = page.has_earlier;
+                            view.history_page_error = None;
+                        }
+                    }
+                    Ok(_) => {
+                        view.history_page_error = Some("The local service returned an invalid history page.".into());
+                    }
+                    Err(_) => {
+                        view.history_page_error = Some("The local service returned an invalid history page.".into());
+                    }
+                }
+                cx.notify();
+            });
+        }));
+    }
+
     fn accept_loaded_session(
         &mut self,
         loaded: SessionLoadResult,
@@ -1397,6 +1534,8 @@ impl DesktopView {
 
         let retained_submission = self.retained_submission.take();
         self.load_history(history);
+        self.history_start_index = loaded.history_start_index;
+        self.history_has_earlier = loaded.history_has_earlier && loaded.history_start_index > 0;
         self.restored_review_history_incomplete = loaded.review_history_incomplete;
         self.restored_activity_history_incomplete = loaded.activity_history_incomplete;
         for item in &loaded.review_items {
@@ -2546,6 +2685,7 @@ impl DesktopView {
                     if let Some(pending) = pending_item_update.take() {
                         self.process_drained_event(pending, window, cx);
                     }
+                    self.cancel_session_load_task();
                     self.backend = None;
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -2677,6 +2817,10 @@ impl DesktopView {
                     self.session_request = None;
                 }
                 if let Some(error) = error {
+                    if method == protocol::method::SESSION_HISTORY {
+                        self.fail_history_page(error, cx);
+                        return;
+                    }
                     if self.session_request == Some(method.as_str()) {
                         self.session_request = None;
                     }
@@ -2954,6 +3098,7 @@ impl DesktopView {
                         self.status = "Session closed. Start a new session to continue.".to_string();
                     }
                     protocol::method::SESSION_LOAD => self.begin_session_load(result, cx),
+                    protocol::method::SESSION_HISTORY => self.begin_session_history_page(result, cx),
                     protocol::method::TURN_SUBMIT => {
                         let accepted =
                             serde_json::from_value::<protocol::TurnAccepted>(result)
@@ -2985,6 +3130,18 @@ impl DesktopView {
                         self.status = "Cancellation accepted; waiting for cleanup…".to_string();
                     }
                     _ => {}
+                }
+            }
+            BackendEvent::SessionHistoryResponse { request_id, result, error } => {
+                if self.history_page_request_id.as_deref() != Some(request_id.as_str()) {
+                    return;
+                }
+                if let Some(error) = error {
+                    self.fail_history_page(error, cx);
+                } else if let Some(result) = result {
+                    self.begin_session_history_page(result, cx);
+                } else {
+                    self.fail_history_page("The local service returned an empty history response.".into(), cx);
                 }
             }
             BackendEvent::ThreadEvent(notification) => {
@@ -3420,6 +3577,12 @@ impl DesktopView {
     fn cancel_session_load_task(&mut self) {
         self.session_load_generation = self.session_load_generation.wrapping_add(1);
         self.session_load_task = None;
+        self.history_page_generation = self.history_page_generation.wrapping_add(1);
+        self.history_page_request_id = None;
+        self.history_page_limit = 0;
+        self.history_page_task = None;
+        self.history_page_loading = false;
+        self.history_page_error = None;
     }
 
     /// Clear session-owned projections together so another conversation cannot inherit them.
@@ -3428,6 +3591,8 @@ impl DesktopView {
         self.active_primary_agent_display = None;
         self.transcript.clear();
         self.restored_activity.clear();
+        self.history_start_index = 0;
+        self.history_has_earlier = false;
         self.selected_output_id = None;
         self.activity_scroll = VirtualListScrollHandle::new();
         self.restored_review_history_incomplete = false;
@@ -5072,6 +5237,10 @@ impl DesktopView {
             for change in changes {
                 match change {
                     TranscriptLayoutChange::Reset(item_count) => state.reset(item_count, cx),
+                    TranscriptLayoutChange::Prepend(count) => {
+                        let applied = state.prepend(count, cx);
+                        debug_assert!(applied, "transcript and message scroller row counts diverged");
+                    }
                     TranscriptLayoutChange::Splice { range, count } => {
                         let applied = state.splice(range, count, cx);
                         debug_assert!(applied, "transcript and message scroller row counts diverged");
@@ -5199,7 +5368,41 @@ impl DesktopView {
                 )
                 .into_any_element()
         } else {
-            MessageScroller::new(
+            let remaining_history_capacity = self.transcript.remaining_capacity();
+            let mut transcript_content = div().size_full().min_h_0().flex().flex_col();
+            if self.history_has_earlier || self.history_page_loading || self.history_page_error.is_some() {
+                let mut history_bar = div().w_full().flex().flex_col().items_center().gap_1().px_3().py_1();
+                if let Some(error) = &self.history_page_error {
+                    history_bar =
+                        history_bar.child(warning_alert("history-page-error", error.clone(), &cx.theme().colors));
+                }
+                if self.history_has_earlier && remaining_history_capacity == 0 {
+                    history_bar = history_bar.child(
+                        div()
+                            .id("history-page-limit")
+                            .role(gpui_kit::Role::Status)
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground)
+                            .child("The 2,000-message local transcript limit has been reached."),
+                    );
+                } else if self.history_has_earlier {
+                    history_bar = history_bar.child(
+                        desktop_button("load-earlier-history")
+                            .label(if self.history_page_loading {
+                                "Loading earlier messages…"
+                            } else {
+                                "Load earlier messages"
+                            })
+                            .small()
+                            .ghost()
+                            .tooltip("Load the previous archived messages while keeping this position")
+                            .desktop_disabled(self.history_page_loading || self.running)
+                            .on_click(cx.listener(|view, _, _, cx| view.request_earlier_history(cx))),
+                    );
+                }
+                transcript_content = transcript_content.child(history_bar);
+            }
+            let scroller = MessageScroller::new(
                 "transcript-scroller",
                 self.message_scroller.clone(),
                 cx.processor(|view, index, _, cx| view.render_transcript_row(index, cx)),
@@ -5209,9 +5412,12 @@ impl DesktopView {
             // Row spacing is applied by render_transcript_row so collapsed tool
             // placeholders do not each reserve the scroller's default 32 px gap.
             .with_row_style(gpui_kit::StyleRefinement::default().pb_0())
-            .size_full()
+            .w_full()
+            .flex_1()
+            .min_h_0()
             .py_6()
-            .into_any_element()
+            .into_any_element();
+            transcript_content.child(scroller).into_any_element()
         };
         div()
             .id("transcript-scroll")
@@ -7853,26 +8059,39 @@ fn restored_history_element_id(session_id: &str, role: &str, text: &str, occurre
     format!("history-{:016x}", hasher.finish())
 }
 
+fn restored_archive_element_id(session_id: &str, archive_index: usize) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    session_id.hash(&mut hasher);
+    format!("history-{:016x}-{archive_index}", hasher.finish())
+}
+
 /// Prepare stable transcript rows and Markdown accessibility projections for archived messages.
 fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage>) -> Vec<TranscriptItem> {
     let mut occurrences = std::collections::HashMap::<u64, usize>::new();
     messages
         .into_iter()
         .map(|message| {
-            let title = match message.role.as_str() {
+            let SessionHistoryMessage { archive_index, role, text } = message;
+            let title = match role.as_str() {
                 "user" => "You".to_string(),
                 "assistant" => "VT Code".to_string(),
                 "tool" => "Tool result".to_string(),
-                _ => message.role.clone(),
+                _ => role.clone(),
             };
-            let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
-            message.role.hash(&mut fingerprint);
-            message.text.hash(&mut fingerprint);
-            let occurrence = occurrences.entry(fingerprint.finish()).or_default();
-            let id = restored_history_element_id(session_id, &message.role, &message.text, *occurrence);
-            *occurrence = (*occurrence).saturating_add(1);
+            let id = archive_index.map_or_else(
+                || {
+                    let mut fingerprint = std::collections::hash_map::DefaultHasher::new();
+                    role.hash(&mut fingerprint);
+                    text.hash(&mut fingerprint);
+                    let occurrence = occurrences.entry(fingerprint.finish()).or_default();
+                    let id = restored_history_element_id(session_id, &role, &text, *occurrence);
+                    *occurrence = (*occurrence).saturating_add(1);
+                    id
+                },
+                |index| restored_archive_element_id(session_id, index),
+            );
             // Preserve collapsed archive tool text without inventing activity status.
-            let mut item = TranscriptItem::new(id, message.role, title.into(), message.text);
+            let mut item = TranscriptItem::new(id, role, title.into(), text);
             item.has_activity_status = false;
             item.prepare_render_content();
             item

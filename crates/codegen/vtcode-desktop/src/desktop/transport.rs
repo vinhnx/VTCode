@@ -32,6 +32,11 @@ pub(crate) enum BackendEvent {
         result: Option<Value>,
         error: Option<String>,
     },
+    SessionHistoryResponse {
+        request_id: String,
+        result: Option<Value>,
+        error: Option<String>,
+    },
     InteractionResponded {
         identity: InteractionResponseIdentity,
         error: Option<String>,
@@ -59,6 +64,7 @@ pub(crate) struct InteractionResponseIdentity {
 struct PendingRequest {
     method: String,
     interaction: Option<InteractionResponseIdentity>,
+    session_history_request_id: Option<String>,
 }
 
 impl PendingRequest {
@@ -73,10 +79,16 @@ impl PendingRequest {
                 })
             })
             .flatten();
-        Self { method, interaction }
+        let session_history_request_id = (method == protocol::method::SESSION_HISTORY)
+            .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+            .flatten();
+        Self { method, interaction, session_history_request_id }
     }
 
     fn finish(self, result: Option<Value>, error: Option<String>) -> BackendEvent {
+        if let Some(request_id) = self.session_history_request_id {
+            return BackendEvent::SessionHistoryResponse { request_id, result, error };
+        }
         match self.interaction {
             Some(identity) => BackendEvent::InteractionResponded { identity, error },
             None => BackendEvent::Response { method: self.method, result, error },
@@ -488,6 +500,25 @@ mod tests {
             matches!(event, BackendEvent::Response { method, result: Some(_), error: None } if method == "session/list")
         );
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn session_history_responses_retain_the_page_request_identity() {
+        let mut pending = HashMap::from([(
+            RequestId::Number(10),
+            PendingRequest::new(
+                protocol::method::SESSION_HISTORY.into(),
+                &json!({ "requestId": "page-current", "sessionId": "session" }),
+            ),
+        )]);
+        let event = decode_frame(br#"{"jsonrpc":"2.0","id":10,"error":{"message":"page failed"}}"#, &mut pending)
+            .expect("valid response")
+            .expect("decoded response");
+        assert!(matches!(
+            event,
+            BackendEvent::SessionHistoryResponse { request_id, result: None, error: Some(error) }
+                if request_id == "page-current" && error == "page failed"
+        ));
     }
 
     #[test]

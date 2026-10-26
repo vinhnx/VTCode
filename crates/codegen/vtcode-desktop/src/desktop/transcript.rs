@@ -10,6 +10,7 @@ pub(super) const MAX_TRANSCRIPT_ITEMS: usize = 2_000;
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum TranscriptLayoutChange {
     Reset(usize),
+    Prepend(usize),
     Splice { range: Range<usize>, count: usize },
     Remeasure,
     RemeasureItems(Range<usize>),
@@ -180,6 +181,10 @@ impl Transcript {
         self.items.is_empty()
     }
 
+    pub fn remaining_capacity(&self) -> usize {
+        MAX_TRANSCRIPT_ITEMS.saturating_sub(self.items.len())
+    }
+
     pub fn get(&self, index: usize) -> Option<&TranscriptItem> {
         self.items.get(index)
     }
@@ -236,6 +241,40 @@ impl Transcript {
         for item in items {
             self.push_inner(item, false);
         }
+    }
+
+    /// Prepend prepared archive rows without resetting the reader's scroll anchor.
+    pub(super) fn prepend_prepared(&mut self, items: Vec<TranscriptItem>) -> usize {
+        let count = items.len();
+        if count == 0 || count > self.remaining_capacity() {
+            return 0;
+        }
+
+        let previous_first_tool_expanded = self
+            .items
+            .front()
+            .filter(|item| item.role == "tool")
+            .map(|item| item.activity_expanded);
+        let mut prefix = items;
+        if let Some(expanded) = previous_first_tool_expanded {
+            for item in prefix.iter_mut().rev().take_while(|item| item.role == "tool") {
+                item.activity_expanded = expanded;
+            }
+        }
+
+        let mut merged = VecDeque::with_capacity(self.items.len() + count);
+        merged.extend(prefix);
+        merged.append(&mut self.items);
+        self.items = merged;
+        self.rebuild_activity_group_flags();
+        self.refresh_trailing_tool_group_start();
+        self.layout_changes.push(TranscriptLayoutChange::Prepend(count));
+        let affected_end = count.saturating_add(1).min(self.items.len());
+        if affected_end > 0 {
+            self.layout_changes
+                .push(TranscriptLayoutChange::RemeasureItems(0..affected_end));
+        }
+        count
     }
 
     fn push_inner(&mut self, mut item: TranscriptItem, prepare_render_content: bool) {
@@ -630,6 +669,32 @@ mod tests {
 
         transcript.upsert(item(1, "assistant", "A **changed** response."));
         assert_eq!(transcript.get(0).unwrap().markdown.as_str(), "A **changed** response.");
+    }
+
+    #[test]
+    fn prepending_history_preserves_layout_anchor_and_tool_group_state() {
+        let mut transcript = Transcript::default();
+        transcript.push(item(3, "tool", "completed"));
+        transcript.push(item(4, "tool", "running"));
+        let _initial_layout = transcript.take_layout_changes();
+        transcript.toggle_activity_group("3");
+        let _expanded_layout = transcript.take_layout_changes();
+
+        let inserted =
+            transcript.prepend_prepared(vec![item(1, "assistant", "Earlier context"), item(2, "tool", "completed")]);
+
+        assert_eq!(inserted, 2);
+        assert_eq!(transcript.items().map(|row| row.id.as_str()).collect::<Vec<_>>(), ["1", "2", "3", "4"]);
+        assert_eq!(transcript.activity_group(1), Some(1..4));
+        assert!(transcript.get(1).unwrap().activity_expanded);
+        assert!(transcript.get(2).unwrap().activity_expanded);
+        assert_eq!(
+            transcript.take_layout_changes(),
+            vec![
+                super::TranscriptLayoutChange::Prepend(2),
+                super::TranscriptLayoutChange::RemeasureItems(0..3),
+            ]
+        );
     }
 
     #[test]

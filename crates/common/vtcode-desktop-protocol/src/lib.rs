@@ -490,6 +490,9 @@ pub struct SessionSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionHistoryMessage {
+    /// Stable zero-based index in the archived session snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive_index: Option<usize>,
     /// Message role such as `user`, `assistant`, or `tool`.
     pub role: String,
     /// Text projection of the persisted message content.
@@ -504,6 +507,12 @@ pub struct SessionLoadResult {
     pub session: SessionSummary,
     /// Recent messages restored from the archive snapshot.
     pub messages: Vec<SessionHistoryMessage>,
+    /// Index of the earliest restored message in the archive snapshot.
+    #[serde(default)]
+    pub history_start_index: usize,
+    /// Whether earlier archived messages can be requested.
+    #[serde(default)]
+    pub history_has_earlier: bool,
     /// Recent file-change snapshots from canonical history, in persisted order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub review_items: Vec<vtcode_exec_events::ThreadItem>,
@@ -516,6 +525,36 @@ pub struct SessionLoadResult {
     /// Whether bounded history projection omitted activity or output evidence.
     #[serde(default)]
     pub activity_history_incomplete: bool,
+}
+
+/// Request an earlier bounded page of the selected archived conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHistoryParams {
+    /// Durable session identifier.
+    pub session_id: String,
+    /// Request identity echoed by the service to reject stale pages.
+    pub request_id: String,
+    /// Exclusive end index for the page; use the earliest loaded archive index.
+    pub before_index: usize,
+    /// Number of messages requested, capped by [`MAX_SESSION_HISTORY_PAGE_MESSAGES`].
+    pub limit: usize,
+}
+
+/// One bounded earlier page from a durable conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHistoryPage {
+    /// Durable session identifier that owns the page.
+    pub session_id: String,
+    /// Request identity echoed from [`SessionHistoryParams`].
+    pub request_id: String,
+    /// Index of the earliest message included in this page.
+    pub start_index: usize,
+    /// Messages in chronological order.
+    pub messages: Vec<SessionHistoryMessage>,
+    /// Whether the archive contains messages before this page.
+    pub has_earlier: bool,
 }
 
 /// Request identity for one bounded read-only Git snapshot.
@@ -794,6 +833,8 @@ pub mod method {
     pub const SESSION_CREATE: &str = "session/create";
     /// Load a durable session.
     pub const SESSION_LOAD: &str = "session/load";
+    /// Load one bounded earlier page from the selected durable session.
+    pub const SESSION_HISTORY: &str = "session/history";
     /// Close the selected session after cleanup.
     pub const SESSION_CLOSE: &str = "session/close";
     /// Submit a user turn.
@@ -835,6 +876,9 @@ pub mod method {
     /// Revoke the bridge's pairings and stop its listener.
     pub const WEBMCP_STOP: &str = "webmcp/stop";
 }
+
+/// Maximum message count accepted by one desktop archive-history page request.
+pub const MAX_SESSION_HISTORY_PAGE_MESSAGES: usize = 160;
 
 /// Error raised by protocol framing, negotiation, or identity validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1248,9 +1292,38 @@ mod tests {
         assert!(!loaded.review_history_incomplete);
         assert!(loaded.activity_items.is_empty());
         assert!(!loaded.activity_history_incomplete);
+        assert_eq!(loaded.history_start_index, 0);
+        assert!(!loaded.history_has_earlier);
+        assert_eq!(loaded.messages[0].archive_index, None);
         assert_eq!(loaded.messages[0].text, "Continue");
         let round_trip: SessionLoadResult = serde_json::from_value(serde_json::to_value(&loaded).unwrap()).unwrap();
         assert_eq!(round_trip, loaded);
+    }
+
+    #[test]
+    fn session_history_page_round_trips_archive_cursor_and_request_identity() {
+        let params = SessionHistoryParams {
+            session_id: "saved-session".into(),
+            request_id: "page-2".into(),
+            before_index: 160,
+            limit: 80,
+        };
+        let page = SessionHistoryPage {
+            session_id: params.session_id.clone(),
+            request_id: params.request_id.clone(),
+            start_index: 80,
+            messages: vec![SessionHistoryMessage {
+                archive_index: Some(80),
+                role: "assistant".into(),
+                text: "Earlier reply".into(),
+            }],
+            has_earlier: true,
+        };
+        let decoded_params: SessionHistoryParams =
+            serde_json::from_value(serde_json::to_value(&params).unwrap()).unwrap();
+        let decoded_page: SessionHistoryPage = serde_json::from_value(serde_json::to_value(&page).unwrap()).unwrap();
+        assert_eq!(decoded_params, params);
+        assert_eq!(decoded_page, page);
     }
 
     #[test]
