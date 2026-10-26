@@ -29,7 +29,7 @@ measured-list, approval, persistence, or accessibility owners.
 | [collapsible](https://gpui-kit.com/component/collapsible) | Retain app-owned pane visibility; no extra disclosure or animated layer needed. |
 | [color-picker](https://gpui-kit.com/component/color-picker) | Applied to provider-supported reasoning effort with native step buttons and typed runtime updates. |
 | [combobox](https://gpui-kit.com/component/combobox) | Applied: retained filtered context/model palettes; stable sections survive asynchronous discovery. |
-| [command](https://gpui-kit.com/component/command) | Applied: retained filtered context/model palettes and conversation search; stable message/activity IDs jump through the measured MessageScroller, reveal tool details, and load bounded older-history pages without replacing the archive pager. |
+| [command](https://gpui-kit.com/component/command) | Applied: retained filtered context/model palettes and conversation search; stable message/activity IDs jump through the measured MessageScroller, reveal tool details, open captured output in the inspector, and load bounded older-history pages without replacing the archive pager. |
 | [data-table](https://gpui-kit.com/component/data-table) | Not needed for the current coding-workspace workflows or available data. |
 | [date-picker](https://gpui-kit.com/component/date-picker) | Not needed for the current coding-workspace workflows or available data. |
 | [description-list](https://gpui-kit.com/component/description-list) | Reviewed presentation options; keep essential metadata visible and avoid extra decoration/state. |

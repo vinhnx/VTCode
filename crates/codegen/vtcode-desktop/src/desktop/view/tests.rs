@@ -2157,6 +2157,66 @@ fn conversation_search_includes_tool_activity_and_reveals_the_matching_row(cx: &
 }
 
 #[gpui_kit::test]
+fn conversation_search_finds_restored_tool_output_and_opens_it_in_the_inspector(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let session_id = "output-search-thread".to_string();
+    view.update(cx, |view, _| {
+        view.selected_session_id = Some(session_id.clone());
+        let mut item = TranscriptItem::new(
+            "archived-command".into(),
+            "tool".into(),
+            "Run command".into(),
+            "completed\n\ncargo check".into(),
+        );
+        item.output = Some("archived-only-output-marker\ncompiler finished".into());
+        view.restored_activity.push(item);
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.open_conversation_search(session_id.clone(), window, cx));
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.render_frame(cx);
+        window.within("command-palette").input("archived-only-output-marker", cx);
+        window.render_frame(cx);
+
+        let search = view.read(cx).palette.as_ref().unwrap().clone();
+        assert_eq!(search.read(cx).matched_count(), 1);
+        let target_action = view
+            .read(cx)
+            .palette_groups
+            .iter()
+            .flat_map(|(_, entries)| entries)
+            .find(|entry| entry.label.contains("archived-only-output-marker"))
+            .unwrap()
+            .action
+            .clone();
+        assert!(matches!(target_action, super::PaletteAction::ShowActivityOutput { .. }));
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert!(view_state.palette.is_none());
+        assert!(view_state.inspector_open);
+        assert_eq!(view_state.inspector_tab, super::inspector::InspectorTab::Output);
+        assert_eq!(view_state.selected_output_id.as_deref(), Some("archived-command"));
+        let output = super::inspector::output_for(
+            &view_state.transcript,
+            &view_state.restored_activity,
+            view_state.selected_output_id.as_deref(),
+        )
+        .unwrap();
+        assert!(output.text.contains("archived-only-output-marker"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::{SessionHistoryMessage, SessionHistoryPage};
 

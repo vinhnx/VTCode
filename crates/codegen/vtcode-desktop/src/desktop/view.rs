@@ -424,6 +424,7 @@ enum PaletteAction {
     CloseSession,
     OpenConversationSearch { session_id: String },
     JumpToTranscriptItem { session_id: String, item_id: String },
+    ShowActivityOutput { session_id: String, item_id: String },
     ChooseModel,
     ChooseWorkspace,
     RefreshSessions,
@@ -1580,6 +1581,7 @@ impl DesktopView {
                 } else {
                     let _previous = view.restored_output_cursors.remove(&pending.item_id);
                 }
+                view.refresh_conversation_search(&pending.session_id);
                 cx.notify();
             });
         }));
@@ -2251,7 +2253,7 @@ impl DesktopView {
             ],
         ));
         if let Some(session_id) = self.selected_session_id.clone()
-            && self.has_searchable_conversation_messages()
+            && self.has_searchable_conversation_content()
         {
             groups.push((
                 "Conversation".into(),
@@ -2305,7 +2307,7 @@ impl DesktopView {
 
     fn open_conversation_search(&mut self, session_id: String, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_session_id.as_deref() != Some(session_id.as_str())
-            || !self.has_searchable_conversation_messages()
+            || !self.has_searchable_conversation_content()
         {
             return;
         }
@@ -2314,8 +2316,20 @@ impl DesktopView {
             return;
         }
 
-        let messages = self.conversation_search_messages(&session_id);
-        self.show_palette(PaletteKind::ConversationSearch, vec![("Loaded messages".into(), messages)], window, cx);
+        self.show_palette(PaletteKind::ConversationSearch, self.conversation_search_groups(&session_id), window, cx);
+    }
+
+    fn conversation_search_groups(&self, session_id: &str) -> Vec<(String, Vec<PaletteCommand>)> {
+        let messages = self.conversation_search_messages(session_id);
+        let outputs = self.conversation_search_outputs(session_id);
+        let mut groups = Vec::with_capacity(2);
+        if !messages.is_empty() {
+            groups.push(("Loaded messages".into(), messages));
+        }
+        if !outputs.is_empty() {
+            groups.push(("Loaded tool output".into(), outputs));
+        }
+        groups
     }
 
     fn conversation_search_messages(&self, session_id: &str) -> Vec<PaletteCommand> {
@@ -2346,20 +2360,46 @@ impl DesktopView {
             .collect()
     }
 
+    fn conversation_search_outputs(&self, session_id: &str) -> Vec<PaletteCommand> {
+        let mut seen = HashSet::new();
+        self.restored_activity
+            .iter()
+            .chain(self.transcript.items())
+            .filter(|item| item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
+            .filter(|item| seen.insert(item.id.as_str()))
+            .filter_map(|item| {
+                let output = item.output.as_ref()?;
+                let searchable_output = inspector::output_tail(output);
+                let mut entry = command(
+                    format!("Output · {} · {}", item.title, transcript_search_snippet(&searchable_output)),
+                    PaletteAction::ShowActivityOutput {
+                        session_id: session_id.to_string(),
+                        item_id: item.id.clone(),
+                    },
+                );
+                entry.shared_keywords.extend([searchable_output, item.title.clone()]);
+                Some(entry)
+            })
+            .collect()
+    }
+
     fn refresh_conversation_search(&mut self, session_id: &str) {
         if self.palette_kind != PaletteKind::ConversationSearch
             || self.selected_session_id.as_deref() != Some(session_id)
         {
             return;
         }
-        let messages = self.conversation_search_messages(session_id);
-        self.palette_groups = share_palette_commands(vec![("Loaded messages".into(), messages)]);
+        self.palette_groups = share_palette_commands(self.conversation_search_groups(session_id));
     }
 
-    fn has_searchable_conversation_messages(&self) -> bool {
-        self.transcript
-            .items()
-            .any(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+    fn has_searchable_conversation_content(&self) -> bool {
+        self.transcript.items().any(|item| {
+            (is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
+                || (item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
+        }) || self
+            .restored_activity
+            .iter()
+            .any(|item| item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
     }
 
     fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2540,6 +2580,11 @@ impl DesktopView {
                     }
                 }
             }
+            PaletteAction::ShowActivityOutput { session_id, item_id } => {
+                if self.selected_session_id.as_deref() == Some(session_id.as_str()) {
+                    self.select_activity_output(item_id, window, cx);
+                }
+            }
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
             PaletteAction::RefreshSessions => {
@@ -2609,7 +2654,7 @@ impl DesktopView {
             PaletteAction::NewSession | PaletteAction::ChooseModel => self.session_change_allowed(None),
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
-                    && self.has_searchable_conversation_messages()
+                    && self.has_searchable_conversation_content()
             }
             PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
@@ -2618,6 +2663,18 @@ impl DesktopView {
                             .get(index)
                             .is_some_and(|item| is_searchable_conversation_role(&item.role))
                     })
+            }
+            PaletteAction::ShowActivityOutput { session_id, item_id } => {
+                self.selected_session_id.as_deref() == Some(session_id.as_str())
+                    && (self
+                        .restored_activity
+                        .iter()
+                        .any(|item| item.id == *item_id && item.role == "tool" && item.output.is_some())
+                        || self
+                            .transcript
+                            .position_by_id(item_id)
+                            .and_then(|index| self.transcript.get(index))
+                            .is_some_and(|item| item.role == "tool" && item.output.is_some()))
             }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
             PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {
@@ -7547,7 +7604,7 @@ impl DesktopView {
         } else if self.palette_kind == PaletteKind::ReviewFiles {
             "Search changed files…".to_owned()
         } else if conversation_search {
-            "Search messages and tool activity…".to_owned()
+            "Search messages and visible output…".to_owned()
         } else if prompt_history {
             "Search prompts in this thread…".to_owned()
         } else if modes {
@@ -7569,7 +7626,7 @@ impl DesktopView {
                         .py_2()
                         .text_xs()
                         .text_color(muted_foreground)
-                        .child("Searches loaded user, VT Code, and tool activity")
+                        .child("Searches loaded messages and visible tool output")
                 })
             })
             .empty(move |_, _, _| {
@@ -7584,7 +7641,7 @@ impl DesktopView {
                         } else if modes && catalog_empty {
                             "Agent modes unavailable"
                         } else if conversation_search && older_history_available {
-                            "No match in loaded messages"
+                            "No match in loaded conversation"
                         } else {
                             "No matching results"
                         },
@@ -8287,6 +8344,10 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::InsertDraft(value) => value.hash(&mut hasher),
         PaletteAction::OpenConversationSearch { session_id } => session_id.hash(&mut hasher),
         PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
+            session_id.hash(&mut hasher);
+            item_id.hash(&mut hasher);
+        }
+        PaletteAction::ShowActivityOutput { session_id, item_id } => {
             session_id.hash(&mut hasher);
             item_id.hash(&mut hasher);
         }
