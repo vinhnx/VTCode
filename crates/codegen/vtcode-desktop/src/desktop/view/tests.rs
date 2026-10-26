@@ -5291,6 +5291,12 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-split").checked(), Some(false));
         assert!(window.find("workspace-review-diff").bounds().size.width > px(900.));
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
+        focus_element_by_tab(window, "workspace-review-next-file", cx);
+        assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
+        window.within("diff-review-panel").press("alt-f7", cx);
+        assert_eq!(window.find("workspace-review-current-file").label(), Some("File 2 of 2 · b.rs"));
+        window.within("diff-review-panel").press("alt-shift-f7", cx);
+        assert_eq!(window.find("workspace-review-current-file").label(), Some("File 1 of 2 · a.rs"));
         window.click("workspace-review-previous-file", cx);
         window.render_frame(cx);
         assert_eq!(window.find("workspace-review-current-file").label(), Some("File 2 of 2 · b.rs"));

@@ -279,6 +279,8 @@ actions!(
         LastSettingsTab,
         NextReviewChange,
         PreviousReviewChange,
+        NextReviewFile,
+        PreviousReviewFile,
         CancelRun,
         DismissOverlay,
         OpenSettings,
@@ -307,6 +309,8 @@ fn init_keybindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("f7", NextReviewChange, Some("VTCodeDiffReview")),
         KeyBinding::new("shift-f7", PreviousReviewChange, Some("VTCodeDiffReview")),
+        KeyBinding::new("alt-f7", NextReviewFile, Some("VTCodeDiffReview")),
+        KeyBinding::new("alt-shift-f7", PreviousReviewFile, Some("VTCodeDiffReview")),
         KeyBinding::new("cmd-w", CloseWindow, Some("VTCodeDesktop")),
         KeyBinding::new("cmd-m", MinimizeWindow, Some("VTCodeDesktop")),
         KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
@@ -4412,6 +4416,12 @@ impl DesktopView {
                             )
                             .on_action(cx.listener(|view, _: &PreviousReviewChange, _, cx| {
                                 view.navigate_review_change(false, cx)
+                            }))
+                            .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| {
+                                view.navigate_workspace_review_file(true, cx)
+                            }))
+                            .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| {
+                                view.navigate_workspace_review_file(false, cx)
                             }))
                             .child(
                                 div()

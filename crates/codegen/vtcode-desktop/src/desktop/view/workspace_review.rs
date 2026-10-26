@@ -14,8 +14,8 @@ use serde_json::json;
 use vtcode_desktop_protocol::{self as protocol, WorkspaceReviewResult};
 
 use super::{
-    DesktopButtonExt, DesktopView, RefreshWorkspace, desktop_button, empty_state, skeleton_line, uuid_like_id,
-    warning_alert,
+    DesktopButtonExt, DesktopView, NextReviewFile, PreviousReviewFile, RefreshWorkspace, desktop_button, empty_state,
+    skeleton_line, uuid_like_id, warning_alert,
 };
 
 pub(super) struct WorkspaceReviewState {
@@ -136,7 +136,7 @@ impl DesktopView {
         review.error = None;
     }
 
-    fn navigate_workspace_review_file(&mut self, forward: bool, cx: &mut Context<Self>) {
+    pub(super) fn navigate_workspace_review_file(&mut self, forward: bool, cx: &mut Context<Self>) {
         let Some(review) = self.workspace_review.as_mut() else {
             return;
         };
@@ -371,6 +371,7 @@ impl DesktopView {
                     .child(
                         desktop_button("workspace-review-previous-file")
                             .label("Previous file")
+                            .tooltip_with_action("Previous file", &PreviousReviewFile, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)
@@ -391,6 +392,7 @@ impl DesktopView {
                     .child(
                         desktop_button("workspace-review-next-file")
                             .label("Next file")
+                            .tooltip_with_action("Next file", &NextReviewFile, Some("VTCodeDiffReview"))
                             .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)

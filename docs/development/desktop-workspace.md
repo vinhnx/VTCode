@@ -557,6 +557,8 @@ review containers clip overflow instead of introducing a competing scroll area.
 | Unified / Split | Changes the retained viewer layout |
 | Next change / `F7` | Navigates to the next changed group in the selected file |
 | Previous change / `Shift+F7` | Navigates to the previous changed group |
+| Next file / `Option+F7` | In working-tree review, selects the next captured file |
+| Previous file / `Option+Shift+F7` | In working-tree review, selects the previous captured file |
 | Copy patch | Copies the exact change-set owning the parsed file preview |
 | Open file | Leaves review and opens the bounded read-only workspace preview |
 | Close / `Escape` | Returns to the inspector and restores previous focus |
