@@ -5500,7 +5500,7 @@ fn output_tab_bounds_rendered_large_output_but_copies_the_full_capture(cx: &mut 
 }
 
 #[test]
-fn restored_output_page_validation_only_allows_utf8_eof_slack() {
+fn restored_output_page_validation_requires_exact_utf8_offsets() {
     let pending = super::PendingOutputPage {
         request_id: "request-1".into(),
         session_id: "session-1".into(),
@@ -5529,14 +5529,14 @@ fn restored_output_page_validation_only_allows_utf8_eof_slack() {
         &cursor(pending.offset + 12)
     ));
     assert!(super::valid_session_output_page(
-        &page(pending.offset + 7, "four", false, pending.offset + 7),
+        &page(pending.offset + 4, "four", false, pending.offset + 4),
         &pending,
-        &cursor(pending.offset + 7)
+        &cursor(pending.offset + 4)
     ));
     assert!(!super::valid_session_output_page(
-        &page(pending.offset + 8, "four", false, pending.offset + 8),
+        &page(pending.offset + 5, "four", false, pending.offset + 5),
         &pending,
-        &cursor(pending.offset + 8)
+        &cursor(pending.offset + 5)
     ));
 }
 
@@ -5737,6 +5737,60 @@ fn stale_output_page_error_does_not_clear_the_current_request(cx: &mut TestAppCo
         assert_eq!(view.output_page_pending.as_ref(), Some(&pending));
         assert!(view.output_page_error.is_none());
     });
+}
+
+#[gpui_kit::test]
+fn failed_historical_output_page_keeps_the_incomplete_marker_and_retry_control(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("archive-session".into());
+        view.selected_output_id = Some("historical-output".into());
+        view.inspector_open = true;
+        view.inspector_tab = crate::desktop::inspector::InspectorTab::Output;
+        let mut item = TranscriptItem::new(
+            "historical-output".into(),
+            "tool".into(),
+            "Archived command".into(),
+            "completed".into(),
+        );
+        item.output = Some(format!("valid prefix{suffix}").into());
+        view.restored_activity.push(item);
+        let _previous = view.restored_output_cursors.insert(
+            "historical-output".into(),
+            vtcode_desktop_protocol::SessionOutputCursor {
+                item_id: "historical-output".into(),
+                next_offset: 12,
+                total_bytes: 20,
+            },
+        );
+        view.output_page_pending = Some(super::PendingOutputPage {
+            request_id: "output-page-1".into(),
+            session_id: "archive-session".into(),
+            item_id: "historical-output".into(),
+            offset: 12,
+        });
+        view.handle_backend_event(
+            BackendEvent::SessionOutputResponse {
+                request_id: "output-page-1".into(),
+                result: None,
+                error: Some("captured output ends with an incomplete UTF-8 sequence".into()),
+            },
+            cx,
+        );
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.find("output-body").label().unwrap().ends_with(suffix));
+        assert!(window.try_find("output-page-error").is_some());
+        assert!(window.try_find("load-more-output").is_some());
+        let state = view.read(cx);
+        assert!(state.restored_output_cursors.contains_key("historical-output"));
+        assert!(state.output_page_pending.is_none());
+        assert!(state.output_page_error.is_some());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]

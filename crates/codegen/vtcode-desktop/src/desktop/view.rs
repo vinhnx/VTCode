@@ -533,8 +533,7 @@ fn valid_session_output_page(
         && byte_delta <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES as u64
         && page.text.len() <= protocol::MAX_SESSION_OUTPUT_PAGE_BYTES
         && page.has_more == (page.next_offset < page.total_bytes)
-        && (!page.has_more || byte_delta == page.text.len() as u64)
-        && (page.has_more || (byte_delta >= page.text.len() as u64 && byte_delta - page.text.len() as u64 <= 3))
+        && byte_delta == page.text.len() as u64
 }
 
 fn append_restored_output_page(

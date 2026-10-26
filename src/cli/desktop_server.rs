@@ -1492,13 +1492,16 @@ fn read_restored_spool_page(workspace: &Path, spool_path: &str, offset: u64) -> 
         .take(protocol::MAX_SESSION_OUTPUT_PAGE_BYTES as u64)
         .read_to_end(&mut bytes)
         .context("failed to read captured output")?;
-    let visible_bytes = match std::str::from_utf8(&bytes) {
-        Ok(_) => bytes.len(),
-        Err(error) if error.error_len().is_none() => error.valid_up_to(),
-        Err(_) => bail!("captured output is not valid UTF-8 text"),
-    };
     let bytes_read = bytes.len() as u64;
     let reached_eof = offset.saturating_add(bytes_read) >= total_bytes;
+    let (visible_bytes, has_incomplete_tail) = match std::str::from_utf8(&bytes) {
+        Ok(_) => (bytes.len(), false),
+        Err(error) if error.error_len().is_none() => (error.valid_up_to(), true),
+        Err(_) => bail!("captured output is not valid UTF-8 text"),
+    };
+    if has_incomplete_tail && reached_eof {
+        bail!("captured output ends with an incomplete UTF-8 sequence");
+    }
     let consumed_bytes = if reached_eof && visible_bytes < bytes.len() {
         bytes_read
     } else {
@@ -2673,6 +2676,22 @@ mod tests {
 
         assert_eq!(assembled, full_output);
         assert!(read_restored_spool_page(&workspace, spool_path, cursor.total_bytes + 1).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restored_spooled_output_rejects_an_incomplete_utf8_sequence_at_eof() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = vtcode_commons::canonicalize(dir.path()).unwrap();
+        let spool_path = ".vtcode/context/tool_outputs/incomplete-utf8.txt";
+        let spool_file = workspace.join(spool_path);
+        std::fs::create_dir_all(spool_file.parent().unwrap()).unwrap();
+        std::fs::write(&spool_file, b"valid\xe2\x82").unwrap();
+
+        let error = read_restored_spool_page(&workspace, spool_path, 0)
+            .err()
+            .expect("an incomplete UTF-8 tail must not be reported as a complete page");
+        assert!(error.to_string().contains("incomplete UTF-8 sequence"));
     }
 
     #[cfg(unix)]
