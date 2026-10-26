@@ -116,6 +116,28 @@ fn agent_message_update_event(session_id: &str, turn_id: &str, item_id: &str, te
     })
 }
 
+fn plan_delta_notification(
+    session_id: &str,
+    turn_id: &str,
+    item_id: &str,
+    delta: &str,
+    include_checkpoint: bool,
+) -> vtcode_desktop_protocol::ThreadEventNotification {
+    use vtcode_exec_events::{PlanDeltaEvent, ThreadEvent};
+
+    vtcode_desktop_protocol::ThreadEventNotification {
+        session_id: session_id.into(),
+        turn_id: Some(turn_id.into()),
+        event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::PlanDelta(Box::new(PlanDeltaEvent {
+            thread_id: session_id.into(),
+            turn_id: turn_id.into(),
+            item_id: item_id.into(),
+            delta: delta.into(),
+            recovery: include_checkpoint.then(Box::default),
+        }))),
+    }
+}
+
 #[test]
 fn item_update_coalescing_requires_the_same_session_turn_and_item() {
     let first = agent_message_update_event("session-a", "turn-a", "item-a", "first snapshot");
@@ -157,6 +179,35 @@ fn event_drain_projects_the_latest_adjacent_item_snapshot(cx: &mut TestAppContex
         });
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn plan_delta_chunks_accumulate_and_empty_recovery_checkpoints_stay_hidden(cx: &mut TestAppContext) {
+    use vtcode_exec_events::{ItemCompletedEvent, PlanItem, ThreadEvent, ThreadItem, ThreadItemDetails};
+
+    let (_, view) = open_desktop(cx);
+    cx.update_entity(&view, |view, _| {
+        view.handle_thread_event(plan_delta_notification("session", "turn", "plan", "", true));
+        assert!(view.transcript.is_empty(), "a checkpoint without text is not a visible plan row");
+
+        view.handle_thread_event(plan_delta_notification("session", "turn", "plan", "Plan: ", false));
+        view.handle_thread_event(plan_delta_notification("session", "turn", "plan", "inspect the change.", false));
+        assert_eq!(view.transcript.len(), 1);
+        assert_eq!(view.transcript.get(0).unwrap().text.as_ref(), "Plan: inspect the change.");
+
+        view.handle_thread_event(vtcode_desktop_protocol::ThreadEventNotification {
+            session_id: "session".into(),
+            turn_id: Some("turn".into()),
+            event: vtcode_exec_events::VersionedThreadEvent::new(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    context: None,
+                    id: "plan".into(),
+                    details: ThreadItemDetails::Plan(PlanItem { text: "Final plan snapshot".into() }),
+                },
+            })),
+        });
+        assert_eq!(view.transcript.get(0).unwrap().text.as_ref(), "Final plan snapshot");
+    });
 }
 
 #[test]

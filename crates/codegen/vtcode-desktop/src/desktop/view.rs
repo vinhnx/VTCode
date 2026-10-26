@@ -3147,9 +3147,8 @@ impl DesktopView {
                 self.finish_unverified_turn(&event.message);
             }
             ThreadEvent::PlanDelta(delta) => {
-                let id = delta.item_id.clone();
-                let text = delta.delta.clone();
-                self.append_or_update_item(id, "assistant", "Plan", &text, true);
+                self.transcript
+                    .append_text(delta.item_id.clone(), "assistant", "Plan".into(), &delta.delta);
             }
             ThreadEvent::ItemStarted(event) => self.update_runtime_item(&event.item),
             ThreadEvent::ItemUpdated(event) => self.update_runtime_item(&event.item),

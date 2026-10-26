@@ -401,6 +401,8 @@ snapshots replace the pending snapshot for the same item, consecutive `plan.delt
 ordered events displace stale snapshots before ever being dropped. A slow GUI therefore degrades the stream instead of
 failing a healthy turn; only a disconnected consumer is fatal, and displaced or dropped events are counted and logged
 by the service pump.
+The transcript appends incremental `plan.delta` chunks to their stable plan row; empty deltas that carry only recovery
+checkpoints remain persistence-only, and the completed plan snapshot replaces the accumulated stream.
 
 | Method | Purpose |
 | --- | --- |

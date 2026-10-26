@@ -337,6 +337,19 @@ impl Transcript {
         }
     }
 
+    /// Append an incremental text chunk to the row with this stable identity.
+    pub fn append_text(&mut self, id: String, role: &str, title: SharedString, delta: &str) {
+        if delta.is_empty() {
+            return;
+        }
+        let mut text = self
+            .position_by_id(&id)
+            .and_then(|index| self.items.get(index))
+            .map_or_else(String::new, |item| item.text.to_string());
+        text.push_str(delta);
+        self.upsert(TranscriptItem::new(id, role.to_string(), title, text));
+    }
+
     pub fn upsert(&mut self, mut item: TranscriptItem) {
         if let Some(index) = self.position_by_id(&item.id) {
             let Some(existing) = self.items.get(index) else {
