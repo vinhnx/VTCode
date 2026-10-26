@@ -277,55 +277,36 @@ fn output_view(item: &TranscriptItem) -> Option<OutputView> {
 
 /// Cap the rendered output tail so a chatty command stays cheap to draw.
 pub(super) fn output_tail(text: &SharedString) -> SharedString {
-    if text.len() <= MAX_OUTPUT_BYTES && text.lines().count() <= MAX_OUTPUT_LINES {
+    let mut start = text.len().saturating_sub(MAX_OUTPUT_BYTES);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    let mut tail = text.get(start..).unwrap_or_default();
+    let mut newlines_to_keep = MAX_OUTPUT_LINES + usize::from(tail.ends_with('\n'));
+    for (index, byte) in tail.bytes().enumerate().rev() {
+        if byte == b'\n' {
+            newlines_to_keep -= 1;
+            if newlines_to_keep == 0 {
+                start += index + 1;
+                tail = text.get(start..).unwrap_or_default();
+                break;
+            }
+        }
+    }
+
+    if start == 0 {
         return text.clone();
     }
 
-    let mut lines = Vec::with_capacity(MAX_OUTPUT_LINES);
-    let mut retained_bytes = 0usize;
-    let mut truncated = false;
-    for line in text.lines().rev() {
-        if lines.len() == MAX_OUTPUT_LINES {
-            truncated = true;
-            break;
-        }
-
-        let separator_bytes = usize::from(!lines.is_empty());
-        let available_bytes = MAX_OUTPUT_BYTES.saturating_sub(retained_bytes.saturating_add(separator_bytes));
-        if line.len() <= available_bytes {
-            retained_bytes = retained_bytes.saturating_add(separator_bytes).saturating_add(line.len());
-            lines.push(line);
-            continue;
-        }
-
-        if available_bytes > 0 {
-            let mut start = line.len().saturating_sub(available_bytes);
-            while !line.is_char_boundary(start) {
-                start += 1;
-            }
-            if let Some(suffix) = line.get(start..) {
-                retained_bytes = retained_bytes.saturating_add(separator_bytes).saturating_add(suffix.len());
-                lines.push(suffix);
-            }
-        }
-        truncated = true;
-        break;
+    // `str::lines()` omits one final line terminator; match the previous
+    // projection's join behavior when building a truncated tail.
+    if let Some(without_terminator) = tail.strip_suffix('\n') {
+        tail = without_terminator;
     }
-
-    if !truncated {
-        return text.clone();
-    }
-
-    lines.reverse();
-    let mut tail = String::with_capacity(OUTPUT_TRUNCATION_NOTICE.len().saturating_add(retained_bytes));
-    tail.push_str(OUTPUT_TRUNCATION_NOTICE);
-    for (index, line) in lines.into_iter().enumerate() {
-        if index > 0 {
-            tail.push('\n');
-        }
-        tail.push_str(line);
-    }
-    tail.into()
+    let mut rendered = String::with_capacity(OUTPUT_TRUNCATION_NOTICE.len().saturating_add(tail.len()));
+    rendered.push_str(OUTPUT_TRUNCATION_NOTICE);
+    rendered.push_str(tail);
+    rendered.into()
 }
 
 fn change_kind(status: DiffFileStatus) -> DiffFileKind {
@@ -569,6 +550,18 @@ mod tests {
     }
 
     #[test]
+    fn output_tail_preserves_a_trailing_newline_at_the_line_limit() {
+        let at_limit: SharedString = format!("{}\n", vec!["line"; MAX_OUTPUT_LINES].join("\n")).into();
+        assert_eq!(output_tail(&at_limit), at_limit);
+
+        let over_limit: SharedString = format!("{}\n", vec!["line"; MAX_OUTPUT_LINES + 1].join("\n")).into();
+        let tail = output_tail(&over_limit);
+        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
+        assert_eq!(tail.lines().count(), MAX_OUTPUT_LINES + 1);
+        assert!(tail.ends_with("line"));
+    }
+
+    #[test]
     fn output_tail_bounds_long_lines_without_splitting_utf8() {
         let long_line: SharedString = format!("prefix\n{}", "界".repeat(MAX_OUTPUT_BYTES / 3 + 100)).into();
         let tail = output_tail(&long_line);
@@ -577,5 +570,15 @@ mod tests {
         assert!(tail.len() <= MAX_OUTPUT_BYTES + OUTPUT_TRUNCATION_NOTICE.len());
         assert!(tail.ends_with("界"));
         assert!(tail.is_char_boundary(tail.len()));
+    }
+
+    #[test]
+    fn output_tail_handles_a_large_single_line_with_a_bounded_tail() {
+        let long_line: SharedString = "x".repeat(MAX_OUTPUT_BYTES * 16).into();
+        let tail = output_tail(&long_line);
+
+        assert!(tail.starts_with(OUTPUT_TRUNCATION_NOTICE));
+        assert_eq!(tail.len(), OUTPUT_TRUNCATION_NOTICE.len() + MAX_OUTPUT_BYTES);
+        assert!(tail.ends_with(&"x".repeat(64)));
     }
 }
