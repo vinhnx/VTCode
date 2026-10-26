@@ -98,7 +98,9 @@ fn desktop_buttons_use_pointer_when_enabled_and_arrow_when_disabled() {
 
 #[test]
 fn activity_details_omit_tool_output_from_the_metadata_copy() {
-    use vtcode_exec_events::{ThreadItemDetails, ToolCallStatus, ToolOutputItem};
+    use vtcode_exec_events::{
+        CommandExecutionItem, CommandExecutionStatus, ThreadItemDetails, ToolCallStatus, ToolOutputItem,
+    };
 
     let details = ThreadItemDetails::ToolOutput(Box::new(ToolOutputItem {
         call_id: "call-1".into(),
@@ -112,6 +114,36 @@ fn activity_details_omit_tool_output_from_the_metadata_copy() {
 
     assert!(payload.contains("call-1"), "tool identity remains available in metadata");
     assert!(!payload.contains("large captured result"), "the separate output field owns captured text");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+        json!({
+            "type": "tool_output",
+            "call_id": "call-1",
+            "tool_call_id": "provider-call-1",
+            "spool_path": ".vtcode/tool-outputs/call-1",
+            "exit_code": 0,
+            "status": "completed"
+        })
+    );
+
+    let command = ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+        command: "cargo check".into(),
+        arguments: Some(json!({ "cwd": "/workspace" })),
+        aggregated_output: "discarded command output".repeat(64),
+        exit_code: None,
+        status: CommandExecutionStatus::InProgress,
+    }));
+    let payload = super::activity_details_payload(&command);
+    assert!(!payload.contains("discarded command output"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+        json!({
+            "type": "command_execution",
+            "command": "cargo check",
+            "arguments": { "cwd": "/workspace" },
+            "status": "in_progress"
+        })
+    );
 }
 
 #[test]
@@ -155,7 +187,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             view.active_turn_id = Some("turn-1".into());
             view.running = true;
             view.event_tx.send(completed_turn("turn-1")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(!view.running);
         });
         window.render_frame(cx);
@@ -166,7 +198,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.event_tx.send(completed_turn("stale-turn")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
         });
     })
     .unwrap();
@@ -187,7 +219,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     })),
                 }))
                 .unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             view.active_turn_id = Some("turn-3".into());
             view.running = true;
@@ -206,7 +238,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
                     selected_choice_ids: Vec::new(),
                 }))
                 .unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(view.interaction.is_some());
         });
         window.render_frame(cx);
@@ -244,7 +276,7 @@ fn inactive_agent_events_post_system_notices_and_click_reopens_the_window(cx: &m
             view.active_turn_id = Some("turn-4".into());
             view.running = true;
             view.event_tx.send(completed_turn("turn-4")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(!view.running);
         });
     })
@@ -539,6 +571,30 @@ fn event_drain_task_is_owned_by_the_desktop_view(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn event_drain_wakes_on_events_and_reschedules_full_batches(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.start_event_drain(cx);
+            for index in 0..MAX_UI_EVENTS_PER_TICK + 3 {
+                view.event_tx
+                    .try_send(BackendEvent::TurnStatus(
+                        json!({ "sessionId": "session", "status": format!("event-{index}") }),
+                    ))
+                    .unwrap();
+            }
+        });
+    })
+    .unwrap();
+
+    cx.run_until_parked();
+    cx.update_entity(&view, |view: &mut DesktopView, _| {
+        assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
+    });
+}
+
+#[gpui_kit::test]
 fn reopening_after_last_window_closes_creates_one_new_window(cx: &mut TestAppContext) {
     let (closed, view) = open_desktop(cx);
     drop(view);
@@ -584,9 +640,9 @@ fn event_drain_yields_to_input_with_a_busy_producer(cx: &mut TestAppContext) {
                     ))
                     .unwrap();
             }
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK - 1));
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert_eq!(view.status, format!("event-{}", MAX_UI_EVENTS_PER_TICK + 2));
         });
     });
@@ -916,6 +972,7 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
                 )),
             });
             assert!(!view.running, "turn completion re-enables session controls");
+            assert!(view.sessions[0].completed, "the selected session row reflects completion locally");
         });
 
         window.click("close-session", cx);
@@ -925,10 +982,6 @@ fn first_submit_names_the_session_and_close_deselects_it(cx: &mut TestAppContext
         panic!("expected turn request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
-    let BackendCommand::Request { method, params: _ } = requests.try_recv().unwrap() else {
-        panic!("expected session list refresh");
-    };
-    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
     let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
         panic!("expected close request");
     };
@@ -1489,6 +1542,32 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
         panic!("expected session create request");
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_CREATE);
+}
+
+#[gpui_kit::test]
+fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.open_command_palette(window, cx);
+            assert!(
+                view.palette_groups[0]
+                    .1
+                    .iter()
+                    .any(|entry| entry.label == "Refresh recent threads")
+            );
+            view.run_palette_action(super::PaletteAction::RefreshSessions, window, cx);
+        });
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("expected recent thread refresh request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LIST);
+    assert_eq!(params, json!({}));
 }
 
 #[gpui_kit::test]
@@ -2173,6 +2252,67 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
 }
 
 #[gpui_kit::test]
+fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 1600., 900.);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.sidebar_open = false;
+            view.inspector_open = false;
+            view.transcript.push(TranscriptItem::new(
+                "assistant-center".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "An assistant message.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "user-center".into(),
+                "user".into(),
+                "You".into(),
+                "A user message.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "tool-center".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "Finished successfully".into(),
+            ));
+        });
+        window.render_frame(cx);
+
+        let viewport_center = window.find("transcript-scroll").bounds().center().x;
+        for id in ["assistant-center", "user-center", "tool-center"] {
+            let column = window.find(format!("transcript-content-{id}")).bounds();
+            assert!(
+                (column.center().x - viewport_center).abs() <= px(1.),
+                "transcript column {id} should be centered in the conversation viewport: column={column:?}, viewport_center={viewport_center:?}"
+            );
+        }
+        let assistant_column = window.find("transcript-content-assistant-center").bounds();
+        let assistant_body = window.find("message-body-assistant-center").bounds();
+        assert!(
+            (assistant_body.origin.x - assistant_column.origin.x).abs() <= px(1.),
+            "assistant text should begin at the centered transcript column inset: body={assistant_body:?}, column={assistant_column:?}"
+        );
+    })
+    .unwrap();
+
+    cx.simulate_window_resize(window, size(px(640.), px(900.)));
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let row = window.find("transcript-row-assistant-center").bounds();
+        let column = window.find("transcript-content-assistant-center").bounds();
+        let viewport = window.find("transcript-scroll").bounds();
+        assert!(
+            (column.origin.x - row.origin.x).abs() <= px(1.)
+                && (column.right() - row.right()).abs() <= px(1.),
+            "the content column should use the scroller's inset without adding another row inset: row={row:?}, column={column:?}"
+        );
+        assert!(column.origin.x >= viewport.origin.x && column.right() <= viewport.right());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppContext) {
     let first = tempfile::TempDir::new().unwrap();
     let second = tempfile::TempDir::new().unwrap();
@@ -2627,7 +2767,7 @@ fn service_exit_clears_pending_interaction_and_answer_before_retry(cx: &mut Test
                 .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
                 .unwrap();
 
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             assert!(view.interaction.is_none());
             assert!(view.interaction_choice_ids.is_empty());
@@ -2654,7 +2794,7 @@ fn service_exit_discards_stale_webmcp_state_and_refreshes_after_reconnect(cx: &m
                 .send(BackendEvent::Exited { status: Some(1), authentication_required: false })
                 .unwrap();
 
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
 
             assert!(view.webmcp_status.is_none());
             assert!(view.webmcp_pairing.is_none(), "pairing codes belong to the exited service process");
@@ -4108,7 +4248,7 @@ fn selected_diff_tracks_runtime_updates_and_keeps_unrelated_review_state(cx: &mu
         // A malformed replacement invalidates this item's preview rather than leaving a stale viewer.
         view.update(cx, |view, cx| {
             view.event_tx.send(notification("edit", "src/app.rs", "invalid patch")).unwrap();
-            view.drain_events(window, cx);
+            let _batch_full = view.drain_events(window, cx);
             assert!(view.selected_change.is_none());
             assert!(view.change_viewer.is_none());
             assert!(!view.review_open);
@@ -5533,6 +5673,38 @@ fn settings_sheet_and_category_tabs_fit_a_narrow_window(cx: &mut TestAppContext)
         assert!(content.origin.x >= panel.origin.x);
         assert!(content.origin.x + content.size.width <= panel.origin.x + panel.size.width);
         assert!(window.try_find("keyboard-settings").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn settings_tab_bar_stays_fixed_while_settings_content_scrolls(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 560.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_font_size(view.theme_mode, 24);
+            view.apply_typography(cx);
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        window.render_frame(cx);
+        select_settings_category(window, 2, cx);
+        window.render_frame(cx);
+
+        let sheet = window.find("sheet-content").bounds();
+        let panel = window.find("settings-panel").bounds();
+        assert!(
+            panel.origin.y + panel.size.height <= sheet.origin.y + sheet.size.height,
+            "large UI typography should keep settings within the sheet: panel={panel:?}, sheet={sheet:?}"
+        );
+        let navigation_before = window.find("settings-navigation").bounds();
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-240.))), cx);
+        window.render_frame(cx);
+
+        let offset = view.read(cx).settings_scroll.offset().y;
+        assert!(offset != px(0.), "settings content should scroll independently");
+        assert_eq!(window.find("settings-navigation").bounds(), navigation_before);
     })
     .unwrap();
 }

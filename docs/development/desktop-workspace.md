@@ -33,6 +33,9 @@ The optional first argument selects the output `.app` path. The script builds th
 places the service in `Contents/Helpers`, signs both executables before signing the app, and verifies the bundle. The
 default output is `dist/VT Code.app`; the script will not overwrite an existing output. Ad hoc signatures support local
 development only. They do not establish Developer ID trust or notarize a downloaded app; see [Apple Developer ID](https://developer.apple.com/developer-id/).
+The packaged GUI uses only its bundled `Contents/Helpers/vtcode`; if that helper is missing, it asks you to rebuild or
+reinstall instead of starting an unrelated workspace binary. Development runs prefer an adjacent `vtcode` binary, then
+check the workspace `target/release` and `target/debug` outputs.
 
 Launch a packaged build by its exact path with `scripts/open-desktop-macos.sh "dist/VT Code.app"`. The launcher asks
 macOS to open a new instance of that bundle; this avoids selecting a different local copy when several development apps
@@ -99,7 +102,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Toggle the inspector | The toolbar button shows or hides the panel; the palette has the same command. |
 | Navigate inspector tabs | The kit underline TabBar exposes selected tabs. Tab focuses the inspector navigation; Left/Right cycle tabs, Home selects Changes, and End selects Output. |
 | Start from the welcome view | The kit Empty surface offers Browse files and Choose model actions. Changes, activity, and output use matching empty-state layouts until session data arrives. |
-| Open the command palette | ⌘K searches currently available session commands, view toggles, all loaded sessions (up to 200), and file previews from the bounded workspace scan (up to 400 entries). Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
+| Open the command palette | ⌘K searches session commands, view toggles, all loaded sessions (up to 200), and file previews from the bounded workspace scan (up to 400 entries). Use Refresh recent threads to sync sessions created by the CLI; the desktop updates the active session from runtime events instead of rescanning archives after every turn. Named accessible rows retain selection semantics; Tab stays inside. Enter confirms. Escape clears a nonempty query first, then dismisses and returns focus; a backdrop click also dismisses. |
 | Expand navigation | The toolbar toggle or ⌘B pins/unpins the project/thread sidebar. Hover the rail’s project icon for a transient list; leaving navigation or pressing Escape dismisses the peek. Clicking the icon also pins it for keyboard use. |
 | Navigate settings | Settings opens in a responsive right-side Kit Sheet and groups Appearance, Accessibility, Shortcuts, VT Code, and Connections into tabs. Left/Right moves between categories; Home and End select the first and last. Each category scrolls within the sheet so its title and navigation remain available; Escape, the close button, or an overlay click dismisses it. |
 | Configure shortcuts | Settings → Shortcuts shows current bindings as GPUI Kit `Kbd` badges. Choose Edit shortcuts to change twenty-one main desktop commands; invalid, duplicate, typing-only, and reserved macOS/editing combinations are rejected. Save/reset applies on restart; Import from CLI reuses the configured interrupt/model bindings. Every enabled button remains in Tab order and activates with Enter or Space; contextual item actions do not need a global chord. |
@@ -373,7 +376,7 @@ by the service pump.
 | `config/settings/read`, `config/settings/write` | Browse bounded, credential-filtered effective settings and save type-checked edits through the CLI config service. |
 | `config/models`, `config/select` | List the model catalog, or switch provider/model for the next session (requires no active turn). |
 | `workspace/review` | Capture bounded Git changes against HEAD or an unborn branch’s empty tree, with optional untracked text previews. |
-| `session/list`, `session/create`, `session/load`, `session/close` | Select, create, and restore durable messages, canonical change reviews, activity, and captured output. |
+| `session/list`, `session/create`, `session/load`, `session/close` | List up to 200 recent archives for the active workspace, create sessions, and restore durable messages, canonical change reviews, activity, and captured output. |
 | `turn/submit`, `turn/cancel` | Submit one user turn or cancel its exact session/turn identity. |
 | `interaction/respond` | Resolve one pending approval or question using its session, turn, and interaction IDs. |
 | `session/primaryAgentChanged` | Publish ephemeral active-agent display state for a live session; it does not change next-session options. |

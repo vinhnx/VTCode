@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -8,7 +9,7 @@ use super::SESSION_FILE_EXTENSION;
 use super::identifier::session_archive_path_for_identifier;
 use super::retention::apply_session_retention_best_effort;
 use super::settings::{SESSION_DIR_ENV, read_env_var_os};
-use super::snapshot::{SessionListing, SessionSnapshot};
+use super::snapshot::{SessionArchiveSummary, SessionListing, SessionSnapshot, session_listing_matches_workspace};
 use vtcode_commons::VtCodePaths;
 use vtcode_commons::fs::read_private_json_file;
 
@@ -19,6 +20,32 @@ pub(crate) async fn resolve_sessions_dir_for_archive_writes() -> Result<PathBuf>
 }
 
 pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
+    list_recent_sessions_matching(limit, None, |listing| listing).await
+}
+
+/// List the most recent archives for a workspace, applying the limit after workspace filtering.
+pub async fn list_recent_sessions_in_workspace(limit: usize, workspace: &Path) -> Result<Vec<SessionListing>> {
+    list_recent_sessions_matching(limit, Some(workspace), |listing| listing).await
+}
+
+/// List recent archives for a workspace while retaining only their navigation metadata.
+pub async fn list_recent_session_summaries_in_workspace(
+    limit: usize,
+    workspace: &Path,
+) -> Result<Vec<SessionArchiveSummary>> {
+    list_recent_sessions_matching(limit, Some(workspace), SessionListing::into_summary).await
+}
+
+async fn list_recent_sessions_matching<T, Project>(
+    limit: usize,
+    workspace: Option<&Path>,
+    project: Project,
+) -> Result<Vec<T>>
+where
+    T: Send + 'static,
+    Project: Fn(SessionListing) -> T + Copy + Send + 'static,
+{
+    let total_started = Instant::now();
     let sessions_dir = match resolve_sessions_dir().await {
         Ok(dir) => dir,
         Err(_) => return Ok(Vec::new()),
@@ -31,6 +58,7 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     // `std::fs::read_dir` is a blocking directory scan; run it off the async
     // executor and collect paths before spawning parallel read tasks. See `# Blocking`
     // docs in `src/agent/runloop/git.rs`.
+    let scan_started = Instant::now();
     let session_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
         for entry in fs::read_dir(&sessions_dir)
@@ -46,22 +74,33 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     })
     .await
     .context("session directory scan task panicked")??;
+    let scan_elapsed = scan_started.elapsed();
 
     // Process session files in parallel for better performance with large archives
     // Batch processing to avoid overwhelming the system with too many concurrent tasks
     const BATCH_SIZE: usize = 10;
-    let mut all_listings = Vec::new();
+    let mut all_sessions = Vec::new();
+    let reads_started = Instant::now();
 
     for batch in session_paths.chunks(BATCH_SIZE) {
         let mut tasks = Vec::with_capacity(batch.len());
 
         for path in batch {
             let path = path.clone();
+            let workspace = workspace.map(Path::to_path_buf);
             let task = tokio::task::spawn(async move {
-                read_private_json_file::<SessionSnapshot>(&path)
-                    .await
-                    .ok()
-                    .map(|snapshot| SessionListing { path, snapshot })
+                let snapshot = match read_private_json_file::<SessionSnapshot>(&path).await {
+                    Ok(snapshot) => snapshot,
+                    Err(_) => return None,
+                };
+                let listing = SessionListing { path, snapshot };
+                if workspace
+                    .as_deref()
+                    .is_some_and(|workspace| !session_listing_matches_workspace(&listing, workspace))
+                {
+                    return None;
+                }
+                Some((listing.snapshot.ended_at, project(listing)))
             });
             tasks.push(task);
         }
@@ -69,18 +108,32 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
         // Collect results from this batch
         for task in tasks {
             if let Ok(Some(listing)) = task.await {
-                all_listings.push(listing);
+                all_sessions.push(listing);
             }
         }
     }
+    let reads_elapsed = reads_started.elapsed();
 
     // Sort and limit results
-    all_listings.sort_by_key(|a| std::cmp::Reverse(a.snapshot.ended_at));
-    if limit > 0 && all_listings.len() > limit {
-        all_listings.truncate(limit);
+    all_sessions.sort_by_key(|(ended_at, _)| std::cmp::Reverse(*ended_at));
+    let matching_sessions = all_sessions.len();
+    if limit > 0 && all_sessions.len() > limit {
+        all_sessions.truncate(limit);
     }
 
-    Ok(all_listings)
+    tracing::debug!(
+        target: "vtcode::session_archive",
+        scanned_files = session_paths.len(),
+        matching_sessions,
+        returned_sessions = all_sessions.len(),
+        workspace_filtered = workspace.is_some(),
+        directory_scan = ?scan_elapsed,
+        snapshot_reads = ?reads_elapsed,
+        total = ?total_started.elapsed(),
+        "listed session archives"
+    );
+
+    Ok(all_sessions.into_iter().map(|(_, session)| session).collect())
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.
@@ -173,3 +226,6 @@ pub(crate) fn is_session_file(path: &Path) -> bool {
                 || ext.eq_ignore_ascii_case("log")
     )
 }
+
+#[cfg(test)]
+mod tests;

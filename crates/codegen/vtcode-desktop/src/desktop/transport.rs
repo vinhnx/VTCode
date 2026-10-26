@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::mpsc::SyncSender;
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 use tokio::time::timeout;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{InteractionRequest, RequestId, ThreadEventNotification};
@@ -47,13 +48,47 @@ pub(crate) struct BackendHandle {
     pub commands: mpsc::Sender<BackendCommand>,
 }
 
+#[derive(Clone)]
+pub(crate) struct BackendEventSender {
+    sender: SyncSender<BackendEvent>,
+    wake: Arc<Notify>,
+}
+
+impl BackendEventSender {
+    pub(crate) fn channel(capacity: usize) -> (Self, Receiver<BackendEvent>) {
+        let (sender, receiver) = sync_channel(capacity);
+        (Self { sender, wake: Arc::default() }, receiver)
+    }
+
+    pub(crate) fn send(&self, event: BackendEvent) -> Result<(), Box<std::sync::mpsc::SendError<BackendEvent>>> {
+        self.sender.send(event).map_err(Box::new)?;
+        self.wake.notify_one();
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn try_send(&self, event: BackendEvent) -> Result<(), Box<std::sync::mpsc::TrySendError<BackendEvent>>> {
+        self.sender.try_send(event).map_err(Box::new)?;
+        self.wake.notify_one();
+        Ok(())
+    }
+
+    pub(crate) async fn notified(&self) {
+        self.wake.notified().await;
+    }
+
+    pub(crate) fn wake(&self) {
+        self.wake.notify_one();
+    }
+}
+
 /// Include JSON escaping and the largest issued request ID in the wire-size check.
 pub(super) fn request_fits_frame(method: &str, params: &Value) -> bool {
     let request = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": params });
     serde_json::to_vec(&request).is_ok_and(|bytes| bytes.len() <= protocol::MAX_FRAME_BYTES)
 }
 
-pub(crate) fn launch_backend(workspace: PathBuf, ui_events: SyncSender<BackendEvent>) -> Result<BackendHandle, String> {
+pub(crate) fn launch_backend(workspace: PathBuf, ui_events: BackendEventSender) -> Result<BackendHandle, String> {
     let executable = resolve_backend_executable()?;
     let (commands, command_rx) = mpsc::channel(CLIENT_QUEUE_CAPACITY);
 
@@ -87,7 +122,7 @@ async fn run_client(
     executable: PathBuf,
     workspace: PathBuf,
     mut commands: mpsc::Receiver<BackendCommand>,
-    ui_events: SyncSender<BackendEvent>,
+    ui_events: BackendEventSender,
 ) {
     let mut child = match spawn_backend(&executable, &workspace).await {
         Ok(child) => child,
@@ -269,21 +304,48 @@ fn resolve_backend_executable() -> Result<PathBuf, String> {
     let current_dir = current
         .parent()
         .ok_or_else(|| "The app binary has no parent directory.".to_string())?;
-    let candidates = [
-        current_dir.join("../Helpers/vtcode"),
-        current_dir.join("vtcode"),
-        manifest_workspace_root().join("target/release/vtcode"),
-        manifest_workspace_root().join("target/debug/vtcode"),
-    ];
+    let (candidates, missing_message) = match packaged_backend_candidates(current_dir) {
+        Some(candidates) => (
+            candidates,
+            "The matching VT Code service is missing from this app bundle. Rebuild or reinstall the app.",
+        ),
+        None => (
+            backend_development_candidates(current_dir, &manifest_workspace_root()),
+            "The matching VT Code backend was not found. Run `cargo build --locked -p vtcode -p vtcode-desktop` or package the app again.",
+        ),
+    };
 
     candidates
         .into_iter()
         .map(|candidate| vtcode_commons::paths::canonicalize(&candidate).unwrap_or(candidate))
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            "The matching VT Code backend was not found. Run `cargo build --locked -p vtcode -p vtcode-desktop` or package the app again."
-                .to_string()
-        })
+        .ok_or_else(|| missing_message.to_string())
+}
+
+fn packaged_backend_candidates(current_dir: &Path) -> Option<Vec<PathBuf>> {
+    if current_dir.file_name() != Some(std::ffi::OsStr::new("MacOS")) {
+        return None;
+    }
+    let contents_dir = current_dir.parent()?;
+    if contents_dir.file_name() != Some(std::ffi::OsStr::new("Contents"))
+        || contents_dir.parent()?.extension() != Some(std::ffi::OsStr::new("app"))
+    {
+        return None;
+    }
+    Some(vec![contents_dir.join("Helpers/vtcode")])
+}
+
+fn backend_development_candidates(current_dir: &Path, workspace_root: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![current_dir.join("vtcode")];
+    for candidate in [
+        workspace_root.join("target/release/vtcode"),
+        workspace_root.join("target/debug/vtcode"),
+    ] {
+        if !candidates.contains(&candidate) {
+            candidates.push(candidate);
+        }
+    }
+    candidates
 }
 
 fn manifest_workspace_root() -> PathBuf {
@@ -341,7 +403,7 @@ fn decode_frame(
     }
 }
 
-fn send_ui_event(sender: &SyncSender<BackendEvent>, event: BackendEvent) -> bool {
+fn send_ui_event(sender: &BackendEventSender, event: BackendEvent) -> bool {
     sender.send(event).is_ok()
 }
 
@@ -428,5 +490,24 @@ mod tests {
         assert!(missing_credentials_diagnostic(b"Authentication not found for OpenAI. Run `vtcode login openai`."));
         assert!(missing_credentials_diagnostic(b"API key not found for provider 'example'."));
         assert!(!missing_credentials_diagnostic(b"Connection refused while contacting the configured endpoint."));
+    }
+
+    #[test]
+    fn packaged_apps_only_resolve_their_bundled_backend() {
+        let candidates = packaged_backend_candidates(Path::new("/Applications/VT Code.app/Contents/MacOS"));
+        assert_eq!(candidates, Some(vec![PathBuf::from("/Applications/VT Code.app/Contents/Helpers/vtcode")]));
+    }
+
+    #[test]
+    fn development_builds_keep_adjacent_and_workspace_backend_fallbacks() {
+        let candidates = backend_development_candidates(Path::new("/workspace/target/debug"), Path::new("/workspace"));
+        assert_eq!(
+            candidates,
+            [
+                PathBuf::from("/workspace/target/debug/vtcode"),
+                PathBuf::from("/workspace/target/release/vtcode"),
+            ]
+        );
+        assert!(packaged_backend_candidates(Path::new("/workspace/target/debug")).is_none());
     }
 }

@@ -1,10 +1,11 @@
 //! Bounded read-only workspace file listing and previews for the sidebar.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-/// Hard bounds so one sidebar render stays cheap regardless of workspace size.
+/// Bounds on retained sidebar rows and recursive traversal depth.
 const MAX_ENTRIES: usize = 400;
 const MAX_DEPTH: usize = 8;
 /// Preview read bound; a `usize` so buffer sizing never truncates.
@@ -36,35 +37,47 @@ pub(super) struct FilePreview {
 
 /// List workspace entries breadth-first, skipping dependency and VCS
 /// directories, hidden entries, and anything past the entry or depth bounds.
+#[cfg(test)]
 pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
+    scan_workspace_cancellable(root, || false).unwrap_or_default()
+}
+
+/// Scan a workspace until the caller cancels the request. A cancelled scan
+/// returns no partial listing so obsolete results cannot replace current UI.
+pub(super) fn scan_workspace_cancellable(root: &Path, is_cancelled: impl Fn() -> bool) -> Option<Vec<FileEntry>> {
     let mut entries = Vec::new();
     let mut queue = std::collections::VecDeque::from(vec![(root.to_path_buf(), 0_usize)]);
     while let Some((dir, depth)) = queue.pop_front() {
+        if is_cancelled() {
+            return None;
+        }
         if entries.len() >= MAX_ENTRIES {
             break;
         }
         let Ok(read_dir) = fs::read_dir(&dir) else {
             continue;
         };
-        let mut children: Vec<(fs::DirEntry, bool)> = read_dir
-            .flatten()
-            .map(|entry| {
-                let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-                (entry, is_dir)
-            })
-            .collect();
-        children.sort_by_key(|(entry, is_dir)| (!is_dir, entry.file_name()));
-        for (entry, is_dir) in children {
-            if entries.len() >= MAX_ENTRIES {
-                break;
+        let remaining = MAX_ENTRIES - entries.len();
+        // Keep the sorted prefix bounded; paths are allocated only for rows that survive the cap.
+        let mut children = BTreeMap::new();
+        for entry in read_dir.flatten() {
+            if is_cancelled() {
+                return None;
             }
+            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
             let name = entry.file_name();
-            let Some(name) = name.to_str() else {
+            let Some(name_str) = name.to_str() else {
                 continue;
             };
-            if name.starts_with('.') || (is_dir && SKIPPED_DIR_NAMES.contains(&name)) {
+            if name_str.starts_with('.') || (is_dir && SKIPPED_DIR_NAMES.contains(&name_str)) {
                 continue;
             }
+            let _previous = children.insert((!is_dir, name), (entry, is_dir));
+            if children.len() > remaining {
+                let _removed = children.pop_last();
+            }
+        }
+        for (_, (entry, is_dir)) in children {
             let Some(rel) = entry.path().strip_prefix(root).ok().map(|path| path.display().to_string()) else {
                 continue;
             };
@@ -74,7 +87,7 @@ pub(super) fn scan_workspace(root: &Path) -> Vec<FileEntry> {
             }
         }
     }
-    entries
+    Some(entries)
 }
 
 /// Read the current git branch for a workspace, walking up to the repository
@@ -201,6 +214,46 @@ mod tests {
 
         let entries = scan_workspace(root);
         assert_eq!(entries.len(), MAX_ENTRIES, "entry count is capped");
+        assert_eq!(entries.first().map(|entry| entry.rel_path.as_str()), Some("file-000.txt"));
+        assert_eq!(
+            entries.last().map(|entry| entry.rel_path.as_str()),
+            Some("file-399.txt"),
+            "the sorted prefix remains stable when the directory is wider than the row limit"
+        );
+    }
+
+    #[test]
+    fn cancelled_workspace_scan_discards_partial_results() {
+        let workspace = temp_workspace();
+        for index in 0..100 {
+            fs::write(workspace.path().join(format!("file-{index:03}.txt")), b"x").expect("write file");
+        }
+
+        let checks = std::cell::Cell::new(0);
+        let entries = scan_workspace_cancellable(workspace.path(), || {
+            let checked = checks.get();
+            checks.set(checked + 1);
+            checked >= 5
+        });
+
+        assert!(entries.is_none(), "cancelled scans must not publish a partial file tree");
+        assert!(checks.get() < 10, "the scanner should stop checking entries promptly");
+    }
+
+    #[test]
+    fn scan_keeps_directories_before_files_and_sorts_names() {
+        let workspace = temp_workspace();
+        let root = workspace.path();
+        for name in ["z-dir", "a-dir"] {
+            fs::create_dir(root.join(name)).expect("create directory");
+        }
+        for name in ["z.txt", "a.txt"] {
+            fs::write(root.join(name), b"x").expect("write file");
+        }
+
+        let entries = scan_workspace(root);
+        let paths: Vec<_> = entries.iter().map(|entry| entry.rel_path.as_str()).collect();
+        assert_eq!(paths, ["a-dir", "z-dir", "a.txt", "z.txt"]);
     }
 
     #[test]

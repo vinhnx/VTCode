@@ -2,8 +2,9 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
-use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 use chrono::Timelike;
 use gpui_kit::assets::IconName;
@@ -65,7 +66,8 @@ use super::preferences;
 use super::themes;
 use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
 use super::transport::{
-    BackendCommand, BackendEvent, BackendHandle, UI_EVENT_CAPACITY, launch_backend, request_fits_frame,
+    BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
+    request_fits_frame,
 };
 
 mod composer_controls;
@@ -97,6 +99,14 @@ struct WelcomeCopy {
     workspace_action: String,
     description: String,
     call_to_action: String,
+}
+
+struct FileScanCancellationGuard(Arc<AtomicBool>);
+
+impl Drop for FileScanCancellationGuard {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -362,6 +372,7 @@ enum PaletteAction {
     CloseSession,
     ChooseModel,
     ChooseWorkspace,
+    RefreshSessions,
     RefreshFiles,
     ToggleInspector,
     ToggleTheme,
@@ -452,7 +463,7 @@ struct DesktopView {
     workspace_picker_task: Option<Task<()>>,
     backend: Option<BackendHandle>,
     event_rx: Receiver<BackendEvent>,
-    event_tx: SyncSender<BackendEvent>,
+    event_tx: BackendEventSender,
     event_drain_task: Option<Task<()>>,
     sessions: Vec<SessionSummary>,
     selected_session_id: Option<String>,
@@ -484,6 +495,7 @@ struct DesktopView {
     expanded_file_directories: HashSet<String>,
     _file_tree_subscription: Subscription,
     files_task: Option<Task<()>>,
+    files_scan_cancel: Option<Arc<AtomicBool>>,
     preview_task: Option<Task<()>>,
     attachments_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
@@ -616,7 +628,7 @@ fn find_file_tree_item<'a>(items: &'a [TreeItem], path: &str) -> Option<&'a Tree
 
 impl DesktopView {
     fn new(window: &mut Window, cx: &mut Context<Self>, theme_mode: ThemeMode) -> Self {
-        let (event_tx, event_rx) = sync_channel(UI_EVENT_CAPACITY);
+        let (event_tx, event_rx) = BackendEventSender::channel(UI_EVENT_CAPACITY);
         let focus_handle = cx.focus_handle();
         let focus_lost_subscription = cx.on_focus_lost(window, |view, window, cx| {
             let target = window
@@ -694,6 +706,7 @@ impl DesktopView {
             expanded_file_directories: HashSet::new(),
             _file_tree_subscription: file_tree_subscription,
             files_task: None,
+            files_scan_cancel: None,
             preview_task: None,
             attachments_task: None,
             file_preview: None,
@@ -978,14 +991,14 @@ impl DesktopView {
             return;
         }
 
+        let event_tx = self.event_tx.clone();
         self.event_drain_task = Some(cx.spawn(async move |weak_view, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_millis(24)).await;
-                if weak_view
-                    .update_in(cx, |view, window, cx| view.drain_events(window, cx))
-                    .is_err()
-                {
-                    break;
+                event_tx.notified().await;
+                match weak_view.update_in(cx, |view, window, cx| view.drain_events(window, cx)) {
+                    Ok(batch_full) if batch_full => event_tx.wake(),
+                    Ok(_) => {}
+                    Err(_) => break,
                 }
             }
         }));
@@ -1138,20 +1151,46 @@ impl DesktopView {
     }
 
     fn refresh_files(&mut self, cx: &mut Context<Self>) {
+        if let Some(previous) = self.files_scan_cancel.take() {
+            previous.store(true, Ordering::Relaxed);
+        }
         let Some(workspace) = self.workspace.clone() else {
             return;
         };
+        let cancellation = Arc::new(AtomicBool::new(false));
+        self.files_scan_cancel = Some(cancellation.clone());
+        let worker_cancellation = cancellation.clone();
         self.files_task = Some(cx.spawn(async move |view, cx| {
+            let _cancel_on_drop = FileScanCancellationGuard(cancellation.clone());
             let root = workspace.clone();
-            let (entries, branch) = cx
-                .background_spawn(async move { (files::scan_workspace(&root), files::git_branch(&root)) })
+            let result = cx
+                .background_spawn(async move {
+                    let entries =
+                        files::scan_workspace_cancellable(&root, || worker_cancellation.load(Ordering::Relaxed))?;
+                    if worker_cancellation.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    Some((entries, files::git_branch(&root)))
+                })
                 .await;
             let _updated = view.update(cx, |view, cx| {
-                if view.workspace.as_ref() == Some(&workspace) {
-                    view.replace_file_entries(entries, cx);
-                    view.git_branch = branch;
-                    cx.notify();
+                let is_current_request = view
+                    .files_scan_cancel
+                    .as_ref()
+                    .is_some_and(|active| Arc::ptr_eq(active, &cancellation));
+                if !is_current_request {
+                    return;
                 }
+                view.files_scan_cancel = None;
+                if view.workspace.as_ref() != Some(&workspace) {
+                    return;
+                }
+                let Some((entries, branch)) = result else {
+                    return;
+                };
+                view.replace_file_entries(entries, cx);
+                view.git_branch = branch;
+                cx.notify();
             });
         }));
     }
@@ -1424,6 +1463,7 @@ impl DesktopView {
                 command("New session", PaletteAction::NewSession),
                 command("Close session", PaletteAction::CloseSession),
                 command("Switch workspace…", PaletteAction::ChooseWorkspace),
+                command("Refresh recent threads", PaletteAction::RefreshSessions),
                 command("Refresh workspace files", PaletteAction::RefreshFiles),
                 command("Choose a model…", PaletteAction::ChooseModel),
             ],
@@ -1597,6 +1637,9 @@ impl DesktopView {
             PaletteAction::CloseSession => self.close_session(cx),
             PaletteAction::ChooseModel => self.open_model_palette(window, cx),
             PaletteAction::ChooseWorkspace => self.choose_workspace(window, cx),
+            PaletteAction::RefreshSessions => {
+                let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+            }
             PaletteAction::RefreshFiles => self.refresh_files(cx),
             PaletteAction::ToggleInspector => self.toggle_inspector(cx),
             PaletteAction::ToggleTheme => self.toggle_theme(window, cx),
@@ -1640,6 +1683,7 @@ impl DesktopView {
             PaletteAction::ChooseWorkspace => {
                 self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open
             }
+            PaletteAction::RefreshSessions => self.backend.is_some(),
             PaletteAction::RefreshFiles | PaletteAction::ToggleInspector | PaletteAction::PreviewFile(_) => {
                 self.workspace.is_some()
             }
@@ -1909,11 +1953,15 @@ impl DesktopView {
         }
     }
 
-    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Drain one bounded event batch. A full batch asks the async waiter to schedule
+    /// another foreground update without returning to a periodic polling loop.
+    fn drain_events(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let mut changed = false;
+        let mut processed = 0;
         for _ in 0..MAX_UI_EVENTS_PER_TICK {
             match self.event_rx.try_recv() {
                 Ok(event) => {
+                    processed += 1;
                     changed = true;
                     if matches!(&event, BackendEvent::Exited { .. } | BackendEvent::LaunchFailed(_)) {
                         self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -1937,6 +1985,7 @@ impl DesktopView {
         if changed {
             cx.notify();
         }
+        processed == MAX_UI_EVENTS_PER_TICK
     }
 
     fn notify_background_activity(&self, event: &BackendEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -2442,6 +2491,7 @@ impl DesktopView {
                 self.pending_submission = None;
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
+                self.set_selected_session_completed(false);
                 self.status = "Running".to_string();
             }
             ThreadEvent::TurnCompleted(event) => {
@@ -2452,7 +2502,7 @@ impl DesktopView {
                 self.cancel_request_sent = false;
                 self.status = "Completed".to_string();
                 self.last_usage = Some(event.usage.clone());
-                self.refresh_sessions_after_turn();
+                self.set_selected_session_completed(true);
             }
             ThreadEvent::TurnFailed(event) => {
                 self.finish_unverified_turn(&event.message);
@@ -2491,7 +2541,7 @@ impl DesktopView {
         self.cancel_requested = false;
         self.cancel_request_sent = false;
         self.status = "Turn ended without verified completion".to_string();
-        self.refresh_sessions_after_turn();
+        self.set_selected_session_completed(false);
         self.transcript.push(TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
@@ -2500,11 +2550,13 @@ impl DesktopView {
         ));
     }
 
-    /// Reload the session list once a turn ends so archive-derived titles
-    /// and completion flags replace the local placeholders.
-    fn refresh_sessions_after_turn(&mut self) {
-        if self.backend.is_some() {
-            let _ = self.request(protocol::method::SESSION_LIST, json!({}));
+    /// Keep the selected sidebar row current without rereading every archive.
+    fn set_selected_session_completed(&mut self, completed: bool) {
+        let Some(session_id) = self.selected_session_id.as_deref() else {
+            return;
+        };
+        if let Some(session) = self.sessions.iter_mut().find(|session| session.session_id == session_id) {
+            session.completed = completed;
         }
     }
 
@@ -4380,29 +4432,36 @@ impl DesktopView {
         let Some(item) = self.transcript.get(index) else {
             return div().into_any_element();
         };
-        let group = self.transcript.activity_group(index);
-        let group_head = group.as_ref().and_then(|range| self.transcript.get(range.start));
-        if group.as_ref().is_some_and(|range| index != range.start)
-            && group_head.is_some_and(|head| !head.activity_expanded)
-        {
+        if item.activity_grouped && !item.activity_group_head && !item.activity_expanded {
             return div().into_any_element();
         }
-        let group_header = group
-            .as_ref()
-            .filter(|range| index == range.start)
-            .map(|range| self.render_activity_group(range.clone(), cx));
-        let show_item = group.is_none() || group_head.is_some_and(|head| head.activity_expanded);
+        let group_header = item
+            .activity_group_head
+            .then(|| self.transcript.activity_group(index))
+            .flatten()
+            .map(|range| self.render_activity_group(range, cx));
+        let show_item = !item.activity_grouped || item.activity_expanded;
+        let content = div()
+            .id(format!("transcript-content-{}", item.id))
+            .test_support()
+            .w_full()
+            .max_w(px(CONTENT_WIDTH))
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .children(group_header)
+            .when(show_item, |column| column.child(self.render_transcript_item(item, cx)));
         div()
             .id(format!("transcript-row-{}", item.id))
             .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
             .test_support()
             .w_full()
-            // MessageScroller adds three pixels of horizontal row inset.
-            .px_5()
+            .flex()
+            .justify_center()
+            // MessageScroller owns the shared horizontal row inset.
             .when(item.role == "tool", |row| row.pb_1())
             .when(item.role != "tool", |row| row.pb_4())
-            .children(group_header)
-            .when(show_item, |row| row.child(self.render_transcript_item(item, cx)))
+            .child(content)
             .into_any_element()
     }
 
@@ -4496,16 +4555,10 @@ impl DesktopView {
             return div().into_any_element();
         };
         let id = head.id.clone();
-        let mut failed = 0;
-        let mut running = 0;
-        for item in range.clone().filter_map(|index| self.transcript.get(index)) {
-            match ActivityState::from_status(item.text.lines().next().unwrap_or_default()) {
-                ActivityState::Failed => failed += 1,
-                ActivityState::Running => running += 1,
-                _ => {}
-            }
-        }
-        let mut label = format!("{} tool actions", range.len());
+        let summary = head.activity_group_summary;
+        let failed = summary.failed;
+        let running = summary.running;
+        let mut label = format!("{} tool actions", summary.total);
         if running > 0 {
             label.push_str(&format!(" · {running} running"));
         }
@@ -6184,9 +6237,9 @@ fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_
 
 /// Embed the shared artwork so packaged applications never depend on checkout paths.
 fn brand_logo(size: f32) -> impl IntoElement {
-    static LOGO: std::sync::OnceLock<std::sync::Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
+    static LOGO: std::sync::OnceLock<Arc<gpui_kit::Image>> = std::sync::OnceLock::new();
     let image = LOGO.get_or_init(|| {
-        std::sync::Arc::new(gpui_kit::Image::from_bytes(
+        Arc::new(gpui_kit::Image::from_bytes(
             gpui_kit::ImageFormat::Png,
             include_bytes!("../../../../../resources/icons/vtcode-profile-120.png").to_vec(),
         ))
@@ -6287,6 +6340,7 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         | PaletteAction::CloseSession
         | PaletteAction::ChooseModel
         | PaletteAction::ChooseWorkspace
+        | PaletteAction::RefreshSessions
         | PaletteAction::RefreshFiles
         | PaletteAction::ToggleInspector
         | PaletteAction::ToggleTheme
@@ -6470,23 +6524,50 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
     }
 }
 
-/// Keep tool output in its dedicated field so activity metadata does not retain another full copy.
+#[derive(serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum ActivityDetailsMetadata<'a> {
+    CommandExecution {
+        command: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        arguments: Option<&'a Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<&'a i32>,
+        status: &'a vtcode_exec_events::CommandExecutionStatus,
+    },
+    ToolOutput {
+        call_id: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool_call_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spool_path: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<&'a i32>,
+        status: &'a vtcode_exec_events::ToolCallStatus,
+    },
+}
+
+/// Keep large tool output out of the metadata serialization path.
 fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> String {
     use vtcode_exec_events::ThreadItemDetails;
 
-    let output_field = match details {
-        ThreadItemDetails::CommandExecution(_) => Some("aggregated_output"),
-        ThreadItemDetails::ToolOutput(_) => Some("output"),
-        _ => None,
-    };
-    let serialized = if let Some(output_field) = output_field {
-        let mut value = serde_json::to_value(details).unwrap_or(Value::Null);
-        if let Some(fields) = value.as_object_mut() {
-            let _removed = fields.remove(output_field);
+    let serialized = match details {
+        ThreadItemDetails::CommandExecution(command) => {
+            serde_json::to_string_pretty(&ActivityDetailsMetadata::CommandExecution {
+                command: &command.command,
+                arguments: command.arguments.as_ref(),
+                exit_code: command.exit_code.as_ref(),
+                status: &command.status,
+            })
         }
-        serde_json::to_string_pretty(&value)
-    } else {
-        serde_json::to_string_pretty(details)
+        ThreadItemDetails::ToolOutput(output) => serde_json::to_string_pretty(&ActivityDetailsMetadata::ToolOutput {
+            call_id: &output.call_id,
+            tool_call_id: output.tool_call_id.as_deref(),
+            spool_path: output.spool_path.as_deref(),
+            exit_code: output.exit_code.as_ref(),
+            status: &output.status,
+        }),
+        _ => serde_json::to_string_pretty(details),
     };
     serialized.unwrap_or_else(|_| "{}".to_string())
 }

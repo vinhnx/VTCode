@@ -22,7 +22,7 @@ use vtcode_core::core::threads::ArchivedSessionIntent;
 use vtcode_core::tools::SpooledOutputReference;
 use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, generate_session_archive_identifier, history_persistence_enabled,
-    list_recent_sessions, reserve_session_archive_identifier, session_workspace_path,
+    list_recent_session_summaries_in_workspace, reserve_session_archive_identifier, session_workspace_path,
 };
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{
@@ -376,11 +376,16 @@ async fn handle_request(context: &ServiceContext, request: &Request) -> Result<(
             Ok((serde_json::to_value(snapshot)?, false))
         }
         method::SESSION_LIST => {
-            let sessions = list_recent_sessions(MAX_SESSIONS).await?;
+            let sessions = list_recent_session_summaries_in_workspace(MAX_SESSIONS, &context.workspace).await?;
             let sessions = sessions
-                .iter()
-                .filter(|listing| listing_matches_workspace(listing, &context.workspace))
-                .map(session_summary)
+                .into_iter()
+                .map(|session| SessionSummary {
+                    session_id: session.identifier,
+                    title: session.title,
+                    workspace: session.workspace_path,
+                    completed: session.completed,
+                    resumable: session.resumable,
+                })
                 .collect::<Vec<_>>();
             Ok((serde_json::to_value(sessions)?, false))
         }
