@@ -15,10 +15,12 @@ pub(super) enum UiLanguage {
     BrazilianPortuguese,
     Korean,
     Dutch,
+    Russian,
+    Indonesian,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 11] = [
+    pub(super) const ALL: [Self; 13] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -30,6 +32,8 @@ impl UiLanguage {
         Self::BrazilianPortuguese,
         Self::Korean,
         Self::Dutch,
+        Self::Russian,
+        Self::Indonesian,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -44,6 +48,8 @@ impl UiLanguage {
             Some("pt-BR") => Self::BrazilianPortuguese,
             Some("ko") => Self::Korean,
             Some("nl") => Self::Dutch,
+            Some("ru") => Self::Russian,
+            Some("id") => Self::Indonesian,
             _ => Self::English,
         }
     }
@@ -61,6 +67,8 @@ impl UiLanguage {
             Self::BrazilianPortuguese => "pt-BR",
             Self::Korean => "ko",
             Self::Dutch => "nl",
+            Self::Russian => "ru",
+            Self::Indonesian => "id",
         }
     }
 
@@ -77,6 +85,8 @@ impl UiLanguage {
             Self::BrazilianPortuguese => "Português (Brasil)",
             Self::Korean => "한국어",
             Self::Dutch => "Nederlands",
+            Self::Russian => "Русский",
+            Self::Indonesian => "Bahasa Indonesia",
         }
     }
 }
@@ -133,6 +143,8 @@ mod tests {
             ("pt-BR", "Configurações", "Copiar", "Selecionar tudo", "Remover"),
             ("ko", "설정", "복사", "모두 선택", "제거"),
             ("nl", "Instellingen", "Kopiëren", "Alles selecteren", "Verwijderen"),
+            ("ru", "Настройки", "Копировать", "Выделить всё", "Удалить"),
+            ("id", "Pengaturan", "Salin", "Pilih Semua", "Hapus"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
@@ -198,6 +210,20 @@ mod tests {
                 "Nieuwe thread",
                 "Bestanden en meer toevoegen @",
                 "Vraag VT Code om wijzigingen aan te brengen…",
+            ),
+            (
+                "ru",
+                "Рабочее пространство",
+                "Новый диалог",
+                "Добавить файлы и другое @",
+                "Попросите VT Code внести изменения…",
+            ),
+            (
+                "id",
+                "Ruang kerja",
+                "Percakapan baru",
+                "Tambahkan file dan lainnya @",
+                "Minta VT Code membuat perubahan…",
             ),
         ];
 
@@ -384,6 +410,22 @@ mod tests {
                 "Weergave",
                 "Verbonden",
             ),
+            (
+                "ru",
+                "Светлая",
+                "Изменить профиль оформления Светлая",
+                "Изменить профиль оформления Светлая (выбран)",
+                "Экран",
+                "Подключено",
+            ),
+            (
+                "id",
+                "Terang",
+                "Ubah profil tampilan Terang",
+                "Ubah profil tampilan Terang (dipilih)",
+                "Tampilan",
+                "Tersambung",
+            ),
         ];
 
         for (locale, light, edit_profile, edit_profile_selected, display, connected) in expected {
@@ -418,6 +460,8 @@ mod tests {
             ("pt-BR", "Bom dia", "Boa tarde", "Boa noite"),
             ("ko", "좋은 아침입니다", "안녕하세요", "좋은 저녁입니다"),
             ("nl", "Goedemorgen", "Goedemiddag", "Goedenavond"),
+            ("ru", "Доброе утро", "Добрый день", "Добрый вечер"),
+            ("id", "Selamat pagi", "Selamat siang", "Selamat malam"),
         ] {
             assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
             assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);

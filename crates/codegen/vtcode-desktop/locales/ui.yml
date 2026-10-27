@@ -13,6 +13,8 @@ app:
       es: Estilo visual
       fr: Style visuel
       ja: ビジュアルスタイル
+      ru: "Визуальный стиль"
+      id: "Gaya visual"
     typography:
       en: Typography
       de: Typografie
@@ -25,6 +27,8 @@ app:
       es: Tipografía
       fr: Typographie
       ja: タイポグラフィ
+      ru: "Типографика"
+      id: "Tipografi"
     layout:
       en: Layout
       de: Layout
@@ -37,6 +41,8 @@ app:
       es: Diseño
       fr: Disposition
       ja: レイアウト
+      ru: "Макет"
+      id: "Tata letak"
     categories_navigation_hint:
       en: Use Left and Right arrows, Home, or End to choose a category.
       vi: Dùng phím mũi tên trái/phải, Home hoặc End để chọn danh mục.
@@ -49,6 +55,8 @@ app:
       pt-BR: "Use as setas para a esquerda e para a direita, Home ou End para escolher uma categoria."
       ko: "왼쪽/오른쪽 화살표, Home 또는 End 키로 카테고리를 선택하세요."
       nl: "Gebruik Links/Rechts, Home of End om een categorie te kiezen."
+      ru: "Используйте стрелки влево и вправо, Home или End, чтобы выбрать категорию."
+      id: "Gunakan tombol panah Kiri dan Kanan, Home, atau End untuk memilih kategori."
     title:
       en: Settings
       es: "Configuración"
@@ -61,6 +69,8 @@ app:
       pt-BR: "Configurações"
       ko: "설정"
       nl: "Instellingen"
+      ru: "Настройки"
+      id: "Pengaturan"
     categories:
       en: Settings categories
       es: "Categorías de configuración"
@@ -73,6 +83,8 @@ app:
       pt-BR: "Categorias de configurações"
       ko: "설정 카테고리"
       nl: "Instellingencategorieën"
+      ru: "Категории настроек"
+      id: "Kategori pengaturan"
     search:
       button:
         en: Search settings and CLI config…
@@ -86,6 +98,8 @@ app:
         pt-BR: "Pesquisar configurações e configuração da CLI…"
         ko: "설정 및 CLI 구성 검색…"
         nl: "Instellingen en CLI-configuratie zoeken…"
+        ru: "Поиск настроек и конфигурации CLI…"
+        id: "Cari pengaturan dan konfigurasi CLI…"
       title:
         en: Search settings and CLI config
         es: "Buscar ajustes y configuración de CLI"
@@ -98,6 +112,8 @@ app:
         pt-BR: "Pesquisar configurações e configuração da CLI"
         ko: "설정 및 CLI 구성 검색"
         nl: "Instellingen en CLI-configuratie zoeken"
+        ru: "Поиск настроек и конфигурации CLI"
+        id: "Cari pengaturan dan konfigurasi CLI"
       placeholder:
         en: Filter settings, categories, and CLI config paths…
         es: "Filtrar ajustes, categorías y rutas de configuración de CLI…"
@@ -110,6 +126,8 @@ app:
         pt-BR: "Filtrar configurações, categorias e caminhos da configuração da CLI…"
         ko: "설정, 카테고리 및 CLI 구성 경로 필터링…"
         nl: "Filter instellingen, categorieën en CLI-configuratiepaden…"
+        ru: "Фильтр настроек, категорий и путей конфигурации CLI…"
+        id: "Saring pengaturan, kategori, dan jalur konfigurasi CLI…"
       group_settings:
         en: Settings
         es: "Configuración"
@@ -122,6 +140,8 @@ app:
         pt-BR: "Configurações"
         ko: "설정"
         nl: "Instellingen"
+        ru: "Настройки"
+        id: "Pengaturan"
       group_cli_config:
         en: CLI config
         es: "Configuración de CLI"
@@ -134,6 +154,8 @@ app:
         pt-BR: "Configuração da CLI"
         ko: "CLI 구성"
         nl: "CLI-configuratie"
+        ru: "Конфигурация CLI"
+        id: "Konfigurasi CLI"
     tab:
       appearance:
         en: Appearance
@@ -147,6 +169,8 @@ app:
         pt-BR: "Aparência"
         ko: "모양"
         nl: "Weergave"
+        ru: "Внешний вид"
+        id: "Tampilan"
       accessibility:
         en: Accessibility
         es: "Accesibilidad"
@@ -159,6 +183,8 @@ app:
         pt-BR: "Acessibilidade"
         ko: "손쉬운 사용"
         nl: "Toegankelijkheid"
+        ru: "Специальные возможности"
+        id: "Aksesibilitas"
       shortcuts:
         en: Shortcuts
         es: "Atajos"
@@ -171,6 +197,8 @@ app:
         pt-BR: "Atalhos"
         ko: "단축키"
         nl: "Sneltoetsen"
+        ru: "Сочетания клавиш"
+        id: "Pintasan"
       vtcode:
         en: VT Code
         es: "VT Code"
@@ -183,6 +211,8 @@ app:
         pt-BR: "VT Code"
         ko: "VT Code"
         nl: "VT Code"
+        ru: "VT Code"
+        id: "VT Code"
       connections:
         en: Connections
         es: "Conexiones"
@@ -195,6 +225,8 @@ app:
         pt-BR: "Conexões"
         ko: "연결"
         nl: "Verbindingen"
+        ru: "Подключения"
+        id: "Koneksi"
     language:
       group:
         en: Language
@@ -208,6 +240,8 @@ app:
         pt-BR: "Idioma"
         ko: "언어"
         nl: "Taal"
+        ru: "Язык"
+        id: "Bahasa"
       label:
         en: Interface language
         es: "Idioma de la interfaz"
@@ -220,6 +254,8 @@ app:
         pt-BR: "Idioma da interface"
         ko: "인터페이스 언어"
         nl: "Interfacetaal"
+        ru: "Язык интерфейса"
+        id: "Bahasa antarmuka"
       description:
         en: Changes supported labels immediately. Untranslated app text remains in English.
         es: "Cambia las etiquetas disponibles al instante. El texto sin traducir permanece en inglés."
@@ -232,6 +268,8 @@ app:
         pt-BR: "Altera imediatamente os rótulos disponíveis. O texto do app sem tradução permanece em inglês."
         ko: "지원되는 레이블은 즉시 변경됩니다. 번역되지 않은 앱 텍스트는 영어로 표시됩니다."
         nl: "Ondersteunde labels worden direct bijgewerkt. Niet-vertaalde app-tekst blijft Engels."
+        ru: "Поддерживаемые подписи меняются сразу. Непереведённый текст приложения остаётся на английском."
+        id: "Label yang didukung langsung berubah. Teks aplikasi yang belum diterjemahkan tetap dalam bahasa Inggris."
       select:
         en: Set interface language to %{language}
         es: "Cambiar el idioma de la interfaz a %{language}"
@@ -244,6 +282,8 @@ app:
         pt-BR: "Definir o idioma da interface como %{language}"
         ko: "인터페이스 언어를 %{language}(으)로 설정"
         nl: "Interfacetaal instellen op %{language}"
+        ru: "Установить язык интерфейса: %{language}"
+        id: "Atur bahasa antarmuka ke %{language}"
     appearance:
       separate_modes:
         en: Separate light and dark modes
@@ -257,6 +297,8 @@ app:
         pt-BR: "Separar os modos claro e escuro"
         ko: "라이트 모드와 다크 모드 분리"
         nl: "Lichte en donkere modus scheiden"
+        ru: "Раздельные светлая и тёмная темы"
+        id: "Pisahkan mode terang dan gelap"
       editing_profile:
         en: Editing the %{profile} appearance profile
         vi: Đang chỉnh cấu hình giao diện %{profile}
@@ -269,6 +311,8 @@ app:
         pt-BR: "Editando o perfil de aparência %{profile}"
         ko: "%{profile} 모양 프로필 편집 중"
         nl: "Bezig met bewerken van het profiel voor %{profile}"
+        ru: "Изменение профиля оформления %{profile}"
+        id: "Mengedit profil tampilan %{profile}"
       editing_profile_short:
         en: Editing profile
         vi: Đang chỉnh cấu hình
@@ -281,6 +325,8 @@ app:
         pt-BR: "Editar perfil"
         ko: "프로필 편집"
         nl: "Profiel bewerken"
+        ru: "Изменение профиля"
+        id: "Mengedit profil tampilan"
       edit_profile:
         en: Edit the %{profile} appearance profile
         vi: Chỉnh cấu hình giao diện %{profile}
@@ -293,6 +339,8 @@ app:
         pt-BR: "Editar o perfil de aparência %{profile}"
         ko: "%{profile} 모양 프로필 편집"
         nl: "Het profiel voor de weergave %{profile} bewerken"
+        ru: "Изменить профиль оформления %{profile}"
+        id: "Ubah profil tampilan %{profile}"
       edit_profile_selected:
         en: Edit the %{profile} appearance profile (selected)
         vi: Chỉnh cấu hình giao diện %{profile} (đã chọn)
@@ -305,6 +353,8 @@ app:
         pt-BR: "Editar o perfil de aparência %{profile} (selecionado)"
         ko: "%{profile} 모양 프로필 편집 (선택됨)"
         nl: "Het profiel voor de weergave %{profile} bewerken (geselecteerd)"
+        ru: "Изменить профиль оформления %{profile} (выбран)"
+        id: "Ubah profil tampilan %{profile} (dipilih)"
       light:
         en: Light
         vi: Sáng
@@ -317,6 +367,8 @@ app:
         pt-BR: "Claro"
         ko: "라이트"
         nl: "Licht"
+        ru: "Светлая"
+        id: "Terang"
       dark:
         en: Dark
         vi: Tối
@@ -329,6 +381,8 @@ app:
         pt-BR: "Escuro"
         ko: "다크"
         nl: "Donker"
+        ru: "Тёмная"
+        id: "Gelap"
       themes:
         en: Themes
         vi: Chủ đề
@@ -341,6 +395,8 @@ app:
         pt-BR: "Temas"
         ko: "테마"
         nl: "Thema's"
+        ru: "Темы"
+        id: "Tema"
       next_themes:
         en: Next themes
         vi: Chủ đề tiếp theo
@@ -353,6 +409,8 @@ app:
         pt-BR: "Próximos temas"
         ko: "다음 테마"
         nl: "Volgende thema's"
+        ru: "Следующие темы"
+        id: "Tema berikutnya"
       previous_themes:
         en: Previous themes
         vi: Chủ đề trước
@@ -365,6 +423,8 @@ app:
         pt-BR: "Temas anteriores"
         ko: "이전 테마"
         nl: "Vorige thema's"
+        ru: "Предыдущие темы"
+        id: "Tema sebelumnya"
       visual_themes:
         en: Visual themes
         vi: Chủ đề giao diện
@@ -377,6 +437,8 @@ app:
         pt-BR: "Temas visuais"
         ko: "시각 테마"
         nl: "Visuele thema's"
+        ru: "Визуальные темы"
+        id: "Tema visual"
       show_navigation:
         en: Show side navigation
         vi: Hiện thanh điều hướng bên
@@ -389,6 +451,8 @@ app:
         pt-BR: "Mostrar navegação lateral"
         ko: "사이드 내비게이션 표시"
         nl: "Zijbalknavigatie tonen"
+        ru: "Показывать боковую навигацию"
+        id: "Tampilkan navigasi samping"
       navigation_hint:
         en: When hidden, project, thread, and workspace actions stay in the top bar.
         vi: Khi ẩn, thao tác dự án, cuộc hội thoại và không gian làm việc vẫn ở thanh trên cùng.
@@ -401,6 +465,8 @@ app:
         pt-BR: "Quando oculta, as ações de projeto, conversa e espaço de trabalho permanecem na barra superior."
         ko: "숨겨도 프로젝트, 대화, 작업 공간 작업은 상단 바에 남습니다."
         nl: "Als deze verborgen is, blijven acties voor projecten, gesprekken en werkruimten in de bovenste balk staan."
+        ru: "Если навигация скрыта, действия для проектов, диалогов и рабочих пространств остаются на верхней панели."
+        id: "Saat disembunyikan, tindakan untuk proyek, percakapan, dan ruang kerja tetap tersedia di bilah atas."
       navigation_right:
         en: Place navigation on the right
         vi: Đặt thanh điều hướng bên phải
@@ -413,6 +479,8 @@ app:
         pt-BR: "Colocar navegação à direita"
         ko: "내비게이션을 오른쪽에 배치"
         nl: "Navigatie rechts plaatsen"
+        ru: "Разместить навигацию справа"
+        id: "Pindahkan navigasi ke kanan"
       reset:
         en: Reset appearance
         vi: Đặt lại giao diện
@@ -425,6 +493,8 @@ app:
         pt-BR: "Redefinir aparência"
         ko: "모양 재설정"
         nl: "Weergave herstellen"
+        ru: "Сбросить оформление"
+        id: "Atur ulang tampilan"
     accessibility:
       description:
         en: Adjust motion and the amount of persistent interface detail.
@@ -438,6 +508,8 @@ app:
         pt-BR: "Ajuste o movimento e a quantidade de detalhes persistentes da interface."
         ko: "모션과 화면에 계속 표시되는 인터페이스 정보량을 조정합니다."
         nl: "Pas beweging en de hoeveelheid permanent zichtbare interface-informatie aan."
+        ru: "Настройте анимацию и количество постоянно отображаемых элементов интерфейса."
+        id: "Atur animasi dan jumlah detail antarmuka yang selalu ditampilkan."
       display:
         en: Display
         vi: Hiển thị
@@ -450,6 +522,8 @@ app:
         pt-BR: "Exibição"
         ko: "디스플레이"
         nl: "Weergave"
+        ru: "Экран"
+        id: "Tampilan"
       show_status_bar:
         en: Show status bar
         vi: Hiện thanh trạng thái
@@ -462,6 +536,8 @@ app:
         pt-BR: "Mostrar barra de status"
         ko: "상태 표시줄 표시"
         nl: "Statusbalk tonen"
+        ru: "Показывать строку состояния"
+        id: "Tampilkan bilah status"
     provider:
       group:
         en: Provider settings
@@ -475,6 +551,8 @@ app:
         pt-BR: "Configurações do provedor"
         ko: "제공자 설정"
         nl: "Providerinstellingen"
+        ru: "Настройки поставщика"
+        id: "Pengaturan penyedia"
       title:
         en: Provider
         vi: Nhà cung cấp
@@ -487,6 +565,8 @@ app:
         pt-BR: "Provedor"
         ko: "제공자"
         nl: "Provider"
+        ru: "Поставщик"
+        id: "Penyedia"
       connect_hint:
         en: Connect to your workspace to view provider and model details.
         vi: Kết nối với không gian làm việc để xem thông tin nhà cung cấp và mô hình.
@@ -499,6 +579,8 @@ app:
         pt-BR: "Conecte-se ao seu espaço de trabalho para ver os detalhes do provedor e do modelo."
         ko: "제공자와 모델 정보를 보려면 작업 공간에 연결하세요."
         nl: "Maak verbinding met je werkruimte om provider- en modelgegevens te bekijken."
+        ru: "Подключитесь к рабочему пространству, чтобы просмотреть сведения о поставщике и модели."
+        id: "Sambungkan ke ruang kerja untuk melihat detail penyedia dan model."
       not_configured:
         en: Not configured
         vi: Chưa cấu hình
@@ -511,6 +593,8 @@ app:
         pt-BR: "Não configurado"
         ko: "구성되지 않음"
         nl: "Niet geconfigureerd"
+        ru: "Не настроен"
+        id: "Belum dikonfigurasi"
       accessibility_label:
         en: Provider and model configuration
         vi: Cấu hình nhà cung cấp và mô hình
@@ -523,6 +607,8 @@ app:
         pt-BR: "Configuração do provedor e do modelo"
         ko: "제공자 및 모델 구성"
         nl: "Provider- en modelconfiguratie"
+        ru: "Настройки поставщика и модели"
+        id: "Konfigurasi penyedia dan model"
       provider:
         en: Provider
         vi: Nhà cung cấp
@@ -535,6 +621,8 @@ app:
         pt-BR: "Provedor"
         ko: "제공자"
         nl: "Provider"
+        ru: "Поставщик"
+        id: "Penyedia"
       model:
         en: Model
         vi: Mô hình
@@ -547,6 +635,8 @@ app:
         pt-BR: "Modelo"
         ko: "모델"
         nl: "Model"
+        ru: "Модель"
+        id: "Model"
     connections:
       connected:
         en: Connected
@@ -560,6 +650,8 @@ app:
         pt-BR: "Conectado"
         ko: "연결됨"
         nl: "Verbonden"
+        ru: "Подключено"
+        id: "Tersambung"
       not_connected:
         en: Not connected
         vi: Chưa kết nối
@@ -572,6 +664,8 @@ app:
         pt-BR: "Não conectado"
         ko: "연결되지 않음"
         nl: "Niet verbonden"
+        ru: "Не подключено"
+        id: "Tidak tersambung"
       active_status:
         en: CLI service connection is active
         vi: Kết nối dịch vụ CLI đang hoạt động
@@ -584,6 +678,8 @@ app:
         pt-BR: "A conexão com o serviço CLI está ativa"
         ko: "CLI 서비스 연결이 활성화되어 있습니다"
         nl: "De verbinding met de CLI-service is actief"
+        ru: "Подключение к службе CLI активно"
+        id: "Koneksi layanan CLI aktif"
       waiting_status:
         en: CLI service has not completed a protocol handshake
         vi: Dịch vụ CLI chưa hoàn tất bắt tay giao thức
@@ -596,6 +692,8 @@ app:
         pt-BR: "O serviço CLI ainda não concluiu a negociação do protocolo"
         ko: "CLI 서비스가 아직 프로토콜 핸드셰이크를 완료하지 않았습니다"
         nl: "De CLI-service heeft de protocolhandshake nog niet voltooid"
+        ru: "Служба CLI ещё не завершила согласование протокола"
+        id: "Layanan CLI belum menyelesaikan jabat tangan protokol"
       runtime:
         en: Runtime
         vi: Môi trường chạy
@@ -608,6 +706,8 @@ app:
         pt-BR: "Ambiente de execução"
         ko: "런타임"
         nl: "Runtime"
+        ru: "Среда выполнения"
+        id: "Runtime"
       version:
         en: Version
         vi: Phiên bản
@@ -620,6 +720,8 @@ app:
         pt-BR: "Versão"
         ko: "버전"
         nl: "Versie"
+        ru: "Версия"
+        id: "Versi"
       protocol:
         en: Protocol
         vi: Giao thức
@@ -632,6 +734,8 @@ app:
         pt-BR: "Protocolo"
         ko: "프로토콜"
         nl: "Protocol"
+        ru: "Протокол"
+        id: "Protokol"
       workspace:
         en: Workspace
         vi: Không gian làm việc
@@ -644,6 +748,8 @@ app:
         pt-BR: "Espaço de trabalho"
         ko: "작업 공간"
         nl: "Werkruimte"
+        ru: "Рабочее пространство"
+        id: "Ruang kerja"
       local_service_unavailable:
         en: The local CLI service will appear here after VT Code Desktop connects.
         vi: Dịch vụ CLI cục bộ sẽ xuất hiện tại đây sau khi VT Code Desktop kết nối.
@@ -656,6 +762,8 @@ app:
         pt-BR: "O serviço CLI local aparecerá aqui após a conexão do VT Code Desktop."
         ko: "VT Code Desktop이 연결되면 여기에 로컬 CLI 서비스가 표시됩니다."
         nl: "De lokale CLI-service wordt hier getoond zodra VT Code Desktop verbinding maakt."
+        ru: "Локальная служба CLI появится здесь после подключения VT Code Desktop."
+        id: "Layanan CLI lokal akan muncul di sini setelah VT Code Desktop tersambung."
       local_service:
         en: Local service
         vi: Dịch vụ cục bộ
@@ -668,6 +776,8 @@ app:
         pt-BR: "Serviço local"
         ko: "로컬 서비스"
         nl: "Lokale service"
+        ru: "Локальная служба"
+        id: "Layanan lokal"
       local_service_details:
         en: Local service connection details
         vi: Chi tiết kết nối dịch vụ cục bộ
@@ -680,6 +790,8 @@ app:
         pt-BR: "Detalhes da conexão do serviço local"
         ko: "로컬 서비스 연결 세부 정보"
         nl: "Verbindingsgegevens van de lokale service"
+        ru: "Сведения о подключении локальной службы"
+        id: "Detail koneksi layanan lokal"
   welcome:
     greeting:
       morning:
@@ -694,6 +806,8 @@ app:
         pt-BR: "Bom dia"
         ko: "좋은 아침입니다"
         nl: "Goedemorgen"
+        ru: "Доброе утро"
+        id: "Selamat pagi"
       afternoon:
         en: Good afternoon
         es: "Buenas tardes"
@@ -706,6 +820,8 @@ app:
         pt-BR: "Boa tarde"
         ko: "안녕하세요"
         nl: "Goedemiddag"
+        ru: "Добрый день"
+        id: "Selamat siang"
       evening:
         en: Good evening
         es: "Buenas noches"
@@ -718,6 +834,8 @@ app:
         pt-BR: "Boa noite"
         ko: "좋은 저녁입니다"
         nl: "Goedenavond"
+        ru: "Добрый вечер"
+        id: "Selamat malam"
     action:
       build:
         en: What should we build
@@ -731,6 +849,8 @@ app:
         pt-BR: "O que vamos construir"
         ko: "무엇을 만들어 볼까요"
         nl: "Wat gaan we bouwen"
+        ru: "Что будем создавать"
+        id: "Apa yang akan kita bangun"
       build_in_workspace:
         en: What should we build in
         es: "¿Qué vamos a crear en"
@@ -743,6 +863,8 @@ app:
         pt-BR: "O que vamos construir em"
         ko: "작업 공간에서 무엇을 만들어 볼까요:"
         nl: "Wat gaan we bouwen in"
+        ru: "Что будем создавать в"
+        id: "Apa yang akan kita bangun di"
       improve:
         en: What are we improving
         es: "¿Qué vamos a mejorar"
@@ -755,6 +877,8 @@ app:
         pt-BR: "O que vamos melhorar"
         ko: "무엇을 개선할까요"
         nl: "Wat gaan we verbeteren"
+        ru: "Что улучшим"
+        id: "Apa yang akan kita tingkatkan"
       improve_in_workspace:
         en: What are we improving in
         es: "¿Qué vamos a mejorar en"
@@ -767,6 +891,8 @@ app:
         pt-BR: "O que vamos melhorar em"
         ko: "작업 공간에서 무엇을 개선할까요:"
         nl: "Wat gaan we verbeteren in"
+        ru: "Что улучшим в"
+        id: "Apa yang akan kita tingkatkan di"
       explore:
         en: What are we exploring
         es: "¿Qué vamos a explorar"
@@ -779,6 +905,8 @@ app:
         pt-BR: "O que vamos explorar"
         ko: "무엇을 살펴볼까요"
         nl: "Wat gaan we verkennen"
+        ru: "Что изучим"
+        id: "Apa yang akan kita jelajahi"
       explore_in_workspace:
         en: What are we exploring in
         es: "¿Qué vamos a explorar en"
@@ -791,6 +919,8 @@ app:
         pt-BR: "O que vamos explorar em"
         ko: "작업 공간에서 무엇을 살펴볼까요:"
         nl: "Wat gaan we verkennen in"
+        ru: "Что изучим в"
+        id: "Apa yang akan kita jelajahi di"
     cta:
       choose_workspace:
         en: Choose a workspace
@@ -804,6 +934,8 @@ app:
         pt-BR: "Escolher um espaço de trabalho"
         ko: "작업 공간 선택"
         nl: "Werkruimte kiezen"
+        ru: "Выбрать рабочее пространство"
+        id: "Pilih ruang kerja"
       open_project:
         en: Open a project
         es: "Abrir un proyecto"
@@ -816,6 +948,8 @@ app:
         pt-BR: "Abrir um projeto"
         ko: "프로젝트 열기"
         nl: "Project openen"
+        ru: "Открыть проект"
+        id: "Buka proyek"
       select_folder:
         en: Select a folder
         es: "Seleccionar una carpeta"
@@ -828,6 +962,8 @@ app:
         pt-BR: "Selecionar uma pasta"
         ko: "폴더 선택"
         nl: "Map selecteren"
+        ru: "Выбрать папку"
+        id: "Pilih folder"
   session:
     preparing_new_thread:
       en: Preparing a new thread…
@@ -841,6 +977,8 @@ app:
       pt-BR: "Preparando uma nova conversa…"
       ko: "새 대화를 준비하는 중…"
       nl: "Nieuwe conversatie voorbereiden…"
+      ru: "Подготовка нового диалога…"
+      id: "Menyiapkan percakapan baru…"
     waiting_to_send:
       en: Your message will send after the startup decision.
       es: "El mensaje se enviará después de la decisión inicial."
@@ -853,6 +991,8 @@ app:
       pt-BR: "Sua mensagem será enviada após a decisão inicial."
       ko: "시작 옵션을 결정한 후 메시지가 전송됩니다."
       nl: "Je bericht wordt verzonden nadat de opstartkeuze is gemaakt."
+      ru: "Сообщение будет отправлено после решения при запуске."
+      id: "Pesan Anda akan dikirim setelah keputusan awal ditangani."
     keep_as_draft:
       en: Keep as draft
       es: "Guardar como borrador"
@@ -865,6 +1005,8 @@ app:
       pt-BR: "Manter como rascunho"
       ko: "초안으로 유지"
       nl: "Als concept bewaren"
+      ru: "Оставить черновиком"
+      id: "Simpan sebagai draf"
   files:
     scanning:
       en: Scanning workspace files
@@ -878,6 +1020,8 @@ app:
       pt-BR: "Verificando arquivos do espaço de trabalho"
       ko: "작업 공간 파일을 검색하는 중"
       nl: "Werkruimtebestanden scannen"
+      ru: "Сканирование файлов рабочего пространства"
+      id: "Memindai file ruang kerja"
     empty:
       title:
         en: No workspace files
@@ -891,6 +1035,8 @@ app:
         pt-BR: "Nenhum arquivo no espaço de trabalho"
         ko: "작업 공간에 파일이 없습니다"
         nl: "Geen werkruimtebestanden"
+        ru: "Файлы рабочего пространства не найдены"
+        id: "Tidak ada file ruang kerja"
       description:
         en: There are no files available to browse in this workspace.
         es: "No hay archivos disponibles para explorar en este espacio de trabajo."
@@ -903,6 +1049,8 @@ app:
         pt-BR: "Não há arquivos disponíveis para navegar neste espaço de trabalho."
         ko: "이 작업 공간에는 찾아볼 수 있는 파일이 없습니다."
         nl: "Er zijn geen bestanden beschikbaar om in deze werkruimte te bekijken."
+        ru: "В этом рабочем пространстве нет доступных для просмотра файлов."
+        id: "Tidak ada file yang dapat dijelajahi di ruang kerja ini."
     no_workspace:
       title:
         en: Choose a workspace
@@ -916,6 +1064,8 @@ app:
         pt-BR: "Escolha um espaço de trabalho"
         ko: "작업 공간 선택"
         nl: "Werkruimte kiezen"
+        ru: "Выберите рабочее пространство"
+        id: "Pilih ruang kerja"
       description:
         en: Select a workspace to browse its files.
         es: "Selecciona un espacio de trabajo para explorar sus archivos."
@@ -928,6 +1078,8 @@ app:
         pt-BR: "Selecione um espaço de trabalho para navegar pelos arquivos."
         ko: "파일을 살펴볼 작업 공간을 선택하세요."
         nl: "Selecteer een werkruimte om de bestanden te bekijken."
+        ru: "Выберите рабочее пространство, чтобы просмотреть его файлы."
+        id: "Pilih ruang kerja untuk menjelajahi file di dalamnya."
   activity:
     history:
       notice:
@@ -942,6 +1094,8 @@ app:
         pt-BR: "Exibindo as %{count} ações de ferramenta mais recentes."
         ko: "최근 도구 작업 %{count}개를 표시합니다."
         nl: "De nieuwste %{count} toolacties worden getoond."
+        ru: "Показаны последние %{count} действий инструментов."
+        id: "Menampilkan %{count} tindakan alat terbaru."
       search:
         en: Search conversation
         es: "Buscar en la conversación"
@@ -954,6 +1108,8 @@ app:
         pt-BR: "Pesquisar conversa"
         ko: "대화 검색"
         nl: "Gesprek zoeken"
+        ru: "Поиск по диалогу"
+        id: "Cari percakapan"
   workspace:
     section:
       en: "Workspace"
@@ -968,6 +1124,8 @@ app:
       ko: "작업 공간"
       nl: "Werkruimte"
 
+      ru: "Рабочее пространство"
+      id: "Ruang kerja"
     choose:
       en: "Choose workspace"
       vi: "Chọn không gian làm việc"
@@ -981,6 +1139,8 @@ app:
       ko: "작업 공간 선택"
       nl: "Werkruimte kiezen"
 
+      ru: "Выбрать рабочее пространство"
+      id: "Pilih ruang kerja"
     choose_or_recent:
       en: "Choose a workspace or recent project"
       vi: "Chọn không gian làm việc hoặc dự án gần đây"
@@ -994,6 +1154,8 @@ app:
       ko: "작업 공간 또는 최근 프로젝트 선택"
       nl: "Kies een werkruimte of recent project"
 
+      ru: "Выберите рабочее пространство или недавний проект"
+      id: "Pilih ruang kerja atau proyek terbaru"
     project_placeholder:
       en: "Choose a project"
       vi: "Chọn dự án"
@@ -1007,6 +1169,8 @@ app:
       ko: "프로젝트 선택"
       nl: "Kies een project"
 
+      ru: "Выберите проект"
+      id: "Pilih proyek"
     checking:
       en: "Checking…"
       vi: "Đang kiểm tra…"
@@ -1020,6 +1184,8 @@ app:
       ko: "확인 중…"
       nl: "Controleren…"
 
+      ru: "Проверка…"
+      id: "Memeriksa…"
     change:
       en: "Change"
       vi: "Thay đổi"
@@ -1033,6 +1199,8 @@ app:
       ko: "변경"
       nl: "Wijzigen"
 
+      ru: "Изменить"
+      id: "Ubah"
     open:
       en: "Open"
       vi: "Mở"
@@ -1046,6 +1214,8 @@ app:
       ko: "열기"
       nl: "Openen"
 
+      ru: "Открыть"
+      id: "Buka"
     projects:
       en: "Projects"
       vi: "Dự án"
@@ -1059,6 +1229,8 @@ app:
       ko: "프로젝트"
       nl: "Projecten"
 
+      ru: "Проекты"
+      id: "Proyek"
     recent_threads:
       en: "Recent threads"
       vi: "Cuộc hội thoại gần đây"
@@ -1072,6 +1244,8 @@ app:
       ko: "최근 대화"
       nl: "Recente gesprekken"
 
+      ru: "Недавние диалоги"
+      id: "Percakapan terbaru"
     current_label:
       en: "%{workspace} (current workspace)"
       vi: "%{workspace} (không gian làm việc hiện tại)"
@@ -1085,6 +1259,8 @@ app:
       ko: "%{workspace} (현재 작업 공간)"
       nl: "%{workspace} (huidige werkruimte)"
 
+      ru: "%{workspace} (текущее рабочее пространство)"
+      id: "%{workspace} (ruang kerja saat ini)"
     choose_folder:
       en: "Choose folder…"
       vi: "Chọn thư mục…"
@@ -1098,6 +1274,8 @@ app:
       ko: "폴더 선택…"
       nl: "Map kiezen…"
 
+      ru: "Выбрать папку…"
+      id: "Pilih folder…"
     no_recent_workspaces:
       en: "No recent workspaces"
       vi: "Chưa có không gian làm việc gần đây"
@@ -1111,6 +1289,8 @@ app:
       ko: "최근 작업 공간이 없습니다"
       nl: "Geen recente werkruimten"
 
+      ru: "Нет недавних рабочих пространств"
+      id: "Tidak ada ruang kerja terbaru"
   workspace_review:
     review_working_tree:
       en: "Review working tree"
@@ -1124,6 +1304,8 @@ app:
       pt-BR: "Revisar a árvore de trabalho"
       ko: "작업 트리 검토"
       nl: "Werkboom controleren"
+      ru: "Проверить рабочую директорию"
+      id: "Tinjau working tree"
     title:
       en: "Working tree review"
       vi: "Xem xét cây làm việc"
@@ -1136,6 +1318,8 @@ app:
       pt-BR: "Revisão da árvore de trabalho"
       ko: "작업 트리 검토"
       nl: "Werkboomcontrole"
+      ru: "Проверка рабочей директории"
+      id: "Tinjauan working tree"
     description:
       en: "Read-only redacted snapshot · staged and unstaged changes · optional untracked text previews"
       vi: "Ảnh chụp đã ẩn thông tin nhạy cảm, chỉ đọc · thay đổi đã đưa vào và chưa đưa vào vùng chờ · tùy chọn xem trước tệp văn bản chưa được theo dõi"
@@ -1148,6 +1332,8 @@ app:
       pt-BR: "Instantâneo redigido e somente leitura · alterações preparadas e não preparadas · prévia opcional de arquivos de texto não rastreados"
       ko: "민감 정보를 제외한 읽기 전용 스냅샷 · 스테이징 및 미스테이징 변경 사항 · 추적되지 않는 텍스트 미리 보기 선택 가능"
       nl: "Opgeschoonde, alleen-lezen momentopname · klaargezette en niet-klaargezette wijzigingen · optionele voorvertoning van niet bijgehouden tekstbestanden"
+      ru: "Обезличенный снимок только для чтения · изменения в индексе и рабочей директории · необязательный просмотр текста неотслеживаемых файлов"
+      id: "Snapshot tersamarkan dan hanya-baca · perubahan staged dan unstaged · pratinjau teks file tak terlacak bersifat opsional"
     session_title:
       en: "Review changes"
       vi: "Xem xét thay đổi"
@@ -1160,6 +1346,8 @@ app:
       pt-BR: "Revisar alterações"
       ko: "변경 사항 검토"
       nl: "Wijzigingen controleren"
+      ru: "Проверить изменения"
+      id: "Tinjau perubahan"
     session_description:
       en: "Session patch previews · read-only"
       vi: "Bản xem trước bản vá của phiên · chỉ đọc"
@@ -1172,6 +1360,8 @@ app:
       pt-BR: "Prévias dos patches da sessão · somente leitura"
       ko: "세션 패치 미리 보기 · 읽기 전용"
       nl: "Patchvoorbeelden van de sessie · alleen-lezen"
+      ru: "Предпросмотр патчей сессии · только чтение"
+      id: "Pratinjau patch sesi · hanya-baca"
     close_review:
       en: "Close diff review"
       vi: "Đóng phần xem xét diff"
@@ -1184,6 +1374,8 @@ app:
       pt-BR: "Fechar revisão do diff"
       ko: "Diff 검토 닫기"
       nl: "Diff-controle sluiten"
+      ru: "Закрыть просмотр diff"
+      id: "Tutup tinjauan diff"
     expanded_in_inspector:
       en: "Changes are open in the expanded review."
       vi: "Các thay đổi đang mở trong phần xem xét mở rộng."
@@ -1196,6 +1388,8 @@ app:
       pt-BR: "As alterações estão abertas na revisão expandida."
       ko: "변경 사항이 확장된 검토 화면에서 열려 있습니다."
       nl: "De wijzigingen staan open in de uitgebreide controle."
+      ru: "Изменения открыты в расширенной панели просмотра."
+      id: "Perubahan terbuka di panel tinjauan yang diperluas."
     folder_optional:
       en: "Folder (optional)"
       vi: "Thư mục (không bắt buộc)"
@@ -1208,6 +1402,8 @@ app:
       pt-BR: "Pasta (opcional)"
       ko: "폴더(선택 사항)"
       nl: "Map (optioneel)"
+      ru: "Папка (необязательно)"
+      id: "Folder (opsional)"
     include_untracked:
       en: "Include untracked text files"
       vi: "Bao gồm tệp văn bản chưa được theo dõi"
@@ -1220,6 +1416,8 @@ app:
       pt-BR: "Incluir arquivos de texto não rastreados"
       ko: "추적되지 않는 텍스트 파일 포함"
       nl: "Niet bijgehouden tekstbestanden opnemen"
+      ru: "Включить текстовые файлы без отслеживания"
+      id: "Sertakan file teks yang tidak terlacak"
     refresh_tooltip:
       en: "Refresh working tree review"
       vi: "Làm mới phần xem xét cây làm việc"
@@ -1232,6 +1430,8 @@ app:
       pt-BR: "Atualizar a revisão da árvore de trabalho"
       ko: "작업 트리 검토 새로고침"
       nl: "Werkboomcontrole vernieuwen"
+      ru: "Обновить проверку рабочей директории"
+      id: "Segarkan tinjauan working tree"
     refreshing:
       en: "Refreshing…"
       vi: "Đang làm mới…"
@@ -1244,6 +1444,8 @@ app:
       pt-BR: "Atualizando…"
       ko: "새로고치는 중…"
       nl: "Vernieuwen…"
+      ru: "Обновление…"
+      id: "Menyegarkan…"
     load_changes:
       en: "Load changes"
       vi: "Tải thay đổi"
@@ -1256,6 +1458,8 @@ app:
       pt-BR: "Carregar alterações"
       ko: "변경 사항 불러오기"
       nl: "Wijzigingen laden"
+      ru: "Загрузить изменения"
+      id: "Muat perubahan"
     refresh:
       en: "Refresh"
       vi: "Làm mới"
@@ -1268,6 +1472,8 @@ app:
       pt-BR: "Atualizar"
       ko: "새로고침"
       nl: "Vernieuwen"
+      ru: "Обновить"
+      id: "Segarkan"
     diff_layout:
       en: "Diff layout"
       vi: "Bố cục diff"
@@ -1280,9 +1486,12 @@ app:
       pt-BR: "Layout do diff"
       ko: "Diff 레이아웃"
       nl: "Diff-indeling"
+      ru: "Макет diff"
+      id: "Tata letak diff"
     unified:
       en: "Unified"
       vi: "Thống nhất"
+      id: "Terpadu"
       es: "Unificado"
       fr: "Unifié"
       ja: "統合"
@@ -1292,6 +1501,7 @@ app:
       pt-BR: "Unificado"
       ko: "통합"
       nl: "Gecombineerd"
+      ru: "Единый"
     split:
       en: "Split"
       vi: "Tách đôi"
@@ -1304,6 +1514,8 @@ app:
       pt-BR: "Dividido"
       ko: "분할"
       nl: "Gesplitst"
+      ru: "Раздельный"
+      id: "Terpisah"
     copy_preview:
       en: "Copy preview"
       vi: "Sao chép bản xem trước"
@@ -1316,6 +1528,8 @@ app:
       pt-BR: "Copiar prévia"
       ko: "미리 보기 복사"
       nl: "Voorbeeld kopiëren"
+      ru: "Копировать предпросмотр"
+      id: "Salin pratinjau"
     reading_git_changes:
       en: "Reading Git changes"
       vi: "Đọc thay đổi Git"
@@ -1328,6 +1542,8 @@ app:
       pt-BR: "Lendo alterações do Git"
       ko: "Git 변경 사항 읽는 중"
       nl: "Git-wijzigingen lezen"
+      ru: "Чтение изменений Git"
+      id: "Membaca perubahan Git"
     reading_git_changes_progress:
       en: "Reading Git changes…"
       vi: "Đang đọc thay đổi Git…"
@@ -1340,6 +1556,8 @@ app:
       pt-BR: "Lendo alterações do Git…"
       ko: "Git 변경 사항 읽는 중…"
       nl: "Git-wijzigingen lezen…"
+      ru: "Чтение изменений Git…"
+      id: "Membaca perubahan Git…"
     capturing_snapshot:
       en: "Capturing a bounded, read-only snapshot."
       vi: "Đang ghi lại ảnh chụp chỉ đọc có giới hạn."
@@ -1352,6 +1570,8 @@ app:
       pt-BR: "Capturando um instantâneo limitado e somente leitura."
       ko: "제한된 읽기 전용 스냅샷을 캡처하는 중입니다."
       nl: "Beperkte, alleen-lezen momentopname wordt gemaakt."
+      ru: "Создание ограниченного снимка только для чтения."
+      id: "Mengambil snapshot terbatas yang hanya-baca."
     refreshing_status:
       en: "Refreshing Git changes · showing the last successful snapshot"
       vi: "Đang làm mới thay đổi Git · đang hiển thị ảnh chụp thành công gần nhất"
@@ -1364,6 +1584,8 @@ app:
       pt-BR: "Atualizando alterações do Git · exibindo o último instantâneo concluído"
       ko: "Git 변경 사항 새로고침 중 · 마지막으로 성공한 스냅샷을 표시합니다"
       nl: "Git-wijzigingen vernieuwen · de laatst geslaagde momentopname wordt getoond"
+      ru: "Обновление изменений Git · показан последний успешный снимок"
+      id: "Menyegarkan perubahan Git · menampilkan snapshot terakhir yang berhasil"
     file:
       en: "file"
       vi: "tệp"
@@ -1376,6 +1598,8 @@ app:
       pt-BR: "arquivo"
       ko: "파일"
       nl: "bestand"
+      ru: "файл"
+      id: "file"
     files:
       en: "files"
       vi: "tệp"
@@ -1388,6 +1612,8 @@ app:
       pt-BR: "arquivos"
       ko: "파일"
       nl: "bestanden"
+      ru: "файлов"
+      id: "file"
     changed_files_summary:
       en: "%{count} %{files} changed · +%{additions} · −%{deletions}"
       vi: "%{count} %{files} đã thay đổi · +%{additions} · −%{deletions}"
@@ -1400,6 +1626,8 @@ app:
       pt-BR: "%{count} %{files} alterados · +%{additions} · −%{deletions}"
       ko: "%{count}개 %{files} 변경 · +%{additions} · −%{deletions}"
       nl: "%{count} %{files} gewijzigd · +%{additions} · −%{deletions}"
+      ru: "Изменено файлов: %{count} %{files} · +%{additions} · −%{deletions}"
+      id: "%{count} %{files} berubah · +%{additions} · −%{deletions}"
     changed_files_count:
       en: "%{count} %{files} changed"
       vi: "%{count} %{files} đã thay đổi"
@@ -1412,6 +1640,8 @@ app:
       pt-BR: "%{count} %{files} alterados"
       ko: "%{count}개 %{files} 변경"
       nl: "%{count} %{files} gewijzigd"
+      ru: "Изменено файлов: %{count} %{files}"
+      id: "%{count} %{files} berubah"
     added_deleted_description:
       en: "Added and deleted lines in the captured working tree preview."
       vi: "Số dòng được thêm và xóa trong bản xem trước cây làm việc đã ghi lại."
@@ -1424,6 +1654,8 @@ app:
       pt-BR: "Linhas adicionadas e removidas na prévia capturada da árvore de trabalho."
       ko: "캡처한 작업 트리 미리 보기에서 추가되거나 삭제된 줄입니다."
       nl: "Toegevoegde en verwijderde regels in de vastgelegde werkboomvoorvertoning."
+      ru: "Добавленные и удалённые строки в сохранённом предпросмотре рабочей директории."
+      id: "Baris yang ditambahkan dan dihapus dalam pratinjau working tree yang diambil."
     file_position:
       en: "File %{current} of %{total} · %{path}"
       vi: "Tệp %{current}/%{total} · %{path}"
@@ -1436,6 +1668,8 @@ app:
       pt-BR: "Arquivo %{current} de %{total} · %{path}"
       ko: "%{total}개 중 %{current}번째 파일 · %{path}"
       nl: "Bestand %{current} van %{total} · %{path}"
+      ru: "Файл %{current} из %{total} · %{path}"
+      id: "File %{current} dari %{total} · %{path}"
     previous_file:
       en: "Previous file"
       vi: "Tệp trước"
@@ -1448,6 +1682,8 @@ app:
       pt-BR: "Arquivo anterior"
       ko: "이전 파일"
       nl: "Vorig bestand"
+      ru: "Предыдущий файл"
+      id: "File sebelumnya"
     choose_changed_file:
       en: "Choose a changed file"
       vi: "Chọn tệp đã thay đổi"
@@ -1460,6 +1696,8 @@ app:
       pt-BR: "Escolher um arquivo alterado"
       ko: "변경된 파일 선택"
       nl: "Gewijzigd bestand kiezen"
+      ru: "Выбрать изменённый файл"
+      id: "Pilih file yang berubah"
     next_file:
       en: "Next file"
       vi: "Tệp tiếp theo"
@@ -1472,6 +1710,8 @@ app:
       pt-BR: "Próximo arquivo"
       ko: "다음 파일"
       nl: "Volgend bestand"
+      ru: "Следующий файл"
+      id: "File berikutnya"
     git_review_unavailable:
       en: "Git review unavailable"
       vi: "Không thể xem xét Git"
@@ -1484,6 +1724,8 @@ app:
       pt-BR: "Revisão do Git indisponível"
       ko: "Git 검토를 사용할 수 없음"
       nl: "Git-controle niet beschikbaar"
+      ru: "Проверка Git недоступна"
+      id: "Tinjauan Git tidak tersedia"
     choose_what_to_review:
       en: "Choose what to review"
       vi: "Chọn nội dung cần xem xét"
@@ -1496,6 +1738,8 @@ app:
       pt-BR: "Escolha o que revisar"
       ko: "검토할 항목 선택"
       nl: "Kies wat je wilt controleren"
+      ru: "Выберите, что проверить"
+      id: "Pilih yang akan ditinjau"
     choose_what_to_review_hint:
       en: "Leave Folder empty for the whole workspace, or enter a relative directory. Then choose Load changes."
       vi: "Để trống Thư mục để xem toàn bộ không gian làm việc, hoặc nhập thư mục tương đối. Sau đó chọn Tải thay đổi."
@@ -1508,6 +1752,8 @@ app:
       pt-BR: "Deixe Pasta vazia para revisar todo o espaço de trabalho ou informe um diretório relativo. Depois, escolha Carregar alterações."
       ko: "전체 작업 공간을 검토하려면 폴더를 비워 두고, 특정 위치만 보려면 상대 디렉터리를 입력한 다음 변경 사항 불러오기를 선택하세요."
       nl: "Laat Map leeg voor de hele werkruimte of voer een relatief pad in. Kies daarna Wijzigingen laden."
+      ru: "Оставьте поле «Папка» пустым, чтобы проверить всё рабочее пространство, или укажите относительный каталог. Затем нажмите «Загрузить изменения»."
+      id: "Kosongkan Folder untuk seluruh ruang kerja, atau masukkan direktori relatif. Lalu pilih Muat perubahan."
     folder_value:
       en: "Folder: %{folder}"
       vi: "Thư mục: %{folder}"
@@ -1520,6 +1766,8 @@ app:
       pt-BR: "Pasta: %{folder}"
       ko: "폴더: %{folder}"
       nl: "Map: %{folder}"
+      ru: "Папка: %{folder}"
+      id: "Direktori: %{folder}"
     refresh_failed:
       en: "Refresh failed. Showing the last successful snapshot. %{error}"
       vi: "Làm mới thất bại. Đang hiển thị ảnh chụp thành công gần nhất. %{error}"
@@ -1532,6 +1780,8 @@ app:
       pt-BR: "Falha ao atualizar. Exibindo o último instantâneo concluído. %{error}"
       ko: "새로고침에 실패했습니다. 마지막으로 성공한 스냅샷을 표시합니다. %{error}"
       nl: "Vernieuwen mislukt. De laatst geslaagde momentopname wordt getoond. %{error}"
+      ru: "Не удалось обновить. Показан последний успешный снимок. %{error}"
+      id: "Gagal menyegarkan. Menampilkan snapshot terakhir yang berhasil. %{error}"
     repository_unavailable_hint:
       en: "Refresh after Git and a valid repository are available for this workspace."
       vi: "Làm mới sau khi Git và kho lưu trữ hợp lệ khả dụng cho không gian làm việc này."
@@ -1544,6 +1794,8 @@ app:
       pt-BR: "Atualize quando o Git e um repositório válido estiverem disponíveis para este espaço de trabalho."
       ko: "이 작업 공간에서 Git과 유효한 저장소를 사용할 수 있게 된 후 새로고침하세요."
       nl: "Vernieuw zodra Git en een geldige repository beschikbaar zijn voor deze werkruimte."
+      ru: "Обновите после того, как Git и корректный репозиторий станут доступны для этого рабочего пространства."
+      id: "Segarkan setelah Git dan repositori yang valid tersedia untuk ruang kerja ini."
     no_previewable_changes:
       en: "No previewable changes"
       vi: "Không có thay đổi nào để xem trước"
@@ -1556,6 +1808,8 @@ app:
       pt-BR: "Nenhuma alteração disponível para prévia"
       ko: "미리 볼 수 있는 변경 사항이 없습니다"
       nl: "Geen wijzigingen om te bekijken"
+      ru: "Нет изменений для предпросмотра"
+      id: "Tidak ada perubahan yang dapat dipratinjau"
     no_tracked_changes:
       en: "No tracked changes"
       vi: "Không có thay đổi được theo dõi"
@@ -1568,6 +1822,8 @@ app:
       pt-BR: "Nenhuma alteração rastreada"
       ko: "추적 중인 변경 사항이 없습니다"
       nl: "Geen bijgehouden wijzigingen"
+      ru: "Нет отслеживаемых изменений"
+      id: "Tidak ada perubahan terlacak"
     no_previewable_changes_hint:
       en: "No previewable changes in this snapshot. See the capture note for omitted files."
       vi: "Không có thay đổi nào để xem trước trong ảnh chụp này. Xem ghi chú để biết các tệp bị bỏ qua."
@@ -1580,6 +1836,8 @@ app:
       pt-BR: "Não há alterações para prévia neste instantâneo. Consulte a nota de captura para ver os arquivos omitidos."
       ko: "이 스냅샷에는 미리 볼 수 있는 변경 사항이 없습니다. 제외된 파일은 캡처 참고 사항을 확인하세요."
       nl: "Deze momentopname bevat geen wijzigingen om te bekijken. Zie de opmerking voor overgeslagen bestanden."
+      ru: "В этом снимке нет изменений для предпросмотра. Сведения о пропущенных файлах см. в примечании к снимку."
+      id: "Tidak ada perubahan yang dapat dipratinjau dalam snapshot ini. Lihat catatan pengambilan untuk file yang dilewati."
     tracked_files_clean_hint:
       en: "Tracked files match the captured Git baseline. Untracked files are excluded."
       vi: "Các tệp được theo dõi khớp với mốc Git đã ghi lại. Tệp chưa được theo dõi không được bao gồm."
@@ -1592,6 +1850,8 @@ app:
       pt-BR: "Os arquivos rastreados correspondem à base Git capturada. Arquivos não rastreados foram excluídos."
       ko: "추적 중인 파일은 캡처한 Git 기준과 일치합니다. 추적되지 않는 파일은 제외되었습니다."
       nl: "Bijgehouden bestanden komen overeen met de vastgelegde Git-basis. Niet bijgehouden bestanden zijn uitgesloten."
+      ru: "Отслеживаемые файлы совпадают с сохранённой базой Git. Неотслеживаемые файлы исключены."
+      id: "File terlacak sesuai dengan baseline Git yang diambil. File tak terlacak dikecualikan."
     preview_incomplete:
       en: "Preview incomplete. See the capture note for omitted files or limits. Copy includes only the captured preview."
       vi: "Bản xem trước chưa đầy đủ. Xem ghi chú để biết tệp bị bỏ qua hoặc giới hạn. Nội dung sao chép chỉ gồm bản xem trước đã ghi lại."
@@ -1604,6 +1864,8 @@ app:
       pt-BR: "A prévia está incompleta. Consulte a nota de captura para ver arquivos omitidos ou limites. A cópia inclui somente a prévia capturada."
       ko: "미리 보기가 완전하지 않습니다. 제외된 파일이나 제한 사항은 캡처 참고 사항을 확인하세요. 복사에는 캡처한 미리 보기만 포함됩니다."
       nl: "De voorvertoning is onvolledig. Zie de opmerking voor overgeslagen bestanden of limieten. Kopiëren neemt alleen de vastgelegde voorvertoning mee."
+      ru: "Предпросмотр неполный. Сведения о пропущенных файлах и ограничениях см. в примечании к снимку. Копируется только сохранённый предпросмотр."
+      id: "Pratinjau belum lengkap. Lihat catatan pengambilan untuk file yang dilewati atau batasan. Salinan hanya mencakup pratinjau yang diambil."
     preview_truncated:
       en: "Preview truncated at the review limit. Choose a narrower folder for a complete review. Copy includes only this preview."
       vi: "Bản xem trước đã đạt giới hạn xem xét. Chọn thư mục hẹp hơn để xem đầy đủ. Nội dung sao chép chỉ gồm bản xem trước này."
@@ -1616,6 +1878,8 @@ app:
       pt-BR: "A prévia atingiu o limite de revisão. Escolha uma pasta mais específica para revisar tudo. A cópia inclui somente esta prévia."
       ko: "검토 제한으로 미리 보기가 잘렸습니다. 전체 검토를 하려면 더 좁은 폴더를 선택하세요. 복사에는 이 미리 보기만 포함됩니다."
       nl: "De voorvertoning is afgekapt bij de controlelimiet. Kies een kleinere map voor een volledige controle. Kopiëren bevat alleen deze voorvertoning."
+      ru: "Предпросмотр усечён из-за ограничения. Для полного просмотра выберите более узкую папку. Копируется только этот предпросмотр."
+      id: "Pratinjau dipotong karena batas ukuran. Pilih folder yang lebih sempit untuk tinjauan lengkap. Salinan hanya mencakup pratinjau ini."
     structured_preview_unavailable:
       en: "Structured preview unavailable for this patch. Showing the captured text."
       vi: "Không thể hiển thị bản xem trước có cấu trúc cho bản vá này. Đang hiển thị văn bản đã ghi lại."
@@ -1628,6 +1892,8 @@ app:
       pt-BR: "A prévia estruturada não está disponível para este patch. Exibindo o texto capturado."
       ko: "이 패치에는 구조화된 미리 보기를 사용할 수 없습니다. 캡처한 텍스트를 표시합니다."
       nl: "Er is geen gestructureerde voorvertoning voor deze patch. De vastgelegde tekst wordt getoond."
+      ru: "Структурированный предпросмотр этого патча недоступен. Показан сохранённый текст."
+      id: "Pratinjau terstruktur tidak tersedia untuk patch ini. Menampilkan teks yang diambil."
     changed_files:
       en: "Changed files"
       vi: "Tệp đã thay đổi"
@@ -1640,6 +1906,8 @@ app:
       pt-BR: "Arquivos alterados"
       ko: "변경된 파일"
       nl: "Gewijzigde bestanden"
+      ru: "Изменённые файлы"
+      id: "File yang berubah"
     request_queue_unavailable:
       en: "The local service request queue is unavailable."
       vi: "Hàng đợi yêu cầu của dịch vụ cục bộ hiện không khả dụng."
@@ -1653,6 +1921,8 @@ app:
       ko: "로컬 서비스 요청 대기열을 사용할 수 없습니다."
       nl: "De wachtrij voor lokale serviceverzoeken is niet beschikbaar."
 
+      ru: "Очередь запросов локальной службы недоступна."
+      id: "Antrean permintaan layanan lokal tidak tersedia."
   navigation:
     sidebar_label:
       en: "Workspace, projects, and recent threads"
@@ -1667,6 +1937,8 @@ app:
       ko: "작업 공간, 프로젝트 및 최근 대화"
       nl: "Werkruimten, projecten en recente gesprekken"
 
+      ru: "Рабочее пространство, проекты и недавние диалоги"
+      id: "Ruang kerja, proyek, dan percakapan terbaru"
     new_thread:
       en: "New thread"
       vi: "Cuộc hội thoại mới"
@@ -1680,6 +1952,8 @@ app:
       ko: "새 대화"
       nl: "Nieuwe thread"
 
+      ru: "Новый диалог"
+      id: "Percakapan baru"
     close_thread:
       en: "Close thread"
       vi: "Đóng hội thoại"
@@ -1693,6 +1967,8 @@ app:
       ko: "대화 닫기"
       nl: "Thread sluiten"
 
+      ru: "Закрыть диалог"
+      id: "Tutup percakapan"
     current_thread_label:
       en: "%{thread} (current thread)"
       vi: "%{thread} (hội thoại hiện tại)"
@@ -1706,6 +1982,8 @@ app:
       ko: "%{thread} (현재 대화)"
       nl: "%{thread} (huidige thread)"
 
+      ru: "%{thread} (текущий диалог)"
+      id: "%{thread} (percakapan saat ini)"
     workspace_actions:
       en: "Workspace actions"
       vi: "Tác vụ không gian làm việc"
@@ -1720,6 +1998,8 @@ app:
       nl: "Werkruimteacties"
 
 
+      ru: "Действия с рабочим пространством"
+      id: "Tindakan ruang kerja"
   composer:
     input_label:
       en: "Message to VT Code"
@@ -1734,6 +2014,8 @@ app:
       ko: "VT Code에 보내는 메시지"
       nl: "Bericht aan VT Code"
 
+      ru: "Сообщение для VT Code"
+      id: "Pesan untuk VT Code"
     input_placeholder:
       en: "Ask VT Code to make changes…"
       vi: "Yêu cầu VT Code thực hiện thay đổi…"
@@ -1747,6 +2029,8 @@ app:
       ko: "VT Code에 변경을 요청하세요…"
       nl: "Vraag VT Code om wijzigingen aan te brengen…"
 
+      ru: "Попросите VT Code внести изменения…"
+      id: "Minta VT Code membuat perubahan…"
     input_group_label:
       en: "Message composer"
       vi: "Trình soạn tin nhắn"
@@ -1760,6 +2044,8 @@ app:
       ko: "메시지 작성기"
       nl: "Berichteditor"
 
+      ru: "Поле ввода сообщения"
+      id: "Area penulisan pesan"
     add_context:
       en: "Add files and more @"
       vi: "Thêm tệp và nội dung khác @"
@@ -1773,6 +2059,8 @@ app:
       ko: "파일 및 추가 항목 @"
       nl: "Bestanden en meer toevoegen @"
 
+      ru: "Добавить файлы и другое @"
+      id: "Tambahkan file dan lainnya @"
     execution_policy:
       en: "Execution policy: %{policy}"
       vi: "Chính sách thực thi: %{policy}"
@@ -1786,6 +2074,8 @@ app:
       ko: "실행 정책: %{policy}"
       nl: "Uitvoeringsbeleid: %{policy}"
 
+      ru: "Политика выполнения: %{policy}"
+      id: "Kebijakan eksekusi: %{policy}"
     permission_ask:
       en: "Ask before protected actions"
       vi: "Hỏi trước các thao tác được bảo vệ"
@@ -1799,6 +2089,8 @@ app:
       ko: "보호된 작업 전에 묻기"
       nl: "Vragen vóór beschermde acties"
 
+      ru: "Спрашивать перед защищёнными действиями"
+      id: "Tanyakan sebelum tindakan yang dilindungi"
     permission_auto:
       en: "Auto-approve commands"
       vi: "Tự động phê duyệt lệnh"
@@ -1812,6 +2104,8 @@ app:
       ko: "명령 자동 승인"
       nl: "Opdrachten automatisch goedkeuren"
 
+      ru: "Автоматически подтверждать команды"
+      id: "Setujui perintah secara otomatis"
     permissions_unavailable:
       en: "Permissions unavailable"
       vi: "Không có thông tin quyền"
@@ -1825,6 +2119,8 @@ app:
       ko: "권한을 사용할 수 없음"
       nl: "Machtigingen niet beschikbaar"
 
+      ru: "Разрешения недоступны"
+      id: "Izin tidak tersedia"
     policy:
       en: "Policy"
       vi: "Chính sách"
@@ -1838,6 +2134,8 @@ app:
       ko: "정책"
       nl: "Beleid"
 
+      ru: "Политика"
+      id: "Kebijakan"
     command_permissions:
       en: "Command permissions"
       vi: "Quyền lệnh"
@@ -1851,6 +2149,8 @@ app:
       ko: "명령 권한"
       nl: "Opdrachtmachtigingen"
 
+      ru: "Разрешения команд"
+      id: "Izin perintah"
     send:
       en: "Send message"
       vi: "Gửi tin nhắn"
@@ -1864,6 +2164,8 @@ app:
       ko: "메시지 보내기"
       nl: "Bericht verzenden"
 
+      ru: "Отправить сообщение"
+      id: "Kirim pesan"
     send_tooltip:
       en: "Send message (Enter)"
       vi: "Gửi tin nhắn (Enter)"
@@ -1877,6 +2179,8 @@ app:
       ko: "메시지 보내기 (Enter)"
       nl: "Bericht verzenden (Enter)"
 
+      ru: "Отправить сообщение (Enter)"
+      id: "Kirim pesan (Enter)"
     cancel:
       en: "Cancel run"
       vi: "Hủy lượt chạy"
@@ -1890,6 +2194,8 @@ app:
       ko: "실행 취소"
       nl: "Uitvoering annuleren"
 
+      ru: "Отменить запуск"
+      id: "Batalkan proses"
     cancel_tooltip:
       en: "Cancel active run"
       vi: "Hủy lượt chạy đang hoạt động"
@@ -1903,6 +2209,8 @@ app:
       ko: "활성 실행 취소"
       nl: "Actieve uitvoering annuleren"
 
+      ru: "Отменить активный запуск"
+      id: "Batalkan proses aktif"
     connect_webmcp:
       en: "Connect WebMCP"
       vi: "Kết nối WebMCP"
@@ -1916,6 +2224,8 @@ app:
       ko: "WebMCP 연결"
       nl: "WebMCP verbinden"
 
+      ru: "Подключить WebMCP"
+      id: "Sambungkan WebMCP"
     webmcp_connected:
       en: "WebMCP connected"
       vi: "Đã kết nối WebMCP"
@@ -1929,6 +2239,8 @@ app:
       ko: "WebMCP 연결됨"
       nl: "WebMCP verbonden"
 
+      ru: "WebMCP подключён"
+      id: "WebMCP tersambung"
     webmcp_accessibility:
       en: "Open VT Code CLI and WebMCP connection settings"
       vi: "Mở cài đặt kết nối VT Code CLI và WebMCP"
@@ -1942,6 +2254,8 @@ app:
       ko: "VT Code CLI 및 WebMCP 연결 설정 열기"
       nl: "Verbindingsinstellingen voor VT Code CLI en WebMCP openen"
 
+      ru: "Открыть настройки подключения VT Code CLI и WebMCP"
+      id: "Buka pengaturan koneksi VT Code CLI dan WebMCP"
     webmcp_tooltip:
       en: "Pair the browser app with this CLI-backed desktop session"
       vi: "Ghép nối ứng dụng trình duyệt với phiên Desktop dùng CLI này"
@@ -1955,6 +2269,8 @@ app:
       ko: "브라우저 앱을 이 CLI 기반 데스크톱 세션과 페어링"
       nl: "De browserapp koppelen aan deze Desktop-sessie met CLI"
 
+      ru: "Подключить браузерное приложение к этой сессии Desktop на базе CLI"
+      id: "Pasangkan aplikasi browser dengan sesi Desktop berbasis CLI ini"
     choose_model:
       en: "Choose a model"
       vi: "Chọn mô hình"
@@ -1968,6 +2284,8 @@ app:
       ko: "모델 선택"
       nl: "Een model kiezen"
 
+      ru: "Выбрать модель"
+      id: "Pilih model"
     choose_model_tooltip:
       en: "Choose a model · Search by provider, name, or model ID"
       vi: "Chọn mô hình · Tìm theo nhà cung cấp, tên hoặc ID mô hình"
@@ -1981,6 +2299,8 @@ app:
       ko: "모델 선택 · 제공자, 이름 또는 모델 ID로 검색"
       nl: "Model kiezen · Zoeken op provider, naam of model-ID"
 
+      ru: "Выбрать модель · поиск по поставщику, названию или идентификатору"
+      id: "Pilih model · cari berdasarkan penyedia, nama, atau ID model"
     select_model:
       en: "Select model"
       vi: "Chọn mô hình"
@@ -1994,6 +2314,8 @@ app:
       ko: "모델 선택"
       nl: "Model selecteren"
 
+      ru: "Выбрать модель"
+      id: "Pilih model"
     search_models:
       en: "Search providers, models, or IDs…"
       vi: "Tìm nhà cung cấp, mô hình hoặc ID…"
@@ -2007,6 +2329,8 @@ app:
       ko: "제공자, 모델 또는 ID 검색…"
       nl: "Providers, modellen of ID's zoeken…"
 
+      ru: "Поиск поставщиков, моделей или идентификаторов…"
+      id: "Cari penyedia, model, atau ID…"
     search_all_models:
       en: "Search all models…"
       vi: "Tìm tất cả mô hình…"
@@ -2020,6 +2344,8 @@ app:
       ko: "모든 모델 검색…"
       nl: "Alle modellen zoeken…"
 
+      ru: "Поиск по всем моделям…"
+      id: "Cari semua model…"
     reasoning_effort:
       en: "Reasoning effort: %{effort}"
       vi: "Mức độ suy luận: %{effort}"
@@ -2033,6 +2359,8 @@ app:
       ko: "추론 강도: %{effort}"
       nl: "Redeneerniveau: %{effort}"
 
+      ru: "Уровень рассуждения: %{effort}"
+      id: "Tingkat penalaran: %{effort}"
     reasoning_effort_generic:
       en: "Reasoning effort"
       vi: "Mức độ suy luận"
@@ -2046,6 +2374,8 @@ app:
       ko: "추론 강도"
       nl: "Redeneerniveau"
 
+      ru: "Уровень рассуждения"
+      id: "Tingkat penalaran"
     reasoning_effort_hint:
       en: "Use Left and Right arrows to adjust reasoning effort."
       vi: "Dùng phím mũi tên trái/phải để điều chỉnh mức độ suy luận."
@@ -2058,6 +2388,8 @@ app:
       pt-BR: "Use as setas esquerda e direita para ajustar o nível de raciocínio."
       ko: "왼쪽/오른쪽 화살표 키로 추론 강도를 조정하세요."
       nl: "Gebruik de pijltjestoetsen Links en Rechts om het redeneerniveau aan te passen."
+      ru: "Используйте стрелки влево и вправо для настройки уровня рассуждения."
+      id: "Gunakan tombol panah Kiri dan Kanan untuk mengatur tingkat penalaran."
 gpui_component:
   Input:
     Copy:
@@ -2071,6 +2403,8 @@ gpui_component:
       pt-BR: "Copiar"
       ko: "복사"
       nl: "Kopiëren"
+      ru: "Копировать"
+      id: "Salin"
     Select All:
       vi: Chọn tất cả
       es: "Seleccionar todo"
@@ -2082,6 +2416,8 @@ gpui_component:
       pt-BR: "Selecionar tudo"
       ko: "모두 선택"
       nl: "Alles selecteren"
+      ru: "Выделить всё"
+      id: "Pilih Semua"
   Attachment:
     Remove:
       vi: Xóa
@@ -2094,6 +2430,8 @@ gpui_component:
       pt-BR: "Remover"
       ko: "제거"
       nl: "Verwijderen"
+      ru: "Удалить"
+      id: "Hapus"
     Retry:
       vi: Thử lại
       es: "Reintentar"
@@ -2105,3 +2443,5 @@ gpui_component:
       pt-BR: "Tentar novamente"
       ko: "다시 시도"
       nl: "Opnieuw proberen"
+      ru: "Повторить"
+      id: "Coba Lagi"

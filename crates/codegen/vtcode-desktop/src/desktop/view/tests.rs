@@ -115,6 +115,20 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
             crate::desktop::preferences::Preferences::load().ui_language(),
             crate::desktop::localization::UiLanguage::BrazilianPortuguese
         );
+        window.click("ui-language-id", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Indonesian);
+        assert_eq!(window.find("settings-panel").label(), Some("Pengaturan"));
+        assert_eq!(window.find("new-session").label(), Some("Percakapan baru"));
+        window.click("ui-language-ru", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Russian);
+        assert_eq!(window.find("settings-panel").label(), Some("Настройки"));
+        assert_eq!(window.find("new-session").label(), Some("Новый диалог"));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().ui_language(),
+            crate::desktop::localization::UiLanguage::Russian
+        );
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
     })
     .unwrap();
