@@ -188,7 +188,6 @@ impl DesktopView {
                     .when(!active, |button| button.ghost())
                     .on_click(cx.listener(move |view, _, _, cx| {
                         view.config_page_group = Some(name.clone());
-                        view.settings_scroll.set_offset(point(px(0.), px(0.)));
                         cx.notify();
                     })),
             );
@@ -262,8 +261,6 @@ impl DesktopView {
             .gap_3()
             .p_6()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(self.render_cli_configuration(cx))
-            .child(categories)
             .child(
                 div()
                     .id("cli-config-page-content")
@@ -275,7 +272,15 @@ impl DesktopView {
                     .track_scroll(&self.settings_scroll)
                     .overflow_y_scroll()
                     .vertical_scrollbar(&self.settings_scroll)
-                    .child(entries),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(self.render_cli_configuration(cx))
+                            .child(categories)
+                            .child(entries),
+                    ),
             );
         if self.config_editor.is_some() {
             panel = panel.child(self.render_cli_config_editor(cx));

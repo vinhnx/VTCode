@@ -2133,6 +2133,47 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn cli_config_page_scrolls_all_controls_in_short_windows(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop_sized(cx, 600., 400.);
+    cx.update(|cx| cx.set_reduce_motion(true));
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_font_size(view.theme_mode, 24);
+            view.apply_typography(cx);
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![vtcode_desktop_protocol::ConfigSetting {
+                    path: "agent.default_model".into(),
+                    value: json!("model-a"),
+                    origin: Some("workspace".into()),
+                    label: Some("Default model".into()),
+                    type_name: Some("string".into()),
+                    default_value: None,
+                    description: Some("Model used for new conversations.".into()),
+                    options: Vec::new(),
+                    group: Some("Model & Provider".into()),
+                    group_description: None,
+                    editable: true,
+                }],
+                target_versions: Vec::new(),
+                omitted_sensitive: 1,
+                omitted_large: 1,
+                omitted_limit: 0,
+            });
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        let viewport = window.find("cli-config-page-content").bounds();
+        assert!(viewport.size.height >= px(100.), "the catalog needs a usable viewport: {viewport:?}");
+        let before = view.read(cx).settings_scroll.offset().y;
+        window.scroll("cli-config-page-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-300.))), cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).settings_scroll.offset().y < before, "the entire configuration page should scroll");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn command_palette_refreshes_recent_threads_on_demand(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);
