@@ -9263,6 +9263,54 @@ fn reasoning_effort_slider_accessible_label_tracks_the_cli_level(cx: &mut TestAp
 }
 
 #[gpui_kit::test]
+fn reasoning_effort_knob_click_commits_the_selected_level(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        let track = window.find("slider-bar-container").bounds();
+        window.click_at("slider-bar-container", point(track.size.width - px(2.), track.size.height / 2.), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("mouse selection request") else {
+        panic!("request expected");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "high");
+    assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn reasoning_effort_knob_does_not_submit_at_its_boundary(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            let mut config = runtime_options_config();
+            config.session_options.as_mut().unwrap().reasoning_effort = "high".into();
+            view.configuration = Some(config);
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        assert!(view.read(cx).effort_focus.is_focused(window));
+        window.press("right", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "the maximum value is already selected");
+}
+
+#[gpui_kit::test]
 fn compact_model_picker_wraps_long_model_names_and_labels_the_current_effort(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, _requests) = tokio::sync::mpsc::channel(2);
@@ -9446,7 +9494,8 @@ fn quick_model_step_control_sends_supported_effort_and_full_search_remains_avail
                 .flat_map(|(_, entries)| entries)
                 .any(|entry| entry.label == "Custom route")
         );
-        window.click("increase-effort", cx);
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        window.press("right", cx);
         window.render_frame(cx);
     })
     .unwrap();

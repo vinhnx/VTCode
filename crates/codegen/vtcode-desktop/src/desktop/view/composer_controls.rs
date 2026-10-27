@@ -1143,6 +1143,7 @@ impl DesktopView {
 pub(super) fn model_options_header(
     config: Option<&ConfigurationSnapshot>,
     slider: Option<&Entity<gpui_kit::component::slider::SliderState>>,
+    focus: &FocusHandle,
     model_label: Option<&str>,
     speed_control: Option<AnyElement>,
     cx: &App,
@@ -1197,36 +1198,13 @@ pub(super) fn model_options_header(
     }
     let mut panel = div().p_3().flex().flex_col().gap_2().min_w_0().child(summary);
     if let Some(slider) = slider {
-        let value = slider.read(cx).value().start();
-        let minimum = slider.read(cx).min_value();
-        let maximum = slider.read(cx).max_value();
-        let lower = slider.clone();
-        let higher = slider.clone();
-        panel = panel.child(
-            div()
-                .flex()
-                .items_center()
-                .gap_2()
-                .child(
-                    desktop_button("decrease-effort")
-                        .icon(IconName::Minus)
-                        .ghost()
-                        .small()
-                        .accessibility_label("Decrease reasoning effort")
-                        .desktop_disabled(value <= minimum)
-                        .on_click(move |_, window, cx| step_effort(&lower, -1., window, cx)),
-                )
-                .child(effort_knob(slider, options.map_or(0, |options| options.supported_efforts.len()), effort, cx))
-                .child(
-                    desktop_button("increase-effort")
-                        .icon(IconName::Plus)
-                        .ghost()
-                        .small()
-                        .accessibility_label("Increase reasoning effort")
-                        .desktop_disabled(value >= maximum)
-                        .on_click(move |_, window, cx| step_effort(&higher, 1., window, cx)),
-                ),
-        );
+        panel = panel.child(effort_knob(
+            slider,
+            focus,
+            options.map_or(0, |options| options.supported_efforts.len()),
+            effort,
+            cx,
+        ));
     }
     if let Some(speed_control) = speed_control {
         panel = panel.child(
@@ -1243,11 +1221,12 @@ pub(super) fn model_options_header(
 
 fn effort_knob(
     state: &Entity<gpui_kit::component::slider::SliderState>,
+    focus: &FocusHandle,
     level_count: usize,
     effort: Option<&str>,
     cx: &App,
 ) -> AnyElement {
-    use gpui_kit::base::slider::{Slider, SliderIndicator, SliderThumb, SliderTrack};
+    use gpui_kit::base::slider::{SliderIndicator, SliderThumb, SliderTrack};
     use gpui_kit::relative;
 
     let colors = cx.theme().colors;
@@ -1273,14 +1252,61 @@ fn effort_knob(
             .bg(colors.foreground.opacity(0.35))
     });
 
-    Slider::new(state)
-        .accessibility_label(
+    let slider_id = state.entity_id();
+    let increment = state.clone();
+    let decrement = state.clone();
+    let keyboard = state.clone();
+    let release = state.clone();
+    let release_outside = state.clone();
+    let click_focus = focus.clone();
+    div()
+        .id(("slider", slider_id))
+        .test_support()
+        .role(gpui_kit::Role::Slider)
+        .aria_label(
             effort
                 .map(|effort| format!("Reasoning effort: {effort}"))
                 .unwrap_or_else(|| "Reasoning effort".to_string()),
         )
+        .aria_description("Use Left and Right arrows to adjust reasoning effort.")
+        .aria_numeric_value(slider.value().start() as f64)
+        .aria_min_numeric_value(slider.min_value() as f64)
+        .aria_max_numeric_value(slider.max_value() as f64)
+        .aria_numeric_value_step(slider.step_value() as f64)
+        .aria_orientation(gpui_kit::Orientation::Horizontal)
+        .track_focus(focus)
+        .focus_visible(|style| style.border_1().border_color(colors.ring))
+        .on_a11y_action(gpui_kit::AccessibleAction::Increment, move |_, window, cx| {
+            step_effort(&increment, 1., window, cx);
+        })
+        .on_a11y_action(gpui_kit::AccessibleAction::Decrement, move |_, window, cx| {
+            step_effort(&decrement, -1., window, cx);
+        })
+        .on_key_down(move |event, window, cx| {
+            if event.keystroke.modifiers.control
+                || event.keystroke.modifiers.alt
+                || event.keystroke.modifiers.platform
+                || event.keystroke.modifiers.function
+            {
+                return;
+            }
+            let direction = match event.keystroke.key.as_str() {
+                "left" | "down" => -1.,
+                "right" | "up" => 1.,
+                _ => return,
+            };
+            cx.stop_propagation();
+            step_effort(&keyboard, direction, window, cx);
+        })
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| click_focus.focus(window, cx))
+        .on_mouse_up(MouseButton::Left, move |_, _, cx| {
+            release.update(cx, |state, cx| state.handle_release(cx));
+        })
+        .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
+            release_outside.update(cx, |state, cx| state.handle_release(cx));
+        })
         .cursor_pointer()
-        .flex_1()
+        .w_full()
         .min_w_0()
         .py_2()
         .child(
@@ -1332,7 +1358,11 @@ fn step_effort(
     cx: &mut App,
 ) {
     slider.update(cx, |state, cx| {
-        let value = (state.value().start() + direction).clamp(state.min_value(), state.max_value());
+        let current = state.value().start();
+        let value = (current + direction).clamp(state.min_value(), state.max_value());
+        if (value - current).abs() < f32::EPSILON {
+            return;
+        }
         state.set_value(value, window, cx);
         cx.emit(gpui_kit::component::slider::SliderEvent::Release(state.value()));
     });

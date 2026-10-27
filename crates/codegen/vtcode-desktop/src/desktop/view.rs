@@ -681,6 +681,7 @@ struct DesktopView {
     palette_kind: PaletteKind,
     palette_query: gpui_kit::SharedString,
     effort_slider: Option<Entity<gpui_kit::component::slider::SliderState>>,
+    effort_focus: FocusHandle,
     _effort_slider_subscriptions: Vec<Subscription>,
     composer_resources: Vec<protocol::ComposerResource>,
     slash_commands: Vec<protocol::SlashCommandInfo>,
@@ -938,6 +939,7 @@ impl DesktopView {
             palette_kind: PaletteKind::Commands,
             palette_query: gpui_kit::SharedString::default(),
             effort_slider: None,
+            effort_focus: cx.focus_handle().tab_stop(true),
             _effort_slider_subscriptions: Vec::new(),
             composer_resources: Vec::new(),
             slash_commands: Vec::new(),
@@ -2544,6 +2546,10 @@ impl DesktopView {
     }
 
     fn focus_palette_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette.is_some() && self.palette_kind == PaletteKind::ModelOptions && self.effort_slider.is_some() {
+            self.effort_focus.focus(window, cx);
+            return;
+        }
         if matches!(
             self.palette_kind,
             PaletteKind::FileMentions | PaletteKind::SlashCommands | PaletteKind::PromptHistory
@@ -8104,6 +8110,7 @@ impl DesktopView {
                     .map(|model| model.display_name.clone())
                     .unwrap_or_else(|| config.model.clone())
             });
+            let effort_focus = self.effort_focus.clone();
             command = command.searchable(false).header(move |_, _, cx| {
                 let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
                     let weak = speed_toggle_view.clone();
@@ -8156,6 +8163,7 @@ impl DesktopView {
                 composer_controls::model_options_header(
                     configuration.as_ref(),
                     slider.as_ref(),
+                    &effort_focus,
                     label.as_deref(),
                     speed_control,
                     cx,
