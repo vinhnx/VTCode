@@ -148,7 +148,7 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
             frame = protocol::read_frame(&mut reader) => {
                 match frame {
                     Ok(Some(frame)) => {
-                        keep_running = process_frame(&context, &mut stdout, &frame).await?;
+                        keep_running = process_frame(&context, &mut stdout, &mut notification_rx, &frame).await?;
                     }
                     Ok(None) => break,
                     Err(error) => {
@@ -172,7 +172,12 @@ pub(crate) async fn handle_desktop_server_command(startup: &StartupContext) -> R
     Ok(())
 }
 
-async fn process_frame<W>(context: &ServiceContext, stdout: &mut W, frame: &[u8]) -> Result<bool>
+async fn process_frame<W>(
+    context: &ServiceContext,
+    stdout: &mut W,
+    notifications: &mut mpsc::Receiver<protocol::Notification>,
+    frame: &[u8],
+) -> Result<bool>
 where
     W: AsyncWrite + Unpin,
 {
@@ -199,7 +204,33 @@ where
         }
     };
 
-    match handle_request(context, &request).await {
+    let response = if request.method == protocol::method::SHUTDOWN {
+        // Shutdown can wait for the event pump, which itself may be blocked on
+        // this bounded queue. Keep draining until the request is complete.
+        let request_future = handle_request(context, &request);
+        tokio::pin!(request_future);
+        loop {
+            tokio::select! {
+                result = &mut request_future => break result,
+                Some(notification) = notifications.recv() => {
+                    protocol::write_frame(stdout, &notification).await?;
+                }
+            }
+        }
+    } else {
+        handle_request(context, &request).await
+    };
+    if request.method == protocol::method::SHUTDOWN {
+        // The pump can finish just after queueing its final event. Flush the
+        // bounded backlog before sending the shutdown response and exiting.
+        for _ in 0..protocol::DEFAULT_QUEUE_CAPACITY {
+            let Ok(notification) = notifications.try_recv() else {
+                break;
+            };
+            protocol::write_frame(stdout, &notification).await?;
+        }
+    }
+    match response {
         Ok((result, should_stop)) => {
             let response = protocol::success_response(request.id, result)?;
             protocol::write_frame(stdout, &response).await?;
@@ -2444,7 +2475,7 @@ mod tests {
         };
         let mut output = Vec::new();
         assert!(
-            process_frame(&context, &mut output, &serde_json::to_vec(&turn).unwrap())
+            process_frame(&context, &mut output, &mut notifications, &serde_json::to_vec(&turn).unwrap())
                 .await
                 .unwrap()
         );
@@ -2488,6 +2519,77 @@ mod tests {
         assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Submit(_))));
         drop(exit_sender);
         runtime_task.abort();
+    }
+
+    #[tokio::test]
+    async fn shutdown_drains_full_notifications_while_waiting_for_turn_cleanup() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let startup = test_startup_context(workspace.path());
+        let (mut context, _) = test_service_context(startup, workspace.path().to_path_buf());
+        let (notifications, mut receiver) = mpsc::channel(1);
+        context.notifications = notifications.clone();
+        notifications
+            .try_send(protocol::Notification {
+                jsonrpc: "2.0".into(),
+                method: "first".into(),
+                params: json!({}),
+            })
+            .unwrap();
+        let (input, mut input_receiver) = mpsc::unbounded_channel();
+        let (exit_sender, exit) = oneshot::channel();
+        let state = std::sync::Arc::clone(&context.state);
+        let finished = std::sync::Arc::clone(&context.turn_finished);
+        let runtime_task = tokio::spawn(async move {
+            assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Cancel)));
+            notifications
+                .send(protocol::Notification {
+                    jsonrpc: "2.0".into(),
+                    method: "second".into(),
+                    params: json!({}),
+                })
+                .await
+                .unwrap();
+            state.lock().await.active_turn_id = None;
+            finished.notify_waiters();
+            assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Exit)));
+            let _ = exit_sender.send(Ok(()));
+        });
+        {
+            let mut state = context.state.lock().await;
+            state.session_id = Some("session".into());
+            state.active_turn_id = Some("turn".into());
+            state.runtime = Some(RuntimeSession {
+                session_id: "session".into(),
+                input,
+                exit,
+                abort: runtime_task.abort_handle(),
+                command_forwarder: std::thread::spawn(|| {}),
+            });
+        }
+        let request = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::Number(1),
+            method: protocol::method::SHUTDOWN.into(),
+            params: json!({}),
+        };
+        let mut output = Vec::new();
+        let keep_running = timeout(
+            Duration::from_secs(2),
+            process_frame(&context, &mut output, &mut receiver, &serde_json::to_vec(&request).unwrap()),
+        )
+        .await
+        .expect("shutdown must drain notifications")
+        .expect("shutdown response");
+        assert!(!keep_running);
+        let frames: Vec<Value> = output
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect();
+        assert_eq!(frames[0]["method"], "first");
+        assert_eq!(frames[1]["method"], "second");
+        assert_eq!(frames.last().unwrap()["result"]["shutdown"], true);
+        runtime_task.await.unwrap();
     }
 
     #[tokio::test]
