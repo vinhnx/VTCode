@@ -253,8 +253,6 @@ fn apply_palette(theme: &DesktopTheme, window: Option<&mut Window>, cx: &mut App
         colors.button_primary_hover = colors.primary_hover;
         colors.button_primary_active = colors.primary_active;
         colors.ring = theme.accent;
-        colors.tab_foreground = colors.muted_foreground;
-        colors.tab_active_foreground = theme.foreground;
         apply_unified_hover_surface(colors, hover_surface(theme.background, theme.foreground));
         colors.ring = accessible_focus_color(theme.accent, colors);
     });
@@ -320,6 +318,11 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     colors.secondary_active = surface;
     colors.popover = raised_surface;
     colors.popover_foreground = colors.foreground;
+    // Kit's segmented TabBar otherwise retains its stock track when VT Code
+    // replaces the palette, making selected tabs blend into other themes.
+    colors.tab_bar_segmented = colors.secondary;
+    colors.tab_foreground = colors.muted_foreground;
+    colors.tab_active_foreground = colors.foreground;
 }
 
 fn filled_surface(background: Hsla, foreground: Hsla, maximum_step: u8) -> Hsla {
@@ -579,6 +582,12 @@ mod tests {
                 assert_eq!(kit.colors.border.a, 0.);
                 assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
                 assert_eq!(kit.colors.input.a, 0.);
+                assert_eq!(kit.colors.tab_bar_segmented, kit.colors.secondary, "{}", palette.id);
+                assert!(
+                    contrast_ratio(kit.colors.background, kit.colors.tab_bar_segmented) >= 1.04,
+                    "{}: selected segmented tabs must stand out from the track",
+                    palette.id
+                );
                 for foreground in [kit.colors.tab_foreground, kit.colors.tab_active_foreground] {
                     assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
                 }
@@ -633,6 +642,11 @@ mod tests {
                 assert_eq!(colors.border.a, 0., "{id}");
                 assert_eq!(colors.sidebar_border, colors.border, "{id}");
                 assert_eq!(colors.input.a, 0., "{id}");
+                assert_eq!(colors.tab_bar_segmented, colors.secondary, "{id}");
+                assert!(
+                    contrast_ratio(colors.background, colors.tab_bar_segmented) >= 1.04,
+                    "{id}: selected segmented tabs must stand out from the track"
+                );
             }
         });
     }
