@@ -2867,18 +2867,18 @@ impl DesktopView {
         if let Some(action) = desktop_slash_action {
             let unavailable_message = match &action {
                 composer_controls::DesktopSlashAction::FastMode(_) => {
-                    "Fast processing is unavailable for the selected model."
+                    rust_i18n::t!("app.errors.fast_processing_unavailable").to_string()
                 }
                 composer_controls::DesktopSlashAction::ModelPicker => {
-                    "Model selection is unavailable while the runtime is changing."
+                    rust_i18n::t!("app.errors.model_selection_runtime_changing").to_string()
                 }
                 composer_controls::DesktopSlashAction::Modes | composer_controls::DesktopSlashAction::Permissions => {
-                    "Runtime options are still loading or unavailable. Try again when they finish loading."
+                    rust_i18n::t!("app.errors.runtime_options_unavailable").to_string()
                 }
-                _ => "This desktop command is currently unavailable. Try again.",
+                _ => rust_i18n::t!("app.errors.desktop_command_unavailable").to_string(),
             };
             if !self.handle_desktop_slash_action(action, window, cx) {
-                self.error = Some(unavailable_message.into());
+                self.error = Some(unavailable_message);
                 cx.notify();
             }
             return;

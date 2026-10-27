@@ -193,6 +193,32 @@ mod tests {
     }
 
     #[test]
+    fn runtime_control_recovery_copy_is_localized_for_every_language() {
+        macro_rules! assert_catalog_key {
+            ($key:literal) => {
+                for language in UiLanguage::ALL {
+                    let locale = language.locale();
+                    let translated = rust_i18n::t!($key, locale = locale).to_string();
+                    assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
+                    if language != UiLanguage::English {
+                        assert_ne!(
+                            translated,
+                            rust_i18n::t!($key, locale = "en").to_string(),
+                            "{locale}/{} fell back to English",
+                            $key
+                        );
+                    }
+                }
+            };
+        }
+
+        assert_catalog_key!("app.errors.fast_processing_unavailable");
+        assert_catalog_key!("app.errors.model_selection_runtime_changing");
+        assert_catalog_key!("app.errors.runtime_options_unavailable");
+        assert_catalog_key!("app.errors.desktop_command_unavailable");
+    }
+
+    #[test]
     fn workspace_and_composer_copy_covers_every_supported_language() {
         let expected = [
             ("en", "Workspace", "New thread", "Add files and more @", "Ask VT Code to make changes…"),

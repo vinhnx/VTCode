@@ -3690,6 +3690,33 @@ fn unavailable_native_slash_commands_stay_in_the_composer(cx: &mut TestAppContex
 }
 
 #[gpui_kit::test]
+fn unavailable_fast_mode_alert_uses_the_selected_language(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+    let language = crate::desktop::localization::UiLanguage::Spanish;
+    crate::desktop::localization::set_language(language);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_language(language);
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("session".into());
+            let mut configuration = runtime_options_config();
+            configuration.session_options.as_mut().unwrap().fast_mode_supported = false;
+            view.configuration = Some(configuration);
+            view.composer.update(cx, |state, cx| state.set_value("/fast", window, cx));
+            view.submit_prompt(window, cx);
+        });
+        window.render_frame(cx);
+        let expected = rust_i18n::t!("app.errors.fast_processing_unavailable", locale = "es").to_string();
+        assert_eq!(view.read(cx).error.as_deref(), Some(expected.as_str()));
+        assert_eq!(window.find("composer-error").label(), Some(expected.as_str()));
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "an unavailable action must not become a prompt");
+    crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
+}
+
+#[gpui_kit::test]
 fn composer_cli_webmcp_button_opens_connections_settings(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(1);
