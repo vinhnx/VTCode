@@ -1697,9 +1697,11 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
             .find(|tree| tree.role() == Some(gpui_kit::Role::Tree))
             .expect("file tree exposes its semantic role");
         assert_eq!(tree.role(), Some(gpui_kit::Role::Tree));
+        assert_eq!(window.find("focus-files").label(), Some("Focus workspace file tree"));
         let root_item = file_tree_item_snapshot(window, 0);
         assert_eq!(root_item.role(), Some(gpui_kit::Role::TreeItem));
         assert_eq!(root_item.label(), Some("src"));
+        assert_eq!(window.find("workspace-file-src").label(), Some("Folder: src"));
         assert_eq!(root_item.expanded(), Some(false));
 
         window.click("workspace-file-src", cx);
@@ -1764,6 +1766,10 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(window.find("file-preview").label(), Some("File preview: src/nested/mod.rs"));
+        assert_eq!(window.find("open-preview-editor").label(), Some("Open in editor"));
+        assert_eq!(window.find("copy-preview").label(), Some("Copy"));
+        assert_eq!(window.find("close-preview").label(), Some("Close"));
         assert_eq!(window.find("open-preview-editor").role(), Some(gpui_kit::Role::Button));
         assert_eq!(window.find("open-preview-vscode").role(), Some(gpui_kit::Role::Button));
         window.click("copy-preview", cx);

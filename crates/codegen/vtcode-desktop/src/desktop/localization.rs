@@ -327,6 +327,54 @@ mod tests {
     }
 
     #[test]
+    fn workspace_file_browser_and_preview_copy_covers_every_language() {
+        macro_rules! assert_translated {
+            ($locale:expr, $key:literal) => {{
+                let translated = rust_i18n::t!($key, locale = $locale).to_string();
+                assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
+                if $locale != "en" && !($locale == "it" && $key == "app.files.file_accessibility") {
+                    let english = rust_i18n::t!($key, locale = "en").to_string();
+                    assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
+                }
+            }};
+        }
+
+        for language in UiLanguage::ALL {
+            let locale = language.locale();
+            assert_translated!(locale, "app.files.workspace_files");
+            assert_translated!(locale, "app.files.focus_tree");
+            assert_translated!(locale, "app.files.refresh");
+            assert_translated!(locale, "app.files.refresh_tooltip");
+            assert_translated!(locale, "app.files.scanning_description");
+            assert_translated!(locale, "app.files.file_accessibility");
+            assert_translated!(locale, "app.files.folder_accessibility");
+            assert_translated!(locale, "app.files.preview_unavailable");
+            assert_translated!(locale, "app.file_preview.accessibility_title");
+            assert_translated!(locale, "app.file_preview.accessibility_description");
+            assert_translated!(locale, "app.file_preview.open_in_editor");
+            assert_translated!(locale, "app.file_preview.copy");
+            assert_translated!(locale, "app.file_preview.close");
+            assert_translated!(locale, "app.file_preview.close_tooltip");
+            assert_translated!(locale, "app.file_preview.truncated");
+            assert_translated!(locale, "app.file_preview.editor_error");
+
+            let file_label =
+                rust_i18n::t!("app.files.file_accessibility", locale = locale, path = "src/main.rs").to_string();
+            assert!(file_label.contains("src/main.rs"), "file path was not interpolated in {locale}");
+            let preview_title =
+                rust_i18n::t!("app.file_preview.accessibility_title", locale = locale, path = "src/main.rs")
+                    .to_string();
+            assert!(preview_title.contains("src/main.rs"), "preview path was not interpolated in {locale}");
+            let truncated = rust_i18n::t!("app.file_preview.truncated", locale = locale, size = "64 KiB").to_string();
+            assert!(truncated.contains("64 KiB"), "truncation limit was not interpolated in {locale}");
+            let editor_error =
+                rust_i18n::t!("app.file_preview.editor_error", locale = locale, error = "editor unavailable")
+                    .to_string();
+            assert!(editor_error.contains("editor unavailable"), "editor error was lost in {locale}");
+        }
+    }
+
+    #[test]
     fn settings_surface_translations_cover_every_supported_language() {
         let expected = [
             (

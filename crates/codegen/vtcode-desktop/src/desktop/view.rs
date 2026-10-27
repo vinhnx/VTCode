@@ -2085,7 +2085,8 @@ impl DesktopView {
                         view.clear_error();
                     }
                     None => {
-                        view.error = Some(format!("“{rel_path}” is outside the workspace, missing, or not UTF-8 text."))
+                        view.error =
+                            Some(rust_i18n::t!("app.files.preview_unavailable", path = rel_path.as_str()).to_string())
                     }
                 }
                 cx.notify();
@@ -2111,7 +2112,9 @@ impl DesktopView {
                 {
                     return;
                 }
-                view.preview_editor_error = result.err();
+                view.preview_editor_error = result
+                    .err()
+                    .map(|error| rust_i18n::t!("app.file_preview.editor_error", error = error.to_string()).to_string());
                 cx.notify();
             });
         })
@@ -2335,7 +2338,7 @@ impl DesktopView {
                 command("Close session", PaletteAction::CloseSession),
                 command("Switch workspace…", PaletteAction::ChooseWorkspace),
                 command("Refresh recent threads", PaletteAction::RefreshSessions),
-                command("Refresh workspace files", PaletteAction::RefreshFiles),
+                command(rust_i18n::t!("app.files.refresh_tooltip").to_string(), PaletteAction::RefreshFiles),
                 command("Choose a model…", PaletteAction::ChooseModel),
             ],
         ));
@@ -4881,11 +4884,15 @@ impl DesktopView {
             .child(
                 div()
                     .id("file-preview")
+                    .test_support()
                     .track_focus(&self.preview_focus)
                     .role(gpui_kit::Role::Dialog)
                     .accessibility_id("file-preview")
-                    .aria_label(format!("File preview: {}", preview.rel_path))
-                    .aria_description("Read-only file preview. Press Escape to close.")
+                    .aria_label(
+                        rust_i18n::t!("app.file_preview.accessibility_title", path = preview.rel_path.as_str())
+                            .to_string(),
+                    )
+                    .aria_description(rust_i18n::t!("app.file_preview.accessibility_description").to_string())
                     .w(px(860.))
                     .max_w_full()
                     .max_h_full()
@@ -4916,7 +4923,7 @@ impl DesktopView {
                             )
                             .child(
                                 desktop_button("open-preview-editor")
-                                    .label("Open in editor")
+                                    .label(rust_i18n::t!("app.file_preview.open_in_editor").to_string())
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(|view, _, window, cx| {
@@ -4928,16 +4935,23 @@ impl DesktopView {
                                     view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)
                                 }),
                             ))
-                            .child(desktop_button("copy-preview").label("Copy").ghost().on_click(
-                                move |_, window, app| {
-                                    app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
-                                    super::notifications::copied_to_clipboard(window, app);
-                                },
-                            ))
+                            .child(
+                                desktop_button("copy-preview")
+                                    .label(rust_i18n::t!("app.file_preview.copy").to_string())
+                                    .ghost()
+                                    .on_click(move |_, window, app| {
+                                        app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
+                                        super::notifications::copied_to_clipboard(window, app);
+                                    }),
+                            )
                             .child(
                                 desktop_button("close-preview")
-                                    .tooltip_with_action("Close preview", &DismissOverlay, Some("VTCodeDesktop"))
-                                    .label("Close")
+                                    .tooltip_with_action(
+                                        rust_i18n::t!("app.file_preview.close_tooltip").to_string(),
+                                        &DismissOverlay,
+                                        Some("VTCodeDesktop"),
+                                    )
+                                    .label(rust_i18n::t!("app.file_preview.close").to_string())
                                     .ghost()
                                     .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
                             ),
@@ -4967,7 +4981,7 @@ impl DesktopView {
                                 .border_color(colors.border)
                                 .text_xs()
                                 .text_color(colors.muted_foreground)
-                                .child("Preview truncated at 64 KiB."),
+                                .child(rust_i18n::t!("app.file_preview.truncated", size = "64 KiB").to_string()),
                         )
                     }),
             )
@@ -5574,17 +5588,25 @@ impl DesktopView {
                 .py_2()
                 .child(
                     desktop_button("focus-files")
-                        .label("Workspace files")
-                        .accessibility_label("Focus workspace file tree")
-                        .tooltip_with_action("Focus workspace file tree", &OpenWorkspaceFiles, Some("VTCodeDesktop"))
+                        .label(rust_i18n::t!("app.files.workspace_files").to_string())
+                        .accessibility_label(rust_i18n::t!("app.files.focus_tree").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.files.focus_tree").to_string(),
+                            &OpenWorkspaceFiles,
+                            Some("VTCodeDesktop"),
+                        )
                         .ghost()
                         .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
                 )
                 .child(
                     desktop_button("refresh-files")
-                        .label("Refresh")
-                        .accessibility_label("Refresh workspace files")
-                        .tooltip_with_action("Refresh workspace files", &RefreshWorkspace, Some("VTCodeDesktop"))
+                        .label(rust_i18n::t!("app.files.refresh").to_string())
+                        .accessibility_label(rust_i18n::t!("app.files.refresh_tooltip").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.files.refresh_tooltip").to_string(),
+                            &RefreshWorkspace,
+                            Some("VTCodeDesktop"),
+                        )
                         .ghost()
                         .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
                 ),
@@ -5599,7 +5621,7 @@ impl DesktopView {
                     .test_support()
                     .role(gpui_kit::Role::Status)
                     .aria_label(rust_i18n::t!("app.files.scanning").to_string())
-                    .aria_description("Workspace files are being indexed for browsing.")
+                    .aria_description(rust_i18n::t!("app.files.scanning_description").to_string())
                     .w_full()
                     .flex_1()
                     .min_h_0()
@@ -5670,7 +5692,11 @@ impl DesktopView {
                         ListItem::new(format!("workspace-file-{rel_path}"))
                             .selected(selected)
                             .cursor_pointer()
-                            .accessibility_label(format!("{} {rel_path}", if is_dir { "Folder" } else { "File" }))
+                            .accessibility_label(if is_dir {
+                                rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str()).to_string()
+                            } else {
+                                rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
+                            })
                             .child(
                                 div()
                                     .flex()
