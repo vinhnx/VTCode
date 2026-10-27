@@ -734,12 +734,16 @@ async fn enqueue_turn(
         }
         bail!("selected session runtime has stopped; reload the session to continue");
     }
-    send_notification(
-        notifications,
-        protocol::method::TURN_STATUS,
-        json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
-    )
-    .await?;
+    // The prompt has crossed the runtime boundary. Status is advisory: waiting
+    // for this queue here can deadlock the request loop, and reporting failure
+    // after delivery could cause a client to submit the same prompt twice.
+    if let Err(error) = notifications.try_send(protocol::Notification {
+        jsonrpc: "2.0".to_string(),
+        method: protocol::method::TURN_STATUS.to_string(),
+        params: json!({ "sessionId": session_id, "turnId": turn_id, "status": "running" }),
+    }) {
+        tracing::warn!(target: "vtcode.desktop", %error, "could not publish turn status");
+    }
     Ok(protocol::TurnAccepted { session_id: session_id.to_string(), turn_id })
 }
 
@@ -2479,6 +2483,56 @@ mod tests {
         assert!(matches!(input_receiver.recv().await, Some(InlineEvent::Submit(_))));
         drop(exit_sender);
         runtime_task.abort();
+    }
+
+    #[tokio::test]
+    async fn accepted_turn_is_not_rejected_or_blocked_by_status_queue() {
+        for closed in [false, true] {
+            let (input, mut input_receiver) = mpsc::unbounded_channel();
+            let (notifications, receiver) = mpsc::channel(1);
+            notifications
+                .try_send(protocol::Notification {
+                    jsonrpc: "2.0".into(),
+                    method: "existing".into(),
+                    params: json!({}),
+                })
+                .unwrap();
+            let _receiver = if closed {
+                drop(receiver);
+                None
+            } else {
+                Some(receiver)
+            };
+            let (exit_sender, exit) = oneshot::channel();
+            let runtime_task = tokio::spawn(std::future::pending::<()>());
+            let state = Mutex::new(ServerState {
+                session_id: Some("session".into()),
+                runtime: Some(RuntimeSession {
+                    session_id: "session".into(),
+                    input,
+                    exit,
+                    abort: runtime_task.abort_handle(),
+                    command_forwarder: std::thread::spawn(|| {}),
+                }),
+                ..ServerState::default()
+            });
+            let accepted = timeout(
+                Duration::from_secs(1),
+                enqueue_turn(&state, &notifications, "session", "only once".into(), Vec::new()),
+            )
+            .await
+            .expect("a full notification queue must not block the request")
+            .expect("delivered turn is accepted");
+            assert_eq!(accepted.session_id, "session");
+            let Some(InlineEvent::Submit(submission)) = input_receiver.recv().await else {
+                panic!("delivered prompt")
+            };
+            assert_eq!(submission.text, "only once");
+            assert!(input_receiver.try_recv().is_err());
+            assert_eq!(state.lock().await.active_turn_id.as_deref(), Some(accepted.turn_id.as_str()));
+            drop(exit_sender);
+            runtime_task.abort();
+        }
     }
 
     #[tokio::test]
