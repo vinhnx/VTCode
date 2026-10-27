@@ -3,139 +3,265 @@ app:
   settings:
     title:
       en: Settings
+      es: "Configuración"
+      fr: "Réglages"
+      ja: "設定"
       vi: Cài đặt
     categories:
       en: Settings categories
+      es: "Categorías de configuración"
+      fr: "Catégories des réglages"
+      ja: "設定カテゴリ"
       vi: Danh mục cài đặt
     search:
       button:
         en: Search settings and CLI config…
+        es: "Buscar ajustes y configuración de CLI…"
+        fr: "Rechercher dans les réglages et la configuration CLI…"
+        ja: "設定とCLI構成を検索…"
         vi: Tìm cài đặt và cấu hình CLI…
       title:
         en: Search settings and CLI config
+        es: "Buscar ajustes y configuración de CLI"
+        fr: "Rechercher dans les réglages et la configuration CLI"
+        ja: "設定とCLI構成を検索"
         vi: Tìm kiếm cài đặt và cấu hình CLI
       placeholder:
         en: Filter settings, categories, and CLI config paths…
+        es: "Filtrar ajustes, categorías y rutas de configuración de CLI…"
+        fr: "Filtrer les réglages, catégories et chemins de configuration CLI…"
+        ja: "設定、カテゴリ、CLI構成パスを絞り込み…"
         vi: Lọc cài đặt, danh mục và đường dẫn cấu hình CLI…
       group_settings:
         en: Settings
+        es: "Configuración"
+        fr: "Réglages"
+        ja: "設定"
         vi: Cài đặt
       group_cli_config:
         en: CLI config
+        es: "Configuración de CLI"
+        fr: "Configuration CLI"
+        ja: "CLI構成"
         vi: Cấu hình CLI
     tab:
       appearance:
         en: Appearance
+        es: "Apariencia"
+        fr: "Apparence"
+        ja: "外観"
         vi: Giao diện
       accessibility:
         en: Accessibility
+        es: "Accesibilidad"
+        fr: "Accessibilité"
+        ja: "アクセシビリティ"
         vi: Trợ năng
       shortcuts:
         en: Shortcuts
+        es: "Atajos"
+        fr: "Raccourcis"
+        ja: "ショートカット"
         vi: Phím tắt
       vtcode:
         en: VT Code
+        es: "VT Code"
+        fr: "VT Code"
+        ja: "VT Code"
         vi: VT Code
       connections:
         en: Connections
+        es: "Conexiones"
+        fr: "Connexions"
+        ja: "接続"
         vi: Kết nối
     language:
       group:
         en: Language
+        es: "Idioma"
+        fr: "Langue"
+        ja: "言語"
         vi: Ngôn ngữ
       label:
         en: Interface language
+        es: "Idioma de la interfaz"
+        fr: "Langue de l’interface"
+        ja: "インターフェースの言語"
         vi: Ngôn ngữ giao diện
       description:
         en: Changes supported labels immediately. Untranslated app text remains in English.
+        es: "Cambia las etiquetas disponibles al instante. El texto sin traducir permanece en inglés."
+        fr: "Modifie immédiatement les libellés disponibles. Le texte non traduit reste en anglais."
+        ja: "対応するラベルをすぐに変更します。未翻訳のテキストは英語で表示されます。"
         vi: Thay đổi nhãn đã hỗ trợ ngay lập tức. Nội dung chưa dịch vẫn hiển thị bằng tiếng Anh.
       select:
         en: Set interface language to %{language}
+        es: "Cambiar el idioma de la interfaz a %{language}"
+        fr: "Définir la langue de l’interface sur %{language}"
+        ja: "インターフェースの言語を%{language}に設定"
         vi: Đặt ngôn ngữ giao diện thành %{language}
   welcome:
     greeting:
       morning:
         en: Good morning
+        es: "Buenos días"
+        fr: "Bonjour"
+        ja: "おはようございます"
         vi: Chào buổi sáng
       afternoon:
         en: Good afternoon
+        es: "Buenas tardes"
+        fr: "Bon après-midi"
+        ja: "こんにちは"
         vi: Chào buổi chiều
       evening:
         en: Good evening
+        es: "Buenas noches"
+        fr: "Bonsoir"
+        ja: "こんばんは"
         vi: Chào buổi tối
     action:
       build:
         en: What should we build
+        es: "¿Qué vamos a crear"
+        fr: "Que voulons-nous créer"
+        ja: "何を作りましょう"
         vi: Chúng ta sẽ xây dựng gì
       build_in_workspace:
         en: What should we build in
+        es: "¿Qué vamos a crear en"
+        fr: "Que voulons-nous créer dans"
+        ja: "作成するワークスペース："
         vi: Chúng ta sẽ xây dựng gì trong
       improve:
         en: What are we improving
+        es: "¿Qué vamos a mejorar"
+        fr: "Que voulons-nous améliorer"
+        ja: "何を改善しましょう"
         vi: Chúng ta sẽ cải thiện gì
       improve_in_workspace:
         en: What are we improving in
+        es: "¿Qué vamos a mejorar en"
+        fr: "Que voulons-nous améliorer dans"
+        ja: "改善するワークスペース："
         vi: Chúng ta sẽ cải thiện gì trong
       explore:
         en: What are we exploring
+        es: "¿Qué vamos a explorar"
+        fr: "Que voulons-nous explorer"
+        ja: "何を調べましょう"
         vi: Chúng ta muốn khám phá gì
       explore_in_workspace:
         en: What are we exploring in
+        es: "¿Qué vamos a explorar en"
+        fr: "Que voulons-nous explorer dans"
+        ja: "調べるワークスペース："
         vi: Chúng ta muốn khám phá gì trong
     cta:
       choose_workspace:
         en: Choose a workspace
+        es: "Elegir un espacio de trabajo"
+        fr: "Choisir un espace de travail"
+        ja: "ワークスペースを選択"
         vi: Chọn không gian làm việc
       open_project:
         en: Open a project
+        es: "Abrir un proyecto"
+        fr: "Ouvrir un projet"
+        ja: "プロジェクトを開く"
         vi: Mở dự án
       select_folder:
         en: Select a folder
+        es: "Seleccionar una carpeta"
+        fr: "Sélectionner un dossier"
+        ja: "フォルダを選択"
         vi: Chọn thư mục
   session:
     preparing_new_thread:
       en: Preparing a new thread…
+      es: "Preparando una conversación nueva…"
+      fr: "Préparation d’une nouvelle conversation…"
+      ja: "新しい会話を準備中…"
       vi: Đang chuẩn bị một cuộc hội thoại mới…
     waiting_to_send:
       en: Your message will send after the startup decision.
+      es: "El mensaje se enviará después de la decisión inicial."
+      fr: "Votre message sera envoyé après la décision initiale."
+      ja: "最初の選択が完了するとメッセージが送信されます。"
       vi: Tin nhắn sẽ được gửi sau khi bạn hoàn tất lựa chọn ban đầu.
     keep_as_draft:
       en: Keep as draft
+      es: "Guardar como borrador"
+      fr: "Garder comme brouillon"
+      ja: "下書きとして保持"
       vi: Giữ làm bản nháp
   files:
     scanning:
       en: Scanning workspace files
+      es: "Explorando archivos del espacio de trabajo"
+      fr: "Analyse des fichiers de l’espace de travail"
+      ja: "ワークスペースのファイルをスキャン中"
       vi: Đang quét tệp trong không gian làm việc
     empty:
       title:
         en: No workspace files
+        es: "No hay archivos en el espacio de trabajo"
+        fr: "Aucun fichier dans l’espace de travail"
+        ja: "ワークスペースにファイルがありません"
         vi: Không có tệp trong không gian làm việc
       description:
         en: There are no files available to browse in this workspace.
+        es: "No hay archivos disponibles para explorar en este espacio de trabajo."
+        fr: "Aucun fichier à parcourir dans cet espace de travail."
+        ja: "このワークスペースには参照できるファイルがありません。"
         vi: Không có tệp nào để duyệt trong không gian làm việc này.
     no_workspace:
       title:
         en: Choose a workspace
+        es: "Elegir un espacio de trabajo"
+        fr: "Choisir un espace de travail"
+        ja: "ワークスペースを選択"
         vi: Chọn không gian làm việc
       description:
         en: Select a workspace to browse its files.
+        es: "Selecciona un espacio de trabajo para explorar sus archivos."
+        fr: "Sélectionnez un espace de travail pour parcourir ses fichiers."
+        ja: "ファイルを参照するワークスペースを選択してください。"
         vi: Chọn không gian làm việc để duyệt tệp.
   activity:
     history:
       notice:
         en: Showing the latest %{count} tool actions.
+        es: "Se muestran las %{count} acciones de herramientas más recientes."
+        fr: "Affichage des %{count} dernières actions des outils."
+        ja: "最新のツール操作%{count}件を表示しています。"
         vi: Đang hiển thị %{count} tác vụ công cụ mới nhất.
       search:
         en: Search conversation
+        es: "Buscar en la conversación"
+        fr: "Rechercher dans la conversation"
+        ja: "会話を検索"
         vi: Tìm trong hội thoại
 gpui_component:
   Input:
     Copy:
       vi: Sao chép
+      es: "Copiar"
+      fr: "Copier"
+      ja: "コピー"
     Select All:
       vi: Chọn tất cả
+      es: "Seleccionar todo"
+      fr: "Tout sélectionner"
+      ja: "すべて選択"
   Attachment:
     Remove:
       vi: Xóa
+      es: "Quitar"
+      fr: "Supprimer"
+      ja: "削除"
     Retry:
       vi: Thử lại
+      es: "Reintentar"
+      fr: "Réessayer"
+      ja: "再試行"

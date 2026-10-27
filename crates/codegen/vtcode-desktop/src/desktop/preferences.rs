@@ -356,6 +356,13 @@ mod tests {
         assert_eq!(loaded.ui_language(), UiLanguage::Vietnamese);
         assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
 
+        for language in UiLanguage::ALL {
+            preferences.set_ui_language(language);
+            let serialized = serde_json::to_string(&preferences).unwrap();
+            let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(loaded.ui_language(), language);
+        }
+
         let invalid: Preferences = serde_json::from_str(r#"{"theme":"ciapre","uiLanguage":"unsupported"}"#).unwrap();
         assert_eq!(invalid.ui_language(), UiLanguage::English);
         assert_eq!(invalid.theme.as_deref(), Some("ciapre"));

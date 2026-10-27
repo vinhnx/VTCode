@@ -76,6 +76,28 @@ fn desktop_view_uses_the_supplied_startup_preferences(cx: &mut TestAppContext) {
     });
 }
 
+#[gpui_kit::test]
+fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-420.))), cx);
+        window.render_frame(cx);
+        window.click("ui-language-es", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Spanish);
+        assert_eq!(window.find("settings-panel").label(), Some("Configuración"));
+        assert_eq!(window.find("ui-language-es").checked(), Some(true));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().ui_language(),
+            crate::desktop::localization::UiLanguage::Spanish
+        );
+        crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
+    })
+    .unwrap();
+}
+
 fn connected_webmcp_status() -> vtcode_desktop_protocol::WebmcpBridgeStatus {
     vtcode_desktop_protocol::WebmcpBridgeStatus {
         running: true,

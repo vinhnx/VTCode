@@ -6,14 +6,26 @@ use gpui_kit::component as gpui_component;
 pub(super) enum UiLanguage {
     English,
     Vietnamese,
+    Spanish,
+    French,
+    Japanese,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 2] = [Self::English, Self::Vietnamese];
+    pub(super) const ALL: [Self; 5] = [
+        Self::English,
+        Self::Vietnamese,
+        Self::Spanish,
+        Self::French,
+        Self::Japanese,
+    ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
         match value.map(str::trim) {
             Some("vi") => Self::Vietnamese,
+            Some("es") => Self::Spanish,
+            Some("fr") => Self::French,
+            Some("ja") => Self::Japanese,
             _ => Self::English,
         }
     }
@@ -22,6 +34,9 @@ impl UiLanguage {
         match self {
             Self::English => "en",
             Self::Vietnamese => "vi",
+            Self::Spanish => "es",
+            Self::French => "fr",
+            Self::Japanese => "ja",
         }
     }
 
@@ -29,6 +44,9 @@ impl UiLanguage {
         match self {
             Self::English => "English",
             Self::Vietnamese => "Tiếng Việt",
+            Self::Spanish => "Español",
+            Self::French => "Français",
+            Self::Japanese => "日本語",
         }
     }
 }
@@ -56,6 +74,9 @@ mod tests {
         assert_eq!(UiLanguage::from_saved(None), UiLanguage::English);
         assert_eq!(UiLanguage::from_saved(Some("vi")), UiLanguage::Vietnamese);
         assert_eq!(UiLanguage::from_saved(Some(" vi ")), UiLanguage::Vietnamese);
+        for language in UiLanguage::ALL {
+            assert_eq!(UiLanguage::from_saved(Some(language.locale())), language);
+        }
         assert_eq!(UiLanguage::from_saved(Some("xx")), UiLanguage::English);
     }
 
@@ -72,6 +93,16 @@ mod tests {
             "Đang chuẩn bị một cuộc hội thoại mới…"
         );
         assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "vi").to_string(), "Sao chép");
+        for (locale, title, copy) in [
+            ("es", "Configuración", "Copiar"),
+            ("fr", "Réglages", "Copier"),
+            ("ja", "設定", "コピー"),
+        ] {
+            assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
+            assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
+            let history = rust_i18n::t!("app.activity.history.notice", locale = locale, count = 42).to_string();
+            assert!(history.contains("42"), "{locale} must interpolate counts");
+        }
     }
 
     #[test]
@@ -79,6 +110,9 @@ mod tests {
         for (locale, morning, afternoon, evening) in [
             ("en", "Good morning", "Good afternoon", "Good evening"),
             ("vi", "Chào buổi sáng", "Chào buổi chiều", "Chào buổi tối"),
+            ("es", "Buenos días", "Buenas tardes", "Buenas noches"),
+            ("fr", "Bonjour", "Bon après-midi", "Bonsoir"),
+            ("ja", "おはようございます", "こんにちは", "こんばんは"),
         ] {
             assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
             assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);
