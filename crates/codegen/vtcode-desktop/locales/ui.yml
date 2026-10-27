@@ -3,18 +3,27 @@ app:
   settings:
     visual_style:
       en: Visual style
+      de: Visueller Stil
+      it: Stile visivo
+      zh-CN: 视觉风格
       vi: Phong cách giao diện
       es: Estilo visual
       fr: Style visuel
       ja: ビジュアルスタイル
     typography:
       en: Typography
+      de: Typografie
+      it: Tipografia
+      zh-CN: 排版
       vi: Kiểu chữ
       es: Tipografía
       fr: Typographie
       ja: タイポグラフィ
     layout:
       en: Layout
+      de: Layout
+      it: Layout
+      zh-CN: 布局
       vi: Bố cục
       es: Diseño
       fr: Disposition
@@ -25,12 +34,18 @@ app:
       fr: "Réglages"
       ja: "設定"
       vi: Cài đặt
+      de: Einstellungen
+      it: Impostazioni
+      zh-CN: 设置
     categories:
       en: Settings categories
       es: "Categorías de configuración"
       fr: "Catégories des réglages"
       ja: "設定カテゴリ"
       vi: Danh mục cài đặt
+      de: Einstellungskategorien
+      it: Categorie delle impostazioni
+      zh-CN: 设置类别
     search:
       button:
         en: Search settings and CLI config…
@@ -38,30 +53,45 @@ app:
         fr: "Rechercher dans les réglages et la configuration CLI…"
         ja: "設定とCLI構成を検索…"
         vi: Tìm cài đặt và cấu hình CLI…
+        de: Einstellungen und CLI-Konfiguration suchen…
+        it: Cerca impostazioni e configurazione CLI…
+        zh-CN: 搜索设置和 CLI 配置…
       title:
         en: Search settings and CLI config
         es: "Buscar ajustes y configuración de CLI"
         fr: "Rechercher dans les réglages et la configuration CLI"
         ja: "設定とCLI構成を検索"
         vi: Tìm kiếm cài đặt và cấu hình CLI
+        de: Einstellungen und CLI-Konfiguration suchen
+        it: Cerca impostazioni e configurazione CLI
+        zh-CN: 搜索设置和 CLI 配置
       placeholder:
         en: Filter settings, categories, and CLI config paths…
         es: "Filtrar ajustes, categorías y rutas de configuración de CLI…"
         fr: "Filtrer les réglages, catégories et chemins de configuration CLI…"
         ja: "設定、カテゴリ、CLI構成パスを絞り込み…"
         vi: Lọc cài đặt, danh mục và đường dẫn cấu hình CLI…
+        de: Einstellungen, Kategorien und CLI-Konfigurationspfade filtern…
+        it: Filtra impostazioni, categorie e percorsi di configurazione CLI…
+        zh-CN: 筛选设置、类别和 CLI 配置路径…
       group_settings:
         en: Settings
         es: "Configuración"
         fr: "Réglages"
         ja: "設定"
         vi: Cài đặt
+        de: Einstellungen
+        it: Impostazioni
+        zh-CN: 设置
       group_cli_config:
         en: CLI config
         es: "Configuración de CLI"
         fr: "Configuration CLI"
         ja: "CLI構成"
         vi: Cấu hình CLI
+        de: CLI-Konfiguration
+        it: Configurazione CLI
+        zh-CN: CLI 配置
     tab:
       appearance:
         en: Appearance
@@ -69,30 +99,45 @@ app:
         fr: "Apparence"
         ja: "外観"
         vi: Giao diện
+        de: Erscheinungsbild
+        it: Aspetto
+        zh-CN: 外观
       accessibility:
         en: Accessibility
         es: "Accesibilidad"
         fr: "Accessibilité"
         ja: "アクセシビリティ"
         vi: Trợ năng
+        de: Barrierefreiheit
+        it: Accessibilità
+        zh-CN: 辅助功能
       shortcuts:
         en: Shortcuts
         es: "Atajos"
         fr: "Raccourcis"
         ja: "ショートカット"
         vi: Phím tắt
+        de: Tastenkürzel
+        it: Scorciatoie
+        zh-CN: 键盘快捷键
       vtcode:
         en: VT Code
         es: "VT Code"
         fr: "VT Code"
         ja: "VT Code"
         vi: VT Code
+        de: VT Code
+        it: VT Code
+        zh-CN: VT Code
       connections:
         en: Connections
         es: "Conexiones"
         fr: "Connexions"
         ja: "接続"
         vi: Kết nối
+        de: Verbindungen
+        it: Connessioni
+        zh-CN: 连接
     language:
       group:
         en: Language
@@ -100,24 +145,36 @@ app:
         fr: "Langue"
         ja: "言語"
         vi: Ngôn ngữ
+        de: Sprache
+        it: Lingua
+        zh-CN: 语言
       label:
         en: Interface language
         es: "Idioma de la interfaz"
         fr: "Langue de l’interface"
         ja: "インターフェースの言語"
         vi: Ngôn ngữ giao diện
+        de: Oberflächensprache
+        it: Lingua dell’interfaccia
+        zh-CN: 界面语言
       description:
         en: Changes supported labels immediately. Untranslated app text remains in English.
         es: "Cambia las etiquetas disponibles al instante. El texto sin traducir permanece en inglés."
         fr: "Modifie immédiatement les libellés disponibles. Le texte non traduit reste en anglais."
         ja: "対応するラベルをすぐに変更します。未翻訳のテキストは英語で表示されます。"
         vi: Thay đổi nhãn đã hỗ trợ ngay lập tức. Nội dung chưa dịch vẫn hiển thị bằng tiếng Anh.
+        de: Unterstützte Beschriftungen werden sofort geändert. Nicht übersetzte Texte bleiben auf Englisch.
+        it: Le etichette supportate cambiano subito. Il testo non tradotto resta in inglese.
+        zh-CN: 支持的标签会立即更改。尚未翻译的文本仍以英语显示。
       select:
         en: Set interface language to %{language}
         es: "Cambiar el idioma de la interfaz a %{language}"
         fr: "Définir la langue de l’interface sur %{language}"
         ja: "インターフェースの言語を%{language}に設定"
         vi: Đặt ngôn ngữ giao diện thành %{language}
+        de: Oberflächensprache auf %{language} festlegen
+        it: Imposta la lingua dell’interfaccia su %{language}
+        zh-CN: 将界面语言设为 %{language}
   welcome:
     greeting:
       morning:
@@ -126,18 +183,27 @@ app:
         fr: "Bonjour"
         ja: "おはようございます"
         vi: Chào buổi sáng
+        de: Guten Morgen
+        it: Buongiorno
+        zh-CN: 早上好
       afternoon:
         en: Good afternoon
         es: "Buenas tardes"
         fr: "Bon après-midi"
         ja: "こんにちは"
         vi: Chào buổi chiều
+        de: Guten Tag
+        it: Buon pomeriggio
+        zh-CN: 下午好
       evening:
         en: Good evening
         es: "Buenas noches"
         fr: "Bonsoir"
         ja: "こんばんは"
         vi: Chào buổi tối
+        de: Guten Abend
+        it: Buonasera
+        zh-CN: 晚上好
     action:
       build:
         en: What should we build
@@ -145,36 +211,54 @@ app:
         fr: "Que voulons-nous créer"
         ja: "何を作りましょう"
         vi: Chúng ta sẽ xây dựng gì
+        de: Was bauen wir
+        it: Cosa costruiamo
+        zh-CN: 我们要构建什么
       build_in_workspace:
         en: What should we build in
         es: "¿Qué vamos a crear en"
         fr: "Que voulons-nous créer dans"
         ja: "作成するワークスペース："
         vi: Chúng ta sẽ xây dựng gì trong
+        de: Was bauen wir in
+        it: Cosa costruiamo in
+        zh-CN: 我们要在以下工作区构建什么：
       improve:
         en: What are we improving
         es: "¿Qué vamos a mejorar"
         fr: "Que voulons-nous améliorer"
         ja: "何を改善しましょう"
         vi: Chúng ta sẽ cải thiện gì
+        de: Was verbessern wir
+        it: Cosa miglioriamo
+        zh-CN: 我们要改进什么
       improve_in_workspace:
         en: What are we improving in
         es: "¿Qué vamos a mejorar en"
         fr: "Que voulons-nous améliorer dans"
         ja: "改善するワークスペース："
         vi: Chúng ta sẽ cải thiện gì trong
+        de: Was verbessern wir in
+        it: Cosa miglioriamo in
+        zh-CN: 我们要改进以下工作区中的什么：
       explore:
         en: What are we exploring
         es: "¿Qué vamos a explorar"
         fr: "Que voulons-nous explorer"
         ja: "何を調べましょう"
         vi: Chúng ta muốn khám phá gì
+        de: Was erkunden wir
+        it: Cosa esploriamo
+        zh-CN: 我们要探索什么
       explore_in_workspace:
         en: What are we exploring in
         es: "¿Qué vamos a explorar en"
         fr: "Que voulons-nous explorer dans"
         ja: "調べるワークスペース："
         vi: Chúng ta muốn khám phá gì trong
+        de: Was erkunden wir in
+        it: Cosa esploriamo in
+        zh-CN: 我们要探索以下工作区中的什么：
     cta:
       choose_workspace:
         en: Choose a workspace
@@ -182,18 +266,27 @@ app:
         fr: "Choisir un espace de travail"
         ja: "ワークスペースを選択"
         vi: Chọn không gian làm việc
+        de: Arbeitsbereich auswählen
+        it: Scegli uno spazio di lavoro
+        zh-CN: 选择工作区
       open_project:
         en: Open a project
         es: "Abrir un proyecto"
         fr: "Ouvrir un projet"
         ja: "プロジェクトを開く"
         vi: Mở dự án
+        de: Projekt öffnen
+        it: Apri un progetto
+        zh-CN: 打开项目
       select_folder:
         en: Select a folder
         es: "Seleccionar una carpeta"
         fr: "Sélectionner un dossier"
         ja: "フォルダを選択"
         vi: Chọn thư mục
+        de: Ordner auswählen
+        it: Seleziona una cartella
+        zh-CN: 选择文件夹
   session:
     preparing_new_thread:
       en: Preparing a new thread…
@@ -201,18 +294,27 @@ app:
       fr: "Préparation d’une nouvelle conversation…"
       ja: "新しい会話を準備中…"
       vi: Đang chuẩn bị một cuộc hội thoại mới…
+      de: Neuer Chat wird vorbereitet…
+      it: Preparazione di una nuova conversazione…
+      zh-CN: 正在准备新对话…
     waiting_to_send:
       en: Your message will send after the startup decision.
       es: "El mensaje se enviará después de la decisión inicial."
       fr: "Votre message sera envoyé après la décision initiale."
       ja: "最初の選択が完了するとメッセージが送信されます。"
       vi: Tin nhắn sẽ được gửi sau khi bạn hoàn tất lựa chọn ban đầu.
+      de: Deine Nachricht wird nach der Startentscheidung gesendet.
+      it: Il messaggio verrà inviato dopo la scelta iniziale.
+      zh-CN: 初始选项确定后将发送你的消息。
     keep_as_draft:
       en: Keep as draft
       es: "Guardar como borrador"
       fr: "Garder comme brouillon"
       ja: "下書きとして保持"
       vi: Giữ làm bản nháp
+      de: Als Entwurf behalten
+      it: Mantieni come bozza
+      zh-CN: 保留为草稿
   files:
     scanning:
       en: Scanning workspace files
@@ -220,6 +322,9 @@ app:
       fr: "Analyse des fichiers de l’espace de travail"
       ja: "ワークスペースのファイルをスキャン中"
       vi: Đang quét tệp trong không gian làm việc
+      de: Arbeitsbereichsdateien werden durchsucht
+      it: Ricerca dei file dello spazio di lavoro
+      zh-CN: 正在扫描工作区文件
     empty:
       title:
         en: No workspace files
@@ -227,12 +332,18 @@ app:
         fr: "Aucun fichier dans l’espace de travail"
         ja: "ワークスペースにファイルがありません"
         vi: Không có tệp trong không gian làm việc
+        de: Keine Arbeitsbereichsdateien
+        it: Nessun file nello spazio di lavoro
+        zh-CN: 没有工作区文件
       description:
         en: There are no files available to browse in this workspace.
         es: "No hay archivos disponibles para explorar en este espacio de trabajo."
         fr: "Aucun fichier à parcourir dans cet espace de travail."
         ja: "このワークスペースには参照できるファイルがありません。"
         vi: Không có tệp nào để duyệt trong không gian làm việc này.
+        de: In diesem Arbeitsbereich sind keine Dateien zum Durchsuchen verfügbar.
+        it: Non ci sono file da esplorare in questo spazio di lavoro.
+        zh-CN: 此工作区中没有可浏览的文件。
     no_workspace:
       title:
         en: Choose a workspace
@@ -240,12 +351,18 @@ app:
         fr: "Choisir un espace de travail"
         ja: "ワークスペースを選択"
         vi: Chọn không gian làm việc
+        de: Arbeitsbereich auswählen
+        it: Scegli uno spazio di lavoro
+        zh-CN: 选择工作区
       description:
         en: Select a workspace to browse its files.
         es: "Selecciona un espacio de trabajo para explorar sus archivos."
         fr: "Sélectionnez un espace de travail pour parcourir ses fichiers."
         ja: "ファイルを参照するワークスペースを選択してください。"
         vi: Chọn không gian làm việc để duyệt tệp.
+        de: Wähle einen Arbeitsbereich aus, um seine Dateien zu durchsuchen.
+        it: Seleziona uno spazio di lavoro per esplorarne i file.
+        zh-CN: 选择工作区以浏览其中的文件。
   activity:
     history:
       notice:
@@ -254,12 +371,18 @@ app:
         fr: "Affichage des %{count} dernières actions des outils."
         ja: "最新のツール操作%{count}件を表示しています。"
         vi: Đang hiển thị %{count} tác vụ công cụ mới nhất.
+        de: Die letzten %{count} Werkzeugaktionen werden angezeigt.
+        it: Sono mostrate le %{count} azioni degli strumenti più recenti.
+        zh-CN: 正在显示最近 %{count} 条工具操作。
       search:
         en: Search conversation
         es: "Buscar en la conversación"
         fr: "Rechercher dans la conversation"
         ja: "会話を検索"
         vi: Tìm trong hội thoại
+        de: Unterhaltung durchsuchen
+        it: Cerca nella conversazione
+        zh-CN: 搜索对话
 gpui_component:
   Input:
     Copy:
@@ -267,19 +390,31 @@ gpui_component:
       es: "Copiar"
       fr: "Copier"
       ja: "コピー"
+      de: Kopieren
+      it: Copia
+      zh-CN: 复制
     Select All:
       vi: Chọn tất cả
       es: "Seleccionar todo"
       fr: "Tout sélectionner"
       ja: "すべて選択"
+      de: Alles auswählen
+      it: Seleziona tutto
+      zh-CN: 全选
   Attachment:
     Remove:
       vi: Xóa
       es: "Quitar"
       fr: "Supprimer"
       ja: "削除"
+      de: Entfernen
+      it: Rimuovi
+      zh-CN: 移除
     Retry:
       vi: Thử lại
       es: "Reintentar"
       fr: "Réessayer"
       ja: "再試行"
+      de: Erneut versuchen
+      it: Riprova
+      zh-CN: 重试

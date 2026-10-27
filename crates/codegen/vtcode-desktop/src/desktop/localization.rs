@@ -9,15 +9,21 @@ pub(super) enum UiLanguage {
     Spanish,
     French,
     Japanese,
+    German,
+    Italian,
+    SimplifiedChinese,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 5] = [
+    pub(super) const ALL: [Self; 8] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
         Self::French,
         Self::Japanese,
+        Self::German,
+        Self::Italian,
+        Self::SimplifiedChinese,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -26,6 +32,9 @@ impl UiLanguage {
             Some("es") => Self::Spanish,
             Some("fr") => Self::French,
             Some("ja") => Self::Japanese,
+            Some("de") => Self::German,
+            Some("it") => Self::Italian,
+            Some("zh-CN") => Self::SimplifiedChinese,
             _ => Self::English,
         }
     }
@@ -37,6 +46,9 @@ impl UiLanguage {
             Self::Spanish => "es",
             Self::French => "fr",
             Self::Japanese => "ja",
+            Self::German => "de",
+            Self::Italian => "it",
+            Self::SimplifiedChinese => "zh-CN",
         }
     }
 
@@ -47,6 +59,9 @@ impl UiLanguage {
             Self::Spanish => "Español",
             Self::French => "Français",
             Self::Japanese => "日本語",
+            Self::German => "Deutsch",
+            Self::Italian => "Italiano",
+            Self::SimplifiedChinese => "简体中文",
         }
     }
 }
@@ -93,13 +108,18 @@ mod tests {
             "Đang chuẩn bị một cuộc hội thoại mới…"
         );
         assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "vi").to_string(), "Sao chép");
-        for (locale, title, copy) in [
-            ("es", "Configuración", "Copiar"),
-            ("fr", "Réglages", "Copier"),
-            ("ja", "設定", "コピー"),
+        for (locale, title, copy, select_all, remove) in [
+            ("es", "Configuración", "Copiar", "Seleccionar todo", "Quitar"),
+            ("fr", "Réglages", "Copier", "Tout sélectionner", "Supprimer"),
+            ("ja", "設定", "コピー", "すべて選択", "削除"),
+            ("de", "Einstellungen", "Kopieren", "Alles auswählen", "Entfernen"),
+            ("it", "Impostazioni", "Copia", "Seleziona tutto", "Rimuovi"),
+            ("zh-CN", "设置", "复制", "全选", "移除"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
+            assert_eq!(rust_i18n::t!("gpui_component.Input.Select All", locale = locale).to_string(), select_all);
+            assert_eq!(rust_i18n::t!("gpui_component.Attachment.Remove", locale = locale).to_string(), remove);
             let history = rust_i18n::t!("app.activity.history.notice", locale = locale, count = 42).to_string();
             assert!(history.contains("42"), "{locale} must interpolate counts");
         }
@@ -113,6 +133,9 @@ mod tests {
             ("es", "Buenos días", "Buenas tardes", "Buenas noches"),
             ("fr", "Bonjour", "Bon après-midi", "Bonsoir"),
             ("ja", "おはようございます", "こんにちは", "こんばんは"),
+            ("de", "Guten Morgen", "Guten Tag", "Guten Abend"),
+            ("it", "Buongiorno", "Buon pomeriggio", "Buonasera"),
+            ("zh-CN", "早上好", "下午好", "晚上好"),
         ] {
             assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
             assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);
