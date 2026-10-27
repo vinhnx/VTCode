@@ -8344,7 +8344,7 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
         window.render_frame(cx);
         assert_eq!(
             window.find("activity-status-chart").label(),
-            Some("Activity statuses: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
+            Some("Recent activity statuses: 1 running · 1 done · 1 failed · 0 interrupted · 0 other")
         );
         assert!(window.try_find("activity-read").is_some(), "the virtual list renders visible activity rows");
         view.update(cx, |view, _| view.inspector_tab = crate::desktop::inspector::InspectorTab::Utilities);
@@ -8388,6 +8388,10 @@ fn activity_tab_virtualizes_the_bounded_tool_history(cx: &mut TestAppContext) {
         let list = window.find("activity-rows");
         assert_eq!(list.role(), Some(gpui_kit::Role::List));
         assert_eq!(list.label(), Some("Recent activity"));
+        assert_eq!(
+            window.find("activity-status-chart").label(),
+            Some("Recent activity statuses: 0 running · 300 done · 0 failed · 0 interrupted · 0 other; older activity is not included")
+        );
         let status = window.find("activity-history-status");
         assert_eq!(status.role(), Some(gpui_kit::Role::Status));
         assert_eq!(status.label(), Some("Showing the latest 300 tool actions."));

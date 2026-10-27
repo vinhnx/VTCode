@@ -5837,27 +5837,50 @@ impl DesktopView {
                 .id("activity-status-chart")
                 .test_support()
                 .role(gpui_kit::Role::Group)
-                .aria_label(format!("Activity statuses: {summary}"))
+                .aria_label(format!(
+                    "Recent activity statuses: {summary}{}",
+                    if has_older_activity {
+                        "; older activity is not included"
+                    } else {
+                        ""
+                    }
+                ))
                 .w_full()
                 .h(px(148.))
                 .flex_shrink_0()
+                .flex()
+                .flex_col()
                 .child(
-                    BarChart::new(chart_data)
-                        .band(|datum| datum.label)
-                        .value(|datum| datum.count as f64)
-                        .label(|datum| datum.count.to_string())
-                        .alignment(BarAlignment::Left)
-                        .value_axis(false)
-                        .grid(false)
-                        .interactive(false)
-                        .appear(false)
-                        .fill(move |datum, _, _, _| match datum.state {
-                            ActivityState::Running => chart_colors.primary,
-                            ActivityState::Completed => chart_colors.success,
-                            ActivityState::Failed => chart_colors.danger,
-                            ActivityState::Interrupted => chart_colors.warning,
-                            ActivityState::Other => chart_colors.muted_foreground,
-                        }),
+                    div()
+                        .flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child("Recent activity"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted_foreground)
+                                .child(format!("{} shown", counts.total())),
+                        ),
+                )
+                .child(
+                    div().flex_1().min_h_0().child(
+                        BarChart::new(chart_data)
+                            .band(|datum| datum.label)
+                            .value(|datum| datum.count as f64)
+                            .label(|datum| datum.count.to_string())
+                            .alignment(BarAlignment::Left)
+                            .value_axis(false)
+                            .grid(false)
+                            .interactive(false)
+                            .appear(false)
+                            .fill(move |datum, _, _, _| Self::activity_status_color(datum.state, chart_colors)),
+                    ),
                 ),
         );
 
