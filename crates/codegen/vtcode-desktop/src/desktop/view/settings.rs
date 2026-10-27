@@ -444,9 +444,9 @@ impl DesktopView {
                             .small()
                             .checked(selected)
                             .cursor_pointer()
-                            .on_click(cx.listener(move |view, checked: &bool, _, cx| {
+                            .on_click(cx.listener(move |view, checked: &bool, window, cx| {
                                 if *checked {
-                                    view.set_ui_language(option, cx);
+                                    view.set_ui_language(option, window, cx);
                                 } else {
                                     // Keep one option selected even when the active toggle is clicked again.
                                     cx.notify();
@@ -509,13 +509,16 @@ impl DesktopView {
         content.into_any_element()
     }
 
-    fn set_ui_language(&mut self, language: UiLanguage, cx: &mut Context<Self>) {
+    fn set_ui_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
         if self.preferences.ui_language() == language {
             return;
         }
 
         self.preferences.set_ui_language(language);
         super::super::localization::set_language(language);
+        let placeholder = rust_i18n::t!("app.composer.input_placeholder").to_string();
+        self.composer
+            .update(cx, |state, cx| state.set_placeholder(placeholder, window, cx));
         // Command rows cache their rendered labels. Drop that projection so a
         // subsequently opened palette reads the newly selected locale.
         self.clear_palette_state();

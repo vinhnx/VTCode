@@ -103,6 +103,14 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         );
         assert_eq!(window.find("settings-panel").label(), Some("Configurações"));
         assert_eq!(window.find("ui-language-pt-BR").checked(), Some(true));
+        assert_eq!(window.find("new-session").label(), Some("Nova conversa"));
+        assert_eq!(
+            view.read(cx).composer.read(cx).presentation().placeholder().as_ref(),
+            "Peça ao VT Code para fazer alterações…"
+        );
+        assert_eq!(window.find("composer-workspace").label(), Some("Escolher espaço de trabalho"));
+        assert_eq!(window.find("attach-files").label(), Some("Adicionar arquivos e mais @"));
+        assert_eq!(window.find("send-prompt").label(), Some("Enviar mensagem"));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().ui_language(),
             crate::desktop::localization::UiLanguage::BrazilianPortuguese

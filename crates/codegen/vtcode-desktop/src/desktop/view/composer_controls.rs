@@ -445,7 +445,7 @@ impl DesktopView {
             .as_ref()
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Choose workspace".into());
+            .unwrap_or_else(|| rust_i18n::t!("app.workspace.choose").to_string());
         let recent = self.recent_workspaces();
         let disabled =
             !self.workspace_switch_idle() || self.retained_submission.is_some() || self.workspace_picker_open;
@@ -457,8 +457,8 @@ impl DesktopView {
             .small()
             .max_w(px(240.))
             .overflow_hidden()
-            .accessibility_label("Choose workspace")
-            .tooltip("Choose a workspace or recent project")
+            .accessibility_label(rust_i18n::t!("app.workspace.choose").to_string())
+            .tooltip(rust_i18n::t!("app.workspace.choose_or_recent").to_string())
             .desktop_disabled(disabled);
 
         Popover::new("composer-workspace-popover")
@@ -485,13 +485,13 @@ impl DesktopView {
                             .text_xs()
                             .font_semibold()
                             .text_color(colors.muted_foreground)
-                            .child("WORKSPACES"),
+                            .child(rust_i18n::t!("app.workspace.section").to_string().to_uppercase()),
                     );
                 let open_view = view.clone();
                 content = content.child(
                     desktop_button("open-workspace-folder")
                         .icon(IconName::Folder)
-                        .label("Choose folder…")
+                        .label(rust_i18n::t!("app.workspace.choose_folder").to_string())
                         .ghost()
                         .w_full()
                         .desktop_disabled(disabled)
@@ -507,7 +507,7 @@ impl DesktopView {
                             .py_2()
                             .text_sm()
                             .text_color(colors.muted_foreground)
-                            .child("No recent workspaces"),
+                            .child(rust_i18n::t!("app.workspace.no_recent_workspaces").to_string()),
                     );
                 } else {
                     content = content.child(div().mx_2().my_1().h(px(1.)).bg(colors.border.opacity(0.7)));
@@ -522,10 +522,11 @@ impl DesktopView {
                         let entry_path = path.clone();
                         content = content.child(
                             desktop_button(opaque_path_element_id("recent-workspace-popover", path))
-                                .accessibility_label(format!(
-                                    "{label}{}",
-                                    if selected { " (current workspace)" } else { "" }
-                                ))
+                                .accessibility_label(if selected {
+                                    rust_i18n::t!("app.workspace.current_label", workspace = label).to_string()
+                                } else {
+                                    label.clone()
+                                })
                                 .child(navigation_label(label, IconName::Folder, selected, colors.primary))
                                 .ghost()
                                 .w_full()
@@ -1164,9 +1165,10 @@ pub(super) fn model_options_header(
             .unwrap_or(&options.reasoning_effort)
             .as_str()
     });
+    let model_fallback = rust_i18n::t!("app.composer.choose_model").to_string();
     let model = model_label
         .or_else(|| config.map(|config| config.model.as_str()))
-        .unwrap_or("Choose a model");
+        .unwrap_or(&model_fallback);
     let summary_label = format!("{model}{}{}", effort.map(|_| " · ").unwrap_or(""), effort.unwrap_or(""));
     let mut summary = div()
         .id("model-options-summary")
@@ -1273,10 +1275,10 @@ fn effort_knob(
         .role(gpui_kit::Role::Slider)
         .aria_label(
             effort
-                .map(|effort| format!("Reasoning effort: {effort}"))
-                .unwrap_or_else(|| "Reasoning effort".to_string()),
+                .map(|effort| rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
+                .unwrap_or_else(|| rust_i18n::t!("app.composer.reasoning_effort_generic").to_string()),
         )
-        .aria_description("Use Left and Right arrows to adjust reasoning effort.")
+        .aria_description(rust_i18n::t!("app.composer.reasoning_effort_hint").to_string())
         .aria_numeric_value(slider.value().start() as f64)
         .aria_min_numeric_value(slider.min_value() as f64)
         .aria_max_numeric_value(slider.max_value() as f64)

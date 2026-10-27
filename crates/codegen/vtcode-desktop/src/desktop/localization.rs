@@ -144,6 +144,75 @@ mod tests {
     }
 
     #[test]
+    fn workspace_and_composer_copy_covers_every_supported_language() {
+        let expected = [
+            ("en", "Workspace", "New thread", "Add files and more @", "Ask VT Code to make changes…"),
+            (
+                "vi",
+                "Không gian làm việc",
+                "Cuộc hội thoại mới",
+                "Thêm tệp và nội dung khác @",
+                "Yêu cầu VT Code thực hiện thay đổi…",
+            ),
+            (
+                "es",
+                "Espacio de trabajo",
+                "Nuevo hilo",
+                "Añadir archivos y más @",
+                "Pide a VT Code que haga cambios…",
+            ),
+            (
+                "fr",
+                "Espace de travail",
+                "Nouvelle conversation",
+                "Ajouter des fichiers et plus @",
+                "Demandez à VT Code d’apporter des modifications…",
+            ),
+            ("ja", "ワークスペース", "新しいスレッド", "ファイルなどを追加 @", "VT Codeに変更を依頼…"),
+            (
+                "de",
+                "Arbeitsbereich",
+                "Neuer Chat",
+                "Dateien und mehr hinzufügen @",
+                "VT Code um Änderungen bitten…",
+            ),
+            (
+                "it",
+                "Spazio di lavoro",
+                "Nuova conversazione",
+                "Aggiungi file e altro @",
+                "Chiedi a VT Code di apportare modifiche…",
+            ),
+            ("zh-CN", "工作区", "新对话", "添加文件等 @", "让 VT Code 帮你修改…"),
+            (
+                "pt-BR",
+                "Espaço de trabalho",
+                "Nova conversa",
+                "Adicionar arquivos e mais @",
+                "Peça ao VT Code para fazer alterações…",
+            ),
+            ("ko", "작업 공간", "새 대화", "파일 및 추가 항목 @", "VT Code에 변경을 요청하세요…"),
+            (
+                "nl",
+                "Werkruimte",
+                "Nieuwe thread",
+                "Bestanden en meer toevoegen @",
+                "Vraag VT Code om wijzigingen aan te brengen…",
+            ),
+        ];
+
+        for (locale, workspace, new_thread, add_context, placeholder) in expected {
+            assert_eq!(rust_i18n::t!("app.workspace.section", locale = locale).to_string(), workspace);
+            assert_eq!(rust_i18n::t!("app.navigation.new_thread", locale = locale).to_string(), new_thread);
+            assert_eq!(rust_i18n::t!("app.composer.add_context", locale = locale).to_string(), add_context);
+            assert_eq!(rust_i18n::t!("app.composer.input_placeholder", locale = locale).to_string(), placeholder);
+            let current_workspace =
+                rust_i18n::t!("app.workspace.current_label", locale = locale, workspace = "vtcode").to_string();
+            assert!(current_workspace.starts_with("vtcode"), "workspace name must interpolate in {locale}");
+        }
+    }
+
+    #[test]
     fn settings_surface_translations_cover_every_supported_language() {
         let expected = [
             (

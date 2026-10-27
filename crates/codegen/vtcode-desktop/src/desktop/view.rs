@@ -850,7 +850,7 @@ impl DesktopView {
         });
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder("Ask VT Code to make changes…")
+                .placeholder(rust_i18n::t!("app.composer.input_placeholder").to_string())
                 .auto_grow(1, 6)
                 .submit_on_enter(true)
         });
@@ -4414,11 +4414,14 @@ impl DesktopView {
 
     fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
+        let workspace_section = rust_i18n::t!("app.workspace.section").to_string().to_uppercase();
+        let projects_section = rust_i18n::t!("app.workspace.projects").to_string().to_uppercase();
+        let recent_threads_section = rust_i18n::t!("app.workspace.recent_threads").to_string().to_uppercase();
         let mut sidebar = div()
             .id("project-thread-sidebar")
             .test_support()
             .role(gpui_kit::Role::Group)
-            .aria_label("Workspace, projects, and recent threads")
+            .aria_label(rust_i18n::t!("app.navigation.sidebar_label").to_string())
             .w(px(self.sidebar_width))
             .min_w(px(MIN_PANE_WIDTH))
             .h_full()
@@ -4436,16 +4439,20 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(section_label("WORKSPACE", theme.colors.muted_foreground))
+                    .child(section_label(workspace_section, theme.colors.muted_foreground))
                     .child(
                         desktop_button("choose-workspace")
-                            .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.workspace.choose").to_string(),
+                                &ChooseWorkspace,
+                                Some("VTCodeDesktop"),
+                            )
                             .label(if self.workspace_selection_pending {
-                                "Checking…"
+                                rust_i18n::t!("app.workspace.checking").to_string()
                             } else if self.workspace.is_some() {
-                                "Change"
+                                rust_i18n::t!("app.workspace.change").to_string()
                             } else {
-                                "Open"
+                                rust_i18n::t!("app.workspace.open").to_string()
                             })
                             .ghost()
                             .desktop_disabled(
@@ -4457,6 +4464,13 @@ impl DesktopView {
                     ),
             );
 
+        let workspace_label = self
+            .workspace
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| rust_i18n::t!("app.workspace.project_placeholder").to_string());
         sidebar = sidebar.child(
             div()
                 .flex()
@@ -4464,14 +4478,13 @@ impl DesktopView {
                 .gap_2()
                 .child(Icon::new(IconName::FolderGit2).text_color(theme.colors.primary))
                 .child(
-                    div().min_w_0().flex_1().text_sm().font_semibold().truncate().child(
-                        self.workspace
-                            .as_ref()
-                            .and_then(|p| p.file_name())
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("Choose a project")
-                            .to_string(),
-                    ),
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_sm()
+                        .font_semibold()
+                        .truncate()
+                        .child(workspace_label),
                 ),
         );
 
@@ -4482,8 +4495,12 @@ impl DesktopView {
                 .gap_2()
                 .child(
                     desktop_button("new-session")
-                        .tooltip_with_action("New session", &NewSession, Some("VTCodeDesktop"))
-                        .label("New thread")
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.navigation.new_thread").to_string(),
+                            &NewSession,
+                            Some("VTCodeDesktop"),
+                        )
+                        .label(rust_i18n::t!("app.navigation.new_thread").to_string())
                         .icon(IconName::Plus)
                         .ghost()
                         .flex_1()
@@ -4494,14 +4511,14 @@ impl DesktopView {
                     desktop_button("close-session")
                         .tooltip_with_action("Close session", &CloseSession, Some("VTCodeDesktop"))
                         .icon(IconName::X)
-                        .accessibility_label("Close thread")
+                        .accessibility_label(rust_i18n::t!("app.navigation.close_thread").to_string())
                         .ghost()
                         .desktop_disabled(self.selected_session_id.is_none() || !self.session_change_allowed(None))
                         .dispatches_desktop_action(CloseSession, self.focus_handle.clone()),
                 ),
         );
 
-        sidebar = sidebar.child(section_label("PROJECTS", theme.colors.muted_foreground));
+        sidebar = sidebar.child(section_label(projects_section, theme.colors.muted_foreground));
         let recent = self.recent_workspaces();
         if !recent.is_empty() {
             sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().map(|path| {
@@ -4517,7 +4534,11 @@ impl DesktopView {
                     .to_string();
                 div().w_full().child(
                     desktop_button(opaque_path_element_id("workspace", path))
-                        .accessibility_label(format!("{label}{}", if current { " (current workspace)" } else { "" }))
+                        .accessibility_label(if current {
+                            rust_i18n::t!("app.workspace.current_label", workspace = label).to_string()
+                        } else {
+                            label.clone()
+                        })
                         .child(navigation_label(label, IconName::Folder, current, theme.colors.primary))
                         .ghost()
                         .w_full()
@@ -4536,7 +4557,7 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(section_label("RECENT THREADS", theme.colors.muted_foreground))
+                .child(section_label(recent_threads_section, theme.colors.muted_foreground))
                 .child(
                     div()
                         .text_xs()
@@ -4552,7 +4573,7 @@ impl DesktopView {
                 .id("session-list")
                 .test_support()
                 .role(gpui_kit::Role::List)
-                .aria_label("Recent threads")
+                .aria_label(rust_i18n::t!("app.workspace.recent_threads").to_string())
                 .relative()
                 .flex_1()
                 .min_h_0()
@@ -4586,10 +4607,15 @@ impl DesktopView {
                                             .w_full()
                                             .child(
                                                 desktop_button(format!("session-{session_id}"))
-                                                    .accessibility_label(format!(
-                                                        "{label}{}",
-                                                        if selected { " (current thread)" } else { "" }
-                                                    ))
+                                                    .accessibility_label(if selected {
+                                                        rust_i18n::t!(
+                                                            "app.navigation.current_thread_label",
+                                                            thread = label
+                                                        )
+                                                        .to_string()
+                                                    } else {
+                                                        label.clone()
+                                                    })
                                                     .child(navigation_label(
                                                         label,
                                                         IconName::MessageSquare,
@@ -4640,12 +4666,13 @@ impl DesktopView {
     }
 
     fn render_thread_header(&self) -> impl IntoElement {
+        let title_fallback = rust_i18n::t!("app.navigation.new_thread").to_string();
         let title = self
             .sessions
             .iter()
             .find(|session| Some(session.session_id.as_str()) == self.selected_session_id.as_deref())
             .and_then(|session| session.title.as_deref())
-            .unwrap_or("New thread");
+            .unwrap_or(&title_fallback);
         div()
             .id("thread-header")
             .test_support()
@@ -4752,7 +4779,7 @@ impl DesktopView {
             .child(
                 Toolbar::new("header-toolbar").small().child(
                     ToolbarGroup::new("header-actions-group")
-                        .label("Workspace actions")
+                        .label(rust_i18n::t!("app.navigation.workspace_actions").to_string())
                         .gap_1()
                         .when(!navigation_visible, |group| {
                             group
@@ -6929,7 +6956,7 @@ impl DesktopView {
         }
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")
-            .aria_label("Message to VT Code")
+            .aria_label(rust_i18n::t!("app.composer.input_label").to_string())
             .cursor_text()
             .min_h(px(32.));
 
@@ -7000,29 +7027,27 @@ impl DesktopView {
                     .map(|model| model.display_name.clone())
                     .unwrap_or_else(|| configuration.model.clone())
             })
-            .unwrap_or_else(|| "Choose model".to_string());
-        let policy = self
-            .configuration
-            .as_ref()
-            .and_then(|config| {
-                config.session_options.as_ref().map(|options| match options.permission_mode {
-                    protocol::PermissionMode::Ask => "Ask before protected actions",
-                    protocol::PermissionMode::AutoApproveCommands => "Auto-approve commands",
-                })
-            })
-            .or_else(|| self.configuration.as_ref().and_then(|config| config.sandbox.as_deref()))
-            .unwrap_or("Permissions unavailable");
-        let policy_label = match policy {
-            "Ask before protected actions" => "Ask",
-            "Auto-approve commands" => "Auto",
-            "Permissions unavailable" => "Policy",
-            policy => policy,
-        };
+            .unwrap_or_else(|| rust_i18n::t!("app.composer.choose_model").to_string());
         let permission_mode = self
             .configuration
             .as_ref()
             .and_then(|config| config.session_options.as_ref())
             .map(|options| options.permission_mode);
+        let (policy, policy_label) = match permission_mode {
+            Some(protocol::PermissionMode::Ask) => {
+                (rust_i18n::t!("app.composer.permission_ask").to_string(), "Ask".to_owned())
+            }
+            Some(protocol::PermissionMode::AutoApproveCommands) => {
+                (rust_i18n::t!("app.composer.permission_auto").to_string(), "Auto".to_owned())
+            }
+            None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
+                Some(policy) => (policy.clone(), policy),
+                None => (
+                    rust_i18n::t!("app.composer.permissions_unavailable").to_string(),
+                    rust_i18n::t!("app.composer.policy").to_string(),
+                ),
+            },
+        };
         let (permission_icon, permission_icon_color) =
             composer_controls::permission_indicator(permission_mode, cx.theme().colors);
         let buttons = div()
@@ -7044,8 +7069,12 @@ impl DesktopView {
                         .child(
                             desktop_button("attach-files")
                                 .icon(IconName::Plus)
-                                .accessibility_label("Add files and more @")
-                                .tooltip_with_action("Add files and more @", &OpenAddContext, Some("VTCodeDesktop"))
+                                .accessibility_label(rust_i18n::t!("app.composer.add_context").to_string())
+                                .tooltip_with_action(
+                                    rust_i18n::t!("app.composer.add_context").to_string(),
+                                    &OpenAddContext,
+                                    Some("VTCodeDesktop"),
+                                )
                                 .ghost()
                                 .small()
                                 .desktop_disabled(
@@ -7057,8 +7086,14 @@ impl DesktopView {
                         )
                         .child(
                             desktop_button("composer-policy")
-                                .accessibility_label(format!("Execution policy: {policy}"))
-                                .tooltip_with_action("Command permissions", &OpenPermissions, Some("VTCodeDesktop"))
+                                .accessibility_label(
+                                    rust_i18n::t!("app.composer.execution_policy", policy = policy).to_string(),
+                                )
+                                .tooltip_with_action(
+                                    rust_i18n::t!("app.composer.command_permissions").to_string(),
+                                    &OpenPermissions,
+                                    Some("VTCodeDesktop"),
+                                )
                                 .icon(Icon::new(permission_icon).text_color(permission_icon_color))
                                 .child(
                                     div()
@@ -7101,7 +7136,7 @@ impl DesktopView {
                         .id("composer-model-effort")
                         .test_support()
                         .role(gpui_kit::Role::Label)
-                        .aria_label(format!("Reasoning effort: {effort}"))
+                        .aria_label(rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
                         .flex_shrink_0()
                         .text_color(colors.muted_foreground)
                         .child(format!("· {effort}")),
@@ -7126,7 +7161,7 @@ impl DesktopView {
                             .max_w(px(336.))
                             .overflow_hidden()
                             .tooltip_with_action(
-                                "Choose a model · Search by provider, name, or model ID",
+                                rust_i18n::t!("app.composer.choose_model_tooltip").to_string(),
                                 &OpenModelPicker,
                                 Some("VTCodeDesktop"),
                             )
@@ -7138,8 +7173,12 @@ impl DesktopView {
         if self.running {
             model_actions = model_actions.child(
                 desktop_button("cancel-turn")
-                    .tooltip_with_action("Cancel active run", &CancelRun, Some("VTCodeDesktop"))
-                    .accessibility_label("Cancel run")
+                    .tooltip_with_action(
+                        rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
+                        &CancelRun,
+                        Some("VTCodeDesktop"),
+                    )
+                    .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                     .icon(IconName::Square)
                     .rounded_full()
                     .danger()
@@ -7148,8 +7187,8 @@ impl DesktopView {
         } else {
             model_actions = model_actions.child(
                 desktop_button("send-prompt")
-                    .accessibility_label("Send message")
-                    .tooltip("Send message (Enter)")
+                    .accessibility_label(rust_i18n::t!("app.composer.send").to_string())
+                    .tooltip(rust_i18n::t!("app.composer.send_tooltip").to_string())
                     .icon(IconName::ArrowUp)
                     .rounded_full()
                     .primary()
@@ -7193,12 +7232,12 @@ impl DesktopView {
                         desktop_button("composer-cli-webmcp")
                             .icon(IconName::Terminal)
                             .label(if self.webmcp_status.as_ref().is_some_and(|status| status.running) {
-                                "WebMCP connected"
+                                rust_i18n::t!("app.composer.webmcp_connected").to_string()
                             } else {
-                                "Connect WebMCP"
+                                rust_i18n::t!("app.composer.connect_webmcp").to_string()
                             })
-                            .accessibility_label("Open VT Code CLI and WebMCP connection settings")
-                            .tooltip("Pair the browser app with this CLI-backed desktop session")
+                            .accessibility_label(rust_i18n::t!("app.composer.webmcp_accessibility").to_string())
+                            .tooltip(rust_i18n::t!("app.composer.webmcp_tooltip").to_string())
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, window, cx| view.open_webmcp_settings(window, cx))),
@@ -7252,7 +7291,7 @@ impl DesktopView {
                             .bg(colors.popover)
                             .child(
                                 InputGroup::new("message-composer")
-                                    .aria_label("Message composer")
+                                    .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                     .w_full()
                                     .rounded(px(22.))
                                     .border_0()
@@ -7998,9 +8037,9 @@ impl DesktopView {
         let composer_popup = self.palette_kind.is_composer_popup();
         let inline_completion = matches!(self.palette_kind, PaletteKind::FileMentions | PaletteKind::SlashCommands);
         let title = match self.palette_kind {
-            PaletteKind::Models => "Choose a model".to_owned(),
+            PaletteKind::Models => rust_i18n::t!("app.composer.choose_model").to_string(),
             PaletteKind::ConversationSearch => "Find in conversation".to_owned(),
-            PaletteKind::ModelOptions => "Select model".to_owned(),
+            PaletteKind::ModelOptions => rust_i18n::t!("app.composer.select_model").to_string(),
             PaletteKind::AddContext => "Add files and more @".to_owned(),
             PaletteKind::FileMentions => "Mention a workspace file".to_owned(),
             PaletteKind::SlashCommands => "VT Code commands".to_owned(),
@@ -8023,7 +8062,7 @@ impl DesktopView {
         } else if matches!(self.palette_kind, PaletteKind::Fonts(_)) {
             "Search installed fonts…".to_owned()
         } else if models {
-            "Search providers, models, or IDs…".to_owned()
+            rust_i18n::t!("app.composer.search_models").to_string()
         } else if self.palette_kind == PaletteKind::FileMentions {
             "Filter workspace files…".to_owned()
         } else if self.palette_kind == PaletteKind::SlashCommands {
@@ -8043,7 +8082,8 @@ impl DesktopView {
             .placeholder(placeholder)
             .max_h(px(360.))
             .when(models, |command| {
-                command.header(|_, _, _| div().px_3().py_2().font_semibold().child("Choose a model"))
+                let title = rust_i18n::t!("app.composer.choose_model").to_string();
+                command.header(move |_, _, _| div().px_3().py_2().font_semibold().child(title.clone()))
             })
             .when(conversation_search, |command| {
                 let muted_foreground = colors.muted_foreground;
@@ -8244,7 +8284,7 @@ impl DesktopView {
                     .py_2()
                     .child(
                         desktop_button("model-search-all")
-                            .label("Search all models…")
+                            .label(rust_i18n::t!("app.composer.search_all_models").to_string())
                             .icon(IconName::Search)
                             .ghost()
                             .small()
