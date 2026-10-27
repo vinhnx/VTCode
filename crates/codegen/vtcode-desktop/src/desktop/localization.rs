@@ -12,6 +12,8 @@ pub(super) enum UiLanguage {
     German,
     Italian,
     SimplifiedChinese,
+    TraditionalChineseTaiwan,
+    TraditionalChineseHongKong,
     BrazilianPortuguese,
     Korean,
     Dutch,
@@ -20,7 +22,7 @@ pub(super) enum UiLanguage {
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 13] = [
+    pub(super) const ALL: [Self; 15] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -29,6 +31,8 @@ impl UiLanguage {
         Self::German,
         Self::Italian,
         Self::SimplifiedChinese,
+        Self::TraditionalChineseTaiwan,
+        Self::TraditionalChineseHongKong,
         Self::BrazilianPortuguese,
         Self::Korean,
         Self::Dutch,
@@ -45,6 +49,8 @@ impl UiLanguage {
             Some("de") => Self::German,
             Some("it") => Self::Italian,
             Some("zh-CN") => Self::SimplifiedChinese,
+            Some("zh-TW") => Self::TraditionalChineseTaiwan,
+            Some("zh-HK") => Self::TraditionalChineseHongKong,
             Some("pt-BR") => Self::BrazilianPortuguese,
             Some("ko") => Self::Korean,
             Some("nl") => Self::Dutch,
@@ -64,6 +70,8 @@ impl UiLanguage {
             Self::German => "de",
             Self::Italian => "it",
             Self::SimplifiedChinese => "zh-CN",
+            Self::TraditionalChineseTaiwan => "zh-TW",
+            Self::TraditionalChineseHongKong => "zh-HK",
             Self::BrazilianPortuguese => "pt-BR",
             Self::Korean => "ko",
             Self::Dutch => "nl",
@@ -82,6 +90,8 @@ impl UiLanguage {
             Self::German => "Deutsch",
             Self::Italian => "Italiano",
             Self::SimplifiedChinese => "简体中文",
+            Self::TraditionalChineseTaiwan => "繁體中文（台灣）",
+            Self::TraditionalChineseHongKong => "繁體中文（香港）",
             Self::BrazilianPortuguese => "Português (Brasil)",
             Self::Korean => "한국어",
             Self::Dutch => "Nederlands",
@@ -140,6 +150,8 @@ mod tests {
             ("de", "Einstellungen", "Kopieren", "Alles auswählen", "Entfernen"),
             ("it", "Impostazioni", "Copia", "Seleziona tutto", "Rimuovi"),
             ("zh-CN", "设置", "复制", "全选", "移除"),
+            ("zh-TW", "設定", "複製", "全選", "移除"),
+            ("zh-HK", "設定", "複製", "全選", "移除"),
             ("pt-BR", "Configurações", "Copiar", "Selecionar tudo", "Remover"),
             ("ko", "설정", "복사", "모두 선택", "제거"),
             ("nl", "Instellingen", "Kopiëren", "Alles selecteren", "Verwijderen"),
@@ -153,6 +165,31 @@ mod tests {
             let history = rust_i18n::t!("app.activity.history.notice", locale = locale, count = 42).to_string();
             assert!(history.contains("42"), "{locale} must interpolate counts");
         }
+    }
+
+    #[test]
+    fn transcript_and_configuration_copy_are_localized_for_every_language() {
+        macro_rules! assert_catalog_key {
+            ($key:literal) => {
+                for language in UiLanguage::ALL {
+                    let locale = language.locale();
+                    let translated = rust_i18n::t!($key, locale = locale).to_string();
+                    assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
+                    if language != UiLanguage::English {
+                        assert_ne!(
+                            translated,
+                            rust_i18n::t!($key, locale = "en").to_string(),
+                            "{locale}/{} fell back to English",
+                            $key
+                        );
+                    }
+                }
+            };
+        }
+
+        assert_catalog_key!("app.palette.title.configuration");
+        assert_catalog_key!("app.transcript.history_limit_reached");
+        assert_catalog_key!("app.transcript.load_earlier_tooltip");
     }
 
     #[test]
@@ -196,6 +233,8 @@ mod tests {
                 "Chiedi a VT Code di apportare modifiche…",
             ),
             ("zh-CN", "工作区", "新对话", "添加文件等 @", "让 VT Code 帮你修改…"),
+            ("zh-TW", "工作區", "新對話", "新增檔案等 @", "讓 VT Code 幫你修改…"),
+            ("zh-HK", "工作區", "新對話", "新增檔案等 @", "讓 VT Code 幫你修改…"),
             (
                 "pt-BR",
                 "Espaço de trabalho",
@@ -371,6 +410,122 @@ mod tests {
                 rust_i18n::t!("app.file_preview.editor_error", locale = locale, error = "editor unavailable")
                     .to_string();
             assert!(editor_error.contains("editor unavailable"), "editor error was lost in {locale}");
+        }
+    }
+
+    #[test]
+    fn command_and_composer_palettes_are_translated_for_every_language() {
+        macro_rules! assert_translated {
+            ($locale:expr, $key:literal) => {{
+                let translated = rust_i18n::t!($key, locale = $locale).to_string();
+                assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
+                if $locale != "en"
+                    && $key != "app.palette.command.vtcode"
+                    && !($locale == "fr" && $key == "app.palette.sections.session")
+                    && !($locale == "fr" && $key == "app.palette.sections.conversation")
+                {
+                    let english = rust_i18n::t!($key, locale = "en").to_string();
+                    assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
+                }
+            }};
+        }
+
+        for language in UiLanguage::ALL {
+            let locale = language.locale();
+            assert_translated!(locale, "app.palette.title.conversation_search");
+            assert_translated!(locale, "app.palette.title.file_mention");
+            assert_translated!(locale, "app.palette.title.slash_commands");
+            assert_translated!(locale, "app.palette.title.prompt_history");
+            assert_translated!(locale, "app.palette.title.permissions");
+            assert_translated!(locale, "app.palette.title.modes");
+            assert_translated!(locale, "app.palette.title.ui_font");
+            assert_translated!(locale, "app.palette.title.code_font");
+            assert_translated!(locale, "app.palette.title.configuration");
+            assert_translated!(locale, "app.palette.title.changed_file");
+            assert_translated!(locale, "app.palette.title.commands");
+            assert_translated!(locale, "app.palette.sections.session");
+            assert_translated!(locale, "app.palette.sections.view");
+            assert_translated!(locale, "app.palette.sections.conversation");
+            assert_translated!(locale, "app.palette.sections.vtcode_commands");
+            assert_translated!(locale, "app.palette.sections.recent_sessions");
+            assert_translated!(locale, "app.palette.sections.files");
+            assert_translated!(locale, "app.palette.sections.loaded_messages");
+            assert_translated!(locale, "app.palette.sections.loaded_tool_output");
+            assert_translated!(locale, "app.palette.sections.this_thread");
+            assert_translated!(locale, "app.palette.sections.add");
+            assert_translated!(locale, "app.palette.sections.workspace_files");
+            assert_translated!(locale, "app.palette.sections.skills");
+            assert_translated!(locale, "app.palette.sections.plugins");
+            assert_translated!(locale, "app.palette.sections.commands");
+            assert_translated!(locale, "app.palette.command.new_session");
+            assert_translated!(locale, "app.palette.command.close_session");
+            assert_translated!(locale, "app.palette.command.switch_workspace");
+            assert_translated!(locale, "app.palette.command.refresh_recent_threads");
+            assert_translated!(locale, "app.palette.command.choose_model");
+            assert_translated!(locale, "app.palette.command.toggle_inspector");
+            assert_translated!(locale, "app.palette.command.toggle_zen_mode");
+            assert_translated!(locale, "app.palette.command.switch_dark_theme");
+            assert_translated!(locale, "app.palette.command.switch_light_theme");
+            assert_translated!(locale, "app.palette.command.find_in_conversation");
+            assert_translated!(locale, "app.palette.command.open_session");
+            assert_translated!(locale, "app.palette.command.preview_file");
+            assert_translated!(locale, "app.palette.command.add_files");
+            assert_translated!(locale, "app.palette.command.workspace_file");
+            assert_translated!(locale, "app.palette.command.vtcode");
+            assert_translated!(locale, "app.palette.command.you");
+            assert_translated!(locale, "app.palette.command.tool_activity");
+            assert_translated!(locale, "app.palette.command.output");
+            assert_translated!(locale, "app.palette.command.use_plugin");
+            assert_translated!(locale, "app.palette.placeholder.configuration");
+            assert_translated!(locale, "app.palette.placeholder.fonts");
+            assert_translated!(locale, "app.palette.placeholder.workspace_files");
+            assert_translated!(locale, "app.palette.placeholder.commands");
+            assert_translated!(locale, "app.palette.placeholder.changed_files");
+            assert_translated!(locale, "app.palette.placeholder.conversation");
+            assert_translated!(locale, "app.palette.placeholder.prompts");
+            assert_translated!(locale, "app.palette.placeholder.modes");
+            assert_translated!(locale, "app.palette.placeholder.default");
+            assert_translated!(locale, "app.palette.conversation_search_header");
+            assert_translated!(locale, "app.palette.empty.no_models");
+            assert_translated!(locale, "app.palette.empty.models_reload");
+            assert_translated!(locale, "app.palette.empty.no_prompts");
+            assert_translated!(locale, "app.palette.empty.prompts_hint");
+            assert_translated!(locale, "app.palette.empty.modes_unavailable");
+            assert_translated!(locale, "app.palette.empty.modes_reload");
+            assert_translated!(locale, "app.palette.empty.no_loaded_match");
+            assert_translated!(locale, "app.palette.empty.older_history");
+            assert_translated!(locale, "app.palette.empty.no_results");
+            assert_translated!(locale, "app.palette.empty.try_different_search");
+            assert_translated!(locale, "app.palette.history.loading");
+            assert_translated!(locale, "app.palette.history.limit_reached");
+            assert_translated!(locale, "app.palette.history.retry");
+            assert_translated!(locale, "app.palette.history.load");
+            assert_translated!(locale, "app.palette.history.retry_hint");
+
+            for (key, value) in [
+                (
+                    "app.palette.command.open_session",
+                    rust_i18n::t!("app.palette.command.open_session", locale = locale, label = "Project A").to_string(),
+                ),
+                (
+                    "app.palette.command.preview_file",
+                    rust_i18n::t!("app.palette.command.preview_file", locale = locale, path = "src/main.rs")
+                        .to_string(),
+                ),
+                (
+                    "app.palette.command.use_plugin",
+                    rust_i18n::t!("app.palette.command.use_plugin", locale = locale, plugin = "web-tools").to_string(),
+                ),
+            ] {
+                let expected = if key == "app.palette.command.open_session" {
+                    "Project A"
+                } else if key == "app.palette.command.preview_file" {
+                    "src/main.rs"
+                } else {
+                    "web-tools"
+                };
+                assert!(value.contains(expected), "{key} lost its interpolation in {locale}");
+            }
         }
     }
 

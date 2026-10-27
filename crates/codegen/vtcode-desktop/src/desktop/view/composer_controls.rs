@@ -575,11 +575,22 @@ impl DesktopView {
                 Some(command(session_title_from_prompt(&prompt), PaletteAction::InsertHistoryPrompt(prompt)))
             })
             .collect();
-        self.show_palette(PaletteKind::PromptHistory, vec![("This thread".into(), entries)], window, cx);
+        self.show_palette(
+            PaletteKind::PromptHistory,
+            vec![(rust_i18n::t!("app.palette.sections.this_thread").to_string(), entries)],
+            window,
+            cx,
+        );
     }
 
     pub(super) fn composer_resource_groups(&self) -> Vec<(String, Vec<PaletteCommand>)> {
-        let mut groups = vec![("Add".into(), vec![command("Files…", PaletteAction::AttachFiles)])];
+        let mut groups = vec![(
+            rust_i18n::t!("app.palette.sections.add").to_string(),
+            vec![command(
+                rust_i18n::t!("app.palette.command.add_files").to_string(),
+                PaletteAction::AttachFiles,
+            )],
+        )];
         let files = self
             .files
             .iter()
@@ -587,10 +598,10 @@ impl DesktopView {
             .map(|entry| command(entry.rel_path.clone(), PaletteAction::AttachFile(entry.rel_path.clone())))
             .collect::<Vec<_>>();
         // Preserve section identities while asynchronous discovery fills empty groups.
-        groups.push(("Workspace files".into(), files));
+        groups.push((rust_i18n::t!("app.palette.sections.workspace_files").to_string(), files));
         for (kind, title) in [
-            (protocol::ComposerResourceKind::Skill, "Skills"),
-            (protocol::ComposerResourceKind::Plugin, "Plugins"),
+            (protocol::ComposerResourceKind::Skill, rust_i18n::t!("app.palette.sections.skills").to_string()),
+            (protocol::ComposerResourceKind::Plugin, rust_i18n::t!("app.palette.sections.plugins").to_string()),
         ] {
             let entries = self
                 .composer_resources
@@ -599,22 +610,30 @@ impl DesktopView {
                 .map(|resource| {
                     let text = match kind {
                         protocol::ComposerResourceKind::Skill => format!("${}", resource.name),
-                        protocol::ComposerResourceKind::Plugin => format!("Use the {} plugin.", resource.name),
+                        protocol::ComposerResourceKind::Plugin => {
+                            rust_i18n::t!("app.palette.command.use_plugin", plugin = resource.name.as_str()).to_string()
+                        }
                     };
                     let mut entry = command(resource.name.clone(), PaletteAction::InsertDraft(text));
                     entry.description = Some(resource.description.clone());
                     entry
                 })
                 .collect::<Vec<_>>();
-            groups.push((title.into(), entries));
+            groups.push((title, entries));
         }
         groups.push((
-            "Commands".into(),
+            rust_i18n::t!("app.palette.sections.commands").to_string(),
             vec![
-                command("Choose a model…", PaletteAction::ChooseModel),
-                command("Switch workspace…", PaletteAction::ChooseWorkspace),
-                command("Toggle inspector panel", PaletteAction::ToggleInspector),
-                command("Refresh workspace files", PaletteAction::RefreshFiles),
+                command(rust_i18n::t!("app.palette.command.choose_model").to_string(), PaletteAction::ChooseModel),
+                command(
+                    rust_i18n::t!("app.palette.command.switch_workspace").to_string(),
+                    PaletteAction::ChooseWorkspace,
+                ),
+                command(
+                    rust_i18n::t!("app.palette.command.toggle_inspector").to_string(),
+                    PaletteAction::ToggleInspector,
+                ),
+                command(rust_i18n::t!("app.files.refresh_tooltip").to_string(), PaletteAction::RefreshFiles),
             ],
         ));
         let slash_commands = self
@@ -628,7 +647,7 @@ impl DesktopView {
                 command
             })
             .collect();
-        groups.push(("VT Code commands".into(), slash_commands));
+        groups.push((rust_i18n::t!("app.palette.sections.vtcode_commands").to_string(), slash_commands));
         groups
     }
 
@@ -659,7 +678,7 @@ impl DesktopView {
                         }
                         let mention = file_mention_token(&entry.rel_path)?;
                         let mut command = command(mention, PaletteAction::InsertFileMention(entry.rel_path.clone()));
-                        command.description = Some("Workspace file".into());
+                        command.description = Some(rust_i18n::t!("app.palette.command.workspace_file").to_string());
                         Some(command)
                     })
                     .take(48)

@@ -2181,7 +2181,7 @@ impl DesktopView {
             });
             let on_close_view = close_view.clone();
             let sheet_title = if is_config_page {
-                "VT Code configuration".to_owned()
+                rust_i18n::t!("app.palette.title.configuration").to_string()
             } else {
                 rust_i18n::t!("app.settings.title").to_string()
             };
@@ -2332,26 +2332,35 @@ impl DesktopView {
         }
         let mut groups: Vec<(String, Vec<PaletteCommand>)> = Vec::new();
         groups.push((
-            "Session".to_string(),
+            rust_i18n::t!("app.palette.sections.session").to_string(),
             vec![
-                command("New session", PaletteAction::NewSession),
-                command("Close session", PaletteAction::CloseSession),
-                command("Switch workspace…", PaletteAction::ChooseWorkspace),
-                command("Refresh recent threads", PaletteAction::RefreshSessions),
+                command(rust_i18n::t!("app.palette.command.new_session").to_string(), PaletteAction::NewSession),
+                command(rust_i18n::t!("app.palette.command.close_session").to_string(), PaletteAction::CloseSession),
+                command(
+                    rust_i18n::t!("app.palette.command.switch_workspace").to_string(),
+                    PaletteAction::ChooseWorkspace,
+                ),
+                command(
+                    rust_i18n::t!("app.palette.command.refresh_recent_threads").to_string(),
+                    PaletteAction::RefreshSessions,
+                ),
                 command(rust_i18n::t!("app.files.refresh_tooltip").to_string(), PaletteAction::RefreshFiles),
-                command("Choose a model…", PaletteAction::ChooseModel),
+                command(rust_i18n::t!("app.palette.command.choose_model").to_string(), PaletteAction::ChooseModel),
             ],
         ));
         groups.push((
-            "View".to_string(),
+            rust_i18n::t!("app.palette.sections.view").to_string(),
             vec![
-                command("Toggle inspector panel", PaletteAction::ToggleInspector),
-                command("Toggle Zen mode", PaletteAction::ToggleZenMode),
+                command(
+                    rust_i18n::t!("app.palette.command.toggle_inspector").to_string(),
+                    PaletteAction::ToggleInspector,
+                ),
+                command(rust_i18n::t!("app.palette.command.toggle_zen_mode").to_string(), PaletteAction::ToggleZenMode),
                 command(
                     if self.theme_mode == ThemeMode::Light {
-                        "Switch to Dark theme"
+                        rust_i18n::t!("app.palette.command.switch_dark_theme").to_string()
                     } else {
-                        "Switch to Light theme"
+                        rust_i18n::t!("app.palette.command.switch_light_theme").to_string()
                     },
                     PaletteAction::ToggleTheme,
                 ),
@@ -2361,9 +2370,9 @@ impl DesktopView {
             && self.has_searchable_conversation_content()
         {
             groups.push((
-                "Conversation".into(),
+                rust_i18n::t!("app.palette.sections.conversation").to_string(),
                 vec![command(
-                    "Find in conversation…",
+                    rust_i18n::t!("app.palette.command.find_in_conversation").to_string(),
                     PaletteAction::OpenConversationSearch { session_id },
                 )],
             ));
@@ -2380,7 +2389,7 @@ impl DesktopView {
             })
             .collect::<Vec<_>>();
         if !slash_commands.is_empty() {
-            groups.push(("VT Code commands".into(), slash_commands));
+            groups.push((rust_i18n::t!("app.palette.sections.vtcode_commands").to_string(), slash_commands));
         }
         let sessions: Vec<PaletteCommand> =
             self.sessions
@@ -2389,22 +2398,28 @@ impl DesktopView {
                     let label = session.title.clone().unwrap_or_else(|| {
                         format!("Session {}", session.session_id.chars().take(8).collect::<String>())
                     });
-                    command(format!("Open session: {label}"), PaletteAction::LoadSession(session.session_id.clone()))
+                    command(
+                        rust_i18n::t!("app.palette.command.open_session", label = label.as_str()).to_string(),
+                        PaletteAction::LoadSession(session.session_id.clone()),
+                    )
                 })
                 .collect();
         if !sessions.is_empty() {
-            groups.push(("Recent sessions".to_string(), sessions));
+            groups.push((rust_i18n::t!("app.palette.sections.recent_sessions").to_string(), sessions));
         }
         let file_commands: Vec<PaletteCommand> = self
             .files
             .iter()
             .filter(|entry| !entry.is_dir)
             .map(|entry| {
-                command(format!("Preview file: {}", entry.rel_path), PaletteAction::PreviewFile(entry.rel_path.clone()))
+                command(
+                    rust_i18n::t!("app.palette.command.preview_file", path = entry.rel_path.as_str()).to_string(),
+                    PaletteAction::PreviewFile(entry.rel_path.clone()),
+                )
             })
             .collect();
         if !file_commands.is_empty() {
-            groups.push(("Files".to_string(), file_commands));
+            groups.push((rust_i18n::t!("app.palette.sections.files").to_string(), file_commands));
         }
 
         self.show_palette(PaletteKind::Commands, groups, window, cx);
@@ -2429,10 +2444,10 @@ impl DesktopView {
         let outputs = self.conversation_search_outputs(session_id);
         let mut groups = Vec::with_capacity(2);
         if !messages.is_empty() {
-            groups.push(("Loaded messages".into(), messages));
+            groups.push((rust_i18n::t!("app.palette.sections.loaded_messages").to_string(), messages));
         }
         if !outputs.is_empty() {
-            groups.push(("Loaded tool output".into(), outputs));
+            groups.push((rust_i18n::t!("app.palette.sections.loaded_tool_output").to_string(), outputs));
         }
         groups
     }
@@ -2443,13 +2458,13 @@ impl DesktopView {
             .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
             .map(|item| {
                 let speaker = if item.role == "user" {
-                    "You"
+                    rust_i18n::t!("app.palette.command.you").to_string()
                 } else if item.title.trim().is_empty() && item.role == "assistant" {
-                    "VT Code"
+                    rust_i18n::t!("app.palette.command.vtcode").to_string()
                 } else if item.title.trim().is_empty() {
-                    "Tool activity"
+                    rust_i18n::t!("app.palette.command.tool_activity").to_string()
                 } else {
-                    item.title.as_str()
+                    item.title.to_string()
                 };
                 let label = format!("{speaker} · {}", transcript_search_snippet(&item.text));
                 let mut entry = command(
@@ -2476,7 +2491,12 @@ impl DesktopView {
                 let output = item.output.as_ref()?;
                 let searchable_output = inspector::output_tail(output);
                 let mut entry = command(
-                    format!("Output · {} · {}", item.title, transcript_search_snippet(&searchable_output)),
+                    format!(
+                        "{} · {} · {}",
+                        rust_i18n::t!("app.palette.command.output"),
+                        item.title,
+                        transcript_search_snippet(&searchable_output)
+                    ),
                     PaletteAction::ShowActivityOutput {
                         session_id: session_id.to_string(),
                         item_id: item.id.clone(),
@@ -6384,19 +6404,19 @@ impl DesktopView {
                             .role(gpui_kit::Role::Status)
                             .text_xs()
                             .text_color(cx.theme().colors.muted_foreground)
-                            .child("The 2,000-message local transcript limit has been reached."),
+                            .child(rust_i18n::t!("app.transcript.history_limit_reached").to_string()),
                     );
                 } else if self.history_has_earlier {
                     history_bar = history_bar.child(
                         desktop_button("load-earlier-history")
                             .label(if self.history_page_loading {
-                                "Loading earlier messages…"
+                                rust_i18n::t!("app.palette.history.loading").to_string()
                             } else {
-                                "Load earlier messages"
+                                rust_i18n::t!("app.palette.history.load").to_string()
                             })
                             .small()
                             .ghost()
-                            .tooltip("Load the previous archived messages while keeping this position")
+                            .tooltip(rust_i18n::t!("app.transcript.load_earlier_tooltip").to_string())
                             .desktop_disabled(self.history_page_loading || self.running)
                             .on_click(cx.listener(|view, _, _, cx| view.request_earlier_history(cx))),
                     );
@@ -8073,45 +8093,67 @@ impl DesktopView {
         let inline_completion = matches!(self.palette_kind, PaletteKind::FileMentions | PaletteKind::SlashCommands);
         let title = match self.palette_kind {
             PaletteKind::Models => rust_i18n::t!("app.composer.choose_model").to_string(),
-            PaletteKind::ConversationSearch => "Find in conversation".to_owned(),
+            PaletteKind::ConversationSearch => rust_i18n::t!("app.palette.title.conversation_search").to_string(),
             PaletteKind::ModelOptions => rust_i18n::t!("app.composer.select_model").to_string(),
-            PaletteKind::AddContext => "Add files and more @".to_owned(),
-            PaletteKind::FileMentions => "Mention a workspace file".to_owned(),
-            PaletteKind::SlashCommands => "VT Code commands".to_owned(),
-            PaletteKind::PromptHistory => "Recent prompts".to_owned(),
-            PaletteKind::Permissions => "Command permissions".to_owned(),
-            PaletteKind::Modes => "Agent mode".to_owned(),
-            PaletteKind::Fonts(FontTarget::Ui) => "Choose UI font".to_owned(),
-            PaletteKind::Fonts(FontTarget::Code) => "Choose code font".to_owned(),
+            PaletteKind::AddContext => rust_i18n::t!("app.composer.add_context").to_string(),
+            PaletteKind::FileMentions => rust_i18n::t!("app.palette.title.file_mention").to_string(),
+            PaletteKind::SlashCommands => rust_i18n::t!("app.palette.title.slash_commands").to_string(),
+            PaletteKind::PromptHistory => rust_i18n::t!("app.palette.title.prompt_history").to_string(),
+            PaletteKind::Permissions => rust_i18n::t!("app.palette.title.permissions").to_string(),
+            PaletteKind::Modes => rust_i18n::t!("app.palette.title.modes").to_string(),
+            PaletteKind::Fonts(FontTarget::Ui) => rust_i18n::t!("app.palette.title.ui_font").to_string(),
+            PaletteKind::Fonts(FontTarget::Code) => rust_i18n::t!("app.palette.title.code_font").to_string(),
             PaletteKind::SettingsSearch => rust_i18n::t!("app.settings.search.title").to_string(),
-            PaletteKind::ConfigSettings => "VT Code configuration".to_owned(),
-            PaletteKind::ReviewFiles => "Choose changed file".to_owned(),
-            PaletteKind::Commands => "Command palette".to_owned(),
+            PaletteKind::ConfigSettings => rust_i18n::t!("app.palette.title.configuration").to_string(),
+            PaletteKind::ReviewFiles => rust_i18n::t!("app.palette.title.changed_file").to_string(),
+            PaletteKind::Commands => rust_i18n::t!("app.palette.title.commands").to_string(),
         };
         let quick_model = self.palette_kind == PaletteKind::ModelOptions;
         let catalog_empty = confirm_groups.is_empty();
         let placeholder = if self.palette_kind == PaletteKind::SettingsSearch {
             rust_i18n::t!("app.settings.search.placeholder").to_string()
         } else if self.palette_kind == PaletteKind::ConfigSettings {
-            "Search all CLI settings…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.configuration").to_string()
         } else if matches!(self.palette_kind, PaletteKind::Fonts(_)) {
-            "Search installed fonts…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.fonts").to_string()
         } else if models {
             rust_i18n::t!("app.composer.search_models").to_string()
         } else if self.palette_kind == PaletteKind::FileMentions {
-            "Filter workspace files…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.workspace_files").to_string()
         } else if self.palette_kind == PaletteKind::SlashCommands {
-            "Filter VT Code commands…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.commands").to_string()
         } else if self.palette_kind == PaletteKind::ReviewFiles {
-            "Search changed files…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.changed_files").to_string()
         } else if conversation_search {
-            "Search messages and visible output…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.conversation").to_string()
         } else if prompt_history {
-            "Search prompts in this thread…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.prompts").to_string()
         } else if modes {
-            "Search agent modes…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.modes").to_string()
         } else {
-            "Type a command or search…".to_owned()
+            rust_i18n::t!("app.palette.placeholder.default").to_string()
+        };
+        let empty_title = if models && catalog_empty {
+            rust_i18n::t!("app.palette.empty.no_models").to_string()
+        } else if prompt_history && catalog_empty {
+            rust_i18n::t!("app.palette.empty.no_prompts").to_string()
+        } else if modes && catalog_empty {
+            rust_i18n::t!("app.palette.empty.modes_unavailable").to_string()
+        } else if conversation_search && older_history_available {
+            rust_i18n::t!("app.palette.empty.no_loaded_match").to_string()
+        } else {
+            rust_i18n::t!("app.palette.empty.no_results").to_string()
+        };
+        let empty_description = if models && catalog_empty {
+            rust_i18n::t!("app.palette.empty.models_reload").to_string()
+        } else if prompt_history && catalog_empty {
+            rust_i18n::t!("app.palette.empty.prompts_hint").to_string()
+        } else if modes && catalog_empty {
+            rust_i18n::t!("app.palette.empty.modes_reload").to_string()
+        } else if conversation_search && older_history_available {
+            rust_i18n::t!("app.palette.empty.older_history").to_string()
+        } else {
+            rust_i18n::t!("app.palette.empty.try_different_search").to_string()
         };
         let mut command = Command::new(&state)
             .placeholder(placeholder)
@@ -8128,39 +8170,14 @@ impl DesktopView {
                         .py_2()
                         .text_xs()
                         .text_color(muted_foreground)
-                        .child("Searches loaded messages and visible tool output")
+                        .child(rust_i18n::t!("app.palette.conversation_search_header").to_string())
                 })
             })
             .empty(move |_, _, _| {
                 if quick_model {
                     div().h(px(0.)).into_any_element()
                 } else {
-                    empty_state(
-                        if models && catalog_empty {
-                            "No models available"
-                        } else if prompt_history && catalog_empty {
-                            "No prompt history yet"
-                        } else if modes && catalog_empty {
-                            "Agent modes unavailable"
-                        } else if conversation_search && older_history_available {
-                            "No match in loaded conversation"
-                        } else {
-                            "No matching results"
-                        },
-                        if models && catalog_empty {
-                            "Reopen VT Code to reload the model catalog."
-                        } else if prompt_history && catalog_empty {
-                            "Prompts sent in this thread will appear here."
-                        } else if modes && catalog_empty {
-                            "Rebuild VT Code Desktop and its bundled CLI together, then reload CLI settings."
-                        } else if conversation_search && older_history_available {
-                            "Load earlier messages below to search older parts of this conversation."
-                        } else {
-                            "Try a different search."
-                        },
-                        IconName::Search,
-                    )
-                    .into_any_element()
+                    empty_state(empty_title.clone(), empty_description.clone(), IconName::Search).into_any_element()
                 }
             });
         if inline_completion {
@@ -8175,17 +8192,20 @@ impl DesktopView {
             let can_load_history =
                 older_history_available && transcript_has_capacity && !history_page_loading && !self.running;
             let history_label = if history_page_loading {
-                "Loading earlier messages…"
+                rust_i18n::t!("app.palette.history.loading").to_string()
             } else if !transcript_has_capacity && older_history_available {
-                "Message limit reached"
+                rust_i18n::t!("app.palette.history.limit_reached").to_string()
             } else if history_page_failed {
-                "Retry loading earlier messages"
+                rust_i18n::t!("app.palette.history.retry").to_string()
             } else {
-                "Load earlier messages"
+                rust_i18n::t!("app.palette.history.load").to_string()
             };
+            let history_error = rust_i18n::t!("app.palette.history.retry_hint").to_string();
             command = command.footer(move |_, _, _| {
                 let weak = weak.clone();
                 let session_id = session_id.clone();
+                let history_label = history_label.clone();
+                let history_error = history_error.clone();
                 div()
                     .border_t_1()
                     .border_color(colors.border)
@@ -8196,12 +8216,7 @@ impl DesktopView {
                     .justify_between()
                     .gap_3()
                     .when(history_page_failed, |footer| {
-                        footer.child(
-                            div()
-                                .text_xs()
-                                .text_color(colors.danger)
-                                .child("Could not load older messages. You can retry."),
-                        )
+                        footer.child(div().text_xs().text_color(colors.danger).child(history_error))
                     })
                     .child(
                         desktop_button("conversation-search-load-earlier")

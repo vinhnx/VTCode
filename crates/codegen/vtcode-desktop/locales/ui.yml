@@ -6,6 +6,8 @@ app:
       de: Visueller Stil
       it: Stile visivo
       zh-CN: 视觉风格
+      zh-TW: 視覺風格
+      zh-HK: 視覺風格
       pt-BR: "Estilo visual"
       ko: "Estilo visual"
       nl: "Visuele stijl"
@@ -20,6 +22,8 @@ app:
       de: Typografie
       it: Tipografia
       zh-CN: 排版
+      zh-TW: 排版
+      zh-HK: 排版
       pt-BR: "Tipografia"
       ko: "타이포그래피"
       nl: "Typografie"
@@ -34,6 +38,8 @@ app:
       de: Layout
       it: Layout
       zh-CN: 布局
+      zh-TW: 佈局
+      zh-HK: 佈局
       pt-BR: "Layout"
       ko: "레이아웃"
       nl: "Indeling"
@@ -52,6 +58,8 @@ app:
       de: Wähle mit Links, Rechts, Pos1 oder Ende eine Kategorie aus.
       it: Usa le frecce sinistra e destra, Home o Fine per scegliere una categoria.
       zh-CN: 使用左右方向键、Home 或 End 选择类别。
+      zh-TW: 使用左右方向鍵、Home 或 End 選擇類別。
+      zh-HK: 使用左右方向鍵、Home 或 End 選擇類別。
       pt-BR: "Use as setas para a esquerda e para a direita, Home ou End para escolher uma categoria."
       ko: "왼쪽/오른쪽 화살표, Home 또는 End 키로 카테고리를 선택하세요."
       nl: "Gebruik Links/Rechts, Home of End om een categorie te kiezen."
@@ -66,6 +74,8 @@ app:
       de: Einstellungen
       it: Impostazioni
       zh-CN: 设置
+      zh-TW: 設定
+      zh-HK: 設定
       pt-BR: "Configurações"
       ko: "설정"
       nl: "Instellingen"
@@ -80,6 +90,8 @@ app:
       de: Einstellungskategorien
       it: Categorie delle impostazioni
       zh-CN: 设置类别
+      zh-TW: 設定類別
+      zh-HK: 設定類別
       pt-BR: "Categorias de configurações"
       ko: "설정 카테고리"
       nl: "Instellingencategorieën"
@@ -95,6 +107,8 @@ app:
         de: Einstellungen und CLI-Konfiguration suchen…
         it: Cerca impostazioni e configurazione CLI…
         zh-CN: 搜索设置和 CLI 配置…
+        zh-TW: 搜尋設定和 CLI 設定…
+        zh-HK: 搜尋設定和 CLI 設定…
         pt-BR: "Pesquisar configurações e configuração da CLI…"
         ko: "설정 및 CLI 구성 검색…"
         nl: "Instellingen en CLI-configuratie zoeken…"
@@ -109,6 +123,8 @@ app:
         de: Einstellungen und CLI-Konfiguration suchen
         it: Cerca impostazioni e configurazione CLI
         zh-CN: 搜索设置和 CLI 配置
+        zh-TW: 搜尋設定和 CLI 設定
+        zh-HK: 搜尋設定和 CLI 設定
         pt-BR: "Pesquisar configurações e configuração da CLI"
         ko: "설정 및 CLI 구성 검색"
         nl: "Instellingen en CLI-configuratie zoeken"
@@ -123,6 +139,8 @@ app:
         de: Einstellungen, Kategorien und CLI-Konfigurationspfade filtern…
         it: Filtra impostazioni, categorie e percorsi di configurazione CLI…
         zh-CN: 筛选设置、类别和 CLI 配置路径…
+        zh-TW: 篩選設定、類別和 CLI 設定路徑…
+        zh-HK: 篩選設定、類別和 CLI 設定路徑…
         pt-BR: "Filtrar configurações, categorias e caminhos da configuração da CLI…"
         ko: "설정, 카테고리 및 CLI 구성 경로 필터링…"
         nl: "Filter instellingen, categorieën en CLI-configuratiepaden…"
@@ -137,6 +155,8 @@ app:
         de: Einstellungen
         it: Impostazioni
         zh-CN: 设置
+        zh-TW: 設定
+        zh-HK: 設定
         pt-BR: "Configurações"
         ko: "설정"
         nl: "Instellingen"
@@ -151,6 +171,8 @@ app:
         de: CLI-Konfiguration
         it: Configurazione CLI
         zh-CN: CLI 配置
+        zh-TW: CLI 設定
+        zh-HK: CLI 設定
         pt-BR: "Configuração da CLI"
         ko: "CLI 구성"
         nl: "CLI-configuratie"
@@ -166,6 +188,8 @@ app:
         de: Erscheinungsbild
         it: Aspetto
         zh-CN: 外观
+        zh-TW: 外觀
+        zh-HK: 外觀
         pt-BR: "Aparência"
         ko: "모양"
         nl: "Weergave"
@@ -180,6 +204,8 @@ app:
         de: Barrierefreiheit
         it: Accessibilità
         zh-CN: 辅助功能
+        zh-TW: 輔助功能
+        zh-HK: 輔助功能
         pt-BR: "Acessibilidade"
         ko: "손쉬운 사용"
         nl: "Toegankelijkheid"
@@ -194,6 +220,8 @@ app:
         de: Tastenkürzel
         it: Scorciatoie
         zh-CN: 键盘快捷键
+        zh-TW: 鍵盤快捷鍵
+        zh-HK: 鍵盤快捷鍵
         pt-BR: "Atalhos"
         ko: "단축키"
         nl: "Sneltoetsen"
@@ -208,6 +236,8 @@ app:
         de: VT Code
         it: VT Code
         zh-CN: VT Code
+        zh-TW: VT Code
+        zh-HK: VT Code
         pt-BR: "VT Code"
         ko: "VT Code"
         nl: "VT Code"
@@ -222,6 +252,8 @@ app:
         de: Verbindungen
         it: Connessioni
         zh-CN: 连接
+        zh-TW: 連接
+        zh-HK: 連接
         pt-BR: "Conexões"
         ko: "연결"
         nl: "Verbindingen"
@@ -237,6 +269,8 @@ app:
         de: Sprache
         it: Lingua
         zh-CN: 语言
+        zh-TW: 語言
+        zh-HK: 語言
         pt-BR: "Idioma"
         ko: "언어"
         nl: "Taal"
@@ -251,6 +285,8 @@ app:
         de: Oberflächensprache
         it: Lingua dell’interfaccia
         zh-CN: 界面语言
+        zh-TW: 界面語言
+        zh-HK: 界面語言
         pt-BR: "Idioma da interface"
         ko: "인터페이스 언어"
         nl: "Interfacetaal"
@@ -265,6 +301,8 @@ app:
         de: Unterstützte Beschriftungen werden sofort geändert. Nicht übersetzte Texte bleiben auf Englisch.
         it: Le etichette supportate cambiano subito. Il testo non tradotto resta in inglese.
         zh-CN: 支持的标签会立即更改。尚未翻译的文本仍以英语显示。
+        zh-TW: 支持的標籤會立即更改。尚未翻譯的文本仍以英語顯示。
+        zh-HK: 支持的標籤會立即更改。尚未翻譯的文本仍以英語顯示。
         pt-BR: "Altera imediatamente os rótulos disponíveis. O texto do app sem tradução permanece em inglês."
         ko: "지원되는 레이블은 즉시 변경됩니다. 번역되지 않은 앱 텍스트는 영어로 표시됩니다."
         nl: "Ondersteunde labels worden direct bijgewerkt. Niet-vertaalde app-tekst blijft Engels."
@@ -279,6 +317,8 @@ app:
         de: Oberflächensprache auf %{language} festlegen
         it: Imposta la lingua dell’interfaccia su %{language}
         zh-CN: 将界面语言设为 %{language}
+        zh-TW: 將界面語言設為 %{language}
+        zh-HK: 將界面語言設為 %{language}
         pt-BR: "Definir o idioma da interface como %{language}"
         ko: "인터페이스 언어를 %{language}(으)로 설정"
         nl: "Interfacetaal instellen op %{language}"
@@ -294,6 +334,8 @@ app:
         de: Helle und dunkle Darstellung getrennt einstellen
         it: Separa modalità chiara e scura
         zh-CN: 分别设置浅色和深色模式
+        zh-TW: 分別設定淺色和深色模式
+        zh-HK: 分別設定淺色和深色模式
         pt-BR: "Separar os modos claro e escuro"
         ko: "라이트 모드와 다크 모드 분리"
         nl: "Lichte en donkere modus scheiden"
@@ -308,6 +350,8 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ wird bearbeitet
         it: Modifica del profilo di aspetto %{profile}
         zh-CN: 正在编辑 %{profile} 外观配置
+        zh-TW: 正在編輯 %{profile} 外觀設定
+        zh-HK: 正在編輯 %{profile} 外觀設定
         pt-BR: "Editando o perfil de aparência %{profile}"
         ko: "%{profile} 모양 프로필 편집 중"
         nl: "Bezig met bewerken van het profiel voor %{profile}"
@@ -322,6 +366,8 @@ app:
         de: Profil wird bearbeitet
         it: Modifica del profilo
         zh-CN: 正在编辑配置
+        zh-TW: 正在編輯設定
+        zh-HK: 正在編輯設定
         pt-BR: "Editar perfil"
         ko: "프로필 편집"
         nl: "Profiel bewerken"
@@ -336,6 +382,8 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten
         it: Modifica il profilo di aspetto %{profile}
         zh-CN: 编辑 %{profile} 外观配置
+        zh-TW: 編輯 %{profile} 外觀設定
+        zh-HK: 編輯 %{profile} 外觀設定
         pt-BR: "Editar o perfil de aparência %{profile}"
         ko: "%{profile} 모양 프로필 편집"
         nl: "Het profiel voor de weergave %{profile} bewerken"
@@ -350,6 +398,8 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten (ausgewählt)
         it: Modifica il profilo di aspetto %{profile} (selezionato)
         zh-CN: 编辑 %{profile} 外观配置（已选中）
+        zh-TW: 編輯 %{profile} 外觀設定（已選中）
+        zh-HK: 編輯 %{profile} 外觀設定（已選中）
         pt-BR: "Editar o perfil de aparência %{profile} (selecionado)"
         ko: "%{profile} 모양 프로필 편집 (선택됨)"
         nl: "Het profiel voor de weergave %{profile} bewerken (geselecteerd)"
@@ -364,6 +414,8 @@ app:
         de: Hell
         it: Chiaro
         zh-CN: 浅色
+        zh-TW: 淺色
+        zh-HK: 淺色
         pt-BR: "Claro"
         ko: "라이트"
         nl: "Licht"
@@ -378,6 +430,8 @@ app:
         de: Dunkel
         it: Scuro
         zh-CN: 深色
+        zh-TW: 深色
+        zh-HK: 深色
         pt-BR: "Escuro"
         ko: "다크"
         nl: "Donker"
@@ -392,6 +446,8 @@ app:
         de: Designs
         it: Temi
         zh-CN: 主题
+        zh-TW: 主題
+        zh-HK: 主題
         pt-BR: "Temas"
         ko: "테마"
         nl: "Thema's"
@@ -406,6 +462,8 @@ app:
         de: Weitere Designs
         it: Temi successivi
         zh-CN: 下一个主题
+        zh-TW: 下一個主題
+        zh-HK: 下一個主題
         pt-BR: "Próximos temas"
         ko: "다음 테마"
         nl: "Volgende thema's"
@@ -420,6 +478,8 @@ app:
         de: Vorherige Designs
         it: Temi precedenti
         zh-CN: 上一个主题
+        zh-TW: 上一個主題
+        zh-HK: 上一個主題
         pt-BR: "Temas anteriores"
         ko: "이전 테마"
         nl: "Vorige thema's"
@@ -434,6 +494,8 @@ app:
         de: Darstellungsthemen
         it: Temi visivi
         zh-CN: 外观主题
+        zh-TW: 外觀主題
+        zh-HK: 外觀主題
         pt-BR: "Temas visuais"
         ko: "시각 테마"
         nl: "Visuele thema's"
@@ -448,6 +510,8 @@ app:
         de: Seitennavigation anzeigen
         it: Mostra la navigazione laterale
         zh-CN: 显示侧边导航
+        zh-TW: 顯示側邊導航
+        zh-HK: 顯示側邊導航
         pt-BR: "Mostrar navegação lateral"
         ko: "사이드 내비게이션 표시"
         nl: "Zijbalknavigatie tonen"
@@ -462,6 +526,8 @@ app:
         de: Bei ausgeblendeter Navigation bleiben Projekt-, Chat- und Arbeitsbereichsaktionen in der oberen Leiste.
         it: Quando è nascosta, le azioni per progetti, conversazioni e spazi di lavoro restano nella barra superiore.
         zh-CN: 隐藏后，项目、对话和工作区操作仍保留在顶部栏。
+        zh-TW: 隱藏後，項目、對話和工作區操作仍保留在頂部欄。
+        zh-HK: 隱藏後，項目、對話和工作區操作仍保留在頂部欄。
         pt-BR: "Quando oculta, as ações de projeto, conversa e espaço de trabalho permanecem na barra superior."
         ko: "숨겨도 프로젝트, 대화, 작업 공간 작업은 상단 바에 남습니다."
         nl: "Als deze verborgen is, blijven acties voor projecten, gesprekken en werkruimten in de bovenste balk staan."
@@ -476,6 +542,8 @@ app:
         de: Navigation rechts platzieren
         it: Posiziona la navigazione a destra
         zh-CN: 将导航栏放在右侧
+        zh-TW: 將導航欄放在右側
+        zh-HK: 將導航欄放在右側
         pt-BR: "Colocar navegação à direita"
         ko: "내비게이션을 오른쪽에 배치"
         nl: "Navigatie rechts plaatsen"
@@ -490,6 +558,8 @@ app:
         de: Erscheinungsbild zurücksetzen
         it: Reimposta l’aspetto
         zh-CN: 重置外观
+        zh-TW: 重置外觀
+        zh-HK: 重置外觀
         pt-BR: "Redefinir aparência"
         ko: "모양 재설정"
         nl: "Weergave herstellen"
@@ -505,6 +575,8 @@ app:
         de: Passe Bewegung und dauerhaft sichtbare Bedienelemente an.
         it: Regola le animazioni e la quantità di elementi persistenti nell’interfaccia.
         zh-CN: 调整动画和界面中常驻元素的数量。
+        zh-TW: 調整動畫和界面中常駐元素的數量。
+        zh-HK: 調整動畫和界面中常駐元素的數量。
         pt-BR: "Ajuste o movimento e a quantidade de detalhes persistentes da interface."
         ko: "모션과 화면에 계속 표시되는 인터페이스 정보량을 조정합니다."
         nl: "Pas beweging en de hoeveelheid permanent zichtbare interface-informatie aan."
@@ -519,6 +591,8 @@ app:
         de: Anzeige
         it: Schermo
         zh-CN: 显示
+        zh-TW: 顯示
+        zh-HK: 顯示
         pt-BR: "Exibição"
         ko: "디스플레이"
         nl: "Weergave"
@@ -533,6 +607,8 @@ app:
         de: Statusleiste anzeigen
         it: Mostra la barra di stato
         zh-CN: 显示状态栏
+        zh-TW: 顯示狀態欄
+        zh-HK: 顯示狀態欄
         pt-BR: "Mostrar barra de status"
         ko: "상태 표시줄 표시"
         nl: "Statusbalk tonen"
@@ -548,6 +624,8 @@ app:
         de: Anbietereinstellungen
         it: Impostazioni del provider
         zh-CN: 提供商设置
+        zh-TW: 提供商設定
+        zh-HK: 提供商設定
         pt-BR: "Configurações do provedor"
         ko: "제공자 설정"
         nl: "Providerinstellingen"
@@ -562,6 +640,8 @@ app:
         de: Anbieter
         it: Provider
         zh-CN: 提供商
+        zh-TW: 提供商
+        zh-HK: 提供商
         pt-BR: "Provedor"
         ko: "제공자"
         nl: "Provider"
@@ -576,6 +656,8 @@ app:
         de: Verbinde dich mit deinem Arbeitsbereich, um Anbieter- und Modelldetails zu sehen.
         it: Connettiti allo spazio di lavoro per vedere i dettagli di provider e modello.
         zh-CN: 连接到工作区以查看提供商和模型详情。
+        zh-TW: 連接到工作區以查看提供商和模型詳情。
+        zh-HK: 連接到工作區以查看提供商和模型詳情。
         pt-BR: "Conecte-se ao seu espaço de trabalho para ver os detalhes do provedor e do modelo."
         ko: "제공자와 모델 정보를 보려면 작업 공간에 연결하세요."
         nl: "Maak verbinding met je werkruimte om provider- en modelgegevens te bekijken."
@@ -590,6 +672,8 @@ app:
         de: Nicht konfiguriert
         it: Non configurato
         zh-CN: 未配置
+        zh-TW: 未設定
+        zh-HK: 未設定
         pt-BR: "Não configurado"
         ko: "구성되지 않음"
         nl: "Niet geconfigureerd"
@@ -604,6 +688,8 @@ app:
         de: Anbieter- und Modellkonfiguration
         it: Configurazione di provider e modello
         zh-CN: 提供商和模型配置
+        zh-TW: 提供商和模型設定
+        zh-HK: 提供商和模型設定
         pt-BR: "Configuração do provedor e do modelo"
         ko: "제공자 및 모델 구성"
         nl: "Provider- en modelconfiguratie"
@@ -618,6 +704,8 @@ app:
         de: Anbieter
         it: Provider
         zh-CN: 提供商
+        zh-TW: 提供商
+        zh-HK: 提供商
         pt-BR: "Provedor"
         ko: "제공자"
         nl: "Provider"
@@ -632,6 +720,8 @@ app:
         de: Modell
         it: Modello
         zh-CN: 模型
+        zh-TW: 模型
+        zh-HK: 模型
         pt-BR: "Modelo"
         ko: "모델"
         nl: "Model"
@@ -647,6 +737,8 @@ app:
         de: Verbunden
         it: Connesso
         zh-CN: 已连接
+        zh-TW: 已連接
+        zh-HK: 已連接
         pt-BR: "Conectado"
         ko: "연결됨"
         nl: "Verbonden"
@@ -661,6 +753,8 @@ app:
         de: Nicht verbunden
         it: Non connesso
         zh-CN: 未连接
+        zh-TW: 未連接
+        zh-HK: 未連接
         pt-BR: "Não conectado"
         ko: "연결되지 않음"
         nl: "Niet verbonden"
@@ -675,6 +769,8 @@ app:
         de: Die Verbindung zum CLI-Dienst ist aktiv
         it: La connessione al servizio CLI è attiva
         zh-CN: CLI 服务连接已启用
+        zh-TW: CLI 服務連接已啓用
+        zh-HK: CLI 服務連接已啓用
         pt-BR: "A conexão com o serviço CLI está ativa"
         ko: "CLI 서비스 연결이 활성화되어 있습니다"
         nl: "De verbinding met de CLI-service is actief"
@@ -689,6 +785,8 @@ app:
         de: Der CLI-Dienst hat den Protokoll-Handshake noch nicht abgeschlossen
         it: Il servizio CLI non ha ancora completato la negoziazione del protocollo
         zh-CN: CLI 服务尚未完成协议握手
+        zh-TW: CLI 服務尚未完成協議握手
+        zh-HK: CLI 服務尚未完成協議握手
         pt-BR: "O serviço CLI ainda não concluiu a negociação do protocolo"
         ko: "CLI 서비스가 아직 프로토콜 핸드셰이크를 완료하지 않았습니다"
         nl: "De CLI-service heeft de protocolhandshake nog niet voltooid"
@@ -703,6 +801,8 @@ app:
         de: Laufzeit
         it: Runtime
         zh-CN: 运行时
+        zh-TW: 執行時
+        zh-HK: 執行時
         pt-BR: "Ambiente de execução"
         ko: "런타임"
         nl: "Runtime"
@@ -717,6 +817,8 @@ app:
         de: Version
         it: Versione
         zh-CN: 版本
+        zh-TW: 版本
+        zh-HK: 版本
         pt-BR: "Versão"
         ko: "버전"
         nl: "Versie"
@@ -731,6 +833,8 @@ app:
         de: Protokoll
         it: Protocollo
         zh-CN: 协议
+        zh-TW: 協議
+        zh-HK: 協議
         pt-BR: "Protocolo"
         ko: "프로토콜"
         nl: "Protocol"
@@ -745,6 +849,8 @@ app:
         de: Arbeitsbereich
         it: Spazio di lavoro
         zh-CN: 工作区
+        zh-TW: 工作區
+        zh-HK: 工作區
         pt-BR: "Espaço de trabalho"
         ko: "작업 공간"
         nl: "Werkruimte"
@@ -759,6 +865,8 @@ app:
         de: Der lokale CLI-Dienst wird hier angezeigt, sobald VT Code Desktop verbunden ist.
         it: Il servizio CLI locale apparirà qui quando VT Code Desktop sarà connesso.
         zh-CN: VT Code Desktop 连接后，本地 CLI 服务会显示在这里。
+        zh-TW: VT Code Desktop 連接後，本地 CLI 服務會顯示在這裡。
+        zh-HK: VT Code Desktop 連接後，本地 CLI 服務會顯示在這裡。
         pt-BR: "O serviço CLI local aparecerá aqui após a conexão do VT Code Desktop."
         ko: "VT Code Desktop이 연결되면 여기에 로컬 CLI 서비스가 표시됩니다."
         nl: "De lokale CLI-service wordt hier getoond zodra VT Code Desktop verbinding maakt."
@@ -773,6 +881,8 @@ app:
         de: Lokaler Dienst
         it: Servizio locale
         zh-CN: 本地服务
+        zh-TW: 本地服務
+        zh-HK: 本地服務
         pt-BR: "Serviço local"
         ko: "로컬 서비스"
         nl: "Lokale service"
@@ -787,6 +897,8 @@ app:
         de: Verbindungsdetails des lokalen Dienstes
         it: Dettagli della connessione al servizio locale
         zh-CN: 本地服务连接详情
+        zh-TW: 本地服務連接詳情
+        zh-HK: 本地服務連接詳情
         pt-BR: "Detalhes da conexão do serviço local"
         ko: "로컬 서비스 연결 세부 정보"
         nl: "Verbindingsgegevens van de lokale service"
@@ -803,6 +915,8 @@ app:
         de: Guten Morgen
         it: Buongiorno
         zh-CN: 早上好
+        zh-TW: 早上好
+        zh-HK: 早上好
         pt-BR: "Bom dia"
         ko: "좋은 아침입니다"
         nl: "Goedemorgen"
@@ -817,6 +931,8 @@ app:
         de: Guten Tag
         it: Buon pomeriggio
         zh-CN: 下午好
+        zh-TW: 下午好
+        zh-HK: 下午好
         pt-BR: "Boa tarde"
         ko: "안녕하세요"
         nl: "Goedemiddag"
@@ -831,6 +947,8 @@ app:
         de: Guten Abend
         it: Buonasera
         zh-CN: 晚上好
+        zh-TW: 晚上好
+        zh-HK: 晚上好
         pt-BR: "Boa noite"
         ko: "좋은 저녁입니다"
         nl: "Goedenavond"
@@ -846,6 +964,8 @@ app:
         de: Was bauen wir
         it: Cosa costruiamo
         zh-CN: 我们要构建什么
+        zh-TW: 我們要構建什麼
+        zh-HK: 我們要構建什麼
         pt-BR: "O que vamos construir"
         ko: "무엇을 만들어 볼까요"
         nl: "Wat gaan we bouwen"
@@ -860,6 +980,8 @@ app:
         de: Was bauen wir in
         it: Cosa costruiamo in
         zh-CN: 我们要在以下工作区构建什么：
+        zh-TW: 我們要在以下工作區構建什麼：
+        zh-HK: 我們要在以下工作區構建什麼：
         pt-BR: "O que vamos construir em"
         ko: "작업 공간에서 무엇을 만들어 볼까요:"
         nl: "Wat gaan we bouwen in"
@@ -874,6 +996,8 @@ app:
         de: Was verbessern wir
         it: Cosa miglioriamo
         zh-CN: 我们要改进什么
+        zh-TW: 我們要改進什麼
+        zh-HK: 我們要改進什麼
         pt-BR: "O que vamos melhorar"
         ko: "무엇을 개선할까요"
         nl: "Wat gaan we verbeteren"
@@ -888,6 +1012,8 @@ app:
         de: Was verbessern wir in
         it: Cosa miglioriamo in
         zh-CN: 我们要改进以下工作区中的什么：
+        zh-TW: 我們要改進以下工作區中的什麼：
+        zh-HK: 我們要改進以下工作區中的什麼：
         pt-BR: "O que vamos melhorar em"
         ko: "작업 공간에서 무엇을 개선할까요:"
         nl: "Wat gaan we verbeteren in"
@@ -902,6 +1028,8 @@ app:
         de: Was erkunden wir
         it: Cosa esploriamo
         zh-CN: 我们要探索什么
+        zh-TW: 我們要探索什麼
+        zh-HK: 我們要探索什麼
         pt-BR: "O que vamos explorar"
         ko: "무엇을 살펴볼까요"
         nl: "Wat gaan we verkennen"
@@ -916,6 +1044,8 @@ app:
         de: Was erkunden wir in
         it: Cosa esploriamo in
         zh-CN: 我们要探索以下工作区中的什么：
+        zh-TW: 我們要探索以下工作區中的什麼：
+        zh-HK: 我們要探索以下工作區中的什麼：
         pt-BR: "O que vamos explorar em"
         ko: "작업 공간에서 무엇을 살펴볼까요:"
         nl: "Wat gaan we verkennen in"
@@ -931,6 +1061,8 @@ app:
         de: Arbeitsbereich auswählen
         it: Scegli uno spazio di lavoro
         zh-CN: 选择工作区
+        zh-TW: 選擇工作區
+        zh-HK: 選擇工作區
         pt-BR: "Escolher um espaço de trabalho"
         ko: "작업 공간 선택"
         nl: "Werkruimte kiezen"
@@ -945,6 +1077,8 @@ app:
         de: Projekt öffnen
         it: Apri un progetto
         zh-CN: 打开项目
+        zh-TW: 打開項目
+        zh-HK: 打開項目
         pt-BR: "Abrir um projeto"
         ko: "프로젝트 열기"
         nl: "Project openen"
@@ -959,6 +1093,8 @@ app:
         de: Ordner auswählen
         it: Seleziona una cartella
         zh-CN: 选择文件夹
+        zh-TW: 選擇資料夾
+        zh-HK: 選擇資料夾
         pt-BR: "Selecionar uma pasta"
         ko: "폴더 선택"
         nl: "Map selecteren"
@@ -974,6 +1110,8 @@ app:
       de: Neuer Chat wird vorbereitet…
       it: Preparazione di una nuova conversazione…
       zh-CN: 正在准备新对话…
+      zh-TW: 正在準備新對話…
+      zh-HK: 正在準備新對話…
       pt-BR: "Preparando uma nova conversa…"
       ko: "새 대화를 준비하는 중…"
       nl: "Nieuwe conversatie voorbereiden…"
@@ -988,6 +1126,8 @@ app:
       de: Deine Nachricht wird nach der Startentscheidung gesendet.
       it: Il messaggio verrà inviato dopo la scelta iniziale.
       zh-CN: 初始选项确定后将发送你的消息。
+      zh-TW: 初始選項確定後將發送你的訊息。
+      zh-HK: 初始選項確定後將發送你的訊息。
       pt-BR: "Sua mensagem será enviada após a decisão inicial."
       ko: "시작 옵션을 결정한 후 메시지가 전송됩니다."
       nl: "Je bericht wordt verzonden nadat de opstartkeuze is gemaakt."
@@ -1002,6 +1142,8 @@ app:
       de: Als Entwurf behalten
       it: Mantieni come bozza
       zh-CN: 保留为草稿
+      zh-TW: 保留為草稿
+      zh-HK: 保留為草稿
       pt-BR: "Manter como rascunho"
       ko: "초안으로 유지"
       nl: "Als concept bewaren"
@@ -1017,6 +1159,8 @@ app:
       de: Arbeitsbereichsdateien werden durchsucht
       it: Ricerca dei file dello spazio di lavoro
       zh-CN: 正在扫描工作区文件
+      zh-TW: 正在掃描工作區檔案
+      zh-HK: 正在掃描工作區檔案
       pt-BR: "Verificando arquivos do espaço de trabalho"
       ko: "작업 공간 파일을 검색하는 중"
       nl: "Werkruimtebestanden scannen"
@@ -1031,6 +1175,8 @@ app:
       de: "Arbeitsbereichsdateien"
       it: "File dello spazio di lavoro"
       zh-CN: "工作区文件"
+      zh-TW: "工作區檔案"
+      zh-HK: "工作區檔案"
       pt-BR: "Arquivos do espaço de trabalho"
       ko: "작업 공간 파일"
       nl: "Werkruimtebestanden"
@@ -1045,6 +1191,8 @@ app:
       de: "Dateibaum des Arbeitsbereichs fokussieren"
       it: "Porta il focus sull’albero dei file dello spazio di lavoro"
       zh-CN: "聚焦工作区文件树"
+      zh-TW: "聚焦工作區檔案樹"
+      zh-HK: "聚焦工作區檔案樹"
       pt-BR: "Focar na árvore de arquivos do espaço de trabalho"
       ko: "작업 공간 파일 트리에 초점 맞추기"
       nl: "Focus op de werkruimtebestandsstructuur"
@@ -1059,6 +1207,8 @@ app:
       de: "Aktualisieren"
       it: "Aggiorna"
       zh-CN: "刷新"
+      zh-TW: "刷新"
+      zh-HK: "刷新"
       pt-BR: "Atualizar"
       ko: "새로고침"
       nl: "Vernieuwen"
@@ -1073,6 +1223,8 @@ app:
       de: "Arbeitsbereichsdateien aktualisieren"
       it: "Aggiorna i file dello spazio di lavoro"
       zh-CN: "刷新工作区文件"
+      zh-TW: "刷新工作區檔案"
+      zh-HK: "刷新工作區檔案"
       pt-BR: "Atualizar arquivos do espaço de trabalho"
       ko: "작업 공간 파일 새로고침"
       nl: "Werkruimtebestanden vernieuwen"
@@ -1087,6 +1239,8 @@ app:
       de: "Arbeitsbereichsdateien werden für die Suche indiziert."
       it: "Indicizzazione dei file dello spazio di lavoro in corso."
       zh-CN: "正在为浏览建立工作区文件索引。"
+      zh-TW: "正在為瀏覽建立工作區檔案索引。"
+      zh-HK: "正在為瀏覽建立工作區檔案索引。"
       pt-BR: "Os arquivos do espaço de trabalho estão sendo indexados."
       ko: "작업 공간 파일을 탐색할 수 있도록 색인을 만드는 중입니다."
       nl: "Werkruimtebestanden worden geïndexeerd om ze te kunnen bekijken."
@@ -1101,6 +1255,8 @@ app:
       de: "Datei: %{path}"
       it: "File: %{path}"
       zh-CN: "文件：%{path}"
+      zh-TW: "檔案：%{path}"
+      zh-HK: "檔案：%{path}"
       pt-BR: "Arquivo: %{path}"
       ko: "파일: %{path}"
       nl: "Bestand: %{path}"
@@ -1115,6 +1271,8 @@ app:
       de: "Ordner: %{path}"
       it: "Cartella: %{path}"
       zh-CN: "文件夹：%{path}"
+      zh-TW: "資料夾：%{path}"
+      zh-HK: "資料夾：%{path}"
       pt-BR: "Pasta: %{path}"
       ko: "폴더: %{path}"
       nl: "Map: %{path}"
@@ -1129,6 +1287,8 @@ app:
       de: "„%{path}“ liegt außerhalb des Arbeitsbereichs, fehlt oder ist kein UTF-8-Text."
       it: "“%{path}” è fuori dallo spazio di lavoro, non esiste o non è testo UTF-8."
       zh-CN: "“%{path}”位于工作区之外、已不存在或不是 UTF-8 文本。"
+      zh-TW: "“%{path}”位於工作區之外、已不存在或不是 UTF-8 文本。"
+      zh-HK: "“%{path}”位於工作區之外、已不存在或不是 UTF-8 文本。"
       pt-BR: "“%{path}” está fora do espaço de trabalho, não existe ou não é texto UTF-8."
       ko: "“%{path}” 파일은 작업 공간 외부에 있거나 없거나 UTF-8 텍스트가 아닙니다."
       nl: "“%{path}” valt buiten de werkruimte, bestaat niet of is geen UTF-8-tekst."
@@ -1144,6 +1304,8 @@ app:
         de: Keine Arbeitsbereichsdateien
         it: Nessun file nello spazio di lavoro
         zh-CN: 没有工作区文件
+        zh-TW: 沒有工作區檔案
+        zh-HK: 沒有工作區檔案
         pt-BR: "Nenhum arquivo no espaço de trabalho"
         ko: "작업 공간에 파일이 없습니다"
         nl: "Geen werkruimtebestanden"
@@ -1158,6 +1320,8 @@ app:
         de: In diesem Arbeitsbereich sind keine Dateien zum Durchsuchen verfügbar.
         it: Non ci sono file da esplorare in questo spazio di lavoro.
         zh-CN: 此工作区中没有可浏览的文件。
+        zh-TW: 此工作區中沒有可瀏覽的檔案。
+        zh-HK: 此工作區中沒有可瀏覽的檔案。
         pt-BR: "Não há arquivos disponíveis para navegar neste espaço de trabalho."
         ko: "이 작업 공간에는 찾아볼 수 있는 파일이 없습니다."
         nl: "Er zijn geen bestanden beschikbaar om in deze werkruimte te bekijken."
@@ -1173,6 +1337,8 @@ app:
         de: Arbeitsbereich auswählen
         it: Scegli uno spazio di lavoro
         zh-CN: 选择工作区
+        zh-TW: 選擇工作區
+        zh-HK: 選擇工作區
         pt-BR: "Escolha um espaço de trabalho"
         ko: "작업 공간 선택"
         nl: "Werkruimte kiezen"
@@ -1187,6 +1353,8 @@ app:
         de: Wähle einen Arbeitsbereich aus, um seine Dateien zu durchsuchen.
         it: Seleziona uno spazio di lavoro per esplorarne i file.
         zh-CN: 选择工作区以浏览其中的文件。
+        zh-TW: 選擇工作區以瀏覽其中的檔案。
+        zh-HK: 選擇工作區以瀏覽其中的檔案。
         pt-BR: "Selecione um espaço de trabalho para navegar pelos arquivos."
         ko: "파일을 살펴볼 작업 공간을 선택하세요."
         nl: "Selecteer een werkruimte om de bestanden te bekijken."
@@ -1202,6 +1370,8 @@ app:
       de: "Dateivorschau: %{path}"
       it: "Anteprima file: %{path}"
       zh-CN: "文件预览：%{path}"
+      zh-TW: "檔案預覽：%{path}"
+      zh-HK: "檔案預覽：%{path}"
       pt-BR: "Prévia do arquivo: %{path}"
       ko: "파일 미리 보기: %{path}"
       nl: "Bestandsvoorbeeld: %{path}"
@@ -1216,6 +1386,8 @@ app:
       de: "Schreibgeschützte Dateivorschau. Zum Schließen Escape drücken."
       it: "Anteprima di sola lettura. Premi Esc per chiudere."
       zh-CN: "只读文件预览。按 Esc 关闭。"
+      zh-TW: "只讀檔案預覽。按 Esc 關閉。"
+      zh-HK: "只讀檔案預覽。按 Esc 關閉。"
       pt-BR: "Prévia somente leitura. Pressione Esc para fechar."
       ko: "읽기 전용 파일 미리 보기입니다. Esc 키를 눌러 닫으세요."
       nl: "Alleen-lezen bestandsvoorbeeld. Druk op Escape om te sluiten."
@@ -1230,6 +1402,8 @@ app:
       de: "Im Editor öffnen"
       it: "Apri nell’editor"
       zh-CN: "在编辑器中打开"
+      zh-TW: "在編輯器中打開"
+      zh-HK: "在編輯器中打開"
       pt-BR: "Abrir no editor"
       ko: "편집기에서 열기"
       nl: "Openen in editor"
@@ -1244,6 +1418,8 @@ app:
       de: "Kopieren"
       it: "Copia"
       zh-CN: "复制"
+      zh-TW: "複製"
+      zh-HK: "複製"
       pt-BR: "Copiar"
       ko: "복사"
       nl: "Kopiëren"
@@ -1258,6 +1434,8 @@ app:
       de: "Schließen"
       it: "Chiudi"
       zh-CN: "关闭"
+      zh-TW: "關閉"
+      zh-HK: "關閉"
       pt-BR: "Fechar"
       ko: "닫기"
       nl: "Sluiten"
@@ -1272,6 +1450,8 @@ app:
       de: "Vorschau schließen"
       it: "Chiudi anteprima"
       zh-CN: "关闭预览"
+      zh-TW: "關閉預覽"
+      zh-HK: "關閉預覽"
       pt-BR: "Fechar prévia"
       ko: "미리 보기 닫기"
       nl: "Voorbeeld sluiten"
@@ -1286,6 +1466,8 @@ app:
       de: "Vorschau bei %{size} abgeschnitten."
       it: "Anteprima troncata a %{size}."
       zh-CN: "预览已截断，大小上限为 %{size}。"
+      zh-TW: "預覽已截斷，大小上限為 %{size}。"
+      zh-HK: "預覽已截斷，大小上限為 %{size}。"
       pt-BR: "Prévia truncada em %{size}."
       ko: "미리 보기가 %{size}에서 잘렸습니다."
       nl: "Voorbeeld afgekapt bij %{size}."
@@ -1300,11 +1482,1157 @@ app:
       de: "Datei konnte im Editor nicht geöffnet werden: %{error}"
       it: "Impossibile aprire il file nell’editor: %{error}"
       zh-CN: "无法在编辑器中打开文件：%{error}"
+      zh-TW: "無法在編輯器中打開檔案：%{error}"
+      zh-HK: "無法在編輯器中打開檔案：%{error}"
       pt-BR: "Não foi possível abrir o arquivo no editor: %{error}"
       ko: "편집기에서 파일을 열 수 없습니다: %{error}"
       nl: "Kan het bestand niet openen in de editor: %{error}"
       ru: "Не удалось открыть файл в редакторе: %{error}"
       id: "File tidak dapat dibuka di editor: %{error}"
+  palette:
+    title:
+      conversation_search:
+        en: Find in conversation
+        vi: Tìm trong cuộc trò chuyện
+        es: Buscar en la conversación
+        fr: Rechercher dans la conversation
+        ja: 会話内を検索
+        de: In Unterhaltung suchen
+        it: Cerca nella conversazione
+        zh-CN: 在对话中查找
+        zh-TW: 在對話中查找
+        zh-HK: 在對話中查找
+        pt-BR: Buscar na conversa
+        ko: 대화에서 찾기
+        nl: Zoeken in gesprek
+        ru: Поиск в диалоге
+        id: Cari dalam percakapan
+      file_mention:
+        en: Mention a workspace file
+        vi: Nhắc đến tệp trong không gian làm việc
+        es: Mencionar un archivo del espacio de trabajo
+        fr: Mentionner un fichier de l’espace de travail
+        ja: ワークスペースのファイルをメンション
+        de: Arbeitsbereichsdatei erwähnen
+        it: Menziona un file dello spazio di lavoro
+        zh-CN: 提及工作区文件
+        zh-TW: 提及工作區檔案
+        zh-HK: 提及工作區檔案
+        pt-BR: Mencionar um arquivo do espaço de trabalho
+        ko: 작업 공간 파일 멘션
+        nl: Een werkruimtebestand vermelden
+        ru: Упомянуть файл рабочего пространства
+        id: Sebut file ruang kerja
+      slash_commands:
+        en: VT Code commands
+        vi: Lệnh VT Code
+        es: Comandos de VT Code
+        fr: Commandes VT Code
+        ja: VT Code コマンド
+        de: VT-Code-Befehle
+        it: Comandi VT Code
+        zh-CN: VT Code 命令
+        zh-TW: VT Code 指令
+        zh-HK: VT Code 指令
+        pt-BR: Comandos do VT Code
+        ko: VT Code 명령
+        nl: VT Code-opdrachten
+        ru: Команды VT Code
+        id: Perintah VT Code
+      prompt_history:
+        en: Recent prompts
+        vi: Yêu cầu gần đây
+        es: Solicitudes recientes
+        fr: Requêtes récentes
+        ja: 最近のプロンプト
+        de: Letzte Prompts
+        it: Prompt recenti
+        zh-CN: 最近的提示
+        zh-TW: 最近的提示
+        zh-HK: 最近的提示
+        pt-BR: Solicitações recentes
+        ko: 최근 프롬프트
+        nl: Recente prompts
+        ru: Недавние запросы
+        id: Prompt terbaru
+      permissions:
+        en: Command permissions
+        vi: Quyền thực thi lệnh
+        es: Permisos de comandos
+        fr: Autorisations des commandes
+        ja: コマンドの権限
+        de: Befehlsberechtigungen
+        it: Autorizzazioni dei comandi
+        zh-CN: 命令权限
+        zh-TW: 指令權限
+        zh-HK: 指令權限
+        pt-BR: Permissões de comandos
+        ko: 명령 권한
+        nl: Opdrachtmachtigingen
+        ru: Разрешения команд
+        id: Izin perintah
+      modes:
+        en: Agent mode
+        vi: Chế độ tác nhân
+        es: Modo del agente
+        fr: Mode de l’agent
+        ja: エージェントモード
+        de: Agentenmodus
+        it: Modalità agente
+        zh-CN: 智能体模式
+        zh-TW: 智能體模式
+        zh-HK: 智能體模式
+        pt-BR: Modo do agente
+        ko: 에이전트 모드
+        nl: Agentmodus
+        ru: Режим агента
+        id: Mode agen
+      ui_font:
+        en: Choose UI font
+        vi: Chọn phông chữ giao diện
+        es: Elegir fuente de interfaz
+        fr: Choisir la police de l’interface
+        ja: UI フォントを選択
+        de: Benutzeroberflächen-Schrift wählen
+        it: Scegli il carattere dell’interfaccia
+        zh-CN: 选择界面字体
+        zh-TW: 選擇界面字體
+        zh-HK: 選擇界面字體
+        pt-BR: Escolher fonte da interface
+        ko: UI 글꼴 선택
+        nl: UI-lettertype kiezen
+        ru: Выбрать шрифт интерфейса
+        id: Pilih font antarmuka
+      code_font:
+        en: Choose code font
+        vi: Chọn phông chữ mã
+        es: Elegir fuente de código
+        fr: Choisir la police du code
+        ja: コードフォントを選択
+        de: Code-Schrift wählen
+        it: Scegli il carattere del codice
+        zh-CN: 选择代码字体
+        zh-TW: 選擇程式碼字體
+        zh-HK: 選擇程式碼字體
+        pt-BR: Escolher fonte de código
+        ko: 코드 글꼴 선택
+        nl: Codelettertype kiezen
+        ru: Выбрать шрифт кода
+        id: Pilih font kode
+      configuration:
+        en: VT Code configuration
+        vi: Cấu hình VT Code
+        es: Configuración de VT Code
+        fr: Configuration de VT Code
+        ja: VT Code の設定
+        de: VT-Code-Konfiguration
+        it: Configurazione di VT Code
+        zh-CN: VT Code 配置
+        zh-TW: VT Code 設定
+        zh-HK: VT Code 設定
+        pt-BR: Configuração do VT Code
+        ko: VT Code 구성
+        nl: VT Code-configuratie
+        ru: Конфигурация VT Code
+        id: Konfigurasi VT Code
+      changed_file:
+        en: Choose changed file
+        vi: Chọn tệp đã thay đổi
+        es: Elegir archivo modificado
+        fr: Choisir un fichier modifié
+        ja: 変更されたファイルを選択
+        de: Geänderte Datei wählen
+        it: Scegli il file modificato
+        zh-CN: 选择已更改的文件
+        zh-TW: 選擇已更改的檔案
+        zh-HK: 選擇已更改的檔案
+        pt-BR: Escolher arquivo alterado
+        ko: 변경된 파일 선택
+        nl: Gewijzigd bestand kiezen
+        ru: Выбрать изменённый файл
+        id: Pilih file yang berubah
+      commands:
+        en: Command palette
+        vi: Bảng lệnh
+        es: Paleta de comandos
+        fr: Palette de commandes
+        ja: コマンドパレット
+        de: Befehlspalette
+        it: Tavolozza dei comandi
+        zh-CN: 命令面板
+        zh-TW: 指令面板
+        zh-HK: 指令面板
+        pt-BR: Paleta de comandos
+        ko: 명령 팔레트
+        nl: Opdrachtenpalet
+        ru: Палитра команд
+        id: Palet perintah
+    sections:
+      session:
+        en: Session
+        vi: Phiên
+        es: Sesión
+        fr: Session
+        ja: セッション
+        de: Sitzung
+        it: Sessione
+        zh-CN: 会话
+        zh-TW: 對話
+        zh-HK: 對話
+        pt-BR: Sessão
+        ko: 세션
+        nl: Sessie
+        ru: Сеанс
+        id: Sesi
+      view:
+        en: View
+        vi: Giao diện
+        es: Vista
+        fr: Affichage
+        ja: 表示
+        de: Ansicht
+        it: Vista
+        zh-CN: 视图
+        zh-TW: 視圖
+        zh-HK: 視圖
+        pt-BR: Exibição
+        ko: 보기
+        nl: Weergave
+        ru: Вид
+        id: Tampilan
+      conversation:
+        en: Conversation
+        vi: Cuộc trò chuyện
+        es: Conversación
+        fr: Conversation
+        ja: 会話
+        de: Unterhaltung
+        it: Conversazione
+        zh-CN: 对话
+        zh-TW: 對話
+        zh-HK: 對話
+        pt-BR: Conversa
+        ko: 대화
+        nl: Gesprek
+        ru: Диалог
+        id: Percakapan
+      vtcode_commands:
+        en: VT Code commands
+        vi: Lệnh VT Code
+        es: Comandos de VT Code
+        fr: Commandes VT Code
+        ja: VT Code コマンド
+        de: VT-Code-Befehle
+        it: Comandi VT Code
+        zh-CN: VT Code 命令
+        zh-TW: VT Code 指令
+        zh-HK: VT Code 指令
+        pt-BR: Comandos do VT Code
+        ko: VT Code 명령
+        nl: VT Code-opdrachten
+        ru: Команды VT Code
+        id: Perintah VT Code
+      recent_sessions:
+        en: Recent sessions
+        vi: Phiên gần đây
+        es: Sesiones recientes
+        fr: Sessions récentes
+        ja: 最近のセッション
+        de: Letzte Sitzungen
+        it: Sessioni recenti
+        zh-CN: 最近的会话
+        zh-TW: 最近的對話
+        zh-HK: 最近的對話
+        pt-BR: Sessões recentes
+        ko: 최근 세션
+        nl: Recente sessies
+        ru: Недавние сеансы
+        id: Sesi terbaru
+      files:
+        en: Files
+        vi: Tệp
+        es: Archivos
+        fr: Fichiers
+        ja: ファイル
+        de: Dateien
+        it: File
+        zh-CN: 文件
+        zh-TW: 檔案
+        zh-HK: 檔案
+        pt-BR: Arquivos
+        ko: 파일
+        nl: Bestanden
+        ru: Файлы
+        id: File
+      loaded_messages:
+        en: Loaded messages
+        vi: Tin nhắn đã tải
+        es: Mensajes cargados
+        fr: Messages chargés
+        ja: 読み込み済みのメッセージ
+        de: Geladene Nachrichten
+        it: Messaggi caricati
+        zh-CN: 已加载的消息
+        zh-TW: 已加載的訊息
+        zh-HK: 已加載的訊息
+        pt-BR: Mensagens carregadas
+        ko: 불러온 메시지
+        nl: Geladen berichten
+        ru: Загруженные сообщения
+        id: Pesan yang dimuat
+      loaded_tool_output:
+        en: Loaded tool output
+        vi: Kết quả công cụ đã tải
+        es: Resultados de herramientas cargados
+        fr: Sorties d’outils chargées
+        ja: 読み込み済みのツール出力
+        de: Geladene Werkzeugausgaben
+        it: Output degli strumenti caricato
+        zh-CN: 已加载的工具输出
+        zh-TW: 已加載的工具輸出
+        zh-HK: 已加載的工具輸出
+        pt-BR: Saídas de ferramentas carregadas
+        ko: 불러온 도구 출력
+        nl: Geladen tooluitvoer
+        ru: Загруженный вывод инструментов
+        id: Output alat yang dimuat
+      this_thread:
+        en: This thread
+        vi: Cuộc trò chuyện này
+        es: Este hilo
+        fr: Cette conversation
+        ja: このスレッド
+        de: Dieser Thread
+        it: Questa conversazione
+        zh-CN: 当前对话
+        zh-TW: 當前對話
+        zh-HK: 當前對話
+        pt-BR: Esta conversa
+        ko: 이 대화
+        nl: Deze thread
+        ru: Этот диалог
+        id: Percakapan ini
+      add:
+        en: Add
+        vi: Thêm
+        es: Añadir
+        fr: Ajouter
+        ja: 追加
+        de: Hinzufügen
+        it: Aggiungi
+        zh-CN: 添加
+        zh-TW: 新增
+        zh-HK: 新增
+        pt-BR: Adicionar
+        ko: 추가
+        nl: Toevoegen
+        ru: Добавить
+        id: Tambahkan
+      workspace_files:
+        en: Workspace files
+        vi: Tệp trong không gian làm việc
+        es: Archivos del espacio de trabajo
+        fr: Fichiers de l’espace de travail
+        ja: ワークスペースのファイル
+        de: Arbeitsbereichsdateien
+        it: File dello spazio di lavoro
+        zh-CN: 工作区文件
+        zh-TW: 工作區檔案
+        zh-HK: 工作區檔案
+        pt-BR: Arquivos do espaço de trabalho
+        ko: 작업 공간 파일
+        nl: Werkruimtebestanden
+        ru: Файлы рабочего пространства
+        id: File ruang kerja
+      skills:
+        en: Skills
+        vi: Kỹ năng
+        es: Habilidades
+        fr: Compétences
+        ja: スキル
+        de: Fähigkeiten
+        it: Competenze
+        zh-CN: 技能
+        zh-TW: 技能
+        zh-HK: 技能
+        pt-BR: Habilidades
+        ko: 스킬
+        nl: Vaardigheden
+        ru: Навыки
+        id: Skill
+      plugins:
+        en: Plugins
+        vi: Plugin
+        es: Complementos
+        fr: Extensions
+        ja: プラグイン
+        de: Erweiterungen
+        it: Plugin
+        zh-CN: 插件
+        zh-TW: 外掛
+        zh-HK: 外掛程式
+        pt-BR: Complementos
+        ko: 플러그인
+        nl: Plug-ins
+        ru: Плагины
+        id: Plugin
+      commands:
+        en: Commands
+        vi: Lệnh
+        es: Comandos
+        fr: Commandes
+        ja: コマンド
+        de: Befehle
+        it: Comandi
+        zh-CN: 命令
+        zh-TW: 指令
+        zh-HK: 指令
+        pt-BR: Comandos
+        ko: 명령
+        nl: Opdrachten
+        ru: Команды
+        id: Perintah
+    command:
+      new_session:
+        en: New session
+        vi: Phiên mới
+        es: Nueva sesión
+        fr: Nouvelle session
+        ja: 新しいセッション
+        de: Neue Sitzung
+        it: Nuova sessione
+        zh-CN: 新建会话
+        zh-TW: 新建對話
+        zh-HK: 新建對話
+        pt-BR: Nova sessão
+        ko: 새 세션
+        nl: Nieuwe sessie
+        ru: Новый сеанс
+        id: Sesi baru
+      close_session:
+        en: Close session
+        vi: Đóng phiên
+        es: Cerrar sesión
+        fr: Fermer la session
+        ja: セッションを閉じる
+        de: Sitzung schließen
+        it: Chiudi sessione
+        zh-CN: 关闭会话
+        zh-TW: 關閉對話
+        zh-HK: 關閉對話
+        pt-BR: Fechar sessão
+        ko: 세션 닫기
+        nl: Sessie sluiten
+        ru: Закрыть сеанс
+        id: Tutup sesi
+      switch_workspace:
+        en: Switch workspace…
+        vi: Chuyển không gian làm việc…
+        es: Cambiar espacio de trabajo…
+        fr: Changer d’espace de travail…
+        ja: ワークスペースを切り替え…
+        de: Arbeitsbereich wechseln…
+        it: Cambia spazio di lavoro…
+        zh-CN: 切换工作区…
+        zh-TW: 切換工作區…
+        zh-HK: 切換工作區…
+        pt-BR: Trocar de espaço de trabalho…
+        ko: 작업 공간 전환…
+        nl: Werkruimte wisselen…
+        ru: Переключить рабочее пространство…
+        id: Ganti ruang kerja…
+      refresh_recent_threads:
+        en: Refresh recent threads
+        vi: Làm mới các cuộc trò chuyện gần đây
+        es: Actualizar hilos recientes
+        fr: Actualiser les conversations récentes
+        ja: 最近のスレッドを更新
+        de: Letzte Threads aktualisieren
+        it: Aggiorna le conversazioni recenti
+        zh-CN: 刷新最近的对话
+        zh-TW: 刷新最近的對話
+        zh-HK: 刷新最近的對話
+        pt-BR: Atualizar conversas recentes
+        ko: 최근 대화 새로고침
+        nl: Recente threads vernieuwen
+        ru: Обновить недавние диалоги
+        id: Segarkan percakapan terbaru
+      choose_model:
+        en: Choose a model…
+        vi: Chọn mô hình…
+        es: Elegir un modelo…
+        fr: Choisir un modèle…
+        ja: モデルを選択…
+        de: Modell wählen…
+        it: Scegli un modello…
+        zh-CN: 选择模型…
+        zh-TW: 選擇模型…
+        zh-HK: 選擇模型…
+        pt-BR: Escolher um modelo…
+        ko: 모델 선택…
+        nl: Een model kiezen…
+        ru: Выбрать модель…
+        id: Pilih model…
+      toggle_inspector:
+        en: Toggle inspector panel
+        vi: Bật/tắt bảng kiểm tra
+        es: Mostrar u ocultar el panel inspector
+        fr: Afficher ou masquer le panneau inspecteur
+        ja: インスペクターパネルを切り替え
+        de: Inspektionsbereich umschalten
+        it: Attiva o disattiva il pannello ispettore
+        zh-CN: 切换检查器面板
+        zh-TW: 切換檢查器面板
+        zh-HK: 切換檢查器面板
+        pt-BR: Alternar painel do inspetor
+        ko: 검사기 패널 전환
+        nl: Inspectiepaneel in- of uitschakelen
+        ru: Переключить панель инспектора
+        id: Alihkan panel pemeriksa
+      toggle_zen_mode:
+        en: Toggle Zen mode
+        vi: Bật/tắt chế độ Zen
+        es: Activar o desactivar el modo Zen
+        fr: Activer ou désactiver le mode Zen
+        ja: Zen モードを切り替え
+        de: Zen-Modus umschalten
+        it: Attiva o disattiva la modalità Zen
+        zh-CN: 切换禅模式
+        zh-TW: 切換禪模式
+        zh-HK: 切換禪模式
+        pt-BR: Alternar modo Zen
+        ko: Zen 모드 전환
+        nl: Zen-modus in- of uitschakelen
+        ru: Переключить режим Zen
+        id: Alihkan mode Zen
+      switch_dark_theme:
+        en: Switch to Dark theme
+        vi: Chuyển sang giao diện tối
+        es: Cambiar al tema oscuro
+        fr: Passer au thème sombre
+        ja: ダークテーマに切り替え
+        de: Zum dunklen Design wechseln
+        it: Passa al tema scuro
+        zh-CN: 切换到深色主题
+        zh-TW: 切換到深色主題
+        zh-HK: 切換到深色主題
+        pt-BR: Mudar para o tema escuro
+        ko: 어두운 테마로 전환
+        nl: Overschakelen naar donker thema
+        ru: Переключить на тёмную тему
+        id: Beralih ke tema gelap
+      switch_light_theme:
+        en: Switch to Light theme
+        vi: Chuyển sang giao diện sáng
+        es: Cambiar al tema claro
+        fr: Passer au thème clair
+        ja: ライトテーマに切り替え
+        de: Zum hellen Design wechseln
+        it: Passa al tema chiaro
+        zh-CN: 切换到浅色主题
+        zh-TW: 切換到淺色主題
+        zh-HK: 切換到淺色主題
+        pt-BR: Mudar para o tema claro
+        ko: 밝은 테마로 전환
+        nl: Overschakelen naar licht thema
+        ru: Переключить на светлую тему
+        id: Beralih ke tema terang
+      find_in_conversation:
+        en: Find in conversation…
+        vi: Tìm trong cuộc trò chuyện…
+        es: Buscar en la conversación…
+        fr: Rechercher dans la conversation…
+        ja: 会話内を検索…
+        de: In Unterhaltung suchen…
+        it: Cerca nella conversazione…
+        zh-CN: 在对话中查找…
+        zh-TW: 在對話中查找…
+        zh-HK: 在對話中查找…
+        pt-BR: Buscar na conversa…
+        ko: 대화에서 찾기…
+        nl: Zoeken in gesprek…
+        ru: Поиск в диалоге…
+        id: Cari dalam percakapan…
+      open_session:
+        en: "Open session: %{label}"
+        vi: "Mở phiên: %{label}"
+        es: "Abrir sesión: %{label}"
+        fr: "Ouvrir la session : %{label}"
+        ja: "セッションを開く: %{label}"
+        de: "Sitzung öffnen: %{label}"
+        it: "Apri sessione: %{label}"
+        zh-CN: "打开会话：%{label}"
+        zh-TW: "打開對話：%{label}"
+        zh-HK: "打開對話：%{label}"
+        pt-BR: "Abrir sessão: %{label}"
+        ko: "세션 열기: %{label}"
+        nl: "Sessie openen: %{label}"
+        ru: "Открыть сеанс: %{label}"
+        id: "Buka sesi: %{label}"
+      preview_file:
+        en: "Preview file: %{path}"
+        vi: "Xem trước tệp: %{path}"
+        es: "Vista previa del archivo: %{path}"
+        fr: "Aperçu du fichier : %{path}"
+        ja: "ファイルをプレビュー: %{path}"
+        de: "Datei anzeigen: %{path}"
+        it: "Anteprima file: %{path}"
+        zh-CN: "预览文件：%{path}"
+        zh-TW: "預覽檔案：%{path}"
+        zh-HK: "預覽檔案：%{path}"
+        pt-BR: "Pré-visualizar arquivo: %{path}"
+        ko: "파일 미리 보기: %{path}"
+        nl: "Bestand bekijken: %{path}"
+        ru: "Предпросмотр файла: %{path}"
+        id: "Pratinjau file: %{path}"
+      add_files:
+        en: Files…
+        vi: Tệp…
+        es: Archivos…
+        fr: Fichiers…
+        ja: ファイル…
+        de: Dateien…
+        it: File…
+        zh-CN: 文件…
+        zh-TW: 檔案…
+        zh-HK: 檔案…
+        pt-BR: Arquivos…
+        ko: 파일…
+        nl: Bestanden…
+        ru: Файлы…
+        id: File…
+      workspace_file:
+        en: Workspace file
+        vi: Tệp trong không gian làm việc
+        es: Archivo del espacio de trabajo
+        fr: Fichier de l’espace de travail
+        ja: ワークスペースのファイル
+        de: Arbeitsbereichsdatei
+        it: File dello spazio di lavoro
+        zh-CN: 工作区文件
+        zh-TW: 工作區檔案
+        zh-HK: 工作區檔案
+        pt-BR: Arquivo do espaço de trabalho
+        ko: 작업 공간 파일
+        nl: Werkruimtebestand
+        ru: Файл рабочего пространства
+        id: File ruang kerja
+      use_plugin:
+        en: "Use the %{plugin} plugin."
+        vi: "Sử dụng plugin %{plugin}."
+        es: "Usa el complemento %{plugin}."
+        fr: "Utiliser l’extension %{plugin}."
+        ja: "%{plugin} プラグインを使用する。"
+        de: "Das Plugin %{plugin} verwenden."
+        it: "Usa il plugin %{plugin}."
+        zh-CN: "使用 %{plugin} 插件。"
+        zh-TW: "使用 %{plugin} 外掛。"
+        zh-HK: "使用 %{plugin} 外掛程式。"
+        pt-BR: "Use o plugin %{plugin}."
+        ko: "%{plugin} 플러그인 사용."
+        nl: "Gebruik de plug-in %{plugin}."
+        ru: "Использовать плагин %{plugin}."
+        id: "Gunakan plugin %{plugin}."
+      you:
+        en: You
+        vi: Bạn
+        es: Tú
+        fr: Vous
+        ja: あなた
+        de: Du
+        it: Tu
+        zh-CN: 你
+        zh-TW: 你
+        zh-HK: 你
+        pt-BR: Você
+        ko: 사용자
+        nl: Jij
+        ru: Вы
+        id: Anda
+      vtcode:
+        en: VT Code
+        vi: VT Code
+        es: VT Code
+        fr: VT Code
+        ja: VT Code
+        de: VT Code
+        it: VT Code
+        zh-CN: VT Code
+        zh-TW: VT Code
+        zh-HK: VT Code
+        pt-BR: VT Code
+        ko: VT Code
+        nl: VT Code
+        ru: VT Code
+        id: VT Code
+      tool_activity:
+        en: Tool activity
+        vi: Hoạt động của công cụ
+        es: Actividad de herramientas
+        fr: Activité des outils
+        ja: ツールのアクティビティ
+        de: Werkzeugaktivität
+        it: Attività degli strumenti
+        zh-CN: 工具活动
+        zh-TW: 工具活動
+        zh-HK: 工具活動
+        pt-BR: Atividade das ferramentas
+        ko: 도구 활동
+        nl: Toolactiviteit
+        ru: Активность инструментов
+        id: Aktivitas alat
+      output:
+        en: Output
+        vi: Kết quả
+        es: Salida
+        fr: Sortie
+        ja: 出力
+        de: Ausgabe
+        it: Risultato
+        zh-CN: 输出
+        zh-TW: 輸出
+        zh-HK: 輸出
+        pt-BR: Saída
+        ko: 출력
+        nl: Uitvoer
+        ru: Вывод
+        id: Keluaran
+    placeholder:
+      configuration:
+        en: Search all CLI settings…
+        vi: Tìm tất cả cài đặt CLI…
+        es: Buscar todos los ajustes de CLI…
+        fr: Rechercher tous les réglages CLI…
+        ja: すべての CLI 設定を検索…
+        de: Alle CLI-Einstellungen durchsuchen…
+        it: Cerca tutte le impostazioni CLI…
+        zh-CN: 搜索所有 CLI 设置…
+        zh-TW: 搜尋所有 CLI 設定…
+        zh-HK: 搜尋所有 CLI 設定…
+        pt-BR: Pesquisar todas as configurações da CLI…
+        ko: 모든 CLI 설정 검색…
+        nl: Alle CLI-instellingen zoeken…
+        ru: Поиск по всем настройкам CLI…
+        id: Cari semua pengaturan CLI…
+      fonts:
+        en: Search installed fonts…
+        vi: Tìm phông chữ đã cài…
+        es: Buscar fuentes instaladas…
+        fr: Rechercher les polices installées…
+        ja: インストール済みフォントを検索…
+        de: Installierte Schriftarten suchen…
+        it: Cerca i caratteri installati…
+        zh-CN: 搜索已安装的字体…
+        zh-TW: 搜尋已安裝的字體…
+        zh-HK: 搜尋已安裝的字體…
+        pt-BR: Pesquisar fontes instaladas…
+        ko: 설치된 글꼴 검색…
+        nl: Geïnstalleerde lettertypen zoeken…
+        ru: Поиск установленных шрифтов…
+        id: Cari font yang terpasang…
+      workspace_files:
+        en: Filter workspace files…
+        vi: Lọc tệp trong không gian làm việc…
+        es: Filtrar archivos del espacio de trabajo…
+        fr: Filtrer les fichiers de l’espace de travail…
+        ja: ワークスペースのファイルを絞り込む…
+        de: Arbeitsbereichsdateien filtern…
+        it: Filtra i file dello spazio di lavoro…
+        zh-CN: 筛选工作区文件…
+        zh-TW: 篩選工作區檔案…
+        zh-HK: 篩選工作區檔案…
+        pt-BR: Filtrar arquivos do espaço de trabalho…
+        ko: 작업 공간 파일 필터링…
+        nl: Werkruimtebestanden filteren…
+        ru: Фильтр файлов рабочего пространства…
+        id: Filter file ruang kerja…
+      commands:
+        en: Filter VT Code commands…
+        vi: Lọc lệnh VT Code…
+        es: Filtrar comandos de VT Code…
+        fr: Filtrer les commandes VT Code…
+        ja: VT Code コマンドを絞り込む…
+        de: VT-Code-Befehle filtern…
+        it: Filtra i comandi VT Code…
+        zh-CN: 筛选 VT Code 命令…
+        zh-TW: 篩選 VT Code 指令…
+        zh-HK: 篩選 VT Code 指令…
+        pt-BR: Filtrar comandos do VT Code…
+        ko: VT Code 명령 필터링…
+        nl: VT Code-opdrachten filteren…
+        ru: Фильтр команд VT Code…
+        id: Filter perintah VT Code…
+      changed_files:
+        en: Search changed files…
+        vi: Tìm tệp đã thay đổi…
+        es: Buscar archivos modificados…
+        fr: Rechercher les fichiers modifiés…
+        ja: 変更されたファイルを検索…
+        de: Geänderte Dateien suchen…
+        it: Cerca i file modificati…
+        zh-CN: 搜索已更改的文件…
+        zh-TW: 搜尋已更改的檔案…
+        zh-HK: 搜尋已更改的檔案…
+        pt-BR: Pesquisar arquivos alterados…
+        ko: 변경된 파일 검색…
+        nl: Gewijzigde bestanden zoeken…
+        ru: Поиск изменённых файлов…
+        id: Cari file yang berubah…
+      conversation:
+        en: Search messages and visible output…
+        vi: Tìm tin nhắn và kết quả đang hiển thị…
+        es: Buscar mensajes y resultados visibles…
+        fr: Rechercher dans les messages et les sorties visibles…
+        ja: メッセージと表示中の出力を検索…
+        de: Nachrichten und sichtbare Ausgaben durchsuchen…
+        it: Cerca nei messaggi e negli output visibili…
+        zh-CN: 搜索消息和可见输出…
+        zh-TW: 搜尋訊息和可見輸出…
+        zh-HK: 搜尋訊息和可見輸出…
+        pt-BR: Pesquisar mensagens e saídas visíveis…
+        ko: 메시지와 표시된 출력 검색…
+        nl: Berichten en zichtbare uitvoer zoeken…
+        ru: Поиск сообщений и видимого вывода…
+        id: Cari pesan dan output yang terlihat…
+      prompts:
+        en: Search prompts in this thread…
+        vi: Tìm yêu cầu trong cuộc trò chuyện này…
+        es: Buscar solicitudes en este hilo…
+        fr: Rechercher les requêtes de cette conversation…
+        ja: このスレッドのプロンプトを検索…
+        de: Prompts in diesem Thread suchen…
+        it: Cerca i prompt in questa conversazione…
+        zh-CN: 搜索当前对话中的提示…
+        zh-TW: 搜尋當前對話中的提示…
+        zh-HK: 搜尋當前對話中的提示…
+        pt-BR: Pesquisar solicitações nesta conversa…
+        ko: 이 대화의 프롬프트 검색…
+        nl: Prompts in deze thread zoeken…
+        ru: Поиск запросов в этом диалоге…
+        id: Cari prompt dalam percakapan ini…
+      modes:
+        en: Search agent modes…
+        vi: Tìm chế độ tác nhân…
+        es: Buscar modos del agente…
+        fr: Rechercher les modes de l’agent…
+        ja: エージェントモードを検索…
+        de: Agentenmodi suchen…
+        it: Cerca le modalità agente…
+        zh-CN: 搜索智能体模式…
+        zh-TW: 搜尋智能體模式…
+        zh-HK: 搜尋智能體模式…
+        pt-BR: Pesquisar modos do agente…
+        ko: 에이전트 모드 검색…
+        nl: Agentmodi zoeken…
+        ru: Поиск режимов агента…
+        id: Cari mode agen…
+      default:
+        en: Type a command or search…
+        vi: Nhập lệnh hoặc nội dung cần tìm…
+        es: Escribe un comando o busca…
+        fr: Saisir une commande ou rechercher…
+        ja: コマンドまたは検索語を入力…
+        de: Befehl eingeben oder suchen…
+        it: Digita un comando o cerca…
+        zh-CN: 输入命令或搜索…
+        zh-TW: 輸入指令或搜尋…
+        zh-HK: 輸入指令或搜尋…
+        pt-BR: Digite um comando ou pesquise…
+        ko: 명령 또는 검색어 입력…
+        nl: Typ een opdracht of zoek…
+        ru: Введите команду или поисковый запрос…
+        id: Ketik perintah atau cari…
+    conversation_search_header:
+      en: Searches loaded messages and visible tool output
+      vi: Tìm trong tin nhắn đã tải và kết quả công cụ đang hiển thị
+      es: Busca en los mensajes cargados y los resultados visibles de herramientas
+      fr: Recherche dans les messages chargés et les sorties d’outils visibles
+      ja: 読み込み済みのメッセージと表示中のツール出力を検索します
+      de: Durchsucht geladene Nachrichten und sichtbare Werkzeugausgaben
+      it: Cerca nei messaggi caricati e negli output degli strumenti visibili
+      zh-CN: 搜索已加载的消息和可见工具输出
+      zh-TW: 搜尋已加載的訊息和可見工具輸出
+      zh-HK: 搜尋已加載的訊息和可見工具輸出
+      pt-BR: Pesquisa mensagens carregadas e saídas de ferramentas visíveis
+      ko: 불러온 메시지와 표시된 도구 출력을 검색합니다
+      nl: Zoekt in geladen berichten en zichtbare tooluitvoer
+      ru: Поиск по загруженным сообщениям и видимому выводу инструментов
+      id: Mencari pesan yang dimuat dan output alat yang terlihat
+    empty:
+      no_models:
+        en: No models available
+        vi: Không có mô hình nào
+        es: No hay modelos disponibles
+        fr: Aucun modèle disponible
+        ja: 利用可能なモデルがありません
+        de: Keine Modelle verfügbar
+        it: Nessun modello disponibile
+        zh-CN: 没有可用模型
+        zh-TW: 沒有可用模型
+        zh-HK: 沒有可用模型
+        pt-BR: Nenhum modelo disponível
+        ko: 사용 가능한 모델이 없습니다
+        nl: Geen modellen beschikbaar
+        ru: Нет доступных моделей
+        id: Tidak ada model yang tersedia
+      models_reload:
+        en: Reopen VT Code to reload the model catalog.
+        vi: Mở lại VT Code để tải lại danh mục mô hình.
+        es: Vuelve a abrir VT Code para cargar el catálogo de modelos.
+        fr: Rouvrez VT Code pour recharger le catalogue de modèles.
+        ja: VT Code を再起動してモデル一覧を再読み込みしてください。
+        de: Öffne VT Code erneut, um den Modellkatalog zu laden.
+        it: Riapri VT Code per ricaricare il catalogo dei modelli.
+        zh-CN: 重新打开 VT Code 以重新加载模型目录。
+        zh-TW: 重新打開 VT Code 以重新加載模型目錄。
+        zh-HK: 重新打開 VT Code 以重新加載模型目錄。
+        pt-BR: Reabra o VT Code para recarregar o catálogo de modelos.
+        ko: VT Code를 다시 열어 모델 카탈로그를 새로고침하세요.
+        nl: Open VT Code opnieuw om de modelcatalogus te laden.
+        ru: Перезапустите VT Code, чтобы загрузить каталог моделей.
+        id: Buka kembali VT Code untuk memuat ulang katalog model.
+      no_prompts:
+        en: No prompt history yet
+        vi: Chưa có lịch sử yêu cầu
+        es: Aún no hay historial de solicitudes
+        fr: Aucun historique de requêtes
+        ja: プロンプト履歴はまだありません
+        de: Noch kein Prompt-Verlauf
+        it: Nessuna cronologia dei prompt
+        zh-CN: 暂无提示历史
+        zh-TW: 暫無提示歷史
+        zh-HK: 暫無提示歷史
+        pt-BR: Ainda não há histórico de solicitações
+        ko: 프롬프트 기록이 없습니다
+        nl: Nog geen promptgeschiedenis
+        ru: История запросов пока пуста
+        id: Belum ada riwayat prompt
+      prompts_hint:
+        en: Prompts sent in this thread will appear here.
+        vi: Các yêu cầu đã gửi trong cuộc trò chuyện này sẽ xuất hiện ở đây.
+        es: Aquí aparecerán las solicitudes enviadas en este hilo.
+        fr: Les requêtes envoyées dans cette conversation apparaîtront ici.
+        ja: このスレッドで送信したプロンプトがここに表示されます。
+        de: Prompts aus diesem Thread werden hier angezeigt.
+        it: Qui appariranno i prompt inviati in questa conversazione.
+        zh-CN: 在当前对话中发送的提示会显示在这里。
+        zh-TW: 在當前對話中發送的提示會顯示在這裡。
+        zh-HK: 在當前對話中發送的提示會顯示在這裡。
+        pt-BR: As solicitações enviadas nesta conversa aparecerão aqui.
+        ko: 이 대화에서 보낸 프롬프트가 여기에 표시됩니다.
+        nl: Prompts die in deze thread zijn verzonden, verschijnen hier.
+        ru: Здесь будут отображаться запросы из этого диалога.
+        id: Prompt yang dikirim dalam percakapan ini akan muncul di sini.
+      modes_unavailable:
+        en: Agent modes unavailable
+        vi: Chế độ tác nhân không khả dụng
+        es: Modos del agente no disponibles
+        fr: Modes de l’agent indisponibles
+        ja: エージェントモードを利用できません
+        de: Agentenmodi nicht verfügbar
+        it: Modalità agente non disponibili
+        zh-CN: 智能体模式不可用
+        zh-TW: 智能體模式不可用
+        zh-HK: 智能體模式不可用
+        pt-BR: Modos do agente indisponíveis
+        ko: 에이전트 모드를 사용할 수 없습니다
+        nl: Agentmodi niet beschikbaar
+        ru: Режимы агента недоступны
+        id: Mode agen tidak tersedia
+      modes_reload:
+        en: Rebuild VT Code Desktop and its bundled CLI together, then reload CLI settings.
+        vi: Hãy biên dịch lại VT Code Desktop cùng CLI đi kèm, sau đó tải lại cài đặt CLI.
+        es: Vuelve a compilar VT Code Desktop junto con su CLI incluido y recarga la configuración de CLI.
+        fr: Recompilez VT Code Desktop avec son CLI intégré, puis rechargez la configuration CLI.
+        ja: VT Code Desktop と同梱 CLI を一緒に再ビルドし、CLI 設定を再読み込みしてください。
+        de: Baue VT Code Desktop zusammen mit der enthaltenen CLI neu und lade anschließend die CLI-Einstellungen.
+        it: Ricompila VT Code Desktop insieme alla CLI inclusa, quindi ricarica la configurazione CLI.
+        zh-CN: 请同时重新构建 VT Code Desktop 及其内置 CLI，然后重新加载 CLI 设置。
+        zh-TW: 請同時重新構建 VT Code Desktop 及其內置 CLI，然後重新加載 CLI 設定。
+        zh-HK: 請同時重新構建 VT Code Desktop 及其內置 CLI，然後重新加載 CLI 設定。
+        pt-BR: Recompile o VT Code Desktop junto com a CLI incluída e recarregue as configurações da CLI.
+        ko: VT Code Desktop과 번들 CLI를 함께 다시 빌드한 다음 CLI 설정을 다시 불러오세요.
+        nl: Bouw VT Code Desktop en de meegeleverde CLI opnieuw en laad daarna de CLI-instellingen.
+        ru: Пересоберите VT Code Desktop вместе со встроенной CLI, затем перезагрузите настройки CLI.
+        id: Bangun ulang VT Code Desktop bersama CLI bawaannya, lalu muat ulang pengaturan CLI.
+      no_loaded_match:
+        en: No match in loaded conversation
+        vi: Không tìm thấy trong phần hội thoại đã tải
+        es: No hay coincidencias en la conversación cargada
+        fr: Aucun résultat dans la conversation chargée
+        ja: 読み込み済みの会話に一致する内容がありません
+        de: Keine Treffer in der geladenen Unterhaltung
+        it: Nessuna corrispondenza nella conversazione caricata
+        zh-CN: 已加载的对话中没有匹配项
+        zh-TW: 已加載的對話中沒有匹配項
+        zh-HK: 已加載的對話中沒有匹配項
+        pt-BR: Nenhum resultado na conversa carregada
+        ko: 불러온 대화에서 일치하는 항목이 없습니다
+        nl: Geen overeenkomst in het geladen gesprek
+        ru: В загруженной части диалога совпадений нет
+        id: Tidak ada kecocokan dalam percakapan yang dimuat
+      older_history:
+        en: Load earlier messages below to search older parts of this conversation.
+        vi: Tải các tin nhắn cũ hơn bên dưới để tìm trong phần trước của cuộc trò chuyện.
+        es: Carga mensajes anteriores para buscar en partes más antiguas de esta conversación.
+        fr: Chargez les messages précédents pour rechercher dans les parties plus anciennes de cette conversation.
+        ja: 下のボタンから以前のメッセージを読み込むと、会話の古い部分も検索できます。
+        de: Lade frühere Nachrichten, um ältere Teile der Unterhaltung zu durchsuchen.
+        it: Carica i messaggi precedenti per cercare nelle parti più vecchie della conversazione.
+        zh-CN: 加载更早的消息，以搜索对话中更早的内容。
+        zh-TW: 加載更早的訊息，以搜尋對話中更早的內容。
+        zh-HK: 加載更早的訊息，以搜尋對話中更早的內容。
+        pt-BR: Carregue mensagens anteriores para pesquisar partes mais antigas desta conversa.
+        ko: 이전 메시지를 불러오면 대화의 오래된 부분도 검색할 수 있습니다.
+        nl: Laad eerdere berichten om oudere delen van dit gesprek te doorzoeken.
+        ru: Загрузите предыдущие сообщения, чтобы искать в более ранних частях диалога.
+        id: Muat pesan sebelumnya untuk mencari bagian percakapan yang lebih lama.
+      no_results:
+        en: No matching results
+        vi: Không có kết quả phù hợp
+        es: No hay resultados coincidentes
+        fr: Aucun résultat correspondant
+        ja: 一致する結果がありません
+        de: Keine passenden Ergebnisse
+        it: Nessun risultato corrispondente
+        zh-CN: 没有匹配结果
+        zh-TW: 沒有匹配結果
+        zh-HK: 沒有匹配結果
+        pt-BR: Nenhum resultado correspondente
+        ko: 일치하는 결과가 없습니다
+        nl: Geen overeenkomende resultaten
+        ru: Совпадений не найдено
+        id: Tidak ada hasil yang cocok
+      try_different_search:
+        en: Try a different search.
+        vi: Hãy thử tìm kiếm nội dung khác.
+        es: Prueba con otra búsqueda.
+        fr: Essayez une autre recherche.
+        ja: 別の語句で検索してください。
+        de: Versuche eine andere Suche.
+        it: Prova un’altra ricerca.
+        zh-CN: 请尝试其他搜索内容。
+        zh-TW: 請嘗試其他搜尋內容。
+        zh-HK: 請嘗試其他搜尋內容。
+        pt-BR: Tente outra pesquisa.
+        ko: 다른 검색어를 입력해 보세요.
+        nl: Probeer een andere zoekopdracht.
+        ru: Попробуйте изменить запрос.
+        id: Coba pencarian lain.
+    history:
+      loading:
+        en: Loading earlier messages…
+        vi: Đang tải tin nhắn cũ hơn…
+        es: Cargando mensajes anteriores…
+        fr: Chargement des messages précédents…
+        ja: 以前のメッセージを読み込み中…
+        de: Frühere Nachrichten werden geladen…
+        it: Caricamento dei messaggi precedenti…
+        zh-CN: 正在加载更早的消息…
+        zh-TW: 正在加載更早的訊息…
+        zh-HK: 正在加載更早的訊息…
+        pt-BR: Carregando mensagens anteriores…
+        ko: 이전 메시지를 불러오는 중…
+        nl: Eerdere berichten laden…
+        ru: Загрузка предыдущих сообщений…
+        id: Memuat pesan sebelumnya…
+      limit_reached:
+        en: Message limit reached
+        vi: Đã đạt giới hạn tin nhắn
+        es: Se alcanzó el límite de mensajes
+        fr: Limite de messages atteinte
+        ja: メッセージの上限に達しました
+        de: Nachrichtenlimit erreicht
+        it: Limite di messaggi raggiunto
+        zh-CN: 已达到消息上限
+        zh-TW: 已達到訊息上限
+        zh-HK: 已達到訊息上限
+        pt-BR: Limite de mensagens atingido
+        ko: 메시지 한도에 도달했습니다
+        nl: Berichtlimiet bereikt
+        ru: Достигнут лимит сообщений
+        id: Batas pesan tercapai
+      retry:
+        en: Retry loading earlier messages
+        vi: Thử tải lại tin nhắn cũ hơn
+        es: Reintentar la carga de mensajes anteriores
+        fr: Réessayer de charger les messages précédents
+        ja: 以前のメッセージの読み込みを再試行
+        de: Laden früherer Nachrichten wiederholen
+        it: Riprova a caricare i messaggi precedenti
+        zh-CN: 重试加载更早的消息
+        zh-TW: 重試加載更早的訊息
+        zh-HK: 重試加載更早的訊息
+        pt-BR: Tentar carregar mensagens anteriores novamente
+        ko: 이전 메시지 다시 불러오기
+        nl: Eerdere berichten opnieuw laden
+        ru: Повторить загрузку предыдущих сообщений
+        id: Coba muat ulang pesan sebelumnya
+      load:
+        en: Load earlier messages
+        vi: Tải tin nhắn cũ hơn
+        es: Cargar mensajes anteriores
+        fr: Charger les messages précédents
+        ja: 以前のメッセージを読み込む
+        de: Frühere Nachrichten laden
+        it: Carica i messaggi precedenti
+        zh-CN: 加载更早的消息
+        zh-TW: 加載更早的訊息
+        zh-HK: 加載更早的訊息
+        pt-BR: Carregar mensagens anteriores
+        ko: 이전 메시지 불러오기
+        nl: Eerdere berichten laden
+        ru: Загрузить предыдущие сообщения
+        id: Muat pesan sebelumnya
+      retry_hint:
+        en: Could not load older messages. You can retry.
+        vi: Không thể tải tin nhắn cũ hơn. Bạn có thể thử lại.
+        es: No se pudieron cargar los mensajes anteriores. Puedes volver a intentarlo.
+        fr: Impossible de charger les messages précédents. Vous pouvez réessayer.
+        ja: 以前のメッセージを読み込めませんでした。もう一度お試しください。
+        de: Frühere Nachrichten konnten nicht geladen werden. Du kannst es erneut versuchen.
+        it: Impossibile caricare i messaggi precedenti. Puoi riprovare.
+        zh-CN: 无法加载更早的消息。你可以重试。
+        zh-TW: 無法加載更早的訊息。你可以重試。
+        zh-HK: 無法加載更早的訊息。你可以重試。
+        pt-BR: Não foi possível carregar mensagens anteriores. Você pode tentar novamente.
+        ko: 이전 메시지를 불러오지 못했습니다. 다시 시도할 수 있습니다.
+        nl: Eerdere berichten konden niet worden geladen. Je kunt het opnieuw proberen.
+        ru: Не удалось загрузить предыдущие сообщения. Можно попробовать ещё раз.
+        id: Pesan lama tidak dapat dimuat. Anda dapat mencoba lagi.
+  transcript:
+    history_limit_reached:
+      en: The 2,000-message local transcript limit has been reached.
+      vi: Đã đạt giới hạn 2.000 tin nhắn trong lịch sử cục bộ.
+      es: Se alcanzó el límite local de 2.000 mensajes del historial.
+      fr: La limite locale de 2 000 messages de l’historique est atteinte.
+      ja: ローカルの会話履歴は2,000件のメッセージ上限に達しました。
+      de: Das lokale Transkriptlimit von 2.000 Nachrichten wurde erreicht.
+      it: È stato raggiunto il limite locale di 2.000 messaggi della cronologia.
+      zh-CN: 本地对话记录已达到 2,000 条消息的上限。
+      zh-TW: 本機對話記錄已達到 2,000 則訊息的上限。
+      zh-HK: 本機對話記錄已達到 2,000 則訊息的上限。
+      pt-BR: O limite local de 2.000 mensagens do histórico foi atingido.
+      ko: 로컬 대화 기록의 메시지 한도 2,000개에 도달했습니다.
+      nl: De lokale transcriptlimiet van 2.000 berichten is bereikt.
+      ru: Достигнут локальный лимит истории в 2 000 сообщений.
+      id: Batas lokal transkrip 2.000 pesan telah tercapai.
+    load_earlier_tooltip:
+      en: Load archived messages above while keeping this position.
+      vi: Tải tin nhắn đã lưu trữ phía trên và giữ nguyên vị trí này.
+      es: Carga los mensajes archivados anteriores sin perder esta posición.
+      fr: Chargez les messages archivés précédents tout en conservant cette position.
+      ja: この位置を保ったまま、前のアーカイブ済みメッセージを読み込みます。
+      de: Lade frühere archivierte Nachrichten, ohne diese Position zu verändern.
+      it: Carica i messaggi archiviati precedenti mantenendo questa posizione.
+      zh-CN: 加载上方归档的消息，同时保持当前位置。
+      zh-TW: 載入上方封存的訊息，同時保持目前位置。
+      zh-HK: 載入上方封存的訊息，同時保持目前位置。
+      pt-BR: Carregue as mensagens arquivadas anteriores sem perder esta posição.
+      ko: 현재 위치를 유지하면서 이전에 보관된 메시지를 불러옵니다.
+      nl: Laad eerdere gearchiveerde berichten zonder deze positie te verliezen.
+      ru: Загрузить предыдущие архивные сообщения, сохранив текущую позицию.
+      id: Muat pesan arsip sebelumnya tanpa mengubah posisi ini.
   activity:
     history:
       notice:
@@ -1316,6 +2644,8 @@ app:
         de: Die letzten %{count} Werkzeugaktionen werden angezeigt.
         it: Sono mostrate le %{count} azioni degli strumenti più recenti.
         zh-CN: 正在显示最近 %{count} 条工具操作。
+        zh-TW: 正在顯示最近 %{count} 條工具操作。
+        zh-HK: 正在顯示最近 %{count} 條工具操作。
         pt-BR: "Exibindo as %{count} ações de ferramenta mais recentes."
         ko: "최근 도구 작업 %{count}개를 표시합니다."
         nl: "De nieuwste %{count} toolacties worden getoond."
@@ -1330,6 +2660,8 @@ app:
         de: Unterhaltung durchsuchen
         it: Cerca nella conversazione
         zh-CN: 搜索对话
+        zh-TW: 搜尋對話
+        zh-HK: 搜尋對話
         pt-BR: "Pesquisar conversa"
         ko: "대화 검색"
         nl: "Gesprek zoeken"
@@ -1345,6 +2677,8 @@ app:
       de: "Arbeitsbereich"
       it: "Spazio di lavoro"
       zh-CN: "工作区"
+      zh-TW: "工作區"
+      zh-HK: "工作區"
       pt-BR: "Espaço de trabalho"
       ko: "작업 공간"
       nl: "Werkruimte"
@@ -1360,6 +2694,8 @@ app:
       de: "Arbeitsbereich auswählen"
       it: "Scegli spazio di lavoro"
       zh-CN: "选择工作区"
+      zh-TW: "選擇工作區"
+      zh-HK: "選擇工作區"
       pt-BR: "Escolher espaço de trabalho"
       ko: "작업 공간 선택"
       nl: "Werkruimte kiezen"
@@ -1375,6 +2711,8 @@ app:
       de: "Arbeitsbereich oder letztes Projekt auswählen"
       it: "Scegli uno spazio di lavoro o un progetto recente"
       zh-CN: "选择工作区或最近的项目"
+      zh-TW: "選擇工作區或最近的項目"
+      zh-HK: "選擇工作區或最近的項目"
       pt-BR: "Escolha um espaço de trabalho ou projeto recente"
       ko: "작업 공간 또는 최근 프로젝트 선택"
       nl: "Kies een werkruimte of recent project"
@@ -1390,6 +2728,8 @@ app:
       de: "Projekt auswählen"
       it: "Scegli un progetto"
       zh-CN: "选择项目"
+      zh-TW: "選擇項目"
+      zh-HK: "選擇項目"
       pt-BR: "Escolha um projeto"
       ko: "프로젝트 선택"
       nl: "Kies een project"
@@ -1405,6 +2745,8 @@ app:
       de: "Wird überprüft…"
       it: "Verifica in corso…"
       zh-CN: "正在检查…"
+      zh-TW: "正在檢查…"
+      zh-HK: "正在檢查…"
       pt-BR: "Verificando…"
       ko: "확인 중…"
       nl: "Controleren…"
@@ -1420,6 +2762,8 @@ app:
       de: "Ändern"
       it: "Modifica"
       zh-CN: "更改"
+      zh-TW: "更改"
+      zh-HK: "更改"
       pt-BR: "Alterar"
       ko: "변경"
       nl: "Wijzigen"
@@ -1435,6 +2779,8 @@ app:
       de: "Öffnen"
       it: "Apri"
       zh-CN: "打开"
+      zh-TW: "打開"
+      zh-HK: "打開"
       pt-BR: "Abrir"
       ko: "열기"
       nl: "Openen"
@@ -1450,6 +2796,8 @@ app:
       de: "Projekte"
       it: "Progetti"
       zh-CN: "项目"
+      zh-TW: "項目"
+      zh-HK: "項目"
       pt-BR: "Projetos"
       ko: "프로젝트"
       nl: "Projecten"
@@ -1465,6 +2813,8 @@ app:
       de: "Letzte Unterhaltungen"
       it: "Conversazioni recenti"
       zh-CN: "最近对话"
+      zh-TW: "最近對話"
+      zh-HK: "最近對話"
       pt-BR: "Conversas recentes"
       ko: "최근 대화"
       nl: "Recente gesprekken"
@@ -1480,6 +2830,8 @@ app:
       de: "%{workspace} (aktueller Arbeitsbereich)"
       it: "%{workspace} (spazio di lavoro attuale)"
       zh-CN: "%{workspace}（当前工作区）"
+      zh-TW: "%{workspace}（當前工作區）"
+      zh-HK: "%{workspace}（當前工作區）"
       pt-BR: "%{workspace} (espaço de trabalho atual)"
       ko: "%{workspace} (현재 작업 공간)"
       nl: "%{workspace} (huidige werkruimte)"
@@ -1495,6 +2847,8 @@ app:
       de: "Ordner auswählen…"
       it: "Scegli cartella…"
       zh-CN: "选择文件夹…"
+      zh-TW: "選擇資料夾…"
+      zh-HK: "選擇資料夾…"
       pt-BR: "Escolher pasta…"
       ko: "폴더 선택…"
       nl: "Map kiezen…"
@@ -1510,6 +2864,8 @@ app:
       de: "Keine zuletzt verwendeten Arbeitsbereiche"
       it: "Nessuno spazio di lavoro recente"
       zh-CN: "没有最近的工作区"
+      zh-TW: "沒有最近的工作區"
+      zh-HK: "沒有最近的工作區"
       pt-BR: "Nenhum espaço de trabalho recente"
       ko: "최근 작업 공간이 없습니다"
       nl: "Geen recente werkruimten"
@@ -1526,6 +2882,8 @@ app:
       de: "Arbeitsbaum prüfen"
       it: "Esamina l’albero di lavoro"
       zh-CN: "审查工作树"
+      zh-TW: "審查工作樹"
+      zh-HK: "審查工作樹"
       pt-BR: "Revisar a árvore de trabalho"
       ko: "작업 트리 검토"
       nl: "Werkboom controleren"
@@ -1540,6 +2898,8 @@ app:
       de: "Arbeitsbaumprüfung"
       it: "Revisione dell’albero di lavoro"
       zh-CN: "工作树审查"
+      zh-TW: "工作樹審查"
+      zh-HK: "工作樹審查"
       pt-BR: "Revisão da árvore de trabalho"
       ko: "작업 트리 검토"
       nl: "Werkboomcontrole"
@@ -1554,6 +2914,8 @@ app:
       de: "Bereinigte, schreibgeschützte Momentaufnahme · vorgemerkte und nicht vorgemerkte Änderungen · optionale Vorschau nicht verfolgter Textdateien"
       it: "Istantanea redatta e di sola lettura · modifiche nell’area di staging e non in staging · anteprima facoltativa dei file di testo non tracciati"
       zh-CN: "只读脱敏快照 · 已暂存和未暂存的更改 · 可选预览未跟踪的文本文件"
+      zh-TW: "只讀脫敏快照 · 已暫存和未暫存的更改 · 可選預覽未跟蹤的文本檔案"
+      zh-HK: "只讀脫敏快照 · 已暫存和未暫存的更改 · 可選預覽未跟蹤的文本檔案"
       pt-BR: "Instantâneo redigido e somente leitura · alterações preparadas e não preparadas · prévia opcional de arquivos de texto não rastreados"
       ko: "민감 정보를 제외한 읽기 전용 스냅샷 · 스테이징 및 미스테이징 변경 사항 · 추적되지 않는 텍스트 미리 보기 선택 가능"
       nl: "Opgeschoonde, alleen-lezen momentopname · klaargezette en niet-klaargezette wijzigingen · optionele voorvertoning van niet bijgehouden tekstbestanden"
@@ -1568,6 +2930,8 @@ app:
       de: "Änderungen prüfen"
       it: "Rivedi le modifiche"
       zh-CN: "审查更改"
+      zh-TW: "審查更改"
+      zh-HK: "審查更改"
       pt-BR: "Revisar alterações"
       ko: "변경 사항 검토"
       nl: "Wijzigingen controleren"
@@ -1582,6 +2946,8 @@ app:
       de: "Patchvorschau der Sitzung · schreibgeschützt"
       it: "Anteprime delle patch della sessione · sola lettura"
       zh-CN: "会话补丁预览 · 只读"
+      zh-TW: "對話補丁預覽 · 只讀"
+      zh-HK: "對話補丁預覽 · 只讀"
       pt-BR: "Prévias dos patches da sessão · somente leitura"
       ko: "세션 패치 미리 보기 · 읽기 전용"
       nl: "Patchvoorbeelden van de sessie · alleen-lezen"
@@ -1596,6 +2962,8 @@ app:
       de: "Diff-Prüfung schließen"
       it: "Chiudi revisione delle differenze"
       zh-CN: "关闭差异审查"
+      zh-TW: "關閉差異審查"
+      zh-HK: "關閉差異審查"
       pt-BR: "Fechar revisão do diff"
       ko: "Diff 검토 닫기"
       nl: "Diff-controle sluiten"
@@ -1610,6 +2978,8 @@ app:
       de: "Die Änderungen sind in der erweiterten Prüfung geöffnet."
       it: "Le modifiche sono aperte nella revisione espansa."
       zh-CN: "更改已在展开的审查视图中打开。"
+      zh-TW: "更改已在展開的審查視圖中打開。"
+      zh-HK: "更改已在展開的審查視圖中打開。"
       pt-BR: "As alterações estão abertas na revisão expandida."
       ko: "변경 사항이 확장된 검토 화면에서 열려 있습니다."
       nl: "De wijzigingen staan open in de uitgebreide controle."
@@ -1624,6 +2994,8 @@ app:
       de: "Ordner (optional)"
       it: "Cartella (facoltativa)"
       zh-CN: "文件夹（可选）"
+      zh-TW: "資料夾（可選）"
+      zh-HK: "資料夾（可選）"
       pt-BR: "Pasta (opcional)"
       ko: "폴더(선택 사항)"
       nl: "Map (optioneel)"
@@ -1638,6 +3010,8 @@ app:
       de: "Nicht verfolgte Textdateien einbeziehen"
       it: "Includi file di testo non tracciati"
       zh-CN: "包含未跟踪的文本文件"
+      zh-TW: "包含未跟蹤的文本檔案"
+      zh-HK: "包含未跟蹤的文本檔案"
       pt-BR: "Incluir arquivos de texto não rastreados"
       ko: "추적되지 않는 텍스트 파일 포함"
       nl: "Niet bijgehouden tekstbestanden opnemen"
@@ -1652,6 +3026,8 @@ app:
       de: "Arbeitsbaumprüfung aktualisieren"
       it: "Aggiorna la revisione dell’albero di lavoro"
       zh-CN: "刷新工作树审查"
+      zh-TW: "刷新工作樹審查"
+      zh-HK: "刷新工作樹審查"
       pt-BR: "Atualizar a revisão da árvore de trabalho"
       ko: "작업 트리 검토 새로고침"
       nl: "Werkboomcontrole vernieuwen"
@@ -1666,6 +3042,8 @@ app:
       de: "Wird aktualisiert…"
       it: "Aggiornamento…"
       zh-CN: "正在刷新…"
+      zh-TW: "正在刷新…"
+      zh-HK: "正在刷新…"
       pt-BR: "Atualizando…"
       ko: "새로고치는 중…"
       nl: "Vernieuwen…"
@@ -1680,6 +3058,8 @@ app:
       de: "Änderungen laden"
       it: "Carica modifiche"
       zh-CN: "加载更改"
+      zh-TW: "加載更改"
+      zh-HK: "加載更改"
       pt-BR: "Carregar alterações"
       ko: "변경 사항 불러오기"
       nl: "Wijzigingen laden"
@@ -1694,6 +3074,8 @@ app:
       de: "Aktualisieren"
       it: "Aggiorna"
       zh-CN: "刷新"
+      zh-TW: "刷新"
+      zh-HK: "刷新"
       pt-BR: "Atualizar"
       ko: "새로고침"
       nl: "Vernieuwen"
@@ -1708,6 +3090,8 @@ app:
       de: "Diff-Layout"
       it: "Layout delle differenze"
       zh-CN: "差异布局"
+      zh-TW: "差異佈局"
+      zh-HK: "差異佈局"
       pt-BR: "Layout do diff"
       ko: "Diff 레이아웃"
       nl: "Diff-indeling"
@@ -1723,6 +3107,8 @@ app:
       de: "Einheitlich"
       it: "Unificato"
       zh-CN: "统一"
+      zh-TW: "統一"
+      zh-HK: "統一"
       pt-BR: "Unificado"
       ko: "통합"
       nl: "Gecombineerd"
@@ -1736,6 +3122,8 @@ app:
       de: "Geteilt"
       it: "Affiancato"
       zh-CN: "拆分"
+      zh-TW: "拆分"
+      zh-HK: "拆分"
       pt-BR: "Dividido"
       ko: "분할"
       nl: "Gesplitst"
@@ -1750,6 +3138,8 @@ app:
       de: "Vorschau kopieren"
       it: "Copia anteprima"
       zh-CN: "复制预览"
+      zh-TW: "複製預覽"
+      zh-HK: "複製預覽"
       pt-BR: "Copiar prévia"
       ko: "미리 보기 복사"
       nl: "Voorbeeld kopiëren"
@@ -1764,6 +3154,8 @@ app:
       de: "Git-Änderungen werden gelesen"
       it: "Lettura delle modifiche Git"
       zh-CN: "正在读取 Git 更改"
+      zh-TW: "正在讀取 Git 更改"
+      zh-HK: "正在讀取 Git 更改"
       pt-BR: "Lendo alterações do Git"
       ko: "Git 변경 사항 읽는 중"
       nl: "Git-wijzigingen lezen"
@@ -1778,6 +3170,8 @@ app:
       de: "Git-Änderungen werden gelesen…"
       it: "Lettura delle modifiche Git…"
       zh-CN: "正在读取 Git 更改…"
+      zh-TW: "正在讀取 Git 更改…"
+      zh-HK: "正在讀取 Git 更改…"
       pt-BR: "Lendo alterações do Git…"
       ko: "Git 변경 사항 읽는 중…"
       nl: "Git-wijzigingen lezen…"
@@ -1792,6 +3186,8 @@ app:
       de: "Begrenzte, schreibgeschützte Momentaufnahme wird erstellt."
       it: "Acquisizione di un’istantanea limitata e di sola lettura."
       zh-CN: "正在获取有范围限制的只读快照。"
+      zh-TW: "正在獲取有範圍限制的只讀快照。"
+      zh-HK: "正在獲取有範圍限制的只讀快照。"
       pt-BR: "Capturando um instantâneo limitado e somente leitura."
       ko: "제한된 읽기 전용 스냅샷을 캡처하는 중입니다."
       nl: "Beperkte, alleen-lezen momentopname wordt gemaakt."
@@ -1806,6 +3202,8 @@ app:
       de: "Git-Änderungen werden aktualisiert · letzte erfolgreiche Momentaufnahme wird angezeigt"
       it: "Aggiornamento delle modifiche Git · è mostrata l’ultima istantanea riuscita"
       zh-CN: "正在刷新 Git 更改 · 显示上次成功的快照"
+      zh-TW: "正在刷新 Git 更改 · 顯示上次成功的快照"
+      zh-HK: "正在刷新 Git 更改 · 顯示上次成功的快照"
       pt-BR: "Atualizando alterações do Git · exibindo o último instantâneo concluído"
       ko: "Git 변경 사항 새로고침 중 · 마지막으로 성공한 스냅샷을 표시합니다"
       nl: "Git-wijzigingen vernieuwen · de laatst geslaagde momentopname wordt getoond"
@@ -1820,6 +3218,8 @@ app:
       de: "Datei"
       it: "file"
       zh-CN: "个文件"
+      zh-TW: "個檔案"
+      zh-HK: "個檔案"
       pt-BR: "arquivo"
       ko: "파일"
       nl: "bestand"
@@ -1834,6 +3234,8 @@ app:
       de: "Dateien"
       it: "file"
       zh-CN: "个文件"
+      zh-TW: "個檔案"
+      zh-HK: "個檔案"
       pt-BR: "arquivos"
       ko: "파일"
       nl: "bestanden"
@@ -1848,6 +3250,8 @@ app:
       de: "%{count} %{files} geändert · +%{additions} · −%{deletions}"
       it: "%{count} %{files} modificati · +%{additions} · −%{deletions}"
       zh-CN: "已更改 %{count} %{files} · +%{additions} · −%{deletions}"
+      zh-TW: "已更改 %{count} %{files} · +%{additions} · −%{deletions}"
+      zh-HK: "已更改 %{count} %{files} · +%{additions} · −%{deletions}"
       pt-BR: "%{count} %{files} alterados · +%{additions} · −%{deletions}"
       ko: "%{count}개 %{files} 변경 · +%{additions} · −%{deletions}"
       nl: "%{count} %{files} gewijzigd · +%{additions} · −%{deletions}"
@@ -1862,6 +3266,8 @@ app:
       de: "%{count} %{files} geändert"
       it: "%{count} %{files} modificati"
       zh-CN: "已更改 %{count} %{files}"
+      zh-TW: "已更改 %{count} %{files}"
+      zh-HK: "已更改 %{count} %{files}"
       pt-BR: "%{count} %{files} alterados"
       ko: "%{count}개 %{files} 변경"
       nl: "%{count} %{files} gewijzigd"
@@ -1876,6 +3282,8 @@ app:
       de: "Hinzugefügte und entfernte Zeilen in der erfassten Arbeitsbaumvorschau."
       it: "Righe aggiunte e rimosse nell’anteprima acquisita dell’albero di lavoro."
       zh-CN: "已捕获工作树预览中新增和删除的行数。"
+      zh-TW: "已捕獲工作樹預覽中新增和刪除的行數。"
+      zh-HK: "已捕獲工作樹預覽中新增和刪除的行數。"
       pt-BR: "Linhas adicionadas e removidas na prévia capturada da árvore de trabalho."
       ko: "캡처한 작업 트리 미리 보기에서 추가되거나 삭제된 줄입니다."
       nl: "Toegevoegde en verwijderde regels in de vastgelegde werkboomvoorvertoning."
@@ -1890,6 +3298,8 @@ app:
       de: "Datei %{current} von %{total} · %{path}"
       it: "File %{current} di %{total} · %{path}"
       zh-CN: "第 %{current}/%{total} 个文件 · %{path}"
+      zh-TW: "第 %{current}/%{total} 個檔案 · %{path}"
+      zh-HK: "第 %{current}/%{total} 個檔案 · %{path}"
       pt-BR: "Arquivo %{current} de %{total} · %{path}"
       ko: "%{total}개 중 %{current}번째 파일 · %{path}"
       nl: "Bestand %{current} van %{total} · %{path}"
@@ -1904,6 +3314,8 @@ app:
       de: "Vorherige Datei"
       it: "File precedente"
       zh-CN: "上一个文件"
+      zh-TW: "上一個檔案"
+      zh-HK: "上一個檔案"
       pt-BR: "Arquivo anterior"
       ko: "이전 파일"
       nl: "Vorig bestand"
@@ -1918,6 +3330,8 @@ app:
       de: "Geänderte Datei auswählen"
       it: "Scegli un file modificato"
       zh-CN: "选择已更改的文件"
+      zh-TW: "選擇已更改的檔案"
+      zh-HK: "選擇已更改的檔案"
       pt-BR: "Escolher um arquivo alterado"
       ko: "변경된 파일 선택"
       nl: "Gewijzigd bestand kiezen"
@@ -1932,6 +3346,8 @@ app:
       de: "Nächste Datei"
       it: "File successivo"
       zh-CN: "下一个文件"
+      zh-TW: "下一個檔案"
+      zh-HK: "下一個檔案"
       pt-BR: "Próximo arquivo"
       ko: "다음 파일"
       nl: "Volgend bestand"
@@ -1946,6 +3362,8 @@ app:
       de: "Git-Prüfung nicht verfügbar"
       it: "Revisione Git non disponibile"
       zh-CN: "Git 审查不可用"
+      zh-TW: "Git 審查不可用"
+      zh-HK: "Git 審查不可用"
       pt-BR: "Revisão do Git indisponível"
       ko: "Git 검토를 사용할 수 없음"
       nl: "Git-controle niet beschikbaar"
@@ -1960,6 +3378,8 @@ app:
       de: "Wähle aus, was geprüft werden soll"
       it: "Scegli cosa revisionare"
       zh-CN: "选择要审查的内容"
+      zh-TW: "選擇要審查的內容"
+      zh-HK: "選擇要審查的內容"
       pt-BR: "Escolha o que revisar"
       ko: "검토할 항목 선택"
       nl: "Kies wat je wilt controleren"
@@ -1974,6 +3394,8 @@ app:
       de: "Lass Ordner leer, um den gesamten Arbeitsbereich zu prüfen, oder gib ein relatives Verzeichnis ein. Wähle danach Änderungen laden."
       it: "Lascia vuota Cartella per l’intero spazio di lavoro oppure inserisci una directory relativa. Poi scegli Carica modifiche."
       zh-CN: "留空文件夹可查看整个工作区，或输入相对目录。然后选择“加载更改”。"
+      zh-TW: "留空資料夾可查看整個工作區，或輸入相對目錄。然後選擇“加載更改”。"
+      zh-HK: "留空資料夾可查看整個工作區，或輸入相對目錄。然後選擇“加載更改”。"
       pt-BR: "Deixe Pasta vazia para revisar todo o espaço de trabalho ou informe um diretório relativo. Depois, escolha Carregar alterações."
       ko: "전체 작업 공간을 검토하려면 폴더를 비워 두고, 특정 위치만 보려면 상대 디렉터리를 입력한 다음 변경 사항 불러오기를 선택하세요."
       nl: "Laat Map leeg voor de hele werkruimte of voer een relatief pad in. Kies daarna Wijzigingen laden."
@@ -1988,6 +3410,8 @@ app:
       de: "Ordner: %{folder}"
       it: "Cartella: %{folder}"
       zh-CN: "文件夹：%{folder}"
+      zh-TW: "資料夾：%{folder}"
+      zh-HK: "資料夾：%{folder}"
       pt-BR: "Pasta: %{folder}"
       ko: "폴더: %{folder}"
       nl: "Map: %{folder}"
@@ -2002,6 +3426,8 @@ app:
       de: "Aktualisierung fehlgeschlagen. Die letzte erfolgreiche Momentaufnahme wird angezeigt. %{error}"
       it: "Aggiornamento non riuscito. È mostrata l’ultima istantanea riuscita. %{error}"
       zh-CN: "刷新失败。正在显示上次成功的快照。%{error}"
+      zh-TW: "刷新失敗。正在顯示上次成功的快照。%{error}"
+      zh-HK: "刷新失敗。正在顯示上次成功的快照。%{error}"
       pt-BR: "Falha ao atualizar. Exibindo o último instantâneo concluído. %{error}"
       ko: "새로고침에 실패했습니다. 마지막으로 성공한 스냅샷을 표시합니다. %{error}"
       nl: "Vernieuwen mislukt. De laatst geslaagde momentopname wordt getoond. %{error}"
@@ -2016,6 +3442,8 @@ app:
       de: "Aktualisiere, sobald Git und ein gültiges Repository für diesen Arbeitsbereich verfügbar sind."
       it: "Aggiorna quando Git e un repository valido sono disponibili per questo spazio di lavoro."
       zh-CN: "此工作区中的 Git 和有效仓库可用后再刷新。"
+      zh-TW: "此工作區中的 Git 和有效倉庫可用後再刷新。"
+      zh-HK: "此工作區中的 Git 和有效倉庫可用後再刷新。"
       pt-BR: "Atualize quando o Git e um repositório válido estiverem disponíveis para este espaço de trabalho."
       ko: "이 작업 공간에서 Git과 유효한 저장소를 사용할 수 있게 된 후 새로고침하세요."
       nl: "Vernieuw zodra Git en een geldige repository beschikbaar zijn voor deze werkruimte."
@@ -2030,6 +3458,8 @@ app:
       de: "Keine Änderungen für die Vorschau"
       it: "Nessuna modifica da visualizzare in anteprima"
       zh-CN: "没有可预览的更改"
+      zh-TW: "沒有可預覽的更改"
+      zh-HK: "沒有可預覽的更改"
       pt-BR: "Nenhuma alteração disponível para prévia"
       ko: "미리 볼 수 있는 변경 사항이 없습니다"
       nl: "Geen wijzigingen om te bekijken"
@@ -2044,6 +3474,8 @@ app:
       de: "Keine nachverfolgten Änderungen"
       it: "Nessuna modifica tracciata"
       zh-CN: "没有已跟踪的更改"
+      zh-TW: "沒有已跟蹤的更改"
+      zh-HK: "沒有已跟蹤的更改"
       pt-BR: "Nenhuma alteração rastreada"
       ko: "추적 중인 변경 사항이 없습니다"
       nl: "Geen bijgehouden wijzigingen"
@@ -2058,6 +3490,8 @@ app:
       de: "In dieser Momentaufnahme gibt es keine Änderungen für die Vorschau. In der Erfassungsnotiz stehen ausgelassene Dateien."
       it: "Nessuna modifica da visualizzare in anteprima in questa istantanea. Consulta la nota per i file omessi."
       zh-CN: "此快照中没有可预览的更改。请查看捕获说明了解被省略的文件。"
+      zh-TW: "此快照中沒有可預覽的更改。請查看捕獲說明瞭解被省略的檔案。"
+      zh-HK: "此快照中沒有可預覽的更改。請查看捕獲說明瞭解被省略的檔案。"
       pt-BR: "Não há alterações para prévia neste instantâneo. Consulte a nota de captura para ver os arquivos omitidos."
       ko: "이 스냅샷에는 미리 볼 수 있는 변경 사항이 없습니다. 제외된 파일은 캡처 참고 사항을 확인하세요."
       nl: "Deze momentopname bevat geen wijzigingen om te bekijken. Zie de opmerking voor overgeslagen bestanden."
@@ -2072,6 +3506,8 @@ app:
       de: "Nachverfolgte Dateien stimmen mit der erfassten Git-Basis überein. Nicht verfolgte Dateien sind ausgeschlossen."
       it: "I file tracciati corrispondono alla base Git acquisita. I file non tracciati sono esclusi."
       zh-CN: "已跟踪文件与捕获的 Git 基线一致。未跟踪文件不包含在内。"
+      zh-TW: "已跟蹤檔案與捕獲的 Git 基線一致。未跟蹤檔案不包含在內。"
+      zh-HK: "已跟蹤檔案與捕獲的 Git 基線一致。未跟蹤檔案不包含在內。"
       pt-BR: "Os arquivos rastreados correspondem à base Git capturada. Arquivos não rastreados foram excluídos."
       ko: "추적 중인 파일은 캡처한 Git 기준과 일치합니다. 추적되지 않는 파일은 제외되었습니다."
       nl: "Bijgehouden bestanden komen overeen met de vastgelegde Git-basis. Niet bijgehouden bestanden zijn uitgesloten."
@@ -2086,6 +3522,8 @@ app:
       de: "Die Vorschau ist unvollständig. Ausgelassene Dateien und Grenzen stehen in der Erfassungsnotiz. Kopiert wird nur die erfasste Vorschau."
       it: "L’anteprima è incompleta. Consulta la nota per i file omessi o i limiti. La copia include solo l’anteprima acquisita."
       zh-CN: "预览不完整。请查看捕获说明了解被省略的文件或限制。复制内容仅包含已捕获的预览。"
+      zh-TW: "預覽不完整。請查看捕獲說明瞭解被省略的檔案或限制。複製內容僅包含已捕獲的預覽。"
+      zh-HK: "預覽不完整。請查看捕獲說明瞭解被省略的檔案或限制。複製內容僅包含已捕獲的預覽。"
       pt-BR: "A prévia está incompleta. Consulte a nota de captura para ver arquivos omitidos ou limites. A cópia inclui somente a prévia capturada."
       ko: "미리 보기가 완전하지 않습니다. 제외된 파일이나 제한 사항은 캡처 참고 사항을 확인하세요. 복사에는 캡처한 미리 보기만 포함됩니다."
       nl: "De voorvertoning is onvolledig. Zie de opmerking voor overgeslagen bestanden of limieten. Kopiëren neemt alleen de vastgelegde voorvertoning mee."
@@ -2100,6 +3538,8 @@ app:
       de: "Die Vorschau wurde am Prüflimit gekürzt. Wähle für eine vollständige Prüfung einen engeren Ordner. Kopiert wird nur diese Vorschau."
       it: "L’anteprima è stata troncata al limite di revisione. Scegli una cartella più specifica per una revisione completa. La copia include solo questa anteprima."
       zh-CN: "预览已达到审查上限。请选择更小的文件夹以完整查看。复制内容仅包含此预览。"
+      zh-TW: "預覽已達到審查上限。請選擇更小的資料夾以完整查看。複製內容僅包含此預覽。"
+      zh-HK: "預覽已達到審查上限。請選擇更小的資料夾以完整查看。複製內容僅包含此預覽。"
       pt-BR: "A prévia atingiu o limite de revisão. Escolha uma pasta mais específica para revisar tudo. A cópia inclui somente esta prévia."
       ko: "검토 제한으로 미리 보기가 잘렸습니다. 전체 검토를 하려면 더 좁은 폴더를 선택하세요. 복사에는 이 미리 보기만 포함됩니다."
       nl: "De voorvertoning is afgekapt bij de controlelimiet. Kies een kleinere map voor een volledige controle. Kopiëren bevat alleen deze voorvertoning."
@@ -2114,6 +3554,8 @@ app:
       de: "Für diesen Patch ist keine strukturierte Vorschau verfügbar. Der erfasste Text wird angezeigt."
       it: "L’anteprima strutturata non è disponibile per questa patch. È mostrato il testo acquisito."
       zh-CN: "此补丁无法使用结构化预览。正在显示捕获的文本。"
+      zh-TW: "此補丁無法使用結構化預覽。正在顯示捕獲的文本。"
+      zh-HK: "此補丁無法使用結構化預覽。正在顯示捕獲的文本。"
       pt-BR: "A prévia estruturada não está disponível para este patch. Exibindo o texto capturado."
       ko: "이 패치에는 구조화된 미리 보기를 사용할 수 없습니다. 캡처한 텍스트를 표시합니다."
       nl: "Er is geen gestructureerde voorvertoning voor deze patch. De vastgelegde tekst wordt getoond."
@@ -2128,6 +3570,8 @@ app:
       de: "Geänderte Dateien"
       it: "File modificati"
       zh-CN: "已更改的文件"
+      zh-TW: "已更改的檔案"
+      zh-HK: "已更改的檔案"
       pt-BR: "Arquivos alterados"
       ko: "변경된 파일"
       nl: "Gewijzigde bestanden"
@@ -2142,6 +3586,8 @@ app:
       de: "Die lokale Dienst-Warteschlange ist nicht verfügbar."
       it: "La coda di richieste del servizio locale non è disponibile."
       zh-CN: "本地服务请求队列不可用。"
+      zh-TW: "本地服務請求隊列不可用。"
+      zh-HK: "本地服務請求隊列不可用。"
       pt-BR: "A fila de solicitações do serviço local está indisponível."
       ko: "로컬 서비스 요청 대기열을 사용할 수 없습니다."
       nl: "De wachtrij voor lokale serviceverzoeken is niet beschikbaar."
@@ -2158,6 +3604,8 @@ app:
       de: "Arbeitsbereiche, Projekte und letzte Unterhaltungen"
       it: "Spazi di lavoro, progetti e conversazioni recenti"
       zh-CN: "工作区、项目和最近对话"
+      zh-TW: "工作區、項目和最近對話"
+      zh-HK: "工作區、項目和最近對話"
       pt-BR: "Espaços de trabalho, projetos e conversas recentes"
       ko: "작업 공간, 프로젝트 및 최근 대화"
       nl: "Werkruimten, projecten en recente gesprekken"
@@ -2173,6 +3621,8 @@ app:
       de: "Neuer Chat"
       it: "Nuova conversazione"
       zh-CN: "新对话"
+      zh-TW: "新對話"
+      zh-HK: "新對話"
       pt-BR: "Nova conversa"
       ko: "새 대화"
       nl: "Nieuwe thread"
@@ -2188,6 +3638,8 @@ app:
       de: "Unterhaltung schließen"
       it: "Chiudi conversazione"
       zh-CN: "关闭对话"
+      zh-TW: "關閉對話"
+      zh-HK: "關閉對話"
       pt-BR: "Fechar conversa"
       ko: "대화 닫기"
       nl: "Thread sluiten"
@@ -2203,6 +3655,8 @@ app:
       de: "%{thread} (aktuelle Unterhaltung)"
       it: "%{thread} (conversazione attuale)"
       zh-CN: "%{thread}（当前对话）"
+      zh-TW: "%{thread}（當前對話）"
+      zh-HK: "%{thread}（當前對話）"
       pt-BR: "%{thread} (conversa atual)"
       ko: "%{thread} (현재 대화)"
       nl: "%{thread} (huidige thread)"
@@ -2218,6 +3672,8 @@ app:
       de: "Arbeitsbereichaktionen"
       it: "Azioni dello spazio di lavoro"
       zh-CN: "工作区操作"
+      zh-TW: "工作區操作"
+      zh-HK: "工作區操作"
       pt-BR: "Ações do espaço de trabalho"
       ko: "작업 공간 작업"
       nl: "Werkruimteacties"
@@ -2235,6 +3691,8 @@ app:
       de: "Nachricht an VT Code"
       it: "Messaggio per VT Code"
       zh-CN: "发送给 VT Code 的消息"
+      zh-TW: "發送給 VT Code 的訊息"
+      zh-HK: "發送給 VT Code 的訊息"
       pt-BR: "Mensagem para o VT Code"
       ko: "VT Code에 보내는 메시지"
       nl: "Bericht aan VT Code"
@@ -2250,6 +3708,8 @@ app:
       de: "VT Code um Änderungen bitten…"
       it: "Chiedi a VT Code di apportare modifiche…"
       zh-CN: "让 VT Code 帮你修改…"
+      zh-TW: "讓 VT Code 幫你修改…"
+      zh-HK: "讓 VT Code 幫你修改…"
       pt-BR: "Peça ao VT Code para fazer alterações…"
       ko: "VT Code에 변경을 요청하세요…"
       nl: "Vraag VT Code om wijzigingen aan te brengen…"
@@ -2265,6 +3725,8 @@ app:
       de: "Nachrichtenfeld"
       it: "Compositore di messaggi"
       zh-CN: "消息编辑器"
+      zh-TW: "訊息編輯器"
+      zh-HK: "訊息編輯器"
       pt-BR: "Campo de mensagem"
       ko: "메시지 작성기"
       nl: "Berichteditor"
@@ -2280,6 +3742,8 @@ app:
       de: "Dateien und mehr hinzufügen @"
       it: "Aggiungi file e altro @"
       zh-CN: "添加文件等 @"
+      zh-TW: "新增檔案等 @"
+      zh-HK: "新增檔案等 @"
       pt-BR: "Adicionar arquivos e mais @"
       ko: "파일 및 추가 항목 @"
       nl: "Bestanden en meer toevoegen @"
@@ -2295,6 +3759,8 @@ app:
       de: "Ausführungsrichtlinie: %{policy}"
       it: "Criterio di esecuzione: %{policy}"
       zh-CN: "执行策略：%{policy}"
+      zh-TW: "執行策略：%{policy}"
+      zh-HK: "執行策略：%{policy}"
       pt-BR: "Política de execução: %{policy}"
       ko: "실행 정책: %{policy}"
       nl: "Uitvoeringsbeleid: %{policy}"
@@ -2310,6 +3776,8 @@ app:
       de: "Vor geschützten Aktionen fragen"
       it: "Chiedi prima delle azioni protette"
       zh-CN: "执行受保护操作前询问"
+      zh-TW: "執行受保護操作前詢問"
+      zh-HK: "執行受保護操作前詢問"
       pt-BR: "Perguntar antes de ações protegidas"
       ko: "보호된 작업 전에 묻기"
       nl: "Vragen vóór beschermde acties"
@@ -2325,6 +3793,8 @@ app:
       de: "Befehle automatisch genehmigen"
       it: "Approva automaticamente i comandi"
       zh-CN: "自动批准命令"
+      zh-TW: "自動批准指令"
+      zh-HK: "自動批准指令"
       pt-BR: "Aprovar comandos automaticamente"
       ko: "명령 자동 승인"
       nl: "Opdrachten automatisch goedkeuren"
@@ -2340,6 +3810,8 @@ app:
       de: "Berechtigungen nicht verfügbar"
       it: "Autorizzazioni non disponibili"
       zh-CN: "权限不可用"
+      zh-TW: "權限不可用"
+      zh-HK: "權限不可用"
       pt-BR: "Permissões indisponíveis"
       ko: "권한을 사용할 수 없음"
       nl: "Machtigingen niet beschikbaar"
@@ -2355,6 +3827,8 @@ app:
       de: "Richtlinie"
       it: "Criterio"
       zh-CN: "策略"
+      zh-TW: "策略"
+      zh-HK: "策略"
       pt-BR: "Política"
       ko: "정책"
       nl: "Beleid"
@@ -2370,6 +3844,8 @@ app:
       de: "Befehlsberechtigungen"
       it: "Autorizzazioni dei comandi"
       zh-CN: "命令权限"
+      zh-TW: "指令權限"
+      zh-HK: "指令權限"
       pt-BR: "Permissões de comandos"
       ko: "명령 권한"
       nl: "Opdrachtmachtigingen"
@@ -2385,6 +3861,8 @@ app:
       de: "Nachricht senden"
       it: "Invia messaggio"
       zh-CN: "发送消息"
+      zh-TW: "發送訊息"
+      zh-HK: "發送訊息"
       pt-BR: "Enviar mensagem"
       ko: "메시지 보내기"
       nl: "Bericht verzenden"
@@ -2400,6 +3878,8 @@ app:
       de: "Nachricht senden (Eingabe)"
       it: "Invia messaggio (Invio)"
       zh-CN: "发送消息（Enter）"
+      zh-TW: "發送訊息（Enter）"
+      zh-HK: "發送訊息（Enter）"
       pt-BR: "Enviar mensagem (Enter)"
       ko: "메시지 보내기 (Enter)"
       nl: "Bericht verzenden (Enter)"
@@ -2415,6 +3895,8 @@ app:
       de: "Ausführung abbrechen"
       it: "Annulla esecuzione"
       zh-CN: "取消运行"
+      zh-TW: "取消執行"
+      zh-HK: "取消執行"
       pt-BR: "Cancelar execução"
       ko: "실행 취소"
       nl: "Uitvoering annuleren"
@@ -2430,6 +3912,8 @@ app:
       de: "Aktuelle Ausführung abbrechen"
       it: "Annulla l’esecuzione attiva"
       zh-CN: "取消当前运行"
+      zh-TW: "取消當前執行"
+      zh-HK: "取消當前執行"
       pt-BR: "Cancelar execução ativa"
       ko: "활성 실행 취소"
       nl: "Actieve uitvoering annuleren"
@@ -2445,6 +3929,8 @@ app:
       de: "WebMCP verbinden"
       it: "Connetti WebMCP"
       zh-CN: "连接 WebMCP"
+      zh-TW: "連接 WebMCP"
+      zh-HK: "連接 WebMCP"
       pt-BR: "Conectar WebMCP"
       ko: "WebMCP 연결"
       nl: "WebMCP verbinden"
@@ -2460,6 +3946,8 @@ app:
       de: "WebMCP verbunden"
       it: "WebMCP connesso"
       zh-CN: "WebMCP 已连接"
+      zh-TW: "WebMCP 已連接"
+      zh-HK: "WebMCP 已連接"
       pt-BR: "WebMCP conectado"
       ko: "WebMCP 연결됨"
       nl: "WebMCP verbonden"
@@ -2475,6 +3963,8 @@ app:
       de: "Verbindungseinstellungen für VT Code CLI und WebMCP öffnen"
       it: "Apri le impostazioni di connessione di VT Code CLI e WebMCP"
       zh-CN: "打开 VT Code CLI 和 WebMCP 连接设置"
+      zh-TW: "打開 VT Code CLI 和 WebMCP 連接設定"
+      zh-HK: "打開 VT Code CLI 和 WebMCP 連接設定"
       pt-BR: "Abrir as configurações de conexão do VT Code CLI e WebMCP"
       ko: "VT Code CLI 및 WebMCP 연결 설정 열기"
       nl: "Verbindingsinstellingen voor VT Code CLI en WebMCP openen"
@@ -2490,6 +3980,8 @@ app:
       de: "Browser-App mit dieser CLI-gestützten Desktop-Sitzung koppeln"
       it: "Associa l’app del browser a questa sessione Desktop collegata alla CLI"
       zh-CN: "将浏览器应用与此 CLI 桌面会话配对"
+      zh-TW: "將瀏覽器應用與此 CLI 桌面對話配對"
+      zh-HK: "將瀏覽器應用與此 CLI 桌面對話配對"
       pt-BR: "Vincular o app do navegador a esta sessão Desktop conectada à CLI"
       ko: "브라우저 앱을 이 CLI 기반 데스크톱 세션과 페어링"
       nl: "De browserapp koppelen aan deze Desktop-sessie met CLI"
@@ -2505,6 +3997,8 @@ app:
       de: "Modell auswählen"
       it: "Scegli un modello"
       zh-CN: "选择模型"
+      zh-TW: "選擇模型"
+      zh-HK: "選擇模型"
       pt-BR: "Escolher um modelo"
       ko: "모델 선택"
       nl: "Een model kiezen"
@@ -2520,6 +4014,8 @@ app:
       de: "Modell wählen · Nach Anbieter, Name oder Modell-ID suchen"
       it: "Scegli un modello · Cerca per provider, nome o ID"
       zh-CN: "选择模型 · 按提供商、名称或模型 ID 搜索"
+      zh-TW: "選擇模型 · 按提供商、名稱或模型 ID 搜尋"
+      zh-HK: "選擇模型 · 按提供商、名稱或模型 ID 搜尋"
       pt-BR: "Escolher modelo · Pesquisar por provedor, nome ou ID do modelo"
       ko: "모델 선택 · 제공자, 이름 또는 모델 ID로 검색"
       nl: "Model kiezen · Zoeken op provider, naam of model-ID"
@@ -2535,6 +4031,8 @@ app:
       de: "Modell auswählen"
       it: "Seleziona modello"
       zh-CN: "选择模型"
+      zh-TW: "選擇模型"
+      zh-HK: "選擇模型"
       pt-BR: "Selecionar modelo"
       ko: "모델 선택"
       nl: "Model selecteren"
@@ -2550,6 +4048,8 @@ app:
       de: "Anbieter, Modelle oder IDs suchen…"
       it: "Cerca provider, modelli o ID…"
       zh-CN: "搜索提供商、模型或 ID…"
+      zh-TW: "搜尋提供商、模型或 ID…"
+      zh-HK: "搜尋提供商、模型或 ID…"
       pt-BR: "Pesquisar provedores, modelos ou IDs…"
       ko: "제공자, 모델 또는 ID 검색…"
       nl: "Providers, modellen of ID's zoeken…"
@@ -2565,6 +4065,8 @@ app:
       de: "Alle Modelle suchen…"
       it: "Cerca tutti i modelli…"
       zh-CN: "搜索所有模型…"
+      zh-TW: "搜尋所有模型…"
+      zh-HK: "搜尋所有模型…"
       pt-BR: "Pesquisar todos os modelos…"
       ko: "모든 모델 검색…"
       nl: "Alle modellen zoeken…"
@@ -2580,6 +4082,8 @@ app:
       de: "Denkaufwand: %{effort}"
       it: "Impegno di ragionamento: %{effort}"
       zh-CN: "推理强度：%{effort}"
+      zh-TW: "推理強度：%{effort}"
+      zh-HK: "推理強度：%{effort}"
       pt-BR: "Nível de raciocínio: %{effort}"
       ko: "추론 강도: %{effort}"
       nl: "Redeneerniveau: %{effort}"
@@ -2595,6 +4099,8 @@ app:
       de: "Denkaufwand"
       it: "Impegno di ragionamento"
       zh-CN: "推理强度"
+      zh-TW: "推理強度"
+      zh-HK: "推理強度"
       pt-BR: "Nível de raciocínio"
       ko: "추론 강도"
       nl: "Redeneerniveau"
@@ -2610,6 +4116,8 @@ app:
       de: "Mit Links und Rechts den Denkaufwand anpassen."
       it: "Usa le frecce sinistra e destra per regolare l’impegno di ragionamento."
       zh-CN: "使用左右方向键调整推理强度。"
+      zh-TW: "使用左右方向鍵調整推理強度。"
+      zh-HK: "使用左右方向鍵調整推理強度。"
       pt-BR: "Use as setas esquerda e direita para ajustar o nível de raciocínio."
       ko: "왼쪽/오른쪽 화살표 키로 추론 강도를 조정하세요."
       nl: "Gebruik de pijltjestoetsen Links en Rechts om het redeneerniveau aan te passen."
@@ -2625,6 +4133,8 @@ gpui_component:
       de: Kopieren
       it: Copia
       zh-CN: 复制
+      zh-TW: 複製
+      zh-HK: 複製
       pt-BR: "Copiar"
       ko: "복사"
       nl: "Kopiëren"
@@ -2638,6 +4148,8 @@ gpui_component:
       de: Alles auswählen
       it: Seleziona tutto
       zh-CN: 全选
+      zh-TW: 全選
+      zh-HK: 全選
       pt-BR: "Selecionar tudo"
       ko: "모두 선택"
       nl: "Alles selecteren"
@@ -2652,6 +4164,8 @@ gpui_component:
       de: Entfernen
       it: Rimuovi
       zh-CN: 移除
+      zh-TW: 移除
+      zh-HK: 移除
       pt-BR: "Remover"
       ko: "제거"
       nl: "Verwijderen"
@@ -2665,6 +4179,8 @@ gpui_component:
       de: Erneut versuchen
       it: Riprova
       zh-CN: 重试
+      zh-TW: 重試
+      zh-HK: 重試
       pt-BR: "Tentar novamente"
       ko: "다시 시도"
       nl: "Opnieuw proberen"

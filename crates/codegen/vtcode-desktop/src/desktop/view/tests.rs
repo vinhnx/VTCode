@@ -129,6 +129,28 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
             crate::desktop::preferences::Preferences::load().ui_language(),
             crate::desktop::localization::UiLanguage::Russian
         );
+        window.click("ui-language-zh-TW", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.ui_language(),
+            crate::desktop::localization::UiLanguage::TraditionalChineseTaiwan
+        );
+        assert_eq!(window.find("settings-panel").label(), Some("設定"));
+        assert_eq!(window.find("new-session").label(), Some("新對話"));
+        assert_eq!(window.find("ui-language-zh-TW").checked(), Some(true));
+        window.click("ui-language-zh-HK", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.ui_language(),
+            crate::desktop::localization::UiLanguage::TraditionalChineseHongKong
+        );
+        assert_eq!(window.find("settings-panel").label(), Some("設定"));
+        assert_eq!(window.find("new-session").label(), Some("新對話"));
+        assert_eq!(window.find("ui-language-zh-HK").checked(), Some(true));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().ui_language(),
+            crate::desktop::localization::UiLanguage::TraditionalChineseHongKong
+        );
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
     })
     .unwrap();
@@ -2004,6 +2026,34 @@ fn command_palette_confirms_the_highlighted_command(cx: &mut TestAppContext) {
     })
     .unwrap();
     assert!(requests.try_recv().is_err(), "a blank thread does not start a runtime");
+}
+
+#[gpui_kit::test]
+fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let language = crate::desktop::localization::UiLanguage::Spanish;
+    crate::desktop::localization::set_language(language);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.preferences.set_ui_language(language);
+            view.open_command_palette(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Paleta de comandos"));
+        assert_eq!(view.read(cx).palette_groups[0].0, "Sesión");
+        assert_eq!(view.read(cx).palette_groups[0].1[0].label, "Nueva sesión");
+
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+        window.render_frame(cx);
+        window.click("attach-files", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Añadir archivos y más @"));
+        let palette_groups = view.read(cx).composer_resource_groups();
+        assert_eq!(palette_groups[0].0, "Añadir");
+        assert_eq!(palette_groups[0].1[0].label, "Archivos…");
+    })
+    .unwrap();
+    crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
 }
 
 #[gpui_kit::test]
