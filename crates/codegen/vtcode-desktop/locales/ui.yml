@@ -1,6 +1,24 @@
 _version: 2
 app:
   settings:
+    visual_style:
+      en: Visual style
+      vi: Phong cách giao diện
+      es: Estilo visual
+      fr: Style visuel
+      ja: ビジュアルスタイル
+    typography:
+      en: Typography
+      vi: Kiểu chữ
+      es: Tipografía
+      fr: Typographie
+      ja: タイポグラフィ
+    layout:
+      en: Layout
+      vi: Bố cục
+      es: Diseño
+      fr: Disposition
+      ja: レイアウト
     title:
       en: Settings
       es: "Configuración"

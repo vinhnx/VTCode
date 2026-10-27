@@ -88,6 +88,10 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Spanish);
         assert_eq!(window.find("settings-panel").label(), Some("Configuración"));
+        assert_eq!(window.find("settings-sheet-heading").label(), Some("Configuración"));
+        assert_eq!(window.find("appearance-visual-style-group").label(), Some("Estilo visual"));
+        assert_eq!(window.find("appearance-typography-group").label(), Some("Tipografía"));
+        assert_eq!(window.find("appearance-layout-group").label(), Some("Diseño"));
         assert_eq!(window.find("ui-language-es").checked(), Some(true));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().ui_language(),

@@ -2177,12 +2177,22 @@ impl DesktopView {
                 }
             });
             let on_close_view = close_view.clone();
+            let sheet_title = if is_config_page {
+                "VT Code configuration".to_owned()
+            } else {
+                rust_i18n::t!("app.settings.title").to_string()
+            };
             sheet
-                .title(DialogTitle::new().text_lg().child(if is_config_page {
-                    "VT Code configuration"
-                } else {
-                    "Settings"
-                }))
+                .title(
+                    DialogTitle::new().text_lg().child(
+                        div()
+                            .id("settings-sheet-heading")
+                            .test_support()
+                            .role(gpui_kit::Role::Label)
+                            .aria_label(sheet_title.clone())
+                            .child(sheet_title),
+                    ),
+                )
                 .size(sheet_width)
                 .p_0()
                 .child(content)

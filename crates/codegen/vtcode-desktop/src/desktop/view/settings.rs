@@ -243,6 +243,9 @@ impl DesktopView {
         } else {
             "dark"
         };
+        let visual_style = rust_i18n::t!("app.settings.visual_style").to_string();
+        let typography = rust_i18n::t!("app.settings.typography").to_string();
+        let layout = rust_i18n::t!("app.settings.layout").to_string();
         let mut content = div()
             .id("appearance-settings")
             .test_support()
@@ -251,11 +254,11 @@ impl DesktopView {
             .gap_5()
             .child(accessible_group_box(
                 "appearance-visual-style-group",
-                "Visual style",
+                visual_style.clone(),
                 GroupBox::new()
                     .flex_shrink_0()
                     .fill()
-                    .title("Visual style")
+                    .title(visual_style)
                     .child(
                         gpui_kit::component::switch::Switch::new("separate-theme-profiles")
                             .label("Separate light and dark modes")
@@ -357,11 +360,11 @@ impl DesktopView {
             ))
             .child(accessible_group_box(
                 "appearance-typography-group",
-                "Typography",
+                typography.clone(),
                 GroupBox::new()
                     .flex_shrink_0()
                     .fill()
-                    .title("Typography")
+                    .title(typography)
                     .child(self.render_font_family(FontTarget::Ui, cx))
                     .child(self.render_font_family(FontTarget::Code, cx))
                     .child(self.render_font_size(false, cx))
@@ -429,11 +432,11 @@ impl DesktopView {
 
         content = content.child(accessible_group_box(
             "appearance-layout-group",
-            "Layout",
+            layout.clone(),
             GroupBox::new()
                 .flex_shrink_0()
                 .fill()
-                .title("Layout")
+                .title(layout)
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-visible")
                         .label("Show side navigation")
