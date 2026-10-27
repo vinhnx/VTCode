@@ -151,6 +151,26 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
             crate::desktop::preferences::Preferences::load().ui_language(),
             crate::desktop::localization::UiLanguage::TraditionalChineseHongKong
         );
+        window.click("ui-language-tr", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Turkish);
+        assert_eq!(window.find("settings-panel").label(), Some("Ayarlar"));
+        assert_eq!(window.find("new-session").label(), Some("Yeni sohbet"));
+        assert_eq!(window.find("ui-language-tr").checked(), Some(true));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().ui_language(),
+            crate::desktop::localization::UiLanguage::Turkish
+        );
+        window.click("ui-language-pl", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Polish);
+        assert_eq!(window.find("settings-panel").label(), Some("Ustawienia"));
+        assert_eq!(window.find("new-session").label(), Some("Nowy wątek"));
+        assert_eq!(window.find("ui-language-pl").checked(), Some(true));
+        assert_eq!(
+            crate::desktop::preferences::Preferences::load().ui_language(),
+            crate::desktop::localization::UiLanguage::Polish
+        );
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
     })
     .unwrap();

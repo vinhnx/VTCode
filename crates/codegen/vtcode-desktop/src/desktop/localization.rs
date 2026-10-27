@@ -19,10 +19,12 @@ pub(super) enum UiLanguage {
     Dutch,
     Russian,
     Indonesian,
+    Turkish,
+    Polish,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 15] = [
+    pub(super) const ALL: [Self; 17] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -38,6 +40,8 @@ impl UiLanguage {
         Self::Dutch,
         Self::Russian,
         Self::Indonesian,
+        Self::Turkish,
+        Self::Polish,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -56,6 +60,8 @@ impl UiLanguage {
             Some("nl") => Self::Dutch,
             Some("ru") => Self::Russian,
             Some("id") => Self::Indonesian,
+            Some("tr") => Self::Turkish,
+            Some("pl") => Self::Polish,
             _ => Self::English,
         }
     }
@@ -77,6 +83,8 @@ impl UiLanguage {
             Self::Dutch => "nl",
             Self::Russian => "ru",
             Self::Indonesian => "id",
+            Self::Turkish => "tr",
+            Self::Polish => "pl",
         }
     }
 
@@ -97,6 +105,8 @@ impl UiLanguage {
             Self::Dutch => "Nederlands",
             Self::Russian => "Русский",
             Self::Indonesian => "Bahasa Indonesia",
+            Self::Turkish => "Türkçe",
+            Self::Polish => "Polski",
         }
     }
 }
@@ -124,8 +134,14 @@ mod tests {
         assert_eq!(UiLanguage::from_saved(None), UiLanguage::English);
         assert_eq!(UiLanguage::from_saved(Some("vi")), UiLanguage::Vietnamese);
         assert_eq!(UiLanguage::from_saved(Some(" vi ")), UiLanguage::Vietnamese);
+        let available_locales = rust_i18n::available_locales!();
         for language in UiLanguage::ALL {
             assert_eq!(UiLanguage::from_saved(Some(language.locale())), language);
+            assert!(
+                available_locales.iter().any(|locale| locale.as_ref() == language.locale()),
+                "{} is not present in the compiled catalog",
+                language.locale()
+            );
         }
         assert_eq!(UiLanguage::from_saved(Some("xx")), UiLanguage::English);
     }
@@ -157,6 +173,8 @@ mod tests {
             ("nl", "Instellingen", "Kopiëren", "Alles selecteren", "Verwijderen"),
             ("ru", "Настройки", "Копировать", "Выделить всё", "Удалить"),
             ("id", "Pengaturan", "Salin", "Pilih Semua", "Hapus"),
+            ("tr", "Ayarlar", "Kopyala", "Tümünü Seç", "Kaldır"),
+            ("pl", "Ustawienia", "Kopiuj", "Zaznacz wszystko", "Usuń"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
@@ -290,6 +308,20 @@ mod tests {
                 "Tambahkan file dan lainnya @",
                 "Minta VT Code membuat perubahan…",
             ),
+            (
+                "tr",
+                "Çalışma alanı",
+                "Yeni sohbet",
+                "Dosya ve daha fazlasını ekle @",
+                "VT Code'dan değişiklik yapmasını iste…",
+            ),
+            (
+                "pl",
+                "Obszar roboczy",
+                "Nowy wątek",
+                "Dodaj pliki i więcej @",
+                "Poproś VT Code o wprowadzenie zmian…",
+            ),
         ];
 
         for (locale, workspace, new_thread, add_context, placeholder) in expected {
@@ -374,6 +406,9 @@ mod tests {
             assert!(summary.contains("8"), "count was not interpolated in {locale}");
             assert!(summary.contains("+13"), "additions were not interpolated in {locale}");
             assert!(summary.contains("−4"), "deletions were not interpolated in {locale}");
+            if locale == "pl" {
+                assert!(summary.contains("plików"), "file label was not interpolated in {locale}");
+            }
 
             let file_position = rust_i18n::t!(
                 "app.workspace_review.file_position",
@@ -388,6 +423,12 @@ mod tests {
                 rust_i18n::t!("app.workspace_review.refresh_failed", locale = locale, error = "repository unavailable")
                     .to_string();
             assert!(refresh_error.contains("repository unavailable"), "diagnostic was lost in {locale}");
+        }
+
+        for locale in ["tr", "pl"] {
+            let folder =
+                rust_i18n::t!("app.workspace_review.folder_value", locale = locale, folder = "src").to_string();
+            assert!(folder.contains("src"), "folder path was not interpolated in {locale}");
         }
     }
 
