@@ -1167,67 +1167,32 @@ pub(super) fn model_options_header(
         .w_full()
         .min_w_0()
         .flex()
-        .flex_col()
+        .items_center()
+        .justify_center()
+        .flex_wrap()
         .gap_2()
-        .p_3()
-        .rounded_lg()
-        .border_1()
-        .border_color(colors.primary.opacity(0.24))
-        .bg(colors.background.opacity(0.42))
         .child(
             div()
-                .flex()
-                .items_start()
-                .gap_2()
-                .child(
-                    div()
-                        .size(px(30.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_lg()
-                        .bg(colors.primary.opacity(0.16))
-                        .child(Icon::new(IconName::Bot).size_4().text_color(colors.primary)),
-                )
-                .child(
-                    div()
-                        .id("model-selected-name")
-                        .test_support()
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(model)
-                        .flex_1()
-                        .min_w_0()
-                        .text_sm()
-                        .font_semibold()
-                        .whitespace_normal()
-                        .child(model.to_string()),
-                ),
+                .id("model-selected-name")
+                .test_support()
+                .role(gpui_kit::Role::Label)
+                .aria_label(model)
+                .min_w_0()
+                .text_sm()
+                .font_medium()
+                .whitespace_normal()
+                .child(model.to_string()),
         );
     if let Some(effort) = effort {
         summary = summary.child(
             div()
-                .id("model-effort-row")
+                .id("model-effort-value")
                 .test_support()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(div().text_xs().text_color(colors.muted_foreground).child("Reasoning effort"))
-                .child(
-                    div()
-                        .id("model-effort-value")
-                        .test_support()
-                        .role(gpui_kit::Role::Label)
-                        .aria_label(format!("Current reasoning effort: {effort}"))
-                        .px_2()
-                        .py_1()
-                        .rounded_full()
-                        .bg(colors.primary)
-                        .text_color(colors.primary_foreground)
-                        .text_xs()
-                        .font_semibold()
-                        .child(capitalize_agent_label(effort)),
-                ),
+                .role(gpui_kit::Role::Label)
+                .aria_label(format!("Current reasoning effort: {effort}"))
+                .text_sm()
+                .text_color(colors.muted_foreground)
+                .child(capitalize_agent_label(effort)),
         );
     }
     let mut panel = div().p_3().flex().flex_col().gap_2().min_w_0().child(summary);
@@ -1324,9 +1289,9 @@ fn effort_knob(
                 .h(px(32.))
                 .px(px(18.))
                 .rounded_full()
-                .bg(colors.primary.opacity(0.2))
+                .bg(colors.foreground.opacity(0.12))
                 .border_1()
-                .border_color(colors.primary.opacity(0.42))
+                .border_color(colors.foreground.opacity(0.18))
                 .child(
                     SliderIndicator::new(state)
                         .relative()
@@ -1350,9 +1315,9 @@ fn effort_knob(
                                 .ml(px(-18.))
                                 .size(px(36.))
                                 .rounded_full()
-                                .bg(colors.primary)
-                                .border_2()
-                                .border_color(colors.popover)
+                                .bg(gpui_kit::white())
+                                .border_1()
+                                .border_color(colors.foreground.opacity(0.35))
                                 .shadow_md(),
                         ),
                 ),
