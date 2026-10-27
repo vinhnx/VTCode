@@ -1099,13 +1099,13 @@ fn spawn_session_pump(
             }
         };
         if let Some(turn_id) = completed_turn {
+            turn_finished.notify_waiters();
             let _ = send_notification(
                 &notifications,
                 protocol::method::TURN_STATUS,
                 json!({ "sessionId": session_id, "turnId": turn_id, "status": "failed" }),
             )
             .await;
-            turn_finished.notify_waiters();
         }
     });
 }
@@ -1187,6 +1187,12 @@ async fn publish_thread_event(
         (turn_id, state.webmcp_event_hub.clone())
     };
 
+    // Cleanup depends on the state transition, not on a potentially full or
+    // disconnected UI notification queue.
+    if terminal_status.is_some() && turn_id.is_some() {
+        turn_finished.notify_waiters();
+    }
+
     if let Some(event_hub) = webmcp_event_hub
         && let Err(error) = event_hub.publish(event.clone())
     {
@@ -1206,7 +1212,6 @@ async fn publish_thread_event(
             json!({ "sessionId": session_id, "turnId": turn_id, "status": status }),
         )
         .await?;
-        turn_finished.notify_waiters();
     }
     Ok(())
 }
@@ -3202,6 +3207,68 @@ mod tests {
             let status = received.try_recv().unwrap();
             assert_eq!(status.params["turnId"], turn_id);
             assert_eq!(status.params["status"], expected_status);
+        }
+    }
+
+    #[tokio::test]
+    async fn terminal_cleanup_wakes_when_notification_queue_is_full_or_closed() {
+        use vtcode_core::exec::events::{ThreadEvent, TurnFailedEvent, VersionedThreadEvent};
+        for closed in [false, true] {
+            let state = Mutex::new(ServerState {
+                session_id: Some("session".into()),
+                active_turn_id: Some("turn".into()),
+                ..Default::default()
+            });
+            let (notifications, mut receiver) = mpsc::channel(1);
+            notifications
+                .try_send(protocol::Notification {
+                    jsonrpc: "2.0".into(),
+                    method: "existing".into(),
+                    params: json!({}),
+                })
+                .unwrap();
+            if closed {
+                receiver.close();
+            }
+            let finished = Notify::new();
+            let waiting = finished.notified();
+            tokio::pin!(waiting);
+            waiting.as_mut().enable();
+            let publishing = publish_thread_event(
+                "session",
+                VersionedThreadEvent::new(ThreadEvent::TurnFailed(TurnFailedEvent {
+                    completed_at: None,
+                    message: "stopped".into(),
+                    usage: None,
+                })),
+                &state,
+                &notifications,
+                &finished,
+            );
+            tokio::pin!(publishing);
+            let woke = tokio::select! {
+                _ = &mut waiting => true,
+                result = &mut publishing => {
+                    assert!(closed && result.is_err(), "full queue must preserve the event");
+                    false
+                },
+                _ = tokio::time::sleep(Duration::from_secs(1)) => panic!("cleanup waiter not notified"),
+            };
+            if !woke {
+                timeout(Duration::from_secs(1), &mut waiting)
+                    .await
+                    .expect("cleanup waiter notified");
+            }
+            assert!(state.lock().await.active_turn_id.is_none());
+            if !closed {
+                assert_eq!(receiver.recv().await.unwrap().method, "existing");
+                let (result, (event, status)) = tokio::join!(publishing, async {
+                    (receiver.recv().await.unwrap(), receiver.recv().await.unwrap())
+                });
+                result.unwrap();
+                assert_eq!(event.method, protocol::method::THREAD_EVENT);
+                assert_eq!(status.method, protocol::method::TURN_STATUS);
+            }
         }
     }
 
