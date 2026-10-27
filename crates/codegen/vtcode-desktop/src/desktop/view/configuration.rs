@@ -613,7 +613,7 @@ impl DesktopView {
             self.status = "Saving CLI settings…".into();
             self.error = None;
         } else {
-            self.config_editor_error = Some("The local CLI settings request queue is unavailable.".into());
+            self.config_editor_error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
         cx.notify();
     }

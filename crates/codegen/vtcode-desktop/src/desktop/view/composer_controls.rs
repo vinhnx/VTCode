@@ -555,7 +555,7 @@ impl DesktopView {
         if !self.resources_loaded && !self.resources_loading && self.session_change_idle() {
             self.resources_loading = self.request(protocol::method::COMPOSER_RESOURCES, json!({}));
             if !self.resources_loading {
-                self.error = Some("The local CLI resource request queue is unavailable.".into());
+                self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
                 cx.notify();
             }
         }

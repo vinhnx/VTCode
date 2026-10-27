@@ -226,7 +226,7 @@ fn webmcp_status_discards_snapshots_superseded_by_session_changes(cx: &mut TestA
                 result: Some(json!({})), error: None,
             }, cx);
             assert!(view.webmcp_status_dirty, "an invalid refresh cannot validate the old snapshot");
-            assert!(view.webmcp_notice.as_deref().unwrap().contains("invalid WebMCP status"));
+            assert!(view.webmcp_notice.as_ref().unwrap().text().contains("invalid WebMCP status"));
             view.request_webmcp_status();
             view.handle_backend_event(BackendEvent::Response {
                 method: vtcode_desktop_protocol::method::WEBMCP_STATUS.into(),
@@ -243,6 +243,53 @@ fn webmcp_status_discards_snapshots_superseded_by_session_changes(cx: &mut TestA
         assert_eq!(method, vtcode_desktop_protocol::method::WEBMCP_STATUS);
     }
     assert!(requests.try_recv().is_err());
+}
+
+#[gpui_kit::test]
+fn webmcp_notice_tracks_the_selected_language_and_typed_refresh_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _window, cx| {
+        view.update(cx, |view, _cx| {
+            view.preferences
+                .set_ui_language(crate::desktop::localization::UiLanguage::Turkish);
+            crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::Turkish);
+            view.webmcp_notice = Some(super::webmcp::WebmcpNotice::Disconnected);
+        });
+        let turkish = rust_i18n::t!("app.webmcp_notice.disconnected", locale = "tr").to_string();
+        assert_eq!(view.read(cx).webmcp_notice.as_ref().unwrap().text(), turkish);
+
+        view.update(cx, |view, _cx| {
+            view.preferences
+                .set_ui_language(crate::desktop::localization::UiLanguage::Polish);
+            crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::Polish);
+        });
+        let polish = rust_i18n::t!("app.webmcp_notice.disconnected", locale = "pl").to_string();
+        assert_eq!(view.read(cx).webmcp_notice.as_ref().unwrap().text(), polish);
+
+        view.update(cx, |view, cx| {
+            assert_eq!(view.webmcp_notice, Some(super::webmcp::WebmcpNotice::Disconnected));
+            assert!(view.handle_webmcp_response(
+                vtcode_desktop_protocol::method::WEBMCP_STATUS,
+                serde_json::to_value(connected_webmcp_status()).unwrap(),
+                cx
+            ));
+            assert!(view.webmcp_notice.is_none(), "a successful refresh clears typed connection failures");
+
+            view.webmcp_notice = Some(super::webmcp::WebmcpNotice::PairingCreated);
+            assert!(view.handle_webmcp_response(
+                vtcode_desktop_protocol::method::WEBMCP_STATUS,
+                serde_json::to_value(connected_webmcp_status()).unwrap(),
+                cx
+            ));
+            assert_eq!(
+                view.webmcp_notice,
+                Some(super::webmcp::WebmcpNotice::PairingCreated),
+                "a status refresh preserves informational pairing feedback"
+            );
+        });
+        crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
+    })
+    .unwrap();
 }
 
 fn pending_webmcp_pairing() -> vtcode_desktop_protocol::WebmcpPairResult {
@@ -3818,12 +3865,18 @@ fn webmcp_tools_and_roots_commands_show_shared_guidance_without_backend_requests
             view.submit_prompt(window, cx);
             assert!(view.settings_open);
             assert!(!view.running);
-            assert_eq!(view.webmcp_notice.as_deref(), Some(vtcode_desktop_protocol::slash_command::WEBMCP_TOOLS_HELP));
+            assert_eq!(
+                view.webmcp_notice.as_ref().unwrap().text(),
+                vtcode_desktop_protocol::slash_command::WEBMCP_TOOLS_HELP
+            );
 
             view.composer
                 .update(cx, |state, cx| state.set_value("/webmcp roots", window, cx));
             view.submit_prompt(window, cx);
-            assert_eq!(view.webmcp_notice.as_deref(), Some(vtcode_desktop_protocol::slash_command::WEBMCP_ROOTS_HELP));
+            assert_eq!(
+                view.webmcp_notice.as_ref().unwrap().text(),
+                vtcode_desktop_protocol::slash_command::WEBMCP_ROOTS_HELP
+            );
         });
     })
     .unwrap();
@@ -4090,8 +4143,8 @@ fn service_exit_discards_stale_webmcp_state_and_refreshes_after_reconnect(cx: &m
             assert!(view.webmcp_request_pending.is_none(), "an abandoned request cannot keep the panel busy");
             assert!(
                 view.webmcp_notice
-                    .as_deref()
-                    .is_some_and(|notice| notice.contains("disconnected"))
+                    .as_ref()
+                    .is_some_and(|notice| notice.text().contains("disconnected"))
             );
 
             let (commands, mut requests) = tokio::sync::mpsc::channel(8);

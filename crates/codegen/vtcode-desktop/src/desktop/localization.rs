@@ -234,6 +234,35 @@ mod tests {
         assert_catalog_key!("app.errors.model_selection_runtime_changing");
         assert_catalog_key!("app.errors.runtime_options_unavailable");
         assert_catalog_key!("app.errors.desktop_command_unavailable");
+        assert_catalog_key!("app.errors.request_queue_unavailable");
+    }
+
+    #[test]
+    fn webmcp_notice_copy_is_translated_for_every_language() {
+        macro_rules! assert_catalog_key {
+            ($key:literal) => {
+                for language in UiLanguage::ALL {
+                    let locale = language.locale();
+                    let translated = rust_i18n::t!($key, locale = locale).to_string();
+                    assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
+                    if language != UiLanguage::English {
+                        assert_ne!(
+                            translated,
+                            rust_i18n::t!($key, locale = "en").to_string(),
+                            "{locale}/{} fell back to English",
+                            $key
+                        );
+                    }
+                }
+            };
+        }
+
+        assert_catalog_key!("app.webmcp_notice.commands_help");
+        assert_catalog_key!("app.webmcp_notice.disconnected");
+        assert_catalog_key!("app.webmcp_notice.invalid_status");
+        assert_catalog_key!("app.webmcp_notice.pairing_created");
+        assert_catalog_key!("app.webmcp_notice.invalid_pairing");
+        assert_catalog_key!("app.webmcp_notice.stopped");
     }
 
     #[test]
@@ -392,7 +421,7 @@ mod tests {
             assert_translated!(locale, "app.workspace_review.preview_truncated");
             assert_translated!(locale, "app.workspace_review.structured_preview_unavailable");
             assert_translated!(locale, "app.workspace_review.changed_files");
-            assert_translated!(locale, "app.workspace_review.request_queue_unavailable");
+            assert_translated!(locale, "app.errors.request_queue_unavailable");
 
             let summary = rust_i18n::t!(
                 "app.workspace_review.changed_files_summary",

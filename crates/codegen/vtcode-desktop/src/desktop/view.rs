@@ -710,7 +710,7 @@ struct DesktopView {
     webmcp_origin_input: Entity<TextareaState>,
     webmcp_request_pending: Option<&'static str>,
     webmcp_status_dirty: bool,
-    webmcp_notice: Option<String>,
+    webmcp_notice: Option<webmcp::WebmcpNotice>,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
     config_target: protocol::ConfigTarget,
     config_value_input: Entity<TextareaState>,
@@ -1397,7 +1397,7 @@ impl DesktopView {
             // Reuse the session transition gate until the handshake is validated.
             self.session_request = Some(protocol::method::INITIALIZE);
         } else {
-            self.report_service_launch_failure("The local service request queue is unavailable.".to_string());
+            self.report_service_launch_failure(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
     }
 
@@ -3230,7 +3230,7 @@ impl DesktopView {
                     self.backend = None;
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
-                    self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
+                    self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                     self.fail_workspace_review("Local service disconnected.".into());
                     self.running = false;
                     self.status = "Local service disconnected".to_string();
@@ -3497,7 +3497,7 @@ impl DesktopView {
                                 ] {
                                     if !self.request(method, json!({})) {
                                         self.error =
-                                            Some("The local service request queue is unavailable.".to_string());
+                                            Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
                                         discovery_queued = false;
                                         break;
                                     }
@@ -3837,7 +3837,7 @@ impl DesktopView {
             }
             BackendEvent::Exited { status, authentication_required } => {
                 self.cancel_session_load_task();
-                self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
+                self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;
@@ -3879,7 +3879,7 @@ impl DesktopView {
             }
             BackendEvent::LaunchFailed(error) => {
                 self.cancel_session_load_task();
-                self.reset_webmcp_state(Some(webmcp::WEBMCP_DISCONNECTED_NOTICE));
+                self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                 self.fail_workspace_review("The local service could not start.".into());
                 self.clear_pending_interaction();
                 self.session_request = None;

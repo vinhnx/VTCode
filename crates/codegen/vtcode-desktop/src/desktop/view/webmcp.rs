@@ -17,8 +17,37 @@ use super::{DesktopButtonExt, DesktopView, desktop_button};
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
 const WEBMCP_COMMANDS_HELP: &str =
     "Commands: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop.";
-pub(super) const WEBMCP_DISCONNECTED_NOTICE: &str =
-    "The local VT Code service disconnected. Reconnect to refresh WebMCP status.";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum WebmcpNotice {
+    CommandsHelp,
+    Disconnected,
+    RequestQueueUnavailable,
+    InvalidStatus,
+    PairingCreated,
+    InvalidPairing,
+    Stopped,
+    Text(String),
+}
+
+impl WebmcpNotice {
+    pub(super) fn text(&self) -> String {
+        match self {
+            Self::CommandsHelp => rust_i18n::t!("app.webmcp_notice.commands_help").to_string(),
+            Self::Disconnected => rust_i18n::t!("app.webmcp_notice.disconnected").to_string(),
+            Self::RequestQueueUnavailable => rust_i18n::t!("app.errors.request_queue_unavailable").to_string(),
+            Self::InvalidStatus => rust_i18n::t!("app.webmcp_notice.invalid_status").to_string(),
+            Self::PairingCreated => rust_i18n::t!("app.webmcp_notice.pairing_created").to_string(),
+            Self::InvalidPairing => rust_i18n::t!("app.webmcp_notice.invalid_pairing").to_string(),
+            Self::Stopped => rust_i18n::t!("app.webmcp_notice.stopped").to_string(),
+            Self::Text(text) => text.clone(),
+        }
+    }
+
+    fn clears_on_status_refresh(&self) -> bool {
+        matches!(self, Self::Disconnected | Self::RequestQueueUnavailable | Self::InvalidStatus)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 enum WebmcpCommand {
@@ -54,12 +83,12 @@ fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
 }
 
 impl DesktopView {
-    pub(super) fn reset_webmcp_state(&mut self, notice: Option<&str>) {
+    pub(super) fn reset_webmcp_state(&mut self, notice: Option<WebmcpNotice>) {
         self.webmcp_status = None;
         self.webmcp_pairing = None;
         self.webmcp_request_pending = None;
         self.webmcp_status_dirty = false;
-        self.webmcp_notice = notice.map(str::to_owned);
+        self.webmcp_notice = notice;
     }
 
     fn open_webmcp_settings_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -85,7 +114,11 @@ impl DesktopView {
         let command = match command {
             Ok(command) => command,
             Err(error) => {
-                self.error = Some(error.to_string());
+                self.error = Some(if error == WEBMCP_COMMANDS_HELP {
+                    WebmcpNotice::CommandsHelp.text()
+                } else {
+                    error.to_string()
+                });
                 cx.notify();
                 return true;
             }
@@ -102,7 +135,7 @@ impl DesktopView {
         self.open_webmcp_settings_panel(window, cx);
         match command {
             WebmcpCommand::Help => {
-                self.webmcp_notice = Some(WEBMCP_COMMANDS_HELP.into());
+                self.webmcp_notice = Some(WebmcpNotice::CommandsHelp);
                 self.request_webmcp_status();
             }
             WebmcpCommand::Status => self.request_webmcp_status(),
@@ -112,10 +145,10 @@ impl DesktopView {
                 self.request_webmcp_pair(origin, replace);
             }
             WebmcpCommand::Tools => {
-                self.webmcp_notice = Some(WEBMCP_TOOLS_HELP.into());
+                self.webmcp_notice = Some(WebmcpNotice::Text(WEBMCP_TOOLS_HELP.into()));
             }
             WebmcpCommand::Roots => {
-                self.webmcp_notice = Some(WEBMCP_ROOTS_HELP.into());
+                self.webmcp_notice = Some(WebmcpNotice::Text(WEBMCP_ROOTS_HELP.into()));
             }
             WebmcpCommand::Stop => self.request_webmcp_stop(),
         }
@@ -348,6 +381,7 @@ impl DesktopView {
         );
 
         if let Some(notice) = self.webmcp_notice.as_ref() {
+            let notice = notice.text();
             controls = controls.child(
                 div()
                     .id("webmcp-notice")
@@ -369,7 +403,7 @@ impl DesktopView {
         if !self.request(protocol::method::WEBMCP_STATUS, json!({})) {
             self.webmcp_request_pending = None;
             self.webmcp_status_dirty = true;
-            self.webmcp_notice = Some("The local service request queue is unavailable.".into());
+            self.webmcp_notice = Some(WebmcpNotice::RequestQueueUnavailable);
         } else {
             self.webmcp_status_dirty = false;
         }
@@ -399,7 +433,7 @@ impl DesktopView {
         self.webmcp_request_pending = Some(protocol::method::WEBMCP_PAIR);
         if !self.request(protocol::method::WEBMCP_PAIR, json!({ "origin": origin, "replace": replace })) {
             self.webmcp_request_pending = None;
-            self.webmcp_notice = Some("The local service request queue is unavailable.".into());
+            self.webmcp_notice = Some(WebmcpNotice::RequestQueueUnavailable);
         }
     }
 
@@ -412,7 +446,7 @@ impl DesktopView {
         self.webmcp_request_pending = Some(protocol::method::WEBMCP_STOP);
         if !self.request(protocol::method::WEBMCP_STOP, json!({})) {
             self.webmcp_request_pending = None;
-            self.webmcp_notice = Some("The local service request queue is unavailable.".into());
+            self.webmcp_notice = Some(WebmcpNotice::RequestQueueUnavailable);
         }
     }
 
@@ -431,33 +465,26 @@ impl DesktopView {
             protocol::method::WEBMCP_STATUS => match serde_json::from_value::<protocol::WebmcpBridgeStatus>(result) {
                 Ok(status) => {
                     self.webmcp_status = Some(status);
-                    if matches!(
-                        self.webmcp_notice.as_deref(),
-                        Some(WEBMCP_DISCONNECTED_NOTICE)
-                            | Some("The desktop service returned an invalid WebMCP status.")
-                            | Some("The local service request queue is unavailable.")
-                    ) {
+                    if self.webmcp_notice.as_ref().is_some_and(WebmcpNotice::clears_on_status_refresh) {
                         self.webmcp_notice = None;
                     }
                 }
                 Err(_) => {
                     self.webmcp_status_dirty = true;
-                    self.webmcp_notice = Some("The desktop service returned an invalid WebMCP status.".into());
+                    self.webmcp_notice = Some(WebmcpNotice::InvalidStatus);
                 }
             },
             protocol::method::WEBMCP_PAIR => match serde_json::from_value::<protocol::WebmcpPairResult>(result) {
                 Ok(pairing) => {
-                    self.webmcp_notice =
-                        Some("Pairing code created. It is valid for a short time and can be used once.".into());
+                    self.webmcp_notice = Some(WebmcpNotice::PairingCreated);
                     self.webmcp_pairing = Some(pairing);
                     self.request_webmcp_status();
                 }
-                Err(_) => self.webmcp_notice = Some("The desktop service returned invalid pairing details.".into()),
+                Err(_) => self.webmcp_notice = Some(WebmcpNotice::InvalidPairing),
             },
             protocol::method::WEBMCP_STOP => {
                 self.webmcp_pairing = None;
-                self.webmcp_notice =
-                    Some("WebMCP disconnected. Browser sessions and pairing codes were revoked.".into());
+                self.webmcp_notice = Some(WebmcpNotice::Stopped);
                 self.request_webmcp_status();
             }
             _ => {}
@@ -475,7 +502,7 @@ impl DesktopView {
         }
         self.webmcp_request_pending = None;
         self.webmcp_status_dirty = true;
-        self.webmcp_notice = Some(error.to_string());
+        self.webmcp_notice = Some(WebmcpNotice::Text(error.to_string()));
         self.error = Some(error.to_string());
         true
     }

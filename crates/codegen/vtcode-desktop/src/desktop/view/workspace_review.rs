@@ -89,7 +89,7 @@ impl DesktopView {
             protocol::method::WORKSPACE_REVIEW,
             json!({ "requestId": request_id, "scope": scope, "includeUntracked": include_untracked }),
         ) {
-            self.fail_workspace_review(rust_i18n::t!("app.workspace_review.request_queue_unavailable").to_string());
+            self.fail_workspace_review(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
         cx.notify();
     }

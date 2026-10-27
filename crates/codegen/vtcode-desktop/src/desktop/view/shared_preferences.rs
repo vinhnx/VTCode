@@ -34,7 +34,7 @@ impl DesktopView {
             self.status = "Saving the selected theme to CLI configuration…".into();
             self.error = None;
         } else {
-            self.error = Some("The local CLI settings request queue is unavailable.".into());
+            self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
         cx.notify();
     }
@@ -62,7 +62,7 @@ impl DesktopView {
         if let Some(backend) = self.backend.as_ref() {
             // Wait for the supervised transport's terminal event before replacing it.
             if backend.commands.try_send(BackendCommand::Stop).is_err() {
-                self.error = Some("The local service request queue is unavailable. Try again.".into());
+                self.error = Some(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
             } else {
                 self.pending_workspace = Some(workspace);
                 self.status = "Reloading CLI settings…".into();
