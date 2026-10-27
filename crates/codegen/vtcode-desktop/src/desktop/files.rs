@@ -166,6 +166,51 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
     })
 }
 
+/// External applications supported by the file preview.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum ExternalEditor {
+    System,
+    VsCode,
+}
+
+fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command {
+    let mut command = std::process::Command::new("/usr/bin/open");
+    match editor {
+        ExternalEditor::System => {
+            let _command = command.arg("-t");
+        }
+        ExternalEditor::VsCode => {
+            let _command = command.args(["-b", "com.microsoft.VSCode"]);
+        }
+    }
+    let _command = command.arg(path);
+    command
+}
+
+/// Resolve the file again at launch time, and never pass a shell command.
+/// This function performs filesystem and process work and must run in the background.
+pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<(), String> {
+    let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path))
+        .map_err(|_error| "The file is missing or outside the workspace.".to_string())?;
+    if !fs::metadata(&path).map(|metadata| metadata.is_file()).unwrap_or(false) {
+        return Err("The selected path is not a regular file.".into());
+    }
+    let output = editor_command(editor, &path)
+        .output()
+        .map_err(|error| format!("Could not launch the editor: {error}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail: String = detail.chars().filter(|c| !c.is_control() || *c == ' ').take(300).collect();
+        Err(if detail.trim().is_empty() {
+            "Could not open the file in the selected editor.".into()
+        } else {
+            format!("Could not open the file in the selected editor: {}", detail.trim())
+        })
+    }
+}
+
 /// Attach complete text only; the preview's truncation is never silently submitted.
 pub(super) fn read_attachment(root: &Path, path: &Path) -> Result<vtcode_desktop_protocol::TurnAttachment, String> {
     let root = vtcode_commons::paths::canonicalize(root).map_err(|error| error.to_string())?;
@@ -185,6 +230,34 @@ mod tests {
 
     fn temp_workspace() -> tempfile::TempDir {
         tempfile::TempDir::new().expect("temp dir")
+    }
+
+    #[test]
+    fn editor_launch_uses_argument_boundaries_and_confines_paths() {
+        use std::os::unix::fs::symlink;
+        let workspace = temp_workspace();
+        let outside = temp_workspace();
+        let name = "-weird $(touch nope).rs";
+        fs::write(workspace.path().join(name), "hello").unwrap();
+        fs::write(outside.path().join("outside.rs"), "private").unwrap();
+        symlink(outside.path(), workspace.path().join("escape")).unwrap();
+        let path = vtcode_commons::paths::resolve_workspace_path(workspace.path(), Path::new(name)).unwrap();
+        for (editor, prefix) in [
+            (ExternalEditor::System, vec!["-t"]),
+            (ExternalEditor::VsCode, vec!["-b", "com.microsoft.VSCode"]),
+        ] {
+            let command = editor_command(editor, &path);
+            let args = command.get_args().collect::<Vec<_>>();
+            assert_eq!(args.len(), prefix.len() + 1);
+            for (actual, expected) in args.iter().zip(prefix) {
+                assert_eq!(*actual, expected);
+            }
+            assert_eq!(args.last().unwrap(), &path.as_os_str());
+        }
+        assert!(open_in_editor(workspace.path(), "escape/outside.rs", ExternalEditor::System).is_err());
+        assert!(open_in_editor(workspace.path(), "missing", ExternalEditor::VsCode).is_err());
+        assert!(open_in_editor(workspace.path(), ".", ExternalEditor::System).is_err());
+        assert!(!workspace.path().join("nope").exists());
     }
 
     #[test]

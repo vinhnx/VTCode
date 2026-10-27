@@ -1706,6 +1706,8 @@ fn workspace_files_open_a_read_only_preview(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        assert_eq!(window.find("open-preview-editor").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("open-preview-vscode").role(), Some(gpui_kit::Role::Button));
         window.click("copy-preview", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("pub fn nested() {}"));
         window.click("close-preview", cx);

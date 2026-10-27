@@ -658,6 +658,7 @@ struct DesktopView {
     preview_task: Option<Task<()>>,
     attachments_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
+    preview_editor_error: Option<String>,
     preview_focus: FocusHandle,
     preview_return_focus: Option<FocusHandle>,
     palette_return_focus: Option<FocusHandle>,
@@ -918,6 +919,7 @@ impl DesktopView {
             preview_task: None,
             attachments_task: None,
             file_preview: None,
+            preview_editor_error: None,
             preview_focus: cx.focus_handle(),
             preview_return_focus: None,
             palette_return_focus: None,
@@ -2077,6 +2079,7 @@ impl DesktopView {
                 }
                 match preview {
                     Some(preview) => {
+                        view.preview_editor_error = None;
                         view.file_preview = Some(preview);
                         view.preview_focus.focus(window, cx);
                         view.clear_error();
@@ -2088,6 +2091,31 @@ impl DesktopView {
                 cx.notify();
             });
         }));
+    }
+
+    fn open_preview_in_editor(&mut self, editor: files::ExternalEditor, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(workspace), Some(preview)) = (self.workspace.clone(), self.file_preview.as_ref()) else {
+            return;
+        };
+        let rel_path = preview.rel_path.clone();
+        self.preview_editor_error = None;
+        cx.spawn_in(window, async move |view, cx| {
+            let root = workspace.clone();
+            let path = rel_path.clone();
+            let result = cx
+                .background_spawn(async move { files::open_in_editor(&root, &path, editor) })
+                .await;
+            let _updated = view.update_in(cx, |view, _, cx| {
+                if view.workspace.as_ref() != Some(&workspace)
+                    || view.file_preview.as_ref().is_none_or(|preview| preview.rel_path != rel_path)
+                {
+                    return;
+                }
+                view.preview_editor_error = result.err();
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2230,6 +2258,7 @@ impl DesktopView {
     fn close_file_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_task = None;
         self.file_preview = None;
+        self.preview_editor_error = None;
         if let Some(focus) = self.preview_return_focus.take() {
             focus.focus(window, cx);
         } else {
@@ -4810,6 +4839,7 @@ impl DesktopView {
             .flex()
             .items_center()
             .justify_center()
+            .p_4()
             .bg(colors.background.opacity(0.6))
             .child(
                 div()
@@ -4820,7 +4850,8 @@ impl DesktopView {
                     .aria_label(format!("File preview: {}", preview.rel_path))
                     .aria_description("Read-only file preview. Press Escape to close.")
                     .w(px(860.))
-                    .max_h(px(640.))
+                    .max_w_full()
+                    .max_h_full()
                     .flex()
                     .flex_col()
                     .rounded_md()
@@ -4831,6 +4862,7 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .justify_between()
+                            .flex_wrap()
                             .gap_2()
                             .px_3()
                             .py_2()
@@ -4845,6 +4877,20 @@ impl DesktopView {
                                     .font_family(mono.clone())
                                     .child(preview.rel_path.clone()),
                             )
+                            .child(
+                                desktop_button("open-preview-editor")
+                                    .label("Open in editor")
+                                    .ghost()
+                                    .small()
+                                    .on_click(cx.listener(|view, _, window, cx| {
+                                        view.open_preview_in_editor(files::ExternalEditor::System, window, cx)
+                                    })),
+                            )
+                            .child(desktop_button("open-preview-vscode").label("VS Code").ghost().small().on_click(
+                                cx.listener(|view, _, window, cx| {
+                                    view.open_preview_in_editor(files::ExternalEditor::VsCode, window, cx)
+                                }),
+                            ))
                             .child(desktop_button("copy-preview").label("Copy").ghost().on_click(
                                 move |_, window, app| {
                                     app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
@@ -4859,6 +4905,9 @@ impl DesktopView {
                                     .on_click(cx.listener(|this, _, window, cx| this.close_file_preview(window, cx))),
                             ),
                     )
+                    .when_some(self.preview_editor_error.as_ref(), |panel, error| {
+                        panel.child(warning_alert("preview-editor-error", error.clone(), colors))
+                    })
                     .child(
                         div()
                             .id("file-preview-body")
