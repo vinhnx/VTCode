@@ -75,6 +75,8 @@ a newer change is discarded and refreshed; a failed refresh is shown as unavaila
 Pending CLI questions and approvals also block new desktop or WebMCP turns and session changes until answered.
 Early runtime notifications remain in the bounded event queue while restored history is prepared, then are applied to
 the selected session in order.
+If a first prompt reaches the runtime before a startup question is displayed, the shared runloop retains the prompt
+and its attachments until the question is answered or dismissed.
 
 When the main window is inactive, a completed or failed/blocked run, or a request waiting for a decision, posts a
 system notification through GPUI Kit. Notifications contain only generic status text; the transcript and interaction
