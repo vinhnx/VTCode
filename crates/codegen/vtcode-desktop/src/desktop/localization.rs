@@ -12,10 +12,13 @@ pub(super) enum UiLanguage {
     German,
     Italian,
     SimplifiedChinese,
+    BrazilianPortuguese,
+    Korean,
+    Dutch,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 8] = [
+    pub(super) const ALL: [Self; 11] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -24,6 +27,9 @@ impl UiLanguage {
         Self::German,
         Self::Italian,
         Self::SimplifiedChinese,
+        Self::BrazilianPortuguese,
+        Self::Korean,
+        Self::Dutch,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -35,6 +41,9 @@ impl UiLanguage {
             Some("de") => Self::German,
             Some("it") => Self::Italian,
             Some("zh-CN") => Self::SimplifiedChinese,
+            Some("pt-BR") => Self::BrazilianPortuguese,
+            Some("ko") => Self::Korean,
+            Some("nl") => Self::Dutch,
             _ => Self::English,
         }
     }
@@ -49,6 +58,9 @@ impl UiLanguage {
             Self::German => "de",
             Self::Italian => "it",
             Self::SimplifiedChinese => "zh-CN",
+            Self::BrazilianPortuguese => "pt-BR",
+            Self::Korean => "ko",
+            Self::Dutch => "nl",
         }
     }
 
@@ -62,6 +74,9 @@ impl UiLanguage {
             Self::German => "Deutsch",
             Self::Italian => "Italiano",
             Self::SimplifiedChinese => "简体中文",
+            Self::BrazilianPortuguese => "Português (Brasil)",
+            Self::Korean => "한국어",
+            Self::Dutch => "Nederlands",
         }
     }
 }
@@ -115,6 +130,9 @@ mod tests {
             ("de", "Einstellungen", "Kopieren", "Alles auswählen", "Entfernen"),
             ("it", "Impostazioni", "Copia", "Seleziona tutto", "Rimuovi"),
             ("zh-CN", "设置", "复制", "全选", "移除"),
+            ("pt-BR", "Configurações", "Copiar", "Selecionar tudo", "Remover"),
+            ("ko", "설정", "복사", "모두 선택", "제거"),
+            ("nl", "Instellingen", "Kopiëren", "Alles selecteren", "Verwijderen"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
@@ -185,6 +203,30 @@ mod tests {
                 "Connesso",
             ),
             ("zh-CN", "浅色", "编辑 浅色 外观配置", "编辑 浅色 外观配置（已选中）", "显示", "已连接"),
+            (
+                "pt-BR",
+                "Claro",
+                "Editar o perfil de aparência Claro",
+                "Editar o perfil de aparência Claro (selecionado)",
+                "Exibição",
+                "Conectado",
+            ),
+            (
+                "ko",
+                "라이트",
+                "라이트 모양 프로필 편집",
+                "라이트 모양 프로필 편집 (선택됨)",
+                "디스플레이",
+                "연결됨",
+            ),
+            (
+                "nl",
+                "Licht",
+                "Het profiel voor de weergave Licht bewerken",
+                "Het profiel voor de weergave Licht bewerken (geselecteerd)",
+                "Weergave",
+                "Verbonden",
+            ),
         ];
 
         for (locale, light, edit_profile, edit_profile_selected, display, connected) in expected {
@@ -216,6 +258,9 @@ mod tests {
             ("de", "Guten Morgen", "Guten Tag", "Guten Abend"),
             ("it", "Buongiorno", "Buon pomeriggio", "Buonasera"),
             ("zh-CN", "早上好", "下午好", "晚上好"),
+            ("pt-BR", "Bom dia", "Boa tarde", "Boa noite"),
+            ("ko", "좋은 아침입니다", "안녕하세요", "좋은 저녁입니다"),
+            ("nl", "Goedemorgen", "Goedemiddag", "Goedenavond"),
         ] {
             assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
             assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);

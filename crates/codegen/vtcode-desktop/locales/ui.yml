@@ -6,6 +6,9 @@ app:
       de: Visueller Stil
       it: Stile visivo
       zh-CN: 视觉风格
+      pt-BR: "Estilo visual"
+      ko: "Estilo visual"
+      nl: "Visuele stijl"
       vi: Phong cách giao diện
       es: Estilo visual
       fr: Style visuel
@@ -15,6 +18,9 @@ app:
       de: Typografie
       it: Tipografia
       zh-CN: 排版
+      pt-BR: "Tipografia"
+      ko: "타이포그래피"
+      nl: "Typografie"
       vi: Kiểu chữ
       es: Tipografía
       fr: Typographie
@@ -24,6 +30,9 @@ app:
       de: Layout
       it: Layout
       zh-CN: 布局
+      pt-BR: "Layout"
+      ko: "레이아웃"
+      nl: "Indeling"
       vi: Bố cục
       es: Diseño
       fr: Disposition
@@ -37,6 +46,9 @@ app:
       de: Wähle mit Links, Rechts, Pos1 oder Ende eine Kategorie aus.
       it: Usa le frecce sinistra e destra, Home o Fine per scegliere una categoria.
       zh-CN: 使用左右方向键、Home 或 End 选择类别。
+      pt-BR: "Use as setas para a esquerda e para a direita, Home ou End para escolher uma categoria."
+      ko: "왼쪽/오른쪽 화살표, Home 또는 End 키로 카테고리를 선택하세요."
+      nl: "Gebruik Links/Rechts, Home of End om een categorie te kiezen."
     title:
       en: Settings
       es: "Configuración"
@@ -46,6 +58,9 @@ app:
       de: Einstellungen
       it: Impostazioni
       zh-CN: 设置
+      pt-BR: "Configurações"
+      ko: "설정"
+      nl: "Instellingen"
     categories:
       en: Settings categories
       es: "Categorías de configuración"
@@ -55,6 +70,9 @@ app:
       de: Einstellungskategorien
       it: Categorie delle impostazioni
       zh-CN: 设置类别
+      pt-BR: "Categorias de configurações"
+      ko: "설정 카테고리"
+      nl: "Instellingencategorieën"
     search:
       button:
         en: Search settings and CLI config…
@@ -65,6 +83,9 @@ app:
         de: Einstellungen und CLI-Konfiguration suchen…
         it: Cerca impostazioni e configurazione CLI…
         zh-CN: 搜索设置和 CLI 配置…
+        pt-BR: "Pesquisar configurações e configuração da CLI…"
+        ko: "설정 및 CLI 구성 검색…"
+        nl: "Instellingen en CLI-configuratie zoeken…"
       title:
         en: Search settings and CLI config
         es: "Buscar ajustes y configuración de CLI"
@@ -74,6 +95,9 @@ app:
         de: Einstellungen und CLI-Konfiguration suchen
         it: Cerca impostazioni e configurazione CLI
         zh-CN: 搜索设置和 CLI 配置
+        pt-BR: "Pesquisar configurações e configuração da CLI"
+        ko: "설정 및 CLI 구성 검색"
+        nl: "Instellingen en CLI-configuratie zoeken"
       placeholder:
         en: Filter settings, categories, and CLI config paths…
         es: "Filtrar ajustes, categorías y rutas de configuración de CLI…"
@@ -83,6 +107,9 @@ app:
         de: Einstellungen, Kategorien und CLI-Konfigurationspfade filtern…
         it: Filtra impostazioni, categorie e percorsi di configurazione CLI…
         zh-CN: 筛选设置、类别和 CLI 配置路径…
+        pt-BR: "Filtrar configurações, categorias e caminhos da configuração da CLI…"
+        ko: "설정, 카테고리 및 CLI 구성 경로 필터링…"
+        nl: "Filter instellingen, categorieën en CLI-configuratiepaden…"
       group_settings:
         en: Settings
         es: "Configuración"
@@ -92,6 +119,9 @@ app:
         de: Einstellungen
         it: Impostazioni
         zh-CN: 设置
+        pt-BR: "Configurações"
+        ko: "설정"
+        nl: "Instellingen"
       group_cli_config:
         en: CLI config
         es: "Configuración de CLI"
@@ -101,6 +131,9 @@ app:
         de: CLI-Konfiguration
         it: Configurazione CLI
         zh-CN: CLI 配置
+        pt-BR: "Configuração da CLI"
+        ko: "CLI 구성"
+        nl: "CLI-configuratie"
     tab:
       appearance:
         en: Appearance
@@ -111,6 +144,9 @@ app:
         de: Erscheinungsbild
         it: Aspetto
         zh-CN: 外观
+        pt-BR: "Aparência"
+        ko: "모양"
+        nl: "Weergave"
       accessibility:
         en: Accessibility
         es: "Accesibilidad"
@@ -120,6 +156,9 @@ app:
         de: Barrierefreiheit
         it: Accessibilità
         zh-CN: 辅助功能
+        pt-BR: "Acessibilidade"
+        ko: "손쉬운 사용"
+        nl: "Toegankelijkheid"
       shortcuts:
         en: Shortcuts
         es: "Atajos"
@@ -129,6 +168,9 @@ app:
         de: Tastenkürzel
         it: Scorciatoie
         zh-CN: 键盘快捷键
+        pt-BR: "Atalhos"
+        ko: "단축키"
+        nl: "Sneltoetsen"
       vtcode:
         en: VT Code
         es: "VT Code"
@@ -138,6 +180,9 @@ app:
         de: VT Code
         it: VT Code
         zh-CN: VT Code
+        pt-BR: "VT Code"
+        ko: "VT Code"
+        nl: "VT Code"
       connections:
         en: Connections
         es: "Conexiones"
@@ -147,6 +192,9 @@ app:
         de: Verbindungen
         it: Connessioni
         zh-CN: 连接
+        pt-BR: "Conexões"
+        ko: "연결"
+        nl: "Verbindingen"
     language:
       group:
         en: Language
@@ -157,6 +205,9 @@ app:
         de: Sprache
         it: Lingua
         zh-CN: 语言
+        pt-BR: "Idioma"
+        ko: "언어"
+        nl: "Taal"
       label:
         en: Interface language
         es: "Idioma de la interfaz"
@@ -166,6 +217,9 @@ app:
         de: Oberflächensprache
         it: Lingua dell’interfaccia
         zh-CN: 界面语言
+        pt-BR: "Idioma da interface"
+        ko: "인터페이스 언어"
+        nl: "Interfacetaal"
       description:
         en: Changes supported labels immediately. Untranslated app text remains in English.
         es: "Cambia las etiquetas disponibles al instante. El texto sin traducir permanece en inglés."
@@ -175,6 +229,9 @@ app:
         de: Unterstützte Beschriftungen werden sofort geändert. Nicht übersetzte Texte bleiben auf Englisch.
         it: Le etichette supportate cambiano subito. Il testo non tradotto resta in inglese.
         zh-CN: 支持的标签会立即更改。尚未翻译的文本仍以英语显示。
+        pt-BR: "Altera imediatamente os rótulos disponíveis. O texto do app sem tradução permanece em inglês."
+        ko: "지원되는 레이블은 즉시 변경됩니다. 번역되지 않은 앱 텍스트는 영어로 표시됩니다."
+        nl: "Ondersteunde labels worden direct bijgewerkt. Niet-vertaalde app-tekst blijft Engels."
       select:
         en: Set interface language to %{language}
         es: "Cambiar el idioma de la interfaz a %{language}"
@@ -184,6 +241,9 @@ app:
         de: Oberflächensprache auf %{language} festlegen
         it: Imposta la lingua dell’interfaccia su %{language}
         zh-CN: 将界面语言设为 %{language}
+        pt-BR: "Definir o idioma da interface como %{language}"
+        ko: "인터페이스 언어를 %{language}(으)로 설정"
+        nl: "Interfacetaal instellen op %{language}"
     appearance:
       separate_modes:
         en: Separate light and dark modes
@@ -194,6 +254,9 @@ app:
         de: Helle und dunkle Darstellung getrennt einstellen
         it: Separa modalità chiara e scura
         zh-CN: 分别设置浅色和深色模式
+        pt-BR: "Separar os modos claro e escuro"
+        ko: "라이트 모드와 다크 모드 분리"
+        nl: "Lichte en donkere modus scheiden"
       editing_profile:
         en: Editing the %{profile} appearance profile
         vi: Đang chỉnh cấu hình giao diện %{profile}
@@ -203,6 +266,9 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ wird bearbeitet
         it: Modifica del profilo di aspetto %{profile}
         zh-CN: 正在编辑 %{profile} 外观配置
+        pt-BR: "Editando o perfil de aparência %{profile}"
+        ko: "%{profile} 모양 프로필 편집 중"
+        nl: "Bezig met bewerken van het profiel voor %{profile}"
       editing_profile_short:
         en: Editing profile
         vi: Đang chỉnh cấu hình
@@ -212,6 +278,9 @@ app:
         de: Profil wird bearbeitet
         it: Modifica del profilo
         zh-CN: 正在编辑配置
+        pt-BR: "Editar perfil"
+        ko: "프로필 편집"
+        nl: "Profiel bewerken"
       edit_profile:
         en: Edit the %{profile} appearance profile
         vi: Chỉnh cấu hình giao diện %{profile}
@@ -221,6 +290,9 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten
         it: Modifica il profilo di aspetto %{profile}
         zh-CN: 编辑 %{profile} 外观配置
+        pt-BR: "Editar o perfil de aparência %{profile}"
+        ko: "%{profile} 모양 프로필 편집"
+        nl: "Het profiel voor de weergave %{profile} bewerken"
       edit_profile_selected:
         en: Edit the %{profile} appearance profile (selected)
         vi: Chỉnh cấu hình giao diện %{profile} (đã chọn)
@@ -230,6 +302,9 @@ app:
         de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten (ausgewählt)
         it: Modifica il profilo di aspetto %{profile} (selezionato)
         zh-CN: 编辑 %{profile} 外观配置（已选中）
+        pt-BR: "Editar o perfil de aparência %{profile} (selecionado)"
+        ko: "%{profile} 모양 프로필 편집 (선택됨)"
+        nl: "Het profiel voor de weergave %{profile} bewerken (geselecteerd)"
       light:
         en: Light
         vi: Sáng
@@ -239,6 +314,9 @@ app:
         de: Hell
         it: Chiaro
         zh-CN: 浅色
+        pt-BR: "Claro"
+        ko: "라이트"
+        nl: "Licht"
       dark:
         en: Dark
         vi: Tối
@@ -248,6 +326,9 @@ app:
         de: Dunkel
         it: Scuro
         zh-CN: 深色
+        pt-BR: "Escuro"
+        ko: "다크"
+        nl: "Donker"
       themes:
         en: Themes
         vi: Chủ đề
@@ -257,6 +338,9 @@ app:
         de: Designs
         it: Temi
         zh-CN: 主题
+        pt-BR: "Temas"
+        ko: "테마"
+        nl: "Thema's"
       next_themes:
         en: Next themes
         vi: Chủ đề tiếp theo
@@ -266,6 +350,9 @@ app:
         de: Weitere Designs
         it: Temi successivi
         zh-CN: 下一个主题
+        pt-BR: "Próximos temas"
+        ko: "다음 테마"
+        nl: "Volgende thema's"
       previous_themes:
         en: Previous themes
         vi: Chủ đề trước
@@ -275,6 +362,9 @@ app:
         de: Vorherige Designs
         it: Temi precedenti
         zh-CN: 上一个主题
+        pt-BR: "Temas anteriores"
+        ko: "이전 테마"
+        nl: "Vorige thema's"
       visual_themes:
         en: Visual themes
         vi: Chủ đề giao diện
@@ -284,6 +374,9 @@ app:
         de: Darstellungsthemen
         it: Temi visivi
         zh-CN: 外观主题
+        pt-BR: "Temas visuais"
+        ko: "시각 테마"
+        nl: "Visuele thema's"
       show_navigation:
         en: Show side navigation
         vi: Hiện thanh điều hướng bên
@@ -293,6 +386,9 @@ app:
         de: Seitennavigation anzeigen
         it: Mostra la navigazione laterale
         zh-CN: 显示侧边导航
+        pt-BR: "Mostrar navegação lateral"
+        ko: "사이드 내비게이션 표시"
+        nl: "Zijbalknavigatie tonen"
       navigation_hint:
         en: When hidden, project, thread, and workspace actions stay in the top bar.
         vi: Khi ẩn, thao tác dự án, cuộc hội thoại và không gian làm việc vẫn ở thanh trên cùng.
@@ -302,6 +398,9 @@ app:
         de: Bei ausgeblendeter Navigation bleiben Projekt-, Chat- und Arbeitsbereichsaktionen in der oberen Leiste.
         it: Quando è nascosta, le azioni per progetti, conversazioni e spazi di lavoro restano nella barra superiore.
         zh-CN: 隐藏后，项目、对话和工作区操作仍保留在顶部栏。
+        pt-BR: "Quando oculta, as ações de projeto, conversa e espaço de trabalho permanecem na barra superior."
+        ko: "숨겨도 프로젝트, 대화, 작업 공간 작업은 상단 바에 남습니다."
+        nl: "Als deze verborgen is, blijven acties voor projecten, gesprekken en werkruimten in de bovenste balk staan."
       navigation_right:
         en: Place navigation on the right
         vi: Đặt thanh điều hướng bên phải
@@ -311,6 +410,9 @@ app:
         de: Navigation rechts platzieren
         it: Posiziona la navigazione a destra
         zh-CN: 将导航栏放在右侧
+        pt-BR: "Colocar navegação à direita"
+        ko: "내비게이션을 오른쪽에 배치"
+        nl: "Navigatie rechts plaatsen"
       reset:
         en: Reset appearance
         vi: Đặt lại giao diện
@@ -320,6 +422,9 @@ app:
         de: Erscheinungsbild zurücksetzen
         it: Reimposta l’aspetto
         zh-CN: 重置外观
+        pt-BR: "Redefinir aparência"
+        ko: "모양 재설정"
+        nl: "Weergave herstellen"
     accessibility:
       description:
         en: Adjust motion and the amount of persistent interface detail.
@@ -330,6 +435,9 @@ app:
         de: Passe Bewegung und dauerhaft sichtbare Bedienelemente an.
         it: Regola le animazioni e la quantità di elementi persistenti nell’interfaccia.
         zh-CN: 调整动画和界面中常驻元素的数量。
+        pt-BR: "Ajuste o movimento e a quantidade de detalhes persistentes da interface."
+        ko: "모션과 화면에 계속 표시되는 인터페이스 정보량을 조정합니다."
+        nl: "Pas beweging en de hoeveelheid permanent zichtbare interface-informatie aan."
       display:
         en: Display
         vi: Hiển thị
@@ -339,6 +447,9 @@ app:
         de: Anzeige
         it: Schermo
         zh-CN: 显示
+        pt-BR: "Exibição"
+        ko: "디스플레이"
+        nl: "Weergave"
       show_status_bar:
         en: Show status bar
         vi: Hiện thanh trạng thái
@@ -348,6 +459,9 @@ app:
         de: Statusleiste anzeigen
         it: Mostra la barra di stato
         zh-CN: 显示状态栏
+        pt-BR: "Mostrar barra de status"
+        ko: "상태 표시줄 표시"
+        nl: "Statusbalk tonen"
     provider:
       group:
         en: Provider settings
@@ -358,6 +472,9 @@ app:
         de: Anbietereinstellungen
         it: Impostazioni del provider
         zh-CN: 提供商设置
+        pt-BR: "Configurações do provedor"
+        ko: "제공자 설정"
+        nl: "Providerinstellingen"
       title:
         en: Provider
         vi: Nhà cung cấp
@@ -367,6 +484,9 @@ app:
         de: Anbieter
         it: Provider
         zh-CN: 提供商
+        pt-BR: "Provedor"
+        ko: "제공자"
+        nl: "Provider"
       connect_hint:
         en: Connect to your workspace to view provider and model details.
         vi: Kết nối với không gian làm việc để xem thông tin nhà cung cấp và mô hình.
@@ -376,6 +496,9 @@ app:
         de: Verbinde dich mit deinem Arbeitsbereich, um Anbieter- und Modelldetails zu sehen.
         it: Connettiti allo spazio di lavoro per vedere i dettagli di provider e modello.
         zh-CN: 连接到工作区以查看提供商和模型详情。
+        pt-BR: "Conecte-se ao seu espaço de trabalho para ver os detalhes do provedor e do modelo."
+        ko: "제공자와 모델 정보를 보려면 작업 공간에 연결하세요."
+        nl: "Maak verbinding met je werkruimte om provider- en modelgegevens te bekijken."
       not_configured:
         en: Not configured
         vi: Chưa cấu hình
@@ -385,6 +508,9 @@ app:
         de: Nicht konfiguriert
         it: Non configurato
         zh-CN: 未配置
+        pt-BR: "Não configurado"
+        ko: "구성되지 않음"
+        nl: "Niet geconfigureerd"
       accessibility_label:
         en: Provider and model configuration
         vi: Cấu hình nhà cung cấp và mô hình
@@ -394,6 +520,9 @@ app:
         de: Anbieter- und Modellkonfiguration
         it: Configurazione di provider e modello
         zh-CN: 提供商和模型配置
+        pt-BR: "Configuração do provedor e do modelo"
+        ko: "제공자 및 모델 구성"
+        nl: "Provider- en modelconfiguratie"
       provider:
         en: Provider
         vi: Nhà cung cấp
@@ -403,6 +532,9 @@ app:
         de: Anbieter
         it: Provider
         zh-CN: 提供商
+        pt-BR: "Provedor"
+        ko: "제공자"
+        nl: "Provider"
       model:
         en: Model
         vi: Mô hình
@@ -412,6 +544,9 @@ app:
         de: Modell
         it: Modello
         zh-CN: 模型
+        pt-BR: "Modelo"
+        ko: "모델"
+        nl: "Model"
     connections:
       connected:
         en: Connected
@@ -422,6 +557,9 @@ app:
         de: Verbunden
         it: Connesso
         zh-CN: 已连接
+        pt-BR: "Conectado"
+        ko: "연결됨"
+        nl: "Verbonden"
       not_connected:
         en: Not connected
         vi: Chưa kết nối
@@ -431,6 +569,9 @@ app:
         de: Nicht verbunden
         it: Non connesso
         zh-CN: 未连接
+        pt-BR: "Não conectado"
+        ko: "연결되지 않음"
+        nl: "Niet verbonden"
       active_status:
         en: CLI service connection is active
         vi: Kết nối dịch vụ CLI đang hoạt động
@@ -440,6 +581,9 @@ app:
         de: Die Verbindung zum CLI-Dienst ist aktiv
         it: La connessione al servizio CLI è attiva
         zh-CN: CLI 服务连接已启用
+        pt-BR: "A conexão com o serviço CLI está ativa"
+        ko: "CLI 서비스 연결이 활성화되어 있습니다"
+        nl: "De verbinding met de CLI-service is actief"
       waiting_status:
         en: CLI service has not completed a protocol handshake
         vi: Dịch vụ CLI chưa hoàn tất bắt tay giao thức
@@ -449,6 +593,9 @@ app:
         de: Der CLI-Dienst hat den Protokoll-Handshake noch nicht abgeschlossen
         it: Il servizio CLI non ha ancora completato la negoziazione del protocollo
         zh-CN: CLI 服务尚未完成协议握手
+        pt-BR: "O serviço CLI ainda não concluiu a negociação do protocolo"
+        ko: "CLI 서비스가 아직 프로토콜 핸드셰이크를 완료하지 않았습니다"
+        nl: "De CLI-service heeft de protocolhandshake nog niet voltooid"
       runtime:
         en: Runtime
         vi: Môi trường chạy
@@ -458,6 +605,9 @@ app:
         de: Laufzeit
         it: Runtime
         zh-CN: 运行时
+        pt-BR: "Ambiente de execução"
+        ko: "런타임"
+        nl: "Runtime"
       version:
         en: Version
         vi: Phiên bản
@@ -467,6 +617,9 @@ app:
         de: Version
         it: Versione
         zh-CN: 版本
+        pt-BR: "Versão"
+        ko: "버전"
+        nl: "Versie"
       protocol:
         en: Protocol
         vi: Giao thức
@@ -476,6 +629,9 @@ app:
         de: Protokoll
         it: Protocollo
         zh-CN: 协议
+        pt-BR: "Protocolo"
+        ko: "프로토콜"
+        nl: "Protocol"
       workspace:
         en: Workspace
         vi: Không gian làm việc
@@ -485,6 +641,9 @@ app:
         de: Arbeitsbereich
         it: Spazio di lavoro
         zh-CN: 工作区
+        pt-BR: "Espaço de trabalho"
+        ko: "작업 공간"
+        nl: "Werkruimte"
       local_service_unavailable:
         en: The local CLI service will appear here after VT Code Desktop connects.
         vi: Dịch vụ CLI cục bộ sẽ xuất hiện tại đây sau khi VT Code Desktop kết nối.
@@ -494,6 +653,9 @@ app:
         de: Der lokale CLI-Dienst wird hier angezeigt, sobald VT Code Desktop verbunden ist.
         it: Il servizio CLI locale apparirà qui quando VT Code Desktop sarà connesso.
         zh-CN: VT Code Desktop 连接后，本地 CLI 服务会显示在这里。
+        pt-BR: "O serviço CLI local aparecerá aqui após a conexão do VT Code Desktop."
+        ko: "VT Code Desktop이 연결되면 여기에 로컬 CLI 서비스가 표시됩니다."
+        nl: "De lokale CLI-service wordt hier getoond zodra VT Code Desktop verbinding maakt."
       local_service:
         en: Local service
         vi: Dịch vụ cục bộ
@@ -503,6 +665,9 @@ app:
         de: Lokaler Dienst
         it: Servizio locale
         zh-CN: 本地服务
+        pt-BR: "Serviço local"
+        ko: "로컬 서비스"
+        nl: "Lokale service"
       local_service_details:
         en: Local service connection details
         vi: Chi tiết kết nối dịch vụ cục bộ
@@ -512,6 +677,9 @@ app:
         de: Verbindungsdetails des lokalen Dienstes
         it: Dettagli della connessione al servizio locale
         zh-CN: 本地服务连接详情
+        pt-BR: "Detalhes da conexão do serviço local"
+        ko: "로컬 서비스 연결 세부 정보"
+        nl: "Verbindingsgegevens van de lokale service"
   welcome:
     greeting:
       morning:
@@ -523,6 +691,9 @@ app:
         de: Guten Morgen
         it: Buongiorno
         zh-CN: 早上好
+        pt-BR: "Bom dia"
+        ko: "좋은 아침입니다"
+        nl: "Goedemorgen"
       afternoon:
         en: Good afternoon
         es: "Buenas tardes"
@@ -532,6 +703,9 @@ app:
         de: Guten Tag
         it: Buon pomeriggio
         zh-CN: 下午好
+        pt-BR: "Boa tarde"
+        ko: "안녕하세요"
+        nl: "Goedemiddag"
       evening:
         en: Good evening
         es: "Buenas noches"
@@ -541,6 +715,9 @@ app:
         de: Guten Abend
         it: Buonasera
         zh-CN: 晚上好
+        pt-BR: "Boa noite"
+        ko: "좋은 저녁입니다"
+        nl: "Goedenavond"
     action:
       build:
         en: What should we build
@@ -551,6 +728,9 @@ app:
         de: Was bauen wir
         it: Cosa costruiamo
         zh-CN: 我们要构建什么
+        pt-BR: "O que vamos construir"
+        ko: "무엇을 만들어 볼까요"
+        nl: "Wat gaan we bouwen"
       build_in_workspace:
         en: What should we build in
         es: "¿Qué vamos a crear en"
@@ -560,6 +740,9 @@ app:
         de: Was bauen wir in
         it: Cosa costruiamo in
         zh-CN: 我们要在以下工作区构建什么：
+        pt-BR: "O que vamos construir em"
+        ko: "작업 공간에서 무엇을 만들어 볼까요:"
+        nl: "Wat gaan we bouwen in"
       improve:
         en: What are we improving
         es: "¿Qué vamos a mejorar"
@@ -569,6 +752,9 @@ app:
         de: Was verbessern wir
         it: Cosa miglioriamo
         zh-CN: 我们要改进什么
+        pt-BR: "O que vamos melhorar"
+        ko: "무엇을 개선할까요"
+        nl: "Wat gaan we verbeteren"
       improve_in_workspace:
         en: What are we improving in
         es: "¿Qué vamos a mejorar en"
@@ -578,6 +764,9 @@ app:
         de: Was verbessern wir in
         it: Cosa miglioriamo in
         zh-CN: 我们要改进以下工作区中的什么：
+        pt-BR: "O que vamos melhorar em"
+        ko: "작업 공간에서 무엇을 개선할까요:"
+        nl: "Wat gaan we verbeteren in"
       explore:
         en: What are we exploring
         es: "¿Qué vamos a explorar"
@@ -587,6 +776,9 @@ app:
         de: Was erkunden wir
         it: Cosa esploriamo
         zh-CN: 我们要探索什么
+        pt-BR: "O que vamos explorar"
+        ko: "무엇을 살펴볼까요"
+        nl: "Wat gaan we verkennen"
       explore_in_workspace:
         en: What are we exploring in
         es: "¿Qué vamos a explorar en"
@@ -596,6 +788,9 @@ app:
         de: Was erkunden wir in
         it: Cosa esploriamo in
         zh-CN: 我们要探索以下工作区中的什么：
+        pt-BR: "O que vamos explorar em"
+        ko: "작업 공간에서 무엇을 살펴볼까요:"
+        nl: "Wat gaan we verkennen in"
     cta:
       choose_workspace:
         en: Choose a workspace
@@ -606,6 +801,9 @@ app:
         de: Arbeitsbereich auswählen
         it: Scegli uno spazio di lavoro
         zh-CN: 选择工作区
+        pt-BR: "Escolher um espaço de trabalho"
+        ko: "작업 공간 선택"
+        nl: "Werkruimte kiezen"
       open_project:
         en: Open a project
         es: "Abrir un proyecto"
@@ -615,6 +813,9 @@ app:
         de: Projekt öffnen
         it: Apri un progetto
         zh-CN: 打开项目
+        pt-BR: "Abrir um projeto"
+        ko: "프로젝트 열기"
+        nl: "Project openen"
       select_folder:
         en: Select a folder
         es: "Seleccionar una carpeta"
@@ -624,6 +825,9 @@ app:
         de: Ordner auswählen
         it: Seleziona una cartella
         zh-CN: 选择文件夹
+        pt-BR: "Selecionar uma pasta"
+        ko: "폴더 선택"
+        nl: "Map selecteren"
   session:
     preparing_new_thread:
       en: Preparing a new thread…
@@ -634,6 +838,9 @@ app:
       de: Neuer Chat wird vorbereitet…
       it: Preparazione di una nuova conversazione…
       zh-CN: 正在准备新对话…
+      pt-BR: "Preparando uma nova conversa…"
+      ko: "새 대화를 준비하는 중…"
+      nl: "Nieuwe conversatie voorbereiden…"
     waiting_to_send:
       en: Your message will send after the startup decision.
       es: "El mensaje se enviará después de la decisión inicial."
@@ -643,6 +850,9 @@ app:
       de: Deine Nachricht wird nach der Startentscheidung gesendet.
       it: Il messaggio verrà inviato dopo la scelta iniziale.
       zh-CN: 初始选项确定后将发送你的消息。
+      pt-BR: "Sua mensagem será enviada após a decisão inicial."
+      ko: "시작 옵션을 결정한 후 메시지가 전송됩니다."
+      nl: "Je bericht wordt verzonden nadat de opstartkeuze is gemaakt."
     keep_as_draft:
       en: Keep as draft
       es: "Guardar como borrador"
@@ -652,6 +862,9 @@ app:
       de: Als Entwurf behalten
       it: Mantieni come bozza
       zh-CN: 保留为草稿
+      pt-BR: "Manter como rascunho"
+      ko: "초안으로 유지"
+      nl: "Als concept bewaren"
   files:
     scanning:
       en: Scanning workspace files
@@ -662,6 +875,9 @@ app:
       de: Arbeitsbereichsdateien werden durchsucht
       it: Ricerca dei file dello spazio di lavoro
       zh-CN: 正在扫描工作区文件
+      pt-BR: "Verificando arquivos do espaço de trabalho"
+      ko: "작업 공간 파일을 검색하는 중"
+      nl: "Werkruimtebestanden scannen"
     empty:
       title:
         en: No workspace files
@@ -672,6 +888,9 @@ app:
         de: Keine Arbeitsbereichsdateien
         it: Nessun file nello spazio di lavoro
         zh-CN: 没有工作区文件
+        pt-BR: "Nenhum arquivo no espaço de trabalho"
+        ko: "작업 공간에 파일이 없습니다"
+        nl: "Geen werkruimtebestanden"
       description:
         en: There are no files available to browse in this workspace.
         es: "No hay archivos disponibles para explorar en este espacio de trabajo."
@@ -681,6 +900,9 @@ app:
         de: In diesem Arbeitsbereich sind keine Dateien zum Durchsuchen verfügbar.
         it: Non ci sono file da esplorare in questo spazio di lavoro.
         zh-CN: 此工作区中没有可浏览的文件。
+        pt-BR: "Não há arquivos disponíveis para navegar neste espaço de trabalho."
+        ko: "이 작업 공간에는 찾아볼 수 있는 파일이 없습니다."
+        nl: "Er zijn geen bestanden beschikbaar om in deze werkruimte te bekijken."
     no_workspace:
       title:
         en: Choose a workspace
@@ -691,6 +913,9 @@ app:
         de: Arbeitsbereich auswählen
         it: Scegli uno spazio di lavoro
         zh-CN: 选择工作区
+        pt-BR: "Escolha um espaço de trabalho"
+        ko: "작업 공간 선택"
+        nl: "Werkruimte kiezen"
       description:
         en: Select a workspace to browse its files.
         es: "Selecciona un espacio de trabajo para explorar sus archivos."
@@ -700,6 +925,9 @@ app:
         de: Wähle einen Arbeitsbereich aus, um seine Dateien zu durchsuchen.
         it: Seleziona uno spazio di lavoro per esplorarne i file.
         zh-CN: 选择工作区以浏览其中的文件。
+        pt-BR: "Selecione um espaço de trabalho para navegar pelos arquivos."
+        ko: "파일을 살펴볼 작업 공간을 선택하세요."
+        nl: "Selecteer een werkruimte om de bestanden te bekijken."
   activity:
     history:
       notice:
@@ -711,6 +939,9 @@ app:
         de: Die letzten %{count} Werkzeugaktionen werden angezeigt.
         it: Sono mostrate le %{count} azioni degli strumenti più recenti.
         zh-CN: 正在显示最近 %{count} 条工具操作。
+        pt-BR: "Exibindo as %{count} ações de ferramenta mais recentes."
+        ko: "최근 도구 작업 %{count}개를 표시합니다."
+        nl: "De nieuwste %{count} toolacties worden getoond."
       search:
         en: Search conversation
         es: "Buscar en la conversación"
@@ -720,6 +951,9 @@ app:
         de: Unterhaltung durchsuchen
         it: Cerca nella conversazione
         zh-CN: 搜索对话
+        pt-BR: "Pesquisar conversa"
+        ko: "대화 검색"
+        nl: "Gesprek zoeken"
 gpui_component:
   Input:
     Copy:
@@ -730,6 +964,9 @@ gpui_component:
       de: Kopieren
       it: Copia
       zh-CN: 复制
+      pt-BR: "Copiar"
+      ko: "복사"
+      nl: "Kopiëren"
     Select All:
       vi: Chọn tất cả
       es: "Seleccionar todo"
@@ -738,6 +975,9 @@ gpui_component:
       de: Alles auswählen
       it: Seleziona tutto
       zh-CN: 全选
+      pt-BR: "Selecionar tudo"
+      ko: "모두 선택"
+      nl: "Alles selecteren"
   Attachment:
     Remove:
       vi: Xóa
@@ -747,6 +987,9 @@ gpui_component:
       de: Entfernen
       it: Rimuovi
       zh-CN: 移除
+      pt-BR: "Remover"
+      ko: "제거"
+      nl: "Verwijderen"
     Retry:
       vi: Thử lại
       es: "Reintentar"
@@ -755,3 +998,6 @@ gpui_component:
       de: Erneut versuchen
       it: Riprova
       zh-CN: 重试
+      pt-BR: "Tentar novamente"
+      ko: "다시 시도"
+      nl: "Opnieuw proberen"

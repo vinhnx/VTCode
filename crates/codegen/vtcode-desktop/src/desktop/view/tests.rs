@@ -95,9 +95,17 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         assert_eq!(window.find("navigation-visible").label(), Some("Mostrar navegación lateral"));
         assert_eq!(window.find("reset-appearance").label(), Some("Restablecer apariencia"));
         assert_eq!(window.find("ui-language-es").checked(), Some(true));
+        window.click("ui-language-pt-BR", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).preferences.ui_language(),
+            crate::desktop::localization::UiLanguage::BrazilianPortuguese
+        );
+        assert_eq!(window.find("settings-panel").label(), Some("Configurações"));
+        assert_eq!(window.find("ui-language-pt-BR").checked(), Some(true));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::Spanish
+            crate::desktop::localization::UiLanguage::BrazilianPortuguese
         );
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
     })
