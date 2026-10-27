@@ -191,8 +191,6 @@ impl DesktopView {
                             .ghost()
                             .small()
                             .w_full()
-                            .border_1()
-                            .border_color(colors.border)
                             .bg(colors.background)
                             .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
                     )

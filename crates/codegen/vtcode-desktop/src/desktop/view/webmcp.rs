@@ -152,8 +152,6 @@ impl DesktopView {
             .flex_col()
             .gap_3()
             .rounded_lg()
-            .border_1()
-            .border_color(colors.border)
             .bg(colors.secondary)
             .p_4()
             .child(div().font_semibold().child(if origin_controls {
@@ -298,8 +296,6 @@ impl DesktopView {
                 .w_full()
                 .min_w_0()
                 .rounded_md()
-                .border_1()
-                .border_color(colors.border)
                 .bg(colors.popover)
                 .px_2()
                 .py_1()

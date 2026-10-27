@@ -4375,8 +4375,6 @@ impl DesktopView {
                     .panel,
             )
             .rounded_lg()
-            .border_1()
-            .border_color(theme.colors.border)
             .child(
                 div()
                     .flex()
@@ -4726,7 +4724,7 @@ impl DesktopView {
                                 )
                                 .child(
                                     desktop_button("top-zen-mode-toggle")
-                                        .icon(IconName::Focus)
+                                        .icon(IconName::Leaf)
                                         .ghost()
                                         .accessibility_label("Enter Zen mode")
                                         .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
@@ -4809,8 +4807,6 @@ impl DesktopView {
                     .flex()
                     .flex_col()
                     .rounded_md()
-                    .border_1()
-                    .border_color(colors.border)
                     .bg(colors.secondary)
                     .shadow_md()
                     .child(
@@ -4929,8 +4925,6 @@ impl DesktopView {
             .flex_col()
             .rounded_lg()
             .bg(themes::mix(colors.background, colors.secondary, 0.3))
-            .border_1()
-            .border_color(colors.border)
             .child(
                 div()
                     .id("inspector-navigation")
@@ -5411,8 +5405,6 @@ impl DesktopView {
                             .flex()
                             .flex_col()
                             .rounded_xl()
-                            .border_1()
-                            .border_color(colors.border)
                             .bg(colors.secondary)
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_action(
@@ -6021,8 +6013,6 @@ impl DesktopView {
             .gap_3()
             .p_2()
             .rounded_lg()
-            .border_1()
-            .border_color(colors.border)
             .bg(colors.secondary)
             .child(
                 div()
@@ -6573,8 +6563,6 @@ impl DesktopView {
                             .px_3()
                             .py_2()
                             .rounded_md()
-                            .border_1()
-                            .border_color(colors.border)
                             .bg(colors.background)
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
@@ -6673,8 +6661,6 @@ impl DesktopView {
             .relative()
             .w_full()
             .max_w(px(CONTENT_WIDTH))
-            .border_1()
-            .border_color(colors.border)
             .rounded_md()
             .overflow_hidden()
             .child(header);
@@ -7167,8 +7153,6 @@ impl DesktopView {
                             .w_full()
                             .min_w_0()
                             .rounded(px(22.))
-                            .border_1()
-                            .border_color(colors.border)
                             .bg(colors.popover)
                             .child(
                                 InputGroup::new("message-composer")
@@ -7543,8 +7527,6 @@ impl DesktopView {
                 div()
                     .h(px(40.))
                     .rounded_md()
-                    .border_1()
-                    .border_color(cx.theme().colors.border)
                     .bg(background)
                     .p_1()
                     .flex()
@@ -7826,22 +7808,15 @@ impl DesktopView {
         }
         if step.allow_freeform {
             content = content.child(
-                div()
-                    .w_full()
-                    .border_1()
-                    .border_color(colors.border)
-                    .rounded_sm()
-                    .bg(colors.popover)
-                    .p_2()
-                    .child(
-                        Textarea::new(&self.question_answer)
-                            .accessibility_id("question-answer")
-                            .aria_label("Your answer")
-                            .cursor_text()
-                            .disabled(self.pending_interaction_response.is_some())
-                            .bg(colors.popover)
-                            .h(px(72.)),
-                    ),
+                div().w_full().rounded_sm().bg(colors.popover).p_2().child(
+                    Textarea::new(&self.question_answer)
+                        .accessibility_id("question-answer")
+                        .aria_label("Your answer")
+                        .cursor_text()
+                        .disabled(self.pending_interaction_response.is_some())
+                        .bg(colors.popover)
+                        .h(px(72.)),
+                ),
             );
         }
         content.into_any_element()
@@ -8314,12 +8289,7 @@ impl DesktopView {
             }))
             .max_w(max_popup_width)
             .when(models || quick_model || inline_completion, |panel| {
-                panel
-                    .rounded_xl()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.popover)
-                    .overflow_hidden()
+                panel.rounded_xl().bg(colors.popover).overflow_hidden()
             })
             .on_mouse_down_out(move |_, window, cx| {
                 let _updated = weak.update(cx, |view, cx| {
@@ -8370,7 +8340,7 @@ impl Render for DesktopView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = cx.theme().colors;
         let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
-        let navigation_visible = self.preferences.navigation_visible() || self.zen_mode;
+        let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
         let navigation_on_right = self.preferences.navigation_on_right();
         let conversation = div()
             .flex_1()
@@ -8388,6 +8358,7 @@ impl Render for DesktopView {
             .test_support()
             .role(gpui_kit::Role::Group)
             .aria_label("Conversation workspace")
+            .relative()
             .flex_1()
             .min_w_0()
             .min_h_0()
@@ -8397,9 +8368,20 @@ impl Render for DesktopView {
             .p_3()
             .bg(colors.background)
             .rounded_xl()
-            .border_1()
-            .border_color(colors.border)
             .child(conversation)
+            .when(self.zen_mode, |workspace| {
+                workspace.child(
+                    div().absolute().top_2().right_2().child(
+                        desktop_button("zen-mode-exit")
+                            .icon(Icon::new(IconName::Leaf).text_color(colors.muted_foreground))
+                            .ghost()
+                            .small()
+                            .accessibility_label("Exit Zen mode")
+                            .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
+                            .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
+                    ),
+                )
+            })
             .when(inspector_visible, |workspace| {
                 workspace.child(
                     div()
@@ -8430,9 +8412,7 @@ impl Render for DesktopView {
         let panes = if navigation_visible {
             let navigation = self.render_navigation(cx);
             let sidebar = div().relative().h_full().flex_shrink_0();
-            let sidebar = if self.zen_mode {
-                sidebar.child(navigation)
-            } else if navigation_on_right {
+            let sidebar = if navigation_on_right {
                 sidebar
                     .when(self.sidebar_open, |sidebar| {
                         sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))

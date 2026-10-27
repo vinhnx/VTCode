@@ -234,8 +234,6 @@ pub(super) fn processing_tier_badge(label: &str, cx: &App) -> AnyElement {
         .px_2()
         .py(px(2.))
         .rounded_full()
-        .border_1()
-        .border_color(if ultrafast { colors.primary } else { colors.border })
         .bg(if ultrafast { colors.primary } else { colors.secondary })
         .text_color(if ultrafast {
             colors.primary_foreground
@@ -1316,8 +1314,6 @@ fn effort_knob(
                 .px(px(18.))
                 .rounded_full()
                 .bg(colors.foreground.opacity(0.12))
-                .border_1()
-                .border_color(colors.foreground.opacity(0.18))
                 .child(
                     SliderIndicator::new(state)
                         .relative()
@@ -1342,8 +1338,6 @@ fn effort_knob(
                                 .size(px(36.))
                                 .rounded_full()
                                 .bg(gpui_kit::white())
-                                .border_1()
-                                .border_color(colors.foreground.opacity(0.35))
                                 .shadow_md(),
                         ),
                 ),

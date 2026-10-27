@@ -7435,7 +7435,7 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
 }
 
 #[gpui_kit::test]
-fn zen_mode_hides_chat_chrome_and_keeps_one_navigation_toggle(cx: &mut TestAppContext) {
+fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -7479,7 +7479,13 @@ fn zen_mode_hides_chat_chrome_and_keeps_one_navigation_toggle(cx: &mut TestAppCo
         window.render_frame(cx);
         assert!(window.try_find("zen-mode-exit").is_some());
         assert_eq!(window.find("zen-mode-exit").label(), Some("Exit Zen mode"));
-        assert!(window.try_find("navigation-rail").is_some());
+        assert!(window.try_find("navigation-rail").is_none());
+        assert!(
+            window
+                .find("workspace-surface")
+                .bounds()
+                .contains(&window.find("zen-mode-exit").bounds().center())
+        );
         assert!(window.try_find("nav-home").is_none());
         assert!(window.try_find("nav-new-thread").is_none());
         assert!(window.try_find("nav-utilities").is_none());

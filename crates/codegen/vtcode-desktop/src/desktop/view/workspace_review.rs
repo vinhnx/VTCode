@@ -375,8 +375,6 @@ impl DesktopView {
                     div()
                         .w_full()
                         .rounded_lg()
-                        .border_1()
-                        .border_color(colors.border)
                         .bg(colors.secondary)
                         .p_4()
                         .flex()

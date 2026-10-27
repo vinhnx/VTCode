@@ -8,41 +8,6 @@ impl DesktopView {
 
     pub(super) fn render_navigation(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
-        if self.zen_mode {
-            let rail = div()
-                .id("navigation-rail")
-                .test_support()
-                .w(px(48.))
-                .flex_shrink_0()
-                .h_full()
-                .flex()
-                .flex_col()
-                .items_center()
-                .py_2()
-                .child(
-                    desktop_button("zen-mode-exit")
-                        .icon(IconName::Focus)
-                        .rounded_lg()
-                        .bg(colors.primary.opacity(0.18))
-                        .text_color(colors.primary)
-                        .accessibility_label("Exit Zen mode")
-                        .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
-                        .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
-                )
-                .child(div().flex_1());
-            return div()
-                .id("primary-navigation")
-                .test_support()
-                .role(gpui_kit::Role::Navigation)
-                .aria_label("Zen mode navigation")
-                .aria_description("One control exits Zen mode.")
-                .h_full()
-                .flex_shrink_0()
-                .bg(chrome_background(&colors))
-                .child(rail)
-                .into_any_element();
-        }
-
         let expanded = self.sidebar_open || self.navigation_peek;
         let navigation_on_right = self.preferences.navigation_on_right();
         let utilities_selected = self.inspector_open && self.inspector_tab == InspectorTab::Utilities;
@@ -111,7 +76,7 @@ impl DesktopView {
             .child(div().flex_1())
             .child(
                 desktop_button("zen-mode-toggle")
-                    .icon(IconName::Focus)
+                    .icon(IconName::Leaf)
                     .ghost()
                     .rounded_lg()
                     .accessibility_label("Enter Zen mode")

@@ -347,8 +347,6 @@ impl DesktopView {
                     .gap_4()
                     .p_5()
                     .rounded_xl()
-                    .border_1()
-                    .border_color(colors.border)
                     .bg(colors.secondary)
                     .shadow_lg()
                     .track_focus(&self.config_editor_focus)
@@ -381,8 +379,6 @@ impl DesktopView {
                                 .cursor_text()
                                 .bg(colors.popover)
                                 .rounded_md()
-                                .border_1()
-                                .border_color(colors.border)
                                 .px_3()
                                 .py_2()
                                 .w_full(),

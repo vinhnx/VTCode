@@ -13,9 +13,6 @@ use gpui_kit::component::theme::{Theme, ThemeColor, ThemeMode};
 use gpui_kit::{App, Hsla, Window, rgb};
 use vtcode_ui::theme::{self, UiThemeColors};
 
-const SURFACE_BORDER_MIX: f32 = 0.16;
-const INPUT_BORDER_MIX: f32 = 0.20;
-
 /// The theme applied on first launch.
 pub(super) const DEFAULT_THEME_ID: &str = "ciapre";
 
@@ -392,12 +389,11 @@ fn apply_system_surface_borders(cx: &mut App) {
     Theme::update(cx, |kit_theme| apply_surface_borders(&mut kit_theme.colors));
 }
 
-/// Keep card outlines quiet while retaining a slightly stronger input stroke.
-/// The shared tokens cover GPUI Kit controls as well as desktop-owned surfaces.
+/// Keep decorative Kit outlines invisible; focus and validation use semantic colors.
 fn apply_surface_borders(colors: &mut ThemeColor) {
-    colors.border = mix(colors.background, colors.foreground, SURFACE_BORDER_MIX);
+    colors.border = colors.background.opacity(0.);
     colors.sidebar_border = colors.border;
-    colors.input = mix(colors.background, colors.foreground, INPUT_BORDER_MIX);
+    colors.input = colors.background.opacity(0.);
 }
 
 /// Give panels and controls a visible neutral fill while keeping their text at
@@ -614,7 +610,7 @@ pub(super) struct NavigationSurfaces {
 /// Dark palettes recess the shell and sidebar; light palettes use the shared
 /// secondary surface without changing component colors.
 pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground: Hsla) -> NavigationSurfaces {
-    if relative_luminance(background) < 0.179 {
+    let surfaces = if relative_luminance(background) < 0.179 {
         let recessed = filled_button_foreground(foreground);
         NavigationSurfaces {
             rail: mix(background, recessed, 0.35),
@@ -625,7 +621,18 @@ pub(super) fn navigation_surfaces(background: Hsla, secondary: Hsla, foreground:
             rail: secondary,
             panel: mix(background, secondary, 0.55),
         }
-    }
+    };
+    let rail = if contrast_ratio(background, surfaces.rail) < 1.02 {
+        filled_surface(background, foreground, 10)
+    } else {
+        surfaces.rail
+    };
+    let panel = if contrast_ratio(rail, surfaces.panel) < 1.02 || contrast_ratio(background, surfaces.panel) < 1.02 {
+        filled_surface(background, foreground, 24)
+    } else {
+        surfaces.panel
+    };
+    NavigationSurfaces { rail, panel }
 }
 
 /// WCAG contrast ratio between two colors.
@@ -669,9 +676,9 @@ mod tests {
                 );
                 assert_eq!(base.tokens.colors.background, palette.background, "{}", palette.id);
                 assert_eq!(base.tokens.colors.primary, palette.accent, "{}", palette.id);
-                assert_eq!(kit.colors.border, mix(palette.background, palette.foreground, SURFACE_BORDER_MIX));
+                assert_eq!(kit.colors.border.a, 0.);
                 assert_eq!(kit.colors.sidebar_border, kit.colors.border, "{}", palette.id);
-                assert_eq!(kit.colors.input, mix(palette.background, palette.foreground, INPUT_BORDER_MIX));
+                assert_eq!(kit.colors.input.a, 0.);
                 for foreground in [kit.colors.tab_foreground, kit.colors.tab_active_foreground] {
                     assert!(contrast_ratio(foreground, palette.background) >= 4.5, "{}: unreadable tab", palette.id);
                 }
@@ -717,15 +724,15 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn system_themes_use_the_same_subtle_surface_and_input_borders(cx: &mut gpui_kit::TestAppContext) {
+    fn system_themes_hide_decorative_surface_borders(cx: &mut gpui_kit::TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
             for id in [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID] {
                 let _mode = apply_by_id(id, None, cx);
                 let colors = cx.theme().colors;
-                assert_eq!(colors.border, mix(colors.background, colors.foreground, SURFACE_BORDER_MIX), "{id}");
+                assert_eq!(colors.border.a, 0., "{id}");
                 assert_eq!(colors.sidebar_border, colors.border, "{id}");
-                assert_eq!(colors.input, mix(colors.background, colors.foreground, INPUT_BORDER_MIX), "{id}");
+                assert_eq!(colors.input.a, 0., "{id}");
             }
         });
     }
@@ -885,22 +892,16 @@ mod tests {
                 let _mode = apply_by_id(id, None, cx);
                 let colors = cx.theme().colors;
                 let surfaces = navigation_surfaces(colors.background, colors.secondary, colors.foreground);
-                let edge = mix(surfaces.panel, colors.border, 0.85);
-                let workspace_edge = mix(colors.background, colors.border, 0.85);
-
                 assert!(
-                    contrast_ratio(colors.background, surfaces.rail) >= 1.02
-                        || contrast_ratio(colors.background, workspace_edge) >= 1.08,
+                    contrast_ratio(colors.background, surfaces.rail) >= 1.02,
                     "{id}: shell must contrast with the workspace top and left edges"
                 );
                 assert!(
-                    contrast_ratio(colors.background, surfaces.panel) >= 1.02
-                        || contrast_ratio(colors.background, edge) >= 1.08,
+                    contrast_ratio(colors.background, surfaces.panel) >= 1.02,
                     "{id}: sidebar must contrast with its surrounding workspace"
                 );
                 assert!(
-                    contrast_ratio(surfaces.panel, surfaces.rail) >= 1.02
-                        || contrast_ratio(surfaces.panel, edge) >= 1.08,
+                    contrast_ratio(surfaces.panel, surfaces.rail) >= 1.02,
                     "{id}: sidebar must remain distinct from the navigation rail"
                 );
                 assert!(
