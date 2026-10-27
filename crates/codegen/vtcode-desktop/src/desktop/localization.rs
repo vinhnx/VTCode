@@ -126,6 +126,86 @@ mod tests {
     }
 
     #[test]
+    fn settings_surface_translations_cover_every_supported_language() {
+        let expected = [
+            (
+                "en",
+                "Light",
+                "Edit the Light appearance profile",
+                "Edit the Light appearance profile (selected)",
+                "Display",
+                "Connected",
+            ),
+            (
+                "vi",
+                "Sáng",
+                "Chỉnh cấu hình giao diện Sáng",
+                "Chỉnh cấu hình giao diện Sáng (đã chọn)",
+                "Hiển thị",
+                "Đã kết nối",
+            ),
+            (
+                "es",
+                "Claro",
+                "Editar el perfil de apariencia Claro",
+                "Editar el perfil de apariencia Claro (seleccionado)",
+                "Pantalla",
+                "Conectado",
+            ),
+            (
+                "fr",
+                "Clair",
+                "Modifier le profil d’apparence Clair",
+                "Modifier le profil d’apparence Clair (sélectionné)",
+                "Affichage",
+                "Connecté",
+            ),
+            (
+                "ja",
+                "ライト",
+                "ライト外観プロファイルを編集",
+                "選択中のライト外観プロファイルを編集",
+                "ディスプレイ",
+                "接続済み",
+            ),
+            (
+                "de",
+                "Hell",
+                "Das Erscheinungsbild-Profil „Hell“ bearbeiten",
+                "Das Erscheinungsbild-Profil „Hell“ bearbeiten (ausgewählt)",
+                "Anzeige",
+                "Verbunden",
+            ),
+            (
+                "it",
+                "Chiaro",
+                "Modifica il profilo di aspetto Chiaro",
+                "Modifica il profilo di aspetto Chiaro (selezionato)",
+                "Schermo",
+                "Connesso",
+            ),
+            ("zh-CN", "浅色", "编辑 浅色 外观配置", "编辑 浅色 外观配置（已选中）", "显示", "已连接"),
+        ];
+
+        for (locale, light, edit_profile, edit_profile_selected, display, connected) in expected {
+            assert_eq!(UiLanguage::from_saved(Some(locale)).locale(), locale);
+            assert_eq!(
+                rust_i18n::t!("app.settings.appearance.edit_profile", locale = locale, profile = light).to_string(),
+                edit_profile,
+                "profile action must be localized in {locale}"
+            );
+            assert_eq!(
+                rust_i18n::t!("app.settings.appearance.edit_profile_selected", locale = locale, profile = light)
+                    .to_string(),
+                edit_profile_selected,
+                "selected profile state must be localized in {locale}"
+            );
+            assert_eq!(rust_i18n::t!("app.settings.accessibility.display", locale = locale).to_string(), display);
+            assert_eq!(rust_i18n::t!("app.settings.connections.connected", locale = locale).to_string(), connected);
+        }
+    }
+
+    #[test]
     fn welcome_copy_is_translated_and_actions_remain_distinct() {
         for (locale, morning, afternoon, evening) in [
             ("en", "Good morning", "Good afternoon", "Good evening"),

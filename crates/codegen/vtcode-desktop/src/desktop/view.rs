@@ -8625,8 +8625,8 @@ fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
     TabBar::new(id).segmented().small().w_full()
 }
 
-fn section_label(text: &'static str, color: gpui_kit::Hsla) -> impl IntoElement {
-    div().text_xs().font_semibold().text_color(color).child(text)
+fn section_label(text: impl Into<gpui_kit::SharedString>, color: gpui_kit::Hsla) -> impl IntoElement {
+    div().text_xs().font_semibold().text_color(color).child(text.into())
 }
 
 fn valid_slash_command_catalog(commands: &[protocol::SlashCommandInfo]) -> bool {

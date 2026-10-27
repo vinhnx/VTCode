@@ -154,7 +154,7 @@ impl DesktopView {
                     .key_context("VTCodeSettings")
                     .role(gpui_kit::Role::Group)
                     .aria_label(rust_i18n::t!("app.settings.categories").to_string())
-                    .aria_description("Use Left and Right arrows, Home, or End to choose a category.")
+                    .aria_description(rust_i18n::t!("app.settings.categories_navigation_hint").to_string())
                     .w_full()
                     .flex_shrink_0()
                     .flex()
@@ -191,7 +191,7 @@ impl DesktopView {
                             )
                             .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
                             .tooltip_with_action(
-                                "Search settings and CLI config",
+                                rust_i18n::t!("app.settings.search.title").to_string(),
                                 &OpenSettingsSearch,
                                 Some("VTCodeDesktop"),
                             )
@@ -239,9 +239,9 @@ impl DesktopView {
         let theme = cx.theme();
         let colors = &theme.colors;
         let active_theme_profile = if self.theme_mode == ThemeMode::Light {
-            "light"
+            rust_i18n::t!("app.settings.appearance.light").to_string()
         } else {
-            "dark"
+            rust_i18n::t!("app.settings.appearance.dark").to_string()
         };
         let visual_style = rust_i18n::t!("app.settings.visual_style").to_string();
         let typography = rust_i18n::t!("app.settings.typography").to_string();
@@ -261,7 +261,7 @@ impl DesktopView {
                     .title(visual_style)
                     .child(
                         gpui_kit::component::switch::Switch::new("separate-theme-profiles")
-                            .label("Separate light and dark modes")
+                            .label(rust_i18n::t!("app.settings.appearance.separate_modes").to_string())
                             .checked(self.preferences.separate_theme_profiles)
                             .on_click(cx.listener(|view, _, _, cx| view.toggle_separate_theme_profiles(cx))),
                     )
@@ -276,21 +276,37 @@ impl DesktopView {
                                     div()
                                         .id("theme-profile-hint")
                                         .role(gpui_kit::Role::Label)
-                                        .aria_label(format!("Editing the {active_theme_profile} appearance profile"))
+                                        .aria_label(
+                                            rust_i18n::t!(
+                                                "app.settings.appearance.editing_profile",
+                                                profile = active_theme_profile
+                                            )
+                                            .to_string(),
+                                        )
                                         .text_sm()
-                                        .child("Editing profile"),
+                                        .child(
+                                            rust_i18n::t!("app.settings.appearance.editing_profile_short").to_string(),
+                                        ),
                                 )
                                 .children([ThemeMode::Light, ThemeMode::Dark].into_iter().map(|mode| {
                                     let light = mode == ThemeMode::Light;
                                     let id = if light { "light" } else { "dark" };
-                                    let label = if light { "Light" } else { "Dark" };
+                                    let label = if light {
+                                        rust_i18n::t!("app.settings.appearance.light").to_string()
+                                    } else {
+                                        rust_i18n::t!("app.settings.appearance.dark").to_string()
+                                    };
                                     let selected = self.theme_mode == mode;
+                                    let profile_action_key = if selected {
+                                        "app.settings.appearance.edit_profile_selected"
+                                    } else {
+                                        "app.settings.appearance.edit_profile"
+                                    };
                                     desktop_button(format!("edit-{id}-profile"))
-                                        .label(label)
-                                        .accessibility_label(format!(
-                                            "Edit {id} appearance profile{}",
-                                            if selected { " (selected)" } else { "" }
-                                        ))
+                                        .label(label.clone())
+                                        .accessibility_label(
+                                            rust_i18n::t!(profile_action_key, profile = label).to_string(),
+                                        )
                                         .toggled(selected)
                                         .ghost()
                                         .when(selected, |button| {
@@ -310,7 +326,10 @@ impl DesktopView {
                             .items_center()
                             .justify_between()
                             .gap_2()
-                            .child(section_label("THEMES", colors.muted_foreground))
+                            .child(section_label(
+                                &rust_i18n::t!("app.settings.appearance.themes").to_string().to_uppercase(),
+                                colors.muted_foreground,
+                            ))
                             .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
                                 let scroll = self.theme_scroll.clone();
                                 desktop_button(if forward { "next-themes" } else { "previous-themes" })
@@ -319,7 +338,14 @@ impl DesktopView {
                                     } else {
                                         IconName::ChevronLeft
                                     })
-                                    .accessibility_label(if forward { "Next themes" } else { "Previous themes" })
+                                    .accessibility_label(
+                                        rust_i18n::t!(if forward {
+                                            "app.settings.appearance.next_themes"
+                                        } else {
+                                            "app.settings.appearance.previous_themes"
+                                        })
+                                        .to_string(),
+                                    )
                                     .ghost()
                                     .small()
                                     .on_click(cx.listener(move |_, _, _, cx| {
@@ -335,7 +361,7 @@ impl DesktopView {
                             .id("theme-list")
                             .test_support()
                             .role(gpui_kit::Role::Group)
-                            .aria_label("Visual themes")
+                            .aria_label(rust_i18n::t!("app.settings.appearance.visual_themes").to_string())
                             .w_full()
                             .min_w_0()
                             .flex_shrink_0()
@@ -439,7 +465,7 @@ impl DesktopView {
                 .title(layout)
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-visible")
-                        .label("Show side navigation")
+                        .label(rust_i18n::t!("app.settings.appearance.show_navigation").to_string())
                         .checked(self.preferences.navigation_visible())
                         .on_click(cx.listener(|view, checked, _, cx| {
                             view.set_navigation_visible(*checked, cx);
@@ -449,11 +475,11 @@ impl DesktopView {
                     div()
                         .text_sm()
                         .text_color(colors.muted_foreground)
-                        .child("When hidden, project, thread, and workspace actions stay in the top bar."),
+                        .child(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string()),
                 )
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-on-right")
-                        .label("Place navigation on the right")
+                        .label(rust_i18n::t!("app.settings.appearance.navigation_right").to_string())
                         .checked(self.preferences.navigation_on_right())
                         .on_click(cx.listener(|view, checked, _, cx| {
                             view.set_navigation_on_right(*checked, cx);
@@ -461,22 +487,25 @@ impl DesktopView {
                 ),
         ));
 
-        content = content.child(desktop_button("reset-appearance").label("Reset appearance").ghost().on_click(
-            cx.listener(|view, _, window, cx| {
-                view.preferences.separate_theme_profiles = false;
-                view.preferences.light_theme = None;
-                view.preferences.dark_theme = None;
-                view.preferences.light_typography = None;
-                view.preferences.dark_typography = None;
-                view.preferences.ui_font_family = None;
-                view.preferences.code_font_family = None;
-                view.preferences.ui_font_size = None;
-                view.preferences.code_font_size = None;
-                view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
-                preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
-                view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
-            }),
-        ));
+        content = content.child(
+            desktop_button("reset-appearance")
+                .label(rust_i18n::t!("app.settings.appearance.reset").to_string())
+                .ghost()
+                .on_click(cx.listener(|view, _, window, cx| {
+                    view.preferences.separate_theme_profiles = false;
+                    view.preferences.light_theme = None;
+                    view.preferences.dark_theme = None;
+                    view.preferences.light_typography = None;
+                    view.preferences.dark_typography = None;
+                    view.preferences.ui_font_family = None;
+                    view.preferences.code_font_family = None;
+                    view.preferences.ui_font_size = None;
+                    view.preferences.code_font_size = None;
+                    view.preferences.reduced_motion = preferences::ReducedMotionPreference::System;
+                    preferences::apply_reduced_motion(view.preferences.reduced_motion, view.system_motion_baseline, cx);
+                    view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
+                })),
+        );
         content.into_any_element()
     }
 
@@ -525,18 +554,18 @@ impl DesktopView {
             .child(
                 div()
                     .text_color(cx.theme().colors.muted_foreground)
-                    .child("Adjust motion and the amount of persistent interface detail."),
+                    .child(rust_i18n::t!("app.settings.accessibility.description").to_string()),
             )
             .child(accessible_group_box(
                 "accessibility-display-group",
-                "Display",
+                rust_i18n::t!("app.settings.accessibility.display").to_string(),
                 GroupBox::new()
                     .flex_shrink_0()
                     .fill()
-                    .title("Display")
+                    .title(rust_i18n::t!("app.settings.accessibility.display").to_string())
                     .child(
                         gpui_kit::component::switch::Switch::new("show-status-bar")
-                            .label("Show status bar")
+                            .label(rust_i18n::t!("app.settings.accessibility.show_status_bar").to_string())
                             .checked(self.preferences.show_status_bar)
                             .on_click(cx.listener(|view, _, _, cx| view.toggle_status_bar(cx))),
                     )
@@ -563,35 +592,47 @@ impl DesktopView {
         let Some(configuration) = self.configuration.as_ref() else {
             return accessible_group_box(
                 "provider-settings-group",
-                "Provider settings",
-                GroupBox::new().flex_shrink_0().fill().title("Provider").child(
-                    div()
-                        .text_color(theme.colors.muted_foreground)
-                        .child("Connect to your workspace to view provider and model details."),
-                ),
+                rust_i18n::t!("app.settings.provider.group").to_string(),
+                GroupBox::new()
+                    .flex_shrink_0()
+                    .fill()
+                    .title(rust_i18n::t!("app.settings.provider.title").to_string())
+                    .child(
+                        div()
+                            .text_color(theme.colors.muted_foreground)
+                            .child(rust_i18n::t!("app.settings.provider.connect_hint").to_string()),
+                    ),
             );
         };
 
         let provider = if configuration.provider.is_empty() {
-            "Not configured".to_string()
+            rust_i18n::t!("app.settings.provider.not_configured").to_string()
         } else {
             configuration.provider.clone()
         };
-        let mut group = GroupBox::new().flex_shrink_0().fill().title("Provider").child(
-            div()
-                .id("provider-details")
-                .test_support()
-                .role(gpui_kit::Role::Group)
-                .aria_label("Provider and model configuration")
-                .child(
-                    DescriptionList::horizontal()
-                        .columns(1)
-                        .label_width(px(128.))
-                        .bordered(false)
-                        .item("Provider", provider, 1)
-                        .item("Model", configuration.model.clone(), 1),
-                ),
-        );
+        let mut group = GroupBox::new()
+            .flex_shrink_0()
+            .fill()
+            .title(rust_i18n::t!("app.settings.provider.title").to_string())
+            .child(
+                div()
+                    .id("provider-details")
+                    .test_support()
+                    .role(gpui_kit::Role::Group)
+                    .aria_label(rust_i18n::t!("app.settings.provider.accessibility_label").to_string())
+                    .child(
+                        DescriptionList::horizontal()
+                            .columns(1)
+                            .label_width(px(128.))
+                            .bordered(false)
+                            .item(rust_i18n::t!("app.settings.provider.provider").to_string(), provider, 1)
+                            .item(
+                                rust_i18n::t!("app.settings.provider.model").to_string(),
+                                configuration.model.clone(),
+                                1,
+                            ),
+                    ),
+            );
         if !configuration.credential_setup_command.is_empty() {
             let command = configuration.credential_setup_command.clone();
             group = group.child(
@@ -610,39 +651,52 @@ impl DesktopView {
                             .truncate()
                             .child(command.clone()),
                     )
-                    .child(desktop_button("copy-credential-command").label("Copy").ghost().on_click(
-                        move |_, window, app| {
-                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()));
-                            super::super::notifications::copied_to_clipboard(window, app);
-                        },
-                    )),
+                    .child(
+                        desktop_button("copy-credential-command")
+                            .label(rust_i18n::t!("gpui_component.Input.Copy").to_string())
+                            .ghost()
+                            .on_click(move |_, window, app| {
+                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(command.to_string()));
+                                super::super::notifications::copied_to_clipboard(window, app);
+                            }),
+                    ),
             );
         }
-        accessible_group_box("provider-settings-group", "Provider settings", group)
+        accessible_group_box("provider-settings-group", rust_i18n::t!("app.settings.provider.group").to_string(), group)
     }
 
     fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
         let service_info = self.service_info.as_ref().filter(|_| self.backend.is_some());
         let service_connected = service_info.is_some();
         let service_status = if service_connected {
-            Tag::success().outline().small().child("Connected")
+            Tag::success()
+                .outline()
+                .small()
+                .child(rust_i18n::t!("app.settings.connections.connected").to_string())
         } else {
-            Tag::warning().outline().small().child("Not connected")
+            Tag::warning()
+                .outline()
+                .small()
+                .child(rust_i18n::t!("app.settings.connections.not_connected").to_string())
         };
         let service_status_label = if service_connected {
-            "CLI service connection is active"
+            rust_i18n::t!("app.settings.connections.active_status").to_string()
         } else {
-            "CLI service has not completed a protocol handshake"
+            rust_i18n::t!("app.settings.connections.waiting_status").to_string()
         };
         let service_details = if let Some(info) = service_info {
             DescriptionList::horizontal()
                 .columns(1)
                 .label_width(px(128.))
                 .bordered(false)
-                .item("Runtime", "VT Code", 1)
-                .item("Version", info.server_version.clone(), 1)
-                .item("Protocol", format!("{}.{}", info.protocol.major, info.protocol.minor), 1)
-                .item("Workspace", info.workspace.clone(), 1)
+                .item(rust_i18n::t!("app.settings.connections.runtime").to_string(), "VT Code", 1)
+                .item(rust_i18n::t!("app.settings.connections.version").to_string(), info.server_version.clone(), 1)
+                .item(
+                    rust_i18n::t!("app.settings.connections.protocol").to_string(),
+                    format!("{}.{}", info.protocol.major, info.protocol.minor),
+                    1,
+                )
+                .item(rust_i18n::t!("app.settings.connections.workspace").to_string(), info.workspace.clone(), 1)
                 .into_any_element()
         } else {
             div()
@@ -651,7 +705,7 @@ impl DesktopView {
                 .min_w_0()
                 .text_sm()
                 .text_color(cx.theme().colors.muted_foreground)
-                .child("The local CLI service will appear here after VT Code Desktop connects.")
+                .child(rust_i18n::t!("app.settings.connections.local_service_unavailable").to_string())
                 .into_any_element()
         };
 
@@ -665,26 +719,30 @@ impl DesktopView {
             .child(self.render_webmcp_settings(true, cx))
             .child(accessible_group_box(
                 "local-service-settings-group",
-                "Local service",
-                GroupBox::new().flex_shrink_0().outline().title("Local service").child(
-                    div()
-                        .id("local-service-details")
-                        .test_support()
-                        .role(gpui_kit::Role::Group)
-                        .aria_label("Local service connection details")
-                        .flex()
-                        .flex_col()
-                        .gap_3()
-                        .child(
-                            div()
-                                .id("local-service-status")
-                                .test_support()
-                                .role(gpui_kit::Role::Status)
-                                .aria_label(service_status_label)
-                                .child(service_status),
-                        )
-                        .child(service_details),
-                ),
+                rust_i18n::t!("app.settings.connections.local_service").to_string(),
+                GroupBox::new()
+                    .flex_shrink_0()
+                    .outline()
+                    .title(rust_i18n::t!("app.settings.connections.local_service").to_string())
+                    .child(
+                        div()
+                            .id("local-service-details")
+                            .test_support()
+                            .role(gpui_kit::Role::Group)
+                            .aria_label(rust_i18n::t!("app.settings.connections.local_service_details").to_string())
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .id("local-service-status")
+                                    .test_support()
+                                    .role(gpui_kit::Role::Status)
+                                    .aria_label(service_status_label)
+                                    .child(service_status),
+                            )
+                            .child(service_details),
+                    ),
             ))
             .into_any_element()
     }

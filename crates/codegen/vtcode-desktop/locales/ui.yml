@@ -28,6 +28,15 @@ app:
       es: Diseño
       fr: Disposition
       ja: レイアウト
+    categories_navigation_hint:
+      en: Use Left and Right arrows, Home, or End to choose a category.
+      vi: Dùng phím mũi tên trái/phải, Home hoặc End để chọn danh mục.
+      es: Usa las flechas izquierda y derecha, Inicio o Fin para elegir una categoría.
+      fr: Utilisez les flèches gauche et droite, Début ou Fin pour choisir une catégorie.
+      ja: 左右の矢印キー、Home、Endでカテゴリを選択します。
+      de: Wähle mit Links, Rechts, Pos1 oder Ende eine Kategorie aus.
+      it: Usa le frecce sinistra e destra, Home o Fine per scegliere una categoria.
+      zh-CN: 使用左右方向键、Home 或 End 选择类别。
     title:
       en: Settings
       es: "Configuración"
@@ -175,6 +184,334 @@ app:
         de: Oberflächensprache auf %{language} festlegen
         it: Imposta la lingua dell’interfaccia su %{language}
         zh-CN: 将界面语言设为 %{language}
+    appearance:
+      separate_modes:
+        en: Separate light and dark modes
+        vi: Tách riêng chế độ sáng và tối
+        es: Separar los modos claro y oscuro
+        fr: Séparer les modes clair et sombre
+        ja: ライトモードとダークモードを個別に設定
+        de: Helle und dunkle Darstellung getrennt einstellen
+        it: Separa modalità chiara e scura
+        zh-CN: 分别设置浅色和深色模式
+      editing_profile:
+        en: Editing the %{profile} appearance profile
+        vi: Đang chỉnh cấu hình giao diện %{profile}
+        es: Editando el perfil de apariencia %{profile}
+        fr: Modification du profil d’apparence %{profile}
+        ja: "%{profile}外観プロファイルを編集中"
+        de: Das Erscheinungsbild-Profil „%{profile}“ wird bearbeitet
+        it: Modifica del profilo di aspetto %{profile}
+        zh-CN: 正在编辑 %{profile} 外观配置
+      editing_profile_short:
+        en: Editing profile
+        vi: Đang chỉnh cấu hình
+        es: Editando perfil
+        fr: Modification du profil
+        ja: プロファイルを編集中
+        de: Profil wird bearbeitet
+        it: Modifica del profilo
+        zh-CN: 正在编辑配置
+      edit_profile:
+        en: Edit the %{profile} appearance profile
+        vi: Chỉnh cấu hình giao diện %{profile}
+        es: Editar el perfil de apariencia %{profile}
+        fr: Modifier le profil d’apparence %{profile}
+        ja: "%{profile}外観プロファイルを編集"
+        de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten
+        it: Modifica il profilo di aspetto %{profile}
+        zh-CN: 编辑 %{profile} 外观配置
+      edit_profile_selected:
+        en: Edit the %{profile} appearance profile (selected)
+        vi: Chỉnh cấu hình giao diện %{profile} (đã chọn)
+        es: Editar el perfil de apariencia %{profile} (seleccionado)
+        fr: Modifier le profil d’apparence %{profile} (sélectionné)
+        ja: 選択中の%{profile}外観プロファイルを編集
+        de: Das Erscheinungsbild-Profil „%{profile}“ bearbeiten (ausgewählt)
+        it: Modifica il profilo di aspetto %{profile} (selezionato)
+        zh-CN: 编辑 %{profile} 外观配置（已选中）
+      light:
+        en: Light
+        vi: Sáng
+        es: Claro
+        fr: Clair
+        ja: ライト
+        de: Hell
+        it: Chiaro
+        zh-CN: 浅色
+      dark:
+        en: Dark
+        vi: Tối
+        es: Oscuro
+        fr: Sombre
+        ja: ダーク
+        de: Dunkel
+        it: Scuro
+        zh-CN: 深色
+      themes:
+        en: Themes
+        vi: Chủ đề
+        es: Temas
+        fr: Thèmes
+        ja: テーマ
+        de: Designs
+        it: Temi
+        zh-CN: 主题
+      next_themes:
+        en: Next themes
+        vi: Chủ đề tiếp theo
+        es: Temas siguientes
+        fr: Thèmes suivants
+        ja: 次のテーマ
+        de: Weitere Designs
+        it: Temi successivi
+        zh-CN: 下一个主题
+      previous_themes:
+        en: Previous themes
+        vi: Chủ đề trước
+        es: Temas anteriores
+        fr: Thèmes précédents
+        ja: 前のテーマ
+        de: Vorherige Designs
+        it: Temi precedenti
+        zh-CN: 上一个主题
+      visual_themes:
+        en: Visual themes
+        vi: Chủ đề giao diện
+        es: Temas visuales
+        fr: Thèmes visuels
+        ja: 外観テーマ
+        de: Darstellungsthemen
+        it: Temi visivi
+        zh-CN: 外观主题
+      show_navigation:
+        en: Show side navigation
+        vi: Hiện thanh điều hướng bên
+        es: Mostrar navegación lateral
+        fr: Afficher la navigation latérale
+        ja: サイドナビゲーションを表示
+        de: Seitennavigation anzeigen
+        it: Mostra la navigazione laterale
+        zh-CN: 显示侧边导航
+      navigation_hint:
+        en: When hidden, project, thread, and workspace actions stay in the top bar.
+        vi: Khi ẩn, thao tác dự án, cuộc hội thoại và không gian làm việc vẫn ở thanh trên cùng.
+        es: Al ocultarla, las acciones de proyectos, conversaciones y espacios de trabajo permanecen en la barra superior.
+        fr: Masquées, les actions de projet, de conversation et d’espace de travail restent dans la barre supérieure.
+        ja: 非表示にしても、プロジェクト、スレッド、ワークスペースの操作は上部バーに残ります。
+        de: Bei ausgeblendeter Navigation bleiben Projekt-, Chat- und Arbeitsbereichsaktionen in der oberen Leiste.
+        it: Quando è nascosta, le azioni per progetti, conversazioni e spazi di lavoro restano nella barra superiore.
+        zh-CN: 隐藏后，项目、对话和工作区操作仍保留在顶部栏。
+      navigation_right:
+        en: Place navigation on the right
+        vi: Đặt thanh điều hướng bên phải
+        es: Colocar la navegación a la derecha
+        fr: Placer la navigation à droite
+        ja: ナビゲーションを右側に配置
+        de: Navigation rechts platzieren
+        it: Posiziona la navigazione a destra
+        zh-CN: 将导航栏放在右侧
+      reset:
+        en: Reset appearance
+        vi: Đặt lại giao diện
+        es: Restablecer apariencia
+        fr: Réinitialiser l’apparence
+        ja: 外観をリセット
+        de: Erscheinungsbild zurücksetzen
+        it: Reimposta l’aspetto
+        zh-CN: 重置外观
+    accessibility:
+      description:
+        en: Adjust motion and the amount of persistent interface detail.
+        vi: Điều chỉnh chuyển động và mức độ chi tiết giao diện luôn hiển thị.
+        es: Ajusta el movimiento y la cantidad de elementos permanentes de la interfaz.
+        fr: Réglez les animations et la quantité d’éléments persistants de l’interface.
+        ja: アニメーションと常時表示するインターフェース要素を調整します。
+        de: Passe Bewegung und dauerhaft sichtbare Bedienelemente an.
+        it: Regola le animazioni e la quantità di elementi persistenti nell’interfaccia.
+        zh-CN: 调整动画和界面中常驻元素的数量。
+      display:
+        en: Display
+        vi: Hiển thị
+        es: Pantalla
+        fr: Affichage
+        ja: ディスプレイ
+        de: Anzeige
+        it: Schermo
+        zh-CN: 显示
+      show_status_bar:
+        en: Show status bar
+        vi: Hiện thanh trạng thái
+        es: Mostrar barra de estado
+        fr: Afficher la barre d’état
+        ja: ステータスバーを表示
+        de: Statusleiste anzeigen
+        it: Mostra la barra di stato
+        zh-CN: 显示状态栏
+    provider:
+      group:
+        en: Provider settings
+        vi: Cài đặt nhà cung cấp
+        es: Configuración del proveedor
+        fr: Paramètres du fournisseur
+        ja: プロバイダー設定
+        de: Anbietereinstellungen
+        it: Impostazioni del provider
+        zh-CN: 提供商设置
+      title:
+        en: Provider
+        vi: Nhà cung cấp
+        es: Proveedor
+        fr: Fournisseur
+        ja: プロバイダー
+        de: Anbieter
+        it: Provider
+        zh-CN: 提供商
+      connect_hint:
+        en: Connect to your workspace to view provider and model details.
+        vi: Kết nối với không gian làm việc để xem thông tin nhà cung cấp và mô hình.
+        es: Conéctate a tu espacio de trabajo para ver los detalles del proveedor y del modelo.
+        fr: Connectez-vous à votre espace de travail pour voir les détails du fournisseur et du modèle.
+        ja: ワークスペースに接続すると、プロバイダーとモデルの詳細を確認できます。
+        de: Verbinde dich mit deinem Arbeitsbereich, um Anbieter- und Modelldetails zu sehen.
+        it: Connettiti allo spazio di lavoro per vedere i dettagli di provider e modello.
+        zh-CN: 连接到工作区以查看提供商和模型详情。
+      not_configured:
+        en: Not configured
+        vi: Chưa cấu hình
+        es: Sin configurar
+        fr: Non configuré
+        ja: 未設定
+        de: Nicht konfiguriert
+        it: Non configurato
+        zh-CN: 未配置
+      accessibility_label:
+        en: Provider and model configuration
+        vi: Cấu hình nhà cung cấp và mô hình
+        es: Configuración del proveedor y del modelo
+        fr: Configuration du fournisseur et du modèle
+        ja: プロバイダーとモデルの設定
+        de: Anbieter- und Modellkonfiguration
+        it: Configurazione di provider e modello
+        zh-CN: 提供商和模型配置
+      provider:
+        en: Provider
+        vi: Nhà cung cấp
+        es: Proveedor
+        fr: Fournisseur
+        ja: プロバイダー
+        de: Anbieter
+        it: Provider
+        zh-CN: 提供商
+      model:
+        en: Model
+        vi: Mô hình
+        es: Modelo
+        fr: Modèle
+        ja: モデル
+        de: Modell
+        it: Modello
+        zh-CN: 模型
+    connections:
+      connected:
+        en: Connected
+        vi: Đã kết nối
+        es: Conectado
+        fr: Connecté
+        ja: 接続済み
+        de: Verbunden
+        it: Connesso
+        zh-CN: 已连接
+      not_connected:
+        en: Not connected
+        vi: Chưa kết nối
+        es: Sin conexión
+        fr: Non connecté
+        ja: 未接続
+        de: Nicht verbunden
+        it: Non connesso
+        zh-CN: 未连接
+      active_status:
+        en: CLI service connection is active
+        vi: Kết nối dịch vụ CLI đang hoạt động
+        es: La conexión al servicio CLI está activa
+        fr: La connexion au service CLI est active
+        ja: CLIサービスに接続しています
+        de: Die Verbindung zum CLI-Dienst ist aktiv
+        it: La connessione al servizio CLI è attiva
+        zh-CN: CLI 服务连接已启用
+      waiting_status:
+        en: CLI service has not completed a protocol handshake
+        vi: Dịch vụ CLI chưa hoàn tất bắt tay giao thức
+        es: El servicio CLI aún no ha completado el protocolo de enlace
+        fr: La négociation du protocole avec le service CLI n’est pas terminée
+        ja: CLIサービスとのプロトコルハンドシェイクが完了していません
+        de: Der CLI-Dienst hat den Protokoll-Handshake noch nicht abgeschlossen
+        it: Il servizio CLI non ha ancora completato la negoziazione del protocollo
+        zh-CN: CLI 服务尚未完成协议握手
+      runtime:
+        en: Runtime
+        vi: Môi trường chạy
+        es: Entorno de ejecución
+        fr: Environnement d’exécution
+        ja: ランタイム
+        de: Laufzeit
+        it: Runtime
+        zh-CN: 运行时
+      version:
+        en: Version
+        vi: Phiên bản
+        es: Versión
+        fr: Version
+        ja: バージョン
+        de: Version
+        it: Versione
+        zh-CN: 版本
+      protocol:
+        en: Protocol
+        vi: Giao thức
+        es: Protocolo
+        fr: Protocole
+        ja: プロトコル
+        de: Protokoll
+        it: Protocollo
+        zh-CN: 协议
+      workspace:
+        en: Workspace
+        vi: Không gian làm việc
+        es: Espacio de trabajo
+        fr: Espace de travail
+        ja: ワークスペース
+        de: Arbeitsbereich
+        it: Spazio di lavoro
+        zh-CN: 工作区
+      local_service_unavailable:
+        en: The local CLI service will appear here after VT Code Desktop connects.
+        vi: Dịch vụ CLI cục bộ sẽ xuất hiện tại đây sau khi VT Code Desktop kết nối.
+        es: El servicio CLI local aparecerá aquí cuando VT Code Desktop se conecte.
+        fr: Le service CLI local apparaîtra ici lorsque VT Code Desktop sera connecté.
+        ja: VT Code Desktopの接続後、ローカルCLIサービスがここに表示されます。
+        de: Der lokale CLI-Dienst wird hier angezeigt, sobald VT Code Desktop verbunden ist.
+        it: Il servizio CLI locale apparirà qui quando VT Code Desktop sarà connesso.
+        zh-CN: VT Code Desktop 连接后，本地 CLI 服务会显示在这里。
+      local_service:
+        en: Local service
+        vi: Dịch vụ cục bộ
+        es: Servicio local
+        fr: Service local
+        ja: ローカルサービス
+        de: Lokaler Dienst
+        it: Servizio locale
+        zh-CN: 本地服务
+      local_service_details:
+        en: Local service connection details
+        vi: Chi tiết kết nối dịch vụ cục bộ
+        es: Detalles de conexión del servicio local
+        fr: Détails de connexion du service local
+        ja: ローカルサービスの接続詳細
+        de: Verbindungsdetails des lokalen Dienstes
+        it: Dettagli della connessione al servizio locale
+        zh-CN: 本地服务连接详情
   welcome:
     greeting:
       morning:

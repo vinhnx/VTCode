@@ -92,6 +92,8 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         assert_eq!(window.find("appearance-visual-style-group").label(), Some("Estilo visual"));
         assert_eq!(window.find("appearance-typography-group").label(), Some("Tipografía"));
         assert_eq!(window.find("appearance-layout-group").label(), Some("Diseño"));
+        assert_eq!(window.find("navigation-visible").label(), Some("Mostrar navegación lateral"));
+        assert_eq!(window.find("reset-appearance").label(), Some("Restablecer apariencia"));
         assert_eq!(window.find("ui-language-es").checked(), Some(true));
         assert_eq!(
             crate::desktop::preferences::Preferences::load().ui_language(),
@@ -2877,16 +2879,16 @@ fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestA
             assert_eq!(preferences.light_theme.as_deref(), Some("catppuccin-latte"));
         }
         assert_eq!(window.find("theme-catppuccin-latte").label(), Some("Catppuccin Latte (light profile)"),);
-        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile (selected)"));
-        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile"));
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile (selected)"));
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile"));
         assert_eq!(window.find("edit-dark-profile").checked(), Some(true));
         assert_eq!(window.find("edit-light-profile").checked(), Some(false));
 
         window.click("edit-light-profile", cx);
         window.render_frame(cx);
         assert!(view.read(cx).settings_open);
-        assert_eq!(window.find("edit-light-profile").label(), Some("Edit light appearance profile (selected)"));
-        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit dark appearance profile"));
+        assert_eq!(window.find("edit-light-profile").label(), Some("Edit the Light appearance profile (selected)"));
+        assert_eq!(window.find("edit-dark-profile").label(), Some("Edit the Dark appearance profile"));
         assert_eq!(window.find("edit-light-profile").checked(), Some(true));
         assert_eq!(window.find("edit-dark-profile").checked(), Some(false));
         assert_eq!(view.read(cx).theme_mode, ThemeMode::Light);
