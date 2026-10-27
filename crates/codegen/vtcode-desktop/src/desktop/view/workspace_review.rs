@@ -34,16 +34,17 @@ pub(super) struct WorkspaceReviewState {
 
 fn review_message(
     id: &'static str,
-    title: &'static str,
+    title: impl Into<gpui_kit::SharedString>,
     description: impl Into<gpui_kit::SharedString>,
     icon: IconName,
 ) -> AnyElement {
+    let title = title.into();
     let description = description.into();
     div()
         .id(id)
         .test_support()
         .role(gpui_kit::Role::Status)
-        .aria_label(title)
+        .aria_label(title.clone())
         .aria_description(description.clone())
         .flex_1()
         .min_h_0()
@@ -88,7 +89,7 @@ impl DesktopView {
             protocol::method::WORKSPACE_REVIEW,
             json!({ "requestId": request_id, "scope": scope, "includeUntracked": include_untracked }),
         ) {
-            self.fail_workspace_review("The local service request queue is unavailable.".into());
+            self.fail_workspace_review(rust_i18n::t!("app.workspace_review.request_queue_unavailable").to_string());
         }
         cx.notify();
     }
@@ -191,7 +192,12 @@ impl DesktopView {
         else {
             return;
         };
-        self.show_palette(PaletteKind::ReviewFiles, vec![("Changed files".into(), entries)], window, cx);
+        self.show_palette(
+            PaletteKind::ReviewFiles,
+            vec![(rust_i18n::t!("app.workspace_review.changed_files").to_string(), entries)],
+            window,
+            cx,
+        );
     }
 
     pub(super) fn select_workspace_review_file(&mut self, path: String, cx: &mut Context<Self>) {
@@ -243,11 +249,15 @@ impl DesktopView {
                 .gap_3()
                 .px_4()
                 .py_2()
-                .child(div().text_sm().child("Folder (optional)"))
+                .child(
+                    div()
+                        .text_sm()
+                        .child(rust_i18n::t!("app.workspace_review.folder_optional").to_string()),
+                )
                 .child(
                     Input::new(&review.scope_input)
                         .accessibility_id("workspace-review-scope")
-                        .aria_label("Review folder (optional)")
+                        .aria_label(rust_i18n::t!("app.workspace_review.folder_optional").to_string())
                         .bg(colors.popover)
                         .disabled(review.pending)
                         .when(review.pending, |input| input.cursor_default())
@@ -258,7 +268,7 @@ impl DesktopView {
         body = body.child(
             div().px_4().py_2().child(
                 Checkbox::new("workspace-review-include-untracked")
-                    .label("Include untracked text files")
+                    .label(rust_i18n::t!("app.workspace_review.include_untracked").to_string())
                     .checked(review.include_untracked)
                     .disabled(review.pending)
                     .when(review.pending, |checkbox| checkbox.cursor_default())
@@ -282,13 +292,17 @@ impl DesktopView {
                 .border_color(colors.border)
                 .child(
                     desktop_button("refresh-workspace-review")
-                        .tooltip_with_action("Refresh working tree review", &RefreshWorkspace, Some("VTCodeDesktop"))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.workspace_review.refresh_tooltip").to_string(),
+                            &RefreshWorkspace,
+                            Some("VTCodeDesktop"),
+                        )
                         .label(if review.pending {
-                            "Refreshing…"
+                            rust_i18n::t!("app.workspace_review.refreshing").to_string()
                         } else if review.snapshot.is_none() {
-                            "Load changes"
+                            rust_i18n::t!("app.workspace_review.load_changes").to_string()
                         } else {
-                            "Refresh"
+                            rust_i18n::t!("app.workspace_review.refresh").to_string()
                         })
                         .small()
                         .desktop_disabled(review.pending)
@@ -299,13 +313,13 @@ impl DesktopView {
                         .id("workspace-review-layout-options")
                         .test_support()
                         .role(gpui_kit::Role::Group)
-                        .aria_label("Diff layout")
+                        .aria_label(rust_i18n::t!("app.workspace_review.diff_layout").to_string())
                         .flex()
                         .items_center()
                         .gap_2()
                         .child(
                             desktop_button("workspace-review-unified")
-                                .label("Unified")
+                                .label(rust_i18n::t!("app.workspace_review.unified").to_string())
                                 .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Unified)
@@ -317,7 +331,7 @@ impl DesktopView {
                         )
                         .child(
                             desktop_button("workspace-review-split")
-                                .label("Split")
+                                .label(rust_i18n::t!("app.workspace_review.split").to_string())
                                 .ghost()
                                 .small()
                                 .toggled(review.mode == DiffMode::Split)
@@ -331,7 +345,7 @@ impl DesktopView {
                 .child(div().flex_1())
                 .child(
                     desktop_button("copy-workspace-review")
-                        .label("Copy preview")
+                        .label(rust_i18n::t!("app.workspace_review.copy_preview").to_string())
                         .icon(IconName::Copy)
                         .ghost()
                         .small()
@@ -356,20 +370,24 @@ impl DesktopView {
                 .id("workspace-review-loading")
                 .test_support()
                 .role(gpui_kit::Role::Status)
-                .aria_label("Reading Git changes")
-                .aria_description("Capturing a bounded read-only snapshot.")
+                .aria_label(rust_i18n::t!("app.workspace_review.reading_git_changes").to_string())
+                .aria_description(rust_i18n::t!("app.workspace_review.capturing_snapshot").to_string())
                 .flex_1()
                 .min_h_0()
                 .flex()
                 .flex_col()
                 .gap_4()
                 .p_4()
-                .child(div().font_medium().child("Reading Git changes…"))
+                .child(
+                    div()
+                        .font_medium()
+                        .child(rust_i18n::t!("app.workspace_review.reading_git_changes_progress").to_string()),
+                )
                 .child(
                     div()
                         .text_sm()
                         .text_color(colors.muted_foreground)
-                        .child("Capturing a bounded read-only snapshot."),
+                        .child(rust_i18n::t!("app.workspace_review.capturing_snapshot").to_string()),
                 )
                 .child(
                     div()
@@ -396,13 +414,13 @@ impl DesktopView {
                     .id("workspace-review-refreshing")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label("Refreshing Git changes")
-                    .aria_description("Showing the last successful snapshot until this refresh finishes.")
+                    .aria_label(rust_i18n::t!("app.workspace_review.refreshing").to_string())
+                    .aria_description(rust_i18n::t!("app.workspace_review.refreshing_status").to_string())
                     .px_4()
                     .py_2()
                     .text_sm()
                     .text_color(colors.muted_foreground)
-                    .child("Refreshing Git changes · showing the last successful snapshot"),
+                    .child(rust_i18n::t!("app.workspace_review.refreshing_status").to_string()),
             );
         }
         if let Some(viewer) = &review.viewer {
@@ -416,34 +434,45 @@ impl DesktopView {
                 },
             );
             let file_count = files.len();
-            let file_label = if file_count == 1 { "file" } else { "files" };
+            let file_label = if file_count == 1 {
+                rust_i18n::t!("app.workspace_review.file").to_string()
+            } else {
+                rust_i18n::t!("app.workspace_review.files").to_string()
+            };
+            let count_label =
+                rust_i18n::t!("app.workspace_review.changed_files_count", count = file_count, files = file_label)
+                    .to_string();
+            let summary = rust_i18n::t!(
+                "app.workspace_review.changed_files_summary",
+                count = file_count,
+                files = file_label,
+                additions = additions,
+                deletions = deletions
+            )
+            .to_string();
             body = body.child(
                 div()
                     .id("workspace-review-summary")
                     .test_support()
                     .role(gpui_kit::Role::Status)
-                    .aria_label(format!("{file_count} {file_label} changed · +{additions} · −{deletions}"))
-                    .aria_description("Added and deleted lines in the captured working tree preview.")
+                    .aria_label(summary.clone())
+                    .aria_description(rust_i18n::t!("app.workspace_review.added_deleted_description").to_string())
                     .flex()
                     .items_center()
                     .gap_2()
                     .px_4()
                     .py_1()
-                    .child(
-                        Tag::secondary()
-                            .outline()
-                            .small()
-                            .child(format!("{file_count} {file_label} changed")),
-                    )
+                    .child(Tag::secondary().outline().small().child(count_label))
                     .child(Tag::success().outline().small().child(format!("+{additions}")))
                     .child(Tag::danger().outline().small().child(format!("−{deletions}"))),
             );
-            let label = format!(
-                "File {} of {} · {}",
-                position.map_or(0, |index| index + 1),
-                files.len(),
-                review.selected_file.as_deref().unwrap_or("")
-            );
+            let label = rust_i18n::t!(
+                "app.workspace_review.file_position",
+                current = position.map_or(0, |index| index + 1),
+                total = files.len(),
+                path = review.selected_file.as_deref().unwrap_or("")
+            )
+            .to_string();
             body = body.child(
                 div()
                     .flex()
@@ -453,8 +482,12 @@ impl DesktopView {
                     .py_2()
                     .child(
                         desktop_button("workspace-review-previous-file")
-                            .label("Previous file")
-                            .tooltip_with_action("Previous file", &PreviousReviewFile, Some("VTCodeDiffReview"))
+                            .label(rust_i18n::t!("app.workspace_review.previous_file").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.workspace_review.previous_file").to_string(),
+                                &PreviousReviewFile,
+                                Some("VTCodeDiffReview"),
+                            )
                             .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)
@@ -464,7 +497,7 @@ impl DesktopView {
                         desktop_button("workspace-review-current-file")
                             .label(label.clone())
                             .icon(IconName::ChevronDown)
-                            .tooltip("Choose a changed file")
+                            .tooltip(rust_i18n::t!("app.workspace_review.choose_changed_file").to_string())
                             .ghost()
                             .small()
                             .flex_1()
@@ -474,8 +507,12 @@ impl DesktopView {
                     )
                     .child(
                         desktop_button("workspace-review-next-file")
-                            .label("Next file")
-                            .tooltip_with_action("Next file", &NextReviewFile, Some("VTCodeDiffReview"))
+                            .label(rust_i18n::t!("app.workspace_review.next_file").to_string())
+                            .tooltip_with_action(
+                                rust_i18n::t!("app.workspace_review.next_file").to_string(),
+                                &NextReviewFile,
+                                Some("VTCodeDiffReview"),
+                            )
                             .ghost()
                             .small()
                             .desktop_disabled(files.len() < 2)
@@ -488,7 +525,7 @@ impl DesktopView {
                 return body
                     .child(review_message(
                         "workspace-review-unavailable",
-                        "Git review unavailable",
+                        rust_i18n::t!("app.workspace_review.git_review_unavailable").to_string(),
                         error.clone(),
                         IconName::GitCompare,
                     ))
@@ -496,22 +533,36 @@ impl DesktopView {
             }
             body = body.child(warning_alert(
                 "workspace-review-refresh-warning",
-                format!("Refresh failed. Showing the last successful snapshot. {error}"),
+                rust_i18n::t!("app.workspace_review.refresh_failed", error = error).to_string(),
                 &colors,
             ));
         }
         let Some(snapshot) = &review.snapshot else {
-            return body.child(review_message("workspace-review-ready", "Choose what to review", "Leave Folder empty for the whole workspace, or enter a relative directory. Then choose Load changes.", IconName::GitCompare)).into_any_element();
+            return body
+                .child(review_message(
+                    "workspace-review-ready",
+                    rust_i18n::t!("app.workspace_review.choose_what_to_review").to_string(),
+                    rust_i18n::t!("app.workspace_review.choose_what_to_review_hint").to_string(),
+                    IconName::GitCompare,
+                ))
+                .into_any_element();
         };
         if snapshot.patch.is_some() {
-            body = body.child(div().px_4().pt_2().text_xs().text_color(colors.muted_foreground).child(format!(
-                "Folder: {}",
-                if snapshot.scope.is_empty() {
-                    "."
-                } else {
-                    &snapshot.scope
-                }
-            )));
+            body = body.child(
+                div()
+                    .px_4()
+                    .pt_2()
+                    .text_xs()
+                    .text_color(colors.muted_foreground)
+                    .child(rust_i18n::t!(
+                        "app.workspace_review.folder_value",
+                        folder = if snapshot.scope.is_empty() {
+                            "."
+                        } else {
+                            &snapshot.scope
+                        }
+                    )),
+            );
         }
         body = body.child(
             div()
@@ -525,8 +576,8 @@ impl DesktopView {
             None => body
                 .child(review_message(
                     "workspace-review-unavailable",
-                    "Git review unavailable",
-                    "Refresh after Git and a valid repository are available for this workspace.",
+                    rust_i18n::t!("app.workspace_review.git_review_unavailable").to_string(),
+                    rust_i18n::t!("app.workspace_review.repository_unavailable_hint").to_string(),
                     IconName::GitCompare,
                 ))
                 .into_any_element(),
@@ -534,14 +585,14 @@ impl DesktopView {
                 .child(review_message(
                     "workspace-review-clean",
                     if snapshot.truncated {
-                        "No previewable changes"
+                        rust_i18n::t!("app.workspace_review.no_previewable_changes").to_string()
                     } else {
-                        "No tracked changes"
+                        rust_i18n::t!("app.workspace_review.no_tracked_changes").to_string()
                     },
                     if snapshot.include_untracked {
-                        "No previewable changes in this snapshot. See the capture note for omitted files."
+                        rust_i18n::t!("app.workspace_review.no_previewable_changes_hint").to_string()
                     } else {
-                        "Tracked files match the captured Git baseline. Untracked files are excluded."
+                        rust_i18n::t!("app.workspace_review.tracked_files_clean_hint").to_string()
                     },
                     IconName::Check,
                 ))
@@ -559,13 +610,15 @@ impl DesktopView {
                     )
                     .into_any_element()
                 } else {
-                    body.child(div().px_4().py_2().text_sm().child(if snapshot.truncated && snapshot.include_untracked {
-                        "Preview incomplete. See the capture note for omitted files or limits. Copy includes only the captured preview."
-                    } else if snapshot.truncated {
-                        "Preview truncated at the review limit. Choose a narrower folder for a complete review. Copy includes only this preview."
-                    } else {
-                        "Structured preview unavailable for this patch. Showing the captured text."
-                    }))
+                    body.child(div().px_4().py_2().text_sm().child(
+                        if snapshot.truncated && snapshot.include_untracked {
+                            rust_i18n::t!("app.workspace_review.preview_incomplete").to_string()
+                        } else if snapshot.truncated {
+                            rust_i18n::t!("app.workspace_review.preview_truncated").to_string()
+                        } else {
+                            rust_i18n::t!("app.workspace_review.structured_preview_unavailable").to_string()
+                        },
+                    ))
                     .child(
                         div()
                             .id("workspace-review-raw")

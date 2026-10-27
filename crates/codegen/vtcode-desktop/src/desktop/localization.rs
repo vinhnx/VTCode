@@ -213,6 +213,94 @@ mod tests {
     }
 
     #[test]
+    fn workspace_review_surface_is_translated_and_interpolates_values() {
+        macro_rules! assert_translated {
+            ($locale:expr, $key:literal) => {{
+                let translated = rust_i18n::t!($key, locale = $locale).to_string();
+                assert!(!translated.is_empty(), "{}/{} is empty", $locale, $key);
+                if $locale != "en" {
+                    let english = rust_i18n::t!($key, locale = "en").to_string();
+                    assert_ne!(translated, english, "{}/{} fell back to English", $locale, $key);
+                }
+            }};
+        }
+
+        for language in UiLanguage::ALL {
+            let locale = language.locale();
+            assert_translated!(locale, "app.workspace_review.review_working_tree");
+            assert_translated!(locale, "app.workspace_review.title");
+            assert_translated!(locale, "app.workspace_review.description");
+            assert_translated!(locale, "app.workspace_review.session_title");
+            assert_translated!(locale, "app.workspace_review.session_description");
+            assert_translated!(locale, "app.workspace_review.close_review");
+            assert_translated!(locale, "app.workspace_review.expanded_in_inspector");
+            assert_translated!(locale, "app.workspace_review.folder_optional");
+            assert_translated!(locale, "app.workspace_review.include_untracked");
+            assert_translated!(locale, "app.workspace_review.refresh_tooltip");
+            assert_translated!(locale, "app.workspace_review.refreshing");
+            assert_translated!(locale, "app.workspace_review.load_changes");
+            assert_translated!(locale, "app.workspace_review.refresh");
+            assert_translated!(locale, "app.workspace_review.diff_layout");
+            assert_translated!(locale, "app.workspace_review.unified");
+            assert_translated!(locale, "app.workspace_review.split");
+            assert_translated!(locale, "app.workspace_review.copy_preview");
+            assert_translated!(locale, "app.workspace_review.reading_git_changes");
+            assert_translated!(locale, "app.workspace_review.reading_git_changes_progress");
+            assert_translated!(locale, "app.workspace_review.capturing_snapshot");
+            assert_translated!(locale, "app.workspace_review.refreshing_status");
+            assert_translated!(locale, "app.workspace_review.changed_files_summary");
+            assert_translated!(locale, "app.workspace_review.changed_files_count");
+            assert_translated!(locale, "app.workspace_review.added_deleted_description");
+            assert_translated!(locale, "app.workspace_review.file_position");
+            assert_translated!(locale, "app.workspace_review.previous_file");
+            assert_translated!(locale, "app.workspace_review.choose_changed_file");
+            assert_translated!(locale, "app.workspace_review.next_file");
+            assert_translated!(locale, "app.workspace_review.git_review_unavailable");
+            assert_translated!(locale, "app.workspace_review.choose_what_to_review");
+            assert_translated!(locale, "app.workspace_review.choose_what_to_review_hint");
+            assert_translated!(locale, "app.workspace_review.folder_value");
+            assert_translated!(locale, "app.workspace_review.refresh_failed");
+            assert_translated!(locale, "app.workspace_review.repository_unavailable_hint");
+            assert_translated!(locale, "app.workspace_review.no_previewable_changes");
+            assert_translated!(locale, "app.workspace_review.no_tracked_changes");
+            assert_translated!(locale, "app.workspace_review.no_previewable_changes_hint");
+            assert_translated!(locale, "app.workspace_review.tracked_files_clean_hint");
+            assert_translated!(locale, "app.workspace_review.preview_incomplete");
+            assert_translated!(locale, "app.workspace_review.preview_truncated");
+            assert_translated!(locale, "app.workspace_review.structured_preview_unavailable");
+            assert_translated!(locale, "app.workspace_review.changed_files");
+            assert_translated!(locale, "app.workspace_review.request_queue_unavailable");
+
+            let summary = rust_i18n::t!(
+                "app.workspace_review.changed_files_summary",
+                locale = locale,
+                count = 8,
+                files = rust_i18n::t!("app.workspace_review.files", locale = locale),
+                additions = 13,
+                deletions = 4
+            )
+            .to_string();
+            assert!(summary.contains("8"), "count was not interpolated in {locale}");
+            assert!(summary.contains("+13"), "additions were not interpolated in {locale}");
+            assert!(summary.contains("−4"), "deletions were not interpolated in {locale}");
+
+            let file_position = rust_i18n::t!(
+                "app.workspace_review.file_position",
+                locale = locale,
+                current = 2,
+                total = 5,
+                path = "src/main.rs"
+            )
+            .to_string();
+            assert!(file_position.contains("src/main.rs"), "path was not interpolated in {locale}");
+            let refresh_error =
+                rust_i18n::t!("app.workspace_review.refresh_failed", locale = locale, error = "repository unavailable")
+                    .to_string();
+            assert!(refresh_error.contains("repository unavailable"), "diagnostic was lost in {locale}");
+        }
+    }
+
+    #[test]
     fn settings_surface_translations_cover_every_supported_language() {
         let expected = [
             (

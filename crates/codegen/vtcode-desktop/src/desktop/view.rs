@@ -5107,7 +5107,7 @@ impl DesktopView {
                 .when(self.restored_review_history_incomplete, |container| {
                     container.child(warning_alert("review-history-warning", PARTIAL_REVIEW_HISTORY_MESSAGE, colors))
                 })
-                .child("Changes are open in the expanded review.")
+                .child(rust_i18n::t!("app.workspace_review.expanded_in_inspector").to_string())
                 .into_any_element();
         }
         let content = self.render_changes_content(false, colors, cx);
@@ -5129,9 +5129,13 @@ impl DesktopView {
             .child(
                 div().px_3().py_2().border_b_1().border_color(colors.border).child(
                     desktop_button("review-working-tree")
-                        .label("Review working tree")
+                        .label(rust_i18n::t!("app.workspace_review.review_working_tree").to_string())
                         .icon(IconName::GitCompare)
-                        .tooltip_with_action("Review working tree", &OpenWorkspaceReview, Some("VTCodeDesktop"))
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.workspace_review.review_working_tree").to_string(),
+                            &OpenWorkspaceReview,
+                            Some("VTCodeDesktop"),
+                        )
                         .ghost()
                         .small()
                         .desktop_disabled(self.backend.is_none() || self.service_info.is_none())
@@ -5371,17 +5375,16 @@ impl DesktopView {
             if expanded {
                 let mode = viewer.read(cx).mode();
                 for (id, label, target) in [
-                    ("review-unified", "Unified", DiffMode::Unified),
-                    ("review-split", "Split", DiffMode::Split),
+                    ("review-unified", rust_i18n::t!("app.workspace_review.unified").to_string(), DiffMode::Unified),
+                    ("review-split", rust_i18n::t!("app.workspace_review.split").to_string(), DiffMode::Split),
                 ] {
                     let state = viewer.clone();
+                    let accessible_label =
+                        format!("{label} diff view{}", if mode == target { " (selected)" } else { "" });
                     header = header.child(
                         desktop_button(id)
                             .label(label)
-                            .accessibility_label(format!(
-                                "{label} diff view{}",
-                                if mode == target { " (selected)" } else { "" }
-                            ))
+                            .accessibility_label(accessible_label)
                             .ghost()
                             .small()
                             .when(mode == target, |button| button.bg(colors.secondary))
@@ -5471,14 +5474,14 @@ impl DesktopView {
             self.render_changes_content(true, &colors, cx)
         };
         let title = if workspace_review {
-            "Working tree review"
+            rust_i18n::t!("app.workspace_review.title").to_string()
         } else {
-            "Review changes"
+            rust_i18n::t!("app.workspace_review.session_title").to_string()
         };
         let description = if workspace_review {
-            "Read-only redacted snapshot · staged and unstaged changes · optional untracked text previews"
+            rust_i18n::t!("app.workspace_review.description").to_string()
         } else {
-            "Session patch previews · read-only"
+            rust_i18n::t!("app.workspace_review.session_description").to_string()
         };
         div()
             .absolute()
@@ -5499,7 +5502,7 @@ impl DesktopView {
                             .id("diff-review-panel")
                             .test_support()
                             .role(gpui_kit::Role::Dialog)
-                            .aria_label(title)
+                            .aria_label(title.clone())
                             .key_context("VTCodeDiffReview")
                             .size_full()
                             .flex()
@@ -5541,8 +5544,14 @@ impl DesktopView {
                                     .child(
                                         desktop_button("close-diff-review")
                                             .icon(IconName::X)
-                                            .accessibility_label("Close diff review")
-                                            .tooltip_with_action("Close review", &DismissOverlay, Some("VTCodeDesktop"))
+                                            .accessibility_label(
+                                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
+                                            )
+                                            .tooltip_with_action(
+                                                rust_i18n::t!("app.workspace_review.close_review").to_string(),
+                                                &DismissOverlay,
+                                                Some("VTCodeDesktop"),
+                                            )
                                             .ghost()
                                             .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
                                     ),
