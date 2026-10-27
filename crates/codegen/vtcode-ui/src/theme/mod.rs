@@ -32,6 +32,6 @@ pub use types::{
     ThemeValidationResult,
 };
 pub use ui_palette::{
-    UiAnsiSlots, UiThemeColors, gpui_kit_theme_colors, gpui_kit_theme_colors_all, gpui_kit_theme_label,
-    is_gpui_kit_theme, rgb_u32,
+    UiAnsiSlots, UiThemeColors, builtin_theme_colors, gpui_kit_theme_colors, gpui_kit_theme_colors_all,
+    gpui_kit_theme_label, is_gpui_kit_theme, rgb_u32,
 };

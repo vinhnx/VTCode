@@ -27,6 +27,17 @@ fn test_ansi_classic_theme_exists() {
 }
 
 #[test]
+fn builtin_ui_palettes_cover_the_full_cli_registry() {
+    for id in available_themes() {
+        let colors = builtin_theme_colors(id).unwrap_or_else(|| panic!("missing palette for {id}"));
+        let definition = all_theme_definitions().get(id).unwrap();
+        assert_eq!(colors.background, definition.palette.background, "{id} background");
+        assert!(contrast_ratio(colors.foreground, colors.background) >= 4.5, "{id} foreground");
+    }
+    assert!(builtin_theme_colors("no-such-theme").is_none());
+}
+
+#[test]
 fn test_all_themes_resolvable() {
     for id in available_themes() {
         assert!(ensure_theme(id).is_ok(), "Theme {id} should be resolvable");

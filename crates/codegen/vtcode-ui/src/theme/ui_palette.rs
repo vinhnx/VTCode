@@ -2,11 +2,13 @@
 //! palette tokens, so the desktop app (and any other UI consumer) renders the
 //! exact colors the CLI registry derives from the same upstream rows.
 
-use anstyle::RgbColor;
+use anstyle::{Color, RgbColor};
 use vtcode_config::constants::ui;
 
-use crate::theme::color_math::{aa_muted_text, contrast_ratio, filled_text, relative_luminance};
+use crate::theme::color_math::{aa_muted_text, contrast_ratio, filled_text, mix, relative_luminance};
 use crate::theme::gpui_kit::{UiThemePalette, UiThemeSpec, theme_specs};
+use crate::theme::registry::theme_definition;
+use crate::theme::types::ColorAccessibilityConfig;
 
 /// Semantic palette colors for one theme, ready for RGB/HSLA consumers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,6 +63,49 @@ pub fn gpui_kit_theme_colors(theme_id: &str) -> Option<UiThemeColors> {
 /// Every gpui-kit theme as `(id, dark, colors)`, in upstream order.
 pub fn gpui_kit_theme_colors_all() -> impl Iterator<Item = (&'static str, bool, UiThemeColors)> {
     theme_specs().iter().map(|spec| (spec.id, spec.dark, colors_for(&spec.palette)))
+}
+
+/// Shared desktop-ready colors for any built-in CLI theme.
+/// Uses the CLI registry and the same accessible text and semantic styles as the TUI.
+pub fn builtin_theme_colors(theme_id: &str) -> Option<UiThemeColors> {
+    let palette = &theme_definition(theme_id)?.palette;
+    let styles = palette.build_styles_with_accessibility(&ColorAccessibilityConfig::default());
+    let rgb = |color: Option<Color>, fallback: RgbColor| match color {
+        Some(Color::Rgb(color)) => color,
+        _ => fallback,
+    };
+    let original_foreground = rgb(Some(styles.foreground), palette.foreground);
+    // Desktop needs enough contrast headroom for raised surfaces as well as
+    // the canvas. Move toward the best neutral only when the CLI text color
+    // cannot support those surfaces, preserving its hue as far as possible.
+    let black = RgbColor(0, 0, 0);
+    let white = RgbColor(255, 255, 255);
+    let target = if contrast_ratio(black, palette.background) > contrast_ratio(white, palette.background) {
+        black
+    } else {
+        white
+    };
+    let foreground = (0..=100)
+        .map(|step| mix(original_foreground, target, step as f32 / 100.0))
+        .find(|color| contrast_ratio(*color, palette.background) >= 7.0)
+        .unwrap_or(target);
+    let accent = rgb(styles.mcp.get_fg_color(), foreground);
+    Some(UiThemeColors {
+        background: palette.background,
+        foreground,
+        accent,
+        secondary: rgb(styles.secondary.get_fg_color(), foreground),
+        danger: rgb(styles.error.get_fg_color(), foreground),
+        warning: rgb(styles.warning.get_fg_color(), foreground),
+        info: rgb(styles.info.get_fg_color(), foreground),
+        success: if relative_luminance(palette.background) > 0.5 {
+            RgbColor(0x23, 0x7a, 0x45)
+        } else {
+            RgbColor(0x63, 0xc7, 0x79)
+        },
+        muted: aa_muted_text(palette.background, foreground),
+        accent_contrast: filled_text(accent),
+    })
 }
 
 fn find_spec(theme_id: &str) -> Option<&'static UiThemeSpec> {

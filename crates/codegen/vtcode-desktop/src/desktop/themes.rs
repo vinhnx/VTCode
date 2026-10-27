@@ -1,9 +1,8 @@
 //! VT Code desktop themes: the TUI theme registry rendered on the gpui-kit
 //! tokens, with Ciapre as the app default.
 //!
-//! Palette rows come from `vtcode_ui::theme` — the longbridge/gpui-kit ports
-//! are shared with the CLI registry — so a theme id looks the same in the
-//! terminal and in the desktop client.
+//! Palette rows come from the shared CLI theme registry. Desktop adjusts
+//! foreground contrast for its raised surfaces while retaining palette hues.
 //!
 //! Each theme overrides the core kit colors after `Theme::change` installs
 //! the matching light/dark base; derived tokens (border, panels, muted text)
@@ -94,7 +93,7 @@ fn ported(spec: (&'static str, bool, UiThemeColors)) -> DesktopTheme {
     let (id, dark, colors) = spec;
     let mut theme = theme(
         id,
-        theme::gpui_kit_theme_label(id).unwrap_or(id),
+        theme::theme_label(id).unwrap_or(id),
         if dark { ThemeMode::Dark } else { ThemeMode::Light },
         [
             theme::rgb_u32(colors.background),
@@ -116,117 +115,18 @@ pub(super) fn find(id: &str) -> Option<&'static DesktopTheme> {
     all_themes().iter().find(|theme| theme.id == id)
 }
 
-/// The full palette table: every ported gpui-kit theme plus the desktop-only
-/// curated rows, built once because the kit's color constructors are not
-/// `const`.
+/// The full CLI palette table, built once because the kit's color constructors
+/// are not `const`.
 pub(super) fn all_themes() -> &'static [DesktopTheme] {
     static THEMES: std::sync::LazyLock<Vec<DesktopTheme>> = std::sync::LazyLock::new(build_themes);
     &THEMES
 }
 
 fn build_themes() -> Vec<DesktopTheme> {
-    // Ported rows come first: they carry the shared upstream colors plus the
-    // contrast-checked semantic tokens. Curated rows fill in the desktop-only
-    // themes the CLI registry does not define.
-    let mut themes: Vec<DesktopTheme> = theme::gpui_kit_theme_colors_all().map(ported).collect();
-    for theme in curated_themes() {
-        if !themes.iter().any(|ported| ported.id == theme.id) {
-            themes.push(theme);
-        }
-    }
-    themes
-}
-
-/// Desktop-only palettes, kept for ids the shared theme registry omits.
-fn curated_themes() -> Vec<DesktopTheme> {
-    vec![
-        theme("ciapre", "Ciapre", ThemeMode::Dark, [0x181818, 0xAEA47F, 0xCC8A3E, 0xAEA47F, 0xC16A68, 0xCC8A3E]),
-        theme(
-            "ciapre-dark",
-            "Ciapre Dark",
-            ThemeMode::Dark,
-            [0x262626, 0xBFB38F, 0xD99A4E, 0xBFB38F, 0xFF8A8A, 0xD99A4E],
-        ),
-        theme(
-            "ciapre-blue",
-            "Ciapre Blue",
-            ThemeMode::Dark,
-            [0x171C26, 0xBFB38F, 0xD99A4E, 0xBFB38F, 0xFF8A8A, 0xD99A4E],
-        ),
-        theme(
-            "solarized-dark",
-            "Solarized Dark",
-            ThemeMode::Dark,
-            [0x002B36, 0x839496, 0x3A95D6, 0x839496, 0xE56765, 0xB58900],
-        ),
-        theme(
-            "solarized-light",
-            "Solarized Light",
-            ThemeMode::Light,
-            [0xFDF6E3, 0x586E75, 0x2073AE, 0x586E75, 0xD3302D, 0xB58900],
-        ),
-        theme(
-            "solarized-dark-hc",
-            "Solarized Dark HC",
-            ThemeMode::Dark,
-            [0x002831, 0xE9E3CC, 0x4A90D2, 0xE9E3CC, 0xE0656A, 0xB58900],
-        ),
-        theme(
-            "gruvbox-dark",
-            "Gruvbox Dark",
-            ThemeMode::Dark,
-            [0x282828, 0xA89984, 0xD79921, 0xA89984, 0xDE716C, 0xD79921],
-        ),
-        theme(
-            "gruvbox-light",
-            "Gruvbox Light",
-            ThemeMode::Light,
-            [0xFBF4E8, 0x786C61, 0x986311, 0x786C61, 0x9D0006, 0x986311],
-        ),
-        theme("dracula", "Dracula", ThemeMode::Dark, [0x282A36, 0xF8F8F2, 0xFFB86C, 0x8BE9FD, 0xFF5858, 0xFFB86C]),
-        theme(
-            "github-dark",
-            "GitHub Dark",
-            ThemeMode::Dark,
-            [0x0D1117, 0xC9D1D9, 0x58A6FF, 0xD29922, 0xF85149, 0xD29922],
-        ),
-        theme(
-            "github",
-            "GitHub Light",
-            ThemeMode::Light,
-            [0xFFFFFF, 0x24292E, 0x0366D6, 0x24292E, 0xD53948, 0x907000],
-        ),
-        theme(
-            "atom-one-dark",
-            "Atom One Dark",
-            ThemeMode::Dark,
-            [0x282C34, 0xABB2BF, 0x61AFEF, 0xE5C07B, 0xE2737C, 0xE5C07B],
-        ),
-        theme(
-            "atom-one-light",
-            "Atom One Light",
-            ThemeMode::Light,
-            [0xFAFAFA, 0x383A42, 0x3E70C3, 0x383A42, 0xC2493E, 0x986200],
-        ),
-        theme(
-            "tomorrow-night",
-            "Tomorrow Night",
-            ThemeMode::Dark,
-            [0x1D1F21, 0xC5C8C6, 0xDE935F, 0x81A2BE, 0xCE6B6B, 0xDE935F],
-        ),
-        theme(
-            "catppuccin-latte",
-            "Catppuccin Latte",
-            ThemeMode::Light,
-            [0xEFF1F5, 0x4C4F69, 0x1E66F5, 0x8839EF, 0xD20F39, 0xFE640B],
-        ),
-        theme(
-            "catppuccin-mocha",
-            "Catppuccin Mocha",
-            ThemeMode::Dark,
-            [0x1E1E2E, 0xCDD6F4, 0x89B4FA, 0xCBA6F7, 0xF38BA8, 0xFAB387],
-        ),
-    ]
+    theme::available_themes()
+        .into_iter()
+        .filter_map(|id| theme::builtin_theme_colors(id).map(|colors| ported((id, !theme::is_light_theme(id), colors))))
+        .collect()
 }
 
 /// One selectable entry in the theme picker: a palette theme or one of the
@@ -945,19 +845,20 @@ mod tests {
     }
 
     #[test]
-    fn every_cli_gpui_kit_theme_is_offered_in_the_desktop_picker() {
+    fn every_cli_theme_is_offered_in_the_desktop_picker() {
         let desktop_ids: Vec<&str> = all_themes().iter().map(|theme| theme.id).collect();
-        for (id, dark, _colors) in theme::gpui_kit_theme_colors_all() {
+        for id in theme::available_themes() {
             let found = find(id).unwrap_or_else(|| panic!("{id} missing from the desktop picker"));
-            assert_eq!(matches!(found.mode, ThemeMode::Dark), dark, "{id} must keep the upstream light/dark mode");
+            assert_eq!(matches!(found.mode, ThemeMode::Light), theme::is_light_theme(id), "{id} mode");
+            assert!(desktop_ids.contains(&id));
         }
-        // Desktop-only curated rows stay available alongside the ported set.
-        assert!(desktop_ids.contains(&"dracula"));
+        assert_eq!(desktop_ids.len(), theme::available_themes().len());
     }
 
     #[test]
     fn ported_rows_use_the_shared_palette_colors() {
-        for (id, _dark, colors) in theme::gpui_kit_theme_colors_all() {
+        for id in theme::available_themes() {
+            let colors = theme::builtin_theme_colors(id).expect("registered theme palette");
             let row = find(id).unwrap_or_else(|| panic!("{id} missing"));
             let background = rgb(theme::rgb_u32(colors.background)).into();
             let foreground = rgb(theme::rgb_u32(colors.foreground)).into();
@@ -980,7 +881,7 @@ mod tests {
                 readable_semantic_color(background, foreground, rgb(theme::rgb_u32(colors.danger)).into()),
                 "{id}: deletion color must use the shared semantic color at readable contrast"
             );
-            assert_eq!(row.label, theme::gpui_kit_theme_label(id).unwrap_or(id), "{id} label");
+            assert_eq!(row.label, theme::theme_label(id).unwrap_or(id), "{id} label");
         }
     }
 

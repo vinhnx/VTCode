@@ -512,16 +512,16 @@ fn scroll_theme_into_view(
     id: &'static str,
     cx: &mut gpui_kit::App,
 ) {
-    for _ in 0..24 {
+    for _ in 0..120 {
         let viewport = window.find("theme-list").bounds();
         let item = window.find(id).bounds();
         if item.left() >= viewport.left() - px(1.) && item.right() <= viewport.right() + px(1.) {
             return;
         }
-        let delta = if item.left() >= viewport.right() {
-            -px(336.)
+        let delta = if item.right() > viewport.right() {
+            -px(112.)
         } else {
-            px(336.)
+            px(112.)
         };
         view.update(cx, |view, cx| {
             let mut offset = view.theme_scroll.offset();
