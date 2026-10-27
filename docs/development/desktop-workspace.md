@@ -701,3 +701,5 @@ and [examples](https://github.com/zed-industries/zed/tree/347f171a3fd00a3b672382
 particularly `a11y.rs` and `popover.rs`. Applied stable roles/labels, retained entity/subscription ownership,
 and anchored/deferred popovers using the APIs actually available through pinned GPUI Kit 0.8.0.
 These are original VT Code integrations; no main-branch APIs or example implementation were copied.
+
+Desktop `/config` opens a dedicated configuration page grouped by the shared CLI catalog. Choose a category to inspect effective values and their source, use **Browse all settings** to search editable entries, and select User, Workspace, or Project as the write target. Changes use the CLI validated writer and reload the service; documented reference-only entries and omitted sensitive or oversized values are identified in the page.

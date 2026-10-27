@@ -24,6 +24,7 @@ pub(super) enum DesktopSlashAction {
     ModelPicker,
     History,
     Settings(Option<settings::SettingsTab>),
+    Configuration,
     Permissions,
     Modes,
     Files(String),
@@ -63,7 +64,7 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             [theme] => Some(DesktopSlashAction::Theme(Some((*theme).to_string()))),
             _ => None,
         },
-        "config" if args.is_empty() => Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::VtCode))),
+        "config" if args.is_empty() => Some(DesktopSlashAction::Configuration),
         "settings" if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
         "config" | "settings" => {
             let settings_tab = match args {
@@ -337,6 +338,15 @@ impl DesktopView {
             DesktopSlashAction::History => {
                 self.clear_submitted_command(window, cx);
                 self.open_prompt_history(window, cx);
+                true
+            }
+            DesktopSlashAction::Configuration => {
+                self.clear_submitted_command(window, cx);
+                if self.settings_open {
+                    self.close_settings(window, cx);
+                }
+                self.config_page_open = true;
+                self.open_settings(window, cx);
                 true
             }
             DesktopSlashAction::Settings(tab) => {
@@ -1486,10 +1496,7 @@ mod tests {
         assert_eq!(desktop_slash_action("/models"), Some(DesktopSlashAction::ModelPicker));
         assert_eq!(desktop_slash_action("/history"), Some(DesktopSlashAction::History));
         assert_eq!(desktop_slash_action("/splash"), Some(DesktopSlashAction::Splash));
-        assert_eq!(
-            desktop_slash_action("/config"),
-            Some(DesktopSlashAction::Settings(Some(super::super::settings::SettingsTab::VtCode)))
-        );
+        assert_eq!(desktop_slash_action("/config"), Some(DesktopSlashAction::Configuration));
         assert_eq!(desktop_slash_action("/settings"), Some(DesktopSlashAction::Settings(None)));
         assert_eq!(desktop_slash_action("/config permissions"), Some(DesktopSlashAction::Permissions));
         assert_eq!(

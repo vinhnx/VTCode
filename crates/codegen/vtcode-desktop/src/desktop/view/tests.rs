@@ -2052,6 +2052,13 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
                 omitted_large: 0,
                 omitted_limit: 0,
             });
+            let snapshot = view.cli_config_settings.as_mut().unwrap();
+            let mut reference = snapshot.settings[0].clone();
+            reference.path = "tools.example".into();
+            reference.group = Some("Tools".into());
+            reference.label = Some("Tool reference".into());
+            reference.editable = false;
+            snapshot.settings.push(reference);
             view.slash_commands = vec![vtcode_desktop_protocol::SlashCommandInfo {
                 name: "config".into(),
                 description: "Open CLI configuration".into(),
@@ -2066,8 +2073,19 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
         });
         window.render_frame(cx);
         assert!(view.read(cx).settings_open);
-        assert_eq!(view.read(cx).settings_tab, super::settings::SettingsTab::VtCode);
-        assert!(view.read(cx).palette.is_none(), "/config opens the VT Code config panel first");
+        assert!(view.read(cx).config_page_open);
+        assert!(window.try_find("cli-config-page").is_some());
+        assert!(window.try_find("config-edit-agent.default_model").is_some());
+        assert!(window.try_find("config-category-Model & Provider").is_some());
+        assert!(view.read(cx).palette.is_none(), "/config opens the configuration page first");
+        window.click("config-category-Tools", cx);
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).config_page_group.as_deref(), Some("Tools"));
+        assert!(window.try_find("config-edit-agent.default_model").is_none());
+        assert!(window.try_find("config-edit-tools.example").is_none());
+        window.click("config-category-Model & Provider", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("config-edit-agent.default_model").is_some());
         window.click("browse-cli-config", cx);
         window.render_frame(cx);
         assert!(matches!(view.read(cx).palette_kind, super::PaletteKind::ConfigSettings));

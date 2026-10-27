@@ -151,6 +151,138 @@ impl ConfigValueKind {
 }
 
 impl DesktopView {
+    pub(super) fn render_cli_config_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let mut groups = std::collections::BTreeMap::<String, Vec<&protocol::ConfigSetting>>::new();
+        if let Some(snapshot) = self.cli_config_settings.as_ref() {
+            for setting in &snapshot.settings {
+                groups
+                    .entry(setting.group.clone().unwrap_or_else(|| "Advanced settings".into()))
+                    .or_default()
+                    .push(setting);
+            }
+        }
+        let selected = self
+            .config_page_group
+            .as_ref()
+            .filter(|group| groups.contains_key(*group))
+            .or_else(|| groups.keys().next())
+            .cloned();
+        let mut categories = div()
+            .id("config-categories")
+            .w_full()
+            .flex_shrink_0()
+            .overflow_x_scroll()
+            .flex()
+            .gap_2();
+        for (name, settings) in &groups {
+            let name = name.clone();
+            let active = selected.as_ref() == Some(&name);
+            let id = format!("config-category-{name}");
+            let label = format!("{} ({})", name, settings.len());
+            categories = categories.child(
+                desktop_button(id)
+                    .label(label)
+                    .small()
+                    .when(active, |button| button.secondary())
+                    .when(!active, |button| button.ghost())
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.config_page_group = Some(name.clone());
+                        view.settings_scroll.set_offset(point(px(0.), px(0.)));
+                        cx.notify();
+                    })),
+            );
+        }
+        let mut entries = div().flex().flex_col().gap_2();
+        if let Some(name) = selected.as_ref() {
+            if let Some(settings) = groups.get(name) {
+                entries =
+                    entries.child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
+                if let Some(description) = settings.iter().find_map(|setting| setting.group_description.as_ref()) {
+                    entries =
+                        entries.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
+                }
+                for setting in settings {
+                    let path = setting.path.clone();
+                    let value = value_summary(&setting.value);
+                    let label = setting.label.as_deref().unwrap_or(&setting.path).to_owned();
+                    let details = format!(
+                        "{} · {}{}",
+                        setting.path,
+                        value,
+                        setting.origin.as_deref().map_or(String::new(), |origin| format!(" · {origin}"))
+                    );
+                    let editable = setting.editable && self.can_edit_cli_settings();
+                    let mut row = div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .p_3()
+                        .rounded_lg()
+                        .bg(colors.secondary)
+                        .child(div().font_weight(gpui_kit::FontWeight::MEDIUM).child(label))
+                        .child(div().text_sm().text_color(colors.muted_foreground).child(details));
+                    if let Some(description) = setting.description.as_ref() {
+                        row = row.child(div().text_sm().child(description.clone()));
+                    }
+                    if setting.editable {
+                        row = row.child(
+                            desktop_button(format!("config-edit-{path}"))
+                                .label("Edit")
+                                .ghost()
+                                .small()
+                                .desktop_disabled(!editable)
+                                .on_click(cx.listener(move |view, _, window, cx| {
+                                    view.open_cli_config_editor(path.clone(), window, cx)
+                                })),
+                        );
+                    } else {
+                        row = row.child(div().text_xs().text_color(colors.muted_foreground).child("Reference only"));
+                    }
+                    entries = entries.child(row);
+                }
+            }
+        }
+        let panel_height =
+            (window.viewport_size().height - cx.theme().sheet.margin_top - cx.theme().font_size * 2.5 - px(8.))
+                .max(px(0.));
+        let mut panel = div()
+            .id("cli-config-page")
+            .test_support()
+            .role(gpui_kit::Role::Dialog)
+            .aria_label("VT Code configuration")
+            .track_focus(&self.settings_focus)
+            .relative()
+            .w_full()
+            .h(panel_height)
+            .min_h_0()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .p_6()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(self.render_cli_configuration(cx))
+            .child(categories)
+            .child(
+                div()
+                    .id("cli-config-page-content")
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .lock_scroll_axis()
+                    .test_support()
+                    .track_scroll(&self.settings_scroll)
+                    .overflow_y_scroll()
+                    .vertical_scrollbar(&self.settings_scroll)
+                    .child(entries),
+            );
+        if self.config_editor.is_some() {
+            panel = panel.child(self.render_cli_config_editor(cx));
+        }
+        panel.into_any_element()
+    }
+
     pub(super) fn render_cli_configuration(&self, cx: &Context<Self>) -> AnyElement {
         let snapshot = self.cli_config_settings.as_ref();
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());

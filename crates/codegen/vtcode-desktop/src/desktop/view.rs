@@ -689,6 +689,8 @@ struct DesktopView {
     resources_loaded: bool,
     palette_groups: PaletteGroups,
     settings_open: bool,
+    config_page_open: bool,
+    config_page_group: Option<String>,
     theme_scroll: ScrollHandle,
     settings_scroll: ScrollHandle,
     settings_tabs_scroll: ScrollHandle,
@@ -947,6 +949,8 @@ impl DesktopView {
             resources_loaded: false,
             palette_groups: Vec::new(),
             settings_open: false,
+            config_page_open: false,
+            config_page_group: None,
             theme_scroll: ScrollHandle::default(),
             settings_scroll: ScrollHandle::default(),
             settings_tabs_scroll: ScrollHandle::default(),
@@ -2134,11 +2138,23 @@ impl DesktopView {
             }
             // The Kit builder runs again as the window resizes; keep the sheet
             // within the current viewport instead of retaining its opening width.
-            let sheet_width = (window.viewport_size().width.min(px(860.)) - px(24.)).max(px(0.));
-            let content = settings_view.update(cx, |view, cx| view.render_settings_tabs(window, cx));
+            let is_config_page = settings_view.read(cx).config_page_open;
+            let max_width = if is_config_page { px(1200.) } else { px(860.) };
+            let sheet_width = (window.viewport_size().width.min(max_width) - px(24.)).max(px(0.));
+            let content = settings_view.update(cx, |view, cx| {
+                if view.config_page_open {
+                    view.render_cli_config_page(window, cx)
+                } else {
+                    view.render_settings_tabs(window, cx)
+                }
+            });
             let on_close_view = close_view.clone();
             sheet
-                .title(DialogTitle::new().text_lg().child("Settings"))
+                .title(DialogTitle::new().text_lg().child(if is_config_page {
+                    "VT Code configuration"
+                } else {
+                    "Settings"
+                }))
                 .size(sheet_width)
                 .p_0()
                 .child(content)
@@ -2161,6 +2177,7 @@ impl DesktopView {
             return;
         }
         self.settings_open = false;
+        self.config_page_open = false;
         if self.shortcuts_editing {
             self.shortcut_inputs = shortcuts::inputs(&self.preferences.shortcuts, window, cx);
             self.shortcuts_editing = false;
