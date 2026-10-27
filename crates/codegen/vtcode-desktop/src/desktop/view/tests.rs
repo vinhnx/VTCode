@@ -4437,6 +4437,16 @@ fn rejected_first_prompt_waits_for_startup_answer_and_retries_once(cx: &mut Test
         view.update(cx, |view, cx| {
             view.handle_backend_event(BackendEvent::InteractionResponded { identity: InteractionResponseIdentity {
                 session_id: "new".into(), turn_id: "session-start".into(), interaction_id: "question".into(), cancelled: true,
+            }, error: Some("Decision rejected".into()) }, cx);
+            assert!(view.first_submission.is_some(), "a failed decision must not send or discard the prompt");
+            assert!(view.interaction.is_some());
+            view.submit_interaction(Vec::new(), true, window, cx);
+        });
+        assert!(matches!(requests.try_recv(), Ok(BackendCommand::Request { method, .. }) if method == vtcode_desktop_protocol::method::INTERACTION_RESPOND));
+        assert!(requests.try_recv().is_err());
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(BackendEvent::InteractionResponded { identity: InteractionResponseIdentity {
+                session_id: "new".into(), turn_id: "session-start".into(), interaction_id: "question".into(), cancelled: true,
             }, error: None }, cx);
             assert_eq!(view.composer.read(cx).value(), "Newer draft");
             assert!(view.first_submission.is_none());
@@ -4451,6 +4461,29 @@ fn rejected_first_prompt_waits_for_startup_answer_and_retries_once(cx: &mut Test
             assert_eq!(view.retained_submission.as_ref().unwrap().prompt, "First prompt");
         });
         assert!(requests.try_recv().is_err(), "only one retry is queued");
+    }).unwrap();
+}
+
+#[gpui_kit::test]
+fn disconnect_while_waiting_for_startup_decision_retains_unsent_prompt(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer.update(cx, |input, cx| input.set_value("Preserve this", window, cx));
+            view.submit_prompt(window, cx);
+            assert!(matches!(requests.try_recv(), Ok(BackendCommand::Request { method, .. }) if method == vtcode_desktop_protocol::method::SESSION_CREATE));
+            view.handle_backend_event(BackendEvent::Response { method: vtcode_desktop_protocol::method::SESSION_CREATE.into(), result: Some(json!({ "sessionId": "new", "title": null, "workspace": "/workspace", "completed": false, "resumable": true })), error: None }, cx);
+            assert!(matches!(requests.try_recv(), Ok(BackendCommand::Request { method, .. }) if method == vtcode_desktop_protocol::method::TURN_SUBMIT));
+            view.handle_backend_event(BackendEvent::TurnBlockedByStartupInteraction { session_id: "new".into() }, cx);
+            view.handle_backend_event(BackendEvent::Exited { status: None, authentication_required: false }, cx);
+            let draft = view.retained_submission.as_ref().expect("unsent prompt retained");
+            assert_eq!(draft.prompt, "Preserve this");
+            assert!(!draft.delivery_uncertain);
+            assert!(view.first_submission.is_none());
+            assert!(requests.try_recv().is_err());
+        });
     }).unwrap();
 }
 
