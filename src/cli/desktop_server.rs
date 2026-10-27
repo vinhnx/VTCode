@@ -1586,7 +1586,7 @@ fn read_restored_spool_text(workspace: &Path, spool_path: &str, max_bytes: usize
     (&mut file).take(max_bytes as u64).read_to_end(&mut bytes).ok()?;
     let (visible_bytes, pageable) = match std::str::from_utf8(&bytes) {
         Ok(_) => (bytes.len(), true),
-        Err(error) if error.error_len().is_none() => (error.valid_up_to(), true),
+        Err(error) if error.error_len().is_none() && total_bytes > bytes.len() as u64 => (error.valid_up_to(), true),
         Err(_) => (bytes.len(), false),
     };
     let truncated = total_bytes > bytes.len() as u64 || !pageable || visible_bytes < bytes.len();
@@ -3177,6 +3177,24 @@ mod tests {
             .err()
             .expect("an incomplete UTF-8 tail must not be reported as a complete page");
         assert!(error.to_string().contains("incomplete UTF-8 sequence"));
+
+        let mut item = tool_output_item("incomplete", Some(spool_path), "preview");
+        let restored = restore_spooled_tool_output(&workspace, &mut item, 4096).unwrap();
+        assert!(restored.incomplete);
+        assert!(restored.cursor.is_none(), "an incomplete EOF cannot be paged");
+        assert!(restored.spool_path.is_none());
+        let vtcode_core::exec::events::ThreadItemDetails::ToolOutput(output) = item.details else {
+            panic!("tool output");
+        };
+        assert!(output.output.contains("valid"));
+        assert!(output.output.ends_with(RESTORED_OUTPUT_TRUNCATION_SUFFIX));
+
+        std::fs::write(&spool_file, "valid界 tail").unwrap();
+        let prefix = read_restored_spool_text(&workspace, spool_path, 6).unwrap();
+        assert!(prefix.pageable, "a partial character before EOF is recoverable");
+        assert_eq!(prefix.text, "valid");
+        assert!(prefix.truncated);
+        assert_eq!(read_restored_spool_page(&workspace, spool_path, 5).unwrap().text, "界 tail");
     }
 
     #[cfg(unix)]
