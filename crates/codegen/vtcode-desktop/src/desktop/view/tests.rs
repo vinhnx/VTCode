@@ -2899,6 +2899,8 @@ fn appearance_themes_scroll_horizontally_without_moving_typography(cx: &mut Test
         window.click("theme-catppuccin-mocha", cx);
         window.render_frame(cx);
         assert_eq!(view.read(cx).theme_id, "catppuccin-mocha");
+        assert_eq!(window.find("theme-catppuccin-mocha").checked(), Some(true));
+        assert_eq!(window.find("theme-catppuccin-mocha").label(), Some("Catppuccin Mocha (active)"));
 
         window.scroll("theme-list", gpui_kit::ScrollDelta::Lines(point(0., 200.)), cx);
         window.render_frame(cx);

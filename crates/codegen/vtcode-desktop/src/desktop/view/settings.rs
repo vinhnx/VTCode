@@ -180,8 +180,15 @@ impl DesktopView {
                     }))
                     .child(
                         desktop_button("settings-filter-search")
-                            .icon(IconName::Search)
-                            .label(rust_i18n::t!("app.settings.search.button").to_string())
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(Icon::new(IconName::Search))
+                                    .child(rust_i18n::t!("app.settings.search.button").to_string()),
+                            )
                             .accessibility_label(rust_i18n::t!("app.settings.search.button").to_string())
                             .tooltip_with_action(
                                 "Search settings and CLI config",
@@ -191,21 +198,20 @@ impl DesktopView {
                             .ghost()
                             .small()
                             .w_full()
-                            .bg(colors.background)
+                            .justify_start()
+                            .bg(colors.secondary)
+                            .rounded_md()
                             .dispatches_desktop_action(OpenSettingsSearch, self.focus_handle.clone()),
                     )
                     .child(
-                        TabBar::new("settings-tabs")
-                            .segmented()
-                            .w_full()
+                        desktop_tab_bar("settings-tabs")
                             .track_scroll(&self.settings_tabs_scroll)
                             .selected_index(selected_index)
                             .on_click(cx.listener(|view, index: &usize, window, cx| {
                                 view.select_settings_tab(*index, window, cx)
                             }))
                             .children(SettingsTab::ALL.map(|tab| Tab::new().label(tab.label()).cursor_pointer())),
-                    )
-                    .child(div().w_full().h(px(1.)).bg(colors.border)),
+                    ),
             )
             .child(
                 div()
@@ -330,7 +336,7 @@ impl DesktopView {
                             .w_full()
                             .min_w_0()
                             .flex_shrink_0()
-                            .h(px(112.))
+                            .h(px(96.))
                             .relative()
                             .child(
                                 div()

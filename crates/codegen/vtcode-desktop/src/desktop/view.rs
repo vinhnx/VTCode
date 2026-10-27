@@ -5022,10 +5022,7 @@ impl DesktopView {
                             .test_support()
                             .track_focus(&self.inspector_focus)
                             .child(
-                                TabBar::new("inspector-tabs")
-                                    .underline()
-                                    .small()
-                                    .w_full()
+                                desktop_tab_bar("inspector-tabs")
                                     .track_scroll(&self.inspector_tabs_scroll)
                                     .selected_index(
                                         InspectorTab::ALL
@@ -7607,7 +7604,7 @@ impl DesktopView {
         };
         let selected = !badge.is_empty();
         let id = format!("theme-{entry_id}");
-        let mut swatch = div()
+        let swatch = div()
             .w_full()
             .flex()
             .flex_col()
@@ -7632,9 +7629,6 @@ impl DesktopView {
                     .when(selected, |label| label.font_semibold())
                     .child(entry.label()),
             );
-        if selected {
-            swatch = swatch.child(div().text_xs().text_color(cx.theme().colors.primary).child(badge));
-        }
         desktop_button(id)
             .accessibility_label(if selected {
                 format!("{} ({badge})", entry.label())
@@ -7645,14 +7639,9 @@ impl DesktopView {
             .ghost()
             .w(px(104.))
             .flex_shrink_0()
-            .h(px(96.))
+            .h(px(80.))
             .p_2()
-            .border_1()
-            .border_color(if selected {
-                cx.theme().colors.primary
-            } else {
-                cx.theme().colors.border
-            })
+            .when(selected, |button| button.bg(cx.theme().colors.popover))
             .rounded_lg()
             .on_click(cx.listener(move |this, _, window, cx| {
                 let theme_id = entry.id();
@@ -8619,6 +8608,11 @@ fn send_request(commands: &mpsc::Sender<BackendCommand>, method: &str, params: V
     commands
         .try_send(BackendCommand::Request { method: method.to_string(), params })
         .is_ok()
+}
+
+/// Shared compact tab treatment for settings and the inspector.
+fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
+    TabBar::new(id).segmented().small().w_full()
 }
 
 fn section_label(text: &'static str, color: gpui_kit::Hsla) -> impl IntoElement {
