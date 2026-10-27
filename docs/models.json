@@ -557,6 +557,47 @@
           "cache_write": 2.5e-06
         },
         "is_pro": true,
+        "lightweight_model": "gpt-6.1-terra",
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "gpt-6.1-terra": {
+        "id": "gpt-6.1-terra",
+        "name": "GPT-6.1 Terra",
+        "description": "Fast, efficient model for visual reasoning, precise computer use, and clear, natural writing.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "caching": true,
+          "structured_output": true,
+          "thinking": true
+        },
+        "supports_sampling": false,
+        "supports_logprobs": false,
+        "prompt_cache_ttl": "30m",
+        "prompt_contract": "gpt6",
+        "cost": {
+          "input": 1e-06,
+          "output": 5e-06,
+          "cache_read": 5e-08,
+          "cache_write": 1.25e-06
+        },
         "lightweight_model": "gpt-6-luna",
         "reasoning_efforts": [
           "low",
@@ -4805,6 +4846,37 @@
           "structured_output": false
         },
         "is_pro": true,
+        "lightweight_model": "openai/gpt-6.1-terra"
+      },
+      "openai/gpt-6.1-terra": {
+        "id": "openai/gpt-6.1-terra",
+        "name": "GPT-6.1 Terra (Merge Gateway)",
+        "description": "OpenAI GPT-6.1 Terra served through Merge Gateway's native Responses API.",
+        "reasoning": true,
+        "reasoning_efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000,
+        "output_tokens": 128000,
+        "capabilities": {
+          "streaming": true,
+          "function_calling": true,
+          "structured_output": false
+        },
         "lightweight_model": "openai/gpt-6-luna"
       },
       "xiaomimimo/mimo-v2.6-pro": {

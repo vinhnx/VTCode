@@ -339,6 +339,7 @@ impl ModelId {
                 | ModelId::MergeGatewayOpenAIGpt6Astra
                 | ModelId::MergeGatewayOpenAIGpt6Sol
                 | ModelId::MergeGatewayOpenAIGpt61Sol
+                | ModelId::MergeGatewayOpenAIGpt61Terra
                 | ModelId::MergeGatewayOpenAIGpt6Luna
                 | ModelId::ClaudeSonnet5
                 | ModelId::ClaudeSonnet55
@@ -422,7 +423,7 @@ impl ModelId {
             // Gemini generations
             // OpenAI generations
             ModelId::GPT6Astra | ModelId::GPT6Sol | ModelId::GPT6Luna => "6",
-            ModelId::GPT61Sol => "6.1",
+            ModelId::GPT61Sol | ModelId::GPT61Terra => "6.1",
             ModelId::GPT56Sol | ModelId::GPT56Terra | ModelId::GPT56Luna => "5.6",
             ModelId::OpenAIGptOss20b | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
@@ -514,7 +515,7 @@ impl ModelId {
             ModelId::MergeGatewayOpenAIGpt6Astra
             | ModelId::MergeGatewayOpenAIGpt6Sol
             | ModelId::MergeGatewayOpenAIGpt6Luna => "6",
-            ModelId::MergeGatewayOpenAIGpt61Sol => "6.1",
+            ModelId::MergeGatewayOpenAIGpt61Sol | ModelId::MergeGatewayOpenAIGpt61Terra => "6.1",
             // Vercel AI Gateway models
             ModelId::VercelAnthropicClaudeSonnet5 => "5",
             ModelId::VercelAnthropicClaudeOpus5 => "5",

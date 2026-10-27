@@ -120,6 +120,13 @@ model_id_table! {
         display: "GPT-6.1 Sol",
         description: "Near-Astra performance for complex coding, computer use, and professional work at a lower cost",
     },
+    GPT61Terra {
+        provider: OpenAI,
+        id: models::openai::GPT_6_1_TERRA,
+        parse: [models::openai::GPT_6_1_TERRA],
+        display: "GPT-6.1 Terra",
+        description: "Fast, efficient model for visual reasoning, precise computer use, and clear, natural writing",
+    },
     GPT6Luna {
         provider: OpenAI,
         id: models::openai::GPT_6_LUNA,
@@ -461,6 +468,13 @@ model_id_table! {
         parse: [models::merge_gateway::OPENAI_GPT_6_1_SOL],
         display: "GPT-6.1 Sol (Merge Gateway)",
         description: "OpenAI GPT-6.1 Sol accessed through Merge Gateway's OpenAI-compatible endpoint",
+    },
+    MergeGatewayOpenAIGpt61Terra {
+        provider: MergeGateway,
+        id: models::merge_gateway::OPENAI_GPT_6_1_TERRA,
+        parse: [models::merge_gateway::OPENAI_GPT_6_1_TERRA],
+        display: "GPT-6.1 Terra (Merge Gateway)",
+        description: "OpenAI GPT-6.1 Terra accessed through Merge Gateway's OpenAI-compatible endpoint",
     },
     MergeGatewayOpenAIGpt6Luna {
         provider: MergeGateway,

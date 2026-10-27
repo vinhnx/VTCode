@@ -266,6 +266,10 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   lower cost ($2 input / $10 output per 1M, 1,050,000 context, 128k max output, reasoning `low`/`medium`
   (default)/`high`/`xhigh`/`max` — `none`/`minimal` unsupported). Same Responses API route, GPT-6 prompt contract,
   explicit cache breakpoints, and `30m` cache TTL as Astra/Sol; sampling and logprobs unsupported.
+- **GPT-6.1 Terra (`gpt-6.1-terra`):** fast, efficient model for visual reasoning, precise computer use, and clear,
+  natural writing ($1 input / $5 output per 1M, 1,050,000 context, 128k max output, reasoning `none`/`low`/`medium`
+  (default)/`high`/`xhigh`/`max`). Same Responses API route, GPT-6 prompt contract, explicit cache breakpoints, and
+  `30m` cache TTL as 6.1 Sol; sampling and logprobs unsupported. Tool calling requires the Responses API.
 - **GPT-6 Luna (`gpt-6-luna`):** fast cost-efficient GPT-6 model for high-volume latency-sensitive workloads (1,050,000
   context, 128k max output, reasoning `low`/`medium`/`high`/`xhigh`/`max`, default `medium`). Same Responses API route,
   GPT-6 prompt contract, explicit cache breakpoints, and `30m` cache TTL as Astra; sampling and logprobs unsupported.
@@ -401,7 +405,7 @@ disclosure does not replace the retained evidence or expose provider chain-of-th
   `google/gemini-4-argon`, `deepseek/deepseek-v4-pro-0813`, `deepseek/deepseek-v4-flash-0731`, `xai/grok-4.6`, `qwen/qwen3.8-max`,
   `minimax/minimax-h3`, `minimax/minimax-m3.1-flash`, `moonshot/kimi-k3`, `moonshot/kimi-k3.1-pro`, `thinkingmachines/inkling`, `zai/glm-5.3-flash`,
   `zai/glm-5.3-flashx`, `openai/gpt-5.6-luna`, `openai/gpt-5.6-sol`, `openai/gpt-5.6-terra`, `openai/gpt-6-astra`,
-  `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
+  `openai/gpt-6-sol`, `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra`, `openai/gpt-6-luna`, `mistral/mistral-large-4-0`,
   and `meta/muse-spark-open`
 - **Features:** Native Responses, streaming, tool calling, structured outputs, authenticated paginated model catalog,
   cache-backed picker metadata, and arbitrary explicit Merge route IDs

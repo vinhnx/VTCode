@@ -77,6 +77,7 @@ vtcode --provider merge-gateway --model anthropic/claude-opus-5
 | `openai/gpt-6-astra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-sol` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6.1-sol` | 1.05M | Yes | OpenAI route |
+| `openai/gpt-6.1-terra` | 1.05M | Yes | OpenAI route |
 | `openai/gpt-6-luna` | 1.05M | Yes | OpenAI route |
 | `xiaomimimo/mimo-v2.6-pro` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |
 | `xiaomimimo/mimo-v2.6-flash` | 1M | Yes | Xiaomi MiMo route; reasoning controls omitted (gateway has no vendor serving reasoning jointly with tools) |

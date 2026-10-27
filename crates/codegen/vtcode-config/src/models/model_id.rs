@@ -35,6 +35,8 @@ pub enum ModelId {
     GPT6Sol,
     /// GPT-6.1 Sol - Near-Astra performance for complex coding, computer use, and professional work at a lower cost
     GPT61Sol,
+    /// GPT-6.1 Terra - Fast, efficient model for visual reasoning, precise computer use, and clear, natural writing
+    GPT61Terra,
     /// GPT-6 Luna - Fast cost-efficient model in the GPT-6 series for high-volume latency-sensitive workloads
     GPT6Luna,
     /// GPT-5.6 Sol - Frontier model for complex professional work in the GPT-5.6 family
@@ -154,6 +156,8 @@ pub enum ModelId {
     MergeGatewayOpenAIGpt6Sol,
     /// OpenAI GPT-6.1 Sol through Merge Gateway
     MergeGatewayOpenAIGpt61Sol,
+    /// OpenAI GPT-6.1 Terra through Merge Gateway
+    MergeGatewayOpenAIGpt61Terra,
     /// OpenAI GPT-6 Luna through Merge Gateway
     MergeGatewayOpenAIGpt6Luna,
     /// Xiaomi MiMo V2.6 Pro through Merge Gateway

@@ -275,7 +275,7 @@ fn test_models_for_provider() {
     assert!(nvidia_models.contains(&ModelId::NvidiaNemotron3Super120bA12b));
 
     let merge_gateway_models = ModelId::models_for_provider(Provider::MergeGateway);
-    assert_eq!(merge_gateway_models.len(), 31);
+    assert_eq!(merge_gateway_models.len(), 32);
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayMoonshotKimiK31Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Pro));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayXiaomimimoMimoV26Flash));
@@ -288,6 +288,7 @@ fn test_models_for_provider() {
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Astra));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Sol));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt61Sol));
+    assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt61Terra));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayOpenAIGpt6Luna));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku4520251001));
     assert!(merge_gateway_models.contains(&ModelId::MergeGatewayAnthropicClaudeHaiku55));
@@ -624,6 +625,40 @@ fn test_gpt_61_sol_openai_and_merge_gateway() {
     assert!(models::merge_gateway::REASONING_EFFORT_ROUTES.contains(&models::merge_gateway::OPENAI_GPT_6_1_SOL));
     assert_eq!(ModelId::MergeGatewayOpenAIGpt61Sol.generation(), "6.1");
     assert!(ModelId::MergeGatewayOpenAIGpt61Sol.is_top_tier());
+}
+
+#[test]
+fn test_gpt_61_terra_openai_and_merge_gateway() {
+    // OpenAI native route
+    assert_eq!(ModelId::from_str(models::openai::GPT_6_1_TERRA).unwrap(), ModelId::GPT61Terra);
+    assert_eq!(ModelId::GPT61Terra.as_str(), models::openai::GPT_6_1_TERRA);
+    assert_eq!(ModelId::GPT61Terra.display_name(), "GPT-6.1 Terra");
+    assert!(models::openai::SUPPORTED_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(models::openai::REASONING_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(models::openai::RESPONSES_API_MODELS.contains(&models::openai::GPT_6_1_TERRA));
+    assert!(Provider::OpenAI.supports_service_tier(models::openai::GPT_6_1_TERRA));
+    assert!(!ModelId::GPT61Terra.is_top_tier());
+    assert_eq!(ModelId::GPT61Terra.generation(), "6.1");
+    assert!(crate::core::prompt_cache::supports_openai_explicit_prompt_cache(models::openai::GPT_6_1_TERRA));
+    // Balanced tier slots between Sol and Luna, mirroring the GPT-5.6 chain.
+    assert_eq!(ModelId::GPT61Sol.preferred_lightweight_variant(), Some(ModelId::GPT61Terra));
+    assert_eq!(ModelId::GPT61Terra.preferred_lightweight_variant(), Some(ModelId::GPT6Luna));
+
+    // Merge Gateway route
+    assert_eq!(
+        ModelId::from_str(models::merge_gateway::OPENAI_GPT_6_1_TERRA).unwrap(),
+        ModelId::MergeGatewayOpenAIGpt61Terra
+    );
+    assert_eq!(ModelId::MergeGatewayOpenAIGpt61Terra.as_str(), models::merge_gateway::OPENAI_GPT_6_1_TERRA);
+    assert!(models::merge_gateway::SUPPORTED_MODELS.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert!(models::merge_gateway::REASONING_MODELS.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert!(models::merge_gateway::REASONING_EFFORT_ROUTES.contains(&models::merge_gateway::OPENAI_GPT_6_1_TERRA));
+    assert_eq!(ModelId::MergeGatewayOpenAIGpt61Terra.generation(), "6.1");
+    assert!(ModelId::MergeGatewayOpenAIGpt61Terra.is_top_tier());
+    assert_eq!(
+        ModelId::MergeGatewayOpenAIGpt61Sol.preferred_lightweight_variant(),
+        Some(ModelId::MergeGatewayOpenAIGpt61Terra)
+    );
 }
 
 #[test]
