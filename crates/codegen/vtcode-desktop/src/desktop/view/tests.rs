@@ -6546,9 +6546,10 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
         assert!(view.read(cx).output_page_pending.is_none());
         assert!(view.read(cx).output_page_error.is_none());
         assert_eq!(window.find("copy-output").role(), Some(gpui_kit::Role::Button));
+        assert_eq!(window.find("copy-output").label(), Some("Copy loaded output"));
         assert_eq!(window.find("load-more-output").role(), Some(gpui_kit::Role::Button));
         window.click("copy-output", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(prefix));
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(format!("{prefix}{suffix}").as_str()));
         window.click("load-more-output", cx);
     })
     .unwrap();
@@ -6589,7 +6590,10 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
             assert!(view.output_page_error.is_none());
         });
         window.click("copy-output", cx);
-        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(format!("{prefix}{middle}").as_str()));
+        assert_eq!(
+            cx.read_from_clipboard().unwrap().text().as_deref(),
+            Some(format!("{prefix}{middle}{suffix}").as_str())
+        );
         window.click("load-more-output", cx);
     })
     .unwrap();
@@ -6638,6 +6642,18 @@ fn restored_output_loads_a_bounded_page_and_removes_the_truncation_marker(cx: &m
 }
 
 #[test]
+fn copying_restored_output_preserves_partial_notice_and_literal_suffix() {
+    let suffix = vtcode_desktop_protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX;
+    let preview: gpui_kit::SharedString = format!("first{suffix}").into();
+    let mut pages = std::collections::HashMap::new();
+    assert_eq!(restored_output_for_copy("item", &preview, &pages, true), format!("first{suffix}"));
+    assert_eq!(restored_output_for_copy("literal", &preview, &pages, false), format!("first{suffix}"));
+    let _previous = pages.insert("item".into(), vec!["first".into(), " second".into()]);
+    assert_eq!(restored_output_for_copy("item", &preview, &pages, true), format!("first second{suffix}"));
+    assert_eq!(restored_output_for_copy("item", &preview, &pages, false), "first second");
+}
+
+#[test]
 fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
     let page_len = vtcode_desktop_protocol::MAX_SESSION_OUTPUT_PAGE_BYTES;
     let prefix = "p".repeat(page_len);
@@ -6668,7 +6684,7 @@ fn restored_output_pages_keep_a_bounded_preview_and_copy_complete_text() {
     assert!(preview.len() < 128 * 1024 + 1024);
     assert!(preview.contains("Earlier output truncated"));
     assert!(preview.ends_with(&"e".repeat(page_len)));
-    let copied = restored_output_for_copy("output-1", preview, &pages_by_item);
+    let copied = restored_output_for_copy("output-1", preview, &pages_by_item, false);
     assert_eq!(copied, complete_output);
     assert!(!copied.ends_with(truncation_suffix));
 }

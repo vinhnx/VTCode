@@ -581,17 +581,18 @@ fn restored_output_for_copy(
     item_id: &str,
     preview: &gpui_kit::SharedString,
     pages_by_item: &HashMap<String, Vec<gpui_kit::SharedString>>,
+    has_more: bool,
 ) -> String {
     let Some(pages) = pages_by_item.get(item_id) else {
-        return preview
-            .strip_suffix(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX)
-            .unwrap_or(preview.as_ref())
-            .to_owned();
+        return preview.to_string();
     };
     let capacity = pages.iter().fold(0usize, |length, page| length.saturating_add(page.len()));
     let mut output = String::with_capacity(capacity);
     for page in pages {
         output.push_str(page);
+    }
+    if has_more {
+        output.push_str(protocol::RESTORED_OUTPUT_TRUNCATION_SUFFIX);
     }
     output
 }
@@ -5673,8 +5674,16 @@ impl DesktopView {
             .child(
                 desktop_button("copy-output")
                     .icon(IconName::Copy)
-                    .accessibility_label("Copy output")
-                    .tooltip("Copy captured output")
+                    .accessibility_label(if has_more_output {
+                        "Copy loaded output"
+                    } else {
+                        "Copy output"
+                    })
+                    .tooltip(if has_more_output {
+                        "Copy loaded output with truncation notice"
+                    } else {
+                        "Copy captured output"
+                    })
                     .ghost()
                     .small()
                     .on_click(cx.listener(move |view, _, window, cx| {
@@ -5682,6 +5691,7 @@ impl DesktopView {
                             &copy_output_id,
                             &copy_output_preview,
                             &view.restored_output_pages,
+                            has_more_output,
                         );
                         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
                         super::notifications::copied_to_clipboard(window, cx);
