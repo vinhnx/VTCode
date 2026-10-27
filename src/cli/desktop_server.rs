@@ -52,6 +52,10 @@ const RESTORED_OUTPUT_TRUNCATION_SUFFIX: &str = protocol::RESTORED_OUTPUT_TRUNCA
 const SESSION_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
 const RUNLOOP_EXIT_TIMEOUT: Duration = Duration::from_secs(5);
 
+#[derive(Debug, thiserror::Error)]
+#[error("resolve the pending startup interaction before submitting a turn")]
+struct StartupInteractionPending;
+
 #[derive(Default)]
 struct ServerState {
     initialized: bool,
@@ -203,8 +207,12 @@ where
         }
         Err(error) => {
             tracing::warn!(target: "vtcode.desktop", method = %request.method, error = %error, "desktop request failed");
-            let response =
-                protocol::error_response(Some(request.id), -32000, sanitize_public_error(&error.to_string()));
+            let code = if error.downcast_ref::<StartupInteractionPending>().is_some() {
+                protocol::STARTUP_INTERACTION_PENDING_ERROR
+            } else {
+                -32000
+            };
+            let response = protocol::error_response(Some(request.id), code, sanitize_public_error(&error.to_string()));
             protocol::write_frame(stdout, &response).await?;
             Ok(true)
         }
@@ -694,6 +702,13 @@ async fn enqueue_turn(
             bail!("another turn is already running");
         }
         if !state.pending_interactions.is_empty() {
+            if state
+                .pending_interactions
+                .values()
+                .all(|interaction| interaction.session_id == session_id && interaction.turn_id == "session-start")
+            {
+                return Err(StartupInteractionPending.into());
+            }
             bail!("resolve the pending CLI interaction before submitting a turn");
         }
         let runtime = state
@@ -2411,7 +2426,22 @@ mod tests {
         let error = enqueue_turn(&context.state, &context.notifications, "session", "hello".into(), Vec::new())
             .await
             .expect_err("pending question blocks turns");
-        assert!(error.to_string().contains("pending CLI interaction"));
+        assert!(error.downcast_ref::<StartupInteractionPending>().is_some());
+        let turn = Request {
+            jsonrpc: "2.0".into(),
+            id: RequestId::String("turn".into()),
+            method: protocol::method::TURN_SUBMIT.into(),
+            params: json!({ "sessionId": "session", "prompt": "hello", "attachments": [] }),
+        };
+        let mut output = Vec::new();
+        assert!(
+            process_frame(&context, &mut output, &serde_json::to_vec(&turn).unwrap())
+                .await
+                .unwrap()
+        );
+        let rejection: protocol::ErrorResponse = serde_json::from_slice(&output).expect("turn rejection");
+        assert_eq!(rejection.error.code, protocol::STARTUP_INTERACTION_PENDING_ERROR);
+        assert!(input_receiver.try_recv().is_err(), "rejected prompts must not reach the runtime");
         let close = Request {
             jsonrpc: "2.0".into(),
             id: RequestId::String("close".into()),

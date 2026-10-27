@@ -719,6 +719,7 @@ struct DesktopView {
     attachments: Vec<protocol::TurnAttachment>,
     attachments_picker_open: bool,
     pending_submission: Option<SubmissionDraft>,
+    pending_first_submission: bool,
     first_submission: Option<SubmissionDraft>,
     session_request: Option<&'static str>,
     pending_new_thread: bool,
@@ -979,6 +980,7 @@ impl DesktopView {
             attachments: Vec::new(),
             attachments_picker_open: false,
             pending_submission: None,
+            pending_first_submission: false,
             first_submission: None,
             session_request: None,
             pending_new_thread: false,
@@ -1090,6 +1092,7 @@ impl DesktopView {
             && self.pending_workspace.is_none()
             && !self.workspace_selection_pending
             && self.session_request.is_none()
+            && self.first_submission.is_none()
     }
 
     fn current_navigation_location(&self) -> Option<NavigationLocation> {
@@ -2870,6 +2873,7 @@ impl DesktopView {
         self.transcript
             .push(TranscriptItem::new(draft.echo_id.clone(), "user".into(), "You".into(), echo));
         self.pending_submission = Some(draft);
+        self.pending_first_submission = false;
         self.transcript.follow_latest();
         self.running = true;
         self.active_turn_id = None;
@@ -2881,6 +2885,7 @@ impl DesktopView {
     }
 
     fn recover_pending_submission(&mut self, delivery_uncertain: bool) {
+        self.pending_first_submission = false;
         if let Some(mut draft) = self.pending_submission.take() {
             draft.delivery_uncertain = delivery_uncertain;
             if !delivery_uncertain {
@@ -3252,6 +3257,29 @@ impl DesktopView {
             self.invalidate_webmcp_status();
         }
         match event {
+            BackendEvent::TurnBlockedByStartupInteraction { session_id } => {
+                if self.selected_session_id.as_deref() != Some(session_id.as_str()) || self.pending_submission.is_none()
+                {
+                    return;
+                }
+                self.invalidate_webmcp_status();
+                let retry = self.pending_first_submission && !self.cancel_requested;
+                self.pending_first_submission = false;
+                self.running = false;
+                self.cancel_requested = false;
+                self.cancel_request_sent = false;
+                if retry {
+                    if let Some(draft) = self.pending_submission.take() {
+                        self.transcript.remove(&draft.echo_id);
+                        self.first_submission = Some(draft);
+                        self.status = "Waiting for the startup decision before sending…".into();
+                    }
+                } else {
+                    self.recover_pending_submission(false);
+                    self.error = Some("Resolve the startup question before sending a message.".into());
+                    self.status = "Message not submitted".into();
+                }
+            }
             BackendEvent::InteractionResponded { identity, error } => {
                 if self.pending_interaction_response.as_deref() != Some(identity.interaction_id.as_str())
                     || !self.interaction.as_ref().is_some_and(|interaction| {
@@ -3276,6 +3304,19 @@ impl DesktopView {
                         "Decision accepted"
                     }
                     .into();
+                    if identity.turn_id == "session-start"
+                        && self.selected_session_id.as_deref() == Some(identity.session_id.as_str())
+                        && self.session_request.is_none()
+                        && let Some(draft) = self.first_submission.take()
+                    {
+                        match self.enqueue_submission(draft, cx) {
+                            Ok(()) => {}
+                            Err(draft) => {
+                                self.retained_submission = Some(draft);
+                                self.status = "Message not submitted".into();
+                            }
+                        }
+                    }
                 }
             }
             BackendEvent::Response { method, result, error } => {
@@ -3548,11 +3589,14 @@ impl DesktopView {
                             self.reset_session_state();
                             self.record_current_navigation();
                             self.status = "Session ready. Submit a prompt to begin.".to_string();
-                            if let Some(draft) = first_submission
-                                && let Err(draft) = self.enqueue_submission(draft, cx)
-                            {
-                                self.retained_submission = Some(draft);
-                                self.status = "Message not submitted".to_string();
+                            if let Some(draft) = first_submission {
+                                match self.enqueue_submission(draft, cx) {
+                                    Ok(()) => self.pending_first_submission = true,
+                                    Err(draft) => {
+                                        self.retained_submission = Some(draft);
+                                        self.status = "Message not submitted".to_string();
+                                    }
+                                }
                             }
                         } else {
                             self.status = "Session creation failed".to_string();
@@ -3609,6 +3653,7 @@ impl DesktopView {
                             return;
                         }
                         self.pending_submission = None;
+                        self.pending_first_submission = false;
                         self.active_turn_id = Some(accepted.turn_id);
                         self.running = true;
                         self.status = "Running".to_string();
@@ -3792,6 +3837,7 @@ impl DesktopView {
         match notification.event.event() {
             ThreadEvent::TurnStarted(_) => {
                 self.pending_submission = None;
+                self.pending_first_submission = false;
                 self.running = true;
                 self.active_turn_id = notification.turn_id;
                 self.set_selected_session_completed(false);
@@ -3799,6 +3845,7 @@ impl DesktopView {
             }
             ThreadEvent::TurnCompleted(event) => {
                 self.pending_submission = None;
+                self.pending_first_submission = false;
                 self.running = false;
                 self.active_turn_id = None;
                 self.cancel_requested = false;
@@ -3838,6 +3885,7 @@ impl DesktopView {
 
     fn finish_unverified_turn(&mut self, message: &str) {
         self.pending_submission = None;
+        self.pending_first_submission = false;
         self.running = false;
         self.active_turn_id = None;
         self.cancel_requested = false;
@@ -4151,6 +4199,7 @@ impl DesktopView {
         self.attachments_picker_open = false;
         self.attachments.clear();
         self.pending_submission = None;
+        self.pending_first_submission = false;
         self.first_submission = None;
         self.session_request = None;
         self.pending_new_thread = false;
@@ -6749,6 +6798,36 @@ impl DesktopView {
                         )
                 },
             )));
+        }
+        if self.first_submission.is_some() && self.session_request.is_none() {
+            let waiting_label = rust_i18n::t!("app.session.waiting_to_send").to_string();
+            panel = panel.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(
+                        div()
+                            .id("startup-send-status")
+                            .test_support()
+                            .role(gpui_kit::Role::Status)
+                            .aria_label(waiting_label.clone())
+                            .child(waiting_label),
+                    )
+                    .child(
+                        desktop_button("cancel-startup-send")
+                            .label(rust_i18n::t!("app.session.keep_as_draft").to_string())
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.retained_submission = view.first_submission.take();
+                                view.status = "Message not submitted".into();
+                                cx.notify();
+                            })),
+                    ),
+            );
         }
         let input = Textarea::new(&self.composer)
             .accessibility_id("composer")

@@ -46,6 +46,9 @@ pub(crate) enum BackendEvent {
         identity: InteractionResponseIdentity,
         error: Option<String>,
     },
+    TurnBlockedByStartupInteraction {
+        session_id: String,
+    },
     ThreadEvent(ThreadEventNotification),
     PrimaryAgentChanged(protocol::PrimaryAgentChanged),
     Interaction(InteractionRequest),
@@ -71,6 +74,7 @@ struct PendingRequest {
     interaction: Option<InteractionResponseIdentity>,
     session_history_request_id: Option<String>,
     session_output_request_id: Option<String>,
+    turn_session_id: Option<String>,
 }
 
 impl PendingRequest {
@@ -91,11 +95,15 @@ impl PendingRequest {
         let session_output_request_id = (method == protocol::method::SESSION_OUTPUT_READ)
             .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
             .flatten();
+        let turn_session_id = (method == protocol::method::TURN_SUBMIT)
+            .then(|| params.get("sessionId").and_then(Value::as_str).map(str::to_owned))
+            .flatten();
         Self {
             method,
             interaction,
             session_history_request_id,
             session_output_request_id,
+            turn_session_id,
         }
     }
 
@@ -454,6 +462,13 @@ fn decode_frame(
     let id = serde_json::from_value::<RequestId>(id_value).map_err(|_error| ProtocolDecodeError)?;
     let request = pending.remove(&id).ok_or(ProtocolDecodeError)?;
     if let Some(error) = value.get("error") {
+        if request.method == protocol::method::TURN_SUBMIT
+            && error.get("code").and_then(Value::as_i64) == Some(i64::from(protocol::STARTUP_INTERACTION_PENDING_ERROR))
+        {
+            if let Some(session_id) = request.turn_session_id.clone() {
+                return Ok(Some(BackendEvent::TurnBlockedByStartupInteraction { session_id }));
+            }
+        }
         let safe_message = error
             .get("message")
             .and_then(Value::as_str)
@@ -490,6 +505,27 @@ fn missing_credentials_diagnostic(stderr: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_interaction_error_is_typed_only_for_turn_submission() {
+        for (method, typed) in [
+            (protocol::method::TURN_SUBMIT, true),
+            (protocol::method::SESSION_CREATE, false),
+        ] {
+            let mut pending = HashMap::from([(
+                RequestId::Number(7),
+                PendingRequest::new(method.into(), &json!({ "sessionId": "session" })),
+            )]);
+            let frame = serde_json::to_vec(&protocol::error_response(
+                Some(RequestId::Number(7)),
+                protocol::STARTUP_INTERACTION_PENDING_ERROR,
+                "waiting",
+            ))
+            .unwrap();
+            let event = decode_frame(&frame, &mut pending).unwrap().unwrap();
+            assert_eq!(matches!(event, BackendEvent::TurnBlockedByStartupInteraction { .. }), typed);
+        }
+    }
 
     #[tokio::test]
     async fn request_size_preflight_matches_protocol_encoding_at_the_boundary() {

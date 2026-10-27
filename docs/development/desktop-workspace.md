@@ -73,6 +73,9 @@ an empty prompt does not create a session.
 The Connections panel refreshes WebMCP availability after session and turn changes. A status response superseded by
 a newer change is discarded and refreshed; a failed refresh is shown as unavailable rather than as a ready session.
 Pending CLI questions and approvals also block new desktop or WebMCP turns and session changes until answered.
+If a new thread's first prompt is explicitly rejected because a startup question is pending, Desktop waits for the
+acknowledged decision and retries that same prompt once. The user can keep it as an unsent draft instead; uncertain
+delivery is never retried automatically.
 Early runtime notifications remain in the bounded event queue while restored history is prepared, then are applied to
 the selected session in order.
 If a first prompt reaches the runtime before a startup question is displayed, the shared runloop retains the prompt

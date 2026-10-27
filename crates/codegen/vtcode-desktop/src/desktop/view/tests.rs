@@ -4397,6 +4397,118 @@ fn palette_cancel_restores_focus_and_composer_shortcut_dismisses_overlay(cx: &mu
 }
 
 #[gpui_kit::test]
+fn rejected_first_prompt_waits_for_startup_answer_and_retries_once(cx: &mut TestAppContext) {
+    use crate::desktop::transport::InteractionResponseIdentity;
+    use vtcode_desktop_protocol::{InteractionKind, InteractionRequest};
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.composer.update(cx, |input, cx| input.set_value("First prompt", window, cx));
+            view.attachments.push(vtcode_desktop_protocol::TurnAttachment { path: "notes.txt".into(), text: "original".into() });
+            view.submit_prompt(window, cx);
+        });
+        assert!(matches!(requests.try_recv(), Ok(BackendCommand::Request { method, .. }) if method == vtcode_desktop_protocol::method::SESSION_CREATE));
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(BackendEvent::Response { method: vtcode_desktop_protocol::method::SESSION_CREATE.into(), result: Some(json!({ "sessionId": "new", "title": null, "workspace": "/workspace", "completed": false, "resumable": true })), error: None }, cx);
+        });
+        let BackendCommand::Request { method, params: original } = requests.try_recv().unwrap() else { panic!("first turn") };
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+        view.update(cx, |view, cx| {
+            view.composer.update(cx, |input, cx| input.set_value("Newer draft", window, cx));
+            view.handle_backend_event(BackendEvent::TurnBlockedByStartupInteraction { session_id: "old".into() }, cx);
+            assert!(view.pending_submission.is_some());
+            assert!(view.running);
+            view.handle_backend_event(BackendEvent::TurnBlockedByStartupInteraction { session_id: "new".into() }, cx);
+            assert!(view.first_submission.is_some());
+            assert!(!view.running);
+            assert!(view.transcript.is_empty());
+            assert!(!view.workspace_switch_idle());
+            view.handle_backend_event(BackendEvent::Interaction(InteractionRequest {
+                session_id: "new".into(), turn_id: "session-start".into(), interaction_id: "question".into(),
+                kind: InteractionKind::Question, wizard: false, title: "Question".into(), details: Vec::new(),
+                choices: Vec::new(), steps: Vec::new(), selected_choice_id: None, selected_choice_ids: Vec::new(),
+            }), cx);
+            view.submit_interaction(Vec::new(), true, window, cx);
+        });
+        assert!(matches!(requests.try_recv(), Ok(BackendCommand::Request { method, .. }) if method == vtcode_desktop_protocol::method::INTERACTION_RESPOND));
+        assert!(requests.try_recv().is_err(), "the first prompt waits for the acknowledged decision");
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(BackendEvent::InteractionResponded { identity: InteractionResponseIdentity {
+                session_id: "new".into(), turn_id: "session-start".into(), interaction_id: "question".into(), cancelled: true,
+            }, error: None }, cx);
+            assert_eq!(view.composer.read(cx).value(), "Newer draft");
+            assert!(view.first_submission.is_none());
+            assert!(view.running);
+        });
+        let BackendCommand::Request { method, params: retried } = requests.try_recv().unwrap() else { panic!("retried turn") };
+        assert_eq!(method, vtcode_desktop_protocol::method::TURN_SUBMIT);
+        assert_eq!(retried, original, "the exact prompt and attachments are retried");
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(BackendEvent::TurnBlockedByStartupInteraction { session_id: "new".into() }, cx);
+            assert!(view.first_submission.is_none());
+            assert_eq!(view.retained_submission.as_ref().unwrap().prompt, "First prompt");
+        });
+        assert!(requests.try_recv().is_err(), "only one retry is queued");
+    }).unwrap();
+}
+
+#[gpui_kit::test]
+fn pending_startup_send_can_be_kept_as_a_draft(cx: &mut TestAppContext) {
+    use crate::desktop::transport::InteractionResponseIdentity;
+    use vtcode_desktop_protocol::{InteractionKind, InteractionRequest};
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.selected_session_id = Some("new".into());
+            view.first_submission = Some(super::SubmissionDraft {
+                prompt: "Keep this".into(),
+                attachments: Vec::new(),
+                echo_id: "echo".into(),
+                delivery_uncertain: false,
+            });
+            view.interaction = Some(InteractionRequest {
+                session_id: "new".into(),
+                turn_id: "session-start".into(),
+                interaction_id: "question".into(),
+                kind: InteractionKind::Question,
+                wizard: false,
+                title: "Question".into(),
+                details: Vec::new(),
+                choices: Vec::new(),
+                steps: Vec::new(),
+                selected_choice_id: None,
+                selected_choice_ids: Vec::new(),
+            });
+        });
+        window.render_frame(cx);
+        window.click("cancel-startup-send", cx);
+        view.update(cx, |view, cx| {
+            assert!(view.first_submission.is_none());
+            assert_eq!(view.retained_submission.as_ref().unwrap().prompt, "Keep this");
+            view.pending_interaction_response = Some("question".into());
+            view.handle_backend_event(
+                BackendEvent::InteractionResponded {
+                    identity: InteractionResponseIdentity {
+                        session_id: "new".into(),
+                        turn_id: "session-start".into(),
+                        interaction_id: "question".into(),
+                        cancelled: true,
+                    },
+                    error: None,
+                },
+                cx,
+            );
+        });
+        assert!(requests.try_recv().is_err(), "a cancelled pending send is never retried");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn first_send_creates_one_session_then_submits_the_captured_message(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let (commands, mut requests) = tokio::sync::mpsc::channel(2);

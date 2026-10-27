@@ -96,6 +96,12 @@ app:
     preparing_new_thread:
       en: Preparing a new thread…
       vi: Đang chuẩn bị một cuộc hội thoại mới…
+    waiting_to_send:
+      en: Your message will send after the startup decision.
+      vi: Tin nhắn sẽ được gửi sau khi bạn hoàn tất lựa chọn ban đầu.
+    keep_as_draft:
+      en: Keep as draft
+      vi: Giữ làm bản nháp
   files:
     scanning:
       en: Scanning workspace files
