@@ -31,7 +31,23 @@ fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView
 }
 
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
-    drop(isolate_preferences());
+    open_desktop_sized_with_preferences_path(cx, width, height, isolate_preferences())
+}
+
+fn open_desktop_with_preferences_path(
+    cx: &mut TestAppContext,
+    preferences_path: PathBuf,
+) -> (AnyWindowHandle, Entity<DesktopView>) {
+    open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path)
+}
+
+fn open_desktop_sized_with_preferences_path(
+    cx: &mut TestAppContext,
+    width: f32,
+    height: f32,
+    preferences_path: PathBuf,
+) -> (AnyWindowHandle, Entity<DesktopView>) {
+    crate::desktop::preferences::set_test_preferences_path(preferences_path);
     crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
     cx.update(gpui_kit::init);
     cx.update(super::super::notifications::initialize);
@@ -7892,6 +7908,7 @@ fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut Tes
         let preview_height = window.find("appearance-code-preview").bounds().size.height;
         assert!(preview_height > px(0.), "the highlighted code sample should have rendered layout");
         window.click("font-ui-1", cx);
+        window.render_frame(cx);
         window.click("font-code-1", cx);
         window.render_frame(cx);
         assert_eq!(window.find("font-ui-value").label(), Some("UI font size: 17 pixels"));
@@ -9758,7 +9775,8 @@ fn workspace_permission_choices_persist_after_acknowledgement_and_restore_on_rec
     use vtcode_desktop_protocol::PermissionMode;
     let workspace = tempfile::tempdir().expect("workspace");
     let key = workspace.path().to_string_lossy().into_owned();
-    let (window, view) = open_desktop(cx);
+    let preferences_path = isolate_preferences();
+    let (window, view) = open_desktop_with_preferences_path(cx, preferences_path.clone());
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, _, cx| {
         view.update(cx, |view, cx| {
@@ -9819,7 +9837,7 @@ fn workspace_permission_choices_persist_after_acknowledgement_and_restore_on_rec
     .unwrap();
     assert!(requests.try_recv().is_ok());
     assert!(requests.try_recv().is_ok());
-    let (window, view) = open_desktop(cx);
+    let (window, view) = open_desktop_with_preferences_path(cx, preferences_path);
     let (commands, mut requests) = tokio::sync::mpsc::channel(4);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {

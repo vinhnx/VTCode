@@ -297,7 +297,7 @@ impl Preferences {
     fn preferences_path() -> Option<PathBuf> {
         // Test hook: keep GUI tests from touching real user preferences.
         #[cfg(test)]
-        if let Some(path) = TEST_PREFERENCES_PATH.lock().ok().and_then(|guard| guard.clone()) {
+        if let Some(path) = TEST_PREFERENCES_PATH.with(|path| path.borrow().clone()) {
             return Some(path);
         }
         dirs::home_dir().map(|home| home.join(".vtcode").join("desktop").join("preferences.json"))
@@ -332,27 +332,46 @@ fn clamp_width(width: f32) -> f32 {
 }
 
 #[cfg(test)]
-static TEST_PREFERENCES_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+std::thread_local! {
+    static TEST_PREFERENCES_PATH: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
 
-/// Redirect preference I/O for GUI tests so they never touch the real user
-/// home. Returns the sentinel path.
+/// Redirect preference I/O for one GUI-test setup without touching the real
+/// user home. Each call receives a fresh file, even when the test runner
+/// reuses a worker thread for another test.
 #[cfg(test)]
 pub(super) fn install_test_preferences_path() -> PathBuf {
-    let mut guard = TEST_PREFERENCES_PATH.lock().expect("test prefs lock");
-    guard.clone().unwrap_or_else(|| {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("vtcode-desktop-test-prefs-{}-{nonce}.json", std::process::id()));
-        *guard = Some(path.clone());
-        path
-    })
+    static NEXT_TEST_PATH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = NEXT_TEST_PATH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!("vtcode-desktop-test-prefs-{}-{sequence}.json", std::process::id()));
+    set_test_preferences_path(path.clone());
+    path
+}
+
+#[cfg(test)]
+pub(super) fn set_test_preferences_path(path: PathBuf) {
+    TEST_PREFERENCES_PATH.with(|slot| *slot.borrow_mut() = Some(path));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_preferences_paths_are_fresh_and_isolated_per_thread() {
+        let first = install_test_preferences_path();
+        let current = install_test_preferences_path();
+        let other = std::thread::spawn(|| {
+            let _path = install_test_preferences_path();
+            TEST_PREFERENCES_PATH.with(|slot| slot.borrow().clone().expect("child path installed"))
+        })
+        .join()
+        .expect("child thread returns its preference path");
+
+        assert_ne!(first, current, "each test setup receives a fresh file");
+        assert_ne!(current, other, "different test threads do not share preferences");
+        assert_eq!(TEST_PREFERENCES_PATH.with(|slot| slot.borrow().clone()), Some(current));
+    }
 
     #[test]
     fn ui_language_round_trips_and_invalid_saved_values_preserve_other_preferences() {
