@@ -1,6 +1,10 @@
 use std::sync::Once;
 
+use gpui_kit::SharedString;
 use gpui_kit::component as gpui_component;
+use gpui_kit::component::IndexPath;
+use gpui_kit::component::searchable_list::SearchableListItem;
+use gpui_kit::component::select::{SearchableVec, SelectState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum UiLanguage {
@@ -21,10 +25,11 @@ pub(super) enum UiLanguage {
     Indonesian,
     Turkish,
     Polish,
+    Hindi,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 17] = [
+    pub(super) const ALL: [Self; 18] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -42,6 +47,7 @@ impl UiLanguage {
         Self::Indonesian,
         Self::Turkish,
         Self::Polish,
+        Self::Hindi,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -62,6 +68,7 @@ impl UiLanguage {
             Some("id") => Self::Indonesian,
             Some("tr") => Self::Turkish,
             Some("pl") => Self::Polish,
+            Some("hi") => Self::Hindi,
             _ => Self::English,
         }
     }
@@ -85,6 +92,7 @@ impl UiLanguage {
             Self::Indonesian => "id",
             Self::Turkish => "tr",
             Self::Polish => "pl",
+            Self::Hindi => "hi",
         }
     }
 
@@ -107,9 +115,45 @@ impl UiLanguage {
             Self::Indonesian => "Bahasa Indonesia",
             Self::Turkish => "Türkçe",
             Self::Polish => "Polski",
+            Self::Hindi => "हिन्दी",
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct UiLanguageOption(UiLanguage);
+
+impl UiLanguageOption {
+    pub(super) fn all() -> SearchableVec<Self> {
+        SearchableVec::new(UiLanguage::ALL.map(Self).to_vec())
+    }
+
+    pub(super) fn selected_index(language: UiLanguage) -> Option<IndexPath> {
+        UiLanguage::ALL
+            .iter()
+            .position(|option| *option == language)
+            .map(IndexPath::new)
+    }
+}
+
+impl SearchableListItem for UiLanguageOption {
+    type Value = UiLanguage;
+
+    fn title(&self) -> SharedString {
+        self.0.label().into()
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.0
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        self.0.label().to_lowercase().contains(&query) || self.0.locale().to_lowercase().contains(&query)
+    }
+}
+
+pub(super) type UiLanguageSelectState = SelectState<SearchableVec<UiLanguageOption>>;
 
 static KIT_TRANSLATIONS: Once = Once::new();
 
@@ -127,7 +171,8 @@ pub(super) fn set_language(language: UiLanguage) {
 
 #[cfg(test)]
 mod tests {
-    use super::UiLanguage;
+    use super::{UiLanguage, UiLanguageOption};
+    use gpui_kit::component::searchable_list::SearchableListItem;
 
     #[test]
     fn saved_locale_values_are_validated_and_unknown_values_fall_back_to_english() {
@@ -147,9 +192,20 @@ mod tests {
     }
 
     #[test]
+    fn language_options_match_native_names_and_locale_codes() {
+        let hindi = UiLanguageOption(UiLanguage::Hindi);
+        assert!(hindi.matches("हिन्दी"));
+        assert!(hindi.matches("HI"));
+        assert!(!hindi.matches("Ukrainian"));
+        assert_eq!(UiLanguageOption::selected_index(UiLanguage::Hindi).map(|index| index.row), Some(17));
+    }
+
+    #[test]
     fn app_catalog_covers_language_controls_and_kit_overrides() {
         assert_eq!(rust_i18n::t!("app.settings.title", locale = "en").to_string(), "Settings");
         assert_eq!(rust_i18n::t!("app.settings.title", locale = "vi").to_string(), "Cài đặt");
+        assert_eq!(rust_i18n::t!("app.settings.visual_style", locale = "en").to_string(), "Visual style");
+        assert_eq!(rust_i18n::t!("app.settings.visual_style", locale = "vi").to_string(), "Phong cách giao diện");
         assert_eq!(
             rust_i18n::t!("app.session.preparing_new_thread", locale = "en").to_string(),
             "Preparing a new thread…"
@@ -159,24 +215,26 @@ mod tests {
             "Đang chuẩn bị một cuộc hội thoại mới…"
         );
         assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "vi").to_string(), "Sao chép");
-        for (locale, title, copy, select_all, remove) in [
-            ("es", "Configuración", "Copiar", "Seleccionar todo", "Quitar"),
-            ("fr", "Réglages", "Copier", "Tout sélectionner", "Supprimer"),
-            ("ja", "設定", "コピー", "すべて選択", "削除"),
-            ("de", "Einstellungen", "Kopieren", "Alles auswählen", "Entfernen"),
-            ("it", "Impostazioni", "Copia", "Seleziona tutto", "Rimuovi"),
-            ("zh-CN", "设置", "复制", "全选", "移除"),
-            ("zh-TW", "設定", "複製", "全選", "移除"),
-            ("zh-HK", "設定", "複製", "全選", "移除"),
-            ("pt-BR", "Configurações", "Copiar", "Selecionar tudo", "Remover"),
-            ("ko", "설정", "복사", "모두 선택", "제거"),
-            ("nl", "Instellingen", "Kopiëren", "Alles selecteren", "Verwijderen"),
-            ("ru", "Настройки", "Копировать", "Выделить всё", "Удалить"),
-            ("id", "Pengaturan", "Salin", "Pilih Semua", "Hapus"),
-            ("tr", "Ayarlar", "Kopyala", "Tümünü Seç", "Kaldır"),
-            ("pl", "Ustawienia", "Kopiuj", "Zaznacz wszystko", "Usuń"),
+        for (locale, title, visual_style, copy, select_all, remove) in [
+            ("es", "Configuración", "Estilo visual", "Copiar", "Seleccionar todo", "Quitar"),
+            ("fr", "Réglages", "Style visuel", "Copier", "Tout sélectionner", "Supprimer"),
+            ("ja", "設定", "ビジュアルスタイル", "コピー", "すべて選択", "削除"),
+            ("de", "Einstellungen", "Visueller Stil", "Kopieren", "Alles auswählen", "Entfernen"),
+            ("it", "Impostazioni", "Stile visivo", "Copia", "Seleziona tutto", "Rimuovi"),
+            ("zh-CN", "设置", "视觉风格", "复制", "全选", "移除"),
+            ("zh-TW", "設定", "視覺風格", "複製", "全選", "移除"),
+            ("zh-HK", "設定", "視覺風格", "複製", "全選", "移除"),
+            ("pt-BR", "Configurações", "Estilo visual", "Copiar", "Selecionar tudo", "Remover"),
+            ("ko", "설정", "시각적 스타일", "복사", "모두 선택", "제거"),
+            ("nl", "Instellingen", "Visuele stijl", "Kopiëren", "Alles selecteren", "Verwijderen"),
+            ("ru", "Настройки", "Визуальный стиль", "Копировать", "Выделить всё", "Удалить"),
+            ("id", "Pengaturan", "Gaya visual", "Salin", "Pilih Semua", "Hapus"),
+            ("tr", "Ayarlar", "Görsel stil", "Kopyala", "Tümünü Seç", "Kaldır"),
+            ("pl", "Ustawienia", "Styl wizualny", "Kopiuj", "Zaznacz wszystko", "Usuń"),
+            ("hi", "सेटिंग्स", "दृश्य शैली", "कॉपी करें", "सभी चुनें", "हटाएँ"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
+            assert_eq!(rust_i18n::t!("app.settings.visual_style", locale = locale).to_string(), visual_style);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = locale).to_string(), copy);
             assert_eq!(rust_i18n::t!("gpui_component.Input.Select All", locale = locale).to_string(), select_all);
             assert_eq!(rust_i18n::t!("gpui_component.Attachment.Remove", locale = locale).to_string(), remove);
@@ -208,6 +266,36 @@ mod tests {
         assert_catalog_key!("app.palette.title.configuration");
         assert_catalog_key!("app.transcript.history_limit_reached");
         assert_catalog_key!("app.transcript.load_earlier_tooltip");
+        assert_catalog_key!("app.transcript.compact_boundary_title");
+        assert_catalog_key!("app.transcript.compact_boundary_body");
+        assert_catalog_key!("app.transcript.context_reset_title");
+        assert_catalog_key!("app.transcript.context_reset_body");
+
+        for language in UiLanguage::ALL {
+            let locale = language.locale();
+            let compacted = rust_i18n::t!(
+                "app.transcript.compact_boundary_body",
+                locale = locale,
+                original = 120,
+                compacted = 8,
+                trigger = "auto",
+                mode = "local"
+            )
+            .to_string();
+            for expected in ["120", "8", "auto", "local"] {
+                assert!(compacted.contains(expected), "{locale} dropped {expected}");
+            }
+            let reset = rust_i18n::t!(
+                "app.transcript.context_reset_body",
+                locale = locale,
+                trigger = "plan approval",
+                previous = 87
+            )
+            .to_string();
+            for expected in ["plan approval", "87"] {
+                assert!(reset.contains(expected), "{locale} dropped {expected}");
+            }
+        }
     }
 
     #[test]
@@ -351,6 +439,7 @@ mod tests {
                 "Dodaj pliki i więcej @",
                 "Poproś VT Code o wprowadzenie zmian…",
             ),
+            ("hi", "वर्कस्पेस", "नया थ्रेड", "फ़ाइलें और अन्य चीज़ें जोड़ें @", "VT Code से बदलाव करने को कहें…"),
         ];
 
         for (locale, workspace, new_thread, add_context, placeholder) in expected {
@@ -421,6 +510,7 @@ mod tests {
             assert_translated!(locale, "app.workspace_review.preview_truncated");
             assert_translated!(locale, "app.workspace_review.structured_preview_unavailable");
             assert_translated!(locale, "app.workspace_review.changed_files");
+            assert_translated!(locale, "app.workspace_review.files");
             assert_translated!(locale, "app.errors.request_queue_unavailable");
 
             let summary = rust_i18n::t!(
@@ -454,7 +544,7 @@ mod tests {
             assert!(refresh_error.contains("repository unavailable"), "diagnostic was lost in {locale}");
         }
 
-        for locale in ["tr", "pl"] {
+        for locale in ["tr", "pl", "hi"] {
             let folder =
                 rust_i18n::t!("app.workspace_review.folder_value", locale = locale, folder = "src").to_string();
             assert!(folder.contains("src"), "folder path was not interpolated in {locale}");

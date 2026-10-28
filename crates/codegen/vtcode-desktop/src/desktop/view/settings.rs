@@ -409,7 +409,6 @@ impl DesktopView {
                     ),
             ));
 
-        let language = self.preferences.ui_language();
         let language_group_title = rust_i18n::t!("app.settings.language.group").to_string();
         content = content.child(accessible_group_box(
             "appearance-language-group",
@@ -433,26 +432,14 @@ impl DesktopView {
                                     .child(rust_i18n::t!("app.settings.language.description").to_string()),
                             ),
                     )
-                    .child(div().flex().flex_wrap().gap_1().children(UiLanguage::ALL.map(|option| {
-                        let selected = language == option;
-                        Toggle::new(format!("ui-language-{}", option.locale()))
-                            .label(option.label())
-                            .tooltip(
-                                rust_i18n::t!("app.settings.language.select", language = option.label()).to_string(),
-                            )
-                            .outline()
-                            .small()
-                            .checked(selected)
-                            .cursor_pointer()
-                            .on_click(cx.listener(move |view, checked: &bool, window, cx| {
-                                if *checked {
-                                    view.set_ui_language(option, window, cx);
-                                } else {
-                                    // Keep one option selected even when the active toggle is clicked again.
-                                    cx.notify();
-                                }
-                            }))
-                    }))),
+                    .child(
+                        Select::new(&self.ui_language_select)
+                            .id("ui-language-select")
+                            .accessibility_label(rust_i18n::t!("app.settings.language.label").to_string())
+                            .search_placeholder(rust_i18n::t!("app.settings.language.search").to_string())
+                            .menu_max_h(px(320.))
+                            .w(px(240.)),
+                    ),
             ),
         ));
 
@@ -509,7 +496,7 @@ impl DesktopView {
         content.into_any_element()
     }
 
-    fn set_ui_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn set_ui_language(&mut self, language: UiLanguage, window: &mut Window, cx: &mut Context<Self>) {
         if self.preferences.ui_language() == language {
             return;
         }

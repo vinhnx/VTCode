@@ -40,6 +40,7 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::radio::Radio;
 use gpui_kit::component::resizable::{HandleEdge, resize_handle};
 use gpui_kit::component::scroll::{ScrollableElement, ScrollableMask, Scrollbar};
+use gpui_kit::component::select::{Select, SelectEvent};
 use gpui_kit::component::skeleton::Skeleton;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::status_bar::StatusBar;
@@ -89,6 +90,7 @@ mod typography;
 mod utilities;
 mod webmcp;
 mod workspace_review;
+use super::localization::{UiLanguageOption, UiLanguageSelectState};
 use typography::FontTarget;
 use workspace_review::WorkspaceReviewState;
 
@@ -646,6 +648,8 @@ struct DesktopView {
     interaction_step_index: usize,
     composer: Entity<TextareaState>,
     _composer_subscription: Subscription,
+    ui_language_select: Entity<UiLanguageSelectState>,
+    _ui_language_subscription: Subscription,
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
@@ -859,6 +863,21 @@ impl DesktopView {
                 view.update_composer_suggestions(window, cx);
             }
         });
+        let language = preferences.ui_language();
+        let ui_language_select = cx.new(|cx| {
+            gpui_kit::component::select::SelectState::new(
+                UiLanguageOption::all(),
+                UiLanguageOption::selected_index(language),
+                window,
+                cx,
+            )
+            .searchable(true)
+        });
+        let ui_language_subscription = cx.subscribe_in(&ui_language_select, window, |view, _, event, window, cx| {
+            if let SelectEvent::Confirm(Some(language)) = event {
+                view.set_ui_language(*language, window, cx);
+            }
+        });
         Self {
             shortcut_inputs,
             shortcut_message: None,
@@ -907,6 +926,8 @@ impl DesktopView {
             interaction_step_index: 0,
             composer,
             _composer_subscription: composer_subscription,
+            ui_language_select,
+            _ui_language_subscription: ui_language_subscription,
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
@@ -3960,6 +3981,42 @@ impl DesktopView {
                     "notice".to_string(),
                     "Runtime error".into(),
                     message,
+                ));
+            }
+            ThreadEvent::ThreadCompactBoundary(event) => {
+                // Pre-boundary usage no longer describes the live context; the
+                // next completed turn reports fresh post-boundary usage.
+                self.last_usage = None;
+                self.transcript.push(TranscriptItem::new(
+                    format!("compact-boundary-{}", uuid_like_id()),
+                    "notice".to_string(),
+                    rust_i18n::t!("app.transcript.compact_boundary_title").to_string().into(),
+                    rust_i18n::t!(
+                        "app.transcript.compact_boundary_body",
+                        original = event.original_message_count,
+                        compacted = event.compacted_message_count,
+                        trigger = event.trigger.as_str(),
+                        mode = event.mode.as_str()
+                    )
+                    .to_string(),
+                ));
+            }
+            ThreadEvent::ContextReset(event) => {
+                self.last_usage = None;
+                let trigger = match event.trigger {
+                    vtcode_exec_events::ContextResetTrigger::PlanApproval => "plan approval",
+                    vtcode_exec_events::ContextResetTrigger::Unknown => "unknown",
+                };
+                self.transcript.push(TranscriptItem::new(
+                    format!("context-reset-{}", uuid_like_id()),
+                    "notice".to_string(),
+                    rust_i18n::t!("app.transcript.context_reset_title").to_string().into(),
+                    rust_i18n::t!(
+                        "app.transcript.context_reset_body",
+                        trigger = trigger,
+                        previous = event.previous_context_usage_percent
+                    )
+                    .to_string(),
                 ));
             }
             _ => {}
@@ -7427,7 +7484,12 @@ impl DesktopView {
             .gap_3()
             .min_w_0()
             .when(context_percent.is_some(), |bar| {
-                bar.child(div().child(format!("Context: {}%", context_percent.unwrap_or_default())))
+                bar.child(
+                    div()
+                        .id("context-usage")
+                        .test_support()
+                        .child(format!("Context: {}%", context_percent.unwrap_or_default())),
+                )
             })
             .child(div().truncate().child(provider_model))
             .child(

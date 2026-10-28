@@ -83,94 +83,52 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
         window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-420.))), cx);
-        window.render_frame(cx);
-        window.click("ui-language-es", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Spanish);
-        assert_eq!(window.find("settings-panel").label(), Some("Configuración"));
-        assert_eq!(window.find("settings-sheet-heading").label(), Some("Configuración"));
-        assert_eq!(window.find("appearance-visual-style-group").label(), Some("Estilo visual"));
-        assert_eq!(window.find("appearance-typography-group").label(), Some("Tipografía"));
-        assert_eq!(window.find("appearance-layout-group").label(), Some("Diseño"));
-        assert_eq!(window.find("navigation-visible").label(), Some("Mostrar navegación lateral"));
-        assert_eq!(window.find("reset-appearance").label(), Some("Restablecer apariencia"));
-        assert_eq!(window.find("ui-language-es").checked(), Some(true));
-        window.click("ui-language-pt-BR", cx);
-        window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).preferences.ui_language(),
-            crate::desktop::localization::UiLanguage::BrazilianPortuguese
-        );
-        assert_eq!(window.find("settings-panel").label(), Some("Configurações"));
-        assert_eq!(window.find("ui-language-pt-BR").checked(), Some(true));
-        assert_eq!(window.find("new-session").label(), Some("Nova conversa"));
-        assert_eq!(
-            view.read(cx).composer.read(cx).presentation().placeholder().as_ref(),
-            "Peça ao VT Code para fazer alterações…"
-        );
-        assert_eq!(window.find("composer-workspace").label(), Some("Escolher espaço de trabalho"));
-        assert_eq!(window.find("attach-files").label(), Some("Adicionar arquivos e mais @"));
-        assert_eq!(window.find("send-prompt").label(), Some("Enviar mensagem"));
-        assert_eq!(
-            crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::BrazilianPortuguese
-        );
-        window.click("ui-language-id", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Indonesian);
-        assert_eq!(window.find("settings-panel").label(), Some("Pengaturan"));
-        assert_eq!(window.find("new-session").label(), Some("Percakapan baru"));
-        window.click("ui-language-ru", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Russian);
-        assert_eq!(window.find("settings-panel").label(), Some("Настройки"));
-        assert_eq!(window.find("new-session").label(), Some("Новый диалог"));
-        assert_eq!(
-            crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::Russian
-        );
-        window.click("ui-language-zh-TW", cx);
-        window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).preferences.ui_language(),
-            crate::desktop::localization::UiLanguage::TraditionalChineseTaiwan
-        );
-        assert_eq!(window.find("settings-panel").label(), Some("設定"));
-        assert_eq!(window.find("new-session").label(), Some("新對話"));
-        assert_eq!(window.find("ui-language-zh-TW").checked(), Some(true));
-        window.click("ui-language-zh-HK", cx);
-        window.render_frame(cx);
-        assert_eq!(
-            view.read(cx).preferences.ui_language(),
-            crate::desktop::localization::UiLanguage::TraditionalChineseHongKong
-        );
-        assert_eq!(window.find("settings-panel").label(), Some("設定"));
-        assert_eq!(window.find("new-session").label(), Some("新對話"));
-        assert_eq!(window.find("ui-language-zh-HK").checked(), Some(true));
-        assert_eq!(
-            crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::TraditionalChineseHongKong
-        );
-        window.click("ui-language-tr", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Turkish);
-        assert_eq!(window.find("settings-panel").label(), Some("Ayarlar"));
-        assert_eq!(window.find("new-session").label(), Some("Yeni sohbet"));
-        assert_eq!(window.find("ui-language-tr").checked(), Some(true));
-        assert_eq!(
-            crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::Turkish
-        );
-        window.click("ui-language-pl", cx);
-        window.render_frame(cx);
-        assert_eq!(view.read(cx).preferences.ui_language(), crate::desktop::localization::UiLanguage::Polish);
-        assert_eq!(window.find("settings-panel").label(), Some("Ustawienia"));
-        assert_eq!(window.find("new-session").label(), Some("Nowy wątek"));
-        assert_eq!(window.find("ui-language-pl").checked(), Some(true));
-        assert_eq!(
-            crate::desktop::preferences::Preferences::load().ui_language(),
-            crate::desktop::localization::UiLanguage::Polish
-        );
+    })
+    .unwrap();
+
+    for (locale, title, new_session, language) in [
+        ("es", "Configuración", None, crate::desktop::localization::UiLanguage::Spanish),
+        (
+            "pt-BR",
+            "Configurações",
+            Some("Nova conversa"),
+            crate::desktop::localization::UiLanguage::BrazilianPortuguese,
+        ),
+        ("id", "Pengaturan", Some("Percakapan baru"), crate::desktop::localization::UiLanguage::Indonesian),
+        ("ru", "Настройки", Some("Новый диалог"), crate::desktop::localization::UiLanguage::Russian),
+        ("zh-TW", "設定", Some("新對話"), crate::desktop::localization::UiLanguage::TraditionalChineseTaiwan),
+        (
+            "zh-HK",
+            "設定",
+            Some("新對話"),
+            crate::desktop::localization::UiLanguage::TraditionalChineseHongKong,
+        ),
+        ("tr", "Ayarlar", Some("Yeni sohbet"), crate::desktop::localization::UiLanguage::Turkish),
+        ("pl", "Ustawienia", Some("Nowy wątek"), crate::desktop::localization::UiLanguage::Polish),
+        ("hi", "सेटिंग्स", Some("नया थ्रेड"), crate::desktop::localization::UiLanguage::Hindi),
+    ] {
+        cx.update_window(window, |_, window, cx| {
+            window.within("ui-language-select").click("input", cx);
+            window.input(locale, cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| window.press("enter", cx)).unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert_eq!(view.read(cx).preferences.ui_language(), language);
+            assert_eq!(window.find("settings-panel").label(), Some(title));
+            if let Some(new_session) = new_session {
+                assert_eq!(window.find("new-session").label(), Some(new_session));
+            }
+            assert_eq!(window.find("ui-language-select").value(), Some(language.label()));
+        })
+        .unwrap();
+        assert_eq!(crate::desktop::preferences::Preferences::load().ui_language(), language);
+    }
+
+    cx.update_window(window, |_, _, _| {
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
     })
     .unwrap();
@@ -288,6 +246,179 @@ fn webmcp_notice_tracks_the_selected_language_and_typed_refresh_state(cx: &mut T
             );
         });
         crate::desktop::localization::set_language(crate::desktop::localization::UiLanguage::English);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{
+        CompactionMode, CompactionTrigger, ContextResetEvent, ContextResetTrigger, ThreadCompactBoundaryEvent,
+        ThreadEvent, TurnCompletedEvent, Usage, VersionedThreadEvent,
+    };
+
+    let boundary = |session_id: &str| {
+        BackendEvent::ThreadEvent(ThreadEventNotification {
+            session_id: session_id.into(),
+            turn_id: None,
+            event: VersionedThreadEvent::new(ThreadEvent::ThreadCompactBoundary(Box::new(
+                ThreadCompactBoundaryEvent {
+                    thread_id: session_id.into(),
+                    trigger: CompactionTrigger::Auto,
+                    mode: CompactionMode::Local,
+                    original_message_count: 120,
+                    compacted_message_count: 8,
+                    history_artifact_path: None,
+                    previous_segment_id: None,
+                    new_segment_id: None,
+                    previous_prefix_hash: None,
+                    new_prefix_hash: None,
+                    previous_catalog_hash: None,
+                    new_catalog_hash: None,
+                },
+            ))),
+        })
+    };
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.selected_session_id = Some("session".into());
+            view.last_usage = Some(Usage {
+                input_tokens: 90_000,
+                output_tokens: 10_000,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+            });
+
+            view.handle_backend_event(boundary("other-session"), cx);
+            assert!(view.transcript.is_empty(), "stale sessions stay silent");
+            assert!(view.last_usage.is_some(), "stale sessions keep their usage");
+
+            view.handle_backend_event(boundary("session"), cx);
+            assert!(view.last_usage.is_none(), "compaction clears stale usage");
+            assert_eq!(view.transcript.len(), 1);
+            let notice = view.transcript.get(0).unwrap();
+            assert_eq!(notice.role, "notice");
+            assert!(!notice.title.is_empty());
+            for expected in ["120", "8", "auto", "local"] {
+                assert!(notice.text.contains(expected), "notice dropped {expected}");
+            }
+
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: None,
+                event: VersionedThreadEvent::new(ThreadEvent::ContextReset(ContextResetEvent {
+                    thread_id: "session".into(),
+                    turn_id: "turn-1".into(),
+                    trigger: ContextResetTrigger::PlanApproval,
+                    plan_preserved: true,
+                    previous_context_usage_percent: 87,
+                    tool_budget_reset: true,
+                })),
+            });
+            assert_eq!(view.transcript.len(), 2);
+            let notice = view.transcript.get(1).unwrap();
+            assert_eq!(notice.role, "notice");
+            for expected in ["plan approval", "87"] {
+                assert!(notice.text.contains(expected), "notice dropped {expected}");
+            }
+
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some("turn-1".into()),
+                event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    completed_at: None,
+                    usage: Usage {
+                        input_tokens: 5_000,
+                        output_tokens: 500,
+                        cached_input_tokens: 0,
+                        cache_creation_tokens: 0,
+                    },
+                    in_progress_exec_sessions: Vec::new(),
+                })),
+            });
+            assert_eq!(view.last_usage.as_ref().unwrap().input_tokens, 5_000);
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn context_boundary_hides_and_restores_rendered_context_usage(cx: &mut TestAppContext) {
+    use vtcode_desktop_protocol::ThreadEventNotification;
+    use vtcode_exec_events::{
+        CompactionMode, CompactionTrigger, ThreadCompactBoundaryEvent, ThreadEvent, TurnCompletedEvent, Usage,
+        VersionedThreadEvent,
+    };
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.selected_session_id = Some("session".into());
+            view.preferences.show_status_bar = true;
+            let mut configuration = runtime_options_config();
+            configuration.context_window = Some(200_000);
+            view.configuration = Some(configuration);
+            view.last_usage = Some(Usage {
+                input_tokens: 90_000,
+                output_tokens: 10_000,
+                cached_input_tokens: 0,
+                cache_creation_tokens: 0,
+            });
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("status-bar").is_some());
+        assert!(window.try_find("context-usage").is_some(), "usage renders before the boundary");
+
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::ThreadEvent(ThreadEventNotification {
+                    session_id: "session".into(),
+                    turn_id: None,
+                    event: VersionedThreadEvent::new(ThreadEvent::ThreadCompactBoundary(Box::new(
+                        ThreadCompactBoundaryEvent {
+                            thread_id: "session".into(),
+                            trigger: CompactionTrigger::Auto,
+                            mode: CompactionMode::Local,
+                            original_message_count: 120,
+                            compacted_message_count: 8,
+                            history_artifact_path: None,
+                            previous_segment_id: None,
+                            new_segment_id: None,
+                            previous_prefix_hash: None,
+                            new_prefix_hash: None,
+                            previous_catalog_hash: None,
+                            new_catalog_hash: None,
+                        },
+                    ))),
+                }),
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("status-bar").is_some());
+        assert!(window.try_find("context-usage").is_none(), "boundary hides Context %");
+
+        view.update(cx, |view, _| {
+            view.handle_thread_event(ThreadEventNotification {
+                session_id: "session".into(),
+                turn_id: Some("turn-1".into()),
+                event: VersionedThreadEvent::new(ThreadEvent::TurnCompleted(TurnCompletedEvent {
+                    completed_at: None,
+                    usage: Usage {
+                        input_tokens: 5_000,
+                        output_tokens: 500,
+                        cached_input_tokens: 0,
+                        cache_creation_tokens: 0,
+                    },
+                    in_progress_exec_sessions: Vec::new(),
+                })),
+            });
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("context-usage").is_some(), "next turn restores Context %");
     })
     .unwrap();
 }

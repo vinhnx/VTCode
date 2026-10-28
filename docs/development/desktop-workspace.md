@@ -132,6 +132,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Use keyboard commands | ⌘N creates a session, ⌘⇧W closes the selected session, ⌘O chooses a workspace, ⌘L focuses the composer, ⌘⇧I toggles the inspector, ⌘⇧U opens Utilities, ⌘⇧E opens Workspace Files, ⌘⇧G reviews the working tree, ⌘R refreshes the active workspace view, and ⌘. cancels the active run. The same active-turn and cleanup guards apply as for buttons. |
 | Dismiss an overlay | Escape closes the topmost CLI config editor, Settings Sheet, palette, or file preview and restores prior keyboard focus. ⌘L dismisses supported overlays and focuses the composer. Escape alone does not cancel agent work. |
 | Read the status bar | Workspace name, the workspace's git branch (walked up to the repository root; detached HEAD shortened; worktree pointers followed), the sandbox policy label, Context % (last turn's usage against the model's context window, hidden while unknown), the configured provider · model, and the agent running/idle state. When enabled, a Kit Marker announces agent state and shows a compact loading spinner while work is running; its text remains visible. |
+| Notice a context boundary | Automatic or manual compaction and fresh-context resets post a transcript notice with message counts or prior pressure, and Context % hides until the next completed turn reports post-boundary usage. |
 | Reduce motion | Settings → Accessibility offers System, On, and Off. System uses the current macOS accessibility setting at launch or when selected; explicit choices persist with Desktop preferences and apply to GPUI Kit animations. |
 | Switch workspaces | The sidebar's Workspaces section lists recent projects (at most 8) for one-click switching; the most recent workspace reopens on launch when it still exists. |
 | Resize panes | Drag the GPUI Kit splitters or Tab to one and use Left/Right; hold Shift for 50px steps. Sidebar and inspector widths clamp to 180–560px and persist. |
@@ -146,7 +147,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | Settings → VT Code → CLI configuration searches the complete typed CLI config, including defaults, optional documented fields, labels, descriptions, choices, and the CLI's seven curated groups. Booleans toggle directly; strings/numbers use typed editors and arrays/maps use JSON. Choose User, Workspace, or Project; VT Code validates and version-checks the write, then reloads the service. Credential-bearing fields stay excluded; schema templates without concrete values are shown as read-only references. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews for every built-in CLI theme and typography; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status. |
-| Change interface language | Settings → Appearance offers English, Tiếng Việt, Español, Français, 日本語, Deutsch, Italiano, 简体中文, 繁體中文（台灣）, 繁體中文（香港）, Português (Brasil), 한국어, Nederlands, Русский, Bahasa Indonesia, Türkçe, and Polski. The selection updates translated Settings controls and accessibility labels, GPUI Kit controls, navigation, workspace picker, composer, welcome, file browser and preview, activity copy, transcript paging, command/resource palettes, runtime-control recovery errors, and WebMCP status notices immediately, then persists in desktop preferences. CLI-authored command names and descriptions remain unchanged. Untranslated app copy falls back to English. |
+| Change interface language | Settings → Appearance offers 18 languages, including Hindi. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |
 
 ### Utilities pane
@@ -267,7 +268,11 @@ draft and attached files remain; previous sessions are available in history. Rel
 and is unavailable during active turns, pending submissions, interactions, session changes, or file pickers/reads.
 It also retries a disconnected service after configuration or authentication has been repaired outside the app.
 
-Protocol 1.13 adds model capability metadata and a CLI-backed fast-processing toggle. Protocol 1.10 adds live
+Protocol 1.16 reports first-prompt rejection with a dedicated startup-interaction error so Desktop can retry
+after the acknowledged decision. Protocol 1.15 adds bounded restored-output paging. Protocol 1.14 adds the
+CLI slash-command catalog, the CLI-discovered primary-agent catalog, and documented settings metadata
+(labels, types, defaults) for the native configuration browser. Protocol 1.13 added model capability
+metadata and a CLI-backed fast-processing toggle. Protocol 1.10 adds live
 primary-agent display updates without changing the next-session mode. Protocol 1.9 added searchable settings
 read/write methods alongside typed built-in theme synchronization. The service
 uses the CLI startup loader for provider, model, runtime policy, and agent execution.
@@ -410,7 +415,7 @@ Cancelling sends no answer drafts; oversized submissions remain editable instead
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.13` (additive over 1.0–1.12; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.16` (additive over 1.0–1.15; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
 GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
