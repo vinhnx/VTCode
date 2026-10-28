@@ -15,7 +15,7 @@
 - Theme uses brand `primary`, hover `accent`, and shared `apply_theme`; Markdown blocks images and uses Kit `syntect` highlighting.
 - Localization uses app-owned `app` keys in `locales/ui.yml`; notify the view after locale changes.
 - Appearance scrolling locks axes; typography follows active profiles, then becomes shared when separation is disabled.
-- Use `aa_muted` (metadata only), `label_foreground` (headings/labels/tabs), and `filled_button_foreground` over palette colors; never hardcode colors over a theme. App-owned labels use medium weight at minimum; Kit `GroupBox` titles need the shared `group_box_title` wrapper.
+- Use `aa_muted` (metadata only), `label_foreground` (headings/labels/tabs), and `filled_button_foreground` over palette colors; never hardcode colors over a theme. Titles and body stay regular; semibold is reserved for small headings via `group_box_title`/`section_label` (Kit `GroupBox` titles render muted by default).
 - Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions
   and never infers subagent state.
 - `view/composer_controls.rs` owns anchored controls; the service validates CLI-discovered modes

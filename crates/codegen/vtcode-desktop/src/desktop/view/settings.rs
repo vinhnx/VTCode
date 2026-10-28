@@ -428,7 +428,7 @@ impl DesktopView {
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .child(field_label(rust_i18n::t!("app.settings.language.label").to_string()))
+                                .child(div().child(rust_i18n::t!("app.settings.language.label").to_string()))
                                 .child(
                                     div()
                                         .text_sm()

@@ -55,7 +55,7 @@ impl DesktopView {
                                     .gap_2()
                                     .w_full()
                                     .child(Icon::new(IconName::GitCompare).small())
-                                    .child(div().flex_1().child(field_label("Changes")))
+                                    .child(div().flex_1().child("Changes"))
                                     .when_some(totals, |row, (additions, deletions)| {
                                         row.child(
                                             div().text_sm().text_color(colors.success).child(format!("+{additions}")),

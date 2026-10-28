@@ -6362,7 +6362,7 @@ impl DesktopView {
             );
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                .font_weight(gpui_kit::FontWeight::NORMAL)
                 .text_color(colors.foreground)
                 .child(
                     div()
@@ -6401,7 +6401,7 @@ impl DesktopView {
                                             .min_w_0()
                                             .truncate()
                                             .text_size(gpui_kit::rems(1.75))
-                                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                            .font_weight(gpui_kit::FontWeight::NORMAL)
                                             .border_b_1()
                                             .border_dashed()
                                             .border_color(colors.muted_foreground)
@@ -6740,7 +6740,7 @@ impl DesktopView {
                         .w_full()
                         .text_color(status_color)
                         .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
-                        .child(div().min_w_0().truncate().font_medium().child(item.title.clone()))
+                        .child(div().min_w_0().truncate().child(item.title.clone()))
                         .when(state != ActivityState::Completed, |row| {
                             row.child(div().min_w_0().truncate().text_xs().child(status.to_string()))
                         })
@@ -7634,19 +7634,12 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(field_label("Reduce motion"))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child("System uses macOS accessibility settings; select it again to refresh."),
-                    ),
+                div().min_w_0().flex_1().flex().flex_col().gap_1().child("Reduce motion").child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("System uses macOS accessibility settings; select it again to refresh."),
+                ),
             )
             .child(
                 div()
@@ -7702,19 +7695,12 @@ impl DesktopView {
             .gap_3()
             .py_2()
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(field_label(label))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().colors.muted_foreground)
-                            .child(description),
-                    ),
+                div().flex_1().min_w_0().flex().flex_col().gap_1().child(label).child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().colors.muted_foreground)
+                        .child(description),
+                ),
             )
             .child(
                 div()
@@ -8816,12 +8802,6 @@ fn group_box_title(
         .child(title.into())
 }
 
-/// Field and control labels use medium weight at minimum: normal-weight small
-/// text renders thin on dark surfaces, while descriptions stay muted.
-fn field_label(label: impl Into<gpui_kit::SharedString>) -> impl IntoElement {
-    div().font_medium().child(label.into())
-}
-
 fn valid_slash_command_catalog(commands: &[protocol::SlashCommandInfo]) -> bool {
     commands.len() <= 256
         && commands.iter().all(|command| {
@@ -8844,7 +8824,7 @@ fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_
         .items_center()
         .gap_2()
         .child(Icon::new(icon).size_4().when(selected, |icon| icon.text_color(accent)))
-        .child(div().flex_1().min_w_0().truncate().text_left().font_medium().child(label))
+        .child(div().flex_1().min_w_0().truncate().text_left().child(label))
         .when(selected, |row| row.child(div().size(px(5.)).rounded_full().bg(accent)))
 }
 
