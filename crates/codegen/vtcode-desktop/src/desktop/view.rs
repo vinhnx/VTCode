@@ -3820,7 +3820,13 @@ impl DesktopView {
                     } else if let Ok(snapshot) =
                         serde_json::from_value::<protocol::WorkspaceReviewResult>(result.unwrap_or(Value::Null))
                     {
-                        self.accept_workspace_review(snapshot, cx);
+                        if self.workspace_review.as_ref().is_some_and(|review| {
+                            review.request_id == snapshot.request_id && review.workspace == snapshot.workspace
+                        }) {
+                            self.accept_workspace_review(snapshot, cx);
+                        } else {
+                            self.fail_workspace_review("Invalid Git review response.".into());
+                        }
                     } else {
                         self.fail_workspace_review("Invalid Git review response.".into());
                     }

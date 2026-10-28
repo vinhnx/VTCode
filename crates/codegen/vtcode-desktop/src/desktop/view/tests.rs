@@ -7543,7 +7543,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(params["scope"], "src");
         assert_eq!(params["includeUntracked"], true);
         assert_eq!(window.find("workspace-review-include-untracked").disabled(), Some(true));
-        let request_id = params["requestId"].as_str().unwrap().to_string();
+        let mut request_id = params["requestId"].as_str().unwrap().to_string();
         view.update(cx, |view, cx| {
             view.handle_backend_event(BackendEvent::WorkspaceReviewResponse {
                 request_id: "stale".into(),
@@ -7560,7 +7560,12 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
             view.handle_backend_event(snapshot("stale", "/workspace"), cx);
             assert!(view.workspace_review.as_ref().unwrap().pending);
             view.handle_backend_event(snapshot(&request_id, "/other-workspace"), cx);
-            assert!(view.workspace_review.as_ref().unwrap().pending);
+            assert!(!view.workspace_review.as_ref().unwrap().pending);
+            view.refresh_workspace_review(cx);
+            let BackendCommand::Request { params, .. } = requests.try_recv().unwrap() else {
+                panic!("review retry request")
+            };
+            request_id = params["requestId"].as_str().unwrap().to_string();
             view.handle_backend_event(snapshot(&request_id, "/workspace"), cx);
             let review = view.workspace_review.as_ref().unwrap();
             assert!(!review.pending);

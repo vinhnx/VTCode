@@ -22,7 +22,7 @@ use super::{
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
     pub(super) scope_input: Entity<InputState>,
-    workspace: String,
+    pub(super) workspace: String,
     pub(super) pending: bool,
     pub(super) snapshot: Option<WorkspaceReviewResult>,
     pub(super) viewer: Option<Entity<DiffState>>,
