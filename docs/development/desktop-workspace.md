@@ -500,7 +500,7 @@ additional catalog icons referenced by the desktop UI.
 ### Appearance and typography
 
 Open Settings (`Cmd+,`) for theme previews and a Typography card. UI font size
-ranges from 12–24 logical pixels (default 16); code size ranges from 10–24
+ranges from 14–24 logical pixels (default 16); code size ranges from 11–24
 (default 14). The accessible decrease/increase buttons apply immediately and
 save to desktop preferences. Code size controls Markdown code blocks, previews,
 terminal output, and gpui-kit diff typography. Kit diff sizing also follows the

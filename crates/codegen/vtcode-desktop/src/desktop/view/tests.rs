@@ -6236,7 +6236,7 @@ fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(c
         assert_eq!(view.read(cx).preferences.recent_workspaces[0], "/preserve-workspace");
         view.update(cx, |view, cx| {
             view.preferences.ui_font_size = Some(24);
-            view.preferences.code_font_size = Some(10);
+            view.preferences.code_font_size = Some(11);
             view.apply_typography(cx);
         });
         window.render_frame(cx);

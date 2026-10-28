@@ -7674,8 +7674,8 @@ impl DesktopView {
                 "Code font size",
                 "Code, diffs, and terminal output",
                 self.preferences.typography_for(self.theme_mode).code_font_size,
-                10,
-                24,
+                preferences::MIN_CODE_FONT_SIZE,
+                preferences::MAX_CODE_FONT_SIZE,
             )
         } else {
             (
@@ -7683,8 +7683,8 @@ impl DesktopView {
                 "UI font size",
                 "Base size for controls and conversation text",
                 self.preferences.typography_for(self.theme_mode).ui_font_size,
-                12,
-                24,
+                preferences::MIN_UI_FONT_SIZE,
+                preferences::MAX_UI_FONT_SIZE,
             )
         };
         div()

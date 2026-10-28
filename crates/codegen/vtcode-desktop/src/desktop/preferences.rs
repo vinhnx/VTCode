@@ -16,6 +16,13 @@ const DEFAULT_SIDEBAR_WIDTH: f32 = 270.0;
 const DEFAULT_INSPECTOR_WIDTH: f32 = 320.0;
 pub(super) const MIN_PANE_WIDTH: f32 = 180.0;
 pub(super) const MAX_PANE_WIDTH: f32 = 560.0;
+/// Smallest UI base size: keeps the tiniest labels (`text_xs` = 0.75rem) at
+/// 10.5px, the smallest functional size on macOS.
+pub(super) const MIN_UI_FONT_SIZE: u8 = 14;
+pub(super) const MAX_UI_FONT_SIZE: u8 = 24;
+/// Smallest mono size for diffs, code blocks, and terminal output.
+pub(super) const MIN_CODE_FONT_SIZE: u8 = 11;
+pub(super) const MAX_CODE_FONT_SIZE: u8 = 24;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -152,10 +159,10 @@ impl Preferences {
     }
 
     pub(super) fn ui_font_size(&self) -> u8 {
-        self.ui_font_size.unwrap_or(16).clamp(12, 24)
+        self.ui_font_size.unwrap_or(16).clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE)
     }
     pub(super) fn code_font_size(&self) -> u8 {
-        self.code_font_size.unwrap_or(14).clamp(10, 24)
+        self.code_font_size.unwrap_or(14).clamp(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE)
     }
 
     pub(super) fn navigation_on_right(&self) -> bool {
@@ -179,8 +186,11 @@ impl Preferences {
             Some(profile) => TypographySettings {
                 ui_font_family: profile.ui_font_family.as_deref(),
                 code_font_family: profile.code_font_family.as_deref(),
-                ui_font_size: profile.ui_font_size.unwrap_or(16).clamp(12, 24),
-                code_font_size: profile.code_font_size.unwrap_or(14).clamp(10, 24),
+                ui_font_size: profile.ui_font_size.unwrap_or(16).clamp(MIN_UI_FONT_SIZE, MAX_UI_FONT_SIZE),
+                code_font_size: profile
+                    .code_font_size
+                    .unwrap_or(14)
+                    .clamp(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE),
             },
             None => TypographySettings {
                 ui_font_family: self.ui_font_family.as_deref(),
@@ -417,9 +427,9 @@ mod tests {
             code_font_size: Some(255),
             ..old
         };
-        assert_eq!((settings.ui_font_size(), settings.code_font_size()), (12, 24));
+        assert_eq!((settings.ui_font_size(), settings.code_font_size()), (14, 24));
         let parsed: Preferences = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
-        assert_eq!((parsed.ui_font_size(), parsed.code_font_size()), (12, 24));
+        assert_eq!((parsed.ui_font_size(), parsed.code_font_size()), (14, 24));
     }
 
     #[test]
@@ -504,7 +514,7 @@ mod tests {
         preferences.set_ui_font_size(ThemeMode::Dark, 0);
         preferences.set_code_font_size(ThemeMode::Dark, 255);
         let dark = preferences.typography_for(ThemeMode::Dark);
-        assert_eq!((dark.ui_font_size, dark.code_font_size), (12, 24));
+        assert_eq!((dark.ui_font_size, dark.code_font_size), (14, 24));
         let light = preferences.typography_for(ThemeMode::Light);
         assert_eq!((light.ui_font_size, light.code_font_size), (18, 13));
     }
