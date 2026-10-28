@@ -18,10 +18,21 @@ pub(super) enum TranscriptLayoutChange {
     FollowLatest,
 }
 
+/// Severity for `notice` rows (runtime errors, compaction/reset notices,
+/// run status). Other roles leave the default untouched.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum NoticeSeverity {
+    #[default]
+    Info,
+    Warning,
+    Error,
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct TranscriptItem {
     pub id: String,
     pub role: String,
+    pub notice_severity: NoticeSeverity,
     pub title: SharedString,
     pub text: SharedString,
     pub markdown: SharedString,
@@ -134,6 +145,7 @@ impl TranscriptItem {
             id,
             has_activity_status: role == "tool",
             role,
+            notice_severity: NoticeSeverity::Info,
             title,
             text,
             markdown: SharedString::default(),
@@ -152,6 +164,13 @@ impl TranscriptItem {
         if matches!(self.role.as_str(), "tool" | "diff") {
             self.markdown = SharedString::default();
             self.accessibility_text = SharedString::default();
+            return;
+        }
+        // Notices render as plain severity text: error bodies must not
+        // reinterpret backticks or brackets as Markdown.
+        if self.role == "notice" {
+            self.markdown = SharedString::default();
+            self.accessibility_text.clone_from(&self.text);
             return;
         }
 
@@ -413,8 +432,13 @@ impl Transcript {
             let group_status_changed = is_tool_update && previous_status != next_status;
             let has_activity_status_changed = existing.has_activity_status != item.has_activity_status;
             let diff_changed = existing.diff != item.diff;
-            let content_changed =
-                role_changed || title_changed || text_changed || has_activity_status_changed || diff_changed;
+            let severity_changed = existing.notice_severity != item.notice_severity;
+            let content_changed = role_changed
+                || title_changed
+                || text_changed
+                || has_activity_status_changed
+                || diff_changed
+                || severity_changed;
             if !content_changed {
                 let Some(existing) = self.items.get_mut(index) else {
                     return;
@@ -444,6 +468,7 @@ impl Transcript {
                 || title_changed
                 || has_activity_status_changed
                 || diff_changed
+                || severity_changed
                 || if updated_is_tool {
                     activity_status_changed || (existing.expanded && text_changed)
                 } else {

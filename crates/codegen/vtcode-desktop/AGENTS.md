@@ -18,6 +18,8 @@
 - Use `aa_muted` (captions/metadata only), `muted_text` (row descriptions/hints, 6:1 target), `label_foreground` (headings/labels/tabs), and `filled_button_foreground` over palette colors; never hardcode colors over a theme. Titles and body stay regular; semibold is reserved for small headings via `group_box_title`/`section_label` (Kit `GroupBox` titles render muted by default). Settings rows use `row_title`/`row_description` with `row_divider` separators.
 - Rich text needs readable accessibility nodes; `view/utilities.rs` reuses projections/actions
   and never infers subagent state.
+- Transcript `notice` rows carry `NoticeSeverity` and render as plain severity rows (no bubble/Markdown/copy); message
+  actions reveal on hover in a fixed slot, with the palette copy command as the keyboard path.
 - `view/composer_controls.rs` owns anchored controls; the service validates CLI-discovered modes
   and persists the CLI default. Save workspace permission choices only after acknowledgement;
   restore before Send. Keep drafts/sources across changes.

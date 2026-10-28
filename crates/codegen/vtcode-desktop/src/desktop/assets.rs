@@ -64,6 +64,7 @@ mod tests {
         IconName::ChevronDown,
         IconName::ChevronLeft,
         IconName::ChevronRight,
+        IconName::CircleAlert,
         IconName::Copy,
         IconName::Ellipsis,
         IconName::ExternalLink,
@@ -78,6 +79,7 @@ mod tests {
         IconName::GitBranch,
         IconName::GitCompare,
         IconName::House,
+        IconName::Info,
         IconName::Maximize2,
         IconName::MessageSquare,
         IconName::Minus,
@@ -92,6 +94,7 @@ mod tests {
         IconName::ShieldAlert,
         IconName::Square,
         IconName::Terminal,
+        IconName::TriangleAlert,
         IconName::Wrench,
         IconName::X,
     ];

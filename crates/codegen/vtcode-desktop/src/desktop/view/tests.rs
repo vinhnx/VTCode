@@ -347,6 +347,205 @@ fn context_boundary_events_notice_and_reset_stale_usage(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn transcript_notices_render_severity_without_message_chrome(cx: &mut TestAppContext) {
+    use crate::desktop::transcript::NoticeSeverity;
+
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            for (id, severity, title, text) in [
+                ("notice-error", NoticeSeverity::Error, "Runtime error", "Boom `code` here"),
+                ("notice-warning", NoticeSeverity::Warning, "Run status", "Turn ended early"),
+                ("notice-info", NoticeSeverity::Info, "Compaction", "120 into 8 messages"),
+            ] {
+                let mut item = TranscriptItem::new(id.into(), "notice".into(), title.into(), text.into());
+                item.notice_severity = severity;
+                view.transcript.push(item);
+            }
+            cx.notify();
+        });
+        window.render_frame(cx);
+        // Severity roles: errors announce as alerts, the rest as status.
+        assert_eq!(window.find("notice-notice-error").role(), Some(gpui_kit::Role::Alert));
+        assert_eq!(window.find("notice-notice-warning").role(), Some(gpui_kit::Role::Status));
+        assert_eq!(window.find("notice-notice-info").role(), Some(gpui_kit::Role::Status));
+        // No message chrome: notices carry no copy action.
+        for id in ["notice-error", "notice-warning", "notice-info"] {
+            assert!(window.try_find(format!("copy-message-{id}")).is_none(), "{id} must not offer message copy");
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn message_actions_reveal_on_hover_without_moving_rows(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "hover-me".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Hover body".into(),
+            ));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("copy-message-hover-me").is_none(), "actions hide at rest");
+        let slot = window.find("message-actions-hover-me").bounds();
+        assert!(slot.size.height > px(0.), "the slot reserves layout while empty");
+        let row = window.find("transcript-row-hover-me").bounds();
+        window.hover("transcript-row-hover-me", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("copy-message-hover-me").is_some(), "hover reveals actions");
+        assert_eq!(window.find("transcript-row-hover-me").bounds(), row, "reveal must not reflow the row");
+        assert_eq!(view.read(cx).hovered_message.as_deref(), Some("hover-me"));
+        window.hover("transcript-scroll", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("copy-message-hover-me").is_none(), "leaving hides actions again");
+        assert!(view.read(cx).hovered_message.is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn palette_copy_latest_message_copies_newest_raw_text(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.latest_copyable_message().is_none(), "empty transcript has nothing to copy");
+            assert!(!view.palette_action_available(&super::PaletteAction::CopyLatestMessage));
+            view.run_palette_action(super::PaletteAction::CopyLatestMessage, window, cx);
+        });
+        window.render_frame(cx);
+        assert!(cx.read_from_clipboard().is_none(), "empty copy writes nothing");
+        assert!(window.notifications(cx).is_empty(), "empty copy notifies nothing");
+
+        view.update(cx, |view, cx| {
+            for (id, role, text) in [
+                ("first", "user", "first prompt"),
+                ("second", "assistant", "**second** reply"),
+                ("tool-row", "tool", "Finished successfully"),
+                ("third", "user", "third prompt"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), "Title".into(), text.into()));
+            }
+            assert!(view.palette_action_available(&super::PaletteAction::CopyLatestMessage));
+            view.run_palette_action(super::PaletteAction::CopyLatestMessage, window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("third prompt"));
+        assert_eq!(window.notifications(cx).len(), 1);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn tool_status_slot_renders_in_every_state(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            // An assistant row between the tools keeps both ungrouped.
+            for (id, role, title, text) in [
+                ("done-tool", "tool", "cargo check", "completed\noutput"),
+                ("filler", "assistant", "VT Code", "Between."),
+                ("failed-tool", "tool", "cargo check", "failed (exit 1)\ndetails"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), title.into(), text.into()));
+            }
+        });
+        window.render_frame(cx);
+        // Completed rows keep a transparent status slot instead of dropping
+        // it, so rows hold their shape as states change.
+        let done = window.find("tool-status-done-tool").bounds();
+        let failed = window.find("tool-status-failed-tool").bounds();
+        assert!(done.size.height > px(0.));
+        assert_eq!(done.size.height, failed.size.height);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn grouped_tool_rows_nest_under_their_header(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            for (id, role, title, text) in [
+                ("intro", "assistant", "VT Code", "I will inspect the build."),
+                ("read", "tool", "Read Cargo.toml", "completed\nmanifest"),
+                ("build", "tool", "cargo check", "failed (exit 1)\nstructured details"),
+                ("comment", "assistant", "VT Code", "The build needs a fix."),
+                ("retry", "tool", "cargo check", "in progress\nretrying"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), title.into(), text.into()));
+            }
+        });
+        window.render_frame(cx);
+        window.click("activity-group-read", cx);
+        window.render_frame(cx);
+        let header_x = window.find("activity-group-read").bounds().origin.x;
+        let child_x = window.find("tool-build").bounds().origin.x;
+        let single_x = window.find("tool-retry").bounds().origin.x;
+        assert!(child_x > header_x, "grouped rows nest under their header");
+        assert_eq!(single_x, header_x, "ungrouped rows stay flush");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn turn_dividers_separate_later_user_turns(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            for (id, role, text) in [
+                ("first-turn", "user", "hello"),
+                ("answer", "assistant", "Hi there."),
+                ("second-turn", "user", "and then?"),
+            ] {
+                view.transcript
+                    .push(TranscriptItem::new(id.into(), role.into(), "Title".into(), text.into()));
+            }
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("turn-divider-first-turn").is_none(), "no divider above the first turn");
+        assert!(window.try_find("turn-divider-second-turn").is_some(), "later turns get a divider");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn expanded_tool_output_paints_on_the_panel_fill(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.transcript.push(TranscriptItem::new(
+                "explain".into(),
+                "assistant".into(),
+                "VT Code".into(),
+                "Checking.".into(),
+            ));
+            view.transcript.push(TranscriptItem::new(
+                "check".into(),
+                "tool".into(),
+                "cargo check".into(),
+                "completed\nall targets".into(),
+            ));
+        });
+        let panel: gpui_kit::Background = cx.theme().colors.secondary.into();
+        window.render_frame(cx);
+        let collapsed_panels = window.painted_quads().iter().filter(|quad| quad.background == panel).count();
+        window.click("tool-check", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("tool-output-check").is_some());
+        let expanded_panels = window.painted_quads().iter().filter(|quad| quad.background == panel).count();
+        assert!(expanded_panels > collapsed_panels, "expanding output adds a panel fill");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn context_boundary_hides_and_restores_rendered_context_usage(cx: &mut TestAppContext) {
     use vtcode_desktop_protocol::ThreadEventNotification;
     use vtcode_exec_events::{
@@ -3545,6 +3744,9 @@ fn rich_transcript_copy_actions_keep_raw_markdown_and_exact_code(cx: &mut TestAp
             ));
         });
         window.render_frame(cx);
+        // Message actions reveal on hover; keyboard users copy via the palette command.
+        window.hover("transcript-row-copy-test", cx);
+        window.render_frame(cx);
         window.click("copy-message-copy-test", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some(source));
         assert_eq!(window.notifications(cx).len(), 1);
@@ -3630,13 +3832,20 @@ fn transcript_content_column_is_centered_and_uses_scroller_inset(cx: &mut TestAp
             (assistant_body.top() - assistant_column.top()).abs() <= px(1.),
             "agent prose should start directly in its row without a speaker header"
         );
+        // Later user turns open with a divider; the bubble still starts
+        // directly after it with no speaker header.
+        let divider = window.find("turn-divider-user-center").bounds();
         assert!(
-            user_body.top() - user_column.top() <= px(16.),
+            user_body.top() - divider.bottom() <= px(16.),
             "the user bubble should not reserve space for a speaker header"
         );
         assert!(user_body.left() > assistant_body.left(), "user bubbles align to the trailing edge");
         assert!(user_body.right() <= user_column.right(), "bubble text remains inside the conversation column");
         assert_eq!(window.find("message-body-user-center").label(), Some("You: A user message."));
+        assert!(window.try_find("copy-message-user-center").is_none());
+        assert!(window.try_find("copy-message-assistant-center").is_none());
+        window.hover("transcript-row-assistant-center", cx);
+        window.render_frame(cx);
         assert!(window.try_find("copy-message-user-center").is_none());
         assert!(window.try_find("copy-message-assistant-center").is_some());
         assert!(
@@ -7664,6 +7873,8 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
         assert_eq!(window.find("tool-output-check").label(), Some("Finished successfully"));
         window.click("tool-check", cx);
         assert!(!view.read(cx).transcript.get(1).unwrap().expanded);
+        window.hover("transcript-row-answer", cx);
+        window.render_frame(cx);
         window.click("copy-message-answer", cx);
         assert_eq!(cx.read_from_clipboard().unwrap().text().as_deref(), Some("Tests passed: **7**. Run `cargo test`."));
     })
@@ -8505,7 +8716,8 @@ fn activity_status_colors_follow_semantic_theme_tokens() {
             success: palette.success,
             danger: palette.danger,
             warning: palette.warning,
-            muted_foreground: palette.foreground,
+            foreground: palette.foreground,
+            popover: palette.background,
             ..Default::default()
         };
 
@@ -8514,7 +8726,6 @@ fn activity_status_colors_follow_semantic_theme_tokens() {
             (ActivityState::Completed, colors.success),
             (ActivityState::Failed, colors.danger),
             (ActivityState::Interrupted, colors.warning),
-            (ActivityState::Other, colors.muted_foreground),
         ] {
             assert_eq!(
                 DesktopView::activity_status_color(state, colors),
@@ -8523,6 +8734,17 @@ fn activity_status_colors_follow_semantic_theme_tokens() {
                 palette.id
             );
         }
+        // Subdued rows use the brighter secondary ramp: readable everywhere,
+        // at the 6:1 target wherever the palette allows it.
+        let other = DesktopView::activity_status_color(ActivityState::Other, colors);
+        let headroom = super::themes::contrast_ratio(colors.foreground, colors.popover);
+        let ratio = super::themes::contrast_ratio(other, colors.popover);
+        assert!(ratio >= 4.5, "{}: subdued status unreadable ({ratio:.2})", palette.id);
+        assert!(
+            ratio >= 6.0_f32.min(headroom) - 0.05,
+            "{}: subdued status misses its target ({ratio:.2}, headroom {headroom:.2})",
+            palette.id
+        );
     }
 }
 

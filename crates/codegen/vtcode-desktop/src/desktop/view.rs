@@ -72,7 +72,7 @@ use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, Changes
 use super::markdown::render_markdown;
 use super::preferences;
 use super::themes;
-use super::transcript::{DiffCard, DiffFile, DiffFileKind, Transcript, TranscriptItem};
+use super::transcript::{DiffCard, DiffFile, DiffFileKind, NoticeSeverity, Transcript, TranscriptItem};
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
     request_fits_frame,
@@ -426,6 +426,7 @@ enum PaletteAction {
     NewSession,
     CloseSession,
     OpenConversationSearch { session_id: String },
+    CopyLatestMessage,
     JumpToTranscriptItem { session_id: String, item_id: String },
     ShowActivityOutput { session_id: String, item_id: String },
     ChooseModel,
@@ -755,6 +756,7 @@ struct DesktopView {
     default_code_font: gpui_kit::SharedString,
     sidebar_open: bool,
     navigation_peek: bool,
+    hovered_message: Option<String>,
     zen_mode: bool,
     shortcut_inputs: Vec<Entity<gpui_kit::component::input::InputState>>,
     shortcut_message: Option<String>,
@@ -1036,6 +1038,7 @@ impl DesktopView {
             system_motion_baseline,
             sidebar_open: false,
             navigation_peek: false,
+            hovered_message: None,
             zen_mode: false,
             sidebar_width: 270.0,
             inspector_width: 320.0,
@@ -2392,10 +2395,16 @@ impl DesktopView {
         {
             groups.push((
                 rust_i18n::t!("app.palette.sections.conversation").to_string(),
-                vec![command(
-                    rust_i18n::t!("app.palette.command.find_in_conversation").to_string(),
-                    PaletteAction::OpenConversationSearch { session_id },
-                )],
+                vec![
+                    command(
+                        rust_i18n::t!("app.palette.command.find_in_conversation").to_string(),
+                        PaletteAction::OpenConversationSearch { session_id },
+                    ),
+                    command(
+                        rust_i18n::t!("app.palette.command.copy_latest_message").to_string(),
+                        PaletteAction::CopyLatestMessage,
+                    ),
+                ],
             ));
         }
         let slash_commands = self
@@ -2536,6 +2545,22 @@ impl DesktopView {
             return;
         }
         self.palette_groups = share_palette_commands(self.conversation_search_groups(session_id));
+    }
+
+    /// Raw text of the newest user/assistant message, for the keyboard
+    /// copy path that backs the hover-only message actions.
+    fn latest_copyable_message(&self) -> Option<gpui_kit::SharedString> {
+        self.transcript
+            .items_newest_first()
+            .find(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
+            .map(|item| item.text.clone())
+    }
+
+    fn copy_latest_message(&self, window: &mut Window, cx: &mut App) {
+        if let Some(text) = self.latest_copyable_message() {
+            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text.to_string()));
+            super::notifications::copied_to_clipboard(window, cx);
+        }
     }
 
     fn has_searchable_conversation_content(&self) -> bool {
@@ -2712,6 +2737,7 @@ impl DesktopView {
             PaletteAction::OpenConversationSearch { session_id } => {
                 self.open_conversation_search(session_id, window, cx);
             }
+            PaletteAction::CopyLatestMessage => self.copy_latest_message(window, cx),
             PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
                 if self.selected_session_id.as_deref() != Some(session_id.as_str()) {
                     return;
@@ -2816,6 +2842,7 @@ impl DesktopView {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
                     && self.has_searchable_conversation_content()
             }
+            PaletteAction::CopyLatestMessage => self.latest_copyable_message().is_some(),
             PaletteAction::JumpToTranscriptItem { session_id, item_id } => {
                 self.selected_session_id.as_deref() == Some(session_id.as_str())
                     && self.transcript.position_by_id(item_id).is_some_and(|index| {
@@ -3986,12 +4013,14 @@ impl DesktopView {
             ThreadEvent::ItemCompleted(event) => self.update_runtime_item(&event.item),
             ThreadEvent::Error(event) => {
                 let message = event.message.clone();
-                self.transcript.push(TranscriptItem::new(
+                let mut item = TranscriptItem::new(
                     format!("runtime-error-{}", uuid_like_id()),
                     "notice".to_string(),
                     "Runtime error".into(),
                     message,
-                ));
+                );
+                item.notice_severity = NoticeSeverity::Error;
+                self.transcript.push(item);
             }
             ThreadEvent::ThreadCompactBoundary(event) => {
                 // Pre-boundary usage no longer describes the live context; the
@@ -4045,12 +4074,14 @@ impl DesktopView {
         self.cancel_request_sent = false;
         self.status = "Turn ended without verified completion".to_string();
         self.set_selected_session_completed(false);
-        self.transcript.push(TranscriptItem::new(
+        let mut item = TranscriptItem::new(
             format!("event-{}", uuid_like_id()),
             "notice".to_string(),
             "Run status".into(),
             message.to_string(),
-        ));
+        );
+        item.notice_severity = NoticeSeverity::Warning;
+        self.transcript.push(item);
     }
 
     /// Keep the selected sidebar row current without rereading every archive.
@@ -6229,7 +6260,9 @@ impl DesktopView {
             ActivityState::Completed => colors.success,
             ActivityState::Failed => colors.danger,
             ActivityState::Interrupted => colors.warning,
-            ActivityState::Other => colors.muted_foreground,
+            // Subdued rows still carry small text, so they use the brighter
+            // secondary ramp instead of the caption-grade muted floor.
+            ActivityState::Other => themes::muted_text(&colors),
         }
     }
 
@@ -6546,7 +6579,16 @@ impl DesktopView {
             .flex()
             .flex_col()
             .children(group_header)
+            .when(item.role == "user" && index > 0, |column| {
+                column.child(
+                    div()
+                        .id(format!("turn-divider-{}", item.id))
+                        .test_support()
+                        .child(turn_divider(&cx.theme().colors)),
+                )
+            })
             .when(show_item, |column| column.child(self.render_transcript_item(item, cx)));
+        let message_id = item.id.clone();
         div()
             .id(format!("transcript-row-{}", item.id))
             .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
@@ -6558,11 +6600,23 @@ impl DesktopView {
             .when(item.role == "tool", |row| row.pb_1())
             .when(item.role == "user", |row| row.pb_6())
             .when(item.role != "tool" && item.role != "user", |row| row.pb_3())
+            .when(item.role == "assistant", |row| {
+                row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
+                    let next = hovered.then(|| message_id.clone());
+                    if view.hovered_message != next {
+                        view.hovered_message = next;
+                        cx.notify();
+                    }
+                }))
+            })
             .child(content)
             .into_any_element()
     }
 
     fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+        if item.role == "notice" {
+            return self.render_notice_item(item, cx);
+        }
         if item.role == "tool" {
             return self.render_tool_item(item, cx);
         }
@@ -6621,21 +6675,70 @@ impl DesktopView {
                 ),
             )
             .when(!user, |message| {
+                // Message actions reveal on hover only; the slot keeps the
+                // xsmall button height so rows never reflow. Keyboard and
+                // screen-reader users copy through the palette command.
+                let revealed = self.hovered_message.as_deref() == Some(item.id.as_str());
                 message.footer(
                     MessageFooter::new().child(
-                        desktop_button(format!("copy-message-{}", item.id))
-                            .icon(IconName::Copy)
-                            .accessibility_label("Copy message")
-                            .tooltip("Copy message")
-                            .ghost()
-                            .xsmall()
-                            .on_click(move |_, window, app| {
-                                app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copy_text.to_string()));
-                                super::notifications::copied_to_clipboard(window, app);
+                        div()
+                            .id(format!("message-actions-{}", item.id))
+                            .test_support()
+                            .min_h_5()
+                            .flex()
+                            .items_center()
+                            .when(revealed, |slot| {
+                                slot.child(
+                                    desktop_button(format!("copy-message-{}", item.id))
+                                        .icon(IconName::Copy)
+                                        .accessibility_label("Copy message")
+                                        .tooltip("Copy message")
+                                        .ghost()
+                                        .xsmall()
+                                        .tab_stop(false)
+                                        .on_click(move |_, window, app| {
+                                            app.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                                copy_text.to_string(),
+                                            ));
+                                            super::notifications::copied_to_clipboard(window, app);
+                                        }),
+                                )
                             }),
                     ),
                 )
             })
+            .into_any_element()
+    }
+
+    /// Severity rows for runtime errors, compaction/reset notices, and run
+    /// status: a compact icon/title/body row in severity colors, with no
+    /// message bubble, Markdown, or copy action.
+    fn render_notice_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let (icon, tone, role) = match item.notice_severity {
+            NoticeSeverity::Error => (IconName::CircleAlert, colors.danger, gpui_kit::Role::Alert),
+            NoticeSeverity::Warning => (IconName::TriangleAlert, colors.warning, gpui_kit::Role::Status),
+            NoticeSeverity::Info => (IconName::Info, themes::muted_text(&colors), gpui_kit::Role::Status),
+        };
+        div()
+            .id(format!("notice-{}", item.id))
+            .test_support()
+            .role(role)
+            .aria_label(format!("{}: {}", item.title, item.accessibility_text))
+            .w_full()
+            .max_w(px(CONTENT_WIDTH))
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(Icon::new(icon).small().text_color(tone))
+                    .child(div().text_sm().font_semibold().text_color(tone).child(item.title.clone())),
+            )
+            .child(div().text_sm().text_color(colors.foreground).child(item.text.clone()))
             .into_any_element()
     }
 
@@ -6751,9 +6854,23 @@ impl DesktopView {
                         .text_color(status_color)
                         .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
                         .child(div().min_w_0().truncate().child(item.title.clone()))
-                        .when(state != ActivityState::Completed, |row| {
-                            row.child(div().min_w_0().truncate().text_xs().child(status.to_string()))
-                        })
+                        // The status slot always renders so rows keep their
+                        // shape as states change; completed rows paint it
+                        // transparent instead of collapsing the layout.
+                        .child(
+                            div()
+                                .id(format!("tool-status-{}", item.id))
+                                .test_support()
+                                .min_w_0()
+                                .truncate()
+                                .text_sm()
+                                .text_color(if state == ActivityState::Completed {
+                                    status_color.opacity(0.)
+                                } else {
+                                    status_color
+                                })
+                                .child(status.to_string()),
+                        )
                         .child(
                             Icon::new(if item.expanded {
                                 IconName::ChevronDown
@@ -6768,6 +6885,8 @@ impl DesktopView {
                     cx.notify();
                 })),
         );
+        // Grouped rows nest under their shared header; single tool rows stay flush.
+        panel = panel.when(item.activity_grouped, |panel| panel.pl_6());
         if item.expanded {
             let output = item
                 .output
@@ -6808,7 +6927,7 @@ impl DesktopView {
                             .px_3()
                             .py_2()
                             .rounded_md()
-                            .bg(colors.background)
+                            .bg(colors.secondary)
                             .font_family(cx.theme().mono_font_family.clone())
                             .text_size(cx.theme().mono_font_size)
                             .child(output_excerpt),
@@ -6835,7 +6954,7 @@ impl DesktopView {
             "applied"
         };
         let toggle_id = id.clone();
-        let mut stats = div().flex().items_center().gap_2().text_xs();
+        let mut stats = div().flex().items_center().gap_2().text_sm();
         if let Some(additions) = diff.additions {
             stats = stats.child(div().text_color(colors.success).child(format!("+{additions}")));
         }
@@ -6860,11 +6979,11 @@ impl DesktopView {
                     .child(stats)
                     .child(
                         div()
-                            .text_xs()
+                            .text_sm()
                             .text_color(if diff.failed {
                                 colors.danger
                             } else {
-                                colors.muted_foreground
+                                themes::muted_text(&colors)
                             })
                             .child(status_label),
                     ),
@@ -8846,6 +8965,16 @@ fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElem
     div().h(px(1.)).bg(themes::hairline(colors.group_box, colors.foreground))
 }
 
+/// Quiet full-width break between conversation turns on the canvas. The
+/// single-sided rhythm keeps the row compact: preceding rows already carry
+/// bottom padding, and user bubbles must start within 16px of their column.
+fn turn_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
+    div()
+        .w_full()
+        .py_1()
+        .child(div().h(px(1.)).bg(themes::hairline(colors.background, colors.foreground)))
+}
+
 fn valid_slash_command_catalog(commands: &[protocol::SlashCommandInfo]) -> bool {
     commands.len() <= 256
         && commands.iter().all(|command| {
@@ -9027,6 +9156,7 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
         }
         PaletteAction::NewSession
         | PaletteAction::CloseSession
+        | PaletteAction::CopyLatestMessage
         | PaletteAction::ChooseModel
         | PaletteAction::ChooseWorkspace
         | PaletteAction::RefreshSessions

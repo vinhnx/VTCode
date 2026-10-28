@@ -347,6 +347,11 @@ labelled “Load earlier messages” action; the local transcript remains capped
 control appears after scrolling away from new activity.
 Transcript Markdown remains a document renderer: images are blocked, and only valid HTTP(S) links without embedded
 credentials open in the system browser. WebMCP remains a separately paired browser app rather than an embedded WebView.
+Runtime errors, compaction/reset notices, and run status render as compact severity rows (danger/warning/subdued,
+alert or status roles) with plain-text bodies and no message actions. Assistant message actions reveal on hover
+inside a fixed-height slot so rows never reflow; keyboard users copy the newest message through the command
+palette instead. Expanded group rows nest under their header, tool output sits on the panel fill, later user
+turns open with a hairline divider, and tool rows always reserve their status slot so state changes hold layout.
 
 ## Accessibility
 

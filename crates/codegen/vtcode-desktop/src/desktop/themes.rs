@@ -83,7 +83,7 @@ fn theme(
         secondary: rgb(secondary).into(),
         success: readable_semantic_color(background, foreground, success_seed),
         danger: readable_semantic_color(background, foreground, rgb(danger).into()),
-        warning: rgb(warning).into(),
+        warning: readable_semantic_color(background, foreground, rgb(warning).into()),
     }
 }
 
@@ -277,6 +277,7 @@ fn normalize_system_interaction_colors(cx: &mut App) {
         apply_unified_hover_surface(colors, surface);
         colors.success = readable_semantic_color(colors.background, colors.foreground, colors.success);
         colors.danger = readable_semantic_color(colors.background, colors.foreground, colors.danger);
+        colors.warning = readable_semantic_color(colors.background, colors.foreground, colors.warning);
         colors.success_foreground = filled_button_foreground(colors.success);
         colors.danger_foreground = filled_button_foreground(colors.danger);
         colors.ring = accessible_focus_color(colors.primary, colors);
@@ -1061,7 +1062,6 @@ mod tests {
                 ("foreground", colors.foreground, row.foreground),
                 ("accent", colors.accent, row.accent),
                 ("secondary", colors.secondary, row.secondary),
-                ("warning", colors.warning, row.warning),
             ] {
                 assert_eq!(rgb_hex(actual), theme::rgb_u32(expected), "{id}: {field} must match the shared palette");
             }
@@ -1075,9 +1075,32 @@ mod tests {
                 readable_semantic_color(background, foreground, rgb(theme::rgb_u32(colors.danger)).into()),
                 "{id}: deletion color must use the shared semantic color at readable contrast"
             );
+            assert_eq!(
+                row.warning,
+                readable_semantic_color(background, foreground, rgb(theme::rgb_u32(colors.warning)).into()),
+                "{id}: warning color must use the shared semantic color at readable contrast"
+            );
             assert_eq!(row.label, theme::theme_label(id).unwrap_or(id), "{id} label");
         }
     }
+    #[gpui_kit::test]
+    fn notice_severity_tones_hold_aa_on_canvas(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                for (name, tone) in [("error", colors.danger), ("warning", colors.warning)] {
+                    let ratio = contrast_ratio(tone, colors.background);
+                    assert!(ratio >= 4.5, "{id}: notice {name} title contrast is {ratio:.2}");
+                }
+            }
+        });
+    }
+
 
     /// Convert a GPUI color back to `0xRRGGBB` for palette comparisons.
     ///
