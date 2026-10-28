@@ -8635,6 +8635,33 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
 }
 
 #[gpui_kit::test]
+fn earlier_history_rejects_a_page_that_skips_messages(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("archive-session".into());
+        view.history_start_index = 160;
+        view.history_page_request_id = Some("page".into());
+        view.history_page_limit = 80;
+        view.history_page_loading = true;
+        view.begin_session_history_page(
+            json!({
+                "sessionId": "archive-session", "requestId": "page", "startIndex": 157,
+                "messages": [{ "archiveIndex": 157, "role": "assistant", "text": "Earlier" }],
+                "hasEarlier": true
+            }),
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert_eq!(view.history_start_index, 160);
+        assert!(!view.history_page_loading);
+        assert!(view.history_page_error.is_some());
+        assert!(view.transcript.is_empty());
+    });
+}
+
+#[gpui_kit::test]
 fn stale_history_page_error_does_not_clear_the_current_request(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     view.update(cx, |view, cx| {

@@ -1728,11 +1728,7 @@ impl DesktopView {
                             && page.messages.len() <= limit
                             && page.start_index < before_index
                             && valid_indices
-                            && page
-                                .messages
-                                .last()
-                                .and_then(|message| message.archive_index)
-                                .is_some_and(|index| index < before_index)
+                            && page.start_index.checked_add(page.messages.len()) == Some(before_index)
                             && page.has_earlier == (page.start_index > 0);
                         valid.then(|| {
                             let history = prepare_session_history(&page.session_id, std::mem::take(&mut page.messages));
