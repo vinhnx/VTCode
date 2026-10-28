@@ -1101,7 +1101,6 @@ mod tests {
         });
     }
 
-
     /// Convert a GPUI color back to `0xRRGGBB` for palette comparisons.
     ///
     /// Rows are stored from 8-bit channels, so each component round-trips
