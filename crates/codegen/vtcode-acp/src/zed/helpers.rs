@@ -454,7 +454,11 @@ mod tests {
 
     #[test]
     fn build_available_commands_includes_templates_and_deduplicates_names() {
-        let slash_command = SlashCommandInfo { name: "status", description: "Show status" };
+        let slash_command = SlashCommandInfo {
+            name: "status",
+            description: "Show status",
+            category: "tools",
+        };
         let templates = vec![
             PromptTemplate {
                 name: "custom-plan".to_string(),
