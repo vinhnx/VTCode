@@ -311,6 +311,9 @@ pub(super) struct Preferences {
     pub sidebar_width: Option<f32>,
     /// Inspector width in logical pixels.
     pub inspector_width: Option<f32>,
+    /// Open the main window maximized (zoomed). Missing values launch
+    /// maximized so fresh installs start full-size.
+    pub window_maximized: Option<bool>,
 }
 
 impl Preferences {
@@ -449,6 +452,14 @@ impl Preferences {
 
     pub(super) fn inspector_width(&self) -> f32 {
         clamp_width(self.inspector_width.unwrap_or(DEFAULT_INSPECTOR_WIDTH))
+    }
+
+    pub(super) fn window_maximized(&self) -> bool {
+        self.window_maximized.unwrap_or(true)
+    }
+
+    pub(super) fn set_window_maximized(&mut self, maximized: bool) {
+        self.window_maximized = Some(maximized);
     }
 
     /// Record a workspace as most-recently-used.
@@ -874,6 +885,23 @@ mod tests {
         preferences.set_widths(40.0, 2_000.0);
         assert!((preferences.sidebar_width() - MIN_PANE_WIDTH).abs() < f32::EPSILON);
         assert!((preferences.inspector_width() - MAX_PANE_WIDTH).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn window_maximized_defaults_to_true_and_round_trips() {
+        let legacy: Preferences = serde_json::from_str("{}").unwrap();
+        assert!(legacy.window_maximized(), "fresh installs launch maximized");
+
+        let mut preferences = Preferences::default();
+        preferences.set_window_maximized(false);
+        let serialized = serde_json::to_string(&preferences).unwrap();
+        assert!(serialized.contains("\"windowMaximized\":false"), "saved key is stable: {serialized}");
+        let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+        assert!(!loaded.window_maximized());
+
+        preferences.set_window_maximized(true);
+        let loaded: Preferences = serde_json::from_str(&serde_json::to_string(&preferences).unwrap()).unwrap();
+        assert!(loaded.window_maximized());
     }
 
     #[test]

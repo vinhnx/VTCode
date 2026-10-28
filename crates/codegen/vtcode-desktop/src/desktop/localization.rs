@@ -378,91 +378,37 @@ mod tests {
     #[test]
     fn workspace_and_composer_copy_covers_every_supported_language() {
         let expected = [
-            ("en", "Workspace", "New thread", "Add files and more @", "Ask VT Code to make changes…"),
-            (
-                "vi",
-                "Không gian làm việc",
-                "Cuộc hội thoại mới",
-                "Thêm tệp và nội dung khác @",
-                "Yêu cầu VT Code thực hiện thay đổi…",
-            ),
-            (
-                "es",
-                "Espacio de trabajo",
-                "Nuevo hilo",
-                "Añadir archivos y más @",
-                "Pide a VT Code que haga cambios…",
-            ),
+            ("en", "Workspace", "New thread", "Add files and more @", "Type a request…"),
+            ("vi", "Không gian làm việc", "Cuộc hội thoại mới", "Thêm tệp và nội dung khác @", "Nhập yêu cầu…"),
+            ("es", "Espacio de trabajo", "Nuevo hilo", "Añadir archivos y más @", "Escribe una solicitud…"),
             (
                 "fr",
                 "Espace de travail",
                 "Nouvelle conversation",
                 "Ajouter des fichiers et plus @",
-                "Demandez à VT Code d’apporter des modifications…",
+                "Saisissez une demande…",
             ),
-            ("ja", "ワークスペース", "新しいスレッド", "ファイルなどを追加 @", "VT Codeに変更を依頼…"),
-            (
-                "de",
-                "Arbeitsbereich",
-                "Neuer Chat",
-                "Dateien und mehr hinzufügen @",
-                "VT Code um Änderungen bitten…",
-            ),
-            (
-                "it",
-                "Spazio di lavoro",
-                "Nuova conversazione",
-                "Aggiungi file e altro @",
-                "Chiedi a VT Code di apportare modifiche…",
-            ),
-            ("zh-CN", "工作区", "新对话", "添加文件等 @", "让 VT Code 帮你修改…"),
-            ("zh-TW", "工作區", "新對話", "新增檔案等 @", "讓 VT Code 幫你修改…"),
-            ("zh-HK", "工作區", "新對話", "新增檔案等 @", "讓 VT Code 幫你修改…"),
+            ("ja", "ワークスペース", "新しいスレッド", "ファイルなどを追加 @", "リクエストを入力…"),
+            ("de", "Arbeitsbereich", "Neuer Chat", "Dateien und mehr hinzufügen @", "Anfrage eingeben…"),
+            ("it", "Spazio di lavoro", "Nuova conversazione", "Aggiungi file e altro @", "Digita una richiesta…"),
+            ("zh-CN", "工作区", "新对话", "添加文件等 @", "输入请求…"),
+            ("zh-TW", "工作區", "新對話", "新增檔案等 @", "輸入請求…"),
+            ("zh-HK", "工作區", "新對話", "新增檔案等 @", "輸入請求…"),
             (
                 "pt-BR",
                 "Espaço de trabalho",
                 "Nova conversa",
                 "Adicionar arquivos e mais @",
-                "Peça ao VT Code para fazer alterações…",
+                "Digite uma solicitação…",
             ),
-            ("ko", "작업 공간", "새 대화", "파일 및 추가 항목 @", "VT Code에 변경을 요청하세요…"),
-            (
-                "nl",
-                "Werkruimte",
-                "Nieuwe thread",
-                "Bestanden en meer toevoegen @",
-                "Vraag VT Code om wijzigingen aan te brengen…",
-            ),
-            (
-                "ru",
-                "Рабочее пространство",
-                "Новый диалог",
-                "Добавить файлы и другое @",
-                "Попросите VT Code внести изменения…",
-            ),
-            (
-                "id",
-                "Ruang kerja",
-                "Percakapan baru",
-                "Tambahkan file dan lainnya @",
-                "Minta VT Code membuat perubahan…",
-            ),
-            (
-                "tr",
-                "Çalışma alanı",
-                "Yeni sohbet",
-                "Dosya ve daha fazlasını ekle @",
-                "VT Code'dan değişiklik yapmasını iste…",
-            ),
-            (
-                "pl",
-                "Obszar roboczy",
-                "Nowy wątek",
-                "Dodaj pliki i więcej @",
-                "Poproś VT Code o wprowadzenie zmian…",
-            ),
-            ("hi", "वर्कस्पेस", "नया थ्रेड", "फ़ाइलें और अन्य चीज़ें जोड़ें @", "VT Code से बदलाव करने को कहें…"),
-            ("uk", "Робочий простір", "Нова розмова", "Додати файли та інше @", "Попросіть VT Code внести зміни…"),
+            ("ko", "작업 공간", "새 대화", "파일 및 추가 항목 @", "요청을 입력하세요…"),
+            ("nl", "Werkruimte", "Nieuwe thread", "Bestanden en meer toevoegen @", "Typ een verzoek…"),
+            ("ru", "Рабочее пространство", "Новый диалог", "Добавить файлы и другое @", "Введите запрос…"),
+            ("id", "Ruang kerja", "Percakapan baru", "Tambahkan file dan lainnya @", "Ketik permintaan…"),
+            ("tr", "Çalışma alanı", "Yeni sohbet", "Dosya ve daha fazlasını ekle @", "Bir istek yazın…"),
+            ("pl", "Obszar roboczy", "Nowy wątek", "Dodaj pliki i więcej @", "Wpisz prośbę…"),
+            ("hi", "वर्कस्पेस", "नया थ्रेड", "फ़ाइलें और अन्य चीज़ें जोड़ें @", "एक अनुरोध लिखें…"),
+            ("uk", "Робочий простір", "Нова розмова", "Додати файли та інше @", "Введіть запит…"),
         ];
 
         for (locale, workspace, new_thread, add_context, placeholder) in expected {
@@ -474,6 +420,20 @@ mod tests {
                 rust_i18n::t!("app.workspace.current_label", locale = locale, workspace = "vtcode").to_string();
             assert!(current_workspace.starts_with("vtcode"), "workspace name must interpolate in {locale}");
         }
+    }
+
+    /// The desktop composer placeholder tracks the CLI bootstrap prompt.
+    ///
+    /// The CLI appends terminal shortcut hints that do not apply to the
+    /// desktop, so the desktop keeps only the shared lead text.
+    #[test]
+    fn composer_placeholder_matches_cli_bootstrap_lead() {
+        let desktop = rust_i18n::t!("app.composer.input_placeholder", locale = "en").to_string();
+        assert!(
+            vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP.starts_with(desktop.as_str()),
+            "desktop placeholder {desktop:?} drifted from CLI bootstrap {:?}",
+            vtcode_config::constants::ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP
+        );
     }
 
     #[test]

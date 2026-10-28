@@ -7375,6 +7375,51 @@ fn welcome_greeting_uses_local_day_period_boundaries() {
 }
 
 #[gpui_kit::test]
+fn welcome_greeting_refreshes_to_the_current_day_period(cx: &mut TestAppContext) {
+    use chrono::Timelike;
+
+    let (_window, view) = open_desktop(cx);
+    let expected = super::welcome_period_for_hour(chrono::Local::now().hour());
+    // Force a stale period that differs from now so the refresh is observable.
+    let stale = match expected {
+        WelcomePeriod::Morning => WelcomePeriod::Evening,
+        _ => WelcomePeriod::Morning,
+    };
+    view.update(cx, |view, cx| {
+        view.welcome_period = stale;
+        view.refresh_welcome_period(cx);
+        assert_eq!(view.welcome_period, expected);
+        // A second refresh without a boundary crossing leaves the period alone.
+        view.refresh_welcome_period(cx);
+        assert_eq!(view.welcome_period, expected);
+    });
+}
+
+#[gpui_kit::test]
+fn window_maximized_state_persists_on_bounds_changes(cx: &mut TestAppContext) {
+    let preferences_path = isolate_preferences();
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path.clone());
+    // Seed the file so the no-write check compares bytes: any save rewrites in pretty form.
+    std::fs::write(&preferences_path, "{\"windowMaximized\":false}").expect("seed preferences file");
+    view.update(cx, |view, _| {
+        view.preferences.set_window_maximized(false);
+    });
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    let seeded = std::fs::read_to_string(&preferences_path).expect("seeded file remains readable");
+    assert_eq!(seeded, "{\"windowMaximized\":false}", "unchanged zoomed state must not rewrite preferences");
+    // Headless windows report windowed, so flipping from maximized persists the change to disk.
+    view.update(cx, |view, _| {
+        view.preferences.set_window_maximized(true);
+    });
+    cx.update_window(window, |_, window, cx| window.bounds_changed(cx)).unwrap();
+    let saved = std::fs::read_to_string(&preferences_path).expect("maximized flip is persisted");
+    assert!(saved.contains("\"windowMaximized\": false"), "unexpected preferences content: {saved}");
+    cx.update(|cx| {
+        assert!(!view.read(cx).preferences.window_maximized());
+    });
+}
+
+#[gpui_kit::test]
 fn quiet_welcome_keeps_workspace_utilities_in_navigation_without_creating_a_session(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {

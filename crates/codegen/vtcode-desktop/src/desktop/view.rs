@@ -493,6 +493,7 @@ fn open_or_activate_main_window(
         .theme
         .clone()
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
+    let start_maximized = preferences.window_maximized();
     let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
         window.set_window_title("VT Code");
         let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
@@ -500,6 +501,13 @@ fn open_or_activate_main_window(
         view.update(cx, |view, cx| view.load_preferences(window, cx));
         view
     })?;
+    if start_maximized {
+        // macOS ignores WindowBounds::Maximized at creation, so zoom after
+        // opening to reach the native zoomed state the Zoom menu toggles.
+        // The headless test platform leaves zoom unimplemented.
+        #[cfg(not(test))]
+        window.update(cx, |_, window, _| window.zoom_window())?;
+    }
     // Reopen the most recent workspace when it still exists.
     let last_workspace = view.read(cx).preferences.recent_workspaces.first().map(PathBuf::from);
     if let Some(path) = last_workspace {
@@ -626,6 +634,8 @@ pub(super) struct TestLaunchIntercept {
 struct DesktopView {
     focus_handle: FocusHandle,
     _focus_lost_subscription: Subscription,
+    _window_bounds_subscription: Subscription,
+    _welcome_activation_subscription: Subscription,
     welcome_period: WelcomePeriod,
     welcome_copy_index: usize,
     workspace: Option<PathBuf>,
@@ -863,6 +873,14 @@ impl DesktopView {
                 .unwrap_or_else(|| view.focus_handle.clone());
             target.focus(window, cx);
         });
+        let window_bounds_subscription = cx.observe_window_bounds(window, |view, window, _| {
+            view.persist_window_maximized(window);
+        });
+        let welcome_activation_subscription = cx.observe_window_activation(window, |view, window, cx| {
+            if window.is_window_active() {
+                view.refresh_welcome_period(cx);
+            }
+        });
         focus_handle.focus(window, cx);
         let system_motion_baseline = preferences::system_motion_baseline(cx);
         preferences::apply_reduced_motion(preferences.reduced_motion, system_motion_baseline, cx);
@@ -938,6 +956,8 @@ impl DesktopView {
             default_code_font: typography::default_code_font(cx),
             focus_handle,
             _focus_lost_subscription: focus_lost_subscription,
+            _window_bounds_subscription: window_bounds_subscription,
+            _welcome_activation_subscription: welcome_activation_subscription,
             welcome_period: welcome_period_for_hour(chrono::Local::now().hour()),
             welcome_copy_index: rand::random_range(0..WELCOME_COPY_COUNT),
             workspace: None,
@@ -2330,6 +2350,30 @@ impl DesktopView {
         }
         self.focus_composer(window, cx);
         cx.notify();
+    }
+
+    /// Persist the native zoomed state when it changes. Fullscreen is not
+    /// maximized: skipping it keeps leaving fullscreen from clobbering the
+    /// saved launch state.
+    fn persist_window_maximized(&mut self, window: &Window) {
+        if window.is_fullscreen() {
+            return;
+        }
+        let maximized = window.is_maximized();
+        if maximized != self.preferences.window_maximized() {
+            self.preferences.set_window_maximized(maximized);
+            self.preferences.save();
+        }
+    }
+
+    /// Recompute the day-period greeting so a window left open across a
+    /// morning/afternoon/evening boundary greets correctly when reactivated.
+    fn refresh_welcome_period(&mut self, cx: &mut Context<Self>) {
+        let period = welcome_period_for_hour(chrono::Local::now().hour());
+        if period != self.welcome_period {
+            self.welcome_period = period;
+            cx.notify();
+        }
     }
 
     fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {

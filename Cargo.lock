@@ -12243,6 +12243,7 @@ dependencies = [
  "tokio",
  "url",
  "vtcode-commons",
+ "vtcode-config",
  "vtcode-desktop-protocol",
  "vtcode-exec-events",
  "vtcode-ui",

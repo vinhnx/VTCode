@@ -95,6 +95,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Action | Behavior |
 | --- | --- |
 | Reopen the app | Dock or Finder relaunch activates the existing window. If the last window was closed, it opens a new window and restores the most recent existing workspace. |
+| Launch maximized | The main window opens zoomed (full-size) by default; unzooming persists, so the next launch restores the saved zoomed or windowed state. |
 | Connect to a workspace | Initialization validates the negotiated protocol before configuration and session discovery. Session commands and Send wait for this handshake; incompatible helpers disconnect with the initialization error preserved. |
 | Recover a disconnected service | Startup failures and unexpected local-service exits announce an accessible error and direct you to Settings → VT Code → Reload CLI settings. Pending interactions are dismissed when the service exits, so they cannot block recovery or carry answers into a later question. Repair provider credentials in Terminal when requested. If delivery was uncertain, restore or dismiss the retained message first; it is never resent automatically. |
 | Use native menus | File, Edit, View, and Window menus dispatch the same typed actions as keyboard controls. Session commands disable while unavailable; Edit targets the focused text field. ⌘W closes the window, ⌘M minimizes, ⌘Q quits, and ⌘⇧N shows or reopens the main window. |
