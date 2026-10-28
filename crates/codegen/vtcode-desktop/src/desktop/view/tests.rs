@@ -93,6 +93,27 @@ fn desktop_view_uses_the_supplied_startup_preferences(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn disconnected_config_catalog_cannot_be_edited(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    view.update(cx, |view, _| {
+        view.workspace = Some("/workspace".into());
+        view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+            settings: Vec::new(),
+            target_versions: Vec::new(),
+            omitted_sensitive: 0,
+            omitted_large: 0,
+            omitted_limit: 0,
+        });
+        assert!(!view.can_edit_cli_settings());
+        view.backend = Some(BackendHandle { commands });
+        assert!(view.can_edit_cli_settings());
+        view.backend = None;
+        assert!(!view.can_edit_cli_settings());
+    });
+}
+
+#[gpui_kit::test]
 fn interrupted_config_write_unlocks_editor_and_reports_uncertain_outcome(cx: &mut TestAppContext) {
     let (_window, view) = open_desktop(cx);
     for event in [
@@ -1927,8 +1948,10 @@ fn settings_dialog_copies_the_credential_setup_command(cx: &mut TestAppContext) 
 #[gpui_kit::test]
 fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
             view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
@@ -2497,8 +2520,10 @@ fn command_and_add_context_palettes_follow_the_selected_language(cx: &mut TestAp
 #[gpui_kit::test]
 fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
             view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),
@@ -2585,8 +2610,10 @@ fn settings_search_filters_categories_and_cli_config_paths(cx: &mut TestAppConte
 #[gpui_kit::test]
 fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
             view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
                 settings: vec![vtcode_desktop_protocol::ConfigSetting {
                     path: "agent.default_model".into(),

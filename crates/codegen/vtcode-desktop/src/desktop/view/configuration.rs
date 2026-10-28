@@ -371,6 +371,7 @@ impl DesktopView {
 
     pub(super) fn can_edit_cli_settings(&self) -> bool {
         self.workspace.is_some()
+            && self.backend.is_some()
             && self.cli_config_settings.is_some()
             && !self.config_write_pending
             && self.can_reload_cli_settings()
