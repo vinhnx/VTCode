@@ -151,6 +151,17 @@ impl ConfigValueKind {
 }
 
 impl DesktopView {
+    pub(super) fn interrupt_cli_config_write(&mut self) {
+        if self.config_write_pending {
+            self.config_write_pending = false;
+            let message = "The service disconnected while saving. The outcome is unknown; reload CLI settings before trying again.";
+            self.config_editor_error = Some(message.into());
+            self.error = Some(match self.error.take() {
+                Some(error) => format!("{error}\n\n{message}"),
+                None => message.into(),
+            });
+        }
+    }
     pub(super) fn render_cli_config_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
         let mut groups = std::collections::BTreeMap::<String, Vec<&protocol::ConfigSetting>>::new();

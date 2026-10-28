@@ -3281,6 +3281,7 @@ impl DesktopView {
                         self.process_drained_event(pending, window, cx);
                     }
                     self.cancel_session_load_task();
+                    self.interrupt_cli_config_write();
                     self.backend = None;
                     self.clear_pending_interaction();
                     self.question_answer.update(cx, |state, cx| state.set_value("", window, cx));
@@ -3915,6 +3916,7 @@ impl DesktopView {
             }
             BackendEvent::Exited { status, authentication_required } => {
                 self.cancel_session_load_task();
+                self.interrupt_cli_config_write();
                 self.reset_webmcp_state(Some(webmcp::WebmcpNotice::Disconnected));
                 self.fail_workspace_review("The local service exited before Git review completed.".into());
                 self.clear_pending_interaction();
@@ -3936,10 +3938,14 @@ impl DesktopView {
                     self.start_workspace(workspace, cx);
                 } else if authentication_required {
                     self.status = "Provider credentials required".to_string();
-                    self.error = Some(format!(
+                    let authentication_error = format!(
                         "VT Code could not authenticate the configured provider. In Terminal, run `vtcode auth` or `vtcode login <provider>`. {}",
                         service_reconnect_guidance(self.retained_submission.is_some())
-                    ));
+                    );
+                    self.error = Some(match self.error.take() {
+                        Some(error) => format!("{error}\n\n{authentication_error}"),
+                        None => authentication_error,
+                    });
                 } else {
                     self.status = match status {
                         Some(code) => format!("Local service exited with code {code}"),
@@ -3967,6 +3973,7 @@ impl DesktopView {
                 }
                 self.recover_pending_submission(true);
                 self.report_service_launch_failure(error);
+                self.interrupt_cli_config_write();
                 self.backend = None;
                 self.running = false;
                 self.cancel_requested = false;

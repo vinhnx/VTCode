@@ -93,6 +93,29 @@ fn desktop_view_uses_the_supplied_startup_preferences(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn interrupted_config_write_unlocks_editor_and_reports_uncertain_outcome(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    for event in [
+        BackendEvent::Exited { status: Some(1), authentication_required: false },
+        BackendEvent::Exited { status: Some(1), authentication_required: true },
+        BackendEvent::LaunchFailed("service failed".into()),
+    ] {
+        view.update(cx, |view, cx| {
+            view.config_write_pending = true;
+            view.config_editor_error = None;
+            view.handle_backend_event(event, cx);
+            assert!(!view.config_write_pending);
+            assert!(
+                view.config_editor_error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("outcome is unknown"))
+            );
+            assert!(view.error.as_deref().is_some_and(|error| error.contains("outcome is unknown")));
+        });
+    }
+}
+
+#[gpui_kit::test]
 fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     cx.update_window(window, |_, window, cx| {
