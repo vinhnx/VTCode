@@ -1100,18 +1100,84 @@ T1 and D0/D1 are independent and can land in either order once the spine exists.
 
 ---
 
-https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01a174f2-dc40-7df0-8c9d-54dbc531603d/diff
+implement Full access mode for VT Code. check OpenAI codex implementation. Read the provided references and apply relevant insights to improve VT Code. Use appropriate skills, inspect existing architecture, identify practical improvements, and implement them with focused verification. Prioritize simplicity, performance, and reliability, DRY and KISS
 
 ---
 
-https://hotpath.rs/app/repos/hotpath-rs/VTCode/benchmarks/tui_hotpath/reports/01a174f1-ed7a-72a5-a6a5-3c5e81252ec2/diff
-
---
-
-revamp this UI '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-26 at 4.34.02 PM.png' --> remove the background for the UI heading section
+desktop implement: trackpad swipe support for navigation
 
 ---
 
-update the selected reasoning effort and trait (ultrafast/fast) in the model picker in the chat input.
+desktop extract common UI layouts and components for reuse. follow gpui-kit patterns. and keep them consistent. maybe add to design system. then update existing screens. and check for consistency. note this for future updates.
 
-also update the ULTRAFAST UI -> keep it special and premium also capitalize the text labe.
+---
+
+check crates/codegen/vtcode-desktop/ and make sure all strings are reused and make constants/enum/struct where possible.
+
+---
+
+https://gpui-kit.com/component/chart/
+
+---
+
+sync and port all themes from CLI to Desktop.
+
+---
+
+check Settings' tab appearence not showing correctly for selected tab and highlight tabs
+
+---
+
+add more languages support
+
+---
+
+check and improve desktop app panel layout, currently looks cramped and cluttered. ensure spacing and alignment are consistent. and adjust margins where needed. make sure panels are not too tight. and components have enough room.
+
+---
+
+desktop check zen mode layout being shifted when toggled -> fix
+
+/Users/vinhnguyenxuan/Documents/vtcode-resources/zenshift
+
+---
+
+desktop: change and update main cursor color base on theme's accent color
+
+---
+
+improve typography, text color in desktop app, especially headings and labels. reference codex: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-27 at 8.32.59 PM.png'. currently headings, labels are too faint. and not smooth enough.
+
+---
+
+check all desktop app icons position and alignment. it seems the variant of icons placement are not synchronized.
+
+---
+
+update the day greeting based on time of day when desktop app is opened active or resumed.
+
+---
+
+Before adding another subagent ask what problem it's solving. A bloated system prompt is often the issue.
+
+Skills and tool search can fix that without splitting context across agents. My rule of thumb is to keep a subagent when the work is parallel, needs fresh context or one agent really can't pick the right tools.
+
+Otherwise, fold it into the main loop, turn its prompt into a skill, run your evals and keep whatever wins.
+
+https://claude.com/resources/articles/building-agents-when-to-fold-subagents-into-your-main-agent-loop
+
+---
+
+change desktop chat text input placeholder text to sync with CLI
+
+---
+
+also revise chat input styling to match CLI.
+
+---
+
+launch the desktop app in full size window (maximize), and remember this state next time.
+
+---
+
+check and reference codex/chatgpt app typography design, it looks cleaner and more readable. /Users/vinhnguyenxuan/Documents/vtcode-resources/typography -> apply to improve desktop app text.
