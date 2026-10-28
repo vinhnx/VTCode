@@ -53,27 +53,26 @@ impl UiLanguage {
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
-        match value.map(str::trim) {
-            Some("vi") => Self::Vietnamese,
-            Some("es") => Self::Spanish,
-            Some("fr") => Self::French,
-            Some("ja") => Self::Japanese,
-            Some("de") => Self::German,
-            Some("it") => Self::Italian,
-            Some("zh-CN") => Self::SimplifiedChinese,
-            Some("zh-TW") => Self::TraditionalChineseTaiwan,
-            Some("zh-HK") => Self::TraditionalChineseHongKong,
-            Some("pt-BR") => Self::BrazilianPortuguese,
-            Some("ko") => Self::Korean,
-            Some("nl") => Self::Dutch,
-            Some("ru") => Self::Russian,
-            Some("id") => Self::Indonesian,
-            Some("tr") => Self::Turkish,
-            Some("pl") => Self::Polish,
-            Some("hi") => Self::Hindi,
-            Some("uk") => Self::Ukrainian,
-            _ => Self::English,
+        let Some(value) = value.map(str::trim) else {
+            return Self::English;
+        };
+        let locale = value.replace('_', "-");
+        if locale
+            .split('-')
+            .any(|part| part.is_empty() || !part.chars().all(|ch| ch.is_ascii_alphanumeric()))
+        {
+            return Self::English;
         }
+        Self::ALL
+            .into_iter()
+            .find(|language| language.locale().eq_ignore_ascii_case(&locale))
+            .or_else(|| {
+                let base = locale.split('-').next()?;
+                Self::ALL
+                    .into_iter()
+                    .find(|language| language.locale().len() == 2 && language.locale().eq_ignore_ascii_case(base))
+            })
+            .unwrap_or(Self::English)
     }
 
     pub(super) const fn locale(self) -> &'static str {
@@ -194,6 +193,11 @@ mod tests {
             );
         }
         assert_eq!(UiLanguage::from_saved(Some("xx")), UiLanguage::English);
+        assert_eq!(UiLanguage::from_saved(Some("fr-CA")), UiLanguage::French);
+        assert_eq!(UiLanguage::from_saved(Some("ES_mx")), UiLanguage::Spanish);
+        assert_eq!(UiLanguage::from_saved(Some("zh_hk")), UiLanguage::TraditionalChineseHongKong);
+        assert_eq!(UiLanguage::from_saved(Some("pt-PT")), UiLanguage::English);
+        assert_eq!(UiLanguage::from_saved(Some("fr-")), UiLanguage::English);
     }
 
     #[test]
