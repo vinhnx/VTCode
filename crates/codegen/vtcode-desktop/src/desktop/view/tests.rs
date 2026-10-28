@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::select::SelectEvent;
-use gpui_kit::test::TestWindowExt;
+use gpui_kit::test::{ClickOptions, TestWindowExt};
 use gpui_kit::{
-    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, TestAppContext, WindowBounds, WindowOptions, point, px,
-    size,
+    AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, MouseButton, NavigationDirection, TestAppContext,
+    WindowBounds, WindowOptions, point, px, size,
 };
 use serde_json::json;
 
@@ -5442,6 +5442,206 @@ fn navigation_toolbar_and_shortcuts_traverse_thread_history(cx: &mut TestAppCont
     };
     assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
     assert_eq!(params, json!({ "sessionId": "current-session" }));
+}
+
+fn swipe_history_fixture(
+    cx: &mut TestAppContext,
+    view: &Entity<DesktopView>,
+    commands: tokio::sync::mpsc::Sender<BackendCommand>,
+) -> Vec<vtcode_desktop_protocol::SessionSummary> {
+    let workspace = std::env::temp_dir();
+    let summaries = ["swipe-first", "swipe-second", "swipe-third"]
+        .into_iter()
+        .map(|id| vtcode_desktop_protocol::SessionSummary {
+            session_id: id.into(),
+            title: Some(format!("Thread {id}")),
+            workspace: workspace.display().to_string(),
+            completed: true,
+            resumable: true,
+        })
+        .collect::<Vec<_>>();
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.workspace = Some(workspace.clone());
+        view.sessions.clone_from(&summaries);
+        view.selected_session_id = Some(summaries[1].session_id.clone());
+        for summary in &summaries {
+            view.navigation_history.record(NavigationLocation {
+                workspace: workspace.clone(),
+                session_id: Some(summary.session_id.clone()),
+            });
+        }
+        assert!(view.navigation_history.navigate_to(1));
+    });
+    summaries
+}
+
+fn swipe_navigate(window: AnyWindowHandle, direction: NavigationDirection, cx: &mut TestAppContext) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.click_with_options("pane-root", ClickOptions::new().with_button(MouseButton::Navigate(direction)), cx);
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn trackpad_swipe_back_loads_previous_thread_with_loading_feedback(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let summaries = swipe_history_fixture(cx, &view, commands);
+
+    swipe_navigate(window, NavigationDirection::Back, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("swipe back should load the previous thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert_eq!(view_state.pending_navigation.map(|pending| pending.target_index), Some(0));
+        assert_eq!(view_state.pending_navigation_direction(), Some(NavigationDirection::Back));
+        assert_eq!(window.find("navigate-back").label(), Some("Back (navigating…)"));
+        assert_eq!(window.find("navigate-forward").label(), Some("Forward"));
+        let loading = window.find("navigation-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Navigating back…"));
+    })
+    .unwrap();
+
+    swipe_navigate(window, NavigationDirection::Back, cx);
+    assert!(requests.try_recv().is_err(), "a second swipe while pending must not issue another request");
+
+    view.update(cx, |view, cx| {
+        view.handle_backend_event(
+            BackendEvent::Response {
+                method: vtcode_desktop_protocol::method::SESSION_LOAD.into(),
+                result: Some(json!({
+                    "session": summaries[0],
+                    "messages": [{ "role": "assistant", "text": "First conversation" }],
+                })),
+                error: None,
+            },
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert_eq!(view_state.selected_session_id.as_deref(), Some("swipe-first"));
+        assert!(view_state.pending_navigation.is_none());
+        assert_eq!(window.find("navigate-back").label(), Some("Back"));
+        assert!(window.try_find("navigation-loading").is_none(), "loading status clears after the load");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn trackpad_swipe_forward_loads_next_thread_with_loading_feedback(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    swipe_navigate(window, NavigationDirection::Forward, cx);
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("swipe forward should load the next thread");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-third" }));
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let view_state = view.read(cx);
+        assert_eq!(view_state.pending_navigation.map(|pending| pending.target_index), Some(2));
+        assert_eq!(view_state.pending_navigation_direction(), Some(NavigationDirection::Forward));
+        assert_eq!(window.find("navigate-back").label(), Some("Back"));
+        assert_eq!(window.find("navigate-forward").label(), Some("Forward (navigating…)"));
+        let loading = window.find("navigation-loading");
+        assert_eq!(loading.role(), Some(gpui_kit::Role::Status));
+        assert_eq!(loading.label(), Some("Navigating forward…"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn trackpad_swipe_ignores_empty_history(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let workspace = std::env::temp_dir();
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+        view.workspace = Some(workspace.clone());
+        view.selected_session_id = Some("only-session".into());
+        view.navigation_history
+            .record(NavigationLocation { workspace, session_id: Some("only-session".into()) });
+    });
+
+    swipe_navigate(window, NavigationDirection::Back, cx);
+    swipe_navigate(window, NavigationDirection::Forward, cx);
+    assert!(requests.try_recv().is_err(), "swipes with no history in either direction must not navigate");
+}
+
+#[gpui_kit::test]
+fn trackpad_swipe_over_open_palette_does_not_navigate(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    let _summaries = swipe_history_fixture(cx, &view, commands);
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_command_palette(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_some());
+        window.click_with_options(
+            "pane-root",
+            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
+            cx,
+        );
+    })
+    .unwrap();
+    assert!(requests.try_recv().is_err(), "a swipe over an open palette must not navigate the background");
+
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.close_palette(window, cx));
+        window.render_frame(cx);
+        window.click_with_options(
+            "pane-root",
+            ClickOptions::new().with_button(MouseButton::Navigate(NavigationDirection::Back)),
+            cx,
+        );
+    })
+    .unwrap();
+    let BackendCommand::Request { method, params } = requests.try_recv().unwrap() else {
+        panic!("the same swipe navigates once the palette is closed");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::SESSION_LOAD);
+    assert_eq!(params, json!({ "sessionId": "swipe-first" }));
+}
+
+#[gpui_kit::test]
+fn swipe_navigation_guard_covers_modal_overlay_state(cx: &mut TestAppContext) {
+    let (_window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        assert!(view.swipe_navigation_allowed());
+        view.settings_open = true;
+        assert!(!view.swipe_navigation_allowed());
+        view.settings_open = false;
+        view.config_page_open = true;
+        assert!(!view.swipe_navigation_allowed());
+        view.config_page_open = false;
+        view.review_open = true;
+        assert!(!view.swipe_navigation_allowed());
+        view.review_open = false;
+        view.file_preview = Some(crate::desktop::files::FilePreview {
+            rel_path: "src/app.rs".into(),
+            text: "preview".into(),
+            truncated: false,
+        });
+        assert!(!view.swipe_navigation_allowed());
+        view.file_preview = None;
+        assert!(view.swipe_navigation_allowed());
+    });
 }
 
 #[gpui_kit::test]

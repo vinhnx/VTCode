@@ -32,6 +32,10 @@ impl NavigationHistory {
         }
     }
 
+    pub(super) fn current_index(&self) -> Option<usize> {
+        self.current_index
+    }
+
     pub(super) fn back_index(&self) -> Option<usize> {
         self.current_index?.checked_sub(1)
     }

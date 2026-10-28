@@ -55,8 +55,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, Animation, AnimationExt, AnyElement, App, Axis, Context, CursorStyle, DragMoveEvent, Entity, FocusHandle,
     Focusable, KeyBinding, KeyDownEvent, KeyUpEvent, Menu, MenuItem, MouseButton, MouseDownEvent, MouseUpEvent,
-    OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType, Task,
-    TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, point, px, size,
+    NavigationDirection, OsAction, PathPromptOptions, Pixels, Render, ScrollHandle, Size, Subscription, SystemMenuType,
+    Task, TestSupportExt, Window, WindowOptions, actions, anchored, deferred, div, point, px, size,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -1210,6 +1210,35 @@ impl DesktopView {
         self.navigation_history.forward_index().is_some()
             && self.pending_navigation.is_none()
             && self.session_change_allowed(None)
+    }
+
+    /// Direction of the in-flight history navigation, derived from the pending
+    /// target relative to the current cursor. The cursor only moves when the
+    /// pending navigation resolves, so the comparison is stable while pending.
+    fn pending_navigation_direction(&self) -> Option<NavigationDirection> {
+        let pending = self.pending_navigation?;
+        let current = self.navigation_history.current_index()?;
+        if pending.target_index < current {
+            Some(NavigationDirection::Back)
+        } else if pending.target_index > current {
+            Some(NavigationDirection::Forward)
+        } else {
+            None
+        }
+    }
+
+    /// Whether a trackpad swipe or mouse back/forward button may navigate.
+    /// History, pending-transition, and session guards live in
+    /// `can_navigate_back`/`can_navigate_forward`; this adds the modal-overlay
+    /// guard so a swipe over an open palette, settings, preview, or review
+    /// cannot navigate the background underneath it.
+    fn swipe_navigation_allowed(&self) -> bool {
+        self.palette.is_none()
+            && !self.settings_open
+            && !self.config_page_open
+            && self.config_editor.is_none()
+            && self.file_preview.is_none()
+            && !self.review_open
     }
 
     fn navigate_back(&mut self, cx: &mut Context<Self>) {
@@ -4988,6 +5017,9 @@ impl DesktopView {
         } else {
             IconName::PanelLeft
         };
+        let pending_direction = self.pending_navigation_direction();
+        let pending_back = pending_direction == Some(NavigationDirection::Back);
+        let pending_forward = pending_direction == Some(NavigationDirection::Forward);
         let workspace = self
             .workspace
             .as_ref()
@@ -5008,20 +5040,26 @@ impl DesktopView {
                     .gap_3()
                     .child(
                         desktop_button("navigate-back")
-                            .accessibility_label("Back")
+                            .accessibility_label(if pending_back { "Back (navigating…)" } else { "Back" })
                             .icon(IconName::ArrowLeft)
                             .ghost()
+                            .loading(pending_back)
                             .tooltip_with_action("Back", &NavigateBack, Some("VTCodeDesktop"))
-                            .desktop_disabled(!self.can_navigate_back())
+                            .desktop_disabled(!self.can_navigate_back() && !pending_back)
                             .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
                     )
                     .child(
                         desktop_button("navigate-forward")
-                            .accessibility_label("Forward")
+                            .accessibility_label(if pending_forward {
+                                "Forward (navigating…)"
+                            } else {
+                                "Forward"
+                            })
                             .icon(IconName::ArrowRight)
                             .ghost()
+                            .loading(pending_forward)
                             .tooltip_with_action("Forward", &NavigateForward, Some("VTCodeDesktop"))
-                            .desktop_disabled(!self.can_navigate_forward())
+                            .desktop_disabled(!self.can_navigate_forward() && !pending_forward)
                             .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
                     )
                     .child(
@@ -6687,6 +6725,34 @@ impl DesktopView {
     fn pending_blank_transition(&self) -> bool {
         self.session_request == Some(protocol::method::SESSION_CLOSE)
             && (self.pending_new_thread || self.pending_navigation.is_some())
+    }
+
+    /// Compact loading status shown above the transcript while a history
+    /// navigation is in flight. Blank transitions already replace the
+    /// transcript with their own status, so this covers session loads and
+    /// workspace switches. Visible in Zen mode, where the toolbar buttons
+    /// and thread header are hidden.
+    fn render_navigation_loading(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = match self.pending_navigation_direction() {
+            Some(NavigationDirection::Back) => "Navigating back…",
+            Some(NavigationDirection::Forward) => "Navigating forward…",
+            None => "Navigating…",
+        };
+        div()
+            .id("navigation-loading")
+            .test_support()
+            .role(gpui_kit::Role::Status)
+            .aria_label(label)
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .py_1()
+            .text_xs()
+            .text_color(cx.theme().colors.muted_foreground)
+            .child(Spinner::new().small().color(cx.theme().colors.muted_foreground))
+            .child(label)
     }
 
     fn render_transcript_row(&self, index: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -8855,6 +8921,9 @@ impl Render for DesktopView {
             .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
                 column.child(self.render_thread_header())
             })
+            .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
+                column.child(self.render_navigation_loading(cx))
+            })
             .child(self.render_transcript(cx))
             .child(self.render_composer(window, cx));
         let workspace = div()
@@ -8904,6 +8973,7 @@ impl Render for DesktopView {
             });
         let panes = div()
             .id("pane-root")
+            .test_support()
             .p_3()
             .gap_2()
             .flex_1()
@@ -8975,6 +9045,22 @@ impl Render for DesktopView {
             }))
             .on_action(cx.listener(|view, _: &NavigateBack, _, cx| view.navigate_back(cx)))
             .on_action(cx.listener(|view, _: &NavigateForward, _, cx| view.navigate_forward(cx)))
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|view, _, _, cx| {
+                    if view.swipe_navigation_allowed() {
+                        view.navigate_back(cx);
+                    }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|view, _, _, cx| {
+                    if view.swipe_navigation_allowed() {
+                        view.navigate_forward(cx);
+                    }
+                }),
+            )
             .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
             .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
             .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
