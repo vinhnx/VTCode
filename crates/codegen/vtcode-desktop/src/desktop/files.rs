@@ -167,10 +167,12 @@ pub(super) fn read_preview(root: &Path, rel_path: &str) -> Option<FilePreview> {
 }
 
 /// External applications supported by the file preview.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ExternalEditor {
     System,
     VsCode,
+    Sublime,
+    Xcode,
 }
 
 fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command {
@@ -181,6 +183,12 @@ fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command 
         }
         ExternalEditor::VsCode => {
             let _command = command.args(["-b", "com.microsoft.VSCode"]);
+        }
+        ExternalEditor::Sublime => {
+            let _command = command.args(["-b", "com.sublimetext.4"]);
+        }
+        ExternalEditor::Xcode => {
+            let _command = command.args(["-b", "com.apple.dt.Xcode"]);
         }
     }
     let _command = command.arg(path);
@@ -245,6 +253,8 @@ mod tests {
         for (editor, prefix) in [
             (ExternalEditor::System, vec!["-t"]),
             (ExternalEditor::VsCode, vec!["-b", "com.microsoft.VSCode"]),
+            (ExternalEditor::Sublime, vec!["-b", "com.sublimetext.4"]),
+            (ExternalEditor::Xcode, vec!["-b", "com.apple.dt.Xcode"]),
         ] {
             let command = editor_command(editor, &path);
             let args = command.get_args().collect::<Vec<_>>();

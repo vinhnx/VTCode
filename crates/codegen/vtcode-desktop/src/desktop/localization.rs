@@ -677,7 +677,7 @@ mod tests {
             assert_translated!(locale, "app.palette.command.switch_light_theme");
             assert_translated!(locale, "app.palette.command.find_in_conversation");
             assert_translated!(locale, "app.palette.command.open_session");
-            assert_translated!(locale, "app.palette.command.preview_file");
+            assert_translated!(locale, "app.palette.command.open_file");
             assert_translated!(locale, "app.palette.command.add_files");
             assert_translated!(locale, "app.palette.command.workspace_file");
             assert_translated!(locale, "app.palette.command.vtcode");
@@ -717,9 +717,8 @@ mod tests {
                     rust_i18n::t!("app.palette.command.open_session", locale = locale, label = "Project A").to_string(),
                 ),
                 (
-                    "app.palette.command.preview_file",
-                    rust_i18n::t!("app.palette.command.preview_file", locale = locale, path = "src/main.rs")
-                        .to_string(),
+                    "app.palette.command.open_file",
+                    rust_i18n::t!("app.palette.command.open_file", locale = locale, path = "src/main.rs").to_string(),
                 ),
                 (
                     "app.palette.command.use_plugin",
@@ -728,7 +727,7 @@ mod tests {
             ] {
                 let expected = if key == "app.palette.command.open_session" {
                     "Project A"
-                } else if key == "app.palette.command.preview_file" {
+                } else if key == "app.palette.command.open_file" {
                     "src/main.rs"
                 } else {
                     "web-tools"
@@ -864,6 +863,33 @@ mod tests {
             assert_eq!(rust_i18n::t!("app.settings.accessibility.display", locale = locale).to_string(), display);
             assert_eq!(rust_i18n::t!("app.settings.connections.connected", locale = locale).to_string(), connected);
         }
+    }
+
+    #[test]
+    fn file_destination_copy_is_translated_for_every_language() {
+        macro_rules! assert_catalog_key {
+            ($key:literal) => {
+                for language in UiLanguage::ALL {
+                    let locale = language.locale();
+                    let translated = rust_i18n::t!($key, locale = locale).to_string();
+                    assert!(!translated.is_empty(), "{locale}/{} is empty", $key);
+                    if language != UiLanguage::English {
+                        assert_ne!(
+                            translated,
+                            rust_i18n::t!($key, locale = "en").to_string(),
+                            "{locale}/{} fell back to English",
+                            $key
+                        );
+                    }
+                }
+            };
+        }
+
+        assert_catalog_key!("app.settings.files.group");
+        assert_catalog_key!("app.settings.files.destination.label");
+        assert_catalog_key!("app.settings.files.destination.description");
+        assert_catalog_key!("app.settings.files.destination.viewer");
+        assert_catalog_key!("app.settings.files.destination.system");
     }
 
     #[test]

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gpui_kit::component::WindowExt as _;
+use gpui_kit::component::select::SelectEvent;
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, CursorStyle, Entity, TestAppContext, WindowBounds, WindowOptions, point, px,
@@ -14,9 +15,12 @@ use serde_json::json;
 
 use super::navigation_history::{NavigationLocation, PendingNavigation};
 use super::{
-    ActivityState, DesktopButtonExt, DesktopView, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK, ThemeMode, WelcomePeriod,
-    append_restored_output_page, restored_output_for_copy, scale_row_height_for_ui_font, workspace_picker_options,
+    ActivityState, DesktopButtonExt, DesktopView, ExternalLaunchCall, FixedRowSizeCache, MAX_UI_EVENTS_PER_TICK,
+    TestLaunchIntercept, ThemeMode, WelcomePeriod, append_restored_output_page, restored_output_for_copy,
+    scale_row_height_for_ui_font, workspace_picker_options,
 };
+use crate::desktop::files::ExternalEditor;
+use crate::desktop::preferences::FileOpenDestination;
 use crate::desktop::transcript::MAX_TRANSCRIPT_ITEMS;
 use crate::desktop::transcript::TranscriptItem;
 use crate::desktop::transport::{BackendCommand, BackendEvent, BackendHandle};
@@ -3376,7 +3380,7 @@ fn command_palette_searches_all_loaded_sessions_and_workspace_files(cx: &mut Tes
         window.render_frame(cx);
         assert_eq!(palette.read(cx).query(cx), "generated-59.rs");
         assert_eq!(palette.read(cx).matched_count(), 1);
-        assert_eq!(window.find(later_file).label(), Some("Preview file: src/generated-59.rs"));
+        assert_eq!(window.find(later_file).label(), Some("Open file: src/generated-59.rs"));
     })
     .unwrap();
 }
@@ -4229,6 +4233,240 @@ fn file_tasks_discard_obsolete_workspace_and_preview_results(cx: &mut TestAppCon
         assert!(view.error.is_none(), "superseded read cannot publish an error");
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn file_selection_with_external_destination_launches_without_preview_overlay(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    std::fs::write(workspace.path().join("notes.txt"), "notes").unwrap();
+    std::fs::write(workspace.path().join("other.txt"), "other").unwrap();
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.preferences.set_file_open_destination(FileOpenDestination::VsCode);
+            view.test_launch_intercept = Some(TestLaunchIntercept::default());
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+            assert!(view.file_preview.is_none(), "external mode never opens the overlay");
+            assert!(view.error.is_none());
+            assert_eq!(
+                view.test_launch_intercept.as_ref().unwrap().calls,
+                vec![ExternalLaunchCall {
+                    rel_path: "notes.txt".into(),
+                    editor: ExternalEditor::VsCode
+                }]
+            );
+
+            // A different destination and file route to the newly selected editor.
+            view.preferences.set_file_open_destination(FileOpenDestination::Sublime);
+            view.open_file_preview("other.txt".to_string(), window, cx);
+            assert!(view.file_preview.is_none());
+            assert_eq!(
+                view.test_launch_intercept.as_ref().unwrap().calls,
+                vec![
+                    ExternalLaunchCall {
+                        rel_path: "notes.txt".into(),
+                        editor: ExternalEditor::VsCode
+                    },
+                    ExternalLaunchCall {
+                        rel_path: "other.txt".into(),
+                        editor: ExternalEditor::Sublime
+                    },
+                ]
+            );
+
+            // Switching back to the viewer restores the overlay path.
+            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        let view = view.read(cx);
+        assert_eq!(view.file_preview.as_ref().unwrap().rel_path, "notes.txt");
+        assert_eq!(view.test_launch_intercept.as_ref().unwrap().calls.len(), 2, "viewer mode launches nothing");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn external_launch_failure_surfaces_error_and_success_clears_it(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    std::fs::write(workspace.path().join("notes.txt"), "notes").unwrap();
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.preferences.set_file_open_destination(FileOpenDestination::Xcode);
+            view.test_launch_intercept = Some(TestLaunchIntercept {
+                fail_with: Some("missing app".into()),
+                ..TestLaunchIntercept::default()
+            });
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+            assert!(view.file_preview.is_none(), "a failed launch opens no overlay");
+            assert!(view.preview_editor_error.is_none(), "overlay-scoped errors stay unset");
+            let error = view.error.as_ref().unwrap();
+            assert!(error.contains("missing app"), "unexpected error: {error}");
+
+            view.test_launch_intercept.as_mut().unwrap().fail_with = None;
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+            assert!(view.error.is_none(), "a successful launch clears the notice");
+            assert_eq!(view.test_launch_intercept.as_ref().unwrap().calls.len(), 2);
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn external_launch_ignores_results_after_workspace_change(cx: &mut TestAppContext) {
+    let first = tempfile::TempDir::new().unwrap();
+    let second = tempfile::TempDir::new().unwrap();
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(first.path().to_path_buf());
+            view.apply_external_launch_result(second.path(), Err("stale".into()), cx);
+            assert!(view.error.is_none(), "a superseded launch cannot publish an error");
+            view.apply_external_launch_result(first.path(), Err("current".into()), cx);
+            assert!(view.error.as_ref().unwrap().contains("current"));
+            view.apply_external_launch_result(second.path(), Ok(()), cx);
+            assert!(view.error.is_some(), "a stale success cannot clear a current error");
+            view.apply_external_launch_result(first.path(), Ok(()), cx);
+            assert!(view.error.is_none());
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn external_destination_cancels_in_flight_and_open_previews(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().unwrap();
+    std::fs::write(workspace.path().join("notes.txt"), "notes").unwrap();
+    std::fs::write(workspace.path().join("other.txt"), "other").unwrap();
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+            assert!(view.preview_task.is_some(), "viewer load starts in the background");
+
+            // Switching destinations mid-load cancels the viewer read: the late
+            // result must never pop the overlay open after an external launch.
+            view.preferences.set_file_open_destination(FileOpenDestination::VsCode);
+            view.test_launch_intercept = Some(TestLaunchIntercept::default());
+            view.open_file_preview("other.txt".to_string(), window, cx);
+            assert!(view.preview_task.is_none());
+            assert!(view.file_preview.is_none());
+            assert_eq!(view.test_launch_intercept.as_ref().unwrap().calls.len(), 1);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.file_preview.is_none(), "a cancelled load publishes no overlay");
+
+            // An already-open overlay is dropped when selection goes external.
+            view.preferences.set_file_open_destination(FileOpenDestination::Viewer);
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.file_preview.is_some());
+            view.preferences.set_file_open_destination(FileOpenDestination::Sublime);
+            view.open_file_preview("other.txt".to_string(), window, cx);
+            assert!(view.file_preview.is_none(), "external selection clears the open overlay");
+            assert!(view.preview_editor_error.is_none());
+            let calls = &view.test_launch_intercept.as_ref().unwrap().calls;
+            assert_eq!(calls.len(), 2);
+            assert_eq!(calls[1].editor, ExternalEditor::Sublime);
+        });
+    })
+    .unwrap();
+    cx.run_until_parked();
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).file_preview.is_none(), "no late overlay appears");
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.open_settings(window, cx));
+        window.render_frame(cx);
+        window.scroll("settings-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1000.))), cx);
+        window.render_frame(cx);
+        assert_eq!(window.find_all("file-open-destination-select").len(), 1);
+        assert_eq!(window.find("file-open-destination-select").value(), Some("File viewer"));
+        assert_eq!(view.read(cx).preferences.file_open_destination(), FileOpenDestination::Viewer);
+    })
+    .unwrap();
+
+    // Drive the production subscription path: a dropdown confirmation reaches the setter.
+    cx.update_window(window, |_, _, cx| {
+        let select = view.read(cx).file_destination_select.clone();
+        select.update(cx, |_, cx| cx.emit(SelectEvent::Confirm(Some(FileOpenDestination::Xcode))));
+    })
+    .unwrap();
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).preferences.file_open_destination(), FileOpenDestination::Xcode);
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().file_open_destination(),
+        FileOpenDestination::Xcode,
+        "the dropdown choice persists across restarts"
+    );
+
+    // The persisted choice routes a real selection to the chosen editor.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.test_launch_intercept = Some(TestLaunchIntercept::default());
+            view.open_file_preview("notes.txt".to_string(), window, cx);
+            assert!(view.file_preview.is_none());
+            assert_eq!(
+                view.test_launch_intercept.as_ref().unwrap().calls,
+                vec![ExternalLaunchCall {
+                    rel_path: "notes.txt".into(),
+                    editor: ExternalEditor::Xcode
+                }]
+            );
+        });
+    })
+    .unwrap();
+
+    // A repeat confirmation is a no-op that keeps the saved choice.
+    cx.update_window(window, |_, _, cx| {
+        let select = view.read(cx).file_destination_select.clone();
+        select.update(cx, |_, cx| cx.emit(SelectEvent::Confirm(Some(FileOpenDestination::Xcode))));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().file_open_destination(),
+        FileOpenDestination::Xcode,
+        "a repeat confirmation keeps the saved choice"
+    );
+
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, cx| {
+            view.set_file_open_destination(FileOpenDestination::Viewer, cx);
+            assert_eq!(view.preferences.file_open_destination(), FileOpenDestination::Viewer);
+        });
+    })
+    .unwrap();
+    assert_eq!(
+        crate::desktop::preferences::Preferences::load().file_open_destination(),
+        FileOpenDestination::Viewer
+    );
 }
 
 #[gpui_kit::test]
@@ -9312,13 +9550,13 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
             window
                 .find(super::opaque_path_element_id("utilities-source", "src/main.rs"))
                 .label(),
-            Some("Preview attached source: src/main.rs")
+            Some("Open attached source: src/main.rs")
         );
         assert_eq!(
             window
                 .find(super::opaque_path_element_id("utilities-source", "src/lib.rs"))
                 .label(),
-            Some("Preview attached source: src/lib.rs")
+            Some("Open attached source: src/lib.rs")
         );
         view.update(cx, |view, _| view.attachments.reverse());
         window.render_frame(cx);
@@ -9326,7 +9564,7 @@ fn utilities_pane_projects_real_activity_and_routes_existing_workflows(cx: &mut 
             window
                 .find(super::opaque_path_element_id("utilities-source", "src/main.rs"))
                 .label(),
-            Some("Preview attached source: src/main.rs"),
+            Some("Open attached source: src/main.rs"),
             "source identity follows its path after reordering"
         );
         window.click("utilities-activity", cx);

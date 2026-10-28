@@ -605,6 +605,24 @@ struct ActivePrimaryAgentDisplay {
     display_name: String,
 }
 
+/// A recorded external-editor launch request, captured only under test interception.
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ExternalLaunchCall {
+    pub rel_path: String,
+    pub editor: files::ExternalEditor,
+}
+
+/// Test-only interception of external-editor launches so GUI tests never shell
+/// out to `/usr/bin/open`. The completion path stays shared with production.
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub(super) struct TestLaunchIntercept {
+    pub calls: Vec<ExternalLaunchCall>,
+    /// Simulated failure for every intercepted launch; `None` means success.
+    pub fail_with: Option<String>,
+}
+
 struct DesktopView {
     focus_handle: FocusHandle,
     _focus_lost_subscription: Subscription,
@@ -651,6 +669,8 @@ struct DesktopView {
     _composer_subscription: Subscription,
     ui_language_select: Entity<UiLanguageSelectState>,
     _ui_language_subscription: Subscription,
+    file_destination_select: Entity<preferences::FileDestinationSelectState>,
+    _file_destination_subscription: Subscription,
     question_answer: Entity<TextareaState>,
     theme_mode: ThemeMode,
     files: Vec<FileEntry>,
@@ -662,8 +682,11 @@ struct DesktopView {
     files_scan_cancel: Option<Arc<AtomicBool>>,
     preview_task: Option<Task<()>>,
     attachments_task: Option<Task<()>>,
+    external_launch_task: Option<Task<()>>,
     file_preview: Option<FilePreview>,
     preview_editor_error: Option<String>,
+    #[cfg(test)]
+    test_launch_intercept: Option<TestLaunchIntercept>,
     preview_focus: FocusHandle,
     preview_return_focus: Option<FocusHandle>,
     palette_return_focus: Option<FocusHandle>,
@@ -883,6 +906,22 @@ impl DesktopView {
                 view.set_ui_language(*language, window, cx);
             }
         });
+        let destination = preferences.file_open_destination();
+        let file_destination_select = cx.new(|cx| {
+            gpui_kit::component::select::SelectState::new(
+                preferences::FileDestinationOption::all(),
+                preferences::FileDestinationOption::selected_index(destination),
+                window,
+                cx,
+            )
+            .searchable(false)
+        });
+        let file_destination_subscription =
+            cx.subscribe_in(&file_destination_select, window, |view, _, event, _, cx| {
+                if let SelectEvent::Confirm(Some(destination)) = event {
+                    view.set_file_open_destination(*destination, cx);
+                }
+            });
         let config_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings…"));
         let config_search_subscription = cx.subscribe_in(&config_search_input, window, |_, _, event, _, cx| {
             if matches!(event, InputEvent::Change) {
@@ -939,6 +978,8 @@ impl DesktopView {
             _composer_subscription: composer_subscription,
             ui_language_select,
             _ui_language_subscription: ui_language_subscription,
+            file_destination_select,
+            _file_destination_subscription: file_destination_subscription,
             question_answer: cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 4)),
             theme_mode,
             files: Vec::new(),
@@ -950,8 +991,11 @@ impl DesktopView {
             files_scan_cancel: None,
             preview_task: None,
             attachments_task: None,
+            external_launch_task: None,
             file_preview: None,
             preview_editor_error: None,
+            #[cfg(test)]
+            test_launch_intercept: None,
             preview_focus: cx.focus_handle(),
             preview_return_focus: None,
             palette_return_focus: None,
@@ -1414,6 +1458,7 @@ impl DesktopView {
         }
         self.git_branch = None;
         self.preview_task = None;
+        self.external_launch_task = None;
         self.refresh_files(cx);
         self.file_preview = None;
         self.models.clear();
@@ -2092,6 +2137,15 @@ impl DesktopView {
     }
 
     fn open_file_preview(&mut self, rel_path: String, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(editor) = self.preferences.file_open_destination().external_editor() {
+            // External mode never shows the overlay: cancel an in-flight viewer
+            // load and drop a stale preview. Selection focus stays untouched.
+            self.preview_task = None;
+            self.file_preview = None;
+            self.preview_editor_error = None;
+            self.open_file_in_editor(&rel_path, editor, window, cx);
+            return;
+        }
         if self.review_open {
             self.close_review(window, cx);
         }
@@ -2124,6 +2178,63 @@ impl DesktopView {
                 cx.notify();
             });
         }));
+    }
+
+    /// Open a file directly in an external editor without the preview overlay.
+    /// Unlike the viewer path this never closes the review sheet: an external
+    /// launch is non-modal and must not destroy the user's open context.
+    fn open_file_in_editor(
+        &mut self,
+        rel_path: &str,
+        editor: files::ExternalEditor,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(workspace) = self.workspace.clone() else {
+            return;
+        };
+        #[cfg(test)]
+        if let Some(result) = self.intercept_test_launch(rel_path, editor) {
+            self.apply_external_launch_result(&workspace, result, cx);
+            return;
+        }
+        let rel_path = rel_path.to_owned();
+        // Stored, not detached: replacing the task supersedes an older launch
+        // so only the latest completion can publish or clear the error notice.
+        self.external_launch_task = Some(cx.spawn_in(window, async move |view, cx| {
+            let root = workspace.clone();
+            let path = rel_path.clone();
+            let result = cx
+                .background_spawn(async move { files::open_in_editor(&root, &path, editor) })
+                .await;
+            let _updated = view.update_in(cx, |view, _, cx| {
+                view.apply_external_launch_result(&workspace, result, cx);
+            });
+        }));
+    }
+
+    /// Shared completion for direct external launches, used by production and tests.
+    fn apply_external_launch_result(&mut self, workspace: &Path, result: Result<(), String>, cx: &mut Context<Self>) {
+        if self.workspace.as_deref() != Some(workspace) {
+            return;
+        }
+        match result {
+            Ok(()) => self.clear_error(),
+            Err(error) => {
+                self.error =
+                    Some(rust_i18n::t!("app.file_preview.editor_error", error = error.to_string()).to_string());
+            }
+        }
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    fn intercept_test_launch(&mut self, rel_path: &str, editor: files::ExternalEditor) -> Option<Result<(), String>> {
+        let intercept = self.test_launch_intercept.as_mut()?;
+        intercept
+            .calls
+            .push(ExternalLaunchCall { rel_path: rel_path.to_owned(), editor });
+        Some(intercept.fail_with.clone().map_or(Ok(()), Err))
     }
 
     fn open_preview_in_editor(&mut self, editor: files::ExternalEditor, window: &mut Window, cx: &mut Context<Self>) {
@@ -2451,7 +2562,7 @@ impl DesktopView {
             .filter(|entry| !entry.is_dir)
             .map(|entry| {
                 command(
-                    rust_i18n::t!("app.palette.command.preview_file", path = entry.rel_path.as_str()).to_string(),
+                    rust_i18n::t!("app.palette.command.open_file", path = entry.rel_path.as_str()).to_string(),
                     PaletteAction::PreviewFile(entry.rel_path.clone()),
                 )
             })
@@ -5593,7 +5704,7 @@ impl DesktopView {
                 desktop_button("open-change-file")
                     .icon(IconName::ExternalLink)
                     .accessibility_label("Open file")
-                    .tooltip("Open file preview")
+                    .tooltip("Open file")
                     .ghost()
                     .small()
                     .on_click(

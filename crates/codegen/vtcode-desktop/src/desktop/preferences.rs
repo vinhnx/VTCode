@@ -5,10 +5,15 @@
 
 use std::path::PathBuf;
 
+use gpui_kit::SharedString;
+use gpui_kit::component::IndexPath;
+use gpui_kit::component::searchable_list::SearchableListItem;
+use gpui_kit::component::select::{SearchableVec, SelectState};
 use gpui_kit::component::theme::ThemeMode;
 use gpui_kit::{App, Global};
 use serde::{Deserialize, Serialize};
 
+use super::files::ExternalEditor;
 use super::localization::UiLanguage;
 
 const MAX_RECENT_WORKSPACES: usize = 8;
@@ -109,11 +114,113 @@ impl TypographySettings<'_> {
     }
 }
 
+/// Where files open when selected in the sidebar, palettes, review views, or attached sources.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum FileOpenDestination {
+    /// Built-in read-only preview overlay.
+    #[default]
+    Viewer,
+    /// The system default application for the file type.
+    System,
+    /// Visual Studio Code.
+    VsCode,
+    /// Sublime Text.
+    Sublime,
+    /// Xcode.
+    Xcode,
+}
+
+impl FileOpenDestination {
+    pub(super) const ALL: [Self; 5] = [Self::Viewer, Self::System, Self::VsCode, Self::Sublime, Self::Xcode];
+
+    pub(super) const fn id(self) -> &'static str {
+        match self {
+            Self::Viewer => "viewer",
+            Self::System => "system",
+            Self::VsCode => "vscode",
+            Self::Sublime => "sublime",
+            Self::Xcode => "xcode",
+        }
+    }
+
+    /// The external application for this destination, if it leaves the viewer.
+    pub(super) const fn external_editor(self) -> Option<ExternalEditor> {
+        match self {
+            Self::Viewer => None,
+            Self::System => Some(ExternalEditor::System),
+            Self::VsCode => Some(ExternalEditor::VsCode),
+            Self::Sublime => Some(ExternalEditor::Sublime),
+            Self::Xcode => Some(ExternalEditor::Xcode),
+        }
+    }
+
+    /// Display label for the settings dropdown. Descriptive destinations are
+    /// localized; editor brand names are proper nouns and stay as-is.
+    pub(super) fn label(self) -> String {
+        match self {
+            Self::Viewer => rust_i18n::t!("app.settings.files.destination.viewer").to_string(),
+            Self::System => rust_i18n::t!("app.settings.files.destination.system").to_string(),
+            Self::VsCode => "VS Code".to_string(),
+            Self::Sublime => "Sublime Text".to_string(),
+            Self::Xcode => "Xcode".to_string(),
+        }
+    }
+
+    /// Parse a saved id. Missing or unknown values fall back to the default
+    /// so a corrupt preference never breaks file selection.
+    pub(super) fn from_saved(value: Option<&str>) -> Self {
+        let Some(id) = value.map(str::trim) else {
+            return Self::default();
+        };
+        Self::ALL
+            .into_iter()
+            .find(|destination| destination.id().eq_ignore_ascii_case(id))
+            .unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct FileDestinationOption(FileOpenDestination);
+
+impl FileDestinationOption {
+    pub(super) fn all() -> SearchableVec<Self> {
+        SearchableVec::new(FileOpenDestination::ALL.map(Self).to_vec())
+    }
+
+    pub(super) fn selected_index(destination: FileOpenDestination) -> Option<IndexPath> {
+        FileOpenDestination::ALL
+            .iter()
+            .position(|option| *option == destination)
+            .map(IndexPath::new)
+    }
+}
+
+impl SearchableListItem for FileDestinationOption {
+    type Value = FileOpenDestination;
+
+    fn title(&self) -> SharedString {
+        self.0.label().into()
+    }
+
+    fn value(&self) -> &Self::Value {
+        &self.0
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        self.0.label().to_lowercase().contains(&query) || self.0.id().contains(&query)
+    }
+}
+
+pub(super) type FileDestinationSelectState = SelectState<SearchableVec<FileDestinationOption>>;
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub(super) struct Preferences {
     /// Selected desktop UI language. Unknown values fall back to English.
     pub ui_language: Option<String>,
+    /// Default file open destination id. Unknown values fall back to the viewer.
+    pub file_open_destination: Option<String>,
     /// The optional diagnostics footer is hidden on a fresh installation.
     pub show_status_bar: bool,
     pub reduced_motion: ReducedMotionPreference,
@@ -156,6 +263,14 @@ impl Preferences {
 
     pub(super) fn set_ui_language(&mut self, language: UiLanguage) {
         self.ui_language = Some(language.locale().to_owned());
+    }
+
+    pub(super) fn file_open_destination(&self) -> FileOpenDestination {
+        FileOpenDestination::from_saved(self.file_open_destination.as_deref())
+    }
+
+    pub(super) fn set_file_open_destination(&mut self, destination: FileOpenDestination) {
+        self.file_open_destination = Some(destination.id().to_owned());
     }
 
     pub(super) fn ui_font_size(&self) -> u8 {
@@ -395,6 +510,60 @@ mod tests {
         let invalid: Preferences = serde_json::from_str(r#"{"theme":"ciapre","uiLanguage":"unsupported"}"#).unwrap();
         assert_eq!(invalid.ui_language(), UiLanguage::English);
         assert_eq!(invalid.theme.as_deref(), Some("ciapre"));
+    }
+
+    #[test]
+    fn file_open_destination_round_trips_and_invalid_values_fall_back_to_viewer() {
+        assert_eq!(FileOpenDestination::default(), FileOpenDestination::Viewer);
+        let legacy: Preferences = serde_json::from_str(r#"{"theme":"ciapre"}"#).unwrap();
+        assert_eq!(legacy.file_open_destination(), FileOpenDestination::Viewer);
+
+        for destination in FileOpenDestination::ALL {
+            let mut preferences = Preferences::default();
+            preferences.set_file_open_destination(destination);
+            let serialized = serde_json::to_string(&preferences).unwrap();
+            assert!(
+                serialized.contains(&format!("\"fileOpenDestination\":\"{}\"", destination.id())),
+                "saved id is stable for {destination:?}: {serialized}"
+            );
+            let loaded: Preferences = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(loaded.file_open_destination(), destination);
+            assert_eq!(loaded.file_open_destination, Some(destination.id().to_owned()));
+        }
+
+        // Parsing is case-insensitive and trims whitespace, like UI language ids.
+        let padded: Preferences = serde_json::from_str(r#"{"fileOpenDestination":"  VSCode "}"#).unwrap();
+        assert_eq!(padded.file_open_destination(), FileOpenDestination::VsCode);
+        for (saved, expected) in [
+            ("VSCode", FileOpenDestination::VsCode),
+            ("  system", FileOpenDestination::System),
+            ("viewer\t", FileOpenDestination::Viewer),
+        ] {
+            assert_eq!(FileOpenDestination::from_saved(Some(saved)), expected, "parse {saved:?}");
+        }
+
+        // Unknown or empty ids keep every other preference intact.
+        for saved in ["emacs", "", "   "] {
+            let content = format!(r#"{{"theme":"ciapre","fileOpenDestination":{saved:?}}}"#);
+            let loaded: Preferences = serde_json::from_str(&content).unwrap();
+            assert_eq!(loaded.file_open_destination(), FileOpenDestination::Viewer, "saved {saved:?}");
+            assert_eq!(loaded.theme.as_deref(), Some("ciapre"));
+        }
+    }
+
+    #[test]
+    fn file_open_destination_maps_each_id_to_its_external_editor() {
+        assert_eq!(FileOpenDestination::Viewer.external_editor(), None);
+        for (destination, expected) in [
+            (FileOpenDestination::System, ExternalEditor::System),
+            (FileOpenDestination::VsCode, ExternalEditor::VsCode),
+            (FileOpenDestination::Sublime, ExternalEditor::Sublime),
+            (FileOpenDestination::Xcode, ExternalEditor::Xcode),
+        ] {
+            assert_eq!(destination.external_editor(), Some(expected), "map {destination:?}");
+            assert!(FileOpenDestination::ALL.contains(&destination));
+        }
+        assert_eq!(FileOpenDestination::ALL.len(), 5, "extend this table when adding a destination");
     }
 
     #[gpui_kit::test]

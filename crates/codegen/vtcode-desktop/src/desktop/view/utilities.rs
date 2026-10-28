@@ -132,7 +132,7 @@ impl DesktopView {
                             .ghost()
                             .w_full()
                             .justify_start()
-                            .accessibility_label(format!("Preview attached source: {path}"))
+                            .accessibility_label(format!("Open attached source: {path}"))
                             .tooltip(path.clone())
                             .child(
                                 div()

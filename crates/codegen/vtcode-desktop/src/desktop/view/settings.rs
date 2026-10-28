@@ -44,6 +44,12 @@ impl SettingsTab {
                 "navigation",
                 "sidebar",
                 "layout",
+                "files",
+                "file",
+                "editor",
+                "destination",
+                "viewer",
+                "open",
             ],
             Self::Accessibility => &[
                 "accessibility",
@@ -499,6 +505,44 @@ impl DesktopView {
                     view.apply_theme(themes::DEFAULT_THEME_ID.to_string(), window, cx);
                 })),
         );
+        // Last: appending here keeps every existing row's scroll position intact.
+        let files_group_title = rust_i18n::t!("app.settings.files.group").to_string();
+        content = content.child(accessible_group_box(
+            "appearance-files-group",
+            files_group_title.clone(),
+            GroupBox::new()
+                .flex_shrink_0()
+                .fill()
+                .title(group_box_title(files_group_title, colors))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .child(row_title(
+                                    rust_i18n::t!("app.settings.files.destination.label").to_string(),
+                                    colors,
+                                ))
+                                .child(row_description(
+                                    rust_i18n::t!("app.settings.files.destination.description").to_string(),
+                                    colors,
+                                )),
+                        )
+                        .child(
+                            Select::new(&self.file_destination_select)
+                                .id("file-open-destination-select")
+                                .accessibility_label(rust_i18n::t!("app.settings.files.destination.label").to_string())
+                                .menu_max_h(px(320.))
+                                .w(px(240.)),
+                        ),
+                ),
+        ));
         content.into_any_element()
     }
 
@@ -515,6 +559,20 @@ impl DesktopView {
         // Command rows cache their rendered labels. Drop that projection so a
         // subsequently opened palette reads the newly selected locale.
         self.clear_palette_state();
+        self.preferences.save();
+        cx.notify();
+    }
+
+    pub(super) fn set_file_open_destination(
+        &mut self,
+        destination: preferences::FileOpenDestination,
+        cx: &mut Context<Self>,
+    ) {
+        if self.preferences.file_open_destination() == destination {
+            return;
+        }
+
+        self.preferences.set_file_open_destination(destination);
         self.preferences.save();
         cx.notify();
     }
