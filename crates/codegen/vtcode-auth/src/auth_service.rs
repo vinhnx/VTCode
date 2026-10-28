@@ -26,49 +26,54 @@ impl OpenAIAccountAuthService {
 
     /// Resolve the active OpenAI auth source for the current configuration.
     pub(crate) fn resolve_runtime_auth(&self, api_key: Option<String>) -> Result<OpenAIResolvedAuth> {
-        let session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
+        // Load the stored ChatGPT session lazily: the ApiKey path never uses it,
+        // so an unreadable session store must not break API-key auth.
         match self.auth_config.preferred_method {
-            OpenAIPreferredMethod::Chatgpt => match session {
-                Some(native) => {
-                    let handle = self.handle_from_session(native);
-                    let api_key = handle.current_api_key()?;
-                    Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
-                }
-                None => match self.try_codex_fallback()? {
-                    Some(codex_session) => {
-                        // Reject expired Codex sessions so runtime selection
-                        // matches status display (summarize_credentials also
-                        // filters expired Codex out). This prevents status
-                        // from reporting no active credential while runtime
-                        // silently selects an expired one.
-                        if is_session_expired(&codex_session) {
-                            Err(anyhow!(
-                                "Codex's ChatGPT session is expired. \
-                                 Run `codex login` to refresh it, or `vtcode login openai` for a VT Code session."
-                            ))
-                        } else {
-                            // Codex sessions must use the external refresher —
-                            // Codex-owned tokens are not rotated by VT Code
-                            // (ownership/race-avoidance: rotating them could
-                            // race Codex's refresh cycle or invalidate
-                            // Codex-maintained credentials).
-                            let handle = OpenAIChatGptAuthHandle::new_external(
-                                codex_session,
-                                self.auth_config.auto_refresh,
-                                codex_auth_json_refresher(),
-                            );
-                            let api_key = handle.current_api_key()?;
-                            Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
-                        }
+            OpenAIPreferredMethod::Chatgpt => {
+                let session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
+                match session {
+                    Some(native) => {
+                        let handle = self.handle_from_session(native);
+                        let api_key = handle.current_api_key()?;
+                        Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
                     }
-                    None => Err(anyhow!("Run vtcode login openai")),
-                },
-            },
+                    None => match self.try_codex_fallback()? {
+                        Some(codex_session) => {
+                            // Reject expired Codex sessions so runtime selection
+                            // matches status display (summarize_credentials also
+                            // filters expired Codex out). This prevents status
+                            // from reporting no active credential while runtime
+                            // silently selects an expired one.
+                            if is_session_expired(&codex_session) {
+                                Err(anyhow!(
+                                    "Codex's ChatGPT session is expired. \
+                                 Run `codex login` to refresh it, or `vtcode login openai` for a VT Code session."
+                                ))
+                            } else {
+                                // Codex sessions must use the external refresher —
+                                // Codex-owned tokens are not rotated by VT Code
+                                // (ownership/race-avoidance: rotating them could
+                                // race Codex's refresh cycle or invalidate
+                                // Codex-maintained credentials).
+                                let handle = OpenAIChatGptAuthHandle::new_external(
+                                    codex_session,
+                                    self.auth_config.auto_refresh,
+                                    codex_auth_json_refresher(),
+                                );
+                                let api_key = handle.current_api_key()?;
+                                Ok(OpenAIResolvedAuth::ChatGpt { api_key, handle })
+                            }
+                        }
+                        None => Err(anyhow!("Run vtcode login openai")),
+                    },
+                }
+            }
             OpenAIPreferredMethod::ApiKey => {
                 let api_key = require_api_key(api_key)?;
                 Ok(OpenAIResolvedAuth::ApiKey { api_key })
             }
             OpenAIPreferredMethod::Auto => {
+                let session = load_openai_chatgpt_session_with_mode(self.storage_mode)?;
                 if let Some(session) = session {
                     let handle = self.handle_from_session(session);
                     let api_key = handle.current_api_key()?;

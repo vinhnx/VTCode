@@ -411,6 +411,30 @@ fn resolve_openai_auth_api_key_mode_ignores_stored_chatgpt_session() {
 
 #[test]
 #[serial]
+fn resolve_openai_auth_api_key_mode_survives_unreadable_session_store() {
+    let temp = TempDir::new().expect("temp dir");
+    let blocker = temp.path().join("blocker");
+    fs::write(&blocker, b"not a directory").expect("write blocker");
+    let previous = crate::storage_paths::auth_storage_dir_override_for_tests().expect("read auth dir override");
+    crate::storage_paths::set_auth_storage_dir_override_for_tests(Some(blocker.join("sub")))
+        .expect("set unreadable auth dir override");
+    let resolved = resolve_openai_auth(
+        &OpenAIAuthConfig {
+            preferred_method: OpenAIPreferredMethod::ApiKey,
+            ..OpenAIAuthConfig::default()
+        },
+        AuthCredentialsStoreMode::File,
+        Some("api-key".to_string()),
+    );
+    crate::storage_paths::set_auth_storage_dir_override_for_tests(previous).expect("restore auth dir override");
+    assert!(matches!(
+        resolved.expect("apikey must not touch the session store"),
+        OpenAIResolvedAuth::ApiKey { .. }
+    ));
+}
+
+#[test]
+#[serial]
 fn resolve_openai_auth_chatgpt_mode_requires_stored_session() {
     let _guard = TestAuthDirGuard::new();
     clear_openai_chatgpt_session_with_mode(AuthCredentialsStoreMode::File).expect("clear session");
