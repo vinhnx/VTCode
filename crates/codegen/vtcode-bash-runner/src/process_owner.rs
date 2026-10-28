@@ -161,8 +161,43 @@ pub fn maybe_run_owned_command() -> io::Result<bool> {
     owner.set_read_timeout(None)?;
     spawn_watchdog(&owner)?;
     drop(owner);
+    // Ancestors may hold descriptors without CLOEXEC (observed: a system
+    // kernel-control socket inherited at fd 24 flaking lifetime tests), so
+    // the helper enforces a clean table itself instead of trusting ambient
+    // CLOEXEC hygiene. Only stdio must survive: owner and watchdog channels
+    // are already dropped above.
+    close_all_above_stdio();
     let error = std::process::Command::new(program).arg0(arg0).args(args.iter().skip(3)).exec();
     Err(error)
+}
+
+/// Close every inherited descriptor above stdio, preserving 0, 1, and 2.
+///
+/// Call only when no Rust-owned descriptor above stdio may still be live;
+/// the helper drops its owner and watchdog channels before exec, so by that
+/// point every surviving fd is inherited junk. Sweeps to the process file
+/// limit (floored at 256 so the checked range is always covered, capped at
+/// 65536 to bound worst-case time); descriptors above a lowered limit are a
+/// pathological case this best-effort sweep does not chase.
+#[expect(
+    unsafe_code,
+    reason = "getrlimit/close take validated arguments; no Rust-owned fds above stdio are live here"
+)]
+fn close_all_above_stdio() {
+    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: `getrlimit` writes only to the caller-owned `limit` out-param.
+    let ceiling = if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) } == 0 {
+        limit.rlim_cur.clamp(256, 65536) as libc::c_int
+    } else {
+        8192
+    };
+    for fd in 3..ceiling {
+        // SAFETY: `close` on an arbitrary small fd number is always sound;
+        // invalid numbers fail with EBADF and stdio is out of range.
+        unsafe {
+            libc::close(fd);
+        }
+    }
 }
 
 #[expect(
