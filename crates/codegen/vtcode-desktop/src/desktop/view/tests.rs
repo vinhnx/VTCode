@@ -4470,6 +4470,43 @@ fn file_destination_setting_renders_persists_and_routes_selection(cx: &mut TestA
 }
 
 #[gpui_kit::test]
+fn destination_dropdown_offers_detected_saved_and_system_choices(cx: &mut TestAppContext) {
+    let apps = tempfile::TempDir::new().unwrap();
+    crate::desktop::files::write_test_bundle(apps.path(), "Ghostty.app", "com.mitchellh.ghostty");
+    crate::desktop::files::write_test_bundle(apps.path(), "Xcode.app", "com.apple.dt.Xcode");
+    let pref_dir = tempfile::TempDir::new().unwrap();
+    let prefs_path = pref_dir.path().join("prefs.json");
+    std::fs::write(&prefs_path, r#"{"fileOpenDestination":"vscode"}"#).unwrap();
+    let _roots = crate::desktop::files::set_test_app_roots(vec![apps.path().to_path_buf()]);
+
+    let (window, view) = open_desktop_with_preferences_path(cx, prefs_path);
+    cx.update_window(window, |_, window, cx| {
+        let select = view.read(cx).file_destination_select.clone();
+        // The saved choice stays selected even though its app is missing.
+        assert_eq!(select.read(cx).selected_value().copied(), Some(FileOpenDestination::VsCode));
+        // Probe the offered set through selection: detected and system
+        // destinations select, undetected ones resolve to no selection.
+        for (destination, offered) in [
+            (FileOpenDestination::Ghostty, true),
+            (FileOpenDestination::Xcode, true),
+            (FileOpenDestination::Finder, true),
+            (FileOpenDestination::Terminal, true),
+            (FileOpenDestination::Sublime, false),
+            (FileOpenDestination::AndroidStudio, false),
+            (FileOpenDestination::ITerm2, false),
+        ] {
+            select.update(cx, |state, cx| state.set_selected_value(&destination, window, cx));
+            assert_eq!(
+                select.read(cx).selected_value().copied().as_ref(),
+                offered.then_some(&destination),
+                "{destination:?} offered={offered}"
+            );
+        }
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn session_transitions_clear_runtime_projections_and_model_switch_keeps_sources(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
     let session = json!({

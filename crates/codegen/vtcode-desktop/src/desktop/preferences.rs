@@ -128,10 +128,35 @@ pub(super) enum FileOpenDestination {
     Sublime,
     /// Xcode.
     Xcode,
+    /// Android Studio.
+    AndroidStudio,
+    /// Reveal the file in Finder.
+    Finder,
+    /// Open the containing directory in Terminal.
+    Terminal,
+    /// Open the containing directory in iTerm2.
+    ITerm2,
+    /// Open the containing directory in Ghostty.
+    Ghostty,
 }
 
 impl FileOpenDestination {
-    pub(super) const ALL: [Self; 5] = [Self::Viewer, Self::System, Self::VsCode, Self::Sublime, Self::Xcode];
+    pub(super) const ALL: [Self; 10] = [
+        Self::Viewer,
+        Self::System,
+        Self::VsCode,
+        Self::Sublime,
+        Self::Xcode,
+        Self::AndroidStudio,
+        Self::Finder,
+        Self::Terminal,
+        Self::ITerm2,
+        Self::Ghostty,
+    ];
+
+    /// Destinations needing no install detection: the viewer plus macOS apps
+    /// that ship on the sealed system volume and cannot be uninstalled.
+    pub(super) const ALWAYS_AVAILABLE: [Self; 4] = [Self::Viewer, Self::System, Self::Finder, Self::Terminal];
 
     pub(super) const fn id(self) -> &'static str {
         match self {
@@ -140,6 +165,11 @@ impl FileOpenDestination {
             Self::VsCode => "vscode",
             Self::Sublime => "sublime",
             Self::Xcode => "xcode",
+            Self::AndroidStudio => "androidstudio",
+            Self::Finder => "finder",
+            Self::Terminal => "terminal",
+            Self::ITerm2 => "iterm2",
+            Self::Ghostty => "ghostty",
         }
     }
 
@@ -151,7 +181,26 @@ impl FileOpenDestination {
             Self::VsCode => Some(ExternalEditor::VsCode),
             Self::Sublime => Some(ExternalEditor::Sublime),
             Self::Xcode => Some(ExternalEditor::Xcode),
+            Self::AndroidStudio => Some(ExternalEditor::AndroidStudio),
+            Self::Finder => Some(ExternalEditor::Finder),
+            Self::Terminal => Some(ExternalEditor::Terminal),
+            Self::ITerm2 => Some(ExternalEditor::ITerm2),
+            Self::Ghostty => Some(ExternalEditor::Ghostty),
         }
+    }
+
+    /// Dropdown options in canonical order: always-available destinations and
+    /// detected editors, plus the saved choice even when undetected so the
+    /// control never renders blank and reinstalls restore behavior.
+    pub(super) fn offered(saved: Self, detected: &[ExternalEditor]) -> Vec<Self> {
+        Self::ALL
+            .into_iter()
+            .filter(|destination| {
+                Self::ALWAYS_AVAILABLE.contains(destination)
+                    || *destination == saved
+                    || destination.external_editor().is_some_and(|editor| detected.contains(&editor))
+            })
+            .collect()
     }
 
     /// Display label for the settings dropdown. Descriptive destinations are
@@ -163,6 +212,11 @@ impl FileOpenDestination {
             Self::VsCode => "VS Code".to_string(),
             Self::Sublime => "Sublime Text".to_string(),
             Self::Xcode => "Xcode".to_string(),
+            Self::AndroidStudio => "Android Studio".to_string(),
+            Self::Finder => "Finder".to_string(),
+            Self::Terminal => "Terminal".to_string(),
+            Self::ITerm2 => "iTerm2".to_string(),
+            Self::Ghostty => "Ghostty".to_string(),
         }
     }
 
@@ -183,12 +237,15 @@ impl FileOpenDestination {
 pub(super) struct FileDestinationOption(FileOpenDestination);
 
 impl FileDestinationOption {
-    pub(super) fn all() -> SearchableVec<Self> {
-        SearchableVec::new(FileOpenDestination::ALL.map(Self).to_vec())
+    pub(super) fn for_destinations(destinations: &[FileOpenDestination]) -> SearchableVec<Self> {
+        SearchableVec::new(destinations.iter().map(|destination| Self(*destination)).collect::<Vec<_>>())
     }
 
-    pub(super) fn selected_index(destination: FileOpenDestination) -> Option<IndexPath> {
-        FileOpenDestination::ALL
+    pub(super) fn selected_index(
+        destinations: &[FileOpenDestination],
+        destination: FileOpenDestination,
+    ) -> Option<IndexPath> {
+        destinations
             .iter()
             .position(|option| *option == destination)
             .map(IndexPath::new)
@@ -559,11 +616,94 @@ mod tests {
             (FileOpenDestination::VsCode, ExternalEditor::VsCode),
             (FileOpenDestination::Sublime, ExternalEditor::Sublime),
             (FileOpenDestination::Xcode, ExternalEditor::Xcode),
+            (FileOpenDestination::AndroidStudio, ExternalEditor::AndroidStudio),
+            (FileOpenDestination::Finder, ExternalEditor::Finder),
+            (FileOpenDestination::Terminal, ExternalEditor::Terminal),
+            (FileOpenDestination::ITerm2, ExternalEditor::ITerm2),
+            (FileOpenDestination::Ghostty, ExternalEditor::Ghostty),
         ] {
             assert_eq!(destination.external_editor(), Some(expected), "map {destination:?}");
             assert!(FileOpenDestination::ALL.contains(&destination));
         }
-        assert_eq!(FileOpenDestination::ALL.len(), 5, "extend this table when adding a destination");
+        assert_eq!(FileOpenDestination::ALL.len(), 10, "extend this table when adding a destination");
+    }
+
+    #[test]
+    fn offered_destinations_combine_always_available_detected_and_saved() {
+        use FileOpenDestination as Destination;
+
+        let base = Destination::offered(Destination::Viewer, &[]);
+        assert_eq!(
+            base,
+            vec![
+                Destination::Viewer,
+                Destination::System,
+                Destination::Finder,
+                Destination::Terminal
+            ]
+        );
+
+        // Detected editors join in canonical order, not detection order.
+        let detected = Destination::offered(
+            Destination::Viewer,
+            &[
+                ExternalEditor::Ghostty,
+                ExternalEditor::VsCode,
+                ExternalEditor::AndroidStudio,
+            ],
+        );
+        assert_eq!(
+            detected,
+            vec![
+                Destination::Viewer,
+                Destination::System,
+                Destination::VsCode,
+                Destination::AndroidStudio,
+                Destination::Finder,
+                Destination::Terminal,
+                Destination::Ghostty,
+            ]
+        );
+
+        // The saved choice stays selectable even when its app is missing, so
+        // the control never renders blank and reinstalls restore behavior.
+        let missing = Destination::offered(Destination::Xcode, &[ExternalEditor::VsCode]);
+        assert_eq!(
+            missing,
+            vec![
+                Destination::Viewer,
+                Destination::System,
+                Destination::VsCode,
+                Destination::Xcode,
+                Destination::Finder,
+                Destination::Terminal,
+            ]
+        );
+
+        // A saved choice that is also detected appears exactly once.
+        let present = Destination::offered(Destination::Sublime, &[ExternalEditor::Sublime]);
+        assert_eq!(present.iter().filter(|d| **d == Destination::Sublime).count(), 1);
+        assert_eq!(Destination::offered(Destination::Viewer, &ExternalEditor::DETECTABLE).len(), 10);
+    }
+
+    #[test]
+    fn destination_availability_matches_editor_availability() {
+        // The viewer has no editor; every other always-available destination
+        // maps to an always-available editor, and vice versa.
+        for destination in FileOpenDestination::ALWAYS_AVAILABLE {
+            match destination.external_editor() {
+                None => assert_eq!(destination, FileOpenDestination::Viewer),
+                Some(editor) => assert!(
+                    ExternalEditor::ALWAYS_AVAILABLE.contains(&editor),
+                    "{destination:?} maps to detected-only {editor:?}"
+                ),
+            }
+        }
+        assert_eq!(
+            FileOpenDestination::ALWAYS_AVAILABLE.len(),
+            ExternalEditor::ALWAYS_AVAILABLE.len() + 1,
+            "the viewer is the only destination without an editor"
+        );
     }
 
     #[gpui_kit::test]

@@ -147,6 +147,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Reload CLI settings | Settings → VT Code → CLI preferences or configurable ⌘⇧R restarts the idle service, reads CLI configuration layers, and preserves the draft and attached sources. Previous sessions remain in history. |
 | Edit CLI settings | `/config` opens the dedicated configuration page: search the catalog, browse the groups rail, and edit rows in place. Booleans toggle with a switch; strings/numbers use typed editors and arrays/maps use JSON. Choose the User, Workspace, or Project write target; VT Code validates and version-checks the write, then reloads the service and reports higher-precedence overrides on the page. Credential-bearing fields stay excluded and schema templates without concrete values show as read-only references; layer resets stay in the terminal (`vtcode config reset`). Settings → VT Code → CLI configuration keeps the same summary with a Browse entry point into the catalog. |
 | Open settings | The toolbar button, application menu, or ⌘, opens the same tabbed Settings sheet. Appearance contains live theme previews for every built-in CLI theme, typography, and the file open destination; VT Code contains provider details and CLI configuration; Connections contains WebMCP pairing and local service status. |
+| Choose where files open | Settings → Appearance → Files lists the built-in viewer, the system default, Finder, Terminal, and detected editors; a saved choice stays listed even when its app is missing. Selection opens there directly. |
 | Change interface language | Settings → Appearance offers 20 languages, including Hindi, Ukrainian, and Swedish. Use the searchable language picker by native name or locale code; the selection updates supported labels immediately and persists in desktop preferences. Untranslated desktop copy falls back to English. |
 | Separate light and dark themes | Appearance stores independent theme selections; its Light/Dark controls switch between saved profiles. The selected profile remains visible in the theme swatches. |
 
@@ -389,11 +390,14 @@ Comfort settings live in `~/.vtcode/desktop/preferences.json`: the selected them
 inspector visibility, and pane widths. A missing or corrupt file falls back to defaults; write failures are ignored.
 The most recent workspace reopens on launch when it still exists.
 
-The Files group in Appearance settings chooses the default file open destination: the built-in read-only viewer
-or an external editor (system default, VS Code, Sublime Text, Xcode). Selecting a file in the sidebar, palettes,
-review views, or attached sources opens the viewer overlay or launches the configured editor directly; unknown
-saved values fall back to the viewer. External launches re-resolve the path inside the workspace at launch time
-and report failures in the app error notice without opening the overlay.
+The Files group in Appearance settings chooses the default file open destination: the built-in read-only viewer,
+the system default, Finder reveal, Terminal, or a detected editor (VS Code, Sublime Text, Xcode, Android Studio,
+iTerm2, Ghostty). The dropdown lists the viewer, system apps, and editors found in /Applications and
+~/Applications at launch, plus the saved choice even when its app is missing; installing an editor while the app
+runs needs a restart to appear. Selecting a file in the sidebar, palettes, review views, or attached sources
+opens the viewer overlay, reveals the file, opens its directory in a terminal, or launches the configured
+editor directly; unknown saved values fall back to the viewer. External launches re-resolve the path inside the
+workspace at launch time and report failures in the app error notice without opening the overlay.
 
 The UI drains at most 64 service events per foreground tick so a busy stream yields to input. Row data and GPUI's
 measured list state are maintained together; streaming text, expansion, theme changes, and viewport resizing invalidate

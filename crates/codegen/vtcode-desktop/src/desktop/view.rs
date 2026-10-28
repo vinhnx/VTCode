@@ -907,10 +907,13 @@ impl DesktopView {
             }
         });
         let destination = preferences.file_open_destination();
+        // Bounded Info.plist scan; fast enough to run inline so the
+        // dropdown is correct on its first render.
+        let offered = preferences::FileOpenDestination::offered(destination, &files::detect_installed_editors());
         let file_destination_select = cx.new(|cx| {
             gpui_kit::component::select::SelectState::new(
-                preferences::FileDestinationOption::all(),
-                preferences::FileDestinationOption::selected_index(destination),
+                preferences::FileDestinationOption::for_destinations(&offered),
+                preferences::FileDestinationOption::selected_index(&offered, destination),
                 window,
                 cx,
             )

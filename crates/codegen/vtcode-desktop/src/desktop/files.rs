@@ -173,6 +173,76 @@ pub(super) enum ExternalEditor {
     VsCode,
     Sublime,
     Xcode,
+    AndroidStudio,
+    Finder,
+    Terminal,
+    ITerm2,
+    Ghostty,
+}
+
+/// How `/usr/bin/open` receives the resolved path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OpenAction {
+    /// Open the file itself.
+    Open,
+    /// Reveal the file without opening it.
+    Reveal,
+    /// Open the containing directory (terminal emulators).
+    OpenDirectory,
+}
+
+impl ExternalEditor {
+    #[cfg(test)]
+    const ALL: [Self; 9] = [
+        Self::System,
+        Self::VsCode,
+        Self::Sublime,
+        Self::Xcode,
+        Self::AndroidStudio,
+        Self::Finder,
+        Self::Terminal,
+        Self::ITerm2,
+        Self::Ghostty,
+    ];
+
+    /// Editors located by scanning the application directories for their
+    /// bundle identifiers.
+    pub(super) const DETECTABLE: [Self; 6] = [
+        Self::VsCode,
+        Self::Sublime,
+        Self::Xcode,
+        Self::AndroidStudio,
+        Self::ITerm2,
+        Self::Ghostty,
+    ];
+
+    /// Destinations needing no detection: the system default plus macOS apps
+    /// that ship on the sealed system volume and cannot be uninstalled.
+    #[cfg(test)]
+    pub(super) const ALWAYS_AVAILABLE: [Self; 3] = [Self::System, Self::Finder, Self::Terminal];
+
+    /// The bundle identifier used both to detect the installation and to
+    /// launch it, or `None` for destinations that need neither.
+    const fn bundle_id(self) -> Option<&'static str> {
+        match self {
+            Self::System | Self::Finder => None,
+            Self::Terminal => Some("com.apple.Terminal"),
+            Self::VsCode => Some("com.microsoft.VSCode"),
+            Self::Sublime => Some("com.sublimetext.4"),
+            Self::Xcode => Some("com.apple.dt.Xcode"),
+            Self::AndroidStudio => Some("com.google.android.studio"),
+            Self::ITerm2 => Some("com.googlecode.iterm2"),
+            Self::Ghostty => Some("com.mitchellh.ghostty"),
+        }
+    }
+
+    const fn open_action(self) -> OpenAction {
+        match self {
+            Self::Finder => OpenAction::Reveal,
+            Self::Terminal | Self::ITerm2 | Self::Ghostty => OpenAction::OpenDirectory,
+            Self::System | Self::VsCode | Self::Sublime | Self::Xcode | Self::AndroidStudio => OpenAction::Open,
+        }
+    }
 }
 
 fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command {
@@ -181,28 +251,45 @@ fn editor_command(editor: ExternalEditor, path: &Path) -> std::process::Command 
         ExternalEditor::System => {
             let _command = command.arg("-t");
         }
-        ExternalEditor::VsCode => {
-            let _command = command.args(["-b", "com.microsoft.VSCode"]);
+        ExternalEditor::Finder => {
+            let _command = command.arg("-R");
         }
-        ExternalEditor::Sublime => {
-            let _command = command.args(["-b", "com.sublimetext.4"]);
-        }
-        ExternalEditor::Xcode => {
-            let _command = command.args(["-b", "com.apple.dt.Xcode"]);
-        }
+        editor => match editor.bundle_id() {
+            Some(id) => {
+                let _command = command.args(["-b", id]);
+            }
+            // Only System and Finder lack identifiers, and both match above.
+            // Fall back to the system default rather than launching nothing.
+            None => {
+                let _command = command.arg("-t");
+            }
+        },
     }
     let _command = command.arg(path);
     command
 }
 
-/// Resolve the file again at launch time, and never pass a shell command.
-/// This function performs filesystem and process work and must run in the background.
-pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<(), String> {
+/// Resolve the launch target: the file itself, or its containing directory
+/// for terminal emulators. Pure filesystem work, safe to unit test.
+fn launch_path(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<PathBuf, String> {
     let path = vtcode_commons::paths::resolve_workspace_path(root, Path::new(rel_path))
         .map_err(|_error| "The file is missing or outside the workspace.".to_string())?;
     if !fs::metadata(&path).map(|metadata| metadata.is_file()).unwrap_or(false) {
         return Err("The selected path is not a regular file.".into());
     }
+    if editor.open_action() == OpenAction::OpenDirectory {
+        return path
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "The file has no containing directory.".to_string());
+    }
+    Ok(path)
+}
+
+/// Resolve the file again at launch time, and never pass a shell command.
+/// This function performs filesystem and process work and must run in the background.
+pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor) -> Result<(), String> {
+    let path = launch_path(root, rel_path, editor)?;
     let output = editor_command(editor, &path)
         .output()
         .map_err(|error| format!("Could not launch the editor: {error}"))?;
@@ -217,6 +304,129 @@ pub(super) fn open_in_editor(root: &Path, rel_path: &str, editor: ExternalEditor
             format!("Could not open the file in the selected editor: {}", detail.trim())
         })
     }
+}
+
+/// Maximum directory entries inspected per application root during detection.
+const MAX_APP_SCAN_ENTRIES: usize = 512;
+
+/// Application directories scanned for installed editors.
+fn app_roots() -> Vec<PathBuf> {
+    // Test hook: GUI tests redirect detection at deterministic fake roots.
+    #[cfg(test)]
+    if let Some(roots) = TEST_APP_ROOTS.with(|roots| roots.borrow().clone()) {
+        return roots;
+    }
+    let mut roots = vec![PathBuf::from("/Applications")];
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home.join("Applications"));
+    }
+    roots
+}
+
+/// Detect installed editors by the bundle identifier registered in each
+/// application's `Info.plist`. Bounded per root with early exit once every
+/// known editor is found; unreadable or unparseable bundles are skipped.
+pub(super) fn detect_installed_editors() -> Vec<ExternalEditor> {
+    scan_app_roots(&app_roots())
+}
+
+/// Maximum `Info.plist` bytes read per bundle during detection.
+const MAX_INFO_PLIST_BYTES: usize = 256 * 1024;
+
+fn bundle_id_of(app_dir: &Path) -> Option<String> {
+    let file = fs::File::open(app_dir.join("Contents").join("Info.plist")).ok()?;
+    let mut bytes = Vec::new();
+    let _read = file.take(MAX_INFO_PLIST_BYTES as u64).read_to_end(&mut bytes).ok()?;
+    let value: plist::Value = plist::from_bytes(&bytes).ok()?;
+    value.into_dictionary()?.remove("CFBundleIdentifier")?.into_string()
+}
+
+fn scan_app_roots(roots: &[PathBuf]) -> Vec<ExternalEditor> {
+    let mut found = Vec::new();
+    for root in roots {
+        let Ok(entries) = fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten().take(MAX_APP_SCAN_ENTRIES) {
+            if found.len() == ExternalEditor::DETECTABLE.len() {
+                break;
+            }
+            // Symlinked installs count; dangling links fail closed on the plist read.
+            let is_bundle = entry
+                .file_type()
+                .map(|kind| kind.is_dir() || kind.is_symlink())
+                .unwrap_or(false)
+                && entry.path().extension().is_some_and(|ext| ext.eq_ignore_ascii_case("app"));
+            if !is_bundle {
+                continue;
+            }
+            if let Some(id) = bundle_id_of(&entry.path())
+                && let Some(editor) = ExternalEditor::DETECTABLE
+                    .into_iter()
+                    .find(|editor| editor.bundle_id() == Some(id.as_str()))
+                && !found.contains(&editor)
+            {
+                found.push(editor);
+            }
+        }
+        if found.len() == ExternalEditor::DETECTABLE.len() {
+            break;
+        }
+    }
+    // Canonical order regardless of filesystem iteration order.
+    ExternalEditor::DETECTABLE
+        .into_iter()
+        .filter(|editor| found.contains(editor))
+        .collect()
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static TEST_APP_ROOTS: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Redirect install detection at fake roots for one GUI test. Hold the
+/// returned guard for the test's duration; dropping it restores real roots.
+#[cfg(test)]
+#[must_use = "hold the guard or the override leaks into other tests"]
+pub(super) fn set_test_app_roots(roots: Vec<PathBuf>) -> TestAppRootsGuard {
+    TEST_APP_ROOTS.with(|slot| *slot.borrow_mut() = Some(roots));
+    TestAppRootsGuard { _private: () }
+}
+
+/// RAII guard restoring real application roots on drop, even on failure.
+#[cfg(test)]
+pub(super) struct TestAppRootsGuard {
+    _private: (),
+}
+
+#[cfg(test)]
+impl Drop for TestAppRootsGuard {
+    fn drop(&mut self) {
+        clear_test_app_roots();
+    }
+}
+
+/// Restore real application roots. Tests that override detection must pair
+/// every override with this call (an RAII guard is safest) so it never leaks
+/// into another test on a reused worker thread.
+#[cfg(test)]
+pub(super) fn clear_test_app_roots() {
+    TEST_APP_ROOTS.with(|slot| *slot.borrow_mut() = None);
+}
+
+/// Write a minimal `.app` bundle registering `bundle_id` for detection tests.
+#[cfg(test)]
+pub(super) fn write_test_bundle(root: &Path, name: &str, bundle_id: &str) {
+    let contents = root.join(name).join("Contents");
+    fs::create_dir_all(&contents).expect("bundle contents");
+    fs::write(
+        contents.join("Info.plist"),
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>{bundle_id}</string></dict></plist>"
+        ),
+    )
+    .expect("bundle plist");
 }
 
 /// Attach complete text only; the preview's truncation is never silently submitted.
@@ -250,17 +460,25 @@ mod tests {
         fs::write(outside.path().join("outside.rs"), "private").unwrap();
         symlink(outside.path(), workspace.path().join("escape")).unwrap();
         let path = vtcode_commons::paths::resolve_workspace_path(workspace.path(), Path::new(name)).unwrap();
-        for (editor, prefix) in [
-            (ExternalEditor::System, vec!["-t"]),
-            (ExternalEditor::VsCode, vec!["-b", "com.microsoft.VSCode"]),
-            (ExternalEditor::Sublime, vec!["-b", "com.sublimetext.4"]),
-            (ExternalEditor::Xcode, vec!["-b", "com.apple.dt.Xcode"]),
-        ] {
+        // Independent oracle: every variant's launch flags, stated separately
+        // from the implementation.
+        for editor in ExternalEditor::ALL {
+            let expected: &[&str] = match editor {
+                ExternalEditor::System => &["-t"],
+                ExternalEditor::Finder => &["-R"],
+                ExternalEditor::VsCode => &["-b", "com.microsoft.VSCode"],
+                ExternalEditor::Sublime => &["-b", "com.sublimetext.4"],
+                ExternalEditor::Xcode => &["-b", "com.apple.dt.Xcode"],
+                ExternalEditor::AndroidStudio => &["-b", "com.google.android.studio"],
+                ExternalEditor::Terminal => &["-b", "com.apple.Terminal"],
+                ExternalEditor::ITerm2 => &["-b", "com.googlecode.iterm2"],
+                ExternalEditor::Ghostty => &["-b", "com.mitchellh.ghostty"],
+            };
             let command = editor_command(editor, &path);
             let args = command.get_args().collect::<Vec<_>>();
-            assert_eq!(args.len(), prefix.len() + 1);
-            for (actual, expected) in args.iter().zip(prefix) {
-                assert_eq!(*actual, expected);
+            assert_eq!(args.len(), expected.len() + 1, "{editor:?} flags");
+            for (actual, expected) in args.iter().zip(expected) {
+                assert_eq!(*actual, *expected);
             }
             assert_eq!(args.last().unwrap(), &path.as_os_str());
         }
@@ -268,6 +486,120 @@ mod tests {
         assert!(open_in_editor(workspace.path(), "missing", ExternalEditor::VsCode).is_err());
         assert!(open_in_editor(workspace.path(), ".", ExternalEditor::System).is_err());
         assert!(!workspace.path().join("nope").exists());
+    }
+
+    #[test]
+    fn editor_catalog_partitions_always_available_and_detectable_targets() {
+        assert_eq!(ExternalEditor::ALL.len(), 9, "extend this test when adding an editor");
+        for editor in ExternalEditor::ALL {
+            let always = ExternalEditor::ALWAYS_AVAILABLE.contains(&editor);
+            let detectable = ExternalEditor::DETECTABLE.contains(&editor);
+            assert!(always ^ detectable, "{editor:?} must be exclusively detectable or always available");
+            if detectable {
+                assert!(editor.bundle_id().is_some(), "{editor:?} needs an identifier to detect");
+            }
+        }
+        assert_eq!(ExternalEditor::DETECTABLE.len(), 6);
+        assert_eq!(ExternalEditor::ALWAYS_AVAILABLE.len(), 3);
+        assert_eq!(ExternalEditor::System.bundle_id(), None);
+        assert_eq!(ExternalEditor::Finder.bundle_id(), None);
+        for editor in [
+            ExternalEditor::Terminal,
+            ExternalEditor::ITerm2,
+            ExternalEditor::Ghostty,
+        ] {
+            assert_eq!(editor.open_action(), OpenAction::OpenDirectory, "{editor:?} opens a directory");
+        }
+        assert_eq!(ExternalEditor::Finder.open_action(), OpenAction::Reveal);
+        for editor in [
+            ExternalEditor::System,
+            ExternalEditor::VsCode,
+            ExternalEditor::Sublime,
+            ExternalEditor::Xcode,
+            ExternalEditor::AndroidStudio,
+        ] {
+            assert_eq!(editor.open_action(), OpenAction::Open, "{editor:?} opens the file");
+        }
+    }
+
+    #[test]
+    fn launch_paths_resolve_files_and_terminal_directories_without_shelling_out() {
+        let workspace = temp_workspace();
+        let nested = workspace.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(nested.join("deep.rs"), "code").unwrap();
+        fs::write(workspace.path().join("top.rs"), "code").unwrap();
+        let root = vtcode_commons::paths::canonicalize(workspace.path()).unwrap();
+
+        for editor in [ExternalEditor::VsCode, ExternalEditor::Finder, ExternalEditor::System] {
+            assert_eq!(
+                launch_path(&root, "nested/deep.rs", editor).unwrap(),
+                root.join("nested/deep.rs"),
+                "{editor:?} targets the file"
+            );
+        }
+        for editor in [
+            ExternalEditor::Terminal,
+            ExternalEditor::ITerm2,
+            ExternalEditor::Ghostty,
+        ] {
+            assert_eq!(
+                launch_path(&root, "nested/deep.rs", editor).unwrap(),
+                root.join("nested"),
+                "{editor:?} targets the containing directory"
+            );
+        }
+        assert_eq!(
+            launch_path(&root, "top.rs", ExternalEditor::Terminal).unwrap(),
+            root,
+            "a root-level file opens the workspace root itself"
+        );
+        assert!(launch_path(&root, "missing.rs", ExternalEditor::Ghostty).is_err());
+        assert!(launch_path(&root, "../escape.rs", ExternalEditor::Terminal).is_err());
+        assert!(launch_path(&root, "nested", ExternalEditor::VsCode).is_err(), "directories are rejected");
+    }
+
+    #[test]
+    fn install_detection_matches_bundle_identifiers_across_roots_in_canonical_order() {
+        let first = temp_workspace();
+        let second = temp_workspace();
+        write_test_bundle(first.path(), "Ghostty.app", "com.mitchellh.ghostty");
+        // Detection keys on the registered identifier, not the directory name.
+        write_test_bundle(first.path(), "Renamed Code.app", "com.microsoft.VSCode");
+        write_test_bundle(second.path(), "iTerm.app", "com.googlecode.iterm2");
+        // Near misses that must not match: a file in place of a bundle, an
+        // unknown identifier, malformed XML, and a bundle without a plist.
+        fs::write(first.path().join("Xcode.app"), "not a directory").unwrap();
+        write_test_bundle(first.path(), "Other.app", "com.example.other");
+        let broken = second.path().join("Broken.app").join("Contents");
+        fs::create_dir_all(&broken).unwrap();
+        fs::write(broken.join("Info.plist"), "not xml{{{").unwrap();
+        fs::create_dir(second.path().join("Bare.app")).unwrap();
+        // Symlinked installs count by their target's identifier; dangling and
+        // file-target links fail closed. The real bundle lives outside both
+        // scanned roots so only the link can surface it.
+        use std::os::unix::fs::symlink;
+        let hidden = temp_workspace();
+        write_test_bundle(hidden.path(), "Real Studio.app", "com.google.android.studio");
+        symlink(hidden.path().join("Real Studio.app"), second.path().join("Linked.app")).unwrap();
+        symlink(first.path().join("missing-target"), second.path().join("Dangling.app")).unwrap();
+        symlink(first.path().join("Xcode.app"), second.path().join("FileLink.app")).unwrap();
+
+        let found = scan_app_roots(&[first.path().to_path_buf(), second.path().to_path_buf()]);
+        assert_eq!(
+            found,
+            vec![
+                ExternalEditor::VsCode,
+                ExternalEditor::AndroidStudio,
+                ExternalEditor::ITerm2,
+                ExternalEditor::Ghostty,
+            ]
+        );
+
+        let missing = scan_app_roots(&[first.path().join("no-such-dir")]);
+        assert!(missing.is_empty(), "missing roots scan as empty");
+        let empty = scan_app_roots(&[]);
+        assert!(empty.is_empty(), "no roots means no editors");
     }
 
     #[test]

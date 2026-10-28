@@ -12233,6 +12233,7 @@ dependencies = [
  "chrono",
  "dirs 7.0.0",
  "gpui-kit",
+ "plist",
  "pulldown-cmark",
  "rand 0.10.3",
  "rust-i18n",
