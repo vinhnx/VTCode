@@ -27,10 +27,11 @@ pub(super) enum UiLanguage {
     Polish,
     Hindi,
     Ukrainian,
+    Swedish,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 19] = [
+    pub(super) const ALL: [Self; 20] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -50,6 +51,7 @@ impl UiLanguage {
         Self::Polish,
         Self::Hindi,
         Self::Ukrainian,
+        Self::Swedish,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -96,6 +98,7 @@ impl UiLanguage {
             Self::Polish => "pl",
             Self::Hindi => "hi",
             Self::Ukrainian => "uk",
+            Self::Swedish => "sv",
         }
     }
 
@@ -120,6 +123,7 @@ impl UiLanguage {
             Self::Polish => "Polski",
             Self::Hindi => "हिन्दी",
             Self::Ukrainian => "Українська",
+            Self::Swedish => "Svenska",
         }
     }
 }
@@ -198,6 +202,9 @@ mod tests {
         assert_eq!(UiLanguage::from_saved(Some("zh_hk")), UiLanguage::TraditionalChineseHongKong);
         assert_eq!(UiLanguage::from_saved(Some("pt-PT")), UiLanguage::English);
         assert_eq!(UiLanguage::from_saved(Some("fr-")), UiLanguage::English);
+        assert_eq!(UiLanguage::from_saved(Some("sv-SE")), UiLanguage::Swedish);
+        assert_eq!(rust_i18n::t!("app.settings.title", locale = "sv").to_string(), "Inställningar");
+        assert_eq!(rust_i18n::t!("gpui_component.Input.Copy", locale = "sv").to_string(), "Kopiera");
     }
 
     #[test]

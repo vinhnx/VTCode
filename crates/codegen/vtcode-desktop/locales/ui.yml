@@ -3,6 +3,7 @@ app:
   settings:
     visual_style:
       en: Visual style
+      sv: "Visuell stil"
       uk: "Візуальний стиль"
       hi: "दृश्य शैली"
       pl: "Styl wizualny"
@@ -23,6 +24,7 @@ app:
       id: "Gaya visual"
     typography:
       en: Typography
+      sv: "Typografi"
       uk: "Типографіка"
       hi: "टाइपोग्राफी"
       pl: "Typografia"
@@ -43,6 +45,7 @@ app:
       id: "Tipografi"
     layout:
       en: Layout
+      sv: "Layout"
       uk: "Макет"
       hi: "लेआउट"
       pl: "Układ"
@@ -63,6 +66,7 @@ app:
       id: "Tata letak"
     categories_navigation_hint:
       en: Use Left and Right arrows, Home, or End to choose a category.
+      sv: "Använd vänster och höger pil, Hem eller Slut för att välja en kategori."
       uk: "Використовуйте стрілки вліво та вправо, Home або End, щоб вибрати категорію."
       hi: "श्रेणी चुनने के लिए बाएँ और दाएँ तीर, Home या End दबाएँ।"
       pl: "Użyj strzałek w lewo i w prawo albo klawiszy Home i End, aby wybrać kategorię."
@@ -83,6 +87,7 @@ app:
       id: "Gunakan tombol panah Kiri dan Kanan, Home, atau End untuk memilih kategori."
     title:
       en: Settings
+      sv: "Inställningar"
       uk: "Налаштування"
       hi: "सेटिंग्स"
       pl: "Ustawienia"
@@ -103,6 +108,7 @@ app:
       id: "Pengaturan"
     categories:
       en: Settings categories
+      sv: "Inställningskategorier"
       uk: "Категорії налаштувань"
       hi: "सेटिंग्स श्रेणियाँ"
       pl: "Kategorie ustawień"
@@ -124,6 +130,7 @@ app:
     search:
       button:
         en: Search settings and CLI config…
+        sv: "Sök inställningar och CLI-konfiguration…"
         uk: "Пошук налаштувань і конфігурації CLI…"
         hi: "सेटिंग्स और CLI कॉन्फ़िगरेशन खोजें…"
         pl: "Szukaj w ustawieniach i konfiguracji CLI…"
@@ -144,6 +151,7 @@ app:
         id: "Cari pengaturan dan konfigurasi CLI…"
       title:
         en: Search settings and CLI config
+        sv: "Sök inställningar och CLI-konfiguration"
         uk: "Пошук налаштувань і конфігурації CLI"
         hi: "सेटिंग्स और CLI कॉन्फ़िगरेशन खोजें"
         pl: "Szukaj w ustawieniach i konfiguracji CLI"
@@ -164,6 +172,7 @@ app:
         id: "Cari pengaturan dan konfigurasi CLI"
       placeholder:
         en: Filter settings, categories, and CLI config paths…
+        sv: "Filtrera inställningar, kategorier och CLI-konfigurationssökvägar…"
         uk: "Фільтрувати налаштування, категорії та шляхи конфігурації CLI…"
         hi: "सेटिंग्स, श्रेणियाँ और CLI कॉन्फ़िगरेशन पथ फ़िल्टर करें…"
         pl: "Filtruj ustawienia, kategorie i ścieżki konfiguracji CLI…"
@@ -184,6 +193,7 @@ app:
         id: "Saring pengaturan, kategori, dan jalur konfigurasi CLI…"
       group_settings:
         en: Settings
+        sv: "Inställningar"
         uk: "Налаштування"
         hi: "सेटिंग्स"
         pl: "Ustawienia"
@@ -204,6 +214,7 @@ app:
         id: "Pengaturan"
       group_cli_config:
         en: CLI config
+        sv: "CLI-konfiguration"
         uk: "Конфігурація CLI"
         hi: "CLI कॉन्फ़िगरेशन"
         pl: "Konfiguracja CLI"
@@ -225,6 +236,7 @@ app:
     tab:
       appearance:
         en: Appearance
+        sv: "Utseende"
         uk: "Зовнішній вигляд"
         hi: "दिखावट"
         pl: "Wygląd"
@@ -245,6 +257,7 @@ app:
         id: "Tampilan"
       accessibility:
         en: Accessibility
+        sv: "Tillgänglighet"
         uk: "Спеціальні можливості"
         hi: "सुलभता"
         pl: "Dostępność"
@@ -265,6 +278,7 @@ app:
         id: "Aksesibilitas"
       shortcuts:
         en: Shortcuts
+        sv: "Genvägar"
         uk: "Клавіатурні скорочення"
         hi: "कीबोर्ड शॉर्टकट"
         pl: "Skróty klawiszowe"
@@ -285,6 +299,7 @@ app:
         id: "Pintasan"
       vtcode:
         en: VT Code
+        sv: "VT Code"
         uk: "VT Code"
         hi: "VT Code"
         pl: "VT Code"
@@ -305,6 +320,7 @@ app:
         id: "VT Code"
       connections:
         en: Connections
+        sv: "Anslutningar"
         uk: "Підключення"
         hi: "कनेक्शन"
         pl: "Połączenia"
@@ -326,6 +342,7 @@ app:
     language:
       group:
         en: Language
+        sv: "Språk"
         uk: "Мова"
         hi: "भाषा"
         pl: "Język"
@@ -346,6 +363,7 @@ app:
         id: "Bahasa"
       label:
         en: Interface language
+        sv: "Språk för gränssnitt"
         uk: "Мова інтерфейсу"
         hi: "इंटरफ़ेस भाषा"
         pl: "Język interfejsu"
@@ -366,6 +384,7 @@ app:
         id: "Bahasa antarmuka"
       description:
         en: Changes supported labels immediately. Untranslated app text remains in English.
+        sv: "Ändrar etiketter som stöds omedelbart. Oöversatt apptext förblir på engelska."
         uk: "Підтримувані написи змінюються одразу. Неперекладений текст програми залишається англійською."
         hi: "समर्थित लेबल तुरंत बदलते हैं। जिन ऐप टेक्स्ट का अनुवाद नहीं हुआ है, वे अंग्रेज़ी में दिखेंगे।"
         pl: "Od razu zmienia przetłumaczone etykiety. Nieprzetłumaczony tekst aplikacji pozostaje po angielsku."
@@ -386,6 +405,7 @@ app:
         id: "Label yang didukung langsung berubah. Teks aplikasi yang belum diterjemahkan tetap dalam bahasa Inggris."
       search:
         en: Search languages…
+        sv: "Sök språk"
         uk: "Пошук мов…"
         vi: Tìm ngôn ngữ…
         es: Buscar idiomas…
@@ -407,6 +427,7 @@ app:
     appearance:
       separate_modes:
         en: Separate light and dark modes
+        sv: "Separata ljusa och mörka lägen"
         uk: "Окремі світла й темна теми"
         hi: "लाइट और डार्क मोड अलग रखें"
         pl: "Oddzielne tryby jasny i ciemny"
@@ -427,6 +448,7 @@ app:
         id: "Pisahkan mode terang dan gelap"
       editing_profile:
         en: Editing the %{profile} appearance profile
+        sv: "Redigera utseendeprofilen för %{profile}"
         uk: "Редагування профілю оформлення %{profile}"
         hi: "%{profile} रूप-रंग प्रोफ़ाइल संपादित हो रही है"
         pl: "Edycja profilu wyglądu %{profile}"
@@ -447,6 +469,7 @@ app:
         id: "Mengedit profil tampilan %{profile}"
       editing_profile_short:
         en: Editing profile
+        sv: "Redigera profil"
         uk: "Редагування профілю"
         hi: "प्रोफ़ाइल संपादित हो रही है"
         pl: "Edycja profilu"
@@ -467,6 +490,7 @@ app:
         id: "Mengedit profil tampilan"
       edit_profile:
         en: Edit the %{profile} appearance profile
+        sv: "Redigera utseendeprofilen för %{profile}"
         uk: "Редагувати профіль оформлення %{profile}"
         hi: "%{profile} रूप-रंग प्रोफ़ाइल संपादित करें"
         pl: "Edytuj profil wyglądu %{profile}"
@@ -487,6 +511,7 @@ app:
         id: "Ubah profil tampilan %{profile}"
       edit_profile_selected:
         en: Edit the %{profile} appearance profile (selected)
+        sv: "Redigera utseendeprofilen för %{profile} (vald)"
         uk: "Редагувати профіль оформлення %{profile} (вибрано)"
         hi: "%{profile} रूप-रंग प्रोफ़ाइल संपादित करें (चयनित)"
         pl: "Edytuj profil wyglądu %{profile} (wybrany)"
@@ -507,6 +532,7 @@ app:
         id: "Ubah profil tampilan %{profile} (dipilih)"
       light:
         en: Light
+        sv: "Ljus"
         uk: "Світла"
         hi: "लाइट"
         pl: "Jasny"
@@ -527,6 +553,7 @@ app:
         id: "Terang"
       dark:
         en: Dark
+        sv: "Mörk"
         uk: "Темна"
         hi: "डार्क"
         pl: "Ciemny"
@@ -547,6 +574,7 @@ app:
         id: "Gelap"
       themes:
         en: Themes
+        sv: "Teman"
         uk: "Теми"
         hi: "थीम"
         pl: "Motywy"
@@ -567,6 +595,7 @@ app:
         id: "Tema"
       next_themes:
         en: Next themes
+        sv: "Nästa teman"
         uk: "Наступні теми"
         hi: "अगली थीम"
         pl: "Następne motywy"
@@ -587,6 +616,7 @@ app:
         id: "Tema berikutnya"
       previous_themes:
         en: Previous themes
+        sv: "Tidigare teman"
         uk: "Попередні теми"
         hi: "पिछली थीम"
         pl: "Poprzednie motywy"
@@ -607,6 +637,7 @@ app:
         id: "Tema sebelumnya"
       visual_themes:
         en: Visual themes
+        sv: "Visuella teman"
         uk: "Візуальні теми"
         hi: "दृश्य थीम"
         pl: "Motywy wizualne"
@@ -627,6 +658,7 @@ app:
         id: "Tema visual"
       show_navigation:
         en: Show side navigation
+        sv: "Visa sidonavigering"
         uk: "Показувати бічну навігацію"
         hi: "साइड नेविगेशन दिखाएँ"
         pl: "Pokaż nawigację boczną"
@@ -647,6 +679,7 @@ app:
         id: "Tampilkan navigasi samping"
       navigation_hint:
         en: When hidden, project, thread, and workspace actions stay in the top bar.
+        sv: "När projekt-, tråd- och arbetsyteåtgärder är dolda förblir de i det övre fältet."
         uk: "Коли її приховано, дії з проєктами, розмовами та робочим простором залишаються на верхній панелі."
         hi: "छिपाने पर प्रोजेक्ट, थ्रेड और वर्कस्पेस के विकल्प ऊपर की पट्टी में रहते हैं।"
         pl: "Po ukryciu działania związane z projektami, wątkami i obszarem roboczym pozostają na górnym pasku."
@@ -667,6 +700,7 @@ app:
         id: "Saat disembunyikan, tindakan untuk proyek, percakapan, dan ruang kerja tetap tersedia di bilah atas."
       navigation_right:
         en: Place navigation on the right
+        sv: "Placera navigering till höger"
         uk: "Розмістити навігацію праворуч"
         hi: "नेविगेशन दाईं ओर रखें"
         pl: "Umieść nawigację po prawej stronie"
@@ -687,6 +721,7 @@ app:
         id: "Pindahkan navigasi ke kanan"
       reset:
         en: Reset appearance
+        sv: "Återställ utseende"
         uk: "Скинути оформлення"
         hi: "रूप-रंग रीसेट करें"
         pl: "Przywróć domyślny wygląd"
@@ -708,6 +743,7 @@ app:
     accessibility:
       description:
         en: Adjust motion and the amount of persistent interface detail.
+        sv: "Justera rörelse och mängden beständig gränssnittsdetalj."
         uk: "Налаштуйте анімацію та кількість постійних елементів інтерфейсу."
         hi: "एनीमेशन और हमेशा दिखने वाले इंटरफ़ेस विवरण समायोजित करें।"
         pl: "Dostosuj animacje i ilość stale widocznych elementów interfejsu."
@@ -728,6 +764,7 @@ app:
         id: "Atur animasi dan jumlah detail antarmuka yang selalu ditampilkan."
       display:
         en: Display
+        sv: "Bildskärm"
         uk: "Дисплей"
         hi: "डिस्प्ले"
         pl: "Wyświetlanie"
@@ -748,6 +785,7 @@ app:
         id: "Tampilan"
       show_status_bar:
         en: Show status bar
+        sv: "Visa statusrad"
         uk: "Показувати рядок стану"
         hi: "स्टेटस बार दिखाएँ"
         pl: "Pokaż pasek stanu"
@@ -769,6 +807,7 @@ app:
     provider:
       group:
         en: Provider settings
+        sv: "Leverantörsinställningar"
         uk: "Налаштування провайдера"
         hi: "प्रोवाइडर सेटिंग्स"
         pl: "Ustawienia dostawcy"
@@ -789,6 +828,7 @@ app:
         id: "Pengaturan penyedia"
       title:
         en: Provider
+        sv: "Leverantör"
         uk: "Провайдер"
         hi: "प्रोवाइडर"
         pl: "Dostawca"
@@ -809,6 +849,7 @@ app:
         id: "Penyedia"
       connect_hint:
         en: Connect to your workspace to view provider and model details.
+        sv: "Anslut till din arbetsyta för att se leverantörs- och modelluppgifter."
         uk: "Під’єднайтеся до робочого простору, щоб переглянути відомості про провайдера й модель."
         hi: "प्रोवाइडर और मॉडल की जानकारी देखने के लिए अपने वर्कस्पेस से कनेक्ट करें।"
         pl: "Połącz się z obszarem roboczym, aby zobaczyć informacje o dostawcy i modelu."
@@ -829,6 +870,7 @@ app:
         id: "Sambungkan ke ruang kerja untuk melihat detail penyedia dan model."
       not_configured:
         en: Not configured
+        sv: "Inte konfigurerad"
         uk: "Не налаштовано"
         hi: "कॉन्फ़िगर नहीं किया गया"
         pl: "Nie skonfigurowano"
@@ -849,6 +891,7 @@ app:
         id: "Belum dikonfigurasi"
       accessibility_label:
         en: Provider and model configuration
+        sv: "Leverantörs- och modellkonfiguration"
         uk: "Налаштування провайдера та моделі"
         hi: "प्रोवाइडर और मॉडल कॉन्फ़िगरेशन"
         pl: "Konfiguracja dostawcy i modelu"
@@ -869,6 +912,7 @@ app:
         id: "Konfigurasi penyedia dan model"
       provider:
         en: Provider
+        sv: "Leverantör"
         uk: "Провайдер"
         hi: "प्रोवाइडर"
         pl: "Dostawca"
@@ -889,6 +933,7 @@ app:
         id: "Penyedia"
       model:
         en: Model
+        sv: "Modell"
         uk: "Модель"
         hi: "मॉडल"
         pl: "Model"
@@ -910,6 +955,7 @@ app:
     connections:
       connected:
         en: Connected
+        sv: "Ansluten"
         uk: "Підключено"
         hi: "कनेक्टेड"
         pl: "Połączono"
@@ -930,6 +976,7 @@ app:
         id: "Tersambung"
       not_connected:
         en: Not connected
+        sv: "Ej ansluten"
         uk: "Не підключено"
         hi: "कनेक्ट नहीं है"
         pl: "Nie połączono"
@@ -950,6 +997,7 @@ app:
         id: "Tidak tersambung"
       active_status:
         en: CLI service connection is active
+        sv: "CLI-serviceanslutningen är aktiv"
         uk: "З’єднання зі службою CLI активне"
         hi: "CLI सेवा कनेक्शन सक्रिय है"
         pl: "Połączenie z usługą CLI jest aktywne"
@@ -970,6 +1018,7 @@ app:
         id: "Koneksi layanan CLI aktif"
       waiting_status:
         en: CLI service has not completed a protocol handshake
+        sv: "CLI-tjänsten har inte slutfört ett protokollhandslag"
         uk: "Служба CLI ще не завершила узгодження протоколу"
         hi: "CLI सेवा का प्रोटोकॉल हैंडशेक पूरा नहीं हुआ है"
         pl: "Usługa CLI nie zakończyła jeszcze uzgadniania protokołu"
@@ -990,6 +1039,7 @@ app:
         id: "Layanan CLI belum menyelesaikan jabat tangan protokol"
       runtime:
         en: Runtime
+        sv: "Körningstid"
         uk: "Середовище виконання"
         hi: "रनटाइम"
         pl: "Środowisko uruchomieniowe"
@@ -1010,6 +1060,7 @@ app:
         id: "Runtime"
       version:
         en: Version
+        sv: "Version"
         uk: "Версія"
         hi: "संस्करण"
         pl: "Wersja"
@@ -1030,6 +1081,7 @@ app:
         id: "Versi"
       protocol:
         en: Protocol
+        sv: "Protokoll"
         uk: "Протокол"
         hi: "प्रोटोकॉल"
         pl: "Protokół"
@@ -1050,6 +1102,7 @@ app:
         id: "Protokol"
       workspace:
         en: Workspace
+        sv: "Arbetsområde"
         uk: "Робочий простір"
         hi: "वर्कस्पेस"
         pl: "Obszar roboczy"
@@ -1070,6 +1123,7 @@ app:
         id: "Ruang kerja"
       local_service_unavailable:
         en: The local CLI service will appear here after VT Code Desktop connects.
+        sv: "Den lokala CLI-tjänsten visas här efter att VT Code Desktop har anslutits."
         uk: "Локальна служба CLI з’явиться тут після підключення VT Code Desktop."
         hi: "VT Code Desktop कनेक्ट होने के बाद स्थानीय CLI सेवा यहाँ दिखाई देगी।"
         pl: "Lokalna usługa CLI pojawi się tutaj po połączeniu VT Code Desktop."
@@ -1090,6 +1144,7 @@ app:
         id: "Layanan CLI lokal akan muncul di sini setelah VT Code Desktop tersambung."
       local_service:
         en: Local service
+        sv: "lokala service"
         uk: "Локальна служба"
         hi: "स्थानीय सेवा"
         pl: "Usługa lokalna"
@@ -1110,6 +1165,7 @@ app:
         id: "Layanan lokal"
       local_service_details:
         en: Local service connection details
+        sv: "Information om lokal serviceanslutning"
         uk: "Відомості про підключення до локальної служби"
         hi: "स्थानीय सेवा कनेक्शन विवरण"
         pl: "Szczegóły połączenia z usługą lokalną"
@@ -1132,6 +1188,7 @@ app:
     greeting:
       morning:
         en: Good morning
+        sv: "God morgon"
         uk: "Доброго ранку"
         hi: "सुप्रभात"
         pl: "Dzień dobry"
@@ -1152,6 +1209,7 @@ app:
         id: "Selamat pagi"
       afternoon:
         en: Good afternoon
+        sv: "God eftermiddag"
         uk: "Добрий день"
         hi: "नमस्कार"
         pl: "Dzień dobry"
@@ -1172,6 +1230,7 @@ app:
         id: "Selamat siang"
       evening:
         en: Good evening
+        sv: "God kväll"
         uk: "Добрий вечір"
         hi: "शुभ संध्या"
         pl: "Dobry wieczór"
@@ -1193,6 +1252,7 @@ app:
     action:
       build:
         en: What should we build
+        sv: "Vad ska vi bygga"
         uk: "Що будемо створювати"
         hi: "हम क्या बनाएँ"
         pl: "Co zbudujemy"
@@ -1213,6 +1273,7 @@ app:
         id: "Apa yang akan kita bangun"
       build_in_workspace:
         en: What should we build in
+        sv: "Vad ska vi bygga i"
         uk: "Що створюємо в"
         hi: "हम इसमें क्या बनाएँ"
         pl: "Co zbudujemy w"
@@ -1233,6 +1294,7 @@ app:
         id: "Apa yang akan kita bangun di"
       improve:
         en: What are we improving
+        sv: "Vad förbättrar vi"
         uk: "Що вдосконалюємо"
         hi: "हम किसमें सुधार कर रहे हैं"
         pl: "Co ulepszymy"
@@ -1253,6 +1315,7 @@ app:
         id: "Apa yang akan kita tingkatkan"
       improve_in_workspace:
         en: What are we improving in
+        sv: "Vad förbättrar vi i"
         uk: "Що вдосконалюємо в"
         hi: "हम इसमें क्या सुधार कर रहे हैं"
         pl: "Co ulepszymy w"
@@ -1273,6 +1336,7 @@ app:
         id: "Apa yang akan kita tingkatkan di"
       explore:
         en: What are we exploring
+        sv: "Vad utforskar vi"
         uk: "Що досліджуємо"
         hi: "हम क्या खोज रहे हैं"
         pl: "Co odkryjemy"
@@ -1293,6 +1357,7 @@ app:
         id: "Apa yang akan kita jelajahi"
       explore_in_workspace:
         en: What are we exploring in
+        sv: "Vad utforskar vi i"
         uk: "Що досліджуємо в"
         hi: "हम इसमें क्या खोज रहे हैं"
         pl: "Co odkryjemy w"
@@ -1314,6 +1379,7 @@ app:
     cta:
       choose_workspace:
         en: Choose a workspace
+        sv: "Välj en arbetsyta"
         uk: "Вибрати робочий простір"
         hi: "वर्कस्पेस चुनें"
         pl: "Wybierz obszar roboczy"
@@ -1334,6 +1400,7 @@ app:
         id: "Pilih ruang kerja"
       open_project:
         en: Open a project
+        sv: "Öppna ett projekt"
         uk: "Відкрити проєкт"
         hi: "प्रोजेक्ट खोलें"
         pl: "Otwórz projekt"
@@ -1354,6 +1421,7 @@ app:
         id: "Buka proyek"
       select_folder:
         en: Select a folder
+        sv: "Välj en mapp"
         uk: "Вибрати папку"
         hi: "फ़ोल्डर चुनें"
         pl: "Wybierz folder"
@@ -1375,6 +1443,7 @@ app:
   session:
     preparing_new_thread:
       en: Preparing a new thread…
+      sv: "Förbereder en ny tråd..."
       uk: "Підготовка нової розмови…"
       hi: "नया थ्रेड तैयार हो रहा है…"
       pl: "Przygotowywanie nowego wątku…"
@@ -1395,6 +1464,7 @@ app:
       id: "Menyiapkan percakapan baru…"
     waiting_to_send:
       en: Your message will send after the startup decision.
+      sv: "Ditt meddelande kommer att skickas efter startbeslutet."
       uk: "Ваше повідомлення буде надіслано після ухвалення рішення про запуск."
       hi: "शुरुआती निर्णय के बाद आपका संदेश भेजा जाएगा।"
       pl: "Wiadomość zostanie wysłana po podjęciu decyzji dotyczącej uruchomienia."
@@ -1415,6 +1485,7 @@ app:
       id: "Pesan Anda akan dikirim setelah keputusan awal ditangani."
     keep_as_draft:
       en: Keep as draft
+      sv: "Behåll som utkast"
       uk: "Залишити чернеткою"
       hi: "ड्राफ़्ट के रूप में रखें"
       pl: "Pozostaw jako wersję roboczą"
@@ -1436,6 +1507,7 @@ app:
   files:
     scanning:
       en: Scanning workspace files
+      sv: "Skannar arbetsytefiler"
       uk: "Сканування файлів робочого простору"
       hi: "वर्कस्पेस फ़ाइलें स्कैन हो रही हैं"
       pl: "Skanowanie plików obszaru roboczego"
@@ -1456,6 +1528,7 @@ app:
       id: "Memindai file ruang kerja"
     workspace_files:
       en: Workspace files
+      sv: "Arbetsytefiler"
       uk: "Файли робочого простору"
       hi: "वर्कस्पेस फ़ाइलें"
       pl: "Pliki obszaru roboczego"
@@ -1476,6 +1549,7 @@ app:
       id: "File ruang kerja"
     focus_tree:
       en: Focus workspace file tree
+      sv: "Fokusera arbetsytans filträd"
       uk: "Перейти до дерева файлів робочого простору"
       hi: "वर्कस्पेस फ़ाइल ट्री पर फ़ोकस करें"
       pl: "Przenieś fokus na drzewo plików obszaru roboczego"
@@ -1496,6 +1570,7 @@ app:
       id: "Fokus ke pohon file ruang kerja"
     refresh:
       en: Refresh
+      sv: "Uppdatera"
       uk: "Оновити"
       hi: "रीफ़्रेश करें"
       pl: "Odśwież"
@@ -1516,6 +1591,7 @@ app:
       id: "Segarkan"
     refresh_tooltip:
       en: Refresh workspace files
+      sv: "Uppdatera arbetsytefiler"
       uk: "Оновити файли робочого простору"
       hi: "वर्कस्पेस फ़ाइलें रीफ़्रेश करें"
       pl: "Odśwież pliki obszaru roboczego"
@@ -1536,6 +1612,7 @@ app:
       id: "Segarkan file ruang kerja"
     scanning_description:
       en: Workspace files are being indexed for browsing.
+      sv: "Arbetsytefiler indexeras för bläddring."
       uk: "Файли робочого простору індексуються для перегляду."
       hi: "ब्राउज़ करने के लिए वर्कस्पेस फ़ाइलों की इंडेक्सिंग हो रही है।"
       pl: "Pliki obszaru roboczego są indeksowane na potrzeby przeglądania."
@@ -1556,6 +1633,7 @@ app:
       id: "File ruang kerja sedang diindeks untuk ditelusuri."
     file_accessibility:
       en: "File: %{path}"
+      sv: "Fil: %{path}"
       uk: "Файл: %{path}"
       hi: "फ़ाइल: %{path}"
       pl: "Plik: %{path}"
@@ -1576,6 +1654,7 @@ app:
       id: "Berkas: %{path}"
     folder_accessibility:
       en: "Folder: %{path}"
+      sv: "Mapp: %{path}"
       uk: "Папка: %{path}"
       hi: "फ़ोल्डर: %{path}"
       pl: "Katalog: %{path}"
@@ -1596,6 +1675,7 @@ app:
       id: "Direktori: %{path}"
     preview_unavailable:
       en: "“%{path}” is outside the workspace, missing, or not UTF-8 text."
+      sv: "\"%{path}\" är utanför arbetsytan, saknas eller saknas UTF-8-text."
       uk: "«%{path}» не належить до робочого простору, не існує або не є текстом у UTF-8."
       hi: "“%{path}” वर्कस्पेस से बाहर है, मौजूद नहीं है या UTF-8 टेक्स्ट नहीं है।"
       pl: "„%{path}” znajduje się poza obszarem roboczym, nie istnieje lub nie jest tekstem UTF-8."
@@ -1617,6 +1697,7 @@ app:
     empty:
       title:
         en: No workspace files
+        sv: "Inga arbetsytefiler"
         uk: "Немає файлів робочого простору"
         hi: "वर्कस्पेस में कोई फ़ाइल नहीं"
         pl: "Brak plików w obszarze roboczym"
@@ -1637,6 +1718,7 @@ app:
         id: "Tidak ada file ruang kerja"
       description:
         en: There are no files available to browse in this workspace.
+        sv: "Det finns inga filer tillgängliga att bläddra i denna arbetsyta."
         uk: "У цьому робочому просторі немає файлів для перегляду."
         hi: "इस वर्कस्पेस में ब्राउज़ करने के लिए कोई फ़ाइल उपलब्ध नहीं है।"
         pl: "W tym obszarze roboczym nie ma plików do przeglądania."
@@ -1658,6 +1740,7 @@ app:
     no_workspace:
       title:
         en: Choose a workspace
+        sv: "Välj en arbetsyta"
         uk: "Виберіть робочий простір"
         hi: "वर्कस्पेस चुनें"
         pl: "Wybierz obszar roboczy"
@@ -1678,6 +1761,7 @@ app:
         id: "Pilih ruang kerja"
       description:
         en: Select a workspace to browse its files.
+        sv: "Välj en arbetsyta för att bläddra bland dess filer."
         uk: "Виберіть робочий простір, щоб переглядати його файли."
         hi: "फ़ाइलें ब्राउज़ करने के लिए वर्कस्पेस चुनें।"
         pl: "Wybierz obszar roboczy, aby przeglądać jego pliki."
@@ -1699,6 +1783,7 @@ app:
   file_preview:
     accessibility_title:
       en: "File preview: %{path}"
+      sv: "Filförhandsgranskning: %{path}"
       uk: "Попередній перегляд файлу: %{path}"
       hi: "फ़ाइल पूर्वावलोकन: %{path}"
       pl: "Podgląd pliku: %{path}"
@@ -1719,6 +1804,7 @@ app:
       id: "Pratinjau file: %{path}"
     accessibility_description:
       en: Read-only file preview. Press Escape to close.
+      sv: "Förhandsgranskning av skrivskyddad fil. Tryck på Escape för att stänga."
       uk: "Файл лише для читання. Натисніть Escape, щоб закрити."
       hi: "केवल-पठन फ़ाइल पूर्वावलोकन। बंद करने के लिए Escape दबाएँ।"
       pl: "Podgląd pliku tylko do odczytu. Naciśnij Escape, aby zamknąć."
@@ -1739,6 +1825,7 @@ app:
       id: "Pratinjau file hanya-baca. Tekan Escape untuk menutup."
     open_in_editor:
       en: Open in editor
+      sv: "Öppna i redigeraren"
       uk: "Відкрити в редакторі"
       hi: "एडिटर में खोलें"
       pl: "Otwórz w edytorze"
@@ -1759,6 +1846,7 @@ app:
       id: "Buka di editor"
     copy:
       en: Copy
+      sv: "Kopiera"
       uk: "Копіювати"
       hi: "कॉपी करें"
       pl: "Kopiuj"
@@ -1779,6 +1867,7 @@ app:
       id: "Salin"
     close:
       en: Close
+      sv: "Stäng"
       uk: "Закрити"
       hi: "बंद करें"
       pl: "Zamknij"
@@ -1799,6 +1888,7 @@ app:
       id: "Tutup"
     close_tooltip:
       en: Close preview
+      sv: "Stäng förhandsgranskning"
       uk: "Закрити попередній перегляд"
       hi: "पूर्वावलोकन बंद करें"
       pl: "Zamknij podgląd"
@@ -1819,6 +1909,7 @@ app:
       id: "Tutup pratinjau"
     truncated:
       en: "Preview truncated at %{size}."
+      sv: "Förhandsgranskning trunkerad vid %{size}."
       uk: "Попередній перегляд обрізано до %{size}."
       hi: "%{size} पर पूर्वावलोकन छोटा किया गया।"
       pl: "Podgląd skrócono do %{size}."
@@ -1839,6 +1930,7 @@ app:
       id: "Pratinjau dipotong pada %{size}."
     editor_error:
       en: "Could not open the file in the editor: %{error}"
+      sv: "Kunde inte öppna filen i redigeraren: %{error}"
       uk: "Не вдалося відкрити файл у редакторі: %{error}"
       hi: "फ़ाइल एडिटर में नहीं खुल सकी: %{error}"
       pl: "Nie można otworzyć pliku w edytorze: %{error}"
@@ -1861,6 +1953,7 @@ app:
     title:
       conversation_search:
         en: Find in conversation
+        sv: "Hitta i konversation"
         uk: "Знайти в розмові"
         hi: "बातचीत में खोजें"
         pl: "Znajdź w rozmowie"
@@ -1881,6 +1974,7 @@ app:
         id: Cari dalam percakapan
       file_mention:
         en: Mention a workspace file
+        sv: "Nämn en arbetsytefil"
         uk: "Згадати файл робочого простору"
         hi: "वर्कस्पेस फ़ाइल का उल्लेख करें"
         pl: "Wspomnij plik z obszaru roboczego"
@@ -1901,6 +1995,7 @@ app:
         id: Sebut file ruang kerja
       slash_commands:
         en: VT Code commands
+        sv: "VT Code-kommandon"
         uk: "Команди VT Code"
         hi: "VT Code कमांड"
         pl: "Polecenia VT Code"
@@ -1921,6 +2016,7 @@ app:
         id: Perintah VT Code
       prompt_history:
         en: Recent prompts
+        sv: "Senaste uppmaningarna"
         uk: "Останні запити"
         hi: "हाल के प्रॉम्प्ट"
         pl: "Ostatnie prompty"
@@ -1941,6 +2037,7 @@ app:
         id: Prompt terbaru
       permissions:
         en: Command permissions
+        sv: "Kommandotillstånd"
         uk: "Дозволи команд"
         hi: "कमांड अनुमतियाँ"
         pl: "Uprawnienia poleceń"
@@ -1961,6 +2058,7 @@ app:
         id: Izin perintah
       modes:
         en: Agent mode
+        sv: "Agentläge"
         uk: "Режим агента"
         hi: "एजेंट मोड"
         pl: "Tryb agenta"
@@ -1981,6 +2079,7 @@ app:
         id: Mode agen
       ui_font:
         en: Choose UI font
+        sv: "Välj typsnitt för användargränssnitt"
         uk: "Вибрати шрифт інтерфейсу"
         hi: "UI फ़ॉन्ट चुनें"
         pl: "Wybierz czcionkę interfejsu"
@@ -2001,6 +2100,7 @@ app:
         id: Pilih font antarmuka
       code_font:
         en: Choose code font
+        sv: "Välj kodtypsnitt"
         uk: "Вибрати шрифт коду"
         hi: "कोड फ़ॉन्ट चुनें"
         pl: "Wybierz czcionkę kodu"
@@ -2021,6 +2121,7 @@ app:
         id: Pilih font kode
       configuration:
         en: VT Code configuration
+        sv: "VT Code-konfiguration"
         uk: "Конфігурація VT Code"
         hi: "VT Code कॉन्फ़िगरेशन"
         pl: "Konfiguracja VT Code"
@@ -2041,6 +2142,7 @@ app:
         id: Konfigurasi VT Code
       changed_file:
         en: Choose changed file
+        sv: "Välj ändrad fil"
         uk: "Вибрати змінений файл"
         hi: "बदली हुई फ़ाइल चुनें"
         pl: "Wybierz zmieniony plik"
@@ -2061,6 +2163,7 @@ app:
         id: Pilih file yang berubah
       commands:
         en: Command palette
+        sv: "Kommandopalett"
         uk: "Палітра команд"
         hi: "कमांड पैलेट"
         pl: "Paleta poleceń"
@@ -2082,6 +2185,7 @@ app:
     sections:
       session:
         en: Session
+        sv: "Arbetssession"
         uk: "Сеанс"
         hi: "सेशन"
         pl: "Sesja"
@@ -2102,6 +2206,7 @@ app:
         id: Sesi
       view:
         en: View
+        sv: "Visa"
         uk: "Вигляд"
         hi: "दृश्य"
         pl: "Widok"
@@ -2122,6 +2227,7 @@ app:
         id: Tampilan
       conversation:
         en: Conversation
+        sv: "Konversation"
         uk: "Розмова"
         hi: "बातचीत"
         pl: "Rozmowa"
@@ -2142,6 +2248,7 @@ app:
         id: Percakapan
       vtcode_commands:
         en: VT Code commands
+        sv: "VT Code-kommandon"
         uk: "Команди VT Code"
         hi: "VT Code कमांड"
         pl: "Polecenia VT Code"
@@ -2162,6 +2269,7 @@ app:
         id: Perintah VT Code
       recent_sessions:
         en: Recent sessions
+        sv: "Senaste sessioner"
         uk: "Останні сеанси"
         hi: "हाल के सेशन"
         pl: "Ostatnie sesje"
@@ -2182,6 +2290,7 @@ app:
         id: Sesi terbaru
       files:
         en: Files
+        sv: "Filer"
         uk: "Файли"
         hi: "फ़ाइलें"
         pl: "Pliki"
@@ -2202,6 +2311,7 @@ app:
         id: File
       loaded_messages:
         en: Loaded messages
+        sv: "Laddade meddelanden"
         uk: "Завантажені повідомлення"
         hi: "लोड किए गए संदेश"
         pl: "Wczytane wiadomości"
@@ -2222,6 +2332,7 @@ app:
         id: Pesan yang dimuat
       loaded_tool_output:
         en: Loaded tool output
+        sv: "Utmatning av laddat verktyg"
         uk: "Завантажений вивід інструментів"
         hi: "लोड किया गया टूल आउटपुट"
         pl: "Wczytane wyniki narzędzi"
@@ -2242,6 +2353,7 @@ app:
         id: Output alat yang dimuat
       this_thread:
         en: This thread
+        sv: "Den här tråden"
         uk: "Ця розмова"
         hi: "यह थ्रेड"
         pl: "Ten wątek"
@@ -2262,6 +2374,7 @@ app:
         id: Percakapan ini
       add:
         en: Add
+        sv: "Lägg till"
         uk: "Додати"
         hi: "जोड़ें"
         pl: "Dodaj"
@@ -2282,6 +2395,7 @@ app:
         id: Tambahkan
       workspace_files:
         en: Workspace files
+        sv: "Arbetsytefiler"
         uk: "Файли робочого простору"
         hi: "वर्कस्पेस फ़ाइलें"
         pl: "Pliki obszaru roboczego"
@@ -2302,6 +2416,7 @@ app:
         id: File ruang kerja
       skills:
         en: Skills
+        sv: "Färdigheter"
         uk: "Навички"
         hi: "स्किल"
         pl: "Umiejętności"
@@ -2322,6 +2437,7 @@ app:
         id: Skill
       plugins:
         en: Plugins
+        sv: "Tillägg"
         uk: "Плагіни"
         hi: "प्लगइन"
         pl: "Wtyczki"
@@ -2342,6 +2458,7 @@ app:
         id: Plugin
       commands:
         en: Commands
+        sv: "Kommandon"
         uk: "Команди"
         hi: "कमांड"
         pl: "Polecenia"
@@ -2363,6 +2480,7 @@ app:
     command:
       new_session:
         en: New session
+        sv: "Ny session"
         uk: "Новий сеанс"
         hi: "नया सेशन"
         pl: "Nowa sesja"
@@ -2383,6 +2501,7 @@ app:
         id: Sesi baru
       close_session:
         en: Close session
+        sv: "Stäng sessionen"
         uk: "Закрити сеанс"
         hi: "सेशन बंद करें"
         pl: "Zamknij sesję"
@@ -2403,6 +2522,7 @@ app:
         id: Tutup sesi
       switch_workspace:
         en: Switch workspace…
+        sv: "Byt arbetsyta..."
         uk: "Змінити робочий простір…"
         hi: "वर्कस्पेस बदलें…"
         pl: "Przełącz obszar roboczy…"
@@ -2423,6 +2543,7 @@ app:
         id: Ganti ruang kerja…
       refresh_recent_threads:
         en: Refresh recent threads
+        sv: "Uppdatera senaste trådar"
         uk: "Оновити останні розмови"
         hi: "हाल के थ्रेड रीफ़्रेश करें"
         pl: "Odśwież ostatnie wątki"
@@ -2443,6 +2564,7 @@ app:
         id: Segarkan percakapan terbaru
       choose_model:
         en: Choose a model…
+        sv: "Välj en modell…"
         uk: "Вибрати модель…"
         hi: "मॉडल चुनें…"
         pl: "Wybierz model…"
@@ -2463,6 +2585,7 @@ app:
         id: Pilih model…
       toggle_inspector:
         en: Toggle inspector panel
+        sv: "Växla inspektörspanel"
         uk: "Перемкнути панель інспектора"
         hi: "इंस्पेक्टर पैनल टॉगल करें"
         pl: "Przełącz panel inspektora"
@@ -2483,6 +2606,7 @@ app:
         id: Alihkan panel pemeriksa
       toggle_zen_mode:
         en: Toggle Zen mode
+        sv: "Växla Zen-läge"
         uk: "Перемкнути режим Zen"
         hi: "Zen मोड टॉगल करें"
         pl: "Przełącz tryb Zen"
@@ -2503,6 +2627,7 @@ app:
         id: Alihkan mode Zen
       switch_dark_theme:
         en: Switch to Dark theme
+        sv: "Byt till mörkt tema"
         uk: "Перейти до темної теми"
         hi: "डार्क थीम पर जाएँ"
         pl: "Przełącz na ciemny motyw"
@@ -2523,6 +2648,7 @@ app:
         id: Beralih ke tema gelap
       switch_light_theme:
         en: Switch to Light theme
+        sv: "Byt till ljust tema"
         uk: "Перейти до світлої теми"
         hi: "लाइट थीम पर जाएँ"
         pl: "Przełącz na jasny motyw"
@@ -2543,6 +2669,7 @@ app:
         id: Beralih ke tema terang
       find_in_conversation:
         en: Find in conversation…
+        sv: "Hitta i konversation..."
         uk: "Знайти в розмові…"
         hi: "बातचीत में खोजें…"
         pl: "Znajdź w rozmowie…"
@@ -2563,8 +2690,10 @@ app:
         id: Cari dalam percakapan…
       copy_latest_message:
         en: Copy latest message
+        sv: "Kopiera senaste meddelandet"
       open_session:
         en: "Open session: %{label}"
+        sv: "Öppen session: %{label}"
         uk: "Відкрити сеанс: %{label}"
         hi: "सेशन खोलें: %{label}"
         pl: "Otwórz sesję: %{label}"
@@ -2585,6 +2714,7 @@ app:
         id: "Buka sesi: %{label}"
       preview_file:
         en: "Preview file: %{path}"
+        sv: "Förhandsgranska fil: %{path}"
         uk: "Попередній перегляд файлу: %{path}"
         hi: "फ़ाइल का पूर्वावलोकन करें: %{path}"
         pl: "Podgląd pliku: %{path}"
@@ -2605,6 +2735,7 @@ app:
         id: "Pratinjau file: %{path}"
       add_files:
         en: Files…
+        sv: "Filer"
         uk: "Файли…"
         hi: "फ़ाइलें…"
         pl: "Pliki…"
@@ -2625,6 +2756,7 @@ app:
         id: File…
       workspace_file:
         en: Workspace file
+        sv: "Arbetsytefil"
         uk: "Файл робочого простору"
         hi: "वर्कस्पेस फ़ाइल"
         pl: "Plik obszaru roboczego"
@@ -2645,6 +2777,7 @@ app:
         id: File ruang kerja
       use_plugin:
         en: "Use the %{plugin} plugin."
+        sv: "Använd tillägget %{plugin}."
         uk: "Використати плагін %{plugin}."
         hi: "%{plugin} प्लगइन का उपयोग करें।"
         pl: "Użyj wtyczki %{plugin}."
@@ -2665,6 +2798,7 @@ app:
         id: "Gunakan plugin %{plugin}."
       you:
         en: You
+        sv: "Du"
         uk: "Ви"
         hi: "आप"
         pl: "Ty"
@@ -2685,6 +2819,7 @@ app:
         id: Anda
       vtcode:
         en: VT Code
+        sv: "VT Code"
         uk: "VT Code"
         hi: "VT Code"
         pl: "VT Code"
@@ -2705,6 +2840,7 @@ app:
         id: VT Code
       tool_activity:
         en: Tool activity
+        sv: "Verktygsaktivitet"
         uk: "Активність інструментів"
         hi: "टूल गतिविधि"
         pl: "Aktywność narzędzi"
@@ -2725,6 +2861,7 @@ app:
         id: Aktivitas alat
       output:
         en: Output
+        sv: "Utdata"
         uk: "Вивід"
         hi: "आउटपुट"
         pl: "Wynik"
@@ -2746,6 +2883,7 @@ app:
     placeholder:
       configuration:
         en: Search all CLI settings…
+        sv: "Sök i alla CLI-inställningar..."
         uk: "Пошук у всіх налаштуваннях CLI…"
         hi: "सभी CLI सेटिंग्स खोजें…"
         pl: "Szukaj we wszystkich ustawieniach CLI…"
@@ -2766,6 +2904,7 @@ app:
         id: Cari semua pengaturan CLI…
       fonts:
         en: Search installed fonts…
+        sv: "Sök installerade teckensnitt..."
         uk: "Пошук установлених шрифтів…"
         hi: "इंस्टॉल किए गए फ़ॉन्ट खोजें…"
         pl: "Szukaj w zainstalowanych czcionkach…"
@@ -2786,6 +2925,7 @@ app:
         id: Cari font yang terpasang…
       workspace_files:
         en: Filter workspace files…
+        sv: "Filtrera arbetsytefiler..."
         uk: "Фільтрувати файли робочого простору…"
         hi: "वर्कस्पेस फ़ाइलें फ़िल्टर करें…"
         pl: "Filtruj pliki obszaru roboczego…"
@@ -2806,6 +2946,7 @@ app:
         id: Filter file ruang kerja…
       commands:
         en: Filter VT Code commands…
+        sv: "Filtrera VT Code-kommandon..."
         uk: "Фільтрувати команди VT Code…"
         hi: "VT Code कमांड फ़िल्टर करें…"
         pl: "Filtruj polecenia VT Code…"
@@ -2826,6 +2967,7 @@ app:
         id: Filter perintah VT Code…
       changed_files:
         en: Search changed files…
+        sv: "Sök ändrade filer..."
         uk: "Пошук змінених файлів…"
         hi: "बदली हुई फ़ाइलें खोजें…"
         pl: "Szukaj w zmienionych plikach…"
@@ -2846,6 +2988,7 @@ app:
         id: Cari file yang berubah…
       conversation:
         en: Search messages and visible output…
+        sv: "Sök meddelanden och synlig utmatning..."
         uk: "Пошук повідомлень і видимого виводу…"
         hi: "संदेश और दिखाई देने वाला आउटपुट खोजें…"
         pl: "Szukaj w wiadomościach i widocznych wynikach narzędzi…"
@@ -2866,6 +3009,7 @@ app:
         id: Cari pesan dan output yang terlihat…
       prompts:
         en: Search prompts in this thread…
+        sv: "Sökuppmaningar i den här tråden..."
         uk: "Пошук запитів у цій розмові…"
         hi: "इस थ्रेड के प्रॉम्प्ट खोजें…"
         pl: "Szukaj promptów w tym wątku…"
@@ -2886,6 +3030,7 @@ app:
         id: Cari prompt dalam percakapan ini…
       modes:
         en: Search agent modes…
+        sv: "Sök agentlägen..."
         uk: "Пошук режимів агента…"
         hi: "एजेंट मोड खोजें…"
         pl: "Szukaj trybów agentów…"
@@ -2906,6 +3051,7 @@ app:
         id: Cari mode agen…
       default:
         en: Type a command or search…
+        sv: "Skriv ett kommando eller sök..."
         uk: "Введіть команду або пошуковий запит…"
         hi: "कमांड लिखें या खोजें…"
         pl: "Wpisz polecenie lub wyszukaj…"
@@ -2926,6 +3072,7 @@ app:
         id: Ketik perintah atau cari…
     conversation_search_header:
       en: Searches loaded messages and visible tool output
+      sv: "Söker inlästa meddelanden och synlig verktygsutmatning"
       uk: "Пошук охоплює завантажені повідомлення та видимий вивід інструментів"
       hi: "लोड किए गए संदेशों और दिखाई देने वाले टूल आउटपुट में खोजता है"
       pl: "Przeszukuje wczytane wiadomości i widoczne wyniki narzędzi"
@@ -2947,6 +3094,7 @@ app:
     empty:
       no_models:
         en: No models available
+        sv: "Inga modeller tillgängliga"
         uk: "Немає доступних моделей"
         hi: "कोई मॉडल उपलब्ध नहीं है"
         pl: "Brak dostępnych modeli"
@@ -2967,6 +3115,7 @@ app:
         id: Tidak ada model yang tersedia
       models_reload:
         en: Reopen VT Code to reload the model catalog.
+        sv: "Öppna VT Code igen för att ladda om modellkatalogen."
         uk: "Перезапустіть VT Code, щоб завантажити каталог моделей."
         hi: "मॉडल सूची फिर से लोड करने के लिए VT Code दोबारा खोलें।"
         pl: "Otwórz ponownie VT Code, aby wczytać katalog modeli."
@@ -2987,6 +3136,7 @@ app:
         id: Buka kembali VT Code untuk memuat ulang katalog model.
       no_prompts:
         en: No prompt history yet
+        sv: "Ingen prompthistorik ännu"
         uk: "Історія запитів порожня"
         hi: "अभी कोई प्रॉम्प्ट इतिहास नहीं है"
         pl: "Brak historii promptów"
@@ -3007,6 +3157,7 @@ app:
         id: Belum ada riwayat prompt
       prompts_hint:
         en: Prompts sent in this thread will appear here.
+        sv: "Frågorna som skickas i den här tråden visas här."
         uk: "Надіслані в цій розмові запити з’являться тут."
         hi: "इस थ्रेड में भेजे गए प्रॉम्प्ट यहाँ दिखाई देंगे।"
         pl: "Prompty wysłane w tym wątku pojawią się tutaj."
@@ -3027,6 +3178,7 @@ app:
         id: Prompt yang dikirim dalam percakapan ini akan muncul di sini.
       modes_unavailable:
         en: Agent modes unavailable
+        sv: "Agentlägen otillgängliga"
         uk: "Режими агента недоступні"
         hi: "एजेंट मोड उपलब्ध नहीं हैं"
         pl: "Tryby agentów są niedostępne"
@@ -3047,6 +3199,7 @@ app:
         id: Mode agen tidak tersedia
       modes_reload:
         en: Rebuild VT Code Desktop and its bundled CLI together, then reload CLI settings.
+        sv: "Bygg om VT Code Desktop och dess medföljande CLI tillsammans och ladda sedan om CLI-inställningarna."
         uk: "Зберіть VT Code Desktop повторно разом із вбудованим CLI, а потім перезавантажте налаштування CLI."
         hi: "VT Code Desktop और उसके साथ शामिल CLI को एक साथ फिर से बनाएं, फिर CLI सेटिंग्स दोबारा लोड करें।"
         pl: "Przebuduj VT Code Desktop razem z dołączonym CLI, a następnie ponownie wczytaj ustawienia CLI."
@@ -3067,6 +3220,7 @@ app:
         id: Bangun ulang VT Code Desktop bersama CLI bawaannya, lalu muat ulang pengaturan CLI.
       no_loaded_match:
         en: No match in loaded conversation
+        sv: "Ingen matchning i laddad konversation"
         uk: "У завантаженій розмові збігів немає"
         hi: "लोड की गई बातचीत में कोई मेल नहीं"
         pl: "Brak dopasowań w wczytanej rozmowie"
@@ -3087,6 +3241,7 @@ app:
         id: Tidak ada kecocokan dalam percakapan yang dimuat
       older_history:
         en: Load earlier messages below to search older parts of this conversation.
+        sv: "Ladda tidigare meddelanden nedan för att söka i äldre delar av denna konversation."
         uk: "Завантажте нижче попередні повідомлення, щоб шукати в давнішій частині розмови."
         hi: "बातचीत के पुराने हिस्सों को खोजने के लिए नीचे पहले के संदेश लोड करें।"
         pl: "Wczytaj poniżej wcześniejsze wiadomości, aby przeszukać starsze części tej rozmowy."
@@ -3107,6 +3262,7 @@ app:
         id: Muat pesan sebelumnya untuk mencari bagian percakapan yang lebih lama.
       no_results:
         en: No matching results
+        sv: "Inga matchande resultat"
         uk: "Нічого не знайдено"
         hi: "कोई मेल खाता परिणाम नहीं"
         pl: "Brak pasujących wyników"
@@ -3127,6 +3283,7 @@ app:
         id: Tidak ada hasil yang cocok
       try_different_search:
         en: Try a different search.
+        sv: "Prova en annan sökning."
         uk: "Спробуйте інший пошуковий запит."
         hi: "कोई दूसरा खोज शब्द आज़माएँ।"
         pl: "Spróbuj wyszukać coś innego."
@@ -3148,6 +3305,7 @@ app:
     history:
       loading:
         en: Loading earlier messages…
+        sv: "Laddar tidigare meddelanden..."
         uk: "Завантаження попередніх повідомлень…"
         hi: "पहले के संदेश लोड हो रहे हैं…"
         pl: "Wczytywanie wcześniejszych wiadomości…"
@@ -3168,6 +3326,7 @@ app:
         id: Memuat pesan sebelumnya…
       limit_reached:
         en: Message limit reached
+        sv: "Meddelandegräns uppnådd"
         uk: "Досягнуто межі повідомлень"
         hi: "संदेश सीमा पूरी हो गई"
         pl: "Osiągnięto limit wiadomości"
@@ -3188,6 +3347,7 @@ app:
         id: Batas pesan tercapai
       retry:
         en: Retry loading earlier messages
+        sv: "Försök ladda om tidigare meddelanden"
         uk: "Повторити завантаження попередніх повідомлень"
         hi: "पहले के संदेश फिर से लोड करें"
         pl: "Ponów wczytywanie wcześniejszych wiadomości"
@@ -3208,6 +3368,7 @@ app:
         id: Coba muat ulang pesan sebelumnya
       load:
         en: Load earlier messages
+        sv: "Ladda tidigare meddelanden"
         uk: "Завантажити попередні повідомлення"
         hi: "पहले के संदेश लोड करें"
         pl: "Wczytaj wcześniejsze wiadomości"
@@ -3228,6 +3389,7 @@ app:
         id: Muat pesan sebelumnya
       retry_hint:
         en: Could not load older messages. You can retry.
+        sv: "Det gick inte att läsa in äldre meddelanden. Du kan försöka igen."
         uk: "Не вдалося завантажити попередні повідомлення. Спробуйте ще раз."
         hi: "पुराने संदेश लोड नहीं हो सके। आप फिर कोशिश कर सकते हैं।"
         pl: "Nie udało się wczytać starszych wiadomości. Możesz spróbować ponownie."
@@ -3249,6 +3411,7 @@ app:
   errors:
     fast_processing_unavailable:
       en: "Fast processing is unavailable for the selected model."
+      sv: "Snabb bearbetning är inte tillgänglig för den valda modellen."
       uk: "Швидке виконання недоступне для вибраної моделі."
       hi: "चुने गए मॉडल के लिए तेज़ प्रोसेसिंग उपलब्ध नहीं है।"
       pl: "Szybkie przetwarzanie jest niedostępne dla wybranego modelu."
@@ -3269,6 +3432,7 @@ app:
       id: "Pemrosesan cepat tidak tersedia untuk model yang dipilih."
     model_selection_runtime_changing:
       en: "Model selection is unavailable while the runtime is changing."
+      sv: "Modellval är inte tillgängligt medan körtiden ändras."
       uk: "Вибір моделі недоступний, поки змінюється середовище виконання."
       hi: "रनटाइम बदलते समय मॉडल चयन उपलब्ध नहीं है।"
       pl: "Nie można wybrać modelu podczas zmiany środowiska uruchomieniowego."
@@ -3289,6 +3453,7 @@ app:
       id: "Model tidak dapat dipilih saat runtime sedang berubah."
     runtime_options_unavailable:
       en: "Runtime options are still loading or unavailable. Try again when they finish loading."
+      sv: "Körtidsalternativ laddas fortfarande eller är inte tillgängliga. Försök igen när de är klara med laddningen."
       uk: "Параметри середовища виконання ще завантажуються або недоступні. Спробуйте пізніше."
       hi: "रनटाइम विकल्प अभी लोड हो रहे हैं या उपलब्ध नहीं हैं। लोड पूरा होने पर फिर कोशिश करें।"
       pl: "Opcje środowiska uruchomieniowego są nadal wczytywane lub niedostępne. Spróbuj ponownie po zakończeniu wczytywania."
@@ -3309,6 +3474,7 @@ app:
       id: "Opsi runtime masih dimuat atau tidak tersedia. Coba lagi setelah pemuatan selesai."
     request_queue_unavailable:
       en: "The local service request queue is unavailable."
+      sv: "Den lokala serviceförfrågningskön är inte tillgänglig."
       uk: "Черга запитів локальної служби недоступна."
       hi: "स्थानीय सेवा की अनुरोध कतार उपलब्ध नहीं है।"
       pl: "Kolejka żądań usługi lokalnej jest niedostępna."
@@ -3329,6 +3495,7 @@ app:
       id: "Antrean permintaan layanan lokal tidak tersedia."
     desktop_command_unavailable:
       en: "This desktop command is currently unavailable. Try again."
+      sv: "Det här skrivbordskommandot är för närvarande inte tillgängligt. Försök igen."
       uk: "Ця команда Desktop зараз недоступна. Спробуйте ще раз."
       hi: "यह डेस्कटॉप कमांड अभी उपलब्ध नहीं है। फिर कोशिश करें।"
       pl: "To polecenie pulpitu jest obecnie niedostępne. Spróbuj ponownie."
@@ -3350,6 +3517,7 @@ app:
   transcript:
     history_limit_reached:
       en: The 2,000-message local transcript limit has been reached.
+      sv: "Gränsen för lokal transkription av 2 000 meddelanden har uppnåtts."
       uk: "Досягнуто локального обмеження стенограми у 2 000 повідомлень."
       hi: "स्थानीय ट्रांसक्रिप्ट की 2,000 संदेशों की सीमा पूरी हो गई है।"
       pl: "Osiągnięto lokalny limit 2000 wiadomości w transkrypcji."
@@ -3370,6 +3538,7 @@ app:
       id: Batas lokal transkrip 2.000 pesan telah tercapai.
     load_earlier_tooltip:
       en: Load archived messages above while keeping this position.
+      sv: "Ladda arkiverade meddelanden ovan medan du behåller den här positionen."
       uk: "Завантажити архівні повідомлення вище, залишившись на цьому місці."
       hi: "इस स्थान को बनाए रखते हुए ऊपर संग्रहीत संदेश लोड करें।"
       pl: "Wczytaj powyżej zarchiwizowane wiadomości, zachowując bieżące położenie."
@@ -3390,6 +3559,7 @@ app:
       id: Muat pesan arsip sebelumnya tanpa mengubah posisi ini.
     compact_boundary_title:
       en: "Context compacted"
+      sv: "Sammanhang komprimerat"
       uk: "Контекст скорочено"
       hi: "संदर्भ संक्षिप्त किया गया"
       pl: "Skompresowano kontekst"
@@ -3410,6 +3580,7 @@ app:
       id: "Konteks dipadatkan"
     compact_boundary_body:
       en: "Summarized %{original} -> %{compacted} messages (%{trigger}, %{mode})."
+      sv: "Sammanfattat %{original} -> %{compacted} meddelanden (%{trigger}, %{mode})."
       uk: "Узагальнено повідомлення: %{original} → %{compacted} (%{trigger}, %{mode})."
       hi: "%{original} -> %{compacted} संदेशों का सारांश बनाया गया (%{trigger}, %{mode})।"
       pl: "Podsumowano %{original} -> %{compacted} wiadomości (%{trigger}, %{mode})."
@@ -3430,6 +3601,7 @@ app:
       id: "Meringkas %{original} -> %{compacted} pesan (%{trigger}, %{mode})."
     context_reset_title:
       en: "Context reset"
+      sv: "Kontextåterställning"
       uk: "Контекст скинуто"
       hi: "संदर्भ रीसेट किया गया"
       pl: "Zresetowano kontekst"
@@ -3450,6 +3622,7 @@ app:
       id: "Konteks diatur ulang"
     context_reset_body:
       en: "Fresh context started by %{trigger} at %{previous}% pressure."
+      sv: "Nytt sammanhang startat av %{trigger} vid %{previous}% tryck."
       uk: "Новий контекст розпочато через %{trigger} за рівня заповнення %{previous}%."
       hi: "%{trigger} द्वारा %{previous}% दबाव पर नया संदर्भ शुरू किया गया।"
       pl: "Nowy kontekst rozpoczęty przez %{trigger} przy presji %{previous}%."
@@ -3472,6 +3645,7 @@ app:
     history:
       notice:
         en: Showing the latest %{count} tool actions.
+        sv: "Visar de senaste %{count} verktygsåtgärderna."
         uk: "Показано останні %{count} дій інструментів."
         hi: "नवीनतम %{count} टूल कार्रवाइयाँ दिखाई जा रही हैं।"
         pl: "Wyświetlanie %{count} najnowszych działań narzędzi."
@@ -3492,6 +3666,7 @@ app:
         id: "Menampilkan %{count} tindakan alat terbaru."
       search:
         en: Search conversation
+        sv: "Sök konversation"
         uk: "Пошук у розмові"
         hi: "बातचीत खोजें"
         pl: "Szukaj w rozmowie"
@@ -3513,6 +3688,7 @@ app:
   workspace:
     section:
       en: "Workspace"
+      sv: "Arbetsområde"
       uk: "Робочий простір"
       hi: "वर्कस्पेस"
       pl: "Obszar roboczy"
@@ -3534,6 +3710,7 @@ app:
       id: "Ruang kerja"
     choose:
       en: "Choose workspace"
+      sv: "Välj arbetsyta"
       uk: "Вибрати робочий простір"
       hi: "वर्कस्पेस चुनें"
       pl: "Wybierz obszar roboczy"
@@ -3555,6 +3732,7 @@ app:
       id: "Pilih ruang kerja"
     choose_or_recent:
       en: "Choose a workspace or recent project"
+      sv: "Välj en arbetsyta eller ett nyligen genomfört projekt"
       uk: "Виберіть робочий простір або недавній проєкт"
       hi: "वर्कस्पेस या हाल का प्रोजेक्ट चुनें"
       pl: "Wybierz obszar roboczy lub ostatni projekt"
@@ -3576,6 +3754,7 @@ app:
       id: "Pilih ruang kerja atau proyek terbaru"
     project_placeholder:
       en: "Choose a project"
+      sv: "Välj ett projekt"
       uk: "Виберіть проєкт"
       hi: "प्रोजेक्ट चुनें"
       pl: "Wybierz projekt"
@@ -3597,6 +3776,7 @@ app:
       id: "Pilih proyek"
     checking:
       en: "Checking…"
+      sv: "Kontroll…"
       uk: "Перевірка…"
       hi: "जाँच हो रही है…"
       pl: "Sprawdzanie…"
@@ -3618,6 +3798,7 @@ app:
       id: "Memeriksa…"
     change:
       en: "Change"
+      sv: "Ändra"
       uk: "Змінити"
       hi: "बदलें"
       pl: "Zmień"
@@ -3639,6 +3820,7 @@ app:
       id: "Ubah"
     open:
       en: "Open"
+      sv: "Öppna"
       uk: "Відкрити"
       hi: "खोलें"
       pl: "Otwórz"
@@ -3660,6 +3842,7 @@ app:
       id: "Buka"
     projects:
       en: "Projects"
+      sv: "Projekt"
       uk: "Проєкти"
       hi: "प्रोजेक्ट"
       pl: "Projekty"
@@ -3681,6 +3864,7 @@ app:
       id: "Proyek"
     recent_threads:
       en: "Recent threads"
+      sv: "Senaste trådar"
       uk: "Останні розмови"
       hi: "हाल के थ्रेड"
       pl: "Ostatnie wątki"
@@ -3702,6 +3886,7 @@ app:
       id: "Percakapan terbaru"
     current_label:
       en: "%{workspace} (current workspace)"
+      sv: "%{workspace} (nuvarande arbetsyta)"
       uk: "%{workspace} (поточний робочий простір)"
       hi: "%{workspace} (मौजूदा वर्कस्पेस)"
       pl: "%{workspace} (bieżący obszar roboczy)"
@@ -3723,6 +3908,7 @@ app:
       id: "%{workspace} (ruang kerja saat ini)"
     choose_folder:
       en: "Choose folder…"
+      sv: "Välj mapp..."
       uk: "Вибрати папку…"
       hi: "फ़ोल्डर चुनें…"
       pl: "Wybierz folder…"
@@ -3744,6 +3930,7 @@ app:
       id: "Pilih folder…"
     no_recent_workspaces:
       en: "No recent workspaces"
+      sv: "Inga nya arbetsytor"
       uk: "Немає недавніх робочих просторів"
       hi: "हाल के वर्कस्पेस नहीं हैं"
       pl: "Brak ostatnich obszarów roboczych"
@@ -3766,6 +3953,7 @@ app:
   workspace_review:
     review_working_tree:
       en: "Review working tree"
+      sv: "Granska arbetsträd"
       uk: "Переглянути робочу директорію"
       hi: "वर्किंग ट्री की समीक्षा करें"
       pl: "Przejrzyj drzewo robocze"
@@ -3786,6 +3974,7 @@ app:
       id: "Tinjau working tree"
     title:
       en: "Working tree review"
+      sv: "Granskning av arbetsträd"
       uk: "Перегляд робочої директорії"
       hi: "वर्किंग ट्री समीक्षा"
       pl: "Przegląd drzewa roboczego"
@@ -3806,6 +3995,7 @@ app:
       id: "Tinjauan working tree"
     description:
       en: "Read-only redacted snapshot · staged and unstaged changes · optional untracked text previews"
+      sv: "Skrivskyddad redigerad ögonblicksbild · stegvisa och icke-stegade ändringar · valfria ospårade textförhandsvisningar"
       uk: "Лише для читання, з прихованими секретами · індексовані та неіндексовані зміни · за бажанням перегляд тексту невідстежуваних файлів"
       hi: "केवल-पठन संपादित स्नैपशॉट · स्टेज किए और बिना स्टेज किए बदलाव · वैकल्पिक अनट्रैक किए टेक्स्ट पूर्वावलोकन"
       pl: "Tylko do odczytu, zanonimizowany zrzut · zmiany w indeksie i poza nim · opcjonalne podglądy nieśledzonych plików tekstowych"
@@ -3826,6 +4016,7 @@ app:
       id: "Snapshot tersamarkan dan hanya-baca · perubahan staged dan unstaged · pratinjau teks file tak terlacak bersifat opsional"
     session_title:
       en: "Review changes"
+      sv: "Granska ändringar"
       uk: "Перегляд змін"
       hi: "बदलावों की समीक्षा करें"
       pl: "Przejrzyj zmiany"
@@ -3846,6 +4037,7 @@ app:
       id: "Tinjau perubahan"
     session_description:
       en: "Session patch previews · read-only"
+      sv: "Förhandsgranskning av sessionspatch · skrivskyddad"
       uk: "Попередній перегляд патчів сеансу · лише для читання"
       hi: "सेशन पैच पूर्वावलोकन · केवल-पठन"
       pl: "Podglądy poprawek sesji · tylko do odczytu"
@@ -3866,6 +4058,7 @@ app:
       id: "Pratinjau patch sesi · hanya-baca"
     close_review:
       en: "Close diff review"
+      sv: "Stäng diff-granskning"
       uk: "Закрити перегляд змін"
       hi: "डिफ़ समीक्षा बंद करें"
       pl: "Zamknij przegląd różnic"
@@ -3886,6 +4079,7 @@ app:
       id: "Tutup tinjauan diff"
     expanded_in_inspector:
       en: "Changes are open in the expanded review."
+      sv: "Ändringar är öppna i den utökade granskningen."
       uk: "Розширений перегляд уже відкрито в інспекторі."
       hi: "बदलाव विस्तृत समीक्षा में खुले हैं।"
       pl: "Zmiany są otwarte w rozszerzonym widoku przeglądu."
@@ -3906,6 +4100,7 @@ app:
       id: "Perubahan terbuka di panel tinjauan yang diperluas."
     folder_optional:
       en: "Folder (optional)"
+      sv: "Mapp (valfritt)"
       uk: "Папка (необов’язково)"
       hi: "फ़ोल्डर (वैकल्पिक)"
       pl: "Folder (opcjonalnie)"
@@ -3926,6 +4121,7 @@ app:
       id: "Folder (opsional)"
     include_untracked:
       en: "Include untracked text files"
+      sv: "Inkludera ospårade textfiler"
       uk: "Включати невідстежувані текстові файли"
       hi: "अनट्रैक की गई टेक्स्ट फ़ाइलें शामिल करें"
       pl: "Uwzględnij nieśledzone pliki tekstowe"
@@ -3946,6 +4142,7 @@ app:
       id: "Sertakan file teks yang tidak terlacak"
     refresh_tooltip:
       en: "Refresh working tree review"
+      sv: "Uppdatera granskning av arbetsträd"
       uk: "Оновити перегляд робочої директорії"
       hi: "वर्किंग ट्री समीक्षा रीफ़्रेश करें"
       pl: "Odśwież przegląd drzewa roboczego"
@@ -3966,6 +4163,7 @@ app:
       id: "Segarkan tinjauan working tree"
     refreshing:
       en: "Refreshing…"
+      sv: "Uppdaterar"
       uk: "Оновлення…"
       hi: "रीफ़्रेश हो रहा है…"
       pl: "Odświeżanie…"
@@ -3986,6 +4184,7 @@ app:
       id: "Menyegarkan…"
     load_changes:
       en: "Load changes"
+      sv: "Ladda ändringar"
       uk: "Завантажити зміни"
       hi: "बदलाव लोड करें"
       pl: "Wczytaj zmiany"
@@ -4006,6 +4205,7 @@ app:
       id: "Muat perubahan"
     refresh:
       en: "Refresh"
+      sv: "Uppdatera"
       uk: "Оновити"
       hi: "रीफ़्रेश करें"
       pl: "Odśwież"
@@ -4026,6 +4226,7 @@ app:
       id: "Segarkan"
     diff_layout:
       en: "Diff layout"
+      sv: "Diffvy"
       uk: "Режим перегляду змін"
       hi: "डिफ़ लेआउट"
       pl: "Układ różnic"
@@ -4046,6 +4247,7 @@ app:
       id: "Tata letak diff"
     unified:
       en: "Unified"
+      sv: "Förenad"
       uk: "Об’єднаний"
       hi: "यूनिफ़ाइड"
       pl: "Ujednolicony"
@@ -4066,6 +4268,7 @@ app:
       ru: "Единый"
     split:
       en: "Split"
+      sv: "Dela"
       uk: "Розділений"
       hi: "स्प्लिट"
       pl: "Podzielony"
@@ -4086,6 +4289,7 @@ app:
       id: "Terpisah"
     copy_preview:
       en: "Copy preview"
+      sv: "Kopiera förhandsgranskning"
       uk: "Копіювати попередній перегляд"
       hi: "पूर्वावलोकन कॉपी करें"
       pl: "Kopiuj podgląd"
@@ -4106,6 +4310,7 @@ app:
       id: "Salin pratinjau"
     reading_git_changes:
       en: "Reading Git changes"
+      sv: "Läser Git-ändringar"
       uk: "Читання змін Git"
       hi: "Git बदलाव पढ़े जा रहे हैं"
       pl: "Odczytywanie zmian Git"
@@ -4126,6 +4331,7 @@ app:
       id: "Membaca perubahan Git"
     reading_git_changes_progress:
       en: "Reading Git changes…"
+      sv: "Läser Git-ändringar..."
       uk: "Читання змін Git…"
       hi: "Git बदलाव पढ़े जा रहे हैं…"
       pl: "Odczytywanie zmian Git…"
@@ -4146,6 +4352,7 @@ app:
       id: "Membaca perubahan Git…"
     capturing_snapshot:
       en: "Capturing a bounded, read-only snapshot."
+      sv: "Fånga en begränsad, skrivskyddad ögonblicksbild."
       uk: "Створення обмеженого знімка лише для читання."
       hi: "सीमित आकार का केवल-पठन स्नैपशॉट लिया जा रहा है।"
       pl: "Tworzenie ograniczonego zrzutu tylko do odczytu."
@@ -4166,6 +4373,7 @@ app:
       id: "Mengambil snapshot terbatas yang hanya-baca."
     refreshing_status:
       en: "Refreshing Git changes · showing the last successful snapshot"
+      sv: "Uppdaterar Git-ändringar · visar den senaste framgångsrika ögonblicksbilden"
       uk: "Оновлення змін Git · показано останній успішний знімок"
       hi: "Git बदलाव रीफ़्रेश हो रहे हैं · पिछला सफल स्नैपशॉट दिखाया जा रहा है"
       pl: "Odświeżanie zmian Git · wyświetlanie ostatniego poprawnego zrzutu"
@@ -4186,6 +4394,7 @@ app:
       id: "Menyegarkan perubahan Git · menampilkan snapshot terakhir yang berhasil"
     file:
       en: "file"
+      sv: "fil"
       uk: "файл"
       hi: "फ़ाइल"
       pl: "plików"
@@ -4206,6 +4415,7 @@ app:
       id: "file"
     files:
       en: "files"
+      sv: "filer"
       uk: "файлів"
       hi: "फ़ाइलें"
       pl: "plików"
@@ -4226,6 +4436,7 @@ app:
       id: "file"
     changed_files_summary:
       en: "%{count} %{files} changed · +%{additions} · −%{deletions}"
+      sv: "%{count} %{files} ändrade · +%{additions} · −%{deletions}"
       uk: "Змінено %{count} %{files} · +%{additions} · −%{deletions}"
       hi: "%{count} %{files} बदलीं · +%{additions} · −%{deletions}"
       pl: "Liczba %{files}: %{count} · +%{additions} · −%{deletions}"
@@ -4246,6 +4457,7 @@ app:
       id: "%{count} %{files} berubah · +%{additions} · −%{deletions}"
     changed_files_count:
       en: "%{count} %{files} changed"
+      sv: "%{count} %{files} har ändrats"
       uk: "Змінено %{count} %{files}"
       hi: "%{count} %{files} बदलीं"
       pl: "Liczba %{files}: %{count}"
@@ -4266,6 +4478,7 @@ app:
       id: "%{count} %{files} berubah"
     added_deleted_description:
       en: "Added and deleted lines in the captured working tree preview."
+      sv: "Tillagda och raderade rader i den fångade förhandsgranskningen av arbetsträd."
       uk: "Додані й видалені рядки в захопленому перегляді робочої директорії."
       hi: "वर्किंग ट्री पूर्वावलोकन में जोड़ी और हटाई गई पंक्तियाँ।"
       pl: "Dodane i usunięte wiersze w przechwyconym podglądzie drzewa roboczego."
@@ -4286,6 +4499,7 @@ app:
       id: "Baris yang ditambahkan dan dihapus dalam pratinjau working tree yang diambil."
     file_position:
       en: "File %{current} of %{total} · %{path}"
+      sv: "Fil %{current} av %{total} · %{path}"
       uk: "Файл %{current} із %{total} · %{path}"
       hi: "फ़ाइल %{current} / %{total} · %{path}"
       pl: "Plik %{current} z %{total} · %{path}"
@@ -4306,6 +4520,7 @@ app:
       id: "File %{current} dari %{total} · %{path}"
     previous_file:
       en: "Previous file"
+      sv: "Föregående fil"
       uk: "Попередній файл"
       hi: "पिछली फ़ाइल"
       pl: "Poprzedni plik"
@@ -4326,6 +4541,7 @@ app:
       id: "File sebelumnya"
     choose_changed_file:
       en: "Choose a changed file"
+      sv: "Välj en ändrad fil"
       uk: "Вибрати змінений файл"
       hi: "बदली हुई फ़ाइल चुनें"
       pl: "Wybierz zmieniony plik"
@@ -4346,6 +4562,7 @@ app:
       id: "Pilih file yang berubah"
     next_file:
       en: "Next file"
+      sv: "Nästa fil"
       uk: "Наступний файл"
       hi: "अगली फ़ाइल"
       pl: "Następny plik"
@@ -4366,6 +4583,7 @@ app:
       id: "File berikutnya"
     git_review_unavailable:
       en: "Git review unavailable"
+      sv: "Git-granskning ej tillgänglig"
       uk: "Перегляд Git недоступний"
       hi: "Git समीक्षा उपलब्ध नहीं"
       pl: "Przegląd Git jest niedostępny"
@@ -4386,6 +4604,7 @@ app:
       id: "Tinjauan Git tidak tersedia"
     choose_what_to_review:
       en: "Choose what to review"
+      sv: "Välj vad du vill granska"
       uk: "Виберіть, що переглянути"
       hi: "समीक्षा के लिए चुनें"
       pl: "Wybierz zakres przeglądu"
@@ -4406,6 +4625,7 @@ app:
       id: "Pilih yang akan ditinjau"
     choose_what_to_review_hint:
       en: "Leave Folder empty for the whole workspace, or enter a relative directory. Then choose Load changes."
+      sv: "Lämna mappen tom för hela arbetsytan, eller ange en relativ katalog. Välj sedan Ladda ändringar."
       uk: "Залиште папку порожньою, щоб охопити весь робочий простір, або вкажіть відносний каталог. Потім виберіть «Завантажити зміни»."
       hi: "पूरे वर्कस्पेस के लिए Folder खाली छोड़ें या सापेक्ष डायरेक्टरी दर्ज करें। फिर Load changes चुनें।"
       pl: "Pozostaw pole Folder puste, aby objąć cały obszar roboczy, lub wpisz ścieżkę względną. Następnie wybierz Wczytaj zmiany."
@@ -4426,6 +4646,7 @@ app:
       id: "Kosongkan Folder untuk seluruh ruang kerja, atau masukkan direktori relatif. Lalu pilih Muat perubahan."
     folder_value:
       en: "Folder: %{folder}"
+      sv: "Mapp: %{folder}"
       uk: "Папка: %{folder}"
       hi: "फ़ोल्डर: %{folder}"
       pl: "Katalog: %{folder}"
@@ -4446,6 +4667,7 @@ app:
       id: "Direktori: %{folder}"
     refresh_failed:
       en: "Refresh failed. Showing the last successful snapshot. %{error}"
+      sv: "Uppdatering misslyckades. Visar den senaste lyckade ögonblicksbilden. %{error}"
       uk: "Не вдалося оновити. Показано останній успішний знімок. %{error}"
       hi: "रीफ़्रेश विफल हुआ। पिछला सफल स्नैपशॉट दिखाया जा रहा है। %{error}"
       pl: "Odświeżanie nie powiodło się. Wyświetlany jest ostatni poprawny zrzut. %{error}"
@@ -4466,6 +4688,7 @@ app:
       id: "Gagal menyegarkan. Menampilkan snapshot terakhir yang berhasil. %{error}"
     repository_unavailable_hint:
       en: "Refresh after Git and a valid repository are available for this workspace."
+      sv: "Uppdatering efter Git och ett giltigt arkiv är tillgängligt för denna arbetsyta."
       uk: "Оновіть після того, як Git і дійсний репозиторій стануть доступними для цього робочого простору."
       hi: "इस वर्कस्पेस के लिए Git और मान्य रिपॉज़िटरी उपलब्ध होने पर रीफ़्रेश करें।"
       pl: "Odśwież, gdy Git i prawidłowe repozytorium będą dostępne dla tego obszaru roboczego."
@@ -4486,6 +4709,7 @@ app:
       id: "Segarkan setelah Git dan repositori yang valid tersedia untuk ruang kerja ini."
     no_previewable_changes:
       en: "No previewable changes"
+      sv: "Inga förhandsgranskningsbara ändringar"
       uk: "Немає змін для попереднього перегляду"
       hi: "पूर्वावलोकन योग्य बदलाव नहीं हैं"
       pl: "Brak zmian do podglądu"
@@ -4506,6 +4730,7 @@ app:
       id: "Tidak ada perubahan yang dapat dipratinjau"
     no_tracked_changes:
       en: "No tracked changes"
+      sv: "Inga spårade ändringar"
       uk: "Немає відстежуваних змін"
       hi: "ट्रैक किए गए बदलाव नहीं हैं"
       pl: "Brak śledzonych zmian"
@@ -4526,6 +4751,7 @@ app:
       id: "Tidak ada perubahan terlacak"
     no_previewable_changes_hint:
       en: "No previewable changes in this snapshot. See the capture note for omitted files."
+      sv: "Inga förhandsgranskningsbara ändringar i denna ögonblicksbild. Se inspelningsanteckningen för utelämnade filer."
       uk: "У цьому знімку немає змін для попереднього перегляду. Див. примітку захоплення, щоб дізнатися про пропущені файли."
       hi: "इस स्नैपशॉट में पूर्वावलोकन योग्य बदलाव नहीं हैं। छोड़ी गई फ़ाइलों के लिए कैप्चर नोट देखें।"
       pl: "W tym zrzucie nie ma zmian do podglądu. Sprawdź notatkę o przechwyceniu, aby zobaczyć pominięte pliki."
@@ -4546,6 +4772,7 @@ app:
       id: "Tidak ada perubahan yang dapat dipratinjau dalam snapshot ini. Lihat catatan pengambilan untuk file yang dilewati."
     tracked_files_clean_hint:
       en: "Tracked files match the captured Git baseline. Untracked files are excluded."
+      sv: "Spårade filer matchar den fångade Git-baslinjen. Ospårade filer är exkluderade."
       uk: "Відстежувані файли відповідають збереженій базовій версії Git. Невідстежувані файли не включено."
       hi: "ट्रैक की गई फ़ाइलें कैप्चर किए गए Git आधार से मेल खाती हैं। अनट्रैक फ़ाइलें शामिल नहीं हैं।"
       pl: "Śledzone pliki są zgodne z przechwyconą bazą Git. Nieśledzone pliki są wykluczone."
@@ -4566,6 +4793,7 @@ app:
       id: "File terlacak sesuai dengan baseline Git yang diambil. File tak terlacak dikecualikan."
     preview_incomplete:
       en: "Preview incomplete. See the capture note for omitted files or limits. Copy includes only the captured preview."
+      sv: "Förhandsgranskning ofullständig. Se inspelningsanteckningen för utelämnade filer eller begränsningar. Kopia innehåller endast den inspelade förhandsgranskningen."
       uk: "Попередній перегляд неповний. Див. примітку захоплення щодо пропущених файлів або обмежень. Копіюється лише захоплений перегляд."
       hi: "पूर्वावलोकन अधूरा है। छोड़ी गई फ़ाइलों या सीमाओं के लिए कैप्चर नोट देखें। कॉपी में केवल कैप्चर किया पूर्वावलोकन होगा।"
       pl: "Podgląd jest niekompletny. Sprawdź notatkę o przechwyceniu w sprawie pominiętych plików lub limitów. Kopiowanie obejmuje tylko przechwycony podgląd."
@@ -4586,6 +4814,7 @@ app:
       id: "Pratinjau belum lengkap. Lihat catatan pengambilan untuk file yang dilewati atau batasan. Salinan hanya mencakup pratinjau yang diambil."
     preview_truncated:
       en: "Preview truncated at the review limit. Choose a narrower folder for a complete review. Copy includes only this preview."
+      sv: "Förhandsgranskning trunkerad vid granskningsgränsen. Välj en smalare mapp för en fullständig granskning. Kopia innehåller endast denna förhandsgranskning."
       uk: "Попередній перегляд обрізано через обмеження. Виберіть вужчу папку для повного перегляду. Копіюється лише цей перегляд."
       hi: "समीक्षा सीमा पर पूर्वावलोकन छोटा किया गया। पूरी समीक्षा के लिए छोटा फ़ोल्डर चुनें। कॉपी में केवल यही पूर्वावलोकन होगा।"
       pl: "Podgląd skrócono z powodu limitu przeglądu. Aby przejrzeć całość, wybierz węższy folder. Kopiowanie obejmuje tylko ten podgląd."
@@ -4606,6 +4835,7 @@ app:
       id: "Pratinjau dipotong karena batas ukuran. Pilih folder yang lebih sempit untuk tinjauan lengkap. Salinan hanya mencakup pratinjau ini."
     structured_preview_unavailable:
       en: "Structured preview unavailable for this patch. Showing the captured text."
+      sv: "Strukturerad förhandsgranskning är inte tillgänglig för denna patch. Visar den fångade texten."
       uk: "Структурований перегляд цього патча недоступний. Показано захоплений текст."
       hi: "इस पैच के लिए संरचित पूर्वावलोकन उपलब्ध नहीं है। कैप्चर किया गया टेक्स्ट दिखाया जा रहा है।"
       pl: "Podgląd strukturalny tej poprawki jest niedostępny. Wyświetlany jest przechwycony tekst."
@@ -4626,6 +4856,7 @@ app:
       id: "Pratinjau terstruktur tidak tersedia untuk patch ini. Menampilkan teks yang diambil."
     changed_files:
       en: "Changed files"
+      sv: "Ändrade filer"
       uk: "Змінені файли"
       hi: "बदली हुई फ़ाइलें"
       pl: "Zmienione pliki"
@@ -4647,6 +4878,7 @@ app:
   navigation:
     sidebar_label:
       en: "Workspace, projects, and recent threads"
+      sv: "Arbetsyta, projekt och senaste trådar"
       uk: "Робочий простір, проєкти й останні розмови"
       hi: "वर्कस्पेस, प्रोजेक्ट और हाल के थ्रेड"
       pl: "Obszar roboczy, projekty i ostatnie wątki"
@@ -4668,6 +4900,7 @@ app:
       id: "Ruang kerja, proyek, dan percakapan terbaru"
     new_thread:
       en: "New thread"
+      sv: "Ny tråd"
       uk: "Нова розмова"
       hi: "नया थ्रेड"
       pl: "Nowy wątek"
@@ -4689,6 +4922,7 @@ app:
       id: "Percakapan baru"
     close_thread:
       en: "Close thread"
+      sv: "Stäng tråd"
       uk: "Закрити розмову"
       hi: "थ्रेड बंद करें"
       pl: "Zamknij wątek"
@@ -4710,6 +4944,7 @@ app:
       id: "Tutup percakapan"
     current_thread_label:
       en: "%{thread} (current thread)"
+      sv: "%{thread} (nuvarande tråd)"
       uk: "%{thread} (поточна розмова)"
       hi: "%{thread} (मौजूदा थ्रेड)"
       pl: "%{thread} (bieżący wątek)"
@@ -4731,6 +4966,7 @@ app:
       id: "%{thread} (percakapan saat ini)"
     workspace_actions:
       en: "Workspace actions"
+      sv: "Arbetsyteåtgärder"
       uk: "Дії робочого простору"
       hi: "वर्कस्पेस कार्रवाइयाँ"
       pl: "Działania obszaru roboczego"
@@ -4754,6 +4990,7 @@ app:
   composer:
     input_label:
       en: "Message to VT Code"
+      sv: "Meddelande till VT Code"
       uk: "Повідомлення для VT Code"
       hi: "VT Code के लिए संदेश"
       pl: "Wiadomość do VT Code"
@@ -4775,6 +5012,7 @@ app:
       id: "Pesan untuk VT Code"
     input_placeholder:
       en: "Ask VT Code to make changes…"
+      sv: "Be VT Code att göra ändringar..."
       uk: "Попросіть VT Code внести зміни…"
       hi: "VT Code से बदलाव करने को कहें…"
       pl: "Poproś VT Code o wprowadzenie zmian…"
@@ -4796,6 +5034,7 @@ app:
       id: "Minta VT Code membuat perubahan…"
     input_group_label:
       en: "Message composer"
+      sv: "Meddelandefält"
       uk: "Поле повідомлення"
       hi: "संदेश कंपोज़र"
       pl: "Pole tworzenia wiadomości"
@@ -4817,6 +5056,7 @@ app:
       id: "Area penulisan pesan"
     add_context:
       en: "Add files and more @"
+      sv: "Lägg till filer och mer @"
       uk: "Додати файли та інше @"
       hi: "फ़ाइलें और अन्य चीज़ें जोड़ें @"
       pl: "Dodaj pliki i więcej @"
@@ -4838,6 +5078,7 @@ app:
       id: "Tambahkan file dan lainnya @"
     execution_policy:
       en: "Execution policy: %{policy}"
+      sv: "Utförandepolicy: %{policy}"
       uk: "Політика виконання: %{policy}"
       hi: "एक्ज़ीक्यूशन नीति: %{policy}"
       pl: "Zasady wykonywania: %{policy}"
@@ -4859,6 +5100,7 @@ app:
       id: "Kebijakan eksekusi: %{policy}"
     permission_ask:
       en: "Ask before protected actions"
+      sv: "Fråga innan skyddade åtgärder"
       uk: "Запитувати дозвіл перед захищеними діями"
       hi: "सुरक्षित कार्रवाइयों से पहले पूछें"
       pl: "Pytaj przed chronionymi działaniami"
@@ -4880,6 +5122,7 @@ app:
       id: "Tanyakan sebelum tindakan yang dilindungi"
     permission_auto:
       en: "Auto-approve commands"
+      sv: "Autogodkänn kommandon"
       uk: "Автоматично підтверджувати команди"
       hi: "कमांड अपने-आप स्वीकृत करें"
       pl: "Automatycznie zatwierdzaj polecenia"
@@ -4901,6 +5144,7 @@ app:
       id: "Setujui perintah secara otomatis"
     permissions_unavailable:
       en: "Permissions unavailable"
+      sv: "Behörigheter otillgängliga"
       uk: "Дозволи недоступні"
       hi: "अनुमतियाँ उपलब्ध नहीं"
       pl: "Uprawnienia są niedostępne"
@@ -4922,6 +5166,7 @@ app:
       id: "Izin tidak tersedia"
     policy:
       en: "Policy"
+      sv: "Riktlinje"
       uk: "Політика"
       hi: "नीति"
       pl: "Zasady"
@@ -4943,6 +5188,7 @@ app:
       id: "Kebijakan"
     command_permissions:
       en: "Command permissions"
+      sv: "Kommandotillstånd"
       uk: "Дозволи команд"
       hi: "कमांड अनुमतियाँ"
       pl: "Uprawnienia poleceń"
@@ -4964,6 +5210,7 @@ app:
       id: "Izin perintah"
     send:
       en: "Send message"
+      sv: "Skicka meddelande"
       uk: "Надіслати повідомлення"
       hi: "संदेश भेजें"
       pl: "Wyślij wiadomość"
@@ -4985,6 +5232,7 @@ app:
       id: "Kirim pesan"
     send_tooltip:
       en: "Send message (Enter)"
+      sv: "Skicka meddelande (Enter)"
       uk: "Надіслати повідомлення (Enter)"
       hi: "संदेश भेजें (Enter)"
       pl: "Wyślij wiadomość (Enter)"
@@ -5006,6 +5254,7 @@ app:
       id: "Kirim pesan (Enter)"
     cancel:
       en: "Cancel run"
+      sv: "Avbryt körning"
       uk: "Скасувати виконання"
       hi: "रन रद्द करें"
       pl: "Anuluj działanie"
@@ -5027,6 +5276,7 @@ app:
       id: "Batalkan proses"
     cancel_tooltip:
       en: "Cancel active run"
+      sv: "Avbryt aktiv körning"
       uk: "Скасувати активне виконання"
       hi: "सक्रिय रन रद्द करें"
       pl: "Anuluj aktywne działanie"
@@ -5048,6 +5298,7 @@ app:
       id: "Batalkan proses aktif"
     connect_webmcp:
       en: "Connect WebMCP"
+      sv: "Anslut WebMCP"
       uk: "Підключити WebMCP"
       hi: "WebMCP कनेक्ट करें"
       pl: "Połącz z WebMCP"
@@ -5069,6 +5320,7 @@ app:
       id: "Sambungkan WebMCP"
     webmcp_connected:
       en: "WebMCP connected"
+      sv: "WebMCP ansluten"
       uk: "WebMCP підключено"
       hi: "WebMCP कनेक्टेड"
       pl: "WebMCP połączono"
@@ -5090,6 +5342,7 @@ app:
       id: "WebMCP tersambung"
     webmcp_accessibility:
       en: "Open VT Code CLI and WebMCP connection settings"
+      sv: "Öppna anslutningsinställningarna för VT Code CLI och WebMCP"
       uk: "Відкрити налаштування підключення VT Code CLI та WebMCP"
       hi: "VT Code CLI और WebMCP कनेक्शन सेटिंग्स खोलें"
       pl: "Otwórz ustawienia połączeń VT Code CLI i WebMCP"
@@ -5111,6 +5364,7 @@ app:
       id: "Buka pengaturan koneksi VT Code CLI dan WebMCP"
     webmcp_tooltip:
       en: "Pair the browser app with this CLI-backed desktop session"
+      sv: "Parkoppla webbläsarappen med denna CLI-stödda skrivbordssession"
       uk: "З’єднати браузер із сеансом Desktop на базі CLI"
       hi: "ब्राउज़र ऐप को इस CLI-आधारित डेस्कटॉप सेशन के साथ पेयर करें"
       pl: "Sparuj aplikację przeglądarkową z tą sesją obsługiwaną przez CLI"
@@ -5132,6 +5386,7 @@ app:
       id: "Pasangkan aplikasi browser dengan sesi Desktop berbasis CLI ini"
     choose_model:
       en: "Choose a model"
+      sv: "Välj en modell"
       uk: "Вибрати модель"
       hi: "मॉडल चुनें"
       pl: "Wybierz model"
@@ -5153,6 +5408,7 @@ app:
       id: "Pilih model"
     choose_model_tooltip:
       en: "Choose a model · Search by provider, name, or model ID"
+      sv: "Välj en modell · Sök efter leverantör, namn eller modell-ID"
       uk: "Виберіть модель · Пошук за провайдером, назвою або ідентифікатором моделі"
       hi: "मॉडल चुनें · प्रोवाइडर, नाम या मॉडल ID से खोजें"
       pl: "Wybierz model · Szukaj według dostawcy, nazwy lub identyfikatora modelu"
@@ -5174,6 +5430,7 @@ app:
       id: "Pilih model · cari berdasarkan penyedia, nama, atau ID model"
     select_model:
       en: "Select model"
+      sv: "Välj modellen"
       uk: "Вибрати модель"
       hi: "मॉडल चुनें"
       pl: "Wybierz model"
@@ -5195,6 +5452,7 @@ app:
       id: "Pilih model"
     search_models:
       en: "Search providers, models, or IDs…"
+      sv: "Sökleverantörer, modeller eller ID: n..."
       uk: "Пошук провайдерів, моделей або ідентифікаторів…"
       hi: "प्रोवाइडर, मॉडल या ID खोजें…"
       pl: "Szukaj dostawców, modeli lub identyfikatorów…"
@@ -5216,6 +5474,7 @@ app:
       id: "Cari penyedia, model, atau ID…"
     search_all_models:
       en: "Search all models…"
+      sv: "Sök alla modeller..."
       uk: "Пошук серед усіх моделей…"
       hi: "सभी मॉडल खोजें…"
       pl: "Szukaj we wszystkich modelach…"
@@ -5237,6 +5496,7 @@ app:
       id: "Cari semua model…"
     reasoning_effort:
       en: "Reasoning effort: %{effort}"
+      sv: "Ansträngning för resonemang: %{effort}"
       uk: "Рівень міркування: %{effort}"
       hi: "तर्क प्रयास: %{effort}"
       pl: "Poziom rozumowania: %{effort}"
@@ -5258,6 +5518,7 @@ app:
       id: "Tingkat penalaran: %{effort}"
     reasoning_effort_generic:
       en: "Reasoning effort"
+      sv: "Ansträngning för resonemang"
       uk: "Рівень міркування"
       hi: "तर्क प्रयास"
       pl: "Poziom rozumowania"
@@ -5279,6 +5540,7 @@ app:
       id: "Tingkat penalaran"
     reasoning_effort_hint:
       en: "Use Left and Right arrows to adjust reasoning effort."
+      sv: "Använd vänster och höger pil för att justera resonemangsinsatsen."
       uk: "Використовуйте стрілки вліво та вправо, щоб змінити рівень міркування."
       hi: "तर्क प्रयास बदलने के लिए बाएँ और दाएँ तीर दबाएँ।"
       pl: "Użyj strzałek w lewo i w prawo, aby zmienić poziom rozumowania."
@@ -5300,6 +5562,7 @@ app:
   webmcp_notice:
     commands_help:
       en: "Commands: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop."
+      sv: "Kommandon: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop."
       uk: "Команди: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop."
       hi: "कमांड: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop।"
       pl: "Polecenia: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop."
@@ -5320,6 +5583,7 @@ app:
       id: "Perintah: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop."
     disconnected:
       en: "The local VT Code service disconnected. Reconnect to refresh WebMCP status."
+      sv: "Den lokala VT Code-tjänsten kopplades bort. Återanslut för att uppdatera WebMCP-status."
       uk: "Локальну службу VT Code від’єднано. Під’єднайтеся знову, щоб оновити стан WebMCP."
       hi: "स्थानीय VT Code सेवा डिस्कनेक्ट हो गई। WebMCP स्थिति रीफ़्रेश करने के लिए फिर कनेक्ट करें।"
       pl: "Lokalna usługa VT Code została rozłączona. Połącz ponownie, aby odświeżyć stan WebMCP."
@@ -5340,6 +5604,7 @@ app:
       id: "Layanan VT Code lokal terputus. Hubungkan kembali untuk menyegarkan status WebMCP."
     invalid_status:
       en: "The desktop service returned an invalid WebMCP status."
+      sv: "Skrivbordstjänsten returnerade en ogiltig WebMCP-status."
       uk: "Служба Desktop повернула неприпустимий стан WebMCP."
       hi: "डेस्कटॉप सेवा ने अमान्य WebMCP स्थिति लौटाई।"
       pl: "Usługa Desktop zwróciła nieprawidłowy stan WebMCP."
@@ -5360,6 +5625,7 @@ app:
       id: "Layanan desktop mengembalikan status WebMCP yang tidak valid."
     pairing_created:
       en: "Pairing code created. It is valid for a short time and can be used once."
+      sv: "Parkopplingskod skapad. Den är giltig under en kort tid och kan användas en gång."
       uk: "Код підключення створено. Він дійсний недовго та може бути використаний лише один раз."
       hi: "पेयरिंग कोड बनाया गया। यह थोड़े समय के लिए मान्य है और एक बार उपयोग किया जा सकता है।"
       pl: "Utworzono kod parowania. Jest ważny przez krótki czas i można go użyć tylko raz."
@@ -5380,6 +5646,7 @@ app:
       id: "Kode pairing dibuat. Kode ini berlaku sebentar dan hanya dapat digunakan satu kali."
     invalid_pairing:
       en: "The desktop service returned invalid pairing details."
+      sv: "Skrivbordstjänsten returnerade ogiltiga parkopplingsdetaljer."
       uk: "Служба Desktop повернула неприпустимі дані підключення."
       hi: "डेस्कटॉप सेवा ने अमान्य पेयरिंग विवरण लौटाए।"
       pl: "Usługa Desktop zwróciła nieprawidłowe dane parowania."
@@ -5400,6 +5667,7 @@ app:
       id: "Layanan desktop mengembalikan detail pairing yang tidak valid."
     stopped:
       en: "WebMCP disconnected. Browser sessions and pairing codes were revoked."
+      sv: "WebMCP frånkopplad. Webbläsarsessioner och parkopplingskoder återkallades."
       uk: "WebMCP від’єднано. Сеанси браузера й коди підключення відкликано."
       hi: "WebMCP डिस्कनेक्ट हो गया। ब्राउज़र सेशन और पेयरिंग कोड रद्द कर दिए गए।"
       pl: "WebMCP rozłączono. Sesje przeglądarki i kody parowania zostały unieważnione."
@@ -5421,6 +5689,7 @@ app:
 gpui_component:
   Input:
     Copy:
+      sv: "Kopiera"
       uk: "Копіювати"
       vi: Sao chép
       es: "Copiar"
@@ -5440,6 +5709,7 @@ gpui_component:
       pl: "Kopiuj"
       hi: "कॉपी करें"
     Select All:
+      sv: "Markera allt"
       uk: "Вибрати все"
       vi: Chọn tất cả
       es: "Seleccionar todo"
@@ -5460,6 +5730,7 @@ gpui_component:
       hi: "सभी चुनें"
   Attachment:
     Remove:
+      sv: "Ta bort"
       uk: "Видалити"
       vi: Xóa
       es: "Quitar"
@@ -5479,6 +5750,7 @@ gpui_component:
       pl: "Usuń"
       hi: "हटाएँ"
     Retry:
+      sv: "Försök igen"
       uk: "Повторити"
       vi: Thử lại
       es: "Reintentar"
