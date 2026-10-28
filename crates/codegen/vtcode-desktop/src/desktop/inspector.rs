@@ -9,6 +9,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use gpui_kit::SharedString;
 use gpui_kit::component::diff::{DiffFile, DiffFileStatus};
 
+pub(super) use super::transcript::ActivityState;
 use super::transcript::{DiffFileKind, Transcript, TranscriptItem};
 
 /// Cap so a long-running session cannot grow the projection without bound.
@@ -73,15 +74,6 @@ pub(super) struct ActivityProjection {
     pub has_older: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ActivityState {
-    Running,
-    Completed,
-    Failed,
-    Interrupted,
-    Other,
-}
-
 /// Counts for the bounded activity projection, shared by the utility summary
 /// and the Activity tab's chart.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -117,18 +109,6 @@ impl ActivityCounts {
             "{} running · {} done · {} failed · {} interrupted · {} other",
             self.running, self.completed, self.failed, self.interrupted, self.other
         )
-    }
-}
-
-impl ActivityState {
-    pub(super) fn from_status(status: &str) -> Self {
-        match status {
-            "running" | "in progress" | "started" => Self::Running,
-            "completed" => Self::Completed,
-            "interrupted" => Self::Interrupted,
-            status if status == "failed" || status.starts_with("failed (exit ") => Self::Failed,
-            _ => Self::Other,
-        }
     }
 }
 

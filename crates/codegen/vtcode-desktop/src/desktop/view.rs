@@ -71,8 +71,11 @@ use super::files::{self, FileEntry, FilePreview};
 use super::inspector::{self, ActivityCounts, ActivityRow, ActivityState, ChangesProjection, InspectorTab};
 use super::markdown::render_markdown;
 use super::preferences;
+use super::strings::{app, key_context, keys};
 use super::themes;
-use super::transcript::{DiffCard, DiffFile, DiffFileKind, NoticeSeverity, Transcript, TranscriptItem};
+use super::transcript::{
+    DiffCard, DiffFile, DiffFileKind, NoticeSeverity, Transcript, TranscriptItem, TranscriptRole, status as tool_status,
+};
 use super::transport::{
     BackendCommand, BackendEvent, BackendEventSender, BackendHandle, UI_EVENT_CAPACITY, launch_backend,
     request_fits_frame,
@@ -106,6 +109,16 @@ const PARTIAL_ACTIVITY_HISTORY_MESSAGE: &str =
 const ACTIVITY_ROW_HEIGHT: f32 = 72.;
 const SESSION_ROW_HEIGHT: f32 = 36.;
 const CHANGE_ROW_HEIGHT: f32 = 28.;
+const REQUEST_QUEUE_FULL_MESSAGE: &str = "The local service request queue is full. Try again.";
+const UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE: &str =
+    "Restore or dismiss the unsent message before changing sessions or models.";
+const THREAD_UNAVAILABLE_MESSAGE: &str = "This thread is no longer available in the selected workspace.";
+/// Display name for the local user in echo titles and message labels.
+const USER_DISPLAY_NAME: &str = "You";
+/// Palette panel id; the focus trap targets the same element.
+const COMMAND_PALETTE_ELEMENT_ID: &str = "command-palette";
+/// Zen toggle slot id shared by the enter/exit buttons across modes.
+const ZEN_FLOAT_TOGGLE_ELEMENT_ID: &str = "zen-mode-float";
 
 struct WelcomeCopy {
     action: String,
@@ -313,8 +326,8 @@ fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
         }
     }
     cx.bind_keys([
-        KeyBinding::new("cmd-w", CloseWindow, Some("VTCodeDesktop")),
-        KeyBinding::new("cmd-m", MinimizeWindow, Some("VTCodeDesktop")),
+        KeyBinding::new("cmd-w", CloseWindow, Some(key_context::DESKTOP)),
+        KeyBinding::new("cmd-m", MinimizeWindow, Some(key_context::DESKTOP)),
         KeyBinding::new("cmd-shift-n", ShowMainWindow, None),
         KeyBinding::new("cmd-q", QuitApplication, None),
         KeyBinding::new("cmd-h", HideApplication, None),
@@ -323,10 +336,10 @@ fn init_keybindings(cx: &mut App, preferences: &preferences::Preferences) {
         KeyBinding::new("left", PreviousInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("home", FirstInspectorTab, Some("VTCodeInspector")),
         KeyBinding::new("end", LastInspectorTab, Some("VTCodeInspector")),
-        KeyBinding::new("right", NextSettingsTab, Some("VTCodeSettings")),
-        KeyBinding::new("left", PreviousSettingsTab, Some("VTCodeSettings")),
-        KeyBinding::new("home", FirstSettingsTab, Some("VTCodeSettings")),
-        KeyBinding::new("end", LastSettingsTab, Some("VTCodeSettings")),
+        KeyBinding::new("right", NextSettingsTab, Some(key_context::SETTINGS)),
+        KeyBinding::new("left", PreviousSettingsTab, Some(key_context::SETTINGS)),
+        KeyBinding::new("home", FirstSettingsTab, Some(key_context::SETTINGS)),
+        KeyBinding::new("end", LastSettingsTab, Some(key_context::SETTINGS)),
         KeyBinding::new("enter", OpenSelectedFile, Some(gpui_kit::base::tree_key_context())),
     ]);
 }
@@ -338,7 +351,7 @@ fn init_native_menus(cx: &mut App) {
     let _app = cx.on_action(|_: &ShowAllApplications, cx| cx.unhide_other_apps());
     let _app = cx.on_action(|_: &ShowMainWindow, cx| show_main_window(cx));
     cx.set_menus([
-        Menu::new("VT Code").items([
+        Menu::new(app::NAME).items([
             MenuItem::action("Settings…", OpenSettings),
             MenuItem::separator(),
             MenuItem::os_submenu("Services", SystemMenuType::Services),
@@ -496,7 +509,7 @@ fn open_or_activate_main_window(
         .unwrap_or_else(|| themes::DEFAULT_THEME_ID.to_string());
     let start_maximized = preferences.window_maximized();
     let (window, view) = gpui_kit::open_window(desktop_window_options(), cx, move |window, cx| {
-        window.set_window_title("VT Code");
+        window.set_window_title(app::NAME);
         let theme_mode = themes::apply_by_id(&start_theme, Some(window), cx);
         let view = cx.new(|cx| DesktopView::new_with_preferences(window, cx, theme_mode, preferences));
         view.update(cx, |view, cx| view.load_preferences(window, cx));
@@ -1303,12 +1316,13 @@ impl DesktopView {
 
         if let Some(session_id) = target.session_id {
             if !self.sessions.iter().any(|session| session.session_id == session_id) {
-                self.error = Some("This thread is no longer available in the selected workspace.".into());
+                self.error = Some(THREAD_UNAVAILABLE_MESSAGE.into());
                 cx.notify();
                 return;
             }
             self.pending_navigation = Some(PendingNavigation { target_index: index, workspace_switch: false });
-            if !self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx) {
+            if !self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx)
+            {
                 self.pending_navigation = None;
             }
         } else {
@@ -1316,7 +1330,11 @@ impl DesktopView {
                 return;
             };
             self.pending_navigation = Some(PendingNavigation { target_index: index, workspace_switch: false });
-            if !self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx) {
+            if !self.request_session_change(
+                protocol::method::SESSION_CLOSE,
+                json!({ keys::SESSION_ID: session_id }),
+                cx,
+            ) {
                 self.pending_navigation = None;
             }
         }
@@ -1341,11 +1359,11 @@ impl DesktopView {
             return;
         };
         if !self.sessions.iter().any(|session| session.session_id == session_id) {
-            self.error = Some("This thread is no longer available in the selected workspace.".into());
+            self.error = Some(THREAD_UNAVAILABLE_MESSAGE.into());
             self.fail_pending_navigation();
             return;
         }
-        if !self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx) {
+        if !self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx) {
             self.fail_pending_navigation();
         }
     }
@@ -1565,12 +1583,11 @@ impl DesktopView {
 
     fn request_session_change(&mut self, method: &'static str, params: Value, cx: &mut Context<Self>) -> bool {
         let reload_session_id = (method == protocol::method::SESSION_LOAD)
-            .then(|| params.get("sessionId").and_then(Value::as_str))
+            .then(|| params.get(keys::SESSION_ID).and_then(Value::as_str))
             .flatten();
         if !self.session_change_allowed(reload_session_id) {
             if self.retained_submission.is_some() && self.session_change_idle() {
-                self.error =
-                    Some("Restore or dismiss the unsent message before changing sessions or models.".to_string());
+                self.error = Some(UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE.to_string());
                 cx.notify();
             }
             return false;
@@ -1581,7 +1598,7 @@ impl DesktopView {
             self.session_request = Some(method);
             self.status = "Updating session…".to_string();
         } else {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
+            self.error = Some(REQUEST_QUEUE_FULL_MESSAGE.to_string());
         }
         cx.notify();
         sent
@@ -1590,13 +1607,17 @@ impl DesktopView {
     fn begin_new_thread(&mut self, cx: &mut Context<Self>) -> bool {
         if !self.session_change_allowed(None) {
             if self.retained_submission.is_some() && self.session_change_idle() {
-                self.error = Some("Restore or dismiss the unsent message before changing sessions or models.".into());
+                self.error = Some(UNSENT_MESSAGE_BLOCKS_SESSION_CHANGE.into());
                 cx.notify();
             }
             return false;
         }
         if let Some(session_id) = self.selected_session_id.clone() {
-            if !self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx) {
+            if !self.request_session_change(
+                protocol::method::SESSION_CLOSE,
+                json!({ keys::SESSION_ID: session_id }),
+                cx,
+            ) {
                 return false;
             }
             self.pending_new_thread = true;
@@ -1608,11 +1629,10 @@ impl DesktopView {
             self.record_current_navigation();
         }
         self.status = if self.pending_new_thread {
-            "Preparing a new thread…"
+            rust_i18n::t!("app.session.preparing_new_thread").to_string()
         } else {
-            "New thread ready. Submit a prompt to begin."
-        }
-        .into();
+            "New thread ready. Submit a prompt to begin.".into()
+        };
         cx.notify();
         true
     }
@@ -1622,7 +1642,8 @@ impl DesktopView {
     }
 
     fn load_session(&mut self, session_id: String, cx: &mut Context<Self>) {
-        let _sent = self.request_session_change(protocol::method::SESSION_LOAD, json!({ "sessionId": session_id }), cx);
+        let _sent =
+            self.request_session_change(protocol::method::SESSION_LOAD, json!({ keys::SESSION_ID: session_id }), cx);
     }
 
     fn request_earlier_history(&mut self, cx: &mut Context<Self>) {
@@ -1643,10 +1664,10 @@ impl DesktopView {
         if self.request(
             protocol::method::SESSION_HISTORY,
             json!({
-                "sessionId": session_id,
-                "requestId": request_id,
-                "beforeIndex": self.history_start_index,
-                "limit": limit,
+                keys::SESSION_ID: session_id,
+                keys::REQUEST_ID: request_id,
+                keys::BEFORE_INDEX: self.history_start_index,
+                keys::LIMIT: limit,
             }),
         ) {
             self.history_page_generation = self.history_page_generation.wrapping_add(1);
@@ -1655,7 +1676,7 @@ impl DesktopView {
             self.history_page_loading = true;
             self.history_page_error = None;
         } else {
-            self.history_page_error = Some("The local service request queue is full. Try again.".into());
+            self.history_page_error = Some(REQUEST_QUEUE_FULL_MESSAGE.into());
         }
         cx.notify();
     }
@@ -1689,17 +1710,16 @@ impl DesktopView {
         if self.request(
             protocol::method::SESSION_OUTPUT_READ,
             json!({
-                "sessionId": pending.session_id,
-                "requestId": pending.request_id,
-                "itemId": pending.item_id,
-                "offset": pending.offset,
+                keys::SESSION_ID: pending.session_id,
+                keys::REQUEST_ID: pending.request_id,
+                keys::ITEM_ID: pending.item_id,
+                keys::OFFSET: pending.offset,
             }),
         ) {
             self.output_page_pending = Some(pending);
             self.output_page_error = None;
         } else {
-            self.output_page_error =
-                Some((item_id.to_string(), "The local service request queue is full. Try again.".into()));
+            self.output_page_error = Some((item_id.to_string(), REQUEST_QUEUE_FULL_MESSAGE.into()));
         }
         cx.notify();
     }
@@ -2001,7 +2021,7 @@ impl DesktopView {
             return;
         };
         let _sent =
-            self.request_session_change(protocol::method::SESSION_CLOSE, json!({ "sessionId": session_id }), cx);
+            self.request_session_change(protocol::method::SESSION_CLOSE, json!({ keys::SESSION_ID: session_id }), cx);
     }
 
     /// Pick workspace text files to attach to the next prompt.
@@ -2716,9 +2736,9 @@ impl DesktopView {
             .items_newest_first()
             .filter(|item| is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
             .map(|item| {
-                let speaker = if item.role == "user" {
+                let speaker = if item.is_user() {
                     rust_i18n::t!("app.palette.command.you").to_string()
-                } else if item.title.trim().is_empty() && item.role == "assistant" {
+                } else if item.title.trim().is_empty() && item.is_assistant() {
                     rust_i18n::t!("app.palette.command.vtcode").to_string()
                 } else if item.title.trim().is_empty() {
                     rust_i18n::t!("app.palette.command.tool_activity").to_string()
@@ -2744,7 +2764,7 @@ impl DesktopView {
         self.restored_activity
             .iter()
             .chain(self.transcript.items())
-            .filter(|item| item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
+            .filter(|item| item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
             .filter(|item| seen.insert(item.id.as_str()))
             .filter_map(|item| {
                 let output = item.output.as_ref()?;
@@ -2781,7 +2801,7 @@ impl DesktopView {
     fn latest_copyable_message(&self) -> Option<gpui_kit::SharedString> {
         self.transcript
             .items_newest_first()
-            .find(|item| matches!(item.role.as_str(), "user" | "assistant") && !item.text.trim().is_empty())
+            .find(|item| (item.is_user() || item.is_assistant()) && !item.text.trim().is_empty())
             .map(|item| item.text.clone())
     }
 
@@ -2795,11 +2815,11 @@ impl DesktopView {
     fn has_searchable_conversation_content(&self) -> bool {
         self.transcript.items().any(|item| {
             (is_searchable_conversation_role(&item.role) && !item.text.trim().is_empty())
-                || (item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
+                || (item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
         }) || self
             .restored_activity
             .iter()
-            .any(|item| item.role == "tool" && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
+            .any(|item| item.is_tool() && item.output.as_ref().is_some_and(|output| !output.trim().is_empty()))
     }
 
     fn open_model_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2972,7 +2992,7 @@ impl DesktopView {
                     return;
                 }
                 if let Some(index) = self.transcript.position_by_id(&item_id) {
-                    if self.transcript.get(index).is_some_and(|item| item.role == "tool") {
+                    if self.transcript.get(index).is_some_and(|item| item.is_tool()) {
                         if self.transcript.reveal_tool_item(&item_id).is_none() {
                             return;
                         }
@@ -3108,12 +3128,12 @@ impl DesktopView {
                     && (self
                         .restored_activity
                         .iter()
-                        .any(|item| item.id == *item_id && item.role == "tool" && item.output.is_some())
+                        .any(|item| item.id == *item_id && item.is_tool() && item.output.is_some())
                         || self
                             .transcript
                             .position_by_id(item_id)
                             .and_then(|index| self.transcript.get(index))
-                            .is_some_and(|item| item.role == "tool" && item.output.is_some()))
+                            .is_some_and(|item| item.is_tool() && item.output.is_some()))
             }
             PaletteAction::SelectSessionOptions(_) => self.can_select_session_options(),
             PaletteAction::AttachFiles | PaletteAction::AttachFile(_) => {
@@ -3236,7 +3256,8 @@ impl DesktopView {
         let Some(session_id) = self.selected_session_id.clone() else {
             return Err(draft);
         };
-        let params = json!({ "sessionId": session_id, "prompt": draft.prompt, "attachments": draft.attachments });
+        let params =
+            json!({ keys::SESSION_ID: session_id, keys::PROMPT: draft.prompt, keys::ATTACHMENTS: draft.attachments });
         self.clear_error();
         if !request_fits_frame(protocol::method::TURN_SUBMIT, &params) {
             self.error = Some(
@@ -3246,7 +3267,7 @@ impl DesktopView {
             return Err(draft);
         }
         if !self.request(protocol::method::TURN_SUBMIT, params) {
-            self.error = Some("The local service request queue is full. Try again.".to_string());
+            self.error = Some(REQUEST_QUEUE_FULL_MESSAGE.to_string());
             return Err(draft);
         }
         if let Some(entry) = self
@@ -3266,8 +3287,12 @@ impl DesktopView {
                 .collect::<Vec<_>>();
             format!("{}\n\nAttached: {}", draft.prompt, paths.join(", "))
         };
-        self.transcript
-            .push(TranscriptItem::new(draft.echo_id.clone(), "user".into(), "You".into(), echo));
+        self.transcript.push(TranscriptItem::new(
+            draft.echo_id.clone(),
+            TranscriptRole::User.as_str().into(),
+            USER_DISPLAY_NAME.into(),
+            echo,
+        ));
         self.pending_submission = Some(draft);
         self.pending_first_submission = false;
         self.transcript.follow_latest();
@@ -3327,7 +3352,8 @@ impl DesktopView {
             self.status = "Cancellation queued; waiting for the service to accept the turn…".to_string();
             return;
         };
-        if self.request(protocol::method::TURN_CANCEL, json!({ "sessionId": session_id, "turnId": turn_id })) {
+        if self.request(protocol::method::TURN_CANCEL, json!({ keys::SESSION_ID: session_id, keys::TURN_ID: turn_id }))
+        {
             self.cancel_request_sent = true;
         } else {
             self.error = Some("The cancellation request could not be queued.".to_string());
@@ -3615,7 +3641,7 @@ impl DesktopView {
                 }
             }
             BackendEvent::Interaction(interaction) => {
-                let current_turn = interaction.turn_id == "session-start"
+                let current_turn = interaction.turn_id == protocol::SESSION_START_TURN_ID
                     || (self.running
                         && self.active_turn_id.as_deref() == Some(interaction.turn_id.as_str())
                         && self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)));
@@ -3701,7 +3727,7 @@ impl DesktopView {
                         "Decision accepted"
                     }
                     .into();
-                    if identity.turn_id == "session-start"
+                    if identity.turn_id == protocol::SESSION_START_TURN_ID
                         && self.selected_session_id.as_deref() == Some(identity.session_id.as_str())
                         && self.session_request.is_none()
                         && let Some(draft) = self.first_submission.take()
@@ -4142,7 +4168,7 @@ impl DesktopView {
             }
             BackendEvent::Interaction(interaction) => {
                 if self.selected_session_id.as_deref() != Some(interaction.session_id.as_str())
-                    || (interaction.turn_id != "session-start"
+                    || (interaction.turn_id != protocol::SESSION_START_TURN_ID
                         && !self.notification_matches(&interaction.session_id, Some(&interaction.turn_id)))
                     || self
                         .interaction
@@ -4164,12 +4190,12 @@ impl DesktopView {
                 self.status = "Waiting for your decision".to_string();
             }
             BackendEvent::TurnStatus(status) => {
-                if !status.get("sessionId").and_then(Value::as_str).is_some_and(|session_id| {
-                    self.notification_matches(session_id, status.get("turnId").and_then(Value::as_str))
+                if !status.get(keys::SESSION_ID).and_then(Value::as_str).is_some_and(|session_id| {
+                    self.notification_matches(session_id, status.get(keys::TURN_ID).and_then(Value::as_str))
                 }) {
                     return;
                 }
-                if let Some(label) = status.get("status").and_then(Value::as_str) {
+                if let Some(label) = status.get(keys::STATUS).and_then(Value::as_str) {
                     self.status = label.to_string();
                     self.invalidate_webmcp_status();
                 }
@@ -4292,30 +4318,30 @@ impl DesktopView {
                 self.finish_unverified_turn(&event.message);
             }
             ThreadEvent::PlanDelta(delta) => {
-                self.transcript
-                    .append_text(delta.item_id.clone(), "assistant", "Plan".into(), &delta.delta);
+                self.transcript.append_text(
+                    delta.item_id.clone(),
+                    TranscriptRole::Assistant.as_str(),
+                    "Plan".into(),
+                    &delta.delta,
+                );
             }
             ThreadEvent::ItemStarted(event) => self.update_runtime_item(&event.item),
             ThreadEvent::ItemUpdated(event) => self.update_runtime_item(&event.item),
             ThreadEvent::ItemCompleted(event) => self.update_runtime_item(&event.item),
             ThreadEvent::Error(event) => {
-                let message = event.message.clone();
-                let mut item = TranscriptItem::new(
+                self.transcript.push(TranscriptItem::notice(
                     format!("runtime-error-{}", uuid_like_id()),
-                    "notice".to_string(),
                     "Runtime error".into(),
-                    message,
-                );
-                item.notice_severity = NoticeSeverity::Error;
-                self.transcript.push(item);
+                    event.message.clone(),
+                    NoticeSeverity::Error,
+                ));
             }
             ThreadEvent::ThreadCompactBoundary(event) => {
                 // Pre-boundary usage no longer describes the live context; the
                 // next completed turn reports fresh post-boundary usage.
                 self.last_usage = None;
-                self.transcript.push(TranscriptItem::new(
+                self.transcript.push(TranscriptItem::notice(
                     format!("compact-boundary-{}", uuid_like_id()),
-                    "notice".to_string(),
                     rust_i18n::t!("app.transcript.compact_boundary_title").to_string().into(),
                     rust_i18n::t!(
                         "app.transcript.compact_boundary_body",
@@ -4325,6 +4351,7 @@ impl DesktopView {
                         mode = event.mode.as_str()
                     )
                     .to_string(),
+                    NoticeSeverity::Info,
                 ));
             }
             ThreadEvent::ContextReset(event) => {
@@ -4333,9 +4360,8 @@ impl DesktopView {
                     vtcode_exec_events::ContextResetTrigger::PlanApproval => "plan approval",
                     vtcode_exec_events::ContextResetTrigger::Unknown => "unknown",
                 };
-                self.transcript.push(TranscriptItem::new(
+                self.transcript.push(TranscriptItem::notice(
                     format!("context-reset-{}", uuid_like_id()),
-                    "notice".to_string(),
                     rust_i18n::t!("app.transcript.context_reset_title").to_string().into(),
                     rust_i18n::t!(
                         "app.transcript.context_reset_body",
@@ -4343,6 +4369,7 @@ impl DesktopView {
                         previous = event.previous_context_usage_percent
                     )
                     .to_string(),
+                    NoticeSeverity::Info,
                 ));
             }
             _ => {}
@@ -4361,14 +4388,12 @@ impl DesktopView {
         self.cancel_request_sent = false;
         self.status = "Turn ended without verified completion".to_string();
         self.set_selected_session_completed(false);
-        let mut item = TranscriptItem::new(
+        self.transcript.push(TranscriptItem::notice(
             format!("event-{}", uuid_like_id()),
-            "notice".to_string(),
             "Run status".into(),
             message.to_string(),
-        );
-        item.notice_severity = NoticeSeverity::Warning;
-        self.transcript.push(item);
+            NoticeSeverity::Warning,
+        ));
     }
 
     /// Keep the selected sidebar row current without rereading every archive.
@@ -4402,22 +4427,34 @@ impl DesktopView {
         let id = item.id.clone();
         match &item.details {
             ThreadItemDetails::AgentMessage(message) => {
-                self.append_or_update_item(id, "assistant", "VT Code", &message.text, false);
+                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), app::NAME, &message.text, false);
             }
             ThreadItemDetails::Plan(plan) => {
-                self.append_or_update_item(id, "assistant", "Plan", &plan.text, false);
+                self.append_or_update_item(id, TranscriptRole::Assistant.as_str(), "Plan", &plan.text, false);
             }
             ThreadItemDetails::Reasoning(reasoning) => {
-                self.append_or_update_item(id, "assistant", "Planning update", &reasoning.text, false);
+                self.append_or_update_item(
+                    id,
+                    TranscriptRole::Assistant.as_str(),
+                    "Planning update",
+                    &reasoning.text,
+                    false,
+                );
             }
             ThreadItemDetails::Decision(decision) => {
-                self.append_or_update_item(id, "assistant", "Decision", &decision.summary, false);
+                self.append_or_update_item(
+                    id,
+                    TranscriptRole::Assistant.as_str(),
+                    "Decision",
+                    &decision.summary,
+                    false,
+                );
             }
             ThreadItemDetails::FileChange(change) => self.upsert_diff_card(id, change),
             details => {
                 let (title, mut status) = describe_activity(details);
                 if historical && ActivityState::from_status(&status) == ActivityState::Running {
-                    status = "interrupted".to_string();
+                    status = tool_status::INTERRUPTED.to_string();
                 }
                 let payload = activity_details_payload(details);
                 let text = format!("{status}\n\n{payload}");
@@ -4429,11 +4466,12 @@ impl DesktopView {
                     _ => None,
                 };
                 if historical {
-                    let mut item = TranscriptItem::new(id, "tool".to_string(), title.into(), text);
+                    let mut item =
+                        TranscriptItem::new(id, TranscriptRole::Tool.as_str().to_string(), title.into(), text);
                     item.output = output;
                     self.restored_activity.push(item);
                 } else {
-                    self.append_or_update_item(id.clone(), "tool", &title, &text, true);
+                    self.append_or_update_item(id.clone(), TranscriptRole::Tool.as_str(), &title, &text, true);
                     if output.is_some() {
                         self.transcript.set_output(&id, output);
                     }
@@ -4463,7 +4501,12 @@ impl DesktopView {
             failed: change.status == vtcode_exec_events::PatchApplyStatus::Failed,
             patch: change.unified_diff.clone().unwrap_or_default(),
         };
-        let mut item = TranscriptItem::new(id, "diff".to_string(), "File changes".into(), card.patch.clone());
+        let mut item = TranscriptItem::new(
+            id,
+            TranscriptRole::Diff.as_str().to_string(),
+            "File changes".into(),
+            card.patch.clone(),
+        );
         item.diff = Some(card);
         let previous_patch = self
             .selected_change
@@ -4615,7 +4658,7 @@ impl DesktopView {
             if expandable {
                 role.to_string()
             } else {
-                "assistant".to_string()
+                TranscriptRole::Assistant.as_str().to_string()
             },
             title.into(),
             text.to_string(),
@@ -4853,7 +4896,7 @@ impl DesktopView {
                             .tooltip_with_action(
                                 rust_i18n::t!("app.workspace.choose").to_string(),
                                 &ChooseWorkspace,
-                                Some("VTCodeDesktop"),
+                                Some(key_context::DESKTOP),
                             )
                             .label(if self.workspace_selection_pending {
                                 rust_i18n::t!("app.workspace.checking").to_string()
@@ -4906,7 +4949,7 @@ impl DesktopView {
                         .tooltip_with_action(
                             rust_i18n::t!("app.navigation.new_thread").to_string(),
                             &NewSession,
-                            Some("VTCodeDesktop"),
+                            Some(key_context::DESKTOP),
                         )
                         .label(rust_i18n::t!("app.navigation.new_thread").to_string())
                         .icon(IconName::Plus)
@@ -4917,7 +4960,7 @@ impl DesktopView {
                 )
                 .child(
                     desktop_button("close-session")
-                        .tooltip_with_action("Close session", &CloseSession, Some("VTCodeDesktop"))
+                        .tooltip_with_action("Close session", &CloseSession, Some(key_context::DESKTOP))
                         .icon(IconName::X)
                         .accessibility_label(rust_i18n::t!("app.navigation.close_thread").to_string())
                         .ghost()
@@ -5110,9 +5153,9 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let button = if self.zen_mode {
             let faded = themes::faded_chrome(colors.background, colors.foreground);
-            exit_zen_button("zen-mode-float", faded, &self.focus_handle)
+            exit_zen_button(ZEN_FLOAT_TOGGLE_ELEMENT_ID, faded, &self.focus_handle)
         } else {
-            enter_zen_button("zen-mode-float", &self.focus_handle)
+            enter_zen_button(ZEN_FLOAT_TOGGLE_ELEMENT_ID, &self.focus_handle)
         };
         // The toggle persists across modes, so the animation id is keyed by
         // mode: each toggle replays the fade while the button stays fixed.
@@ -5201,7 +5244,7 @@ impl DesktopView {
                             .icon(IconName::ArrowLeft)
                             .ghost()
                             .loading(pending_back)
-                            .tooltip_with_action("Back", &NavigateBack, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Back", &NavigateBack, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_navigate_back() && !pending_back)
                             .dispatches_desktop_action(NavigateBack, self.focus_handle.clone()),
                     )
@@ -5215,7 +5258,7 @@ impl DesktopView {
                             .icon(IconName::ArrowRight)
                             .ghost()
                             .loading(pending_forward)
-                            .tooltip_with_action("Forward", &NavigateForward, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Forward", &NavigateForward, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_navigate_forward() && !pending_forward)
                             .dispatches_desktop_action(NavigateForward, self.focus_handle.clone()),
                     )
@@ -5225,11 +5268,11 @@ impl DesktopView {
                             .toggled(navigation_visible && self.sidebar_open)
                             .icon(navigation_icon)
                             .ghost()
-                            .tooltip_with_action(navigation_label, &ToggleSidebar, Some("VTCodeDesktop"))
+                            .tooltip_with_action(navigation_label, &ToggleSidebar, Some(key_context::DESKTOP))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     )
                     .child(brand_logo(22.))
-                    .child(div().text_sm().font_semibold().child("VT Code"))
+                    .child(div().text_sm().font_semibold().child(app::NAME))
                     .child(
                         div()
                             .min_w_0()
@@ -5251,7 +5294,7 @@ impl DesktopView {
                                         .icon(IconName::Plus)
                                         .ghost()
                                         .accessibility_label("New thread")
-                                        .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
+                                        .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
                                         .desktop_disabled(!self.session_change_allowed(None))
                                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                                 )
@@ -5263,7 +5306,7 @@ impl DesktopView {
                                         .tooltip_with_action(
                                             "Workspace utilities",
                                             &OpenUtilities,
-                                            Some("VTCodeDesktop"),
+                                            Some(key_context::DESKTOP),
                                         )
                                         .desktop_disabled(self.workspace.is_none())
                                         .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
@@ -5279,7 +5322,7 @@ impl DesktopView {
                                 .accessibility_label("Search commands")
                                 .icon(IconName::Search)
                                 .ghost()
-                                .tooltip_with_action("Search commands", &OpenCommandPalette, Some("VTCodeDesktop"))
+                                .tooltip_with_action("Search commands", &OpenCommandPalette, Some(key_context::DESKTOP))
                                 .dispatches_desktop_action(OpenCommandPalette, self.focus_handle.clone()),
                         )
                         .child(
@@ -5290,7 +5333,7 @@ impl DesktopView {
                                 } else {
                                     "Show panel"
                                 })
-                                .tooltip_with_action("Toggle inspector", &ToggleInspector, Some("VTCodeDesktop"))
+                                .tooltip_with_action("Toggle inspector", &ToggleInspector, Some(key_context::DESKTOP))
                                 .ghost()
                                 .desktop_disabled(self.workspace.is_none())
                                 .dispatches_desktop_action(ToggleInspector, self.focus_handle.clone()),
@@ -5299,7 +5342,7 @@ impl DesktopView {
                             desktop_button("open-settings")
                                 .accessibility_label("Settings")
                                 .icon(IconName::Settings2)
-                                .tooltip_with_action("Settings", &OpenSettings, Some("VTCodeDesktop"))
+                                .tooltip_with_action("Settings", &OpenSettings, Some(key_context::DESKTOP))
                                 .ghost()
                                 .dispatches_desktop_action(OpenSettings, self.focus_handle.clone()),
                         )
@@ -5409,7 +5452,7 @@ impl DesktopView {
                                     .tooltip_with_action(
                                         rust_i18n::t!("app.file_preview.close_tooltip").to_string(),
                                         &DismissOverlay,
-                                        Some("VTCodeDesktop"),
+                                        Some(key_context::DESKTOP),
                                     )
                                     .label(rust_i18n::t!("app.file_preview.close").to_string())
                                     .ghost()
@@ -5560,7 +5603,7 @@ impl DesktopView {
             .child(content)
             .when(self.inspector_tab == InspectorTab::Changes, |panel| {
                 panel
-                    .key_context("VTCodeDiffReview")
+                    .key_context(key_context::DIFF_REVIEW)
                     .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_change_file(true, cx)))
                     .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_change_file(false, cx)))
             })
@@ -5607,7 +5650,7 @@ impl DesktopView {
                         .tooltip_with_action(
                             rust_i18n::t!("app.workspace_review.review_working_tree").to_string(),
                             &OpenWorkspaceReview,
-                            Some("VTCodeDesktop"),
+                            Some(key_context::DESKTOP),
                         )
                         .ghost()
                         .small()
@@ -5685,7 +5728,7 @@ impl DesktopView {
                                 .tooltip_with_action(
                                     "Previous changed file",
                                     &PreviousReviewFile,
-                                    Some("VTCodeDiffReview"),
+                                    Some(key_context::DIFF_REVIEW),
                                 )
                                 .ghost()
                                 .small()
@@ -5696,7 +5739,11 @@ impl DesktopView {
                             desktop_button("next-change-file")
                                 .icon(IconName::ChevronRight)
                                 .accessibility_label("Next changed file")
-                                .tooltip_with_action("Next changed file", &NextReviewFile, Some("VTCodeDiffReview"))
+                                .tooltip_with_action(
+                                    "Next changed file",
+                                    &NextReviewFile,
+                                    Some(key_context::DIFF_REVIEW),
+                                )
                                 .ghost()
                                 .small()
                                 .desktop_disabled(self.changes.preview_count() < 2)
@@ -5862,7 +5909,11 @@ impl DesktopView {
                         desktop_button("review-previous-change")
                             .icon(IconName::ArrowUp)
                             .accessibility_label("Previous change")
-                            .tooltip_with_action("Previous change", &PreviousReviewChange, Some("VTCodeDiffReview"))
+                            .tooltip_with_action(
+                                "Previous change",
+                                &PreviousReviewChange,
+                                Some(key_context::DIFF_REVIEW),
+                            )
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(false, cx))),
@@ -5871,7 +5922,7 @@ impl DesktopView {
                         desktop_button("review-next-change")
                             .icon(IconName::ArrowDown)
                             .accessibility_label("Next change")
-                            .tooltip_with_action("Next change", &NextReviewChange, Some("VTCodeDiffReview"))
+                            .tooltip_with_action("Next change", &NextReviewChange, Some(key_context::DIFF_REVIEW))
                             .ghost()
                             .small()
                             .on_click(cx.listener(|view, _, _, cx| view.navigate_review_change(true, cx))),
@@ -5969,7 +6020,7 @@ impl DesktopView {
                             .test_support()
                             .role(gpui_kit::Role::Dialog)
                             .aria_label(title.clone())
-                            .key_context("VTCodeDiffReview")
+                            .key_context(key_context::DIFF_REVIEW)
                             .size_full()
                             .flex()
                             .flex_col()
@@ -6014,7 +6065,7 @@ impl DesktopView {
                                             .tooltip_with_action(
                                                 rust_i18n::t!("app.workspace_review.close_review").to_string(),
                                                 &DismissOverlay,
-                                                Some("VTCodeDesktop"),
+                                                Some(key_context::DESKTOP),
                                             )
                                             .ghost()
                                             .on_click(cx.listener(|view, _, window, cx| view.close_review(window, cx))),
@@ -6043,7 +6094,7 @@ impl DesktopView {
                         .tooltip_with_action(
                             rust_i18n::t!("app.files.focus_tree").to_string(),
                             &OpenWorkspaceFiles,
-                            Some("VTCodeDesktop"),
+                            Some(key_context::DESKTOP),
                         )
                         .ghost()
                         .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
@@ -6055,7 +6106,7 @@ impl DesktopView {
                         .tooltip_with_action(
                             rust_i18n::t!("app.files.refresh_tooltip").to_string(),
                             &RefreshWorkspace,
-                            Some("VTCodeDesktop"),
+                            Some(key_context::DESKTOP),
                         )
                         .ghost()
                         .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
@@ -6762,7 +6813,11 @@ impl DesktopView {
                             title.child(
                                 desktop_button("welcome-workspace")
                                     .accessibility_label(format!("Change workspace, current: {name}"))
-                                    .tooltip_with_action("Choose workspace", &ChooseWorkspace, Some("VTCodeDesktop"))
+                                    .tooltip_with_action(
+                                        "Choose workspace",
+                                        &ChooseWorkspace,
+                                        Some(key_context::DESKTOP),
+                                    )
                                     .text()
                                     .text_color(colors.foreground)
                                     .h_auto()
@@ -6942,7 +6997,7 @@ impl DesktopView {
             .flex()
             .flex_col()
             .children(group_header)
-            .when(item.role == "user" && index > 0, |column| {
+            .when(item.is_user() && index > 0, |column| {
                 column.child(
                     div()
                         .id(format!("turn-divider-{}", item.id))
@@ -6954,16 +7009,16 @@ impl DesktopView {
         let message_id = item.id.clone();
         div()
             .id(format!("transcript-row-{}", item.id))
-            .when(item.role == "tool" || item.role == "diff", |row| row.role(gpui_kit::Role::ListItem))
+            .when(item.is_tool() || item.is_diff(), |row| row.role(gpui_kit::Role::ListItem))
             .test_support()
             .w_full()
             .flex()
             .justify_center()
             // MessageScroller owns the shared horizontal row inset.
-            .when(item.role == "tool", |row| row.pb_1())
-            .when(item.role == "user", |row| row.pb_6())
-            .when(item.role != "tool" && item.role != "user", |row| row.pb_3())
-            .when(item.role == "assistant", |row| {
+            .when(item.is_tool(), |row| row.pb_1())
+            .when(item.is_user(), |row| row.pb_6())
+            .when(!item.is_tool() && !item.is_user(), |row| row.pb_3())
+            .when(item.is_assistant(), |row| {
                 row.on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
                     let next = hovered.then(|| message_id.clone());
                     if view.hovered_message != next {
@@ -6977,19 +7032,19 @@ impl DesktopView {
     }
 
     fn render_transcript_item(&self, item: &TranscriptItem, cx: &mut Context<Self>) -> AnyElement {
-        if item.role == "notice" {
+        if item.is_notice() {
             return self.render_notice_item(item, cx);
         }
-        if item.role == "tool" {
+        if item.is_tool() {
             return self.render_tool_item(item, cx);
         }
-        if item.role == "diff" {
+        if item.is_diff() {
             return self.render_diff_item(item, cx);
         }
 
         let colors = cx.theme().colors;
-        let user = item.role == "user";
-        let label = if user { "You" } else { item.title.as_str() };
+        let user = item.is_user();
+        let label = if user { USER_DISPLAY_NAME } else { item.title.as_str() };
         let copy_text = item.text.clone();
         Message::new()
             .id(format!("message-{}", item.id))
@@ -7025,7 +7080,7 @@ impl DesktopView {
                                         .child(render_markdown(
                                             format!("markdown-{}", item.id),
                                             item.markdown.clone(),
-                                            item.role == "assistant",
+                                            item.is_assistant(),
                                             cx,
                                         )),
                                 ),
@@ -7679,7 +7734,7 @@ impl DesktopView {
                                 .tooltip_with_action(
                                     rust_i18n::t!("app.composer.add_context").to_string(),
                                     &OpenAddContext,
-                                    Some("VTCodeDesktop"),
+                                    Some(key_context::DESKTOP),
                                 )
                                 .ghost()
                                 .small()
@@ -7698,7 +7753,7 @@ impl DesktopView {
                                 .tooltip_with_action(
                                     rust_i18n::t!("app.composer.command_permissions").to_string(),
                                     &OpenPermissions,
-                                    Some("VTCodeDesktop"),
+                                    Some(key_context::DESKTOP),
                                 )
                                 .icon(Icon::new(permission_icon).text_color(permission_icon_color))
                                 .child(
@@ -7769,7 +7824,7 @@ impl DesktopView {
                             .tooltip_with_action(
                                 rust_i18n::t!("app.composer.choose_model_tooltip").to_string(),
                                 &OpenModelPicker,
-                                Some("VTCodeDesktop"),
+                                Some(key_context::DESKTOP),
                             )
                             .ghost()
                             .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
@@ -7785,7 +7840,7 @@ impl DesktopView {
                     .tooltip_with_action(
                         rust_i18n::t!("app.composer.cancel_tooltip").to_string(),
                         &CancelRun,
-                        Some("VTCodeDesktop"),
+                        Some(key_context::DESKTOP),
                     )
                     .accessibility_label(rust_i18n::t!("app.composer.cancel").to_string())
                     .icon(IconName::Square)
@@ -9032,7 +9087,7 @@ impl DesktopView {
             });
 
         let panel = div()
-            .id("command-palette")
+            .id(COMMAND_PALETTE_ELEMENT_ID)
             .test_support()
             .role(gpui_kit::Role::Dialog)
             .aria_label(title)
@@ -9064,7 +9119,7 @@ impl DesktopView {
                 }),
                 |content, progress| content.opacity(progress),
             ))
-            .focus_trap("command-palette", &self.palette_focus);
+            .focus_trap(COMMAND_PALETTE_ELEMENT_ID, &self.palette_focus);
         if composer_popup {
             return deferred(
                 anchored()
@@ -9186,7 +9241,7 @@ impl Render for DesktopView {
             .bg(colors.background)
             .text_color(colors.foreground)
             .track_focus(&self.focus_handle)
-            .key_context("VTCodeDesktop")
+            .key_context(key_context::DESKTOP)
             .when(self.session_change_allowed(None), |body| {
                 body.on_action(cx.listener(|view, _: &NewSession, _, cx| view.create_session(cx)))
             })
@@ -9498,7 +9553,7 @@ fn transcript_search_snippet(text: &str) -> String {
 }
 
 fn is_searchable_conversation_role(role: &str) -> bool {
-    matches!(role, "user" | "assistant" | "tool")
+    TranscriptRole::from_str(role).is_some_and(TranscriptRole::is_searchable_conversation)
 }
 
 /// Keep palette label identity attached to the command when search/filtering changes row order.
@@ -9700,17 +9755,17 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
             let mut label = command_status_label(&command.status);
             if let Some(code) = command.exit_code {
                 if matches!(command.status, vtcode_exec_events::CommandExecutionStatus::Failed) {
-                    label.push_str(&format!(" (exit {code})"));
+                    label = format!("{}{code})", tool_status::FAILED_EXIT_PREFIX);
                 }
             }
             (command.command.clone(), label)
         }
         ThreadItemDetails::McpToolCall(call) => {
             let label = match call.status {
-                Some(vtcode_exec_events::McpToolCallStatus::Started) => "started",
-                Some(vtcode_exec_events::McpToolCallStatus::Completed) => "completed",
-                Some(vtcode_exec_events::McpToolCallStatus::Failed) => "failed",
-                None => "activity",
+                Some(vtcode_exec_events::McpToolCallStatus::Started) => tool_status::STARTED,
+                Some(vtcode_exec_events::McpToolCallStatus::Completed) => tool_status::COMPLETED,
+                Some(vtcode_exec_events::McpToolCallStatus::Failed) => tool_status::FAILED,
+                None => tool_status::ACTIVITY,
             }
             .to_string();
             (format!("MCP · {}", call.tool_name), label)
@@ -9736,7 +9791,7 @@ fn describe_activity(details: &vtcode_exec_events::ThreadItemDetails) -> (String
         | ThreadItemDetails::Plan(_)
         | ThreadItemDetails::Reasoning(_)
         | ThreadItemDetails::Decision(_)
-        | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), "activity".to_string()),
+        | ThreadItemDetails::FileChange(_) => ("Activity".to_string(), tool_status::ACTIVITY.to_string()),
     }
 }
 
@@ -9790,18 +9845,18 @@ fn activity_details_payload(details: &vtcode_exec_events::ThreadItemDetails) -> 
 
 fn tool_status_label(status: &vtcode_exec_events::ToolCallStatus) -> String {
     match status {
-        vtcode_exec_events::ToolCallStatus::Completed => "completed",
-        vtcode_exec_events::ToolCallStatus::Failed => "failed",
-        vtcode_exec_events::ToolCallStatus::InProgress => "in progress",
+        vtcode_exec_events::ToolCallStatus::Completed => tool_status::COMPLETED,
+        vtcode_exec_events::ToolCallStatus::Failed => tool_status::FAILED,
+        vtcode_exec_events::ToolCallStatus::InProgress => tool_status::IN_PROGRESS,
     }
     .to_string()
 }
 
 fn command_status_label(status: &vtcode_exec_events::CommandExecutionStatus) -> String {
     match status {
-        vtcode_exec_events::CommandExecutionStatus::Completed => "completed",
-        vtcode_exec_events::CommandExecutionStatus::Failed => "failed",
-        vtcode_exec_events::CommandExecutionStatus::InProgress => "running",
+        vtcode_exec_events::CommandExecutionStatus::Completed => tool_status::COMPLETED,
+        vtcode_exec_events::CommandExecutionStatus::Failed => tool_status::FAILED,
+        vtcode_exec_events::CommandExecutionStatus::InProgress => tool_status::RUNNING,
     }
     .to_string()
 }
@@ -9938,13 +9993,13 @@ fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage
     let mut occurrences = HashMap::<u64, usize>::new();
     messages
         .into_iter()
-        .filter(|message| !message.hidden || message.role != "system")
+        .filter(|message| !message.hidden || message.role != TranscriptRole::System.as_str())
         .map(|message| {
             let SessionHistoryMessage { archive_index, role, text, .. } = message;
-            let title = match role.as_str() {
-                "user" => "You".to_string(),
-                "assistant" => "VT Code".to_string(),
-                "tool" => "Tool result".to_string(),
+            let title = match TranscriptRole::from_str(&role) {
+                Some(TranscriptRole::User) => USER_DISPLAY_NAME.to_string(),
+                Some(TranscriptRole::Assistant) => app::NAME.to_string(),
+                Some(TranscriptRole::Tool) => "Tool result".to_string(),
                 _ => role.clone(),
             };
             let id = archive_index.map_or_else(
@@ -9979,7 +10034,7 @@ fn enter_zen_button(id: impl Into<gpui_kit::ElementId>, focus: &FocusHandle) -> 
         .icon(IconName::Leaf)
         .ghost()
         .accessibility_label("Enter Zen mode")
-        .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
+        .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some(key_context::DESKTOP))
         .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }
 
@@ -9991,7 +10046,7 @@ fn exit_zen_button(id: impl Into<gpui_kit::ElementId>, faded: gpui_kit::Hsla, fo
         .small()
         .p_2()
         .accessibility_label("Exit Zen mode")
-        .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
+        .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some(key_context::DESKTOP))
         .dispatches_desktop_action(ToggleZenMode, focus.clone())
 }
 

@@ -18,6 +18,7 @@ use super::{
     DesktopButtonExt, DesktopView, NextReviewFile, PaletteAction, PaletteKind, PreviousReviewFile, RefreshWorkspace,
     command, desktop_button, empty_state, skeleton_line, uuid_like_id, warning_alert,
 };
+use crate::desktop::strings::{key_context, keys};
 
 pub(super) struct WorkspaceReviewState {
     pub(super) request_id: String,
@@ -87,7 +88,7 @@ impl DesktopView {
         review.error = None;
         if !self.request(
             protocol::method::WORKSPACE_REVIEW,
-            json!({ "requestId": request_id, "scope": scope, "includeUntracked": include_untracked }),
+            json!({ keys::REQUEST_ID: request_id, keys::SCOPE: scope, keys::INCLUDE_UNTRACKED: include_untracked }),
         ) {
             self.fail_workspace_review(rust_i18n::t!("app.errors.request_queue_unavailable").to_string());
         }
@@ -293,7 +294,7 @@ impl DesktopView {
                         .tooltip_with_action(
                             rust_i18n::t!("app.workspace_review.refresh_tooltip").to_string(),
                             &RefreshWorkspace,
-                            Some("VTCodeDesktop"),
+                            Some(key_context::DESKTOP),
                         )
                         .label(if review.pending {
                             rust_i18n::t!("app.workspace_review.refreshing").to_string()
@@ -483,7 +484,7 @@ impl DesktopView {
                             .tooltip_with_action(
                                 rust_i18n::t!("app.workspace_review.previous_file").to_string(),
                                 &PreviousReviewFile,
-                                Some("VTCodeDiffReview"),
+                                Some(key_context::DIFF_REVIEW),
                             )
                             .ghost()
                             .small()
@@ -508,7 +509,7 @@ impl DesktopView {
                             .tooltip_with_action(
                                 rust_i18n::t!("app.workspace_review.next_file").to_string(),
                                 &NextReviewFile,
-                                Some("VTCodeDiffReview"),
+                                Some(key_context::DIFF_REVIEW),
                             )
                             .ghost()
                             .small()

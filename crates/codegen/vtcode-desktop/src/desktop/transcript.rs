@@ -28,6 +28,97 @@ pub(super) enum NoticeSeverity {
     Error,
 }
 
+/// Canonical activity-status labels.
+///
+/// Producers (the view's `describe_activity` family) write these as the first
+/// line of tool-row text; [`ActivityState::from_status`] is the single
+/// parser. Keep both sides on these consts: a label renamed in one place and
+/// not the other misclassifies silently.
+pub(super) mod status {
+    pub const RUNNING: &str = "running";
+    pub const IN_PROGRESS: &str = "in progress";
+    pub const STARTED: &str = "started";
+    pub const COMPLETED: &str = "completed";
+    pub const FAILED: &str = "failed";
+    /// Prefix (with trailing space) of exit-code failures such as `failed (exit 17)`.
+    pub const FAILED_EXIT_PREFIX: &str = "failed (exit ";
+    pub const INTERRUPTED: &str = "interrupted";
+    pub const ACTIVITY: &str = "activity";
+}
+
+/// Known transcript-row roles.
+///
+/// Stored as [`TranscriptItem::role`] strings because history rows arrive
+/// from the service; compare via the [`TranscriptItem::is_tool`] family or
+/// match on [`TranscriptRole::from_str`] instead of repeating literals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TranscriptRole {
+    User,
+    Assistant,
+    Tool,
+    Diff,
+    Notice,
+    System,
+}
+
+impl TranscriptRole {
+    const ALL: [Self; 6] = [
+        Self::User,
+        Self::Assistant,
+        Self::Tool,
+        Self::Diff,
+        Self::Notice,
+        Self::System,
+    ];
+
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Assistant => "assistant",
+            Self::Tool => "tool",
+            Self::Diff => "diff",
+            Self::Notice => "notice",
+            Self::System => "system",
+        }
+    }
+
+    /// Parse a stored role. Case-sensitive: unknown roles stay unclassified
+    /// so new service-side roles keep rendering instead of vanishing.
+    pub(super) fn from_str(role: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|known| role == known.as_str())
+    }
+
+    /// Roles whose message text is searchable conversation content.
+    pub(super) const fn is_searchable_conversation(self) -> bool {
+        matches!(self, Self::User | Self::Assistant | Self::Tool)
+    }
+}
+
+/// Lifecycle classification of a tool-row status line.
+///
+/// [`from_status`](Self::from_status) is the single parser shared by the
+/// transcript group summaries and the inspector projections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ActivityState {
+    Running,
+    Completed,
+    Failed,
+    Interrupted,
+    Other,
+}
+
+impl ActivityState {
+    pub(super) fn from_status(label: &str) -> Self {
+        match label {
+            status::RUNNING | status::IN_PROGRESS | status::STARTED => Self::Running,
+            status::COMPLETED => Self::Completed,
+            status::INTERRUPTED => Self::Interrupted,
+            other if other == status::FAILED || other.starts_with(status::FAILED_EXIT_PREFIX) => Self::Failed,
+            _ => Self::Other,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct TranscriptItem {
     pub id: String,
@@ -100,10 +191,10 @@ impl ActivityGroupSummary {
 
 impl ToolActivityStatus {
     fn from_text(text: &str) -> Self {
-        let status = text.lines().next().unwrap_or_default();
+        let state = ActivityState::from_status(text.lines().next().unwrap_or_default());
         Self {
-            running: matches!(status, "running" | "in progress" | "started"),
-            failed: status == "failed" || status.starts_with("failed (exit "),
+            running: state == ActivityState::Running,
+            failed: state == ActivityState::Failed,
         }
     }
 }
@@ -134,16 +225,49 @@ pub(super) enum DiffFileKind {
 }
 
 impl TranscriptItem {
+    fn has_role(&self, role: TranscriptRole) -> bool {
+        self.role == role.as_str()
+    }
+
+    pub(super) fn is_user(&self) -> bool {
+        self.has_role(TranscriptRole::User)
+    }
+
+    pub(super) fn is_assistant(&self) -> bool {
+        self.has_role(TranscriptRole::Assistant)
+    }
+
+    pub(super) fn is_tool(&self) -> bool {
+        self.has_role(TranscriptRole::Tool)
+    }
+
+    pub(super) fn is_diff(&self) -> bool {
+        self.has_role(TranscriptRole::Diff)
+    }
+
+    pub(super) fn is_notice(&self) -> bool {
+        self.has_role(TranscriptRole::Notice)
+    }
+
+    /// Notice row (runtime errors, compaction/reset notices, run status) with
+    /// its severity set at construction.
+    pub fn notice(id: String, title: SharedString, text: String, severity: NoticeSeverity) -> Self {
+        let mut item = Self::new(id, TranscriptRole::Notice.as_str().to_string(), title, text);
+        item.notice_severity = severity;
+        item
+    }
+
     pub fn new(id: String, role: String, title: SharedString, text: String) -> Self {
         let text = SharedString::from(text);
-        let activity_group_summary = if role == "tool" {
+        let is_tool = role == TranscriptRole::Tool.as_str();
+        let activity_group_summary = if is_tool {
             ActivityGroupSummary::for_status(ToolActivityStatus::from_text(&text))
         } else {
             ActivityGroupSummary::default()
         };
         Self {
             id,
-            has_activity_status: role == "tool",
+            has_activity_status: is_tool,
             role,
             notice_severity: NoticeSeverity::Info,
             title,
@@ -161,14 +285,14 @@ impl TranscriptItem {
     }
 
     pub(super) fn prepare_render_content(&mut self) {
-        if matches!(self.role.as_str(), "tool" | "diff") {
+        if self.is_tool() || self.is_diff() {
             self.markdown = SharedString::default();
             self.accessibility_text = SharedString::default();
             return;
         }
         // Notices render as plain severity text: error bodies must not
         // reinterpret backticks or brackets as Markdown.
-        if self.role == "notice" {
+        if self.is_notice() {
             self.markdown = SharedString::default();
             self.accessibility_text.clone_from(&self.text);
             return;
@@ -272,11 +396,11 @@ impl Transcript {
         let previous_first_tool_expanded = self
             .items
             .front()
-            .filter(|item| item.role == "tool")
+            .filter(|item| item.is_tool())
             .map(|item| item.activity_expanded);
         let mut prefix = items;
         if let Some(expanded) = previous_first_tool_expanded {
-            for item in prefix.iter_mut().rev().take_while(|item| item.role == "tool") {
+            for item in prefix.iter_mut().rev().take_while(|item| item.is_tool()) {
                 item.activity_expanded = expanded;
             }
         }
@@ -300,14 +424,14 @@ impl Transcript {
         if prepare_render_content {
             item.prepare_render_content();
         }
-        let item_is_tool = item.role == "tool";
+        let item_is_tool = item.is_tool();
         let item_status = ToolActivityStatus::from_text(&item.text);
         if item_is_tool {
             item.activity_group_summary = ActivityGroupSummary::for_status(item_status);
         } else {
             item.activity_group_summary = ActivityGroupSummary::default();
         }
-        let extends_tool_group = item_is_tool && self.items.back().is_some_and(|row| row.role == "tool");
+        let extends_tool_group = item_is_tool && self.items.back().is_some_and(|row| row.is_tool());
         let previous_group_start = self.trailing_tool_group_start;
         let evict_oldest = self.items.len() == MAX_TRANSCRIPT_ITEMS;
         let mut promoted_group_head = false;
@@ -317,7 +441,7 @@ impl Transcript {
             {
                 let mut summary = removed.activity_group_summary;
                 summary.remove_status(ToolActivityStatus::from_text(&removed.text));
-                if let Some(head) = self.items.front_mut().filter(|item| item.role == "tool") {
+                if let Some(head) = self.items.front_mut().filter(|item| item.is_tool()) {
                     let grouped = summary.total > 1;
                     head.activity_group_summary = summary;
                     head.activity_grouped = grouped;
@@ -375,7 +499,7 @@ impl Transcript {
     /// Remove a local unsent echo together with its measured row.
     pub fn remove(&mut self, id: &str) {
         if let Some(index) = self.position_by_id(id) {
-            let removed_was_tool = self.items.remove(index).is_some_and(|item| item.role == "tool");
+            let removed_was_tool = self.items.remove(index).is_some_and(|item| item.is_tool());
             self.rebuild_activity_group_flags();
             self.refresh_trailing_tool_group_start();
             self.layout_changes
@@ -414,10 +538,10 @@ impl Transcript {
                 return;
             };
             let role_changed = existing.role != item.role;
-            let updated_is_tool = item.role == "tool";
+            let updated_is_tool = item.is_tool();
             let title_changed = existing.title != item.title;
             let text_changed = existing.text != item.text;
-            let is_tool_update = updated_is_tool && existing.role == "tool";
+            let is_tool_update = updated_is_tool && existing.is_tool();
             let activity_status_changed = is_tool_update && existing.text.lines().next() != item.text.lines().next();
             let previous_status = if is_tool_update {
                 ToolActivityStatus::from_text(&existing.text)
@@ -528,7 +652,7 @@ impl Transcript {
     }
 
     fn activity_group_start_for(&self, index: usize) -> Option<usize> {
-        if !self.items.get(index).is_some_and(|item| item.role == "tool") {
+        if !self.items.get(index).is_some_and(|item| item.is_tool()) {
             return None;
         }
         if let Some(start) = self.trailing_tool_group_start
@@ -537,7 +661,7 @@ impl Transcript {
             return Some(start);
         }
         let mut start = index;
-        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.role == "tool") {
+        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.is_tool()) {
             start -= 1;
         }
         Some(start)
@@ -546,7 +670,7 @@ impl Transcript {
     fn rebuild_activity_group_flags(&mut self) {
         let mut start = 0;
         while start < self.items.len() {
-            if !self.items.get(start).is_some_and(|item| item.role == "tool") {
+            if !self.items.get(start).is_some_and(|item| item.is_tool()) {
                 if let Some(item) = self.items.get_mut(start) {
                     item.activity_grouped = false;
                     item.activity_group_head = false;
@@ -558,7 +682,7 @@ impl Transcript {
             }
 
             let mut end = start + 1;
-            while self.items.get(end).is_some_and(|item| item.role == "tool") {
+            while self.items.get(end).is_some_and(|item| item.is_tool()) {
                 end += 1;
             }
             let expanded = self.items.get(start).is_some_and(|item| item.activity_expanded);
@@ -583,12 +707,12 @@ impl Transcript {
     }
 
     fn refresh_trailing_tool_group_start(&mut self) {
-        if !self.items.back().is_some_and(|item| item.role == "tool") {
+        if !self.items.back().is_some_and(|item| item.is_tool()) {
             self.trailing_tool_group_start = None;
             return;
         }
         let mut start = self.items.len().saturating_sub(1);
-        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.role == "tool") {
+        while start > 0 && self.items.get(start - 1).is_some_and(|item| item.is_tool()) {
             start -= 1;
         }
         self.trailing_tool_group_start = Some(start);
@@ -612,7 +736,7 @@ impl Transcript {
     /// Expand a tool row and its containing activity group so a search result is visible.
     pub(super) fn reveal_tool_item(&mut self, id: &str) -> Option<usize> {
         let index = self.position_by_id(id)?;
-        if !self.items.get(index).is_some_and(|item| item.role == "tool") {
+        if !self.items.get(index).is_some_and(|item| item.is_tool()) {
             return None;
         }
 
@@ -647,8 +771,8 @@ impl Transcript {
     pub fn toggle_tool(&mut self, id: &str) {
         let last_index = self.items.len().checked_sub(1);
         let index = last_index
-            .filter(|index| self.items.get(*index).is_some_and(|item| item.id == id && item.role == "tool"))
-            .or_else(|| self.items.iter().rposition(|item| item.id == id && item.role == "tool"));
+            .filter(|index| self.items.get(*index).is_some_and(|item| item.id == id && item.is_tool()))
+            .or_else(|| self.items.iter().rposition(|item| item.id == id && item.is_tool()));
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
@@ -662,8 +786,8 @@ impl Transcript {
     pub fn toggle_diff(&mut self, id: &str) {
         let last_index = self.items.len().checked_sub(1);
         let index = last_index
-            .filter(|index| self.items.get(*index).is_some_and(|item| item.id == id && item.role == "diff"))
-            .or_else(|| self.items.iter().rposition(|item| item.id == id && item.role == "diff"));
+            .filter(|index| self.items.get(*index).is_some_and(|item| item.id == id && item.is_diff()))
+            .or_else(|| self.items.iter().rposition(|item| item.id == id && item.is_diff()));
         if let Some(index) = index {
             if let Some(item) = self.items.get_mut(index) {
                 item.expanded = !item.expanded;
@@ -685,7 +809,7 @@ impl Transcript {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_TRANSCRIPT_ITEMS, Transcript, TranscriptItem};
+    use super::{ActivityState, MAX_TRANSCRIPT_ITEMS, ToolActivityStatus, Transcript, TranscriptItem, TranscriptRole};
 
     fn item(id: usize, role: &str, text: &str) -> TranscriptItem {
         TranscriptItem::new(id.to_string(), role.to_string(), "Activity".into(), text.to_string())
@@ -940,5 +1064,91 @@ mod tests {
         assert!(transcript.take_layout_changes().is_empty());
         let output = transcript.get(0).and_then(|row| row.output.as_ref()).map(ToString::to_string);
         assert_eq!(output.as_deref(), Some("updated output"));
+    }
+
+    #[test]
+    fn notice_rows_carry_their_severity_at_construction() {
+        for severity in [
+            super::NoticeSeverity::Info,
+            super::NoticeSeverity::Warning,
+            super::NoticeSeverity::Error,
+        ] {
+            let item = TranscriptItem::notice("id".to_string(), "title".into(), "body".to_string(), severity);
+            assert!(item.is_notice());
+            assert_eq!(item.notice_severity, severity);
+            assert!(!item.has_activity_status);
+        }
+    }
+
+    #[test]
+    fn transcript_roles_round_trip_with_case_sensitive_parse() {
+        for role in TranscriptRole::ALL {
+            assert_eq!(TranscriptRole::from_str(role.as_str()), Some(role), "{role:?}");
+        }
+        // Unknown and case-shifted roles stay unclassified so new service
+        // roles keep rendering instead of vanishing.
+        assert_eq!(TranscriptRole::from_str("unknown"), None);
+        assert_eq!(TranscriptRole::from_str(""), None);
+        assert_eq!(TranscriptRole::from_str("Tool"), None);
+        assert_eq!(TranscriptRole::from_str("ASSISTANT"), None);
+    }
+
+    #[test]
+    fn searchable_roles_cover_messages_and_tool_rows_only() {
+        for role in TranscriptRole::ALL {
+            let expected = matches!(role, TranscriptRole::User | TranscriptRole::Assistant | TranscriptRole::Tool);
+            assert_eq!(role.is_searchable_conversation(), expected, "{role:?}");
+        }
+    }
+
+    #[test]
+    fn activity_state_classifies_each_side_of_every_boundary() {
+        // Both sides of each boundary, including near-miss prefixes that must
+        // not classify: the parser is shared by group summaries, the Activity
+        // tab, and historical-status rewrites.
+        for (label, expected) in [
+            ("running", ActivityState::Running),
+            ("in progress", ActivityState::Running),
+            ("started", ActivityState::Running),
+            ("completed", ActivityState::Completed),
+            ("failed", ActivityState::Failed),
+            ("failed (exit 0)", ActivityState::Failed),
+            ("failed (exit 17)", ActivityState::Failed),
+            ("interrupted", ActivityState::Interrupted),
+            // Near misses: prefix traps and case shifts stay Other.
+            ("failed (exit", ActivityState::Other),
+            ("failed (exit ", ActivityState::Failed),
+            ("failed loudly", ActivityState::Other),
+            ("Running", ActivityState::Other),
+            ("COMPLETED", ActivityState::Other),
+            ("", ActivityState::Other),
+            ("activity", ActivityState::Other),
+            ("verification requested", ActivityState::Other),
+        ] {
+            assert_eq!(ActivityState::from_status(label), expected, "{label:?}");
+        }
+    }
+
+    #[test]
+    fn group_summary_status_matches_the_shared_classifier() {
+        // ToolActivityStatus delegates to ActivityState::from_status; prove
+        // the delegation agrees on every classified label plus multi-line
+        // bodies (only the first line classifies).
+        for (label, running, failed) in [
+            ("running", true, false),
+            ("in progress", true, false),
+            ("started", true, false),
+            ("completed", false, false),
+            ("failed", false, true),
+            ("failed (exit 3)", false, true),
+            ("interrupted", false, false),
+            ("activity", false, false),
+            ("failed loudly", false, false),
+        ] {
+            let inline = ToolActivityStatus::from_text(label);
+            assert_eq!((inline.running, inline.failed), (running, failed), "{label:?}");
+            let with_body = ToolActivityStatus::from_text(&format!("{label}\n\n{{\"details\": true}}"));
+            assert_eq!((with_body.running, with_body.failed), (running, failed), "{label:?} with body");
+        }
     }
 }

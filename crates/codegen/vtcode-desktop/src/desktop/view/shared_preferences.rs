@@ -123,7 +123,7 @@ impl DesktopView {
                         desktop_button("sync-cli-theme")
                             .label("Sync current theme to CLI")
                             .ghost()
-                            .tooltip_with_action("Sync current theme to CLI", &SyncCliTheme, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Sync current theme to CLI", &SyncCliTheme, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_sync_theme_to_cli())
                             .dispatches_desktop_action(SyncCliTheme, self.focus_handle.clone()),
                     )
@@ -131,7 +131,7 @@ impl DesktopView {
                         desktop_button("reload-cli-settings")
                             .label("Reload CLI settings")
                             .ghost()
-                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_reload_cli_settings())
                             .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
                     )

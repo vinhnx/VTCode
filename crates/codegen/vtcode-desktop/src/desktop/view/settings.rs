@@ -1,6 +1,10 @@
 use super::*;
 use crate::desktop::localization::UiLanguage;
 
+/// Provider group id shared by the empty and loaded states so the group
+/// keeps stable identity across configuration changes.
+const PROVIDER_SETTINGS_GROUP_ID: &str = "provider-settings-group";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum SettingsTab {
     Appearance,
@@ -157,7 +161,7 @@ impl DesktopView {
                     .id("settings-navigation")
                     .test_support()
                     .track_focus(&self.settings_navigation_focus)
-                    .key_context("VTCodeSettings")
+                    .key_context(key_context::SETTINGS)
                     .role(gpui_kit::Role::Group)
                     .aria_label(rust_i18n::t!("app.settings.categories").to_string())
                     .aria_description(rust_i18n::t!("app.settings.categories_navigation_hint").to_string())
@@ -199,7 +203,7 @@ impl DesktopView {
                             .tooltip_with_action(
                                 rust_i18n::t!("app.settings.search.title").to_string(),
                                 &OpenSettingsSearch,
-                                Some("VTCodeDesktop"),
+                                Some(key_context::DESKTOP),
                             )
                             .ghost()
                             .small()
@@ -648,7 +652,7 @@ impl DesktopView {
         let theme = cx.theme();
         let Some(configuration) = self.configuration.as_ref() else {
             return accessible_group_box(
-                "provider-settings-group",
+                PROVIDER_SETTINGS_GROUP_ID,
                 rust_i18n::t!("app.settings.provider.group").to_string(),
                 GroupBox::new()
                     .flex_shrink_0()
@@ -719,7 +723,11 @@ impl DesktopView {
                     ),
             );
         }
-        accessible_group_box("provider-settings-group", rust_i18n::t!("app.settings.provider.group").to_string(), group)
+        accessible_group_box(
+            PROVIDER_SETTINGS_GROUP_ID,
+            rust_i18n::t!("app.settings.provider.group").to_string(),
+            group,
+        )
     }
 
     fn render_connections_settings(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -746,7 +754,7 @@ impl DesktopView {
                 .columns(1)
                 .label_width(px(128.))
                 .bordered(false)
-                .item(rust_i18n::t!("app.settings.connections.runtime").to_string(), "VT Code", 1)
+                .item(rust_i18n::t!("app.settings.connections.runtime").to_string(), app::NAME, 1)
                 .item(rust_i18n::t!("app.settings.connections.version").to_string(), info.server_version.clone(), 1)
                 .item(
                     rust_i18n::t!("app.settings.connections.protocol").to_string(),

@@ -5,6 +5,8 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use super::strings::bundle;
+
 /// Bounds on retained sidebar rows and recursive traversal depth.
 const MAX_ENTRIES: usize = 400;
 const MAX_DEPTH: usize = 8;
@@ -334,7 +336,7 @@ pub(super) fn detect_installed_editors() -> Vec<ExternalEditor> {
 const MAX_INFO_PLIST_BYTES: usize = 256 * 1024;
 
 fn bundle_id_of(app_dir: &Path) -> Option<String> {
-    let file = fs::File::open(app_dir.join("Contents").join("Info.plist")).ok()?;
+    let file = fs::File::open(app_dir.join(bundle::CONTENTS_DIR).join(bundle::INFO_PLIST)).ok()?;
     let mut bytes = Vec::new();
     let _read = file.take(MAX_INFO_PLIST_BYTES as u64).read_to_end(&mut bytes).ok()?;
     let value: plist::Value = plist::from_bytes(&bytes).ok()?;

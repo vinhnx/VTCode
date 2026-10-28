@@ -13,11 +13,18 @@ use tokio::time::timeout;
 use vtcode_desktop_protocol as protocol;
 use vtcode_desktop_protocol::{InteractionRequest, RequestId, ThreadEventNotification};
 
+use super::strings::{bundle, keys};
+
 const CLIENT_QUEUE_CAPACITY: usize = 128;
 const MAX_PENDING_REQUESTS: usize = 128;
 const STDERR_TAIL_BYTES: usize = 16 * 1024;
 pub(super) const UI_EVENT_CAPACITY: usize = 256;
 const BACKEND_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(8);
+const BACKEND_SUBCOMMAND: &str = "desktop-server";
+const BACKEND_WORKSPACE_ARG: &str = "--workspace";
+const BACKEND_BINARY_NAME: &str = "vtcode";
+const DEV_RELEASE_BINARY: &str = "target/release/vtcode";
+const DEV_DEBUG_BINARY: &str = "target/debug/vtcode";
 
 #[derive(Debug)]
 pub(crate) enum BackendCommand {
@@ -88,25 +95,25 @@ impl PendingRequest {
         let interaction = (method == protocol::method::INTERACTION_RESPOND)
             .then(|| {
                 Some(InteractionResponseIdentity {
-                    session_id: params.get("sessionId")?.as_str()?.to_owned(),
-                    turn_id: params.get("turnId")?.as_str()?.to_owned(),
-                    interaction_id: params.get("interactionId")?.as_str()?.to_owned(),
-                    cancelled: params.get("cancelled")?.as_bool()?,
+                    session_id: params.get(keys::SESSION_ID)?.as_str()?.to_owned(),
+                    turn_id: params.get(keys::TURN_ID)?.as_str()?.to_owned(),
+                    interaction_id: params.get(keys::INTERACTION_ID)?.as_str()?.to_owned(),
+                    cancelled: params.get(keys::CANCELLED)?.as_bool()?,
                 })
             })
             .flatten();
         let session_history_request_id = (method == protocol::method::SESSION_HISTORY)
-            .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+            .then(|| params.get(keys::REQUEST_ID).and_then(Value::as_str).map(str::to_owned))
             .flatten();
         let session_output_request_id = (method == protocol::method::SESSION_OUTPUT_READ)
-            .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+            .then(|| params.get(keys::REQUEST_ID).and_then(Value::as_str).map(str::to_owned))
             .flatten();
         let turn_session_id = (method == protocol::method::TURN_SUBMIT)
-            .then(|| params.get("sessionId").and_then(Value::as_str).map(str::to_owned))
+            .then(|| params.get(keys::SESSION_ID).and_then(Value::as_str).map(str::to_owned))
             .flatten();
         Self {
             workspace_review_request_id: (method == protocol::method::WORKSPACE_REVIEW)
-                .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+                .then(|| params.get(keys::REQUEST_ID).and_then(Value::as_str).map(str::to_owned))
                 .flatten(),
             method,
             interaction,
@@ -174,7 +181,8 @@ impl BackendEventSender {
 
 /// Include JSON escaping and the largest issued request ID in the wire-size check.
 pub(super) fn request_fits_frame(method: &str, params: &Value) -> bool {
-    let request = json!({ "jsonrpc": "2.0", "id": i64::MAX, "method": method, "params": params });
+    let request =
+        json!({ keys::JSONRPC: keys::JSONRPC_VERSION, keys::ID: i64::MAX, keys::METHOD: method, keys::PARAMS: params });
     serde_json::to_vec(&request).is_ok_and(|bytes| bytes.len() <= protocol::MAX_FRAME_BYTES)
 }
 
@@ -289,10 +297,10 @@ async fn run_client(
                         next_request_id = next_id;
                         let _replaced = pending.insert(id.clone(), request_context);
                         let request = json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "method": method,
-                            "params": params,
+                            keys::JSONRPC: keys::JSONRPC_VERSION,
+                            keys::ID: id,
+                            keys::METHOD: method,
+                            keys::PARAMS: params,
                         });
                         if protocol::write_frame(&mut writer, &request).await.is_err() {
                             let _ = send_ui_event(&ui_events, BackendEvent::LaunchFailed(
@@ -304,10 +312,10 @@ async fn run_client(
                     Some(BackendCommand::Stop) | None => {
                         stopping = true;
                         let shutdown = json!({
-                            "jsonrpc": "2.0",
-                            "id": next_request_id,
-                            "method": protocol::method::SHUTDOWN,
-                            "params": {},
+                            keys::JSONRPC: keys::JSONRPC_VERSION,
+                            keys::ID: next_request_id,
+                            keys::METHOD: protocol::method::SHUTDOWN,
+                            keys::PARAMS: {},
                         });
                         let _shutdown_send_result = protocol::write_frame(&mut writer, &shutdown).await;
                     }
@@ -371,8 +379,8 @@ async fn run_client(
 
 async fn spawn_backend(executable: &Path, workspace: &Path) -> Result<Child, String> {
     Command::new(executable)
-        .arg("desktop-server")
-        .arg("--workspace")
+        .arg(BACKEND_SUBCOMMAND)
+        .arg(BACKEND_WORKSPACE_ARG)
         .arg(workspace)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -410,23 +418,23 @@ fn resolve_backend_executable() -> Result<PathBuf, String> {
 }
 
 fn packaged_backend_candidates(current_dir: &Path) -> Option<Vec<PathBuf>> {
-    if current_dir.file_name() != Some(std::ffi::OsStr::new("MacOS")) {
+    if current_dir.file_name() != Some(std::ffi::OsStr::new(bundle::MACOS_DIR)) {
         return None;
     }
     let contents_dir = current_dir.parent()?;
-    if contents_dir.file_name() != Some(std::ffi::OsStr::new("Contents"))
-        || contents_dir.parent()?.extension() != Some(std::ffi::OsStr::new("app"))
+    if contents_dir.file_name() != Some(std::ffi::OsStr::new(bundle::CONTENTS_DIR))
+        || contents_dir.parent()?.extension() != Some(std::ffi::OsStr::new(bundle::APP_EXTENSION))
     {
         return None;
     }
-    Some(vec![contents_dir.join("Helpers/vtcode")])
+    Some(vec![contents_dir.join(bundle::HELPERS_VTCODE)])
 }
 
 fn backend_development_candidates(current_dir: &Path, workspace_root: &Path) -> Vec<PathBuf> {
-    let mut candidates = vec![current_dir.join("vtcode")];
+    let mut candidates = vec![current_dir.join(BACKEND_BINARY_NAME)];
     for candidate in [
-        workspace_root.join("target/release/vtcode"),
-        workspace_root.join("target/debug/vtcode"),
+        workspace_root.join(DEV_RELEASE_BINARY),
+        workspace_root.join(DEV_DEBUG_BINARY),
     ] {
         if !candidates.contains(&candidate) {
             candidates.push(candidate);
@@ -447,11 +455,11 @@ fn decode_frame(
     pending: &mut HashMap<RequestId, PendingRequest>,
 ) -> Result<Option<BackendEvent>, ProtocolDecodeError> {
     let value = serde_json::from_slice::<Value>(frame).map_err(|_error| ProtocolDecodeError)?;
-    if value.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
+    if value.get(keys::JSONRPC).and_then(Value::as_str) != Some(keys::JSONRPC_VERSION) {
         return Err(ProtocolDecodeError);
     }
-    if let Some(method) = value.get("method").and_then(Value::as_str) {
-        let params = value.get("params").cloned().unwrap_or(Value::Null);
+    if let Some(method) = value.get(keys::METHOD).and_then(Value::as_str) {
+        let params = value.get(keys::PARAMS).cloned().unwrap_or(Value::Null);
         return match method {
             protocol::method::THREAD_EVENT => serde_json::from_value::<ThreadEventNotification>(params)
                 .map(BackendEvent::ThreadEvent)
@@ -470,19 +478,20 @@ fn decode_frame(
         };
     }
 
-    let id_value = value.get("id").ok_or(ProtocolDecodeError)?.clone();
+    let id_value = value.get(keys::ID).ok_or(ProtocolDecodeError)?.clone();
     let id = serde_json::from_value::<RequestId>(id_value).map_err(|_error| ProtocolDecodeError)?;
     let request = pending.remove(&id).ok_or(ProtocolDecodeError)?;
-    if let Some(error) = value.get("error") {
+    if let Some(error) = value.get(keys::ERROR) {
         if request.method == protocol::method::TURN_SUBMIT
-            && error.get("code").and_then(Value::as_i64) == Some(i64::from(protocol::STARTUP_INTERACTION_PENDING_ERROR))
+            && error.get(keys::CODE).and_then(Value::as_i64)
+                == Some(i64::from(protocol::STARTUP_INTERACTION_PENDING_ERROR))
         {
             if let Some(session_id) = request.turn_session_id.clone() {
                 return Ok(Some(BackendEvent::TurnBlockedByStartupInteraction { session_id }));
             }
         }
         let safe_message = error
-            .get("message")
+            .get(keys::MESSAGE)
             .and_then(Value::as_str)
             .unwrap_or("The VT Code service rejected the request.");
         let message = vtcode_commons::sanitizer::sanitize_provider_diagnostic(safe_message)
@@ -492,7 +501,7 @@ fn decode_frame(
             .collect();
         Ok(Some(request.finish(None, Some(message))))
     } else {
-        let result = value.get("result").cloned().ok_or(ProtocolDecodeError)?;
+        let result = value.get(keys::RESULT).cloned().ok_or(ProtocolDecodeError)?;
         Ok(Some(request.finish(Some(result), None)))
     }
 }

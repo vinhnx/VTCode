@@ -17,6 +17,7 @@ use super::{DesktopButtonExt, DesktopView, desktop_button};
 const WEBMCP_APP_URL: &str = "https://vtcode.vinhnx.chatgpt.site/";
 const WEBMCP_COMMANDS_HELP: &str =
     "Commands: /webmcp status | help | tools | roots | connect <origin> | pair <origin> | unpair | stop.";
+const WEBMCP_CONNECT_USAGE: &str = "Usage: /webmcp connect [--replace] <exact-browser-origin>";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum WebmcpNotice {
@@ -67,16 +68,14 @@ fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
     }
     let command = parse_webmcp_slash_command(rest.trim()).map_err(|error| match error {
         WebmcpSlashCommandParseError::UnknownCommand => WEBMCP_COMMANDS_HELP,
-        WebmcpSlashCommandParseError::InvalidConnectionArguments => {
-            "Usage: /webmcp connect [--replace] <exact-browser-origin>"
-        }
+        WebmcpSlashCommandParseError::InvalidConnectionArguments => WEBMCP_CONNECT_USAGE,
     });
     Some(command.and_then(|command| match command {
         WebmcpSlashCommand::Status => Ok(WebmcpCommand::Status),
         WebmcpSlashCommand::Help => Ok(WebmcpCommand::Help),
         WebmcpSlashCommand::Tools => Ok(WebmcpCommand::Tools),
         WebmcpSlashCommand::Roots => Ok(WebmcpCommand::Roots),
-        WebmcpSlashCommand::ConnectHelp => Err("Usage: /webmcp connect [--replace] <exact-browser-origin>"),
+        WebmcpSlashCommand::ConnectHelp => Err(WEBMCP_CONNECT_USAGE),
         WebmcpSlashCommand::Connect { origin, replace } => Ok(WebmcpCommand::Pair { origin, replace }),
         WebmcpSlashCommand::Unpair => Ok(WebmcpCommand::Stop),
     }))

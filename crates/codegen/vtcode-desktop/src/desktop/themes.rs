@@ -177,7 +177,7 @@ pub(super) const SYSTEM_SWATCHES: [SwatchEntry; 2] = [
     SwatchEntry::System(ThemeMode::Dark),
 ];
 
-const FEATURED_THEME_IDS: [&str; 3] = ["ciapre", "ciapre-dark", "ciapre-blue"];
+const FEATURED_THEME_IDS: [&str; 3] = [DEFAULT_THEME_ID, "ciapre-dark", "ciapre-blue"];
 
 /// Picker order leads with the VT Code themes, then system bases and the
 /// remaining shared palette catalog in its existing order.

@@ -773,11 +773,9 @@ async fn enqueue_turn(
             bail!("another turn is already running");
         }
         if !state.pending_interactions.is_empty() {
-            if state
-                .pending_interactions
-                .values()
-                .all(|interaction| interaction.session_id == session_id && interaction.turn_id == "session-start")
-            {
+            if state.pending_interactions.values().all(|interaction| {
+                interaction.session_id == session_id && interaction.turn_id == protocol::SESSION_START_TURN_ID
+            }) {
                 return Err(StartupInteractionPending.into());
             }
             bail!("resolve the pending CLI interaction before submitting a turn");
@@ -1301,7 +1299,10 @@ async fn publish_interaction(
     if state.session_id.as_deref() != Some(session_id) {
         return Ok(());
     }
-    let turn_id = state.active_turn_id.clone().unwrap_or_else(|| "session-start".to_string());
+    let turn_id = state
+        .active_turn_id
+        .clone()
+        .unwrap_or_else(|| protocol::SESSION_START_TURN_ID.to_string());
     let steps = view
         .steps
         .iter()

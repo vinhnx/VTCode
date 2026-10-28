@@ -19,6 +19,10 @@ pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor:
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
 
+/// Fallback turn id for interactions raised with no active turn (startup
+/// decisions). Produced by the service, matched by the desktop client.
+pub const SESSION_START_TURN_ID: &str = "session-start";
+
 /// Largest permitted JSON-RPC line, excluding its line ending.
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 

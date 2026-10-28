@@ -263,7 +263,7 @@ impl DesktopView {
                             .label("Reload")
                             .ghost()
                             .small()
-                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some(key_context::DESKTOP))
                             .desktop_disabled(!self.can_reload_cli_settings())
                             .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
                     ),

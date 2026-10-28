@@ -34,6 +34,18 @@ pub(super) enum DesktopSlashAction {
     Help,
 }
 
+/// Settings-tab aliases shared by the `/config` and `/settings` deep-links.
+fn settings_tab_for_name(name: &str) -> Option<settings::SettingsTab> {
+    match name {
+        "appearance" | "theme" => Some(settings::SettingsTab::Appearance),
+        "accessibility" | "a11y" => Some(settings::SettingsTab::Accessibility),
+        "shortcuts" | "keybindings" => Some(settings::SettingsTab::Shortcuts),
+        "vtcode" | "general" => Some(settings::SettingsTab::VtCode),
+        "connections" | "mcp" | "webmcp" => Some(settings::SettingsTab::Connections),
+        _ => None,
+    }
+}
+
 /// Commands with a native Desktop equivalent; all other slash input
 /// remains owned by the shared CLI dispatcher. `/config` additionally
 /// deep-links setting paths and groups into the configuration page and treats
@@ -97,35 +109,24 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             {
                 return None;
             }
+            if let Some(tab) = settings_tab_for_name(args) {
+                return Some(DesktopSlashAction::Settings(Some(tab)));
+            }
             match args {
-                "appearance" | "theme" => Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Appearance))),
-                "accessibility" | "a11y" => {
-                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Accessibility)))
-                }
-                "shortcuts" | "keybindings" => {
-                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Shortcuts)))
-                }
-                "vtcode" | "general" => Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::VtCode))),
-                "connections" | "mcp" | "webmcp" => {
-                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Connections)))
-                }
                 "model" | "models" => Some(DesktopSlashAction::ModelPicker),
                 "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
                 _ => Some(DesktopSlashAction::Configuration(Some(args.to_string()))),
             }
         }
         "settings" => {
-            let settings_tab = match args {
-                "appearance" | "theme" => Some(Some(settings::SettingsTab::Appearance)),
-                "accessibility" | "a11y" => Some(Some(settings::SettingsTab::Accessibility)),
-                "shortcuts" | "keybindings" => Some(Some(settings::SettingsTab::Shortcuts)),
-                "vtcode" | "general" => Some(Some(settings::SettingsTab::VtCode)),
-                "connections" | "mcp" | "webmcp" => Some(Some(settings::SettingsTab::Connections)),
-                "model" | "models" => return Some(DesktopSlashAction::ModelPicker),
-                "permissions" | "permission" => return Some(DesktopSlashAction::Permissions),
+            if let Some(tab) = settings_tab_for_name(args) {
+                return Some(DesktopSlashAction::Settings(Some(tab)));
+            }
+            match args {
+                "model" | "models" => Some(DesktopSlashAction::ModelPicker),
+                "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
                 _ => None,
-            }?;
-            Some(DesktopSlashAction::Settings(settings_tab))
+            }
         }
         _ => None,
     }
@@ -364,7 +365,7 @@ impl DesktopView {
                 if let Some(session_id) = self.selected_session_id.clone() {
                     if self.request_session_change(
                         protocol::method::SESSION_CLOSE,
-                        json!({ "sessionId": session_id }),
+                        json!({ keys::SESSION_ID: session_id }),
                         cx,
                     ) {
                         self.clear_submitted_command(window, cx);
@@ -1244,7 +1245,7 @@ impl DesktopView {
             .max_w(px(180.))
             .overflow_hidden()
             .accessibility_label(format!("Agent mode: {mode}"))
-            .tooltip_with_action("Choose agent mode", &OpenModePicker, Some("VTCodeDesktop"))
+            .tooltip_with_action("Choose agent mode", &OpenModePicker, Some(key_context::DESKTOP))
             .dropdown_caret(true)
             .ghost()
             .small()

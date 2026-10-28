@@ -1,6 +1,8 @@
 use gpui_kit::component::{WindowExt as _, notification::Notification};
 use gpui_kit::{Anchor, App, Window};
 
+use super::strings::app;
+
 struct ClipboardCopyNotification;
 struct BackgroundAgentActivityNotification;
 
@@ -12,7 +14,7 @@ pub(super) enum BackgroundAgentActivity {
 }
 
 pub(super) fn initialize(cx: &mut App) {
-    cx.set_app_identity("com.vinhnx.vtcode.desktop", "VT Code");
+    cx.set_app_identity("com.vinhnx.vtcode.desktop", app::NAME);
 }
 
 pub(super) fn copied_to_clipboard(window: &mut Window, cx: &mut App) {
@@ -32,7 +34,7 @@ pub(super) fn background_agent_activity(window: &mut Window, activity: Backgroun
     };
     window.push_notification(
         Notification::info(message)
-            .title("VT Code")
+            .title(app::NAME)
             .id::<BackgroundAgentActivityNotification>()
             .system(),
         cx,

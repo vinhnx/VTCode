@@ -4,83 +4,327 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::kbd::Kbd;
 use std::collections::{BTreeMap, HashSet};
 
-const COMMANDS: [(&str, &str, &str); 30] = [
-    ("commands", "Search commands", "cmd-k"),
-    ("conversation_search", "Find in conversation", "cmd-shift-f"),
-    ("new_session", "New thread", "cmd-n"),
-    ("close_session", "Close thread", "cmd-shift-w"),
-    ("workspace", "Choose workspace", "cmd-o"),
-    ("composer", "Focus composer", "cmd-l"),
-    ("sidebar", "Toggle navigation", "cmd-b"),
-    ("inspector", "Toggle inspector", "cmd-shift-i"),
-    ("zen_mode", "Toggle Zen mode", "ctrl-cmd-z"),
-    ("cancel", "Cancel run", "cmd-."),
-    ("dismiss", "Dismiss overlay", "escape"),
-    ("settings", "Settings", "cmd-,"),
-    ("settings_search", "Search settings and CLI config", "cmd-f"),
-    ("model", "Choose model", "cmd-shift-m"),
-    ("permissions", "Command permissions", "cmd-shift-p"),
-    ("agent_mode", "Choose agent mode", "cmd-shift-b"),
-    ("add_context", "Add files and more @", "cmd-shift-a"),
-    ("status_bar", "Toggle status bar", "cmd-shift-s"),
-    ("reload_cli_settings", "Reload CLI settings", "cmd-shift-r"),
-    ("sync_cli_theme", "Sync current theme to CLI", "cmd-shift-t"),
-    ("utilities", "Open workspace utilities", "cmd-shift-u"),
-    ("workspace_files", "Open workspace files", "cmd-shift-e"),
-    ("workspace_review", "Review working tree", "cmd-shift-g"),
-    ("refresh_workspace", "Refresh current workspace view", "cmd-r"),
-    ("navigate_back", "Navigate back", "cmd-["),
-    ("navigate_forward", "Navigate forward", "cmd-]"),
-    ("next_review_change", "Next review change", "f7"),
-    ("previous_review_change", "Previous review change", "shift-f7"),
-    ("next_review_file", "Next changed file", "alt-f7"),
-    ("previous_review_file", "Previous changed file", "alt-shift-f7"),
+/// Stable shortcut-command identity.
+///
+/// Ids persist in preferences (`Preferences::shortcuts`), so never rename an
+/// existing id: [`COMMANDS`] pins the full id table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CommandId {
+    Commands,
+    ConversationSearch,
+    NewSession,
+    CloseSession,
+    Workspace,
+    Composer,
+    Sidebar,
+    Inspector,
+    ZenMode,
+    Cancel,
+    Dismiss,
+    Settings,
+    SettingsSearch,
+    Model,
+    Permissions,
+    AgentMode,
+    AddContext,
+    StatusBar,
+    ReloadCliSettings,
+    SyncCliTheme,
+    Utilities,
+    WorkspaceFiles,
+    WorkspaceReview,
+    RefreshWorkspace,
+    NavigateBack,
+    NavigateForward,
+    NextReviewChange,
+    PreviousReviewChange,
+    NextReviewFile,
+    PreviousReviewFile,
+}
+
+impl CommandId {
+    const ALL: [Self; 30] = [
+        Self::Commands,
+        Self::ConversationSearch,
+        Self::NewSession,
+        Self::CloseSession,
+        Self::Workspace,
+        Self::Composer,
+        Self::Sidebar,
+        Self::Inspector,
+        Self::ZenMode,
+        Self::Cancel,
+        Self::Dismiss,
+        Self::Settings,
+        Self::SettingsSearch,
+        Self::Model,
+        Self::Permissions,
+        Self::AgentMode,
+        Self::AddContext,
+        Self::StatusBar,
+        Self::ReloadCliSettings,
+        Self::SyncCliTheme,
+        Self::Utilities,
+        Self::WorkspaceFiles,
+        Self::WorkspaceReview,
+        Self::RefreshWorkspace,
+        Self::NavigateBack,
+        Self::NavigateForward,
+        Self::NextReviewChange,
+        Self::PreviousReviewChange,
+        Self::NextReviewFile,
+        Self::PreviousReviewFile,
+    ];
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Commands => "commands",
+            Self::ConversationSearch => "conversation_search",
+            Self::NewSession => "new_session",
+            Self::CloseSession => "close_session",
+            Self::Workspace => "workspace",
+            Self::Composer => "composer",
+            Self::Sidebar => "sidebar",
+            Self::Inspector => "inspector",
+            Self::ZenMode => "zen_mode",
+            Self::Cancel => "cancel",
+            Self::Dismiss => "dismiss",
+            Self::Settings => "settings",
+            Self::SettingsSearch => "settings_search",
+            Self::Model => "model",
+            Self::Permissions => "permissions",
+            Self::AgentMode => "agent_mode",
+            Self::AddContext => "add_context",
+            Self::StatusBar => "status_bar",
+            Self::ReloadCliSettings => "reload_cli_settings",
+            Self::SyncCliTheme => "sync_cli_theme",
+            Self::Utilities => "utilities",
+            Self::WorkspaceFiles => "workspace_files",
+            Self::WorkspaceReview => "workspace_review",
+            Self::RefreshWorkspace => "refresh_workspace",
+            Self::NavigateBack => "navigate_back",
+            Self::NavigateForward => "navigate_forward",
+            Self::NextReviewChange => "next_review_change",
+            Self::PreviousReviewChange => "previous_review_change",
+            Self::NextReviewFile => "next_review_file",
+            Self::PreviousReviewFile => "previous_review_file",
+        }
+    }
+
+    fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|known| id == known.as_str())
+    }
+}
+
+/// One configurable desktop command: stable id, settings label, default binding.
+#[derive(Clone, Copy, Debug)]
+struct ShortcutCommand {
+    id: CommandId,
+    label: &'static str,
+    default_binding: &'static str,
+}
+
+const COMMANDS: [ShortcutCommand; 30] = [
+    ShortcutCommand {
+        id: CommandId::Commands,
+        label: "Search commands",
+        default_binding: "cmd-k",
+    },
+    ShortcutCommand {
+        id: CommandId::ConversationSearch,
+        label: "Find in conversation",
+        default_binding: "cmd-shift-f",
+    },
+    ShortcutCommand {
+        id: CommandId::NewSession,
+        label: "New thread",
+        default_binding: "cmd-n",
+    },
+    ShortcutCommand {
+        id: CommandId::CloseSession,
+        label: "Close thread",
+        default_binding: "cmd-shift-w",
+    },
+    ShortcutCommand {
+        id: CommandId::Workspace,
+        label: "Choose workspace",
+        default_binding: "cmd-o",
+    },
+    ShortcutCommand {
+        id: CommandId::Composer,
+        label: "Focus composer",
+        default_binding: "cmd-l",
+    },
+    ShortcutCommand {
+        id: CommandId::Sidebar,
+        label: "Toggle navigation",
+        default_binding: "cmd-b",
+    },
+    ShortcutCommand {
+        id: CommandId::Inspector,
+        label: "Toggle inspector",
+        default_binding: "cmd-shift-i",
+    },
+    ShortcutCommand {
+        id: CommandId::ZenMode,
+        label: "Toggle Zen mode",
+        default_binding: "ctrl-cmd-z",
+    },
+    ShortcutCommand {
+        id: CommandId::Cancel,
+        label: "Cancel run",
+        default_binding: "cmd-.",
+    },
+    ShortcutCommand {
+        id: CommandId::Dismiss,
+        label: "Dismiss overlay",
+        default_binding: "escape",
+    },
+    ShortcutCommand {
+        id: CommandId::Settings,
+        label: "Settings",
+        default_binding: "cmd-,",
+    },
+    ShortcutCommand {
+        id: CommandId::SettingsSearch,
+        label: "Search settings and CLI config",
+        default_binding: "cmd-f",
+    },
+    ShortcutCommand {
+        id: CommandId::Model,
+        label: "Choose model",
+        default_binding: "cmd-shift-m",
+    },
+    ShortcutCommand {
+        id: CommandId::Permissions,
+        label: "Command permissions",
+        default_binding: "cmd-shift-p",
+    },
+    ShortcutCommand {
+        id: CommandId::AgentMode,
+        label: "Choose agent mode",
+        default_binding: "cmd-shift-b",
+    },
+    ShortcutCommand {
+        id: CommandId::AddContext,
+        label: "Add files and more @",
+        default_binding: "cmd-shift-a",
+    },
+    ShortcutCommand {
+        id: CommandId::StatusBar,
+        label: "Toggle status bar",
+        default_binding: "cmd-shift-s",
+    },
+    ShortcutCommand {
+        id: CommandId::ReloadCliSettings,
+        label: "Reload CLI settings",
+        default_binding: "cmd-shift-r",
+    },
+    ShortcutCommand {
+        id: CommandId::SyncCliTheme,
+        label: "Sync current theme to CLI",
+        default_binding: "cmd-shift-t",
+    },
+    ShortcutCommand {
+        id: CommandId::Utilities,
+        label: "Open workspace utilities",
+        default_binding: "cmd-shift-u",
+    },
+    ShortcutCommand {
+        id: CommandId::WorkspaceFiles,
+        label: "Open workspace files",
+        default_binding: "cmd-shift-e",
+    },
+    ShortcutCommand {
+        id: CommandId::WorkspaceReview,
+        label: "Review working tree",
+        default_binding: "cmd-shift-g",
+    },
+    ShortcutCommand {
+        id: CommandId::RefreshWorkspace,
+        label: "Refresh current workspace view",
+        default_binding: "cmd-r",
+    },
+    ShortcutCommand {
+        id: CommandId::NavigateBack,
+        label: "Navigate back",
+        default_binding: "cmd-[",
+    },
+    ShortcutCommand {
+        id: CommandId::NavigateForward,
+        label: "Navigate forward",
+        default_binding: "cmd-]",
+    },
+    ShortcutCommand {
+        id: CommandId::NextReviewChange,
+        label: "Next review change",
+        default_binding: "f7",
+    },
+    ShortcutCommand {
+        id: CommandId::PreviousReviewChange,
+        label: "Previous review change",
+        default_binding: "shift-f7",
+    },
+    ShortcutCommand {
+        id: CommandId::NextReviewFile,
+        label: "Next changed file",
+        default_binding: "alt-f7",
+    },
+    ShortcutCommand {
+        id: CommandId::PreviousReviewFile,
+        label: "Previous changed file",
+        default_binding: "alt-shift-f7",
+    },
 ];
 
-fn action(id: &str) -> Box<dyn gpui_kit::Action> {
+fn action(id: CommandId) -> Box<dyn gpui_kit::Action> {
     match id {
-        "commands" => Box::new(OpenCommandPalette),
-        "conversation_search" => Box::new(OpenConversationSearch),
-        "new_session" => Box::new(NewSession),
-        "close_session" => Box::new(CloseSession),
-        "workspace" => Box::new(ChooseWorkspace),
-        "composer" => Box::new(FocusComposer),
-        "sidebar" => Box::new(ToggleSidebar),
-        "inspector" => Box::new(ToggleInspector),
-        "zen_mode" => Box::new(ToggleZenMode),
-        "cancel" => Box::new(CancelRun),
-        "dismiss" => Box::new(DismissOverlay),
-        "settings_search" => Box::new(OpenSettingsSearch),
-        "model" => Box::new(OpenModelPicker),
-        "permissions" => Box::new(OpenPermissions),
-        "agent_mode" => Box::new(OpenModePicker),
-        "add_context" => Box::new(OpenAddContext),
-        "status_bar" => Box::new(ToggleStatusBar),
-        "reload_cli_settings" => Box::new(ReloadCliSettings),
-        "sync_cli_theme" => Box::new(SyncCliTheme),
-        "utilities" => Box::new(OpenUtilities),
-        "workspace_files" => Box::new(OpenWorkspaceFiles),
-        "workspace_review" => Box::new(OpenWorkspaceReview),
-        "refresh_workspace" => Box::new(RefreshWorkspace),
-        "navigate_back" => Box::new(NavigateBack),
-        "navigate_forward" => Box::new(NavigateForward),
-        "next_review_change" => Box::new(NextReviewChange),
-        "previous_review_change" => Box::new(PreviousReviewChange),
-        "next_review_file" => Box::new(NextReviewFile),
-        "previous_review_file" => Box::new(PreviousReviewFile),
-        _ => Box::new(OpenSettings),
+        CommandId::Commands => Box::new(OpenCommandPalette),
+        CommandId::ConversationSearch => Box::new(OpenConversationSearch),
+        CommandId::NewSession => Box::new(NewSession),
+        CommandId::CloseSession => Box::new(CloseSession),
+        CommandId::Workspace => Box::new(ChooseWorkspace),
+        CommandId::Composer => Box::new(FocusComposer),
+        CommandId::Sidebar => Box::new(ToggleSidebar),
+        CommandId::Inspector => Box::new(ToggleInspector),
+        CommandId::ZenMode => Box::new(ToggleZenMode),
+        CommandId::Cancel => Box::new(CancelRun),
+        CommandId::Dismiss => Box::new(DismissOverlay),
+        CommandId::Settings => Box::new(OpenSettings),
+        CommandId::SettingsSearch => Box::new(OpenSettingsSearch),
+        CommandId::Model => Box::new(OpenModelPicker),
+        CommandId::Permissions => Box::new(OpenPermissions),
+        CommandId::AgentMode => Box::new(OpenModePicker),
+        CommandId::AddContext => Box::new(OpenAddContext),
+        CommandId::StatusBar => Box::new(ToggleStatusBar),
+        CommandId::ReloadCliSettings => Box::new(ReloadCliSettings),
+        CommandId::SyncCliTheme => Box::new(SyncCliTheme),
+        CommandId::Utilities => Box::new(OpenUtilities),
+        CommandId::WorkspaceFiles => Box::new(OpenWorkspaceFiles),
+        CommandId::WorkspaceReview => Box::new(OpenWorkspaceReview),
+        CommandId::RefreshWorkspace => Box::new(RefreshWorkspace),
+        CommandId::NavigateBack => Box::new(NavigateBack),
+        CommandId::NavigateForward => Box::new(NavigateForward),
+        CommandId::NextReviewChange => Box::new(NextReviewChange),
+        CommandId::PreviousReviewChange => Box::new(PreviousReviewChange),
+        CommandId::NextReviewFile => Box::new(NextReviewFile),
+        CommandId::PreviousReviewFile => Box::new(PreviousReviewFile),
     }
 }
 
 pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBinding>, String> {
-    if overrides.keys().any(|key| !COMMANDS.iter().any(|(id, _, _)| id == key)) {
+    if overrides.keys().any(|key| CommandId::from_id(key).is_none()) {
         return Err("Unknown shortcut action".into());
     }
     let mut seen = HashSet::new();
     COMMANDS
         .iter()
-        .map(|(id, label, default)| {
-            let source = overrides.get(*id).map(String::as_str).unwrap_or(default);
+        .map(|command| {
+            let source = overrides
+                .get(command.id.as_str())
+                .map(String::as_str)
+                .unwrap_or(command.default_binding);
+            let label = command.label;
             if source.is_empty() {
                 return Ok(Vec::new());
             }
@@ -108,7 +352,7 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             {
                 return Err(format!("{label}: reserved macOS shortcut"));
             }
-            if !(*id == "dismiss" && source == "escape")
+            if !(command.id == CommandId::Dismiss && source == "escape")
                 && !source.contains("cmd-")
                 && !source.contains("ctrl-")
                 && !source.contains("alt-")
@@ -119,19 +363,26 @@ pub(super) fn bindings(overrides: &BTreeMap<String, String>) -> Result<Vec<KeyBi
             if !seen.insert(normalized) {
                 return Err(format!("{label}: shortcut is already assigned"));
             }
-            let context =
-                gpui_kit::KeyBindingContextPredicate::parse(context_for(id)).map_err(|error| error.to_string())?;
+            let context = gpui_kit::KeyBindingContextPredicate::parse(context_for(command.id))
+                .map_err(|error| error.to_string())?;
             let mut bindings = vec![
-                KeyBinding::load(source, action(id), Some(context.into()), false, None, &gpui_kit::DummyKeyboardMapper)
-                    .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
+                KeyBinding::load(
+                    source,
+                    action(command.id),
+                    Some(context.into()),
+                    false,
+                    None,
+                    &gpui_kit::DummyKeyboardMapper,
+                )
+                .map_err(|error| format!("{label}: invalid shortcut: {error}"))?,
             ];
-            if *id == "settings_search" {
-                let context =
-                    gpui_kit::KeyBindingContextPredicate::parse("VTCodeSettings").map_err(|error| error.to_string())?;
+            if command.id == CommandId::SettingsSearch {
+                let context = gpui_kit::KeyBindingContextPredicate::parse(key_context::SETTINGS)
+                    .map_err(|error| error.to_string())?;
                 bindings.push(
                     KeyBinding::load(
                         source,
-                        action(id),
+                        action(command.id),
                         Some(context.into()),
                         false,
                         None,
@@ -155,11 +406,17 @@ fn is_function_key(shortcut: &str) -> bool {
         .is_some_and(|number| (1..=24).contains(&number))
 }
 
-fn context_for(id: &str) -> &'static str {
-    if matches!(id, "next_review_change" | "previous_review_change" | "next_review_file" | "previous_review_file") {
-        "VTCodeDiffReview"
+fn context_for(id: CommandId) -> &'static str {
+    if matches!(
+        id,
+        CommandId::NextReviewChange
+            | CommandId::PreviousReviewChange
+            | CommandId::NextReviewFile
+            | CommandId::PreviousReviewFile
+    ) {
+        key_context::DIFF_REVIEW
     } else {
-        "VTCodeDesktop"
+        key_context::DESKTOP
     }
 }
 
@@ -170,9 +427,14 @@ pub(super) fn inputs(
 ) -> Vec<Entity<InputState>> {
     COMMANDS
         .iter()
-        .map(|(id, _, default)| {
+        .map(|command| {
             cx.new(|cx| {
-                InputState::new(window, cx).default_value(overrides.get(*id).map(String::as_str).unwrap_or(default))
+                InputState::new(window, cx).default_value(
+                    overrides
+                        .get(command.id.as_str())
+                        .map(String::as_str)
+                        .unwrap_or(command.default_binding),
+                )
             })
         })
         .collect()
@@ -183,7 +445,7 @@ impl DesktopView {
         COMMANDS
             .iter()
             .zip(&self.shortcut_inputs)
-            .map(|((id, _, _), input)| (id.to_string(), input.read(cx).value().to_string()))
+            .map(|(command, input)| (command.id.as_str().to_string(), input.read(cx).value().to_string()))
             .collect()
     }
 
@@ -271,9 +533,9 @@ impl DesktopView {
                     .child(div().font_medium().child("Desktop bindings"))
                     .child(actions),
             )
-            .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|((id, label, _), input)| {
+            .children(COMMANDS.iter().zip(self.shortcut_inputs.iter()).map(|(command, input)| {
                 let value = input.read(cx).value().to_string();
-                let current_binding = active_binding(id, window);
+                let current_binding = active_binding(command.id, window);
                 let value_element = if self.shortcuts_editing {
                     div()
                         .child(
@@ -282,13 +544,13 @@ impl DesktopView {
                                 .max_w_full()
                                 .cursor_text()
                                 .bg(cx.theme().colors.popover)
-                                .id(format!("shortcut-input-{id}"))
-                                .accessibility_id(format!("shortcut-{id}"))
-                                .aria_label(format!("Shortcut for {label}")),
+                                .id(format!("shortcut-input-{}", command.id.as_str()))
+                                .accessibility_id(format!("shortcut-{}", command.id.as_str()))
+                                .aria_label(format!("Shortcut for {}", command.label)),
                         )
                         .into_any_element()
                 } else {
-                    shortcut_badge(id, label, current_binding.as_ref())
+                    shortcut_badge(command.id, command.label, current_binding.as_ref())
                 };
                 let accessible_shortcut = if self.shortcuts_editing {
                     shortcut_accessibility_value(&value)
@@ -296,10 +558,10 @@ impl DesktopView {
                     current_binding.as_ref().map(Kbd::format).unwrap_or_else(|| "not set".into())
                 };
                 div()
-                    .id(format!("shortcut-row-{id}"))
+                    .id(format!("shortcut-row-{}", command.id.as_str()))
                     .test_support()
                     .role(gpui_kit::Role::Group)
-                    .aria_label(format!("{label}, shortcut {accessible_shortcut}"))
+                    .aria_label(format!("{}, shortcut {accessible_shortcut}", command.label))
                     .w_full()
                     .flex()
                     .flex_wrap()
@@ -307,7 +569,7 @@ impl DesktopView {
                     .justify_between()
                     .gap_2()
                     .py_1()
-                    .child(*label)
+                    .child(command.label)
                     .child(value_element)
             }))
             .children(self.shortcut_message.as_ref().map(|message| {
@@ -365,7 +627,7 @@ impl DesktopView {
     }
 }
 
-fn active_binding(id: &str, window: &Window) -> Option<gpui_kit::Keystroke> {
+fn active_binding(id: CommandId, window: &Window) -> Option<gpui_kit::Keystroke> {
     let context = gpui_kit::KeyContext::parse(context_for(id)).ok()?;
     let action = action(id);
     window
@@ -375,13 +637,13 @@ fn active_binding(id: &str, window: &Window) -> Option<gpui_kit::Keystroke> {
         .map(|keystroke| gpui_kit::AsKeystroke::as_keystroke(keystroke).clone())
 }
 
-fn shortcut_badge(id: &str, label: &str, binding: Option<&gpui_kit::Keystroke>) -> AnyElement {
+fn shortcut_badge(id: CommandId, label: &str, binding: Option<&gpui_kit::Keystroke>) -> AnyElement {
     let badge = match binding {
         Some(keystroke) => div().child(Kbd::new(keystroke.clone()).outline()),
         None => div().text_xs().child("Not set"),
     };
     div()
-        .id(format!("shortcut-badge-{id}"))
+        .id(format!("shortcut-badge-{}", id.as_str()))
         .test_support()
         .role(gpui_kit::Role::Label)
         .aria_label(format!("Shortcut for {label}: {}", binding.map(Kbd::format).unwrap_or_else(|| "not set".into())))
@@ -445,9 +707,9 @@ mod tests {
             ("previous_review_file".into(), "alt-shift-f9".into()),
         ]);
         assert!(bindings(&configured).is_ok());
-        assert_eq!(context_for("next_review_change"), "VTCodeDiffReview");
-        assert_eq!(context_for("previous_review_file"), "VTCodeDiffReview");
-        assert_eq!(context_for("navigate_back"), "VTCodeDesktop");
+        assert_eq!(context_for(CommandId::NextReviewChange), "VTCodeDiffReview");
+        assert_eq!(context_for(CommandId::PreviousReviewFile), "VTCodeDiffReview");
+        assert_eq!(context_for(CommandId::NavigateBack), "VTCodeDesktop");
         assert!(bindings(&BTreeMap::from([("next_review_change".into(), "f25".into())])).is_err());
         assert!(
             bindings(&BTreeMap::from([
@@ -456,5 +718,51 @@ mod tests {
             ]))
             .is_err()
         );
+    }
+
+    #[test]
+    fn command_ids_round_trip_and_pin_the_persisted_table() {
+        // Ids persist in preferences: this literal table pins the contract so
+        // a rename breaks loudly instead of orphaning saved shortcuts.
+        let pinned = [
+            "commands",
+            "conversation_search",
+            "new_session",
+            "close_session",
+            "workspace",
+            "composer",
+            "sidebar",
+            "inspector",
+            "zen_mode",
+            "cancel",
+            "dismiss",
+            "settings",
+            "settings_search",
+            "model",
+            "permissions",
+            "agent_mode",
+            "add_context",
+            "status_bar",
+            "reload_cli_settings",
+            "sync_cli_theme",
+            "utilities",
+            "workspace_files",
+            "workspace_review",
+            "refresh_workspace",
+            "navigate_back",
+            "navigate_forward",
+            "next_review_change",
+            "previous_review_change",
+            "next_review_file",
+            "previous_review_file",
+        ];
+        assert_eq!(CommandId::ALL.map(CommandId::as_str), pinned);
+        assert_eq!(COMMANDS.map(|command| command.id), CommandId::ALL);
+        for id in CommandId::ALL {
+            assert_eq!(CommandId::from_id(id.as_str()), Some(id));
+        }
+        assert_eq!(CommandId::from_id("unknown"), None);
+        assert_eq!(CommandId::from_id(""), None);
+        assert_eq!(CommandId::from_id("Commands"), None);
     }
 }

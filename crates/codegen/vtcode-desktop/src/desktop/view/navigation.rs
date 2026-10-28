@@ -42,7 +42,7 @@ impl DesktopView {
                                 "Projects and threads"
                             })
                             .toggled(expanded)
-                            .tooltip_with_action("Projects and threads", &ToggleSidebar, Some("VTCodeDesktop"))
+                            .tooltip_with_action("Projects and threads", &ToggleSidebar, Some(key_context::DESKTOP))
                             .when(expanded, |button| button.bg(colors.secondary).text_color(colors.foreground))
                             .dispatches_desktop_action(ToggleSidebar, self.focus_handle.clone()),
                     ),
@@ -53,7 +53,7 @@ impl DesktopView {
                         .icon(IconName::Plus)
                         .ghost()
                         .accessibility_label("New thread")
-                        .tooltip_with_action("New thread", &NewSession, Some("VTCodeDesktop"))
+                        .tooltip_with_action("New thread", &NewSession, Some(key_context::DESKTOP))
                         .desktop_disabled(!self.session_change_allowed(None))
                         .dispatches_desktop_action(NewSession, self.focus_handle.clone()),
                 )
@@ -68,7 +68,7 @@ impl DesktopView {
                     } else {
                         "Workspace utilities"
                     })
-                    .tooltip_with_action("Workspace utilities", &OpenUtilities, Some("VTCodeDesktop"))
+                    .tooltip_with_action("Workspace utilities", &OpenUtilities, Some(key_context::DESKTOP))
                     .desktop_disabled(self.workspace.is_none())
                     .when(utilities_selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                     .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
