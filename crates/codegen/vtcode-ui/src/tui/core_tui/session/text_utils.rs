@@ -163,6 +163,12 @@ fn wrap_line_internal(
         let span = &line.spans[0];
         let text = span.content.as_ref();
         if text.is_ascii() && !text.contains('\n') && !text.contains('\r') {
+            // Fitting lines need no wrapping: return the input unchanged
+            // instead of falling through to the slow path (hotpath: skipping
+            // the fast path here cost +440% wrap_line icount).
+            if text.len() <= max_width {
+                return vec![line];
+            }
             return wrap_ascii_word_boundaries(text, span.style, max_width);
         }
     }
@@ -774,6 +780,22 @@ mod tests {
         let rows = wrap_ascii_word_boundaries("hello world", Style::default(), 20);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spans[0].content.as_ref(), "hello world");
+    }
+
+    #[test]
+    fn wrap_line_returns_fitting_ascii_unchanged() {
+        let style = Style::default().fg(Color::Green);
+        for (text, width) in [("hello world", 20), ("hello world", 11)] {
+            let rows = wrap_line(Line::from(Span::styled(text.to_owned(), style)), width);
+            assert_eq!(rows, vec![Line::from(Span::styled(text.to_owned(), style))]);
+        }
+    }
+
+    #[test]
+    fn wrap_line_wraps_overflowing_ascii_at_word_boundary() {
+        let rows = wrap_line(Line::from("hello brave new world"), 10);
+        let texts: Vec<&str> = rows.iter().map(|row| row.spans[0].content.as_ref()).collect();
+        assert_eq!(texts, vec!["hello", "brave new", "world"]);
     }
 
     #[test]

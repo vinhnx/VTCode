@@ -351,8 +351,9 @@ TUI invariants found via hotpath (keep these):
 - Link projection fast-rejects when `may_contain_link_candidate_text` is false (no path chars and no `.`); bare
   workspace filenames still match via `.`.
 - Eviction uses `TranscriptReflowCache::evict_prefix`, never a full wipe.
-- Single-style ASCII prose uses `wrap_ascii_word_boundaries` (no grapheme clustering / `clip_line`); other lines keep
-  the full wrapper.
+- Single-style ASCII prose that fits returns the input line unchanged (no wrap work at all); overflowing lines use
+  `wrap_ascii_word_boundaries` (no grapheme clustering / `clip_line`); other lines keep the full wrapper. Never route
+  fitting lines into the slow path — that cost +440% `wrap_line` icount in hotpath PR #1.
 - Transcript lines are pre-wrapped to `content_width`; `TranscriptWidget` must not re-wrap in `Paragraph` every frame.
 - Common transcript frames (no queue overlay, no links, no indicator shimmer) paint via `paint_pre_wrapped_lines`
   (`Buffer::set_span`) — do not clone `Line`s into `Paragraph`. Bottom padding is empty space, not a reason to clone/pad
