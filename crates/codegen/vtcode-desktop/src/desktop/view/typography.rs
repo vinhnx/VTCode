@@ -46,7 +46,7 @@ pub(super) fn default_code_font(cx: &App) -> gpui_kit::SharedString {
 }
 
 impl DesktopView {
-    pub(super) fn open_font_palette(&mut self, target: FontTarget, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_font_palette(&mut self, target: FontTarget, window: &mut Window, cx: &mut Context<Self>) {
         self.close_settings(window, cx);
         let default_label = match target {
             FontTarget::Ui if cfg!(target_os = "macos") => "System default · SF Pro".to_owned(),

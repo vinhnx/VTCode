@@ -816,16 +816,11 @@ impl DesktopView {
             .into_any_element()
     }
 
-    pub(super) fn select_settings_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+    fn select_settings_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.update_settings_tab(index, false, window, cx);
     }
 
-    pub(super) fn select_settings_tab_from_keyboard(
-        &mut self,
-        index: usize,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn select_settings_tab_from_keyboard(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.update_settings_tab(index, true, window, cx);
     }
 
@@ -840,7 +835,7 @@ impl DesktopView {
         }
     }
 
-    pub(super) fn cycle_settings_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn cycle_settings_tab(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let count = SettingsTab::ALL.len();
         let current = SettingsTab::ALL
             .iter()

@@ -170,7 +170,7 @@ impl DesktopView {
         cx.notify();
     }
 
-    pub(super) fn open_workspace_review_file_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_workspace_review_file_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(entries) = self
             .workspace_review
             .as_ref()

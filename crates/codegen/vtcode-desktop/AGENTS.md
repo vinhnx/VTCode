@@ -22,8 +22,8 @@
 - Transcript `notice` rows carry `NoticeSeverity` and render as plain severity rows (no bubble/Markdown/copy); message
   actions reveal on hover in a fixed slot, with the palette copy command as the keyboard path.
 - `view/composer_controls.rs` owns anchored controls; the service validates CLI-discovered modes
-  and persists the CLI default. Save workspace permission choices only after acknowledgement;
-  restore before Send. Keep drafts/sources across changes.
+  and persists the CLI default. Save permission choices only after acknowledgement; restore before Send.
+- New `view/` splits use `use super::*` + `impl DesktopView`; cross-module items are `pub(super)`, test-only re-exports `#[cfg(test)]`. GUI tests live in `view/tests/<topic>.rs` (`use super::*;` only); shared helpers and `pub(super) use` imports stay in `tests/mod.rs`.
 - Rust 2024 render helpers in loops must return `AnyElement` when they capture `&mut Context`.
 - `/config` opens the dedicated page (search, groups rail, value-first rows, trailing notes); deep-links resolve
   path → group → search, runtime sections stay CLI. Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.

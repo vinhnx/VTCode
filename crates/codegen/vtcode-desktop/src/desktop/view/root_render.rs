@@ -1,0 +1,200 @@
+//! Root layout: navigation sidebar, conversation workspace, inspector, and overlays.
+use super::*;
+
+impl Render for DesktopView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors;
+        let inspector_visible = self.inspector_open && self.workspace.is_some() && !self.zen_mode;
+        let navigation_visible = self.preferences.navigation_visible() && !self.zen_mode;
+        let navigation_on_right = self.preferences.navigation_on_right();
+        let conversation = div()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
+                column.child(self.render_thread_header(cx.theme()))
+            })
+            .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
+                column.child(self.render_navigation_loading(cx))
+            })
+            .child(self.render_transcript(cx))
+            .child(self.render_composer(window, cx));
+        let workspace = div()
+            .id("workspace-surface")
+            .test_support()
+            .role(gpui_kit::Role::Group)
+            .aria_label("Conversation workspace")
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .h_full()
+            .flex()
+            .gap_1()
+            .p_3()
+            .bg(colors.background)
+            .rounded_xl()
+            .child(conversation)
+            .when(inspector_visible, |workspace| {
+                workspace.child(
+                    div()
+                        .relative()
+                        .h_full()
+                        .flex_shrink_0()
+                        .child(self.render_inspector(cx))
+                        .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
+                )
+            })
+            .when(self.side_panels_collapsed(), |workspace| workspace.child(self.render_floating_zen_toggle(cx)));
+        let panes = div()
+            .id("pane-root")
+            .test_support()
+            .p_3()
+            .gap_2()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .bg(chrome_background(&colors))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                    if this.resizing.take().is_some() {
+                        this.save_preferences();
+                        cx.notify();
+                    }
+                }),
+            );
+        let panes = if navigation_visible {
+            let navigation = self.render_navigation(cx);
+            let sidebar = div().relative().h_full().flex_shrink_0();
+            let sidebar = if navigation_on_right {
+                sidebar
+                    .when(self.sidebar_open, |sidebar| {
+                        sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                    })
+                    .child(navigation)
+            } else {
+                sidebar.child(navigation).when(self.sidebar_open, |sidebar| {
+                    sidebar.child(self.render_resize_handle(ResizeEdge::Sidebar, cx))
+                })
+            };
+            if navigation_on_right {
+                panes.child(workspace).child(sidebar)
+            } else {
+                panes.child(sidebar).child(workspace)
+            }
+        } else {
+            panes.child(workspace)
+        };
+        let mut body = div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(colors.background)
+            .text_color(colors.foreground)
+            .track_focus(&self.focus_handle)
+            .key_context(key_context::DESKTOP)
+            .when(self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &NewSession, _, cx| view.create_session(cx)))
+            })
+            .when(self.selected_session_id.is_some() && self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &CloseSession, _, cx| view.close_session(cx)))
+            })
+            .when(
+                self.retained_submission.is_none() && self.workspace_switch_idle() && !self.workspace_picker_open,
+                |body| {
+                    body.on_action(
+                        cx.listener(|view, _: &ChooseWorkspace, window, cx| view.choose_workspace(window, cx)),
+                    )
+                },
+            )
+            .on_action(cx.listener(|view, _: &ToggleSidebar, _, cx| {
+                if view.preferences.navigation_visible() {
+                    view.sidebar_open = !view.sidebar_open;
+                } else {
+                    view.preferences.navigation_visible = Some(true);
+                    view.save_preferences();
+                }
+                view.navigation_peek = false;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|view, _: &NavigateBack, _, cx| view.navigate_back(cx)))
+            .on_action(cx.listener(|view, _: &NavigateForward, _, cx| view.navigate_forward(cx)))
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Back),
+                cx.listener(|view, _, _, cx| {
+                    if view.swipe_navigation_allowed() {
+                        view.navigate_back(cx);
+                    }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Navigate(NavigationDirection::Forward),
+                cx.listener(|view, _, _, cx| {
+                    if view.swipe_navigation_allowed() {
+                        view.navigate_forward(cx);
+                    }
+                }),
+            )
+            .on_action(cx.listener(|view, _: &ToggleZenMode, window, cx| view.toggle_zen_mode(window, cx)))
+            .on_action(cx.listener(|view, _: &ToggleStatusBar, _, cx| view.toggle_status_bar(cx)))
+            .on_action(cx.listener(|view, _: &ReloadCliSettings, window, cx| {
+                view.reload_cli_settings_from_ui(window, cx);
+            }))
+            .on_action(cx.listener(|view, _: &SyncCliTheme, _, cx| view.sync_theme_to_cli(cx)))
+            .on_action(cx.listener(|view, _: &FocusComposer, window, cx| view.activate_composer(window, cx)))
+            .when(self.workspace.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &ToggleInspector, _, cx| view.toggle_inspector(cx)))
+                    .on_action(cx.listener(|view, _: &OpenUtilities, _, cx| view.open_utilities(cx)))
+                    .on_action(cx.listener(|view, _: &OpenWorkspaceFiles, window, cx| {
+                        view.focus_workspace_files(window, cx);
+                    }))
+                    .on_action(cx.listener(|view, _: &RefreshWorkspace, _, cx| view.refresh_workspace_view(cx)))
+            })
+            .when(self.backend.is_some() && self.service_info.is_some(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenWorkspaceReview, window, cx| {
+                    view.open_workspace_review(window, cx);
+                }))
+            })
+            .when(self.running, |body| body.on_action(cx.listener(|view, _: &CancelRun, _, cx| view.cancel_turn(cx))))
+            .on_action(cx.listener(|view, _: &DismissOverlay, window, cx| view.dismiss_overlay(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenCommandPalette, window, cx| view.open_command_palette(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenConversationSearch, window, cx| {
+                if let Some(session_id) = view.selected_session_id.clone() {
+                    view.open_conversation_search(session_id, window, cx);
+                }
+            }))
+            .on_action(
+                cx.listener(|view, _: &OpenSettingsSearch, window, cx| view.open_settings_search_palette(window, cx)),
+            )
+            .when(self.can_select_session_options(), |body| {
+                body.on_action(cx.listener(|view, _: &OpenPermissions, window, cx| view.open_permissions(window, cx)))
+                    .on_action(cx.listener(|view, _: &OpenModePicker, window, cx| view.open_modes(window, cx)))
+            })
+            .on_action(cx.listener(|view, _: &OpenAddContext, window, cx| view.open_add_context(window, cx)))
+            .on_action(cx.listener(|view, _: &OpenSettings, window, cx| view.open_settings(window, cx)))
+            .when(self.session_change_allowed(None), |body| {
+                body.on_action(cx.listener(|view, _: &OpenModelPicker, window, cx| view.open_model_options(window, cx)))
+            })
+            .on_action(cx.listener(|_, _: &CloseWindow, window, _| window.remove_window()))
+            .on_action(cx.listener(|_, _: &MinimizeWindow, window, _| window.minimize_window()))
+            .on_action(cx.listener(|_, _: &ZoomWindow, window, _| window.zoom_window()))
+            .child(self.render_toolbar(cx))
+            .child(panes)
+            .when(self.preferences.show_status_bar && !self.zen_mode, |body| body.child(self.render_status_bar(cx)));
+        if self.file_preview.is_some() {
+            body = body.child(self.render_file_preview(cx));
+        }
+        if self.review_open {
+            body = body.child(self.render_change_review(cx));
+        }
+        if !self.palette_kind.is_composer_popup()
+            && let Some(state) = self.palette.clone()
+        {
+            body = body.child(self.render_command_palette(state, window, cx));
+        }
+        body
+    }
+}

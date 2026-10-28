@@ -1,0 +1,650 @@
+//! Inspector Files, Output, and Activity panels.
+
+use super::*;
+
+#[derive(Clone, Copy)]
+struct ActivityChartDatum {
+    label: &'static str,
+    count: usize,
+    state: ActivityState,
+}
+
+impl DesktopView {
+    pub(super) fn render_inspector_files_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let mut body = div().w_full().flex_1().min_h_0().flex().flex_col();
+        body = body.child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .px_3()
+                .py_2()
+                .child(
+                    desktop_button("focus-files")
+                        .label(rust_i18n::t!("app.files.workspace_files").to_string())
+                        .accessibility_label(rust_i18n::t!("app.files.focus_tree").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.files.focus_tree").to_string(),
+                            &OpenWorkspaceFiles,
+                            Some(key_context::DESKTOP),
+                        )
+                        .ghost()
+                        .dispatches_desktop_action(OpenWorkspaceFiles, self.focus_handle.clone()),
+                )
+                .child(
+                    desktop_button("refresh-files")
+                        .label(rust_i18n::t!("app.files.refresh").to_string())
+                        .accessibility_label(rust_i18n::t!("app.files.refresh_tooltip").to_string())
+                        .tooltip_with_action(
+                            rust_i18n::t!("app.files.refresh_tooltip").to_string(),
+                            &RefreshWorkspace,
+                            Some(key_context::DESKTOP),
+                        )
+                        .ghost()
+                        .dispatches_desktop_action(RefreshWorkspace, self.focus_handle.clone()),
+                ),
+        );
+        let directory_paths = self.file_directory_paths.clone();
+        let file_tree = self.file_tree.clone();
+        let weak_view = cx.entity().downgrade();
+        if self.files.is_empty() && self.files_scan_cancel.is_some() {
+            body = body.child(
+                div()
+                    .id("file-list-loading")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(rust_i18n::t!("app.files.scanning").to_string())
+                    .aria_description(rust_i18n::t!("app.files.scanning_description").to_string())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .p_3()
+                    .children([
+                        skeleton_line("file-scan-skeleton-1", px(196.), cx),
+                        skeleton_line("file-scan-skeleton-2", px(148.), cx),
+                        skeleton_line("file-scan-skeleton-3", px(218.), cx),
+                        skeleton_line("file-scan-skeleton-4", px(172.), cx),
+                        skeleton_line("file-scan-skeleton-5", px(204.), cx),
+                    ]),
+            );
+        } else if self.files.is_empty() {
+            let (title, description) = if self.workspace.is_some() {
+                (
+                    rust_i18n::t!("app.files.empty.title").to_string(),
+                    rust_i18n::t!("app.files.empty.description").to_string(),
+                )
+            } else {
+                (
+                    rust_i18n::t!("app.files.no_workspace.title").to_string(),
+                    rust_i18n::t!("app.files.no_workspace.description").to_string(),
+                )
+            };
+            body = body.child(
+                div()
+                    .id("file-list-empty")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .aria_label(title.clone())
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(empty_state(title, description, IconName::Folder)),
+            );
+        } else {
+            body = body.child(
+                div()
+                    .id("file-list")
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .on_action(
+                        cx.listener(|this, _: &OpenSelectedFile, window, cx| this.open_selected_file(window, cx)),
+                    )
+                    .child(Tree::new(&self.file_tree, move |_index, entry, selected, _window, app| {
+                        let rel_path = entry.item().id.to_string();
+                        let is_dir = directory_paths.contains(&rel_path);
+                        let display_name = rel_path.rsplit('/').next().unwrap_or(&rel_path).to_string();
+                        let icon = if is_dir {
+                            if entry.is_expanded() {
+                                IconName::FolderOpen
+                            } else {
+                                IconName::FolderClosed
+                            }
+                        } else {
+                            IconName::FileText
+                        };
+                        let tree = file_tree.clone();
+                        let view = weak_view.clone();
+                        let open_path = rel_path.clone();
+                        ListItem::new(format!("workspace-file-{rel_path}"))
+                            .selected(selected)
+                            .cursor_pointer()
+                            .accessibility_label(if is_dir {
+                                rust_i18n::t!("app.files.folder_accessibility", path = rel_path.as_str()).to_string()
+                            } else {
+                                rust_i18n::t!("app.files.file_accessibility", path = rel_path.as_str()).to_string()
+                            })
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_x_2()
+                                    .child(Icon::new(icon).small().text_color(app.theme().muted_foreground))
+                                    .child(div().text_sm().child(display_name)),
+                            )
+                            .on_click(move |_, window, app| {
+                                tree.update(app, |tree, app| tree.focus(window, app));
+                                if is_dir {
+                                    return;
+                                }
+                                if let Some(view) = view.upgrade() {
+                                    view.update(app, |view, cx| {
+                                        view.open_file_preview(open_path.clone(), window, cx);
+                                    });
+                                }
+                            })
+                    })),
+            );
+        }
+        body.into_any_element()
+    }
+
+    /// Show a selected historical capture or the newest command/tool output.
+    pub(super) fn render_output_tab(&self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = cx.theme();
+        let colors = theme.colors;
+        let mono = theme.mono_font_family.clone();
+        let mut pane = div().w_full().flex_1().min_h_0().flex().flex_col();
+        if self.restored_activity_history_incomplete {
+            pane = pane.child(div().px_3().pt_2().child(warning_alert(
+                "activity-history-warning",
+                PARTIAL_ACTIVITY_HISTORY_MESSAGE,
+                &colors,
+            )));
+        }
+        let Some(output) =
+            inspector::output_for(&self.transcript, &self.restored_activity, self.selected_output_id.as_deref())
+        else {
+            return pane
+                .child(empty_state(
+                    "No output yet",
+                    "Command and tool output will appear here while a turn runs.",
+                    IconName::Terminal,
+                ))
+                .into_any_element();
+        };
+        let tail = inspector::output_tail(&output.text);
+        let is_selected_output = self.selected_output_id.as_deref() == Some(output.id.as_str());
+        let has_more_output = self.restored_output_cursors.contains_key(&output.id);
+        let output_page_loading = self
+            .output_page_pending
+            .as_ref()
+            .is_some_and(|pending| pending.item_id == output.id);
+        let output_page_error = self
+            .output_page_error
+            .as_ref()
+            .and_then(|(item_id, error)| (item_id == &output.id).then(|| error.clone()));
+        let copy_output_id = output.id.clone();
+        let copy_output_preview = output.text.clone();
+        let output_header = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_3()
+            .py_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_medium()
+                    .child(output.title.clone()),
+            )
+            .when(is_selected_output, |header| {
+                header
+                    .child(
+                        Tag::custom(colors.secondary, colors.muted_foreground, colors.border)
+                            .small()
+                            .rounded_full()
+                            .child("History"),
+                    )
+                    .child(
+                        desktop_button("output-follow-latest")
+                            .icon(IconName::Activity)
+                            .ghost()
+                            .small()
+                            .accessibility_label("Follow latest output")
+                            .tooltip("Show the newest captured output")
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.selected_output_id = None;
+                                cx.notify();
+                            })),
+                    )
+            })
+            .when(output.running, |header| {
+                header.child(
+                    Tag::custom(colors.secondary, colors.foreground, colors.border)
+                        .small()
+                        .child("Running"),
+                )
+            })
+            .child(
+                desktop_button("copy-output")
+                    .icon(IconName::Copy)
+                    .accessibility_label(if has_more_output {
+                        "Copy loaded output"
+                    } else {
+                        "Copy output"
+                    })
+                    .tooltip(if has_more_output {
+                        "Copy loaded output with truncation notice"
+                    } else {
+                        "Copy captured output"
+                    })
+                    .ghost()
+                    .small()
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        let text = restored_output_for_copy(
+                            &copy_output_id,
+                            &copy_output_preview,
+                            &view.restored_output_pages,
+                            has_more_output,
+                        );
+                        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
+                        super::super::notifications::copied_to_clipboard(window, cx);
+                    })),
+            );
+        pane = pane.child(output_header);
+        if has_more_output || output_page_loading || output_page_error.is_some() {
+            let output_id = output.id.clone();
+            let mut recovery = div().w_full().px_3().py_1().flex().items_center().gap_2();
+            if has_more_output {
+                recovery = recovery.child(
+                    desktop_button("load-more-output")
+                        .label(if output_page_loading {
+                            "Loading captured output…"
+                        } else {
+                            "Load more captured output"
+                        })
+                        .ghost()
+                        .small()
+                        .accessibility_label(if output_page_loading {
+                            "Loading more captured output"
+                        } else {
+                            "Load more captured output"
+                        })
+                        .desktop_disabled(self.output_page_pending.is_some())
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.request_more_captured_output(&output_id, cx);
+                        })),
+                );
+            }
+            if output_page_loading {
+                recovery = recovery.child(
+                    div()
+                        .id("output-page-loading")
+                        .role(gpui_kit::Role::Status)
+                        .text_xs()
+                        .text_color(colors.muted_foreground)
+                        .child("Reading the next bounded page…"),
+                );
+            }
+            if let Some(error) = output_page_error {
+                recovery = recovery.child(warning_alert("output-page-error", error, &colors));
+            }
+            pane = pane.child(recovery);
+        }
+        pane.child(
+            div()
+                .id("output-body")
+                .test_support()
+                .role(gpui_kit::Role::Label)
+                .aria_label(tail.clone())
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .p_2()
+                .text_xs()
+                .font_family(mono)
+                .text_size(theme.mono_font_size)
+                .child(tail),
+        )
+        .into_any_element()
+    }
+
+    pub(super) fn render_activity_tab(
+        &mut self,
+        colors: &gpui_kit::component::theme::ThemeColor,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let activity = inspector::activity_rows(&self.transcript, &self.restored_activity);
+        let counts = ActivityCounts::from_rows(&activity.rows);
+        let has_older_activity = activity.has_older;
+        let mut body = div()
+            .id("activity-list")
+            .w_full()
+            .flex_1()
+            .min_h_0()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3();
+        if self.restored_activity_history_incomplete {
+            body = body.child(warning_alert("activity-history-warning", PARTIAL_ACTIVITY_HISTORY_MESSAGE, colors));
+        }
+        if activity.rows.is_empty() {
+            return body
+                .child(empty_state(
+                    "No activity yet",
+                    "Follow tool calls and verification as VT Code works.",
+                    IconName::Activity,
+                ))
+                .into_any_element();
+        }
+        let chart_data = [
+            ActivityChartDatum {
+                label: "Running",
+                count: counts.running,
+                state: ActivityState::Running,
+            },
+            ActivityChartDatum {
+                label: "Done",
+                count: counts.completed,
+                state: ActivityState::Completed,
+            },
+            ActivityChartDatum {
+                label: "Failed",
+                count: counts.failed,
+                state: ActivityState::Failed,
+            },
+            ActivityChartDatum {
+                label: "Interrupted",
+                count: counts.interrupted,
+                state: ActivityState::Interrupted,
+            },
+            ActivityChartDatum {
+                label: "Other",
+                count: counts.other,
+                state: ActivityState::Other,
+            },
+        ]
+        .into_iter()
+        .filter(|datum| datum.count > 0)
+        .collect::<Vec<_>>();
+        let summary = counts.summary();
+        let chart_colors = *colors;
+        body = body.child(
+            div()
+                .id("activity-status-chart")
+                .test_support()
+                .role(gpui_kit::Role::Group)
+                .aria_label(format!(
+                    "Recent activity statuses: {summary}{}",
+                    if has_older_activity {
+                        "; older activity is not included"
+                    } else {
+                        ""
+                    }
+                ))
+                .w_full()
+                .h(px(148.))
+                .flex_shrink_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child("Recent activity"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted_foreground)
+                                .child(format!("{} shown", counts.total())),
+                        ),
+                )
+                .child(
+                    div().flex_1().min_h_0().child(
+                        BarChart::new(chart_data)
+                            .band(|datum| datum.label)
+                            .value(|datum| datum.count as f64)
+                            .label(|datum| datum.count.to_string())
+                            .alignment(BarAlignment::Left)
+                            .value_axis(false)
+                            .grid(false)
+                            .interactive(false)
+                            .appear(false)
+                            .fill(move |datum, _, _, _| Self::activity_status_color(datum.state, chart_colors)),
+                    ),
+                ),
+        );
+
+        if has_older_activity {
+            let notice = rust_i18n::t!("app.activity.history.notice", count = inspector::MAX_ACTIVITY_ROWS).to_string();
+            let search_label = rust_i18n::t!("app.activity.history.search").to_string();
+            body = body.child(
+                div()
+                    .id("activity-history-notice")
+                    .test_support()
+                    .w_full()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .rounded_md()
+                    .bg(colors.secondary)
+                    .px_2()
+                    .py_1()
+                    .child(
+                        div()
+                            .id("activity-history-status")
+                            .test_support()
+                            .role(gpui_kit::Role::Status)
+                            .aria_label(notice.clone())
+                            .flex_1()
+                            .min_w_0()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child(notice),
+                    )
+                    .child(
+                        desktop_button("activity-search-history")
+                            .icon(IconName::Search)
+                            .ghost()
+                            .small()
+                            .accessibility_label(search_label.clone())
+                            .tooltip(search_label)
+                            .desktop_disabled(self.selected_session_id.is_none())
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                if let Some(session_id) = view.selected_session_id.clone() {
+                                    view.open_conversation_search(session_id, window, cx);
+                                }
+                            })),
+                    ),
+            );
+        }
+
+        let activity_row_height = scale_row_height_for_ui_font(ACTIVITY_ROW_HEIGHT, cx.theme().font_size);
+        let item_sizes = self.activity_row_sizes.get(activity.rows.len(), activity_row_height);
+        let activity_count = activity.rows.len();
+        let activity_rows = activity.rows;
+        let row_colors = *colors;
+        let weak_view = cx.entity().downgrade();
+        body = body.child(
+            div()
+                .id("activity-rows")
+                .test_support()
+                .role(gpui_kit::Role::List)
+                .aria_label("Recent activity")
+                .relative()
+                .w_full()
+                .flex_1()
+                .min_h_0()
+                .overflow_hidden()
+                .child(
+                    v_virtual_list(cx.entity(), "activity-virtual-list", item_sizes, move |_, visible_range, _, _| {
+                        visible_range
+                            .map(|index| {
+                                activity_rows.get(index).map_or_else(
+                                    || div().into_any_element(),
+                                    |row| {
+                                        let output_action = row.has_output.then(|| {
+                                            let view = weak_view.clone();
+                                            let output_id = row.id.clone();
+                                            let output_title = row.title.to_string();
+                                            desktop_button(format!("activity-output-{}", row.id))
+                                                .icon(IconName::Terminal)
+                                                .ghost()
+                                                .small()
+                                                .accessibility_label(format!("View output for {output_title}"))
+                                                .tooltip("View captured output")
+                                                .on_click(move |_, window, app| {
+                                                    if let Some(view) = view.upgrade() {
+                                                        view.update(app, |view, cx| {
+                                                            view.select_activity_output(output_id.clone(), window, cx);
+                                                        });
+                                                    }
+                                                })
+                                                .into_any_element()
+                                        });
+                                        Self::render_activity_row(
+                                            row,
+                                            row_colors,
+                                            activity_row_height,
+                                            index + 1,
+                                            activity_count,
+                                            output_action,
+                                        )
+                                        .into_any_element()
+                                    },
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .track_scroll(&self.activity_scroll),
+                )
+                .child(Scrollbar::vertical(&self.activity_scroll)),
+        );
+        body.into_any_element()
+    }
+
+    pub(super) fn render_activity_status_indicator(
+        id_prefix: &str,
+        row_id: &str,
+        state: ActivityState,
+        color: gpui_kit::Hsla,
+    ) -> AnyElement {
+        if state == ActivityState::Running {
+            div()
+                .id(format!("{id_prefix}-{row_id}-spinner"))
+                .test_support()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(Spinner::new().small().color(color))
+                .into_any_element()
+        } else {
+            let icon = match state {
+                ActivityState::Completed => IconName::Check,
+                ActivityState::Failed | ActivityState::Interrupted => IconName::X,
+                ActivityState::Running | ActivityState::Other => IconName::Activity,
+            };
+            Icon::new(icon).small().text_color(color).into_any_element()
+        }
+    }
+
+    pub(super) fn activity_status_color(
+        state: ActivityState,
+        colors: gpui_kit::component::theme::ThemeColor,
+    ) -> gpui_kit::Hsla {
+        match state {
+            ActivityState::Running => colors.primary,
+            ActivityState::Completed => colors.success,
+            ActivityState::Failed => colors.danger,
+            ActivityState::Interrupted => colors.warning,
+            // Subdued rows still carry small text, so they use the brighter
+            // secondary ramp instead of the caption-grade muted floor.
+            ActivityState::Other => themes::muted_text(&colors),
+        }
+    }
+
+    fn render_activity_row(
+        row: &ActivityRow,
+        colors: gpui_kit::component::theme::ThemeColor,
+        row_height: f32,
+        position: usize,
+        set_size: usize,
+        output_action: Option<AnyElement>,
+    ) -> impl IntoElement {
+        let status_color = Self::activity_status_color(row.state, colors);
+        let status = gpui_kit::SharedString::from(row.status.as_str());
+        let mut row_element = div()
+            .id(format!("activity-{}", row.id))
+            .test_support()
+            .role(gpui_kit::Role::ListItem)
+            .aria_label(row.title.clone())
+            .aria_description(status.clone())
+            .aria_position_in_set(position)
+            .aria_size_of_set(set_size)
+            .w_full()
+            .h(px(row_height))
+            .flex()
+            .items_center()
+            .gap_3()
+            .p_2()
+            .rounded_lg()
+            .bg(colors.secondary)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(28.))
+                    .flex_shrink_0()
+                    .rounded_full()
+                    .bg(colors.secondary)
+                    .child(Self::render_activity_status_indicator(
+                        "activity-indicator",
+                        &row.id,
+                        row.state,
+                        status_color,
+                    )),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_sm().font_medium().truncate().child(row.title.clone()))
+                    .child(
+                        div().flex().min_w_0().child(
+                            Tag::custom(colors.secondary, colors.foreground, colors.border)
+                                .small()
+                                .rounded_full()
+                                .max_w_full()
+                                .child(div().truncate().child(status)),
+                        ),
+                    ),
+            );
+        if let Some(output_action) = output_action {
+            row_element = row_element.child(output_action);
+        }
+        row_element
+    }
+}
