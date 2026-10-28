@@ -24,7 +24,7 @@ pub(super) enum DesktopSlashAction {
     ModelPicker,
     History,
     Settings(Option<settings::SettingsTab>),
-    Configuration,
+    Configuration(Option<String>),
     Permissions,
     Modes,
     Files(String),
@@ -34,8 +34,10 @@ pub(super) enum DesktopSlashAction {
     Help,
 }
 
-/// Commands with an exact native Desktop equivalent; all other slash input
-/// remains owned by the shared CLI dispatcher.
+/// Commands with a native Desktop equivalent; all other slash input
+/// remains owned by the shared CLI dispatcher. `/config` additionally
+/// deep-links setting paths and groups into the configuration page and treats
+/// anything outside the runtime-owned sections as a catalog search query.
 pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
     if input.chars().any(char::is_control) {
         return None;
@@ -64,9 +66,55 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             [theme] => Some(DesktopSlashAction::Theme(Some((*theme).to_string()))),
             _ => None,
         },
-        "config" if args.is_empty() => Some(DesktopSlashAction::Configuration),
+        "config" if args.is_empty() => Some(DesktopSlashAction::Configuration(None)),
         "settings" if args.is_empty() => Some(DesktopSlashAction::Settings(None)),
-        "config" | "settings" => {
+        "config" => {
+            // Runtime-owned sections keep their CLI behavior: reset/clear show
+            // the target layer and ask for confirmation, checkup/doctor run
+            // diagnostics, and memory/tasks/jobs/log/subprocess/notify render
+            // CLI-owned views. The CLI matches the first word
+            // case-insensitively (see `handle_config_command` in
+            // `src/agent/runloop/slash_commands/builtins.rs`); mirror that so
+            // capitalized forms keep working. None of these is a setting path
+            // or group.
+            let first = args.split_whitespace().next().unwrap_or_default();
+            if [
+                "reset",
+                "clear",
+                "checkup",
+                "doctor",
+                "memory",
+                "agent.persistent_memory",
+                "tasks",
+                "jobs",
+                "log",
+                "subprocess",
+                "subprocesses",
+                "notify",
+            ]
+            .iter()
+            .any(|command| first.eq_ignore_ascii_case(command))
+            {
+                return None;
+            }
+            match args {
+                "appearance" | "theme" => Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Appearance))),
+                "accessibility" | "a11y" => {
+                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Accessibility)))
+                }
+                "shortcuts" | "keybindings" => {
+                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Shortcuts)))
+                }
+                "vtcode" | "general" => Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::VtCode))),
+                "connections" | "mcp" | "webmcp" => {
+                    Some(DesktopSlashAction::Settings(Some(settings::SettingsTab::Connections)))
+                }
+                "model" | "models" => Some(DesktopSlashAction::ModelPicker),
+                "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
+                _ => Some(DesktopSlashAction::Configuration(Some(args.to_string()))),
+            }
+        }
+        "settings" => {
             let settings_tab = match args {
                 "appearance" | "theme" => Some(Some(settings::SettingsTab::Appearance)),
                 "accessibility" | "a11y" => Some(Some(settings::SettingsTab::Accessibility)),
@@ -340,12 +388,15 @@ impl DesktopView {
                 self.open_prompt_history(window, cx);
                 true
             }
-            DesktopSlashAction::Configuration => {
+            DesktopSlashAction::Configuration(target) => {
                 self.clear_submitted_command(window, cx);
                 if self.settings_open {
                     self.close_settings(window, cx);
                 }
                 self.config_page_open = true;
+                if let Some(target) = target.as_deref() {
+                    self.resolve_config_deep_link(target, window, cx);
+                }
                 self.open_settings(window, cx);
                 true
             }
@@ -1538,19 +1589,27 @@ mod tests {
     }
 
     #[test]
-    fn desktop_slash_actions_route_only_exact_native_equivalents() {
+    fn desktop_slash_actions_route_native_equivalents_and_config_deep_links() {
         assert_eq!(desktop_slash_action(" /new "), Some(DesktopSlashAction::NewSession));
         assert_eq!(desktop_slash_action("/exit"), Some(DesktopSlashAction::CloseSession));
         assert_eq!(desktop_slash_action("/stop"), Some(DesktopSlashAction::StopTurn));
         assert_eq!(desktop_slash_action("/models"), Some(DesktopSlashAction::ModelPicker));
         assert_eq!(desktop_slash_action("/history"), Some(DesktopSlashAction::History));
         assert_eq!(desktop_slash_action("/splash"), Some(DesktopSlashAction::Splash));
-        assert_eq!(desktop_slash_action("/config"), Some(DesktopSlashAction::Configuration));
+        assert_eq!(desktop_slash_action("/config"), Some(DesktopSlashAction::Configuration(None)));
         assert_eq!(desktop_slash_action("/settings"), Some(DesktopSlashAction::Settings(None)));
         assert_eq!(desktop_slash_action("/config permissions"), Some(DesktopSlashAction::Permissions));
         assert_eq!(
             desktop_slash_action("/config appearance"),
             Some(DesktopSlashAction::Settings(Some(super::super::settings::SettingsTab::Appearance,)))
+        );
+        assert_eq!(
+            desktop_slash_action("/config agent.default_model"),
+            Some(DesktopSlashAction::Configuration(Some("agent.default_model".into())))
+        );
+        assert_eq!(
+            desktop_slash_action("/config   Tools  "),
+            Some(DesktopSlashAction::Configuration(Some("Tools".into())))
         );
         assert_eq!(desktop_slash_action("/files src/ui"), Some(DesktopSlashAction::Files("src/ui".into())));
         assert_eq!(desktop_slash_action("/fast"), Some(DesktopSlashAction::FastMode(None)));
@@ -1562,6 +1621,24 @@ mod tests {
             "/new please",
             "/fast maybe",
             "/config reset",
+            "/config reset --global",
+            "/config Reset",
+            "/config clear",
+            "/config checkup",
+            "/config checkup --quick",
+            "/config CHECKUP",
+            "/config doctor",
+            "/config memory",
+            "/config Memory",
+            "/config agent.persistent_memory",
+            "/config tasks",
+            "/config jobs",
+            "/config log",
+            "/config notify",
+            "/config subprocess",
+            "/config subprocesses",
+            "/settings reset",
+            "/settings agent.default_model",
             "/splash now",
             "/files\nother",
         ] {

@@ -2700,28 +2700,41 @@ fn cli_config_browser_uses_its_own_search_and_returns_to_settings(cx: &mut TestA
     .unwrap();
 }
 
+fn config_page_setting(path: &str, value: serde_json::Value, group: &str) -> vtcode_desktop_protocol::ConfigSetting {
+    vtcode_desktop_protocol::ConfigSetting {
+        path: path.into(),
+        value,
+        origin: Some("workspace".into()),
+        label: None,
+        type_name: None,
+        default_value: None,
+        description: None,
+        options: Vec::new(),
+        group: Some(group.into()),
+        group_description: None,
+        editable: true,
+    }
+}
+
 #[gpui_kit::test]
-fn cli_config_page_scrolls_all_controls_in_short_windows(cx: &mut TestAppContext) {
+fn cli_config_page_keeps_header_fixed_while_catalog_scrolls_in_short_windows(cx: &mut TestAppContext) {
     let (window, view) = open_desktop_sized(cx, 600., 400.);
     cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.preferences.set_ui_font_size(view.theme_mode, 24);
             view.apply_typography(cx);
+            let settings = (0..6)
+                .map(|index| {
+                    config_page_setting(
+                        &format!("agent.setting_{index}"),
+                        json!(format!("value-{index}")),
+                        "Model & Provider",
+                    )
+                })
+                .collect();
             view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
-                settings: vec![vtcode_desktop_protocol::ConfigSetting {
-                    path: "agent.default_model".into(),
-                    value: json!("model-a"),
-                    origin: Some("workspace".into()),
-                    label: Some("Default model".into()),
-                    type_name: Some("string".into()),
-                    default_value: None,
-                    description: Some("Model used for new conversations.".into()),
-                    options: Vec::new(),
-                    group: Some("Model & Provider".into()),
-                    group_description: None,
-                    editable: true,
-                }],
+                settings,
                 target_versions: Vec::new(),
                 omitted_sensitive: 1,
                 omitted_large: 1,
@@ -2731,12 +2744,236 @@ fn cli_config_page_scrolls_all_controls_in_short_windows(cx: &mut TestAppContext
             view.open_settings(window, cx);
         });
         window.render_frame(cx);
-        let viewport = window.find("cli-config-page-content").bounds();
-        assert!(viewport.size.height >= px(100.), "the catalog needs a usable viewport: {viewport:?}");
+        for id in [
+            "cli-config-header",
+            "config-search",
+            "browse-cli-config",
+            "reload-cli-config",
+            "config-rail",
+            "cli-config-page-content",
+            "cli-config-footer",
+        ] {
+            assert!(window.try_find(id).is_some(), "{id} stays visible in short windows");
+        }
+        let header = window.find("cli-config-header").bounds();
+        let content = window.find("cli-config-page-content").bounds();
+        let footer = window.find("cli-config-footer").bounds();
+        assert!(
+            header.size.height > px(0.) && content.size.height > px(0.) && footer.size.height > px(0.),
+            "header={header:?} content={content:?} footer={footer:?}"
+        );
+        assert!(
+            header.origin.y + header.size.height <= content.origin.y + px(1.),
+            "the header sits above the catalog: {header:?} {content:?}"
+        );
+        assert!(
+            footer.origin.y >= content.origin.y,
+            "the notes trail inside the catalog scroll region: {content:?} {footer:?}"
+        );
         let before = view.read(cx).settings_scroll.offset().y;
         window.scroll("cli-config-page-content", gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-300.))), cx);
         window.render_frame(cx);
-        assert!(view.read(cx).settings_scroll.offset().y < before, "the entire configuration page should scroll");
+        assert!(view.read(cx).settings_scroll.offset().y < before, "the catalog scrolls");
+        assert_eq!(
+            window.find("cli-config-header").bounds(),
+            header,
+            "the header stays fixed while the catalog scrolls"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn config_deep_link_selects_group_setting_or_search(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(2);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![
+                    config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
+                    config_page_setting("agent.thinking_budget", json!(8_000), "Model & Provider"),
+                    config_page_setting("tools.auto_approve", json!(true), "Tools"),
+                ],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            let action = super::composer_controls::DesktopSlashAction::Configuration(Some("Tools".into()));
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        assert_eq!(view.read(cx).config_page_group.as_deref(), Some("Tools"));
+        assert!(view.read(cx).config_search_input.read(cx).value().is_empty());
+        assert!(window.try_find("config-category-Tools").is_some());
+        assert!(window.try_find("config-category-Model & Provider").is_some());
+
+        view.update(cx, |view, cx| {
+            let action =
+                super::composer_controls::DesktopSlashAction::Configuration(Some("agent.default_model".into()));
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).config_page_group.as_deref(), Some("Model & Provider"));
+        assert!(window.try_find("config-edit-agent.default_model").is_some());
+        assert!(
+            window.try_find("config-edit-agent.thinking_budget").is_none(),
+            "the exact path narrows past its shared prefix"
+        );
+
+        view.update(cx, |view, cx| {
+            view.config_page_group = Some("Tools".into());
+            let action = super::composer_controls::DesktopSlashAction::Configuration(Some("budget".into()));
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("config-category-Tools").is_none(), "groups without matches leave the rail");
+        assert!(window.try_find("config-category-Model & Provider").is_some());
+        assert!(window.try_find("config-edit-agent.thinking_budget").is_some());
+
+        view.update(cx, |view, cx| {
+            let action =
+                super::composer_controls::DesktopSlashAction::Configuration(Some("zzz-no-such-setting".into()));
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("config-rail").is_none(), "no match leaves no group rail");
+        assert!(window.try_find("clear-config-search").is_some());
+        window.click("clear-config-search", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("config-category-Tools").is_some(), "clearing restores every group");
+        assert!(window.try_find("cli-config-page-content").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn config_deep_link_before_catalog_load_filters_once_settings_arrive(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.cli_config_settings.is_none());
+            let action = super::composer_controls::DesktopSlashAction::Configuration(Some("budget".into()));
+            assert!(view.handle_desktop_slash_action(action, window, cx));
+        });
+        window.render_frame(cx);
+        assert!(view.read(cx).config_page_open);
+        assert_eq!(view.read(cx).config_search_input.read(cx).value().as_str(), "budget");
+        assert!(window.try_find("config-loading-line-one").is_some());
+
+        view.update(cx, |view, _| {
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![
+                    config_page_setting("agent.default_model", json!("model-a"), "Model & Provider"),
+                    config_page_setting("agent.thinking_budget", json!(8_000), "Model & Provider"),
+                    config_page_setting("tools.auto_approve", json!(true), "Tools"),
+                ],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("config-edit-agent.thinking_budget").is_some());
+        assert!(window.try_find("config-edit-agent.default_model").is_none());
+        assert!(window.try_find("config-category-Tools").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn config_boolean_switch_writes_the_toggled_value_in_both_directions(cx: &mut TestAppContext) {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let (window, view) = open_desktop(cx);
+    // The sheet slides in on a wall-clock animation; reduce motion so the
+    // trailing row controls land inside the viewport on the first frame.
+    cx.update(|cx| cx.set_reduce_motion(true));
+    let (commands, mut requests) = tokio::sync::mpsc::channel(4);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.workspace = Some(workspace.path().to_path_buf());
+            view.backend = Some(BackendHandle { commands });
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![
+                    config_page_setting("agent.verbose", json!(true), "Model & Provider"),
+                    config_page_setting("agent.quiet", json!(false), "Model & Provider"),
+                ],
+                target_versions: Vec::new(),
+                omitted_sensitive: 0,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("config-toggle-agent.verbose").checked(), Some(true));
+        assert_eq!(window.find("config-toggle-agent.quiet").checked(), Some(false));
+        window.click("config-toggle-agent.verbose", cx);
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("verbose write request") else {
+        panic!("expected config write request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SETTINGS_WRITE);
+    assert_eq!(params["path"], "agent.verbose");
+    assert_eq!(params["value"], false);
+
+    cx.update_window(window, |_, window, cx| {
+        assert!(view.read(cx).config_write_pending);
+        assert_eq!(
+            window.find("config-toggle-agent.quiet").disabled(),
+            Some(true),
+            "the in-flight write disables every row control"
+        );
+        view.update(cx, |view, cx| {
+            // Simulate the completed write; the reload cycle it triggers is covered elsewhere.
+            view.config_write_pending = false;
+            view.session_request = None;
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("config-toggle-agent.quiet", cx);
+    })
+    .unwrap();
+
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("quiet write request") else {
+        panic!("expected config write request");
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_SETTINGS_WRITE);
+    assert_eq!(params["path"], "agent.quiet");
+    assert_eq!(params["value"], true);
+}
+
+#[gpui_kit::test]
+fn config_page_footer_shows_reset_hint_and_write_notice(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.cli_config_settings = Some(vtcode_desktop_protocol::ConfigSettingsSnapshot {
+                settings: vec![config_page_setting(
+                    "agent.default_model",
+                    json!("model-a"),
+                    "Model & Provider",
+                )],
+                target_versions: Vec::new(),
+                omitted_sensitive: 1,
+                omitted_large: 0,
+                omitted_limit: 0,
+            });
+            view.config_write_notice = Some("Saved agent.default_model to workspace configuration.".into());
+            view.config_page_open = true;
+            view.open_settings(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("config-write-notice").role(), Some(gpui_kit::Role::Status));
+        assert!(window.try_find("config-reset-hint").is_some());
+        assert!(window.try_find("cli-config-footer").is_some());
     })
     .unwrap();
 }

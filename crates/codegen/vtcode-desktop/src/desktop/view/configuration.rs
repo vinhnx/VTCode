@@ -162,97 +162,297 @@ impl DesktopView {
             });
         }
     }
+    /// Current configuration search text, trimmed. The Kit input owns the
+    /// editing state; render reads it directly so there is a single source.
+    fn config_search_query(&self, cx: &App) -> String {
+        self.config_search_input.read(cx).value().trim().to_string()
+    }
+
+    pub(super) fn set_config_search_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.config_search_input
+            .update(cx, |input, cx| input.set_value(query, window, cx));
+        cx.notify();
+    }
+
+    /// Resolve a `/config <target>` deep link against the loaded catalog.
+    /// Exact setting paths narrow the search to that setting, exact group
+    /// names select the group, and anything else becomes a search query so
+    /// the page shows the closest matches with a clear path back.
+    pub(super) fn resolve_config_deep_link(&mut self, target: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let settings = self
+            .cli_config_settings
+            .as_ref()
+            .map(|snapshot| snapshot.settings.as_slice())
+            .unwrap_or(&[]);
+        match resolve_config_target(settings, target) {
+            ConfigTargetResolution::Setting { group, path } => {
+                self.config_page_group = Some(group);
+                self.set_config_search_query(&path, window, cx);
+            }
+            ConfigTargetResolution::Group { name } => {
+                self.config_page_group = Some(name);
+                self.set_config_search_query("", window, cx);
+            }
+            ConfigTargetResolution::Search { query } => {
+                self.set_config_search_query(&query, window, cx);
+            }
+        }
+    }
+
     pub(super) fn render_cli_config_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let colors = cx.theme().colors;
+        let query = self.config_search_query(cx);
+        let terms = config_search_terms(&query);
         let mut groups = std::collections::BTreeMap::<String, Vec<&protocol::ConfigSetting>>::new();
         if let Some(snapshot) = self.cli_config_settings.as_ref() {
             for setting in &snapshot.settings {
-                groups
-                    .entry(setting.group.clone().unwrap_or_else(|| "Advanced settings".into()))
-                    .or_default()
-                    .push(setting);
+                if setting_matches_query(setting, &terms) {
+                    groups.entry(config_group_name(setting).to_owned()).or_default().push(setting);
+                }
             }
         }
+        let (total, editable_total) = self.cli_config_settings.as_ref().map_or((0, 0), |snapshot| {
+            (snapshot.settings.len(), snapshot.settings.iter().filter(|setting| setting.editable).count())
+        });
+        let visible_count: usize = groups.values().map(Vec::len).sum();
         let selected = self
             .config_page_group
             .as_ref()
             .filter(|group| groups.contains_key(*group))
             .or_else(|| groups.keys().next())
             .cloned();
-        let mut categories = div()
-            .id("config-categories")
-            .w_full()
+        let counts = if terms.is_empty() {
+            format!("{editable_total} editable of {total} settings")
+        } else {
+            format!("{visible_count} of {total} match \"{query}\"")
+        };
+
+        let mut header = div()
+            .id("cli-config-header")
+            .test_support()
             .flex_shrink_0()
-            .overflow_x_scroll()
             .flex()
-            .gap_2();
-        for (name, settings) in &groups {
-            let name = name.clone();
-            let active = selected.as_ref() == Some(&name);
-            let id = format!("config-category-{name}");
-            let label = format!("{} ({})", name, settings.len());
-            categories = categories.child(
+            .flex_col()
+            .gap_3()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Input::new(&self.config_search_input)
+                            .id("config-search")
+                            .flex_1()
+                            .min_w_0()
+                            .small()
+                            .aria_label("Search configuration settings")
+                            .prefix(Icon::new(IconName::Search).size_4())
+                            .cleanable(true),
+                    )
+                    .child(
+                        desktop_button("browse-cli-config")
+                            .label("Browse all settings…")
+                            .accessibility_label("Search and edit CLI configuration settings")
+                            .ghost()
+                            .small()
+                            .desktop_disabled(self.cli_config_settings.is_none() || !self.can_edit_cli_settings())
+                            .on_click(cx.listener(|view, _, window, cx| view.open_cli_config_palette(window, cx))),
+                    )
+                    .child(
+                        desktop_button("reload-cli-config")
+                            .label("Reload")
+                            .ghost()
+                            .small()
+                            .tooltip_with_action("Reload CLI settings", &ReloadCliSettings, Some("VTCodeDesktop"))
+                            .desktop_disabled(!self.can_reload_cli_settings())
+                            .dispatches_desktop_action(ReloadCliSettings, self.focus_handle.clone()),
+                    ),
+            );
+        let targets = [
+            (protocol::ConfigTarget::User, "config-target-user", "User"),
+            (protocol::ConfigTarget::Workspace, "config-target-workspace", "Workspace"),
+            (protocol::ConfigTarget::Project, "config-target-project", "Project"),
+        ]
+        .into_iter()
+        .fold(div().flex().flex_wrap().items_center().gap_2().flex_shrink_0(), |row, (target, id, label)| {
+            let selected = self.config_target == target;
+            row.child(
                 desktop_button(id)
                     .label(label)
+                    .accessibility_label(format!(
+                        "Write CLI settings to {label} configuration{}",
+                        if selected { " (selected)" } else { "" }
+                    ))
+                    .toggled(selected)
+                    .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                    .when(!selected, |button| button.ghost())
                     .small()
-                    .when(active, |button| button.secondary())
-                    .when(!active, |button| button.ghost())
-                    .on_click(cx.listener(move |view, _, _, cx| {
-                        view.config_page_group = Some(name.clone());
-                        cx.notify();
-                    })),
+                    .desktop_disabled(!self.can_edit_cli_settings())
+                    .on_click(cx.listener(move |view, _, _, cx| view.set_cli_config_target(target, cx))),
+            )
+        });
+        header = header.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap_2()
+                .child(section_label("Write to", &colors))
+                .child(targets)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_right()
+                        .child(row_description(counts, &colors)),
+                ),
+        );
+        if let Some(notice) = self.config_write_notice.as_ref() {
+            header = header.child(
+                div()
+                    .id("config-write-notice")
+                    .test_support()
+                    .role(gpui_kit::Role::Status)
+                    .text_sm()
+                    .text_color(colors.foreground)
+                    .child(notice.clone()),
             );
         }
-        let mut entries = div().flex().flex_col().gap_2();
-        if let Some(name) = selected.as_ref() {
-            if let Some(settings) = groups.get(name) {
-                entries =
-                    entries.child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
-                if let Some(description) = settings.iter().find_map(|setting| setting.group_description.as_ref()) {
-                    entries =
-                        entries.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
-                }
-                for setting in settings {
-                    let path = setting.path.clone();
-                    let value = value_summary(&setting.value);
-                    let label = setting.label.as_deref().unwrap_or(&setting.path).to_owned();
-                    let details = format!(
-                        "{} · {}{}",
-                        setting.path,
-                        value,
-                        setting.origin.as_deref().map_or(String::new(), |origin| format!(" · {origin}"))
+
+        let body = match (self.cli_config_settings.as_ref(), selected.as_ref()) {
+            (None, _) if self.workspace.is_none() => self.render_config_content_frame(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .child(empty_state(
+                        "Choose a workspace",
+                        "Choose a workspace to browse CLI configuration settings.",
+                        IconName::Folder,
+                    )),
+            ),
+            (None, _) => self.render_config_content_frame(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_3()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(colors.muted_foreground)
+                            .child("Loading shared CLI settings…"),
+                    )
+                    .child(skeleton_line("config-loading-line-one", px(320.), cx))
+                    .child(skeleton_line("config-loading-line-two", px(240.), cx)),
+            ),
+            (Some(_), None) => self.render_config_content_frame(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .gap_3()
+                            .child(empty_state(
+                                "No matching settings",
+                                "Try a different search or browse another group.",
+                                IconName::Search,
+                            ))
+                            .child(
+                                desktop_button("clear-config-search")
+                                    .label("Clear search")
+                                    .ghost()
+                                    .small()
+                                    .on_click(
+                                        cx.listener(|view, _, window, cx| view.set_config_search_query("", window, cx)),
+                                    ),
+                            ),
+                    )
+                    .child(self.render_config_page_footer(cx)),
+            ),
+            (Some(_), Some(name)) => {
+                let mut rail = div()
+                    .id("config-rail")
+                    .lock_scroll_axis()
+                    .test_support()
+                    .role(gpui_kit::Role::Navigation)
+                    .aria_label("Configuration groups")
+                    .w_56()
+                    .flex_shrink_0()
+                    .min_h_0()
+                    .track_scroll(&self.config_rail_scroll)
+                    .overflow_y_scroll()
+                    .vertical_scrollbar(&self.config_rail_scroll)
+                    .flex()
+                    .flex_col()
+                    .gap_1();
+                for (group, settings) in &groups {
+                    let group = group.clone();
+                    let active = Some(&group) == selected.as_ref();
+                    rail = rail.child(
+                        desktop_button(format!("config-category-{group}"))
+                            .label(format!("{group} ({})", settings.len()))
+                            .small()
+                            .w_full()
+                            .justify_start()
+                            .toggled(active)
+                            .when(active, |button| button.bg(colors.secondary).text_color(colors.foreground))
+                            .when(!active, |button| button.ghost())
+                            .on_click(cx.listener(move |view, _, _, cx| {
+                                view.config_page_group = Some(group.clone());
+                                cx.notify();
+                            })),
                     );
-                    let editable = setting.editable && self.can_edit_cli_settings();
-                    let mut row = div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .p_3()
-                        .rounded_lg()
-                        .bg(colors.secondary)
-                        .child(div().font_weight(gpui_kit::FontWeight::MEDIUM).child(label))
-                        .child(div().text_sm().text_color(colors.muted_foreground).child(details));
-                    if let Some(description) = setting.description.as_ref() {
-                        row = row.child(div().text_sm().child(description.clone()));
-                    }
-                    if setting.editable {
-                        row = row.child(
-                            desktop_button(format!("config-edit-{path}"))
-                                .label("Edit")
-                                .ghost()
-                                .small()
-                                .desktop_disabled(!editable)
-                                .on_click(cx.listener(move |view, _, window, cx| {
-                                    view.open_cli_config_editor(path.clone(), window, cx)
-                                })),
-                        );
-                    } else {
-                        row = row.child(div().text_xs().text_color(colors.muted_foreground).child("Reference only"));
-                    }
-                    entries = entries.child(row);
                 }
+                let mut list = div().flex().flex_col();
+                if let Some(settings) = groups.get(name) {
+                    for (index, setting) in settings.iter().enumerate() {
+                        if index > 0 {
+                            list = list.child(row_divider(&colors));
+                        }
+                        list = list.child(self.render_config_setting_row(setting, cx));
+                    }
+                }
+                let description = groups
+                    .get(name)
+                    .and_then(|settings| settings.iter().find_map(|setting| setting.group_description.as_ref()));
+                let mut group = div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name.clone()));
+                if let Some(description) = description {
+                    group = group.child(div().text_sm().text_color(colors.muted_foreground).child(description.clone()));
+                }
+                group = group.child(list);
+                group = group.child(self.render_config_page_footer(cx));
+                let content = self.render_config_content_frame(group);
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .flex()
+                    .gap_4()
+                    .child(rail)
+                    .child(content)
+                    .into_any_element()
             }
-        }
+        };
+
         let panel_height =
             (window.viewport_size().height - cx.theme().sheet.margin_top - cx.theme().font_size * 2.5 - px(8.))
                 .max(px(0.));
@@ -269,37 +469,174 @@ impl DesktopView {
             .overflow_hidden()
             .flex()
             .flex_col()
-            .gap_3()
+            .gap_4()
             .p_6()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(
-                div()
-                    .id("cli-config-page-content")
-                    .flex_1()
-                    .min_h_0()
-                    .min_w_0()
-                    .lock_scroll_axis()
-                    .test_support()
-                    .track_scroll(&self.settings_scroll)
-                    .overflow_y_scroll()
-                    .vertical_scrollbar(&self.settings_scroll)
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_3()
-                            .child(self.render_cli_configuration(cx))
-                            .child(categories)
-                            .child(entries),
-                    ),
-            );
+            .child(header)
+            .child(body);
         if self.config_editor.is_some() {
             panel = panel.child(self.render_cli_config_editor(cx));
         }
         panel.into_any_element()
     }
 
+    /// Shared scroll frame for the configuration content column: one
+    /// scrollable region keeps the header fixed while the catalog, empty
+    /// states, and trailing notes share the remaining height.
+    fn render_config_content_frame(&self, child: impl IntoElement) -> AnyElement {
+        div()
+            .id("cli-config-page-content")
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .lock_scroll_axis()
+            .test_support()
+            .track_scroll(&self.settings_scroll)
+            .overflow_y_scroll()
+            .vertical_scrollbar(&self.settings_scroll)
+            .pr_2()
+            .flex()
+            .flex_col()
+            .child(child)
+            .into_any_element()
+    }
+
+    /// One value-first setting row: title and live value on stable lanes,
+    /// path and provenance beneath, description last. Boolean rows toggle
+    /// in place; every other editable row opens the typed editor dialog.
+    fn render_config_setting_row(&self, setting: &protocol::ConfigSetting, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let label = setting.label.as_deref().unwrap_or(&setting.path).to_owned();
+        let can_edit = self.can_edit_cli_settings();
+        let mut header = div()
+            .flex()
+            .items_center()
+            .gap_2()
+            .child(div().flex_1().min_w_0().truncate().child(row_title(label.clone(), &colors)));
+        if setting.value.is_null() {
+            header = header.child(
+                div()
+                    .flex_shrink_0()
+                    .text_sm()
+                    .text_color(colors.muted_foreground)
+                    .child("<unset>".to_string()),
+            );
+        } else {
+            header = header.child(
+                div()
+                    .flex_shrink_0()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_semibold()
+                    .text_color(colors.foreground)
+                    .child(value_summary(&setting.value)),
+            );
+        }
+        if setting.value.is_boolean() && setting.editable {
+            let path = setting.path.clone();
+            let enabled = setting.value.as_bool().unwrap_or(false);
+            header = header.child(
+                gpui_kit::component::switch::Switch::new(format!("config-toggle-{path}"))
+                    .small()
+                    .checked(enabled)
+                    .disabled(!can_edit)
+                    .accessibility_label(label.clone())
+                    .tooltip(if enabled {
+                        "Turn off".to_string()
+                    } else {
+                        "Turn on".to_string()
+                    })
+                    .on_click(cx.listener(move |view, enabled, _, cx| {
+                        view.save_cli_config_value(path.clone(), Value::Bool(*enabled), cx);
+                    })),
+            );
+        } else if setting.editable {
+            let path = setting.path.clone();
+            header = header.child(
+                desktop_button(format!("config-edit-{path}"))
+                    .label("Edit")
+                    .accessibility_label(format!("Edit {}", setting.path))
+                    .ghost()
+                    .small()
+                    .desktop_disabled(!can_edit)
+                    .on_click(
+                        cx.listener(move |view, _, window, cx| view.open_cli_config_editor(path.clone(), window, cx)),
+                    ),
+            );
+        } else {
+            header = header.child(Tag::secondary().outline().small().child("Reference only"));
+        }
+        let mut meta = setting.path.clone();
+        if let Some(origin) = setting.origin.as_deref() {
+            meta.push_str(&format!(" · from {origin}"));
+        }
+        if let Some(default) = setting.default_value.as_deref() {
+            meta.push_str(&format!(" · default {default}"));
+        }
+        let mut row = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .py_2()
+            .child(header)
+            .child(div().text_xs().text_color(colors.muted_foreground).child(meta));
+        if let Some(description) = setting.description.as_ref() {
+            row = row.child(row_description(description.clone(), &colors));
+        }
+        row.into_any_element()
+    }
+
+    /// Writer, omission, and reset notes trailing the configuration list.
+    /// Reset stays a terminal command: the desktop protocol exposes no
+    /// destructive layer reset, so the page documents the CLI instead.
+    fn render_config_page_footer(&self, cx: &Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let mut notes = vec![
+            "Saving uses VT Code's validated configuration writer and reloads the local CLI service. Higher-precedence settings can still override the selected layer."
+                .to_string(),
+        ];
+        if let Some(snapshot) = self.cli_config_settings.as_ref() {
+            if snapshot.omitted_sensitive > 0 {
+                notes.push(
+                    "Credential-bearing fields are excluded; manage credentials with `vtcode auth` or the configured environment variable."
+                        .to_string(),
+                );
+            }
+            if snapshot.omitted_large > 0 || snapshot.omitted_limit > 0 {
+                notes.push("Some unusually large or numerous settings are omitted from this browser.".to_string());
+            }
+            let read_only = snapshot.settings.iter().filter(|setting| !setting.editable).count();
+            if read_only > 0 {
+                notes.push(format!(
+                    "{read_only} documented schema entries are reference-only until they have a concrete value."
+                ));
+            }
+        }
+        let mut footer = div()
+            .id("cli-config-footer")
+            .test_support()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(row_divider(&colors));
+        for note in notes {
+            footer = footer.child(div().text_xs().text_color(colors.muted_foreground).child(note));
+        }
+        footer = footer.child(
+            div()
+                .id("config-reset-hint")
+                .test_support()
+                .text_xs()
+                .text_color(colors.muted_foreground)
+                .child("Reset a layer from the terminal with `vtcode config reset` (`--global` for user, `--project` for project)."),
+        );
+        footer.into_any_element()
+    }
+
     pub(super) fn render_cli_configuration(&self, cx: &Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
         let snapshot = self.cli_config_settings.as_ref();
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
         let editable_count =
@@ -333,7 +670,8 @@ impl DesktopView {
                     "Write CLI settings to {label} configuration{}",
                     if selected { " (selected)" } else { "" }
                 ))
-                .when(selected, |button| button.primary())
+                .toggled(selected)
+                .when(selected, |button| button.bg(colors.secondary).text_color(colors.foreground))
                 .when(!selected, |button| button.ghost())
                 .small()
                 .desktop_disabled(!self.can_edit_cli_settings())
@@ -728,6 +1066,83 @@ fn target_label(target: protocol::ConfigTarget) -> &'static str {
     }
 }
 
+/// Curated CLI `/config` group, defaulting to the shared advanced bucket.
+fn config_group_name(setting: &protocol::ConfigSetting) -> &str {
+    setting.group.as_deref().unwrap_or("Advanced settings")
+}
+
+/// How a `/config <target>` deep link resolved against the loaded catalog.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ConfigTargetResolution {
+    /// An exact setting path: narrow the page to it within its group.
+    Setting { group: String, path: String },
+    /// An exact group name (case-insensitive): select the group.
+    Group { name: String },
+    /// Anything else: filter the catalog by it as a search query.
+    Search { query: String },
+}
+
+fn resolve_config_target(settings: &[protocol::ConfigSetting], target: &str) -> ConfigTargetResolution {
+    let target = target.trim();
+    if let Some(setting) = settings.iter().find(|setting| setting.path == target) {
+        return ConfigTargetResolution::Setting {
+            group: config_group_name(setting).to_owned(),
+            path: setting.path.clone(),
+        };
+    }
+    if let Some(name) = settings
+        .iter()
+        .map(config_group_name)
+        .find(|name| name.eq_ignore_ascii_case(target))
+    {
+        return ConfigTargetResolution::Group { name: name.to_owned() };
+    }
+    ConfigTargetResolution::Search { query: target.to_owned() }
+}
+
+/// Lowercased whitespace-separated search terms; every term must match.
+/// Unicode lowering mirrors the CLI's `normalize_query`.
+fn config_search_terms(query: &str) -> Vec<String> {
+    query.split_whitespace().map(|term| term.to_lowercase()).collect()
+}
+
+/// Whether a setting matches every search term across its path, label,
+/// value, group, and documentation, mirroring the CLI's exact-terms filter.
+fn setting_matches_query(setting: &protocol::ConfigSetting, terms: &[String]) -> bool {
+    if terms.is_empty() {
+        return true;
+    }
+    let mut haystack = String::new();
+    haystack.push_str(&setting.path);
+    haystack.push(' ');
+    if let Some(label) = setting.label.as_deref() {
+        haystack.push_str(label);
+        haystack.push(' ');
+    }
+    haystack.push_str(&value_summary(&setting.value));
+    haystack.push(' ');
+    haystack.push_str(config_group_name(setting));
+    haystack.push(' ');
+    if let Some(description) = setting.description.as_deref() {
+        haystack.push_str(description);
+        haystack.push(' ');
+    }
+    if let Some(origin) = setting.origin.as_deref() {
+        haystack.push_str(origin);
+        haystack.push(' ');
+    }
+    if let Some(default) = setting.default_value.as_deref() {
+        haystack.push_str(default);
+        haystack.push(' ');
+    }
+    for option in &setting.options {
+        haystack.push_str(option);
+        haystack.push(' ');
+    }
+    let haystack = haystack.to_lowercase();
+    terms.iter().all(|term| haystack.contains(term))
+}
+
 pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot) -> Vec<(String, Vec<PaletteCommand>)> {
     let mut groups = std::collections::BTreeMap::<String, Vec<PaletteCommand>>::new();
     for setting in &snapshot.settings {
@@ -774,7 +1189,7 @@ pub(super) fn config_palette_groups(snapshot: &protocol::ConfigSettingsSnapshot)
         if let Some(description) = setting.description.as_ref() {
             entry.keywords.push(description.clone());
         }
-        let group = setting.group.clone().unwrap_or_else(|| "Advanced settings".into());
+        let group = config_group_name(setting).to_owned();
         groups.entry(group).or_default().push(entry);
     }
     groups.into_iter().collect()
@@ -803,7 +1218,10 @@ fn value_summary(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConfigValueKind, config_palette_groups};
+    use super::{
+        ConfigTargetResolution, ConfigValueKind, config_palette_groups, config_search_terms, resolve_config_target,
+        setting_matches_query,
+    };
     use serde_json::json;
 
     #[test]
@@ -877,5 +1295,120 @@ mod tests {
         assert_eq!(groups[0].0, "Model & Provider");
         assert_eq!(groups[0].1.len(), 1);
         assert_eq!(groups[0].1[0].label, "Service tier");
+    }
+
+    fn deep_link_fixture() -> Vec<super::protocol::ConfigSetting> {
+        vec![
+            super::protocol::ConfigSetting {
+                path: "agent.default_model".into(),
+                value: json!("model-a"),
+                origin: Some("workspace".into()),
+                label: Some("Default model".into()),
+                type_name: Some("string".into()),
+                default_value: None,
+                description: Some("Model used for new conversations.".into()),
+                options: Vec::new(),
+                group: Some("Model & Provider".into()),
+                group_description: None,
+                editable: true,
+            },
+            super::protocol::ConfigSetting {
+                path: "provider.openai.service_tier".into(),
+                value: json!("auto"),
+                origin: Some("user".into()),
+                label: Some("Service tier".into()),
+                type_name: Some("string".into()),
+                default_value: Some("\"auto\"".into()),
+                description: Some("Choose the request service tier.".into()),
+                options: vec!["auto".into(), "fast".into()],
+                group: Some("Tools".into()),
+                group_description: None,
+                editable: true,
+            },
+        ]
+    }
+
+    #[test]
+    fn config_deep_links_prefer_exact_paths_then_groups_then_search() {
+        let settings = deep_link_fixture();
+        assert_eq!(
+            resolve_config_target(&settings, "agent.default_model"),
+            ConfigTargetResolution::Setting {
+                group: "Model & Provider".into(),
+                path: "agent.default_model".into(),
+            }
+        );
+        assert_eq!(
+            resolve_config_target(&settings, "  tools  "),
+            ConfigTargetResolution::Group { name: "Tools".into() }
+        );
+        // Paths are case-sensitive; groups are not. Near-misses fall
+        // through to search instead of selecting the wrong destination.
+        assert_eq!(
+            resolve_config_target(&settings, "Agent.Default_Model"),
+            ConfigTargetResolution::Search { query: "Agent.Default_Model".into() }
+        );
+        assert_eq!(resolve_config_target(&settings, "tool"), ConfigTargetResolution::Search { query: "tool".into() });
+        assert_eq!(
+            resolve_config_target(&settings, "agent.retries"),
+            ConfigTargetResolution::Search { query: "agent.retries".into() }
+        );
+        assert_eq!(
+            resolve_config_target(&[], "agent.default_model"),
+            ConfigTargetResolution::Search { query: "agent.default_model".into() }
+        );
+    }
+
+    #[test]
+    fn config_search_requires_every_term_across_documented_fields() {
+        let settings = deep_link_fixture();
+        let model = &settings[0];
+        let tier = &settings[1];
+        assert!(setting_matches_query(model, &config_search_terms("")));
+        for (setting, term) in [
+            (model, "agent.default_model"),
+            (model, "Default model"),
+            (model, "model-a"),
+            (model, "conversations"),
+            (model, "workspace"),
+            (model, "Model & Provider"),
+            (tier, "fast"),
+            (tier, "service tier"),
+            (tier, "\"auto\""),
+        ] {
+            assert!(
+                setting_matches_query(setting, &config_search_terms(term)),
+                "{term:?} must match its documented field"
+            );
+        }
+        // Every term must match: the tier row carries both "service" and
+        // "fast", while the model row carries neither "tier" term.
+        assert!(setting_matches_query(tier, &config_search_terms("service fast")));
+        assert!(!setting_matches_query(model, &config_search_terms("model zebra")));
+        assert!(!setting_matches_query(model, &config_search_terms("service")));
+        assert!(setting_matches_query(model, &config_search_terms("MODEL")));
+    }
+
+    #[test]
+    fn config_search_folds_unicode_case_without_stripping_accents() {
+        let accented = super::protocol::ConfigSetting {
+            path: "agent.break_mode".into(),
+            value: json!(true),
+            origin: None,
+            label: Some("Café mode".into()),
+            type_name: Some("bool".into()),
+            default_value: None,
+            description: None,
+            options: Vec::new(),
+            group: None,
+            group_description: None,
+            editable: true,
+        };
+        assert!(setting_matches_query(&accented, &config_search_terms("CAFÉ")));
+        assert!(setting_matches_query(&accented, &config_search_terms("café")));
+        assert!(
+            !setting_matches_query(&accented, &config_search_terms("CAFE")),
+            "folding is case-only; accents still distinguish terms"
+        );
     }
 }

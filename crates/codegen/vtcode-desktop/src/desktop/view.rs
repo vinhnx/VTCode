@@ -26,8 +26,8 @@ use gpui_kit::component::empty::{
 };
 use gpui_kit::component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_kit::component::input::{
-    Copy, Cut, Enter, IndentInline, InputEvent, MoveDown, MoveUp, Paste, Position, Redo, SelectAll, Textarea,
-    TextareaState, Undo,
+    Copy, Cut, Enter, IndentInline, Input, InputEvent, InputState, MoveDown, MoveUp, Paste, Position, Redo, SelectAll,
+    Textarea, TextareaState, Undo,
 };
 use gpui_kit::component::input::{InputGroup, InputGroupAddon, InputGroupAddonAlignment};
 use gpui_kit::component::list::ListItem;
@@ -700,6 +700,7 @@ struct DesktopView {
     theme_scroll: ScrollHandle,
     settings_scroll: ScrollHandle,
     settings_tabs_scroll: ScrollHandle,
+    config_rail_scroll: ScrollHandle,
     session_scroll: VirtualListScrollHandle,
     activity_scroll: VirtualListScrollHandle,
     change_list_scroll: VirtualListScrollHandle,
@@ -718,6 +719,8 @@ struct DesktopView {
     webmcp_notice: Option<webmcp::WebmcpNotice>,
     cli_config_settings: Option<protocol::ConfigSettingsSnapshot>,
     config_target: protocol::ConfigTarget,
+    config_search_input: Entity<InputState>,
+    _config_search_subscription: Subscription,
     config_value_input: Entity<TextareaState>,
     config_editor: Option<configuration::ConfigEditor>,
     config_editor_focus: FocusHandle,
@@ -758,7 +761,7 @@ struct DesktopView {
     navigation_peek: bool,
     hovered_message: Option<String>,
     zen_mode: bool,
-    shortcut_inputs: Vec<Entity<gpui_kit::component::input::InputState>>,
+    shortcut_inputs: Vec<Entity<InputState>>,
     shortcut_message: Option<String>,
     shortcuts_editing: bool,
     sidebar_width: f32,
@@ -880,6 +883,12 @@ impl DesktopView {
                 view.set_ui_language(*language, window, cx);
             }
         });
+        let config_search_input = cx.new(|cx| InputState::new(window, cx).placeholder("Search settings…"));
+        let config_search_subscription = cx.subscribe_in(&config_search_input, window, |_, _, event, _, cx| {
+            if matches!(event, InputEvent::Change) {
+                cx.notify();
+            }
+        });
         Self {
             shortcut_inputs,
             shortcut_message: None,
@@ -979,6 +988,7 @@ impl DesktopView {
             theme_scroll: ScrollHandle::default(),
             settings_scroll: ScrollHandle::default(),
             settings_tabs_scroll: ScrollHandle::default(),
+            config_rail_scroll: ScrollHandle::default(),
             session_scroll: VirtualListScrollHandle::new(),
             activity_scroll: VirtualListScrollHandle::new(),
             change_list_scroll: VirtualListScrollHandle::new(),
@@ -1001,6 +1011,8 @@ impl DesktopView {
             webmcp_notice: None,
             cli_config_settings: None,
             config_target: protocol::ConfigTarget::Workspace,
+            config_search_input,
+            _config_search_subscription: config_search_subscription,
             config_value_input: cx.new(|cx| TextareaState::new(window, cx).auto_grow(4, 12)),
             config_editor: None,
             config_editor_focus: cx.focus_handle().tab_stop(true),

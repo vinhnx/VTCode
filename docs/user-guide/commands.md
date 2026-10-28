@@ -268,7 +268,10 @@ Desktop-to-CLI protocol handshake; a standalone CLI process cannot observe anoth
 
 Configuration resets preserve lower-precedence values and secure credentials. Interactive sessions live-reload safe
 changes from watched layers; malformed edits retain the last valid snapshot and show a warning. See the
-[configuration guide](../config/config.md) for layer precedence and live-reload details.
+[configuration guide](../config/config.md) for layer precedence and live-reload details. In VT Code Desktop, `/config`
+opens a dedicated configuration page with the same groups, search, and typed editors, and `/config <path>` deep-links
+into it; the runtime-owned sections (`reset`, `clear`, `checkup`, `doctor`, `memory`, `tasks`, `jobs`, `log`,
+`subprocess`, `notify`) stay with the CLI runtime, and layer resets use `vtcode config reset` in the terminal.
 
 ### Slash-command notes
 
