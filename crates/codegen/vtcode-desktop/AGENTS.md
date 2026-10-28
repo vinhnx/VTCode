@@ -26,4 +26,4 @@
   restore before Send. Keep drafts/sources across changes.
 - Rust 2024 render helpers in loops must return `AnyElement` when they capture `&mut Context`.
 - `/config` opens the dedicated page (search, groups rail, value-first rows, trailing notes); deep-links resolve
-  path → group → search, runtime sections stay CLI. Sheet slide is wall-clock: sheet-click tests need reduce motion.
+  path → group → search, runtime sections stay CLI. Sheet slide is wall-clock (sheet-click tests need reduce motion); opacity fades stay clickable.

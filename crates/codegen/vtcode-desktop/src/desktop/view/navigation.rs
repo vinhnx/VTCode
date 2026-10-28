@@ -74,15 +74,7 @@ impl DesktopView {
                     .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
             )
             .child(div().flex_1())
-            .child(
-                desktop_button("zen-mode-toggle")
-                    .icon(IconName::Maximize2)
-                    .ghost()
-                    .rounded_lg()
-                    .accessibility_label("Enter Zen mode")
-                    .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
-                    .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
-            )
+            .child(enter_zen_button("zen-mode-toggle", &self.focus_handle).rounded_lg())
             .into_any_element();
         let navigation = div()
             .id("primary-navigation")
@@ -107,7 +99,10 @@ impl DesktopView {
                 .child(rail)
                 .when(expanded, |navigation| navigation.child(self.render_sidebar(cx)))
         };
-        navigation.bg(chrome_background(&colors)).into_any_element()
+        navigation
+            .bg(chrome_background(&colors))
+            .with_animation("navigation-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
+            .into_any_element()
     }
     pub(super) fn render_chrome_menu(&self, id: &'static str, label: &'static str) -> AnyElement {
         let can_new = self.session_change_allowed(None);

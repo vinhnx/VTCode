@@ -35,14 +35,14 @@ fn open_desktop(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<DesktopView
 }
 
 fn open_desktop_sized(cx: &mut TestAppContext, width: f32, height: f32) -> (AnyWindowHandle, Entity<DesktopView>) {
-    open_desktop_sized_with_preferences_path(cx, width, height, isolate_preferences())
+    open_desktop_sized_with_preferences_path(cx, width, height, isolate_preferences(), true)
 }
 
 fn open_desktop_with_preferences_path(
     cx: &mut TestAppContext,
     preferences_path: PathBuf,
 ) -> (AnyWindowHandle, Entity<DesktopView>) {
-    open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path)
+    open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path, true)
 }
 
 fn open_desktop_sized_with_preferences_path(
@@ -50,6 +50,7 @@ fn open_desktop_sized_with_preferences_path(
     width: f32,
     height: f32,
     preferences_path: PathBuf,
+    normal_baseline: bool,
 ) -> (AnyWindowHandle, Entity<DesktopView>) {
     crate::desktop::preferences::set_test_preferences_path(preferences_path);
     crate::desktop::localization::initialize(crate::desktop::localization::UiLanguage::English);
@@ -71,9 +72,14 @@ fn open_desktop_sized_with_preferences_path(
             |window, cx| {
                 cx.new(|cx| {
                     let mut view = DesktopView::new(window, cx, ThemeMode::Light);
-                    view.workspace = Some(std::env::temp_dir());
-                    view.sidebar_open = true;
-                    view.inspector_open = true;
+                    if normal_baseline {
+                        view.workspace = Some(std::env::temp_dir());
+                        view.sidebar_open = true;
+                        view.inspector_open = true;
+                        // Suite baseline is normal mode; zen-by-default is pinned
+                        // by zen_mode_is_active_on_fresh_launch below.
+                        view.zen_mode = false;
+                    }
                     view
                 })
             },
@@ -7398,7 +7404,7 @@ fn welcome_greeting_refreshes_to_the_current_day_period(cx: &mut TestAppContext)
 #[gpui_kit::test]
 fn window_maximized_state_persists_on_bounds_changes(cx: &mut TestAppContext) {
     let preferences_path = isolate_preferences();
-    let (window, view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path.clone());
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., preferences_path.clone(), true);
     // Seed the file so the no-write check compares bytes: any save rewrites in pretty form.
     std::fs::write(&preferences_path, "{\"windowMaximized\":false}").expect("seed preferences file");
     view.update(cx, |view, _| {
@@ -8898,6 +8904,7 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
     view.update(cx, |view, _| {
         view.preferences.navigation_visible = Some(false);
         view.sidebar_open = true;
+        view.inspector_open = false;
     });
 
     cx.update_window(window, |_, window, cx| {
@@ -8907,18 +8914,210 @@ fn hidden_navigation_moves_its_actions_to_the_header_and_can_be_restored(cx: &mu
         assert!(window.try_find("top-new-thread").is_some());
         assert!(window.try_find("top-utilities").is_some());
         assert_eq!(window.find("toggle-sidebar").label(), Some("Show navigation"));
+        // The inspector is closed too, so the zen toggle floats over the main
+        // container instead of taking a header slot.
+        assert!(window.try_find("top-zen-mode-toggle").is_none());
+        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
 
         window.click("toggle-sidebar", cx);
         window.render_frame(cx);
         assert!(view.read(cx).preferences.navigation_visible());
         assert!(window.try_find("navigation-rail").is_some());
         assert!(window.try_find("project-thread-sidebar").is_some());
+        assert!(window.try_find("zen-mode-float").is_none());
+        assert!(window.try_find("zen-mode-toggle").is_some());
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContext) {
+fn zen_mode_is_active_on_fresh_launch(cx: &mut TestAppContext) {
+    // No suite baseline: this observes the constructor default untouched.
+    let (window, view) = open_desktop_sized_with_preferences_path(cx, 1280., 900., isolate_preferences(), false);
+
+    cx.update_window(window, |_, window, cx| {
+        assert!(view.read(cx).zen_mode);
+        window.render_frame(cx);
+        // Navigation defaults to visible, so its absence proves zen.
+        assert!(window.try_find("navigation-rail").is_none());
+        assert!(window.try_find("welcome").is_none());
+        // No workspace yet: the picker row stays as the only visible path
+        // to choose one.
+        assert!(window.try_find("composer-context").is_some());
+        assert!(window.try_find("send-prompt").is_some());
+
+        view.update(cx, |view, _| view.workspace = Some(std::env::temp_dir()));
+        window.render_frame(cx);
+        assert!(view.read(cx).zen_mode);
+        assert!(window.try_find("welcome").is_none());
+        assert!(window.try_find("composer-context").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn floating_toggle_clears_long_thread_titles_in_narrow_windows(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop_sized(cx, 700., 800.);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.sessions = vec![vtcode_desktop_protocol::SessionSummary {
+            session_id: "narrow-thread".into(),
+            title: Some(
+                "A very long thread title that must truncate before reaching the floating toggle corner".into(),
+            ),
+            workspace: workspace.path().display().to_string(),
+            completed: false,
+            resumable: true,
+        }];
+        view.selected_session_id = Some("narrow-thread".into());
+        view.transcript.push(TranscriptItem::new(
+            "narrow-message".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Conversation remains visible.".into(),
+        ));
+        view.preferences.navigation_visible = Some(false);
+        view.inspector_open = false;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let title = window.find("thread-title").bounds();
+        let float = window.find("zen-mode-float").bounds();
+        assert!(
+            title.right() <= float.left(),
+            "long titles must truncate clear of the floating toggle: {title:?} vs {float:?}"
+        );
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn collapsed_side_panels_float_zen_toggle_over_main_container(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.sessions = vec![vtcode_desktop_protocol::SessionSummary {
+            session_id: "float-thread".into(),
+            title: Some("Floating toggle thread".into()),
+            workspace: workspace.path().display().to_string(),
+            completed: false,
+            resumable: true,
+        }];
+        view.selected_session_id = Some("float-thread".into());
+        view.transcript.push(TranscriptItem::new(
+            "float-message".into(),
+            "assistant".into(),
+            "VT Code".into(),
+            "Conversation remains visible.".into(),
+        ));
+        view.preferences.navigation_visible = Some(false);
+        view.inspector_open = false;
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("navigation-rail").is_none());
+        assert!(window.try_find("zen-mode-toggle").is_none());
+        assert!(window.try_find("top-zen-mode-toggle").is_none());
+        assert!(window.try_find("zen-mode-exit").is_none());
+        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        let entered = window.find("zen-mode-float").bounds();
+        assert!(
+            entered.size.width >= px(24.) && entered.size.height >= px(24.),
+            "floating toggle must keep a comfortable pointer target: {entered:?}"
+        );
+        assert!(
+            window.find("workspace-surface").bounds().contains(&entered.center()),
+            "floating toggle sits over the main container"
+        );
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("zen-mode-float").label(), Some("Exit Zen mode"));
+        let zen = window.find("zen-mode-float").bounds();
+        assert_eq!(zen.right(), entered.right(), "floating toggle never moves horizontally");
+        assert_eq!(zen.top(), entered.top(), "floating toggle never moves vertically");
+        assert!(window.try_find("zen-mode-exit").is_none());
+        assert!(
+            window.find("workspace-surface").bounds().contains(&zen.center()),
+            "floating exit stays over the main container"
+        );
+
+        window.click("zen-mode-float", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        let restored = window.find("zen-mode-float").bounds();
+        assert_eq!(restored.right(), entered.right());
+        assert_eq!(restored.top(), entered.top());
+        assert!(window.try_find("thread-header").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_mode_hides_welcome_for_empty_threads(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, _| {
+        view.workspace = Some(workspace.path().to_path_buf());
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_some());
+        assert!(window.try_find("send-prompt").is_some());
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_none());
+        assert!(window.try_find("transcript-scroll").is_some());
+        assert!(window.try_find("send-prompt").is_some());
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("welcome").is_some());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_toggle_renders_identically_with_reduced_motion(cx: &mut TestAppContext) {
+    let workspace = tempfile::TempDir::new().expect("temporary workspace");
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.workspace = Some(workspace.path().to_path_buf());
+        view.preferences.navigation_visible = Some(false);
+        view.inspector_open = false;
+        view.set_reduced_motion(crate::desktop::preferences::ReducedMotionPreference::On, cx);
+    });
+
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("zen-mode-float").label(), Some("Exit Zen mode"));
+        assert!(window.try_find("welcome").is_none());
+        assert!(window.try_find("send-prompt").is_some());
+
+        window.press("ctrl-cmd-z", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("zen-mode-float").label(), Some("Enter Zen mode"));
+        assert!(window.try_find("welcome").is_some());
+
+        view.update(cx, |view, cx| {
+            view.set_reduced_motion(crate::desktop::preferences::ReducedMotionPreference::System, cx);
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn zen_mode_hides_navigation_and_keeps_exit_fixed_in_toolbar(cx: &mut TestAppContext) {
     let workspace = tempfile::TempDir::new().expect("temporary workspace");
     let (window, view) = open_desktop(cx);
     view.update(cx, |view, _| {
@@ -8957,6 +9156,13 @@ fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContex
         assert!(window.try_find("top-new-thread").is_some());
         assert!(window.try_find("top-utilities").is_some());
         assert!(window.try_find("top-zen-mode-toggle").is_some());
+        let normal_frame = window.find("message-composer-frame").bounds();
+        let normal_send = window.find("send-prompt").bounds();
+        assert_eq!(
+            window.find("transcript-content-zen-message").bounds().center().x,
+            normal_frame.center().x,
+            "transcript and composer share one centered spine"
+        );
 
         window.press("ctrl-cmd-z", cx);
         window.render_frame(cx);
@@ -8965,9 +9171,10 @@ fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContex
         assert!(window.try_find("navigation-rail").is_none());
         assert!(
             window
-                .find("workspace-surface")
+                .find("title-bar")
                 .bounds()
-                .contains(&window.find("zen-mode-exit").bounds().center())
+                .contains(&window.find("zen-mode-exit").bounds().center()),
+            "zen exit stays fixed in the title bar while the workspace zooms"
         );
         let exit_bounds = window.find("zen-mode-exit").bounds();
         assert!(
@@ -8993,6 +9200,21 @@ fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContex
         assert!(window.try_find("pick-model").is_none());
         assert!(window.try_find("send-prompt").is_some());
         assert!(window.try_find("workspace-surface").is_some());
+        let zen_frame = window.find("message-composer-frame").bounds();
+        assert!(
+            zen_frame.size.width < normal_frame.size.width,
+            "zen composer narrows: {zen_frame:?} vs {normal_frame:?}"
+        );
+        assert!(zen_frame.size.width <= px(600.), "zen column cap: {zen_frame:?}");
+        assert!(
+            window.find("send-prompt").bounds().size.height < normal_send.size.height,
+            "zen send action shrinks with the composer"
+        );
+        assert_eq!(
+            window.find("transcript-content-zen-message").bounds().center().x,
+            zen_frame.center().x,
+            "zen column keeps one shared spine"
+        );
 
         window.click("zen-mode-exit", cx);
         window.render_frame(cx);

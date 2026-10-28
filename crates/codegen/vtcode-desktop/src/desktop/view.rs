@@ -96,6 +96,7 @@ use workspace_review::WorkspaceReviewState;
 
 const MAX_UI_EVENTS_PER_TICK: usize = 64;
 const CONTENT_WIDTH: f32 = 720.;
+const ZEN_CONTENT_WIDTH: f32 = 600.;
 const DEFAULT_UI_FONT_SIZE: f32 = 16.;
 const WELCOME_COPY_COUNT: usize = 3;
 const PARTIAL_REVIEW_HISTORY_MESSAGE: &str =
@@ -1118,7 +1119,7 @@ impl DesktopView {
             sidebar_open: false,
             navigation_peek: false,
             hovered_message: None,
-            zen_mode: false,
+            zen_mode: true,
             sidebar_width: 270.0,
             inspector_width: 320.0,
             resizing: None,
@@ -2500,6 +2501,24 @@ impl DesktopView {
             self.focus_composer(window, cx);
         }
         cx.notify();
+    }
+
+    /// Both side panels are collapsed by settings, leaving the main container
+    /// full-bleed. The zen toggle then floats over the container instead of
+    /// living in the rail, header, or title bar, so it never moves between
+    /// modes and can never collide with a side panel.
+    fn side_panels_collapsed(&self) -> bool {
+        !self.preferences.navigation_visible() && !self.inspector_open
+    }
+
+    /// Centered content width for the transcript and composer. Zen mode uses
+    /// a narrower column so both stay on one shared spine.
+    fn content_width(&self) -> f32 {
+        if self.zen_mode {
+            ZEN_CONTENT_WIDTH
+        } else {
+            CONTENT_WIDTH
+        }
     }
 
     fn close_file_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -5052,7 +5071,7 @@ impl DesktopView {
         )
     }
 
-    fn render_thread_header(&self) -> impl IntoElement {
+    fn render_thread_header(&self, theme: &Theme) -> impl IntoElement {
         let title_fallback = rust_i18n::t!("app.navigation.new_thread").to_string();
         let title = self
             .sessions
@@ -5071,6 +5090,8 @@ impl DesktopView {
             .py_3()
             .child(
                 div()
+                    .id("thread-title")
+                    .test_support()
                     .min_w_0()
                     .flex_1()
                     .text_lg()
@@ -5078,6 +5099,34 @@ impl DesktopView {
                     .truncate()
                     .child(title.to_string()),
             )
+            .with_animation("thread-header-fade", zen_fade_animation(theme), |el, delta| el.opacity(delta))
+    }
+
+    /// Leaf toggle pinned to the main container's top-trailing corner while
+    /// both side panels are collapsed. It keeps one fixed position in both
+    /// modes and only changes paint: a ghost button to enter Zen, faded text
+    /// to exit.
+    fn render_floating_zen_toggle(&self, cx: &mut Context<Self>) -> AnyElement {
+        let colors = cx.theme().colors;
+        let button = if self.zen_mode {
+            let faded = themes::faded_chrome(colors.background, colors.foreground);
+            exit_zen_button("zen-mode-float", faded, &self.focus_handle)
+        } else {
+            enter_zen_button("zen-mode-float", &self.focus_handle)
+        };
+        // The toggle persists across modes, so the animation id is keyed by
+        // mode: each toggle replays the fade while the button stays fixed.
+        div()
+            .absolute()
+            .top_2()
+            .right_2()
+            .child(button)
+            .with_animation(
+                gpui_kit::ElementId::NamedInteger("zen-toggle-fade".into(), self.zen_mode as u64),
+                zen_fade_animation(cx.theme()),
+                |el, delta| el.opacity(delta),
+            )
+            .into_any_element()
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -5085,11 +5134,32 @@ impl DesktopView {
         let toolbar_surface =
             themes::navigation_surfaces(theme.colors.background, theme.colors.secondary, theme.colors.foreground).rail;
         if self.zen_mode {
-            return TitleBar::new()
+            // The toggle stays fixed in the title bar while the workspace
+            // zooms; it only fades. The text variant paints no background in
+            // any state, so the tooltip and keyboard focus ring identify it.
+            // Padding keeps a comfortable pointer target on the content-sized
+            // button. When both side panels are collapsed, the floating toggle
+            // over the main container is the exit instead.
+            // The bar persists across modes, so its fade id is keyed by mode:
+            // each toggle crossfades the whole bar between states.
+            let bar = TitleBar::new()
                 .w_full()
                 .h(px(48.))
+                .pr_3()
+                .border_b_0()
                 .bg(toolbar_surface)
                 .child(div().flex_1())
+                .with_animation(
+                    gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
+                    zen_fade_animation(cx.theme()),
+                    |el, delta| el.opacity(delta),
+                );
+            if self.side_panels_collapsed() {
+                return bar.into_any_element();
+            }
+            let faded = themes::faded_chrome(theme.colors.background, theme.colors.foreground);
+            return bar
+                .child(exit_zen_button("zen-mode-exit", faded, &self.focus_handle))
                 .into_any_element();
         }
         let navigation_visible = self.preferences.navigation_visible();
@@ -5116,6 +5186,7 @@ impl DesktopView {
             .w_full()
             .h(px(48.))
             .pr_3()
+            .border_b_0()
             .bg(toolbar_surface)
             .child(
                 div()
@@ -5197,14 +5268,11 @@ impl DesktopView {
                                         .desktop_disabled(self.workspace.is_none())
                                         .dispatches_desktop_action(OpenUtilities, self.focus_handle.clone()),
                                 )
-                                .child(
-                                    desktop_button("top-zen-mode-toggle")
-                                        .icon(IconName::Maximize2)
-                                        .ghost()
-                                        .accessibility_label("Enter Zen mode")
-                                        .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
-                                        .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
-                                )
+                        })
+                        .when(!navigation_visible && self.inspector_open, |group| {
+                            // When the inspector is closed too, the floating
+                            // toggle over the main container replaces this slot.
+                            group.child(enter_zen_button("top-zen-mode-toggle", &self.focus_handle))
                         })
                         .child(
                             desktop_button("search-commands")
@@ -5250,6 +5318,11 @@ impl DesktopView {
                         )
                         .content(self.render_chrome_menu("header-overflow", "Window actions")),
                 ),
+            )
+            .with_animation(
+                gpui_kit::ElementId::NamedInteger("title-bar-fade".into(), self.zen_mode as u64),
+                zen_fade_animation(cx.theme()),
+                |el, delta| el.opacity(delta),
             )
             .into_any_element()
     }
@@ -5491,6 +5564,7 @@ impl DesktopView {
                     .on_action(cx.listener(|view, _: &NextReviewFile, _, cx| view.navigate_change_file(true, cx)))
                     .on_action(cx.listener(|view, _: &PreviousReviewFile, _, cx| view.navigate_change_file(false, cx)))
             })
+            .with_animation("inspector-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
             .into_any_element()
     }
 
@@ -6648,6 +6722,7 @@ impl DesktopView {
             && !self.history_has_earlier
             && !self.history_page_loading
             && self.history_page_error.is_none()
+            && !self.zen_mode
         {
             let colors = cx.theme().colors;
             let welcome_copy = welcome_copy(self.welcome_copy_index);
@@ -6724,7 +6799,7 @@ impl DesktopView {
                     EmptyState::new()
                         .header(
                             EmptyHeader::new()
-                                .max_w(px(CONTENT_WIDTH))
+                                .max_w(px(self.content_width()))
                                 .gap_6()
                                 .media(EmptyMedia::new().mb_0().child(welcome_brand_mark(36., colors.primary)))
                                 .title(title),
@@ -6862,7 +6937,7 @@ impl DesktopView {
             .id(format!("transcript-content-{}", item.id))
             .test_support()
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .min_w_0()
             .flex()
             .flex_col()
@@ -6925,7 +7000,7 @@ impl DesktopView {
                 MessageAlignment::Start
             })
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .gap_1()
             .content(
                 MessageContent::new().bubble(
@@ -7009,7 +7084,7 @@ impl DesktopView {
             .role(role)
             .aria_label(format!("{}: {}", item.title, item.accessibility_text))
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .flex()
             .flex_col()
             .gap_1()
@@ -7115,7 +7190,7 @@ impl DesktopView {
         };
         let state = ActivityState::from_status(status);
         let status_color = Self::activity_status_color(state, colors);
-        let mut panel = div().w_full().max_w(px(CONTENT_WIDTH)).flex().flex_col().gap_1().child(
+        let mut panel = div().w_full().max_w(px(self.content_width())).flex().flex_col().gap_1().child(
             desktop_button(format!("tool-{}", item.id))
                 .accessibility_label(format!(
                     "{} for {}, status: {status}",
@@ -7307,7 +7382,7 @@ impl DesktopView {
         let mut panel = div()
             .relative()
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .rounded_md()
             .overflow_hidden()
             .child(header);
@@ -7409,14 +7484,15 @@ impl DesktopView {
         let colors = cx.theme().colors;
         let mut panel = div()
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .min_w_0()
             .flex()
             .flex_col()
             .gap_2()
             .px_4()
             .pb_4()
-            .pt_2();
+            .pt_2()
+            .when(self.zen_mode, |panel| panel.px_3().pb_3());
         if !self.attachments.is_empty() {
             panel = panel.child(div().w_full().flex().flex_wrap().gap_2().children(self.attachments.iter().map(
                 |attachment| {
@@ -7593,6 +7669,9 @@ impl DesktopView {
                         .items_center()
                         .gap_2()
                         .min_w_0()
+                        .with_animation("composer-secondary-fade", zen_fade_animation(cx.theme()), |el, delta| {
+                            el.opacity(delta)
+                        })
                         .child(
                             desktop_button("attach-files")
                                 .icon(IconName::Plus)
@@ -7694,7 +7773,10 @@ impl DesktopView {
                             )
                             .ghost()
                             .desktop_disabled(!self.session_change_allowed(None) || self.attachments_picker_open)
-                            .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone()),
+                            .dispatches_desktop_action(OpenModelPicker, self.focus_handle.clone())
+                            .with_animation("pick-model-fade", zen_fade_animation(cx.theme()), |el, delta| {
+                                el.opacity(delta)
+                            }),
                     )
                 });
         if self.running {
@@ -7709,6 +7791,7 @@ impl DesktopView {
                     .icon(IconName::Square)
                     .rounded_full()
                     .danger()
+                    .when(self.zen_mode, |button| button.small())
                     .dispatches_desktop_action(CancelRun, self.focus_handle.clone()),
             );
         } else {
@@ -7719,6 +7802,7 @@ impl DesktopView {
                     .icon(IconName::ArrowUp)
                     .rounded_full()
                     .primary()
+                    .when(self.zen_mode, |button| button.small())
                     .desktop_disabled(!can_submit)
                     .on_click(cx.listener(|this, _, window, cx| this.submit_prompt(window, cx))),
             );
@@ -7741,7 +7825,9 @@ impl DesktopView {
                 }
             }
         }
-        if !self.zen_mode {
+        // Zen hides this row, except when no workspace is set yet: the picker is
+        // the only visible path to choose one (welcome stays hidden in zen).
+        if !self.zen_mode || self.workspace.is_none() {
             panel = panel.child(
                 div()
                     .id("composer-context")
@@ -7754,6 +7840,9 @@ impl DesktopView {
                     .gap_2()
                     .px_3()
                     .py_1()
+                    .with_animation("composer-context-fade", zen_fade_animation(cx.theme()), |el, delta| {
+                        el.opacity(delta)
+                    })
                     .child(self.render_workspace_picker(cx))
                     .child(
                         desktop_button("composer-cli-webmcp")
@@ -7772,6 +7861,9 @@ impl DesktopView {
                     .child(self.render_mode_button(cx)),
             );
         }
+        // Zen keeps the same card, only smaller and quieter: tighter radius,
+        // narrower column (see content_width), and a small send action.
+        let frame_radius = px(if self.zen_mode { 12. } else { 22. });
         div().w_full().flex().justify_center().child(
             panel.child(
                 div()
@@ -7814,13 +7906,13 @@ impl DesktopView {
                             .test_support()
                             .w_full()
                             .min_w_0()
-                            .rounded(px(22.))
+                            .rounded(frame_radius)
                             .bg(colors.popover)
                             .child(
                                 InputGroup::new("message-composer")
                                     .aria_label(rust_i18n::t!("app.composer.input_group_label").to_string())
                                     .w_full()
-                                    .rounded(px(22.))
+                                    .rounded(frame_radius)
                                     .border_0()
                                     .focus_ring(false)
                                     .p_2()
@@ -7943,6 +8035,7 @@ impl DesktopView {
                     .text_xs()
                     .text_color(colors.muted_foreground),
             )
+            .with_animation("status-bar-fade", zen_fade_animation(cx.theme()), |el, delta| el.opacity(delta))
     }
 
     fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -8254,7 +8347,7 @@ impl DesktopView {
             .aria_label(interaction.title.clone())
             .track_focus(&self.interaction_focus)
             .w_full()
-            .max_w(px(CONTENT_WIDTH))
+            .max_w(px(self.content_width()))
             .flex()
             .flex_col()
             .gap_2()
@@ -9012,7 +9105,7 @@ impl Render for DesktopView {
             .flex()
             .flex_col()
             .when(!self.transcript.is_empty() && !self.zen_mode && !self.pending_blank_transition(), |column| {
-                column.child(self.render_thread_header())
+                column.child(self.render_thread_header(cx.theme()))
             })
             .when(self.pending_navigation.is_some() && !self.pending_blank_transition(), |column| {
                 column.child(self.render_navigation_loading(cx))
@@ -9035,25 +9128,6 @@ impl Render for DesktopView {
             .bg(colors.background)
             .rounded_xl()
             .child(conversation)
-            .when(self.zen_mode, |workspace| {
-                // The exit stays faded and never takes a hover fill (the text
-                // variant paints no background in any state); the tooltip and
-                // keyboard focus ring still identify it. Padding keeps a
-                // comfortable pointer target on the content-sized button.
-                let faded = themes::faded_chrome(colors.background, colors.foreground);
-                workspace.child(
-                    div().absolute().top_2().right_2().child(
-                        desktop_button("zen-mode-exit")
-                            .icon(Icon::new(IconName::Minimize2).text_color(faded))
-                            .text()
-                            .small()
-                            .p_2()
-                            .accessibility_label("Exit Zen mode")
-                            .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
-                            .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
-                    ),
-                )
-            })
             .when(inspector_visible, |workspace| {
                 workspace.child(
                     div()
@@ -9063,7 +9137,8 @@ impl Render for DesktopView {
                         .child(self.render_inspector(cx))
                         .child(self.render_resize_handle(ResizeEdge::Inspector, cx)),
                 )
-            });
+            })
+            .when(self.side_panels_collapsed(), |workspace| workspace.child(self.render_floating_zen_toggle(cx)));
         let panes = div()
             .id("pane-root")
             .test_support()
@@ -9896,6 +9971,39 @@ fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage
 /// Interactive desktop buttons use a pointing hand; disabled buttons keep the arrow.
 fn desktop_button(id: impl Into<gpui_kit::ElementId>) -> Button {
     Button::new(id).tab_stop(true).cursor_pointer()
+}
+
+/// Ghost leaf button entering zen mode; callers add placement styling.
+fn enter_zen_button(id: impl Into<gpui_kit::ElementId>, focus: &FocusHandle) -> Button {
+    desktop_button(id)
+        .icon(IconName::Leaf)
+        .ghost()
+        .accessibility_label("Enter Zen mode")
+        .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
+        .dispatches_desktop_action(ToggleZenMode, focus.clone())
+}
+
+/// Faded leaf button exiting zen mode; the text variant never takes a hover fill.
+fn exit_zen_button(id: impl Into<gpui_kit::ElementId>, faded: gpui_kit::Hsla, focus: &FocusHandle) -> Button {
+    desktop_button(id)
+        .icon(Icon::new(IconName::Leaf).text_color(faded))
+        .text()
+        .small()
+        .p_2()
+        .accessibility_label("Exit Zen mode")
+        .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
+        .dispatches_desktop_action(ToggleZenMode, focus.clone())
+}
+
+/// Opacity transition for elements appearing with a zen toggle, using the
+/// theme duration and enter curve. Pair it with a stable animation id per
+/// mount point; state-key the id when the element persists across modes so
+/// each toggle replays the fade. `with_animation` renders the end state
+/// statically under reduced motion, so no manual gate is needed.
+fn zen_fade_animation(theme: &Theme) -> Animation {
+    let motion = theme.motion_tokens();
+    let easing = motion.easing_enter.clone();
+    Animation::new(motion.duration_normal).with_easing(move |delta| easing.sample(delta))
 }
 
 trait DesktopButtonExt {
