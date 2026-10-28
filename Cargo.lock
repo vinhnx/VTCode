@@ -11864,6 +11864,7 @@ dependencies = [
  "indexmap 2.14.2",
  "insta",
  "itertools 0.15.0",
+ "libc",
  "memchr",
  "mimalloc",
  "nix 0.31.3",

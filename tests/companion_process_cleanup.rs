@@ -5,6 +5,7 @@
 mod process_owner;
 
 use std::ffi::OsStr;
+use std::os::fd::{FromRawFd, OwnedFd};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -230,8 +231,34 @@ async fn native_helper_restores_arg0_and_refuses_missing_owner_before_execution(
     assert!(!temp.path().join("must-not-exist").exists());
 }
 
+/// Open a socket pair deliberately without CLOEXEC to simulate system
+/// libraries that open descriptors without it (observed: macOS
+/// kernel-control socket inherited at fd 24). `OwnedFd` closes both ends on
+/// drop, including test failure, so sibling tests in this process are
+/// unaffected.
+#[expect(
+    unsafe_code,
+    reason = "raw socketpair is the only way to plant non-CLOEXEC sockets; see SAFETY below"
+)]
+fn plant_non_cloexec_sockets() -> [OwnedFd; 2] {
+    let mut pair: [libc::c_int; 2] = [0, 0];
+    // SAFETY: `socketpair` with a valid out-array yields two open, owned fds
+    // on success; the assert aborts before wrapping on failure.
+    let paired = unsafe { libc::socketpair(libc::AF_UNIX, libc::SOCK_STREAM, 0, pair.as_mut_ptr()) };
+    assert_eq!(paired, 0);
+    // SAFETY: `socketpair` succeeded, so this fd is open and owned by us, and
+    // this `OwnedFd` takes that ownership exactly once.
+    let first = unsafe { OwnedFd::from_raw_fd(pair[0]) };
+    // SAFETY: same as above for the second end of the pair.
+    let second = unsafe { OwnedFd::from_raw_fd(pair[1]) };
+    [first, second]
+}
+
 #[tokio::test]
 async fn native_helper_closes_lifetime_sockets_before_executing_target() {
+    // Without the helper's close sweep these planted sockets leak into the
+    // target and fail the assertion below, deterministically.
+    let _planted = plant_non_cloexec_sockets();
     let temp = TempDir::new().unwrap();
     let mut owner = process_owner::TaskProcessOwner::new().unwrap();
     let script = "import os, stat\nsockets=[]\nfor fd in range(3,256):\n try:\n  if stat.S_ISSOCK(os.fstat(fd).st_mode): sockets.append(fd)\n except OSError: pass\nassert not sockets, sockets\nprint('no inherited sockets')";

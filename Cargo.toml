@@ -573,6 +573,7 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
+libc = { workspace = true }
 criterion = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
