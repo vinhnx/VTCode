@@ -27,9 +27,10 @@ pub(crate) enum BackendCommand {
 
 #[derive(Debug)]
 pub(crate) enum BackendEvent {
-    WorkspaceReviewFailed {
+    WorkspaceReviewResponse {
         request_id: String,
-        error: String,
+        result: Option<Value>,
+        error: Option<String>,
     },
     Response {
         method: String,
@@ -116,8 +117,8 @@ impl PendingRequest {
     }
 
     fn finish(self, result: Option<Value>, error: Option<String>) -> BackendEvent {
-        if let (Some(request_id), Some(error)) = (self.workspace_review_request_id, error.as_ref()) {
-            return BackendEvent::WorkspaceReviewFailed { request_id, error: error.clone() };
+        if let Some(request_id) = self.workspace_review_request_id {
+            return BackendEvent::WorkspaceReviewResponse { request_id, result, error };
         }
         if let Some(request_id) = self.session_history_request_id {
             return BackendEvent::SessionHistoryResponse { request_id, result, error };
@@ -575,8 +576,10 @@ mod tests {
         let event = decode_frame(br#"{"jsonrpc":"2.0","id":12,"error":{"message":"review failed"}}"#, &mut pending)
             .expect("valid response")
             .expect("decoded response");
-        assert!(matches!(event, BackendEvent::WorkspaceReviewFailed { request_id, error }
-            if request_id == "review-old" && error == "review failed"));
+        assert!(
+            matches!(event, BackendEvent::WorkspaceReviewResponse { request_id, result: None, error: Some(error) }
+            if request_id == "review-old" && error == "review failed")
+        );
     }
 
     #[test]

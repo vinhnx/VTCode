@@ -3809,13 +3809,21 @@ impl DesktopView {
                     _ => {}
                 }
             }
-            BackendEvent::WorkspaceReviewFailed { request_id, error } => {
+            BackendEvent::WorkspaceReviewResponse { request_id, result, error } => {
                 if self
                     .workspace_review
                     .as_ref()
                     .is_some_and(|review| review.pending && review.request_id == request_id)
                 {
-                    self.fail_workspace_review(error);
+                    if let Some(error) = error {
+                        self.fail_workspace_review(error);
+                    } else if let Ok(snapshot) =
+                        serde_json::from_value::<protocol::WorkspaceReviewResult>(result.unwrap_or(Value::Null))
+                    {
+                        self.accept_workspace_review(snapshot, cx);
+                    } else {
+                        self.fail_workspace_review("Invalid Git review response.".into());
+                    }
                     cx.notify();
                 }
             }

@@ -7491,8 +7491,8 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
     cx.update(|cx| cx.set_reduce_motion(true));
     let (commands, mut requests) = tokio::sync::mpsc::channel(8);
     let patch = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.rs b/b.rs\n--- a/b.rs\n+++ b/b.rs\n@@ -1 +1 @@\n-before\n+after\n";
-    let snapshot = |request_id: &str, workspace: &str| BackendEvent::Response {
-        method: vtcode_desktop_protocol::method::WORKSPACE_REVIEW.into(),
+    let snapshot = |request_id: &str, workspace: &str| BackendEvent::WorkspaceReviewResponse {
+        request_id: request_id.into(),
         error: None,
         result: Some(
             json!({"requestId": request_id, "workspace": workspace, "capturedAt": "2026-10-24T00:00:00Z", "patch": patch, "truncated": false, "note": "Tracked changes against HEAD"}),
@@ -7545,9 +7545,16 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-include-untracked").disabled(), Some(true));
         let request_id = params["requestId"].as_str().unwrap().to_string();
         view.update(cx, |view, cx| {
-            view.handle_backend_event(BackendEvent::WorkspaceReviewFailed {
+            view.handle_backend_event(BackendEvent::WorkspaceReviewResponse {
                 request_id: "stale".into(),
-                error: "stale failure".into(),
+                result: None,
+                error: Some("stale failure".into()),
+            }, cx);
+            assert!(view.workspace_review.as_ref().unwrap().pending);
+            view.handle_backend_event(BackendEvent::WorkspaceReviewResponse {
+                request_id: "stale".into(),
+                result: Some(json!({ "malformed": true })),
+                error: None,
             }, cx);
             assert!(view.workspace_review.as_ref().unwrap().pending);
             view.handle_backend_event(snapshot("stale", "/workspace"), cx);
@@ -7621,7 +7628,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
             let (first, second) = patch.split_once("diff --git a/b.rs").unwrap();
             let reordered = format!("diff --git a/b.rs{second}{first}");
             let mut response = snapshot(&refreshed_id, "/workspace");
-            if let BackendEvent::Response { result: Some(result), .. } = &mut response {
+            if let BackendEvent::WorkspaceReviewResponse { result: Some(result), .. } = &mut response {
                 result["patch"] = json!(reordered);
             }
             view.handle_backend_event(response, cx);
@@ -7641,7 +7648,7 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         };
         view.update(cx, |view, cx| {
             let mut response = snapshot(params["requestId"].as_str().unwrap(), "/workspace");
-            if let BackendEvent::Response { result: Some(result), .. } = &mut response {
+            if let BackendEvent::WorkspaceReviewResponse { result: Some(result), .. } = &mut response {
                 result["patch"] = json!(patch.split_once("diff --git a/b.rs").unwrap().0);
             }
             view.handle_backend_event(response, cx);
