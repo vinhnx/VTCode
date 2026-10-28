@@ -254,7 +254,7 @@ impl DesktopView {
         let mut group = GroupBox::new()
             .flex_shrink_0()
             .fill()
-            .title("Keyboard shortcuts")
+            .title(group_box_title("Keyboard shortcuts", &cx.theme().colors))
             .child(
                 div()
                     .text_xs()

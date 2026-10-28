@@ -321,7 +321,7 @@ fn apply_filled_surfaces(colors: &mut ThemeColor) {
     // Kit's segmented TabBar otherwise retains its stock track when VT Code
     // replaces the palette, making selected tabs blend into other themes.
     colors.tab_bar_segmented = colors.secondary;
-    colors.tab_foreground = colors.muted_foreground;
+    colors.tab_foreground = text_at_contrast(raised_surface, colors.foreground, LABEL_CONTRAST);
     colors.tab_active_foreground = colors.foreground;
 }
 
@@ -470,20 +470,37 @@ pub(super) fn filled_button_foreground(color: Hsla) -> Hsla {
     }
 }
 
+/// Minimum contrast for label-grade text: headings, tab labels, and section
+/// overlines sit between primary foreground and muted metadata.
+const LABEL_CONTRAST: f32 = 7.0;
+
+/// Label-grade text readable on every filled surface: the palette foreground
+/// blended toward the hardest surface (the raised popover fill) just until the
+/// 7:1 threshold holds. Background, panel, sidebar, and hover fills are all
+/// farther from the foreground, so the ratio only grows there. Returns the
+/// foreground untouched when even it cannot reach the threshold.
+pub(super) fn label_foreground(colors: &ThemeColor) -> Hsla {
+    text_at_contrast(colors.popover, colors.foreground, LABEL_CONTRAST)
+}
+
 /// The softest text color that still meets WCAG AA against `background`:
 /// the palette foreground blended toward the background just until the
 /// 4.5:1 threshold holds. Returns the foreground untouched when even it
 /// cannot reach AA (the contrast test then flags the theme).
 pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
     const AA_RATIO: f32 = 4.5;
+    text_at_contrast(background, foreground, AA_RATIO)
+}
+
+fn text_at_contrast(background: Hsla, foreground: Hsla, minimum: f32) -> Hsla {
     let mut low = 0.0_f32;
     let mut high = 1.0_f32;
-    if contrast_ratio(foreground, background) < AA_RATIO {
+    if contrast_ratio(foreground, background) < minimum {
         return foreground;
     }
     for _ in 0..24 {
         let middle = (low + high) / 2.0;
-        if contrast_ratio(mix(foreground, background, middle), background) >= AA_RATIO {
+        if contrast_ratio(mix(foreground, background, middle), background) >= minimum {
             low = middle;
         } else {
             high = middle;
@@ -796,6 +813,41 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn label_grade_text_stays_crisp_on_every_surface(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let sidebar = navigation_surfaces(colors.background, colors.secondary, colors.foreground).panel;
+                // Label-grade text targets 7:1, falling back to the palette
+                // foreground itself when a theme has no headroom above it.
+                for (name, surface) in [
+                    ("canvas", colors.background),
+                    ("panel", colors.secondary),
+                    ("popover", colors.popover),
+                    ("sidebar", sidebar),
+                ] {
+                    let foreground_ratio = contrast_ratio(colors.foreground, surface);
+                    for (kind, text) in [
+                        ("section label", label_foreground(&colors)),
+                        ("inactive tab", colors.tab_foreground),
+                    ] {
+                        let ratio = contrast_ratio(text, surface);
+                        assert!(
+                            ratio >= LABEL_CONTRAST || ratio >= foreground_ratio - 0.01,
+                            "{id}: {kind} contrast on {name} is {ratio:.2} (foreground {foreground_ratio:.2})"
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    #[gpui_kit::test]
     fn navigation_surfaces_are_distinct_and_readable(cx: &mut gpui_kit::TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
@@ -912,6 +964,27 @@ mod tests {
         let rgba = gpui_kit::Rgba::from(color);
         let channel = |value: f32| u32::from((value.clamp(0.0, 1.0) * 255.0).round() as u8);
         (channel(rgba.r) << 16) | (channel(rgba.g) << 8) | channel(rgba.b)
+    }
+
+    #[test]
+    fn contrast_blend_covers_fallback_and_blend_arms_in_both_directions() {
+        let black = Hsla { h: 0.0, s: 0.0, l: 0.0, a: 1.0 };
+        let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: 1.0 };
+        // Below the threshold the foreground passes through untouched.
+        let faint = Hsla { h: 0.0, s: 0.0, l: 0.08, a: 1.0 };
+        assert!(contrast_ratio(faint, black) < 4.5);
+        assert_eq!(aa_muted(black, faint), faint);
+        // Above it both theme directions blend toward the background while
+        // holding the threshold.
+        for (background, foreground) in [(black, white), (white, black)] {
+            let muted = aa_muted(background, foreground);
+            assert_ne!(muted, foreground);
+            assert!(contrast_ratio(muted, background) >= 4.5, "unreadable muted text");
+            assert!(
+                (muted.l - background.l).abs() < (foreground.l - background.l).abs(),
+                "blend must move toward the background"
+            );
+        }
     }
 
     #[test]

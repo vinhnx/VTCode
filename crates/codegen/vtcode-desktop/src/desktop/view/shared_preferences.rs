@@ -109,7 +109,7 @@ impl DesktopView {
         let group = GroupBox::new()
             .flex_shrink_0()
             .fill()
-            .title("CLI preferences")
+            .title(group_box_title("CLI preferences", &cx.theme().colors))
             .child(div().text_sm().child(match theme.as_ref() {
                 Some(theme) => format!("CLI theme: {theme} · {}", if follows { "Following CLI" } else { "Desktop override" }),
                 None => "Connect to the current desktop service to load CLI preferences.".into(),

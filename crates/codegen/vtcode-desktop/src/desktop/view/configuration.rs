@@ -293,7 +293,10 @@ impl DesktopView {
         let count = snapshot.map_or(0, |snapshot| snapshot.settings.len());
         let editable_count =
             snapshot.map_or(0, |snapshot| snapshot.settings.iter().filter(|setting| setting.editable).count());
-        let mut group = GroupBox::new().flex_shrink_0().fill().title("CLI configuration");
+        let mut group = GroupBox::new()
+            .flex_shrink_0()
+            .fill()
+            .title(group_box_title("CLI configuration", &cx.theme().colors));
         group = group.child(div().text_sm().child(match snapshot {
             Some(_) => format!("{editable_count} editable settings across {count} CLI config fields · values follow the active config layers"),
             None if self.workspace.is_some() => "Loading shared CLI settings…".into(),

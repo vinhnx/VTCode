@@ -4519,7 +4519,7 @@ impl DesktopView {
                     .flex()
                     .items_center()
                     .justify_between()
-                    .child(section_label(workspace_section, theme.colors.muted_foreground))
+                    .child(section_label(workspace_section, &theme.colors))
                     .child(
                         desktop_button("choose-workspace")
                             .tooltip_with_action(
@@ -4598,7 +4598,7 @@ impl DesktopView {
                 ),
         );
 
-        sidebar = sidebar.child(section_label(projects_section, theme.colors.muted_foreground));
+        sidebar = sidebar.child(section_label(projects_section, &theme.colors));
         let recent = self.recent_workspaces();
         if !recent.is_empty() {
             sidebar = sidebar.child(div().w_full().flex().flex_col().gap_1().children(recent.iter().map(|path| {
@@ -4637,7 +4637,7 @@ impl DesktopView {
                 .flex()
                 .items_center()
                 .justify_between()
-                .child(section_label(recent_threads_section, theme.colors.muted_foreground))
+                .child(section_label(recent_threads_section, &theme.colors))
                 .child(
                     div()
                         .text_xs()
@@ -6362,7 +6362,7 @@ impl DesktopView {
             );
             let title = EmptyTitle::new()
                 .text_size(gpui_kit::rems(1.75))
-                .font_weight(gpui_kit::FontWeight::NORMAL)
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                 .text_color(colors.foreground)
                 .child(
                     div()
@@ -6401,7 +6401,7 @@ impl DesktopView {
                                             .min_w_0()
                                             .truncate()
                                             .text_size(gpui_kit::rems(1.75))
-                                            .font_weight(gpui_kit::FontWeight::NORMAL)
+                                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                             .border_b_1()
                                             .border_dashed()
                                             .border_color(colors.muted_foreground)
@@ -6740,7 +6740,7 @@ impl DesktopView {
                         .w_full()
                         .text_color(status_color)
                         .child(Self::render_activity_status_indicator("tool-indicator", &item.id, state, status_color))
-                        .child(div().min_w_0().truncate().child(item.title.clone()))
+                        .child(div().min_w_0().truncate().font_medium().child(item.title.clone()))
                         .when(state != ActivityState::Completed, |row| {
                             row.child(div().min_w_0().truncate().text_xs().child(status.to_string()))
                         })
@@ -7634,12 +7634,19 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .child(
-                div().min_w_0().flex_1().flex().flex_col().gap_1().child("Reduce motion").child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child("System uses macOS accessibility settings; select it again to refresh."),
-                ),
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(field_label("Reduce motion"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(colors.muted_foreground)
+                            .child("System uses macOS accessibility settings; select it again to refresh."),
+                    ),
             )
             .child(
                 div()
@@ -7695,12 +7702,19 @@ impl DesktopView {
             .gap_3()
             .py_2()
             .child(
-                div().flex_1().min_w_0().flex().flex_col().gap_1().child(label).child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().colors.muted_foreground)
-                        .child(description),
-                ),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(field_label(label))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().colors.muted_foreground)
+                            .child(description),
+                    ),
             )
             .child(
                 div()
@@ -8777,8 +8791,35 @@ fn desktop_tab_bar(id: impl Into<gpui_kit::ElementId>) -> TabBar {
     TabBar::new(id).segmented().small().w_full()
 }
 
-fn section_label(text: impl Into<gpui_kit::SharedString>, color: gpui_kit::Hsla) -> impl IntoElement {
-    div().text_xs().font_semibold().text_color(color).child(text.into())
+fn section_label(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div()
+        .text_xs()
+        .font_semibold()
+        .text_color(themes::label_foreground(colors))
+        .child(text.into())
+}
+
+/// Section headings for Kit group boxes, whose default title renders in muted
+/// metadata text. Headings stay at primary foreground with semibold weight so
+/// they read above body text instead of below it.
+fn group_box_title(
+    title: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div()
+        .text_sm()
+        .font_semibold()
+        .text_color(colors.foreground)
+        .child(title.into())
+}
+
+/// Field and control labels use medium weight at minimum: normal-weight small
+/// text renders thin on dark surfaces, while descriptions stay muted.
+fn field_label(label: impl Into<gpui_kit::SharedString>) -> impl IntoElement {
+    div().font_medium().child(label.into())
 }
 
 fn valid_slash_command_catalog(commands: &[protocol::SlashCommandInfo]) -> bool {
@@ -8803,7 +8844,7 @@ fn navigation_label(label: String, icon: IconName, selected: bool, accent: gpui_
         .items_center()
         .gap_2()
         .child(Icon::new(icon).size_4().when(selected, |icon| icon.text_color(accent)))
-        .child(div().flex_1().min_w_0().truncate().text_left().child(label))
+        .child(div().flex_1().min_w_0().truncate().text_left().font_medium().child(label))
         .when(selected, |row| row.child(div().size(px(5.)).rounded_full().bg(accent)))
 }
 

@@ -1,6 +1,6 @@
 //! Installed-font selection reuses the retained Kit command palette.
 
-use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button};
+use super::{DesktopView, PaletteAction, PaletteKind, command, desktop_button, field_label};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::prelude::*;
@@ -100,7 +100,7 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .py_2()
-            .child(label)
+            .child(field_label(label))
             .child(
                 desktop_button(id)
                     .label(display.to_string())

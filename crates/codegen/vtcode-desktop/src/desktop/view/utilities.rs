@@ -41,7 +41,7 @@ impl DesktopView {
                 workspace.clone(),
                 GroupBox::new()
                     .fill()
-                    .title(workspace)
+                    .title(group_box_title(workspace, &colors))
                     .child(
                         desktop_button("utilities-changes")
                             .ghost()
@@ -55,7 +55,7 @@ impl DesktopView {
                                     .gap_2()
                                     .w_full()
                                     .child(Icon::new(IconName::GitCompare).small())
-                                    .child(div().flex_1().child("Changes"))
+                                    .child(div().flex_1().child(field_label("Changes")))
                                     .when_some(totals, |row, (additions, deletions)| {
                                         row.child(
                                             div().text_sm().text_color(colors.success).child(format!("+{additions}")),
@@ -75,14 +75,7 @@ impl DesktopView {
                                 view.set_inspector_tab(InspectorTab::Changes, cx);
                             })),
                     )
-                    .child(
-                        div()
-                            .pt_4()
-                            .pb_1()
-                            .text_xs()
-                            .text_color(colors.muted_foreground)
-                            .child("RECENT ACTIVITY"),
-                    )
+                    .child(div().pt_4().pb_1().child(section_label("RECENT ACTIVITY", &colors)))
                     .child(
                         desktop_button("utilities-activity")
                             .ghost()
@@ -108,7 +101,7 @@ impl DesktopView {
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(div().text_xs().text_color(colors.muted_foreground).child("DRAFT SOURCES"))
+                            .child(section_label("DRAFT SOURCES", &colors))
                             .child(
                                 desktop_button("utilities-add-source")
                                     .icon(IconName::Plus)
