@@ -6434,6 +6434,7 @@ fn font_pickers_confirm_defaults_and_cancel_back_to_appearance(cx: &mut TestAppC
 #[gpui_kit::test]
 fn appearance_sizes_apply_live_survive_theme_changes_and_reset_only_appearance(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
@@ -7918,6 +7919,7 @@ fn transcript_accessibility_exposes_content_and_distinguishes_tool_actions(cx: &
 #[gpui_kit::test]
 fn appearance_accessibility_exposes_current_values_after_adjustment(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.open_settings(window, cx));
         window.render_frame(cx);
