@@ -123,6 +123,7 @@ fn language_selection_updates_settings_and_persists(cx: &mut TestAppContext) {
         ("pl", "Ustawienia", Some("Nowy wątek"), crate::desktop::localization::UiLanguage::Polish),
         ("hi", "सेटिंग्स", Some("नया थ्रेड"), crate::desktop::localization::UiLanguage::Hindi),
         ("uk", "Налаштування", Some("Нова розмова"), crate::desktop::localization::UiLanguage::Ukrainian),
+        ("sv", "Inställningar", Some("Ny tråd"), crate::desktop::localization::UiLanguage::Swedish),
     ] {
         cx.update_window(window, |_, window, cx| {
             window.within("ui-language-select").click("input", cx);
