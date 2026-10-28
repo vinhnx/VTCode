@@ -26,10 +26,11 @@ pub(super) enum UiLanguage {
     Turkish,
     Polish,
     Hindi,
+    Ukrainian,
 }
 
 impl UiLanguage {
-    pub(super) const ALL: [Self; 18] = [
+    pub(super) const ALL: [Self; 19] = [
         Self::English,
         Self::Vietnamese,
         Self::Spanish,
@@ -48,6 +49,7 @@ impl UiLanguage {
         Self::Turkish,
         Self::Polish,
         Self::Hindi,
+        Self::Ukrainian,
     ];
 
     pub(super) fn from_saved(value: Option<&str>) -> Self {
@@ -69,6 +71,7 @@ impl UiLanguage {
             Some("tr") => Self::Turkish,
             Some("pl") => Self::Polish,
             Some("hi") => Self::Hindi,
+            Some("uk") => Self::Ukrainian,
             _ => Self::English,
         }
     }
@@ -93,6 +96,7 @@ impl UiLanguage {
             Self::Turkish => "tr",
             Self::Polish => "pl",
             Self::Hindi => "hi",
+            Self::Ukrainian => "uk",
         }
     }
 
@@ -116,6 +120,7 @@ impl UiLanguage {
             Self::Turkish => "Türkçe",
             Self::Polish => "Polski",
             Self::Hindi => "हिन्दी",
+            Self::Ukrainian => "Українська",
         }
     }
 }
@@ -196,8 +201,12 @@ mod tests {
         let hindi = UiLanguageOption(UiLanguage::Hindi);
         assert!(hindi.matches("हिन्दी"));
         assert!(hindi.matches("HI"));
-        assert!(!hindi.matches("Ukrainian"));
+        let ukrainian = UiLanguageOption(UiLanguage::Ukrainian);
+        assert!(ukrainian.matches("Українська"));
+        assert!(ukrainian.matches("UK"));
+        assert!(!ukrainian.matches("Swedish"));
         assert_eq!(UiLanguageOption::selected_index(UiLanguage::Hindi).map(|index| index.row), Some(17));
+        assert_eq!(UiLanguageOption::selected_index(UiLanguage::Ukrainian).map(|index| index.row), Some(18));
     }
 
     #[test]
@@ -232,6 +241,7 @@ mod tests {
             ("tr", "Ayarlar", "Görsel stil", "Kopyala", "Tümünü Seç", "Kaldır"),
             ("pl", "Ustawienia", "Styl wizualny", "Kopiuj", "Zaznacz wszystko", "Usuń"),
             ("hi", "सेटिंग्स", "दृश्य शैली", "कॉपी करें", "सभी चुनें", "हटाएँ"),
+            ("uk", "Налаштування", "Візуальний стиль", "Копіювати", "Вибрати все", "Видалити"),
         ] {
             assert_eq!(rust_i18n::t!("app.settings.title", locale = locale).to_string(), title);
             assert_eq!(rust_i18n::t!("app.settings.visual_style", locale = locale).to_string(), visual_style);
@@ -241,6 +251,7 @@ mod tests {
             let history = rust_i18n::t!("app.activity.history.notice", locale = locale, count = 42).to_string();
             assert!(history.contains("42"), "{locale} must interpolate counts");
         }
+        assert_eq!(rust_i18n::t!("gpui_component.Attachment.Retry", locale = "uk").to_string(), "Повторити");
     }
 
     #[test]
@@ -440,6 +451,7 @@ mod tests {
                 "Poproś VT Code o wprowadzenie zmian…",
             ),
             ("hi", "वर्कस्पेस", "नया थ्रेड", "फ़ाइलें और अन्य चीज़ें जोड़ें @", "VT Code से बदलाव करने को कहें…"),
+            ("uk", "Робочий простір", "Нова розмова", "Додати файли та інше @", "Попросіть VT Code внести зміни…"),
         ];
 
         for (locale, workspace, new_thread, add_context, placeholder) in expected {
@@ -544,7 +556,7 @@ mod tests {
             assert!(refresh_error.contains("repository unavailable"), "diagnostic was lost in {locale}");
         }
 
-        for locale in ["tr", "pl", "hi"] {
+        for locale in ["tr", "pl", "hi", "uk"] {
             let folder =
                 rust_i18n::t!("app.workspace_review.folder_value", locale = locale, folder = "src").to_string();
             assert!(folder.contains("src"), "folder path was not interpolated in {locale}");
@@ -815,6 +827,14 @@ mod tests {
                 "Tampilan",
                 "Tersambung",
             ),
+            (
+                "uk",
+                "Світла",
+                "Редагувати профіль оформлення Світла",
+                "Редагувати профіль оформлення Світла (вибрано)",
+                "Дисплей",
+                "Підключено",
+            ),
         ];
 
         for (locale, light, edit_profile, edit_profile_selected, display, connected) in expected {
@@ -851,6 +871,7 @@ mod tests {
             ("nl", "Goedemorgen", "Goedemiddag", "Goedenavond"),
             ("ru", "Доброе утро", "Добрый день", "Добрый вечер"),
             ("id", "Selamat pagi", "Selamat siang", "Selamat malam"),
+            ("uk", "Доброго ранку", "Добрий день", "Добрий вечір"),
         ] {
             assert_eq!(rust_i18n::t!("app.welcome.greeting.morning", locale = locale).to_string(), morning);
             assert_eq!(rust_i18n::t!("app.welcome.greeting.afternoon", locale = locale).to_string(), afternoon);
