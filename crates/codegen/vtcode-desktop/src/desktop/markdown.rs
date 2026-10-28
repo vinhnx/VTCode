@@ -140,6 +140,13 @@ fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
         .with_code_block(code_style)
         .with_code_background(colors.muted)
         .with_link(colors.link)
+        .with_muted_foreground(super::themes::muted_text(&colors))
+        .with_paragraph_gap(gpui_kit::rems(1.))
+        .with_inline_code(gpui_kit::HighlightStyle {
+            color: Some(colors.foreground),
+            background_color: Some(colors.accent),
+            ..Default::default()
+        })
         .with_table_head(table_head.style().clone())
 }
 
@@ -285,6 +292,42 @@ mod tests {
             .unwrap();
             previous = Some((accent, header));
         }
+    }
+
+    #[gpui_kit::test]
+    fn markdown_copy_and_code_pills_stay_readable_in_every_theme(cx: &mut TestAppContext) {
+        use super::super::themes::{SYSTEM_DARK_ID, SYSTEM_LIGHT_ID, all_themes, apply_by_id, contrast_ratio};
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let style = super::markdown_style(cx);
+                assert_eq!(style.paragraph_gap(), gpui_kit::rems(1.), "{id}: paragraph gap");
+                for (name, surface) in [
+                    ("canvas", colors.background),
+                    ("panel", colors.secondary),
+                    ("popover", colors.popover),
+                ] {
+                    let ratio = contrast_ratio(style.muted_foreground(), surface);
+                    assert!(ratio >= 4.5, "{id}: muted Markdown copy on {name} is {ratio:.2}");
+                }
+                let pill = style.inline_code();
+                let (Some(foreground), Some(background)) = (pill.color, pill.background_color) else {
+                    panic!("{id}: inline code pill needs explicit text and fill colors");
+                };
+                let pill_ratio = contrast_ratio(foreground, background);
+                assert!(pill_ratio >= 4.5, "{id}: inline code pill contrast is {pill_ratio:.2}");
+                // User bubbles share the panel fill, where the pill shape may
+                // blend in; the code text itself must stay readable there.
+                let bubble_ratio = contrast_ratio(foreground, colors.secondary);
+                assert!(bubble_ratio >= 4.5, "{id}: inline code on user bubbles is {bubble_ratio:.2}");
+            }
+        });
     }
 
     #[test]

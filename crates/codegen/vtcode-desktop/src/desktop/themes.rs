@@ -492,6 +492,41 @@ pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
     text_at_contrast(background, foreground, AA_RATIO)
 }
 
+/// Secondary copy (row descriptions, hints) one step brighter than
+/// [`aa_muted`]: small muted text at the 4.5 floor reads washed, so this
+/// targets 6:1 on the hardest surface (the raised popover fill, which is
+/// lighter than canvas, panel, and sidebar fills, so the ratio only grows
+/// there). Falls back toward the palette foreground on low-headroom themes
+/// instead of collapsing below AA.
+pub(super) fn muted_text(colors: &ThemeColor) -> Hsla {
+    const TARGET_RATIO: f32 = 6.0;
+    let headroom = contrast_ratio(colors.foreground, colors.popover);
+    text_at_contrast(colors.popover, colors.foreground, TARGET_RATIO.min(headroom))
+}
+
+/// A 1px separator tone for `fill`: the smallest blend toward the
+/// foreground that stays visible. Contrast grows monotonically along the
+/// lightness-only blend, so binary search lands just inside the threshold;
+/// when even the full blend falls short (extreme hues), the foreground
+/// itself keeps the divider visible.
+pub(super) fn hairline(fill: Hsla, foreground: Hsla) -> Hsla {
+    const MINIMUM: f32 = 1.6;
+    if contrast_ratio(mix(fill, foreground, 1.0), fill) < MINIMUM {
+        return foreground;
+    }
+    let mut low = 0.0_f32;
+    let mut high = 1.0_f32;
+    for _ in 0..24 {
+        let middle = (low + high) / 2.0;
+        if contrast_ratio(mix(fill, foreground, middle), fill) >= MINIMUM {
+            high = middle;
+        } else {
+            low = middle;
+        }
+    }
+    mix(fill, foreground, high)
+}
+
 fn text_at_contrast(background: Hsla, foreground: Hsla, minimum: f32) -> Hsla {
     let mut low = 0.0_f32;
     let mut high = 1.0_f32;
@@ -842,6 +877,99 @@ mod tests {
                             "{id}: {kind} contrast on {name} is {ratio:.2} (foreground {foreground_ratio:.2})"
                         );
                     }
+                }
+            }
+        });
+    }
+
+    #[gpui_kit::test]
+    fn secondary_copy_stays_brighter_than_muted_floor(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                let secondary = muted_text(&colors);
+                for (name, surface) in [
+                    ("canvas", colors.background),
+                    ("panel", colors.secondary),
+                    ("group box", colors.group_box),
+                    ("popover", colors.popover),
+                ] {
+                    let ratio = contrast_ratio(secondary, surface);
+                    assert!(ratio >= 4.5, "{id}: secondary copy on {name} is {ratio:.2}");
+                    let muted_ratio = contrast_ratio(colors.muted_foreground, surface);
+                    assert!(
+                        ratio >= muted_ratio - 0.01,
+                        "{id}: secondary copy ({ratio:.2}) is dimmer than muted ({muted_ratio:.2}) on {name}"
+                    );
+                }
+                let headroom = contrast_ratio(colors.foreground, colors.popover);
+                let popover_ratio = contrast_ratio(secondary, colors.popover);
+                assert!(
+                    popover_ratio >= 6.0_f32.min(headroom) - 0.05,
+                    "{id}: secondary copy misses its 6:1 target ({popover_ratio:.2}, headroom {headroom:.2})"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn secondary_copy_degrades_gracefully_without_headroom() {
+        // Asymmetric fixtures: a headroom-rich dark palette, a light
+        // palette (opposite blend direction), and the measured
+        // lowest-headroom palette. Each must sit at min(6:1, headroom):
+        // the first two reach the brighter target, the last one holds
+        // the highest ratio its palette allows instead of dropping to AA.
+        let lowest = all_themes()
+            .iter()
+            .min_by(|a, b| {
+                contrast_ratio(a.foreground, a.background)
+                    .partial_cmp(&contrast_ratio(b.foreground, b.background))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .expect("theme registry is non-empty");
+        for id in ["ciapre", "catppuccin-latte", lowest.id] {
+            let theme = find(id).unwrap_or_else(|| panic!("{id} missing"));
+            let headroom = contrast_ratio(theme.foreground, theme.background);
+            let muted = text_at_contrast(theme.background, theme.foreground, 6.0_f32.min(headroom));
+            let ratio = contrast_ratio(muted, theme.background);
+            assert!(ratio >= 4.5, "{id}: unreadable secondary copy ({ratio:.2})");
+            assert!(
+                ratio >= 6.0_f32.min(headroom) - 0.05,
+                "{id}: missed min(6:1, headroom {headroom:.2}) with {ratio:.2}"
+            );
+            // The blend moves toward the background in both directions.
+            assert!(
+                (muted.l - theme.background.l).abs() <= (theme.foreground.l - theme.background.l).abs(),
+                "{id}: blend moved away from the background"
+            );
+        }
+    }
+
+    #[gpui_kit::test]
+    fn hairlines_stay_visible_on_every_fill(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            let ids = [SYSTEM_LIGHT_ID, SYSTEM_DARK_ID]
+                .into_iter()
+                .chain(all_themes().iter().map(|theme| theme.id));
+            for id in ids {
+                let _mode = apply_by_id(id, None, cx);
+                let colors = cx.theme().colors;
+                for (name, fill) in [
+                    ("canvas", colors.background),
+                    ("panel", colors.secondary),
+                    ("group box", colors.group_box),
+                    ("popover", colors.popover),
+                ] {
+                    let divider = hairline(fill, colors.foreground);
+                    assert_ne!(divider, fill, "{id}: divider vanishes on {name}");
+                    let ratio = contrast_ratio(divider, fill);
+                    assert!(ratio >= 1.5, "{id}: divider on {name} is invisible ({ratio:.2})");
                 }
             }
         });

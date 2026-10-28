@@ -326,10 +326,7 @@ impl DesktopView {
                             .items_center()
                             .justify_between()
                             .gap_2()
-                            .child(section_label(
-                                &rust_i18n::t!("app.settings.appearance.themes").to_string().to_uppercase(),
-                                colors,
-                            ))
+                            .child(section_label(&rust_i18n::t!("app.settings.appearance.themes").to_string(), colors))
                             .child(div().flex().gap_1().children([false, true].into_iter().map(|forward| {
                                 let scroll = self.theme_scroll.clone();
                                 desktop_button(if forward { "next-themes" } else { "previous-themes" })
@@ -392,8 +389,11 @@ impl DesktopView {
                     .fill()
                     .title(group_box_title(typography, colors))
                     .child(self.render_font_family(FontTarget::Ui, cx))
+                    .child(row_divider(colors))
                     .child(self.render_font_family(FontTarget::Code, cx))
+                    .child(row_divider(colors))
                     .child(self.render_font_size(false, cx))
+                    .child(row_divider(colors))
                     .child(self.render_font_size(true, cx))
                     .child(
                         div()
@@ -428,13 +428,11 @@ impl DesktopView {
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .child(div().child(rust_i18n::t!("app.settings.language.label").to_string()))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(colors.muted_foreground)
-                                        .child(rust_i18n::t!("app.settings.language.description").to_string()),
-                                ),
+                                .child(row_title(rust_i18n::t!("app.settings.language.label").to_string(), colors))
+                                .child(row_description(
+                                    rust_i18n::t!("app.settings.language.description").to_string(),
+                                    colors,
+                                )),
                         )
                         .child(
                             Select::new(&self.ui_language_select)
@@ -462,12 +460,7 @@ impl DesktopView {
                             view.set_navigation_visible(*checked, cx);
                         })),
                 )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(colors.muted_foreground)
-                        .child(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string()),
-                )
+                .child(row_description(rust_i18n::t!("app.settings.appearance.navigation_hint").to_string(), colors))
                 .child(
                     gpui_kit::component::switch::Switch::new("navigation-on-right")
                         .label(rust_i18n::t!("app.settings.appearance.navigation_right").to_string())
@@ -700,9 +693,10 @@ impl DesktopView {
                 .id("local-service-unavailable")
                 .test_support()
                 .min_w_0()
-                .text_sm()
-                .text_color(cx.theme().colors.muted_foreground)
-                .child(rust_i18n::t!("app.settings.connections.local_service_unavailable").to_string())
+                .child(row_description(
+                    rust_i18n::t!("app.settings.connections.local_service_unavailable").to_string(),
+                    &cx.theme().colors,
+                ))
                 .into_any_element()
         };
 

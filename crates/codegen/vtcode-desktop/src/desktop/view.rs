@@ -7260,7 +7260,7 @@ impl DesktopView {
                         .role(gpui_kit::Role::Label)
                         .aria_label(rust_i18n::t!("app.composer.reasoning_effort", effort = effort).to_string())
                         .flex_shrink_0()
-                        .text_color(colors.muted_foreground)
+                        .text_color(themes::muted_text(&colors))
                         .child(format!("· {effort}")),
                 )
             })
@@ -7644,12 +7644,17 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .child(
-                div().min_w_0().flex_1().flex().flex_col().gap_1().child("Reduce motion").child(
-                    div()
-                        .text_xs()
-                        .text_color(colors.muted_foreground)
-                        .child("System uses macOS accessibility settings; select it again to refresh."),
-                ),
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(row_title("Reduce motion", &colors))
+                    .child(row_description(
+                        "System uses macOS accessibility settings; select it again to refresh.",
+                        &colors,
+                    )),
             )
             .child(
                 div()
@@ -7705,12 +7710,14 @@ impl DesktopView {
             .gap_3()
             .py_2()
             .child(
-                div().flex_1().min_w_0().flex().flex_col().gap_1().child(label).child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().colors.muted_foreground)
-                        .child(description),
-                ),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(row_title(label, &cx.theme().colors))
+                    .child(row_description(description, &cx.theme().colors)),
             )
             .child(
                 div()
@@ -8814,6 +8821,29 @@ fn group_box_title(
         .font_semibold()
         .text_color(colors.foreground)
         .child(title.into())
+}
+
+/// Settings-row title: one step below group headings, medium weight at
+/// primary foreground so it reads above its description.
+fn row_title(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div().text_sm().font_medium().text_color(colors.foreground).child(text.into())
+}
+
+/// Settings-row description: same size as the title, set in the brighter
+/// secondary ramp so small muted copy stays readable on every fill.
+fn row_description(
+    text: impl Into<gpui_kit::SharedString>,
+    colors: &gpui_kit::component::theme::ThemeColor,
+) -> impl IntoElement {
+    div().text_sm().text_color(themes::muted_text(colors)).child(text.into())
+}
+
+/// 1px separator between settings rows on a group-box fill.
+fn row_divider(colors: &gpui_kit::component::theme::ThemeColor) -> impl IntoElement {
+    div().h(px(1.)).bg(themes::hairline(colors.group_box, colors.foreground))
 }
 
 fn valid_slash_command_catalog(commands: &[protocol::SlashCommandInfo]) -> bool {

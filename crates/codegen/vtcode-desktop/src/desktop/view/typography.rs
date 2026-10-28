@@ -100,7 +100,7 @@ impl DesktopView {
             .justify_between()
             .gap_3()
             .py_2()
-            .child(label)
+            .child(super::row_title(label, &cx.theme().colors))
             .child(
                 desktop_button(id)
                     .label(display.to_string())

@@ -529,6 +529,16 @@ renderer. Font discovery is cached once per process; restart after installing
 new fonts. The font picker reuses Kit's searchable command palette and returns
 to Appearance on confirmation or cancellation. Default sizes are a base scale:
 headings and secondary labels retain their relative hierarchy.
+
+Type scale (all `rem`-based, so UI size changes preserve hierarchy): the welcome
+display stays at 1.75rem regular; group headings are semibold `text_sm` at
+primary foreground; micro labels are semibold `text_xs` at label-grade contrast;
+settings rows pair a medium `text_sm` title with a regular `text_sm` description
+separated by 1px hairlines. Secondary copy uses a brighter muted ramp targeting
+6:1, while the classic 4.5:1 muted floor remains for true captions and metadata.
+Transcript Markdown keeps 1.5x body leading with a 1rem paragraph gap; inline
+code renders as a mono pill with explicit text and fill colors that hold AA on
+both assistant canvas and user-bubble fills.
 The Settings dialog keeps its title and category tabs visible while the active page scrolls vertically;
 its width and content are constrained to the available screen. The category TabBar uses Kit's accessible tab semantics
 and scoped Left/Right/Home/End navigation. Shortcuts render with Kit `Kbd` badges in the default read-only view;
