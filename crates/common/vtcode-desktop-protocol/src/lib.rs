@@ -14,7 +14,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 16 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 17 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -493,6 +493,9 @@ pub struct SessionSummary {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionHistoryMessage {
+    /// Model-only context retained for archive indexing but hidden from the transcript.
+    #[serde(default)]
+    pub hidden: bool,
     /// Stable zero-based index in the archived session snapshot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archive_index: Option<usize>,
@@ -1376,6 +1379,7 @@ mod tests {
             request_id: params.request_id.clone(),
             start_index: 80,
             messages: vec![SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(80),
                 role: "assistant".into(),
                 text: "Earlier reply".into(),
@@ -1387,6 +1391,11 @@ mod tests {
         let decoded_page: SessionHistoryPage = serde_json::from_value(serde_json::to_value(&page).unwrap()).unwrap();
         assert_eq!(decoded_params, params);
         assert_eq!(decoded_page, page);
+        let legacy: SessionHistoryMessage = serde_json::from_value(serde_json::json!({
+            "archiveIndex": 1, "role": "user", "text": "hello"
+        }))
+        .unwrap();
+        assert!(!legacy.hidden);
     }
 
     #[test]

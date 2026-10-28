@@ -14,6 +14,7 @@
 - `config/theme` accepts a built-in CLI theme ID. Settings DTOs carry bounded dotted keys and JSON values, never
   config file paths, full TOML, or credentials.
 - Use `vtcode-exec-events` history types; review/activity snapshots never replay live lifecycle events.
+- Hidden model-only history rows retain archive indices; only system rows may be omitted from the visible transcript.
 - The live event channel (`live_event_channel`) coalesces under saturation: snapshots replace per item,
   plan deltas merge, ordered events are only dropped when nothing coalescable remains. A slow consumer
   must never fail the producing turn; only a dropped consumer half is fatal.

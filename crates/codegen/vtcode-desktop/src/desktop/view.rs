@@ -1844,8 +1844,9 @@ impl DesktopView {
                             && page.session_id == session_id
                             && view.selected_session_id.as_deref() == Some(session_id.as_str()) =>
                     {
+                        let visible_count = history.len();
                         let inserted = view.transcript.prepend_prepared(history);
-                        if inserted == 0 {
+                        if visible_count > 0 && inserted == 0 {
                             view.history_page_error = Some(
                                 "The transcript reached its local message limit. Start a new session to continue browsing.".into(),
                             );
@@ -6558,7 +6559,11 @@ impl DesktopView {
                 .text_color(cx.theme().colors.foreground)
                 .child(label)
                 .into_any_element()
-        } else if self.transcript.is_empty() {
+        } else if self.transcript.is_empty()
+            && !self.history_has_earlier
+            && !self.history_page_loading
+            && self.history_page_error.is_none()
+        {
             let colors = cx.theme().colors;
             let welcome_copy = welcome_copy(self.welcome_copy_index);
             let greeting = welcome_greeting(self.welcome_period);
@@ -9769,8 +9774,9 @@ fn prepare_session_history(session_id: &str, messages: Vec<SessionHistoryMessage
     let mut occurrences = HashMap::<u64, usize>::new();
     messages
         .into_iter()
+        .filter(|message| !message.hidden || message.role != "system")
         .map(|message| {
-            let SessionHistoryMessage { archive_index, role, text } = message;
+            let SessionHistoryMessage { archive_index, role, text, .. } = message;
             let title = match role.as_str() {
                 "user" => "You".to_string(),
                 "assistant" => "VT Code".to_string(),

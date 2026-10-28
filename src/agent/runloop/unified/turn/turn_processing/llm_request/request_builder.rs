@@ -57,7 +57,7 @@ pub(super) fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
     })
 }
 
-pub(super) const COLLAPSED_TOOL_OUTPUT_NOTICE: &str = "Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.";
+pub(super) use vtcode_core::utils::session_archive::COLLAPSED_TOOL_OUTPUT_NOTICE;
 
 fn is_collapsed_tool_output_notice(message: &uni::Message) -> bool {
     message.role == uni::MessageRole::System && message.content.as_text().as_ref() == COLLAPSED_TOOL_OUTPUT_NOTICE

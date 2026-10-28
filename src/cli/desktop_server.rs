@@ -1810,8 +1810,16 @@ fn restored_history_page(
     let mut start_index = end;
 
     for (archive_index, message) in archived_messages.iter().enumerate().take(end).skip(page_start).rev() {
-        let text = bounded_text_projection(&message.content.as_text(), MAX_RESTORED_MESSAGE_BYTES);
+        let content = message.content.as_text();
+        let hidden =
+            vtcode_core::utils::session_archive::is_internal_session_context(message.role, &content, message.clear_at);
+        let text = if hidden {
+            String::new()
+        } else {
+            bounded_text_projection(&content, MAX_RESTORED_MESSAGE_BYTES)
+        };
         let restored = protocol::SessionHistoryMessage {
+            hidden,
             archive_index: Some(archive_index),
             role: message.role.to_string(),
             text,
@@ -2023,6 +2031,27 @@ fn sanitize_public_error(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restored_history_retains_indices_for_hidden_runtime_context() {
+        use vtcode_core::llm::provider::Message;
+        use vtcode_core::utils::session_archive::{COLLAPSED_TOOL_OUTPUT_NOTICE, SessionMessage};
+
+        let messages = [
+            SessionMessage::from(&Message::user("hello".into())),
+            SessionMessage::from(&Message::turn_scoped_system(COLLAPSED_TOOL_OUTPUT_NOTICE.into())),
+            SessionMessage::from(&Message::assistant("answer".into())),
+        ];
+        let page = restored_history_page(&messages, None, 3);
+        assert_eq!(
+            page.messages.iter().map(|message| message.archive_index).collect::<Vec<_>>(),
+            vec![Some(0), Some(1), Some(2)]
+        );
+        assert!(!page.messages[0].hidden);
+        assert!(page.messages[1].hidden);
+        assert!(page.messages[1].text.is_empty());
+        assert!(!page.messages[2].hidden);
+    }
 
     #[test]
     fn restored_history_pages_are_bounded_ordered_and_non_overlapping() {

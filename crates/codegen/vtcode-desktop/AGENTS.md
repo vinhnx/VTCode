@@ -3,7 +3,7 @@
 [Root AGENTS.md](../../../AGENTS.md) | macOS GPUI client for the local desktop protocol.
 
 - Render on the UI thread; supervise transport asynchronously. Use GPUI's asynchronous `PathPromptOptions` picker.
-- `transcript.rs` owns rows/groups and queues measured-layout changes; `MessageScrollerState` owns virtual-list geometry.
+- `transcript.rs` owns rows/groups and queues measured-layout changes; `MessageScrollerState` owns virtual-list geometry. Hidden-only archive pages advance the cursor and keep earlier history reachable.
 - Use `vtcode-exec-events` runtime types; file changes use bounded `DiffCard` rows.
   Inspector projections reuse live/restored rows; rebuild changes on upsert.
 - Menus and `view/shortcuts.rs` reuse typed actions; buttons share cursor policy. Send uses `submit_on_enter` + `Enter`.

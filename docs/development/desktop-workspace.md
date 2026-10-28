@@ -103,7 +103,7 @@ context inspector start collapsed on each launch; stored pane widths are retaine
 | Inspect tool activity | Expand a consecutive tool-action summary, then open an action for its bounded output excerpt. Copy full output from that action when you need its complete captured text. Running and failed counts remain visible while collapsed. |
 | Receive a background notice | When the main window is inactive, run completion, run failure/blocking, or a pending decision posts a generic system notification. Its click returns to the owning window; app state remains available if OS notification delivery is suppressed. |
 | Read streamed output | GPUI measures variable-height rows and follows the bottom of the newest message, including a message taller than the viewport. |
-| Read the conversation | User messages use trailing, filled neutral bubbles; agent prose has no visible speaker label or avatar. Speaker identity remains available to assistive technology. Compact tool summaries stay between the agent messages that surround them; expanded tools keep their title and disclosure together, with status text reserved for active, failed, or archived activity. |
+| Read the conversation | User messages use trailing, filled neutral bubbles; agent prose has no visible speaker label or avatar. Speaker identity remains available to assistive technology. Compact tool summaries stay between the agent messages that surround them; expanded tools keep their title and disclosure together, with status text reserved for active, failed, or archived activity. Restored conversations omit model-only context while retaining ordinary system notices. |
 | Scroll upward | Tail following pauses; returning to the bottom resumes it. Older rows evicted by the history bound preserve the remaining reader anchor. |
 | Send a prompt | Enter submits the composer draft; Shift+Enter inserts a newline. Send creates a session automatically when none is selected, then submits the exact captured prompt and attachments. A newer draft typed while creation is pending stays in the composer. |
 | Use CLI composer completions | Typing `@` at a token boundary opens filtered workspace-file mentions; selecting one inserts `@path` into the draft and leaves file loading to the shared runtime. A leading `/` opens commands from the CLI's visible slash-command catalog. Up/Down changes the highlighted command, Tab completes without submitting, and Enter completes the selected command and sends it through the normal desktop turn path. Email addresses and package-manager scopes such as `npm install @types/node` do not open file mentions. |
@@ -430,8 +430,10 @@ Cancelling sends no answer drafts; oversized submissions remain editable instead
 ## Local service protocol
 
 `vtcode desktop-server` uses one UTF-8 JSON-RPC object per line on stdin/stdout. Diagnostics go to stderr. The client and
-server negotiate protocol version `1.16` (additive over 1.0–1.15; older fields are serde-defaulted). Incompatible ranges
+server negotiate protocol version `1.17` (additive over 1.0–1.16; older fields are serde-defaulted). Incompatible ranges
 fail explicitly. The protocol crate caps a line at 1 MiB.
+Restored history keeps archive indices for model-only context but marks those rows hidden; desktop paging advances through
+hidden-only pages without displaying them. The CLI resume view uses the same context filter.
 The runtime-event, service-notification, host-command, and desktop-request queues each hold at most 128 entries; the
 GUI event bridge holds at most 256 events. The runtime-event queue is a bounded coalescing channel: `item.updated`
 snapshots replace the pending snapshot for the same item, consecutive `plan.delta` events for one item merge, and

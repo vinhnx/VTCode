@@ -189,17 +189,12 @@ pub(crate) fn build_structured_resume_lines(
 /// stability, but it is not part of the conversation the user had, so the
 /// resume transcript omits it.
 fn is_persisted_request_context(message: &uni::Message) -> bool {
-    if message.role != uni::MessageRole::System {
-        return false;
-    }
-    let text = message.content.as_text();
-    text.starts_with(vtcode_core::prompts::FEW_SHOT_SECTION_HEADER)
-        || text.starts_with(LEGACY_EDITOR_CONTEXT_PROMPT_HEADER)
+    vtcode_core::utils::session_archive::is_internal_session_context(
+        message.role,
+        &message.content.as_text(),
+        message.clear_at,
+    )
 }
-
-/// Header of the pre-removal `## Active Editor Context` block. Kept as a
-/// literal so old histories still filter out of resume transcripts.
-const LEGACY_EDITOR_CONTEXT_PROMPT_HEADER: &str = "## Active Editor Context";
 
 fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
     match tool_call_id {

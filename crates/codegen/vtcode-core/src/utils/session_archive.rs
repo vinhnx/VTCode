@@ -10,6 +10,22 @@ mod shrink;
 mod snapshot;
 mod transcript;
 
+/// Instruction supplied to the model when tool output is collapsed in the UI.
+pub const COLLAPSED_TOOL_OUTPUT_NOTICE: &str = "Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.";
+
+/// Identify persisted model-only context that should not appear in a resumed transcript.
+pub fn is_internal_session_context(
+    role: crate::llm::provider::MessageRole,
+    text: &str,
+    clear_at: Option<crate::llm::provider::MessageClearAt>,
+) -> bool {
+    role == crate::llm::provider::MessageRole::System
+        && (clear_at.is_some()
+            || text.starts_with(crate::prompts::FEW_SHOT_SECTION_HEADER)
+            || text.starts_with("## Active Editor Context")
+            || text == COLLAPSED_TOOL_OUTPUT_NOTICE)
+}
+
 pub use self::archive::SessionArchive;
 #[cfg(test)]
 pub(crate) use self::identifier::generate_unique_archive_path;

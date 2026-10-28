@@ -14,6 +14,19 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::LazyLock;
+
+#[test]
+fn internal_session_context_keeps_ordinary_messages_visible() {
+    use crate::utils::session_archive::{COLLAPSED_TOOL_OUTPUT_NOTICE, is_internal_session_context};
+    assert!(is_internal_session_context(MessageRole::System, COLLAPSED_TOOL_OUTPUT_NOTICE, None));
+    assert!(is_internal_session_context(
+        MessageRole::System,
+        "private guidance",
+        Some(MessageClearAt::NextUserMessage)
+    ));
+    assert!(!is_internal_session_context(MessageRole::User, COLLAPSED_TOOL_OUTPUT_NOTICE, None));
+    assert!(!is_internal_session_context(MessageRole::System, "User-visible system notice", None));
+}
 use std::time::Duration;
 
 static SESSION_HISTORY_TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));

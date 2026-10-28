@@ -3248,6 +3248,7 @@ fn conversation_search_loads_earlier_history_and_keeps_the_search_open(cx: &mut 
         request_id,
         start_index: 1,
         messages: vec![SessionHistoryMessage {
+            hidden: false,
             archive_index: Some(1),
             role: "tool".into(),
             text: "Archived tool entry contains the needle".into(),
@@ -3672,6 +3673,7 @@ fn theme_switches_refresh_both_directions_and_preserve_typography_and_draft(cx: 
 #[gpui_kit::test]
 fn separate_theme_profiles_switch_and_restore_each_selected_theme(cx: &mut TestAppContext) {
     let (window, view) = open_desktop(cx);
+    cx.update(|cx| cx.set_reduce_motion(true));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| view.apply_theme("ciapre".into(), window, cx));
         window.click("open-settings", cx);
@@ -9257,11 +9259,13 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
     let (window, view) = open_desktop(cx);
     let session_id = "archive-session";
     let prompt = SessionHistoryMessage {
+        hidden: false,
         archive_index: None,
         role: "user".into(),
         text: "Question".into(),
     };
     let answer = SessionHistoryMessage {
+        hidden: false,
         archive_index: None,
         role: "assistant".into(),
         text: "Answer".into(),
@@ -9276,6 +9280,7 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
         assert_eq!(window.find(format!("message-body-{answer_id}")).label(), Some("VT Code: Answer"));
 
         let inserted = SessionHistoryMessage {
+            hidden: false,
             archive_index: None,
             role: "user".into(),
             text: "A newer question".into(),
@@ -9287,6 +9292,7 @@ fn restored_history_accessibility_ids_follow_message_content_across_reload(cx: &
                 prompt,
                 answer,
                 SessionHistoryMessage {
+                    hidden: false,
                     archive_index: None,
                     role: "assistant".into(),
                     text: "Answer".into(),
@@ -9311,11 +9317,13 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
                 text: "Repeated".into(),
             },
             SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(161),
                 role: "assistant".into(),
                 text: "Repeated".into(),
@@ -9329,16 +9337,19 @@ fn restored_history_archive_ids_remain_stable_when_an_earlier_page_is_loaded() {
         session_id,
         vec![
             SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(158),
                 role: "user".into(),
                 text: "Earlier".into(),
             },
             SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(159),
                 role: "assistant".into(),
                 text: "Context".into(),
             },
             SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(160),
                 role: "assistant".into(),
                 text: "Repeated".into(),
@@ -9361,6 +9372,7 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         view.history_has_earlier = true;
         let messages = (160..170)
             .map(|index| SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
                 text: format!("Message {index}\n\n{}", "A tall archived row.\n\n".repeat(32)),
@@ -9398,6 +9410,7 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         start_index: 157,
         messages: (157..160)
             .map(|index| SessionHistoryMessage {
+                hidden: false,
                 archive_index: Some(index),
                 role: "assistant".into(),
                 text: format!("Earlier {index}\n\n{}", "Earlier archived row.\n\n".repeat(24)),
@@ -9422,6 +9435,60 @@ fn earlier_history_page_uses_bounded_request_and_preserves_reader_anchor(cx: &mu
         });
     })
     .unwrap();
+}
+
+#[gpui_kit::test]
+fn hidden_history_page_advances_without_showing_runtime_context(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    view.update(cx, |view, cx| {
+        view.selected_session_id = Some("archive-session".into());
+        view.history_start_index = 2;
+        view.history_page_request_id = Some("page".into());
+        view.history_page_limit = 2;
+        view.history_page_loading = true;
+        view.begin_session_history_page(
+            json!({
+                "sessionId": "archive-session", "requestId": "page", "startIndex": 1,
+                "messages": [{ "archiveIndex": 1, "role": "system", "text": "private guidance", "hidden": true }],
+                "hasEarlier": true
+            }),
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    view.update(cx, |view, _| {
+        assert_eq!(view.history_start_index, 1);
+        assert!(view.history_has_earlier);
+        assert!(!view.history_page_loading);
+        assert!(view.history_page_error.is_none());
+        assert!(view.transcript.is_empty());
+    });
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("load-earlier-history").role(), Some(gpui_kit::Role::Button));
+    })
+    .unwrap();
+}
+
+#[test]
+fn hidden_history_marker_does_not_suppress_user_messages() {
+    let messages = vec![
+        vtcode_desktop_protocol::SessionHistoryMessage {
+            hidden: true,
+            archive_index: Some(0),
+            role: "system".into(),
+            text: "model context".into(),
+        },
+        vtcode_desktop_protocol::SessionHistoryMessage {
+            hidden: true,
+            archive_index: Some(1),
+            role: "user".into(),
+            text: "keep my message".into(),
+        },
+    ];
+    let rows = super::prepare_session_history("session", messages);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].text.as_ref(), "keep my message");
 }
 
 #[gpui_kit::test]
