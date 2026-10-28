@@ -11159,3 +11159,209 @@ fn effort_knob_track_click_commits_the_supported_level(cx: &mut TestAppContext) 
     assert_eq!(params["reasoningEffort"], "high");
     assert!(requests.try_recv().is_err());
 }
+
+#[gpui_kit::test]
+fn model_options_panel_stays_open_for_effort_and_speed_changes(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, mut requests) = tokio::sync::mpsc::channel(8);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        window.click("pick-model", cx);
+        window.render_frame(cx);
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        // medium -> high exercises a successful commit; the panel must survive it.
+        window.press("right", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("effort request") else {
+        panic!("request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "high");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let state = view.read(cx);
+        assert!(state.palette.is_some(), "effort change must keep the panel open");
+        assert!(state.palette_kind == super::PaletteKind::ModelOptions);
+        assert!(state.effort_slider.is_some(), "slider state must survive the commit");
+        assert_eq!(state._effort_slider_subscriptions.len(), 2);
+        assert!(state.effort_focus.is_focused(window), "focus must stay on the knob, not jump to the composer");
+        assert_eq!(window.find("command-palette").label(), Some("Select model"));
+        assert!(!state.can_select_session_options(), "controls lock while the CLI request is pending");
+        // While pending, knob input and the speed toggle must neither submit nor move state.
+        let slider_value = state.effort_slider.as_ref().unwrap().read(cx).value().start();
+        assert_eq!(slider_value, 2., "knob shows the committed high level");
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        window.press("left", cx);
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
+            2.,
+            "pending knob input must not move the slider"
+        );
+        window.click("fast-mode-toggle", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "pending input must not submit");
+    cx.update_window(window, |_, window, cx| {
+        // CLI acknowledgement re-enables the panel without dismissing it.
+        let mut ack = runtime_options_config();
+        ack.session_options.as_mut().unwrap().reasoning_effort = "high".into();
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                    result: Some(json!(ack)),
+                    error: None,
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        let state = view.read(cx);
+        assert!(state.palette.is_some(), "CLI ack must keep the panel open");
+        assert!(state.palette_kind == super::PaletteKind::ModelOptions);
+        assert!(state.can_select_session_options(), "ack re-enables the controls");
+        assert_eq!(window.find("model-effort-value").label(), Some("Current reasoning effort: high"));
+        // Boundary no-op when idle: already at high, pressing right submits nothing.
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        window.press("right", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "boundary press must not submit");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        window.press("left", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("medium request") else {
+        panic!("medium request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "medium");
+    cx.update_window(window, |_, window, cx| {
+        // A drag released while blocked must revert to the CLI value, not stick.
+        view.update(cx, |view, cx| {
+            let slider = view.effort_slider.clone().unwrap();
+            slider.update(cx, |state, cx| {
+                state.set_value(0., window, cx);
+                cx.emit(gpui_kit::component::slider::SliderEvent::Release(state.value()));
+            });
+        });
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "blocked drag must not submit");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
+            2.,
+            "blocked drag must revert to the CLI high level"
+        );
+        assert!(view.read(cx).palette.is_some(), "revert must keep the panel open");
+        let mut ack = runtime_options_config();
+        ack.session_options.as_mut().unwrap().reasoning_effort = "medium".into();
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                    result: Some(json!(ack)),
+                    error: None,
+                },
+                cx,
+            );
+        });
+        window.render_frame(cx);
+        // Slider (high) now trails the acked CLI value (medium); the next knob
+        // step re-syncs without a spurious request.
+        view.update(cx, |view, cx| view.effort_focus.focus(window, cx));
+        window.press("left", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(requests.try_recv().is_err(), "re-sync step must not submit");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(
+            view.read(cx).effort_slider.as_ref().unwrap().read(cx).value().start(),
+            1.,
+            "re-sync step must land on the CLI medium level"
+        );
+        assert!(view.read(cx).palette.is_some(), "boundary no-op must keep the panel open");
+        window.click("fast-mode-toggle", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("speed request") else {
+        panic!("speed request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["fastMode"], false);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let state = view.read(cx);
+        assert!(state.palette.is_some(), "speed toggle must keep the panel open");
+        assert!(state.palette_kind == super::PaletteKind::ModelOptions);
+        assert!(state.effort_slider.is_some());
+        let mut ack = runtime_options_config();
+        let options = ack.session_options.as_mut().unwrap();
+        options.reasoning_effort = "medium".into();
+        options.fast_mode_enabled = false;
+        view.update(cx, |view, cx| {
+            view.handle_backend_event(
+                BackendEvent::Response {
+                    method: vtcode_desktop_protocol::method::CONFIG_OPTIONS.into(),
+                    result: Some(json!(ack)),
+                    error: None,
+                },
+                cx,
+            );
+            view.close_palette(window, cx);
+            let mut config = runtime_options_config();
+            config.session_options.as_mut().unwrap().reasoning_effort = "max".into();
+            view.configuration = Some(config);
+            view.open_model_options(window, cx);
+        });
+        window.render_frame(cx);
+        // Unsupported inherited value offers explicit choices without a knob.
+        assert!(view.read(cx).effort_slider.is_none());
+        view.update(cx, |view, cx| view.focus_palette_state(window, cx));
+        window.within("command-palette").press("enter", cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    let BackendCommand::Request { method, params } = requests.try_recv().expect("explicit effort request") else {
+        panic!("explicit effort request expected")
+    };
+    assert_eq!(method, vtcode_desktop_protocol::method::CONFIG_OPTIONS);
+    assert_eq!(params["reasoningEffort"], "low");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let state = view.read(cx);
+        assert!(state.palette.is_some(), "explicit effort choice must keep the panel open");
+        assert!(state.palette_kind == super::PaletteKind::ModelOptions);
+        assert!(window.try_find("command-palette").is_some());
+        // Escape still dismisses the topmost surface and returns focus.
+        view.update(cx, |view, cx| view.dismiss_overlay(window, cx));
+        window.render_frame(cx);
+        assert!(view.read(cx).palette.is_none(), "Escape must still dismiss the panel");
+    })
+    .unwrap();
+}

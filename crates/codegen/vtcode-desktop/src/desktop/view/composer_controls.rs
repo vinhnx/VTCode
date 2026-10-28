@@ -965,14 +965,33 @@ impl DesktopView {
                         {
                             return;
                         }
-                        view.close_palette(window, cx);
-                        let _selected = view.select_session_options(
-                            protocol::SessionOptionsSelectParams {
-                                reasoning_effort: Some(effort),
-                                ..Default::default()
-                            },
-                            cx,
-                        );
+                        // Keep the model options panel open so effort
+                        // adjustments do not dismiss the knob.
+                        let params = protocol::SessionOptionsSelectParams {
+                            reasoning_effort: Some(effort),
+                            ..Default::default()
+                        };
+                        let selected = view.select_session_options(params.clone(), cx);
+                        if !selected && !view.session_option_is_current(&params) {
+                            // Blocked by a pending request. Revert the knob to
+                            // the CLI value so the panel never shows an
+                            // uncommitted level as selected.
+                            let current = view
+                                .configuration
+                                .as_ref()
+                                .and_then(|config| config.session_options.as_ref())
+                                .and_then(|options| {
+                                    options
+                                        .supported_efforts
+                                        .iter()
+                                        .position(|level| level == &options.reasoning_effort)
+                                });
+                            if let Some(index) = current
+                                && let Some(slider) = view.effort_slider.clone()
+                            {
+                                slider.update(cx, |state, cx| state.set_value(index as f32, window, cx));
+                            }
+                        }
                     });
                 });
             }
@@ -1174,6 +1193,7 @@ pub(super) fn model_options_header(
     focus: &FocusHandle,
     model_label: Option<&str>,
     speed_control: Option<AnyElement>,
+    enabled: bool,
     cx: &App,
 ) -> AnyElement {
     let colors = cx.theme().colors;
@@ -1232,6 +1252,7 @@ pub(super) fn model_options_header(
             focus,
             options.map_or(0, |options| options.supported_efforts.len()),
             effort,
+            enabled,
             cx,
         ));
     }
@@ -1253,6 +1274,7 @@ fn effort_knob(
     focus: &FocusHandle,
     level_count: usize,
     effort: Option<&str>,
+    enabled: bool,
     cx: &App,
 ) -> AnyElement {
     use gpui_kit::base::slider::{SliderIndicator, SliderThumb, SliderTrack};
@@ -1306,10 +1328,14 @@ fn effort_knob(
         .track_focus(focus)
         .focus_visible(|style| style.border_1().border_color(colors.ring))
         .on_a11y_action(gpui_kit::AccessibleAction::Increment, move |_, window, cx| {
-            step_effort(&increment, 1., window, cx);
+            if enabled {
+                step_effort(&increment, 1., window, cx);
+            }
         })
         .on_a11y_action(gpui_kit::AccessibleAction::Decrement, move |_, window, cx| {
-            step_effort(&decrement, -1., window, cx);
+            if enabled {
+                step_effort(&decrement, -1., window, cx);
+            }
         })
         .on_key_down(move |event, window, cx| {
             if event.keystroke.modifiers.control
@@ -1325,7 +1351,9 @@ fn effort_knob(
                 _ => return,
             };
             cx.stop_propagation();
-            step_effort(&keyboard, direction, window, cx);
+            if enabled {
+                step_effort(&keyboard, direction, window, cx);
+            }
         })
         .on_mouse_down(MouseButton::Left, move |_, window, cx| click_focus.focus(window, cx))
         .on_mouse_up(MouseButton::Left, move |_, _, cx| {
@@ -1334,7 +1362,8 @@ fn effort_knob(
         .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
             release_outside.update(cx, |state, cx| state.handle_release(cx));
         })
-        .cursor_pointer()
+        .when(enabled, |knob| knob.cursor_pointer())
+        .when(!enabled, |knob| knob.opacity(0.5))
         .w_full()
         .min_w_0()
         .py_2()

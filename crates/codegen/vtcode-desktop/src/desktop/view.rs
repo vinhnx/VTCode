@@ -2695,6 +2695,16 @@ impl DesktopView {
             cx.notify();
             return;
         }
+        // Keep the compact model panel open for explicit effort choices so
+        // users can compare levels without reopening the knob.
+        if let PaletteAction::SelectSessionOptions(options) = &action
+            && self.palette_kind == PaletteKind::ModelOptions
+            && options.reasoning_effort.is_some()
+        {
+            let _selected = self.select_session_options(options.clone(), cx);
+            cx.notify();
+            return;
+        }
         self.close_palette(window, cx);
         match action {
             PaletteAction::NewSession => self.create_session(cx),
@@ -8326,6 +8336,7 @@ impl DesktopView {
                     .unwrap_or_else(|| config.model.clone())
             });
             let effort_focus = self.effort_focus.clone();
+            let options_enabled = self.can_select_session_options();
             command = command.searchable(false).header(move |_, _, cx| {
                 let speed_control = speed_toggle.as_ref().map(|(label, enabled, provider, model, palette_id)| {
                     let weak = speed_toggle_view.clone();
@@ -8354,8 +8365,9 @@ impl DesktopView {
                                 .text_color(colors.primary_foreground)
                                 .border_color(colors.primary)
                         })
-                        .cursor_pointer()
-                        .on_click(move |checked, window, cx| {
+                        .disabled(!options_enabled)
+                        .when(options_enabled, |toggle| toggle.cursor_pointer())
+                        .on_click(move |checked, _window, cx| {
                             let _updated = weak.update(cx, |view, cx| {
                                 if view.palette_kind != PaletteKind::ModelOptions
                                     || view.palette.as_ref().map(|state| state.entity_id()) != palette_id
@@ -8363,7 +8375,8 @@ impl DesktopView {
                                 {
                                     return;
                                 }
-                                view.close_palette(window, cx);
+                                // Keep the model options panel open so processing-tier
+                                // toggles do not dismiss the knob.
                                 let _selected = view.select_session_options(
                                     protocol::SessionOptionsSelectParams {
                                         fast_mode: Some(*checked),
@@ -8381,6 +8394,7 @@ impl DesktopView {
                     &effort_focus,
                     label.as_deref(),
                     speed_control,
+                    options_enabled,
                     cx,
                 )
             });
