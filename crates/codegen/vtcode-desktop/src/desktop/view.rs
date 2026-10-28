@@ -7912,9 +7912,14 @@ impl DesktopView {
 
     /// One theme entry in the settings picker: a color preview chip that
     /// applies live on click.
-    fn render_theme_swatch(&self, entry: themes::SwatchEntry, cx: &mut Context<Self>) -> AnyElement {
+    fn render_theme_swatch(&self, entry: themes::SwatchEntry, duplicate: bool, cx: &mut Context<Self>) -> AnyElement {
         let (background, foreground) = entry.preview();
         let entry_id = entry.id();
+        let label = if duplicate {
+            format!("{entry_id} · {}", entry.label())
+        } else {
+            entry.label().to_owned()
+        };
         let active = self.theme_id == entry_id;
         let light_profile = self.preferences.separate_theme_profiles
             && self.preferences.light_theme.as_deref() == Some(entry_id.as_str());
@@ -7956,14 +7961,10 @@ impl DesktopView {
                     .text_xs()
                     .truncate()
                     .when(selected, |label| label.font_semibold())
-                    .child(entry.label()),
+                    .child(label.clone()),
             );
         desktop_button(id)
-            .accessibility_label(if selected {
-                format!("{} ({badge})", entry.label())
-            } else {
-                entry.label().to_owned()
-            })
+            .accessibility_label(if selected { format!("{label} ({badge})") } else { label })
             .toggled(selected)
             .ghost()
             .w(px(104.))

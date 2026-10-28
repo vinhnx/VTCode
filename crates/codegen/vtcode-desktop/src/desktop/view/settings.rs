@@ -234,8 +234,17 @@ impl DesktopView {
     }
 
     fn render_appearance_settings(&self, cx: &mut Context<Self>) -> AnyElement {
-        let swatches = themes::picker_swatches();
-        let swatch_rows = swatches.map(|entry| self.render_theme_swatch(entry, cx)).collect::<Vec<_>>();
+        let swatches = themes::picker_swatches().collect::<Vec<_>>();
+        let mut counts = HashMap::new();
+        for entry in &swatches {
+            *counts.entry(entry.label()).or_insert(0_usize) += 1;
+        }
+        let swatch_rows = swatches
+            .into_iter()
+            .map(|entry| {
+                self.render_theme_swatch(entry, counts.get(entry.label()).copied().unwrap_or_default() > 1, cx)
+            })
+            .collect::<Vec<_>>();
         let theme = cx.theme();
         let colors = &theme.colors;
         let active_theme_profile = if self.theme_mode == ThemeMode::Light {
