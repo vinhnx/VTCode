@@ -3809,6 +3809,16 @@ impl DesktopView {
                     _ => {}
                 }
             }
+            BackendEvent::WorkspaceReviewFailed { request_id, error } => {
+                if self
+                    .workspace_review
+                    .as_ref()
+                    .is_some_and(|review| review.pending && review.request_id == request_id)
+                {
+                    self.fail_workspace_review(error);
+                    cx.notify();
+                }
+            }
             BackendEvent::SessionHistoryResponse { request_id, result, error } => {
                 if self.history_page_request_id.as_deref() != Some(request_id.as_str()) {
                     return;

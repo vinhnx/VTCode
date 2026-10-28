@@ -7545,6 +7545,11 @@ fn working_tree_review_is_independent_refreshable_and_rejects_stale_results(cx: 
         assert_eq!(window.find("workspace-review-include-untracked").disabled(), Some(true));
         let request_id = params["requestId"].as_str().unwrap().to_string();
         view.update(cx, |view, cx| {
+            view.handle_backend_event(BackendEvent::WorkspaceReviewFailed {
+                request_id: "stale".into(),
+                error: "stale failure".into(),
+            }, cx);
+            assert!(view.workspace_review.as_ref().unwrap().pending);
             view.handle_backend_event(snapshot("stale", "/workspace"), cx);
             assert!(view.workspace_review.as_ref().unwrap().pending);
             view.handle_backend_event(snapshot(&request_id, "/other-workspace"), cx);

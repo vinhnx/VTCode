@@ -27,6 +27,10 @@ pub(crate) enum BackendCommand {
 
 #[derive(Debug)]
 pub(crate) enum BackendEvent {
+    WorkspaceReviewFailed {
+        request_id: String,
+        error: String,
+    },
     Response {
         method: String,
         result: Option<Value>,
@@ -71,6 +75,7 @@ pub(crate) struct InteractionResponseIdentity {
 #[derive(Debug)]
 struct PendingRequest {
     method: String,
+    workspace_review_request_id: Option<String>,
     interaction: Option<InteractionResponseIdentity>,
     session_history_request_id: Option<String>,
     session_output_request_id: Option<String>,
@@ -99,6 +104,9 @@ impl PendingRequest {
             .then(|| params.get("sessionId").and_then(Value::as_str).map(str::to_owned))
             .flatten();
         Self {
+            workspace_review_request_id: (method == protocol::method::WORKSPACE_REVIEW)
+                .then(|| params.get("requestId").and_then(Value::as_str).map(str::to_owned))
+                .flatten(),
             method,
             interaction,
             session_history_request_id,
@@ -108,6 +116,9 @@ impl PendingRequest {
     }
 
     fn finish(self, result: Option<Value>, error: Option<String>) -> BackendEvent {
+        if let (Some(request_id), Some(error)) = (self.workspace_review_request_id, error.as_ref()) {
+            return BackendEvent::WorkspaceReviewFailed { request_id, error: error.clone() };
+        }
         if let Some(request_id) = self.session_history_request_id {
             return BackendEvent::SessionHistoryResponse { request_id, result, error };
         }
@@ -553,6 +564,19 @@ mod tests {
             matches!(event, BackendEvent::Response { method, result: Some(_), error: None } if method == "session/list")
         );
         assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn workspace_review_errors_retain_request_identity() {
+        let mut pending = HashMap::from([(
+            RequestId::Number(12),
+            PendingRequest::new(protocol::method::WORKSPACE_REVIEW.into(), &json!({ "requestId": "review-old" })),
+        )]);
+        let event = decode_frame(br#"{"jsonrpc":"2.0","id":12,"error":{"message":"review failed"}}"#, &mut pending)
+            .expect("valid response")
+            .expect("decoded response");
+        assert!(matches!(event, BackendEvent::WorkspaceReviewFailed { request_id, error }
+            if request_id == "review-old" && error == "review failed"));
     }
 
     #[test]
