@@ -537,7 +537,16 @@ impl DesktopView {
                         )
                     })
                     .when_some(self.config_editor_error.as_ref(), |dialog, error| {
-                        dialog.child(div().text_sm().text_color(colors.danger).child(error.clone()))
+                        dialog.child(
+                            div()
+                                .id("cli-config-save-error")
+                                .test_support()
+                                .role(gpui_kit::Role::Alert)
+                                .aria_label(error.clone())
+                                .text_sm()
+                                .text_color(colors.danger)
+                                .child(error.clone()),
+                        )
                     })
                     .child(
                         div()

@@ -1985,6 +1985,21 @@ fn escape_closes_cli_config_editor_before_the_settings_sheet(cx: &mut TestAppCon
             view.read(cx).config_value_input.read(cx).focus_handle(cx).is_focused(window),
             "free-form values receive initial focus"
         );
+        view.update(cx, |view, cx| {
+            view.config_write_pending = true;
+            view.handle_backend_event(BackendEvent::Exited { status: Some(1), authentication_required: false }, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("cli-config-save-error").role(), Some(gpui_kit::Role::Alert));
+        assert!(
+            window
+                .find("cli-config-save-error")
+                .label()
+                .unwrap()
+                .contains("outcome is unknown")
+        );
+        assert_ne!(window.find("cancel-cli-config-edit").disabled(), Some(true));
+        assert_eq!(window.find("save-cli-config-edit").disabled(), Some(true));
         window.press("escape", cx);
         window.render_frame(cx);
         assert!(view.read(cx).config_editor.is_none());
