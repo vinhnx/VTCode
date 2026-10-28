@@ -4,7 +4,7 @@ use gpui_kit::Styled;
 use gpui_kit::base::{TextView, TextViewMotion, TextViewStyle};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::theme::ActiveTheme;
-use gpui_kit::{ClipboardItem, ImageCacheError, ImageSource, SharedString};
+use gpui_kit::{ClipboardItem, ImageCacheError, ImageSource, SharedString, relative};
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 pub(super) struct PreparedMarkdown {
@@ -146,6 +146,9 @@ fn markdown_style(cx: &gpui_kit::App) -> TextViewStyle {
 pub(super) fn render_markdown(id: String, source: SharedString, streaming: bool, cx: &gpui_kit::App) -> TextView {
     let text_view = TextView::markdown(id, source)
         .style(markdown_style(cx))
+        // WCAG 1.4.8 visual presentation: body copy keeps at least 1.5x
+        // leading so transcript paragraphs stay readable at small sizes.
+        .line_height(relative(1.5))
         .scrollable(false)
         // A richer renderer must not fetch URLs or local files from agent output.
         .image_source(|_| blocked_image_source())
