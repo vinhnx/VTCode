@@ -8210,9 +8210,18 @@ fn zen_mode_hides_navigation_and_places_exit_in_workspace(cx: &mut TestAppContex
                 .bounds()
                 .contains(&window.find("zen-mode-exit").bounds().center())
         );
+        let exit_bounds = window.find("zen-mode-exit").bounds();
+        assert!(
+            exit_bounds.size.width >= px(24.) && exit_bounds.size.height >= px(24.),
+            "faded zen exit must keep a comfortable pointer target: {exit_bounds:?}"
+        );
         assert!(window.try_find("nav-home").is_none());
         assert!(window.try_find("nav-new-thread").is_none());
         assert!(window.try_find("nav-utilities").is_none());
+        assert!(window.try_find("zen-mode-toggle").is_none());
+        assert!(window.try_find("top-zen-mode-toggle").is_none());
+        assert!(window.try_find("top-new-thread").is_none());
+        assert!(window.try_find("top-utilities").is_none());
         assert!(window.try_find("toggle-sidebar").is_none());
         assert!(window.try_find("header-toolbar").is_none());
         assert!(window.try_find("project-thread-sidebar").is_none());
@@ -11199,6 +11208,77 @@ fn runtime_option_popups_focus_the_current_choice_and_confirming_it_is_a_noop(cx
         Some(&vtcode_desktop_protocol::PermissionMode::Ask),
         "explicitly choosing the current Ask policy still persists that preference"
     );
+}
+
+#[gpui_kit::test]
+fn composer_policy_button_tracks_permission_mode_and_availability(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(16);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Permissions unavailable"));
+        assert_eq!(window.find("composer-policy").disabled(), Some(true));
+
+        view.update(cx, |view, _| {
+            view.backend = Some(BackendHandle { commands });
+            view.configuration = Some(runtime_options_config());
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Ask before protected actions"));
+        assert_ne!(window.find("composer-policy").disabled(), Some(true));
+
+        view.update(cx, |view, _| {
+            view.configuration
+                .as_mut()
+                .unwrap()
+                .session_options
+                .as_mut()
+                .unwrap()
+                .permission_mode = vtcode_desktop_protocol::PermissionMode::AutoApproveCommands;
+        });
+        window.render_frame(cx);
+        assert_eq!(window.find("composer-policy").label(), Some("Execution policy: Auto-approve commands"));
+        assert_ne!(window.find("composer-policy").disabled(), Some(true));
+    })
+    .unwrap();
+}
+
+#[test]
+fn permission_palette_rows_resolve_shield_modes_only_for_permission_picks() {
+    use super::{PaletteAction, PaletteKind, permission_palette_mode};
+    use vtcode_desktop_protocol::{PermissionMode, SessionOptionsSelectParams};
+
+    let options = |permission_mode: Option<PermissionMode>| {
+        PaletteAction::SelectSessionOptions(SessionOptionsSelectParams { permission_mode, ..Default::default() })
+    };
+    assert_eq!(
+        permission_palette_mode(PaletteKind::Permissions, &options(Some(PermissionMode::Ask))),
+        Some(PermissionMode::Ask)
+    );
+    assert_eq!(
+        permission_palette_mode(PaletteKind::Permissions, &options(Some(PermissionMode::AutoApproveCommands))),
+        Some(PermissionMode::AutoApproveCommands)
+    );
+    assert_eq!(permission_palette_mode(PaletteKind::Permissions, &options(None)), None);
+    assert_eq!(
+        permission_palette_mode(
+            PaletteKind::Permissions,
+            &PaletteAction::SelectSessionOptions(SessionOptionsSelectParams {
+                permission_mode: Some(PermissionMode::Ask),
+                mode: Some("plan".into()),
+                ..Default::default()
+            })
+        ),
+        Some(PermissionMode::Ask),
+        "mixed selections still carry their shield mode"
+    );
+    assert_eq!(permission_palette_mode(PaletteKind::Permissions, &PaletteAction::NewSession), None);
+    assert_eq!(
+        permission_palette_mode(PaletteKind::Modes, &options(Some(PermissionMode::Ask))),
+        None,
+        "other palettes stay text-only"
+    );
+    assert_eq!(permission_palette_mode(PaletteKind::Commands, &options(None)), None);
 }
 
 #[gpui_kit::test]

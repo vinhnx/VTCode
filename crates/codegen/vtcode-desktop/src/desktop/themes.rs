@@ -493,6 +493,15 @@ pub(super) fn aa_muted(background: Hsla, foreground: Hsla) -> Hsla {
     text_at_contrast(background, foreground, AA_RATIO)
 }
 
+/// Faintest chrome-icon tone on `background` that still meets the 3:1
+/// non-text contrast floor (WCAG 2.1 SC 1.4.11) for meaningful icons.
+/// Quiet controls (the Zen exit) tint their icon with this instead of using
+/// element opacity, so the keyboard focus ring keeps full strength.
+pub(super) fn faded_chrome(background: Hsla, foreground: Hsla) -> Hsla {
+    const NON_TEXT_RATIO: f32 = 3.0;
+    text_at_contrast(background, foreground, NON_TEXT_RATIO)
+}
+
 /// Secondary copy (row descriptions, hints) one step brighter than
 /// [`aa_muted`]: small muted text at the 4.5 floor reads washed, so this
 /// targets 6:1 on the hardest surface (the raised popover fill, which is
@@ -713,6 +722,23 @@ mod tests {
             let muted_ratio = contrast_ratio(muted, theme.background);
             assert!(muted_ratio >= 4.5, "{}: muted text contrast {muted_ratio:.2} is below WCAG AA", theme.id);
         }
+    }
+
+    #[test]
+    fn faded_chrome_meets_non_text_contrast_on_canvas() {
+        for theme in all_themes() {
+            let faded = faded_chrome(theme.background, theme.foreground);
+            let ratio = contrast_ratio(faded, theme.background);
+            let muted = contrast_ratio(aa_muted(theme.background, theme.foreground), theme.background);
+            assert!(ratio >= 3.0, "{}: faded chrome contrast {ratio:.2} is below the 3:1 non-text floor", theme.id);
+            assert!(
+                ratio < muted,
+                "{}: faded chrome ({ratio:.2}) must stay fainter than muted text ({muted:.2})",
+                theme.id
+            );
+        }
+        let flat: Hsla = rgb(0x808080).into();
+        assert_eq!(faded_chrome(flat, flat), flat, "no-contrast surfaces keep the foreground untouched");
     }
 
     #[gpui_kit::test]

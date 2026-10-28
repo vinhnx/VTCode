@@ -4798,8 +4798,6 @@ impl DesktopView {
             div()
                 .mt_auto()
                 .pt_3()
-                .border_t_1()
-                .border_color(theme.colors.border)
                 .text_xs()
                 .text_color(theme.colors.muted_foreground)
                 .child(
@@ -4850,8 +4848,6 @@ impl DesktopView {
                 .w_full()
                 .h(px(48.))
                 .bg(toolbar_surface)
-                .border_b_1()
-                .border_color(toolbar_surface)
                 .child(div().flex_1())
                 .into_any_element();
         }
@@ -4877,8 +4873,6 @@ impl DesktopView {
             .h(px(48.))
             .pr_3()
             .bg(toolbar_surface)
-            .border_b_1()
-            .border_color(toolbar_surface)
             .child(
                 div()
                     .flex_1()
@@ -4955,7 +4949,7 @@ impl DesktopView {
                                 )
                                 .child(
                                     desktop_button("top-zen-mode-toggle")
-                                        .icon(IconName::Leaf)
+                                        .icon(IconName::Maximize2)
                                         .ghost()
                                         .accessibility_label("Enter Zen mode")
                                         .tooltip_with_action("Enter Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
@@ -5055,8 +5049,6 @@ impl DesktopView {
                             .gap_2()
                             .px_3()
                             .py_2()
-                            .border_b_1()
-                            .border_color(colors.border)
                             .child(
                                 div()
                                     .min_w_0()
@@ -5122,8 +5114,6 @@ impl DesktopView {
                             div()
                                 .px_3()
                                 .py_2()
-                                .border_t_1()
-                                .border_color(colors.border)
                                 .text_xs()
                                 .text_color(colors.muted_foreground)
                                 .child(rust_i18n::t!("app.file_preview.truncated", size = "64 KiB").to_string()),
@@ -5286,7 +5276,7 @@ impl DesktopView {
             .flex()
             .flex_col()
             .child(
-                div().px_3().py_2().border_b_1().border_color(colors.border).child(
+                div().px_3().py_2().child(
                     desktop_button("review-working-tree")
                         .label(rust_i18n::t!("app.workspace_review.review_working_tree").to_string())
                         .icon(IconName::GitCompare)
@@ -5515,14 +5505,7 @@ impl DesktopView {
         if let (Some(path), Some(viewer)) = (self.selected_change.clone(), self.change_viewer.clone()) {
             let patch = self.changes.patch_for(&self.transcript, &path);
             let rel_path = path.clone();
-            let mut viewer_panel = div()
-                .w_full()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .border_t_1()
-                .border_color(colors.border);
+            let mut viewer_panel = div().w_full().flex_1().min_h_0().flex().flex_col();
             let mut header = div()
                 .flex()
                 .items_center()
@@ -5688,8 +5671,6 @@ impl DesktopView {
                                     .justify_between()
                                     .px_4()
                                     .py_3()
-                                    .border_b_1()
-                                    .border_color(colors.border)
                                     .child(
                                         div()
                                             .flex()
@@ -5910,8 +5891,6 @@ impl DesktopView {
             .gap_2()
             .px_3()
             .py_2()
-            .border_b_1()
-            .border_color(colors.border)
             .child(
                 div()
                     .flex_1()
@@ -6678,12 +6657,7 @@ impl DesktopView {
                             BubbleContent::new()
                                 .rounded(px(18.))
                                 .when(user, |surface| {
-                                    surface
-                                        .border_color(colors.border)
-                                        .bg(colors.secondary)
-                                        .text_color(colors.foreground)
-                                        .px_4()
-                                        .py_2()
+                                    surface.bg(colors.secondary).text_color(colors.foreground).px_4().py_2()
                                 })
                                 .child(
                                     div()
@@ -7680,7 +7654,6 @@ impl DesktopView {
                     .gap_3()
                     .px_3()
                     .py_0()
-                    .border_color(colors.border)
                     .bg(colors.background)
                     .text_xs()
                     .text_color(colors.muted_foreground),
@@ -8433,8 +8406,6 @@ impl DesktopView {
                 let history_label = history_label.clone();
                 let history_error = history_error.clone();
                 div()
-                    .border_t_1()
-                    .border_color(colors.border)
                     .px_3()
                     .py_2()
                     .flex()
@@ -8556,32 +8527,26 @@ impl DesktopView {
             let search_all_palette_id = state.entity_id();
             command = command.footer(move |_, _, _| {
                 let view = search_all_view.clone();
-                div()
-                    .id("model-search-all-footer")
-                    .border_t_1()
-                    .border_color(colors.border)
-                    .px_3()
-                    .py_2()
-                    .child(
-                        desktop_button("model-search-all")
-                            .label(rust_i18n::t!("app.composer.search_all_models").to_string())
-                            .icon(IconName::Search)
-                            .ghost()
-                            .small()
-                            .w_full()
-                            .on_click(move |_, window, cx| {
-                                let _updated = view.update(cx, |view, cx| {
-                                    if view.palette_kind == PaletteKind::ModelOptions
-                                        && view
-                                            .palette
-                                            .as_ref()
-                                            .is_some_and(|palette| palette.entity_id() == search_all_palette_id)
-                                    {
-                                        view.open_model_palette(window, cx);
-                                    }
-                                });
-                            }),
-                    )
+                div().id("model-search-all-footer").px_3().py_2().child(
+                    desktop_button("model-search-all")
+                        .label(rust_i18n::t!("app.composer.search_all_models").to_string())
+                        .icon(IconName::Search)
+                        .ghost()
+                        .small()
+                        .w_full()
+                        .on_click(move |_, window, cx| {
+                            let _updated = view.update(cx, |view, cx| {
+                                if view.palette_kind == PaletteKind::ModelOptions
+                                    && view
+                                        .palette
+                                        .as_ref()
+                                        .is_some_and(|palette| palette.entity_id() == search_all_palette_id)
+                                {
+                                    view.open_model_palette(window, cx);
+                                }
+                            });
+                        }),
+                )
             });
         }
         let palette_query = self.palette_query.clone();
@@ -8598,6 +8563,8 @@ impl DesktopView {
                     .as_ref()
                     .map(|details| format!("{label} · {details}"))
                     .unwrap_or_else(|| label.clone());
+                let permission_icon = permission_palette_mode(self.palette_kind, &entry.action)
+                    .map(|mode| composer_controls::permission_indicator(Some(mode), colors));
                 group = group.item(
                     CommandItem::new()
                         .disabled(!enabled)
@@ -8618,6 +8585,9 @@ impl DesktopView {
                                 .py_1()
                                 .role(gpui_kit::Role::Label)
                                 .aria_label(accessible_label.clone())
+                                .when_some(permission_icon, |row, (icon, color)| {
+                                    row.child(Icon::new(icon).small().text_color(color))
+                                })
                                 .child(
                                     div()
                                         .flex_1()
@@ -8778,12 +8748,18 @@ impl Render for DesktopView {
             .rounded_xl()
             .child(conversation)
             .when(self.zen_mode, |workspace| {
+                // The exit stays faded and never takes a hover fill (the text
+                // variant paints no background in any state); the tooltip and
+                // keyboard focus ring still identify it. Padding keeps a
+                // comfortable pointer target on the content-sized button.
+                let faded = themes::faded_chrome(colors.background, colors.foreground);
                 workspace.child(
                     div().absolute().top_2().right_2().child(
                         desktop_button("zen-mode-exit")
-                            .icon(Icon::new(IconName::Leaf).text_color(colors.muted_foreground))
-                            .ghost()
+                            .icon(Icon::new(IconName::Minimize2).text_color(faded))
+                            .text()
                             .small()
+                            .p_2()
                             .accessibility_label("Exit Zen mode")
                             .tooltip_with_action("Exit Zen mode", &ToggleZenMode, Some("VTCodeDesktop"))
                             .dispatches_desktop_action(ToggleZenMode, self.focus_handle.clone()),
@@ -9116,6 +9092,17 @@ fn command(label: impl Into<String>, action: PaletteAction) -> PaletteCommand {
         keywords: Vec::new(),
         shared_keywords: Vec::new(),
         action,
+    }
+}
+
+/// Shield mode for permission-picker rows; every other palette and action stays text-only.
+fn permission_palette_mode(kind: PaletteKind, action: &PaletteAction) -> Option<protocol::PermissionMode> {
+    if kind != PaletteKind::Permissions {
+        return None;
+    }
+    match action {
+        PaletteAction::SelectSessionOptions(params) => params.permission_mode,
+        _ => None,
     }
 }
 

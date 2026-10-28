@@ -76,7 +76,7 @@ impl DesktopView {
             .child(div().flex_1())
             .child(
                 desktop_button("zen-mode-toggle")
-                    .icon(IconName::Leaf)
+                    .icon(IconName::Maximize2)
                     .ghost()
                     .rounded_lg()
                     .accessibility_label("Enter Zen mode")

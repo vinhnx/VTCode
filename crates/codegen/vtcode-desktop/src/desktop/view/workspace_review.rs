@@ -288,8 +288,6 @@ impl DesktopView {
                 .gap_2()
                 .px_4()
                 .py_2()
-                .border_b_1()
-                .border_color(colors.border)
                 .child(
                     desktop_button("refresh-workspace-review")
                         .tooltip_with_action(
@@ -400,7 +398,6 @@ impl DesktopView {
                         .gap_3()
                         .child(skeleton_line("workspace-review-placeholder-file", px(180.), cx))
                         .child(skeleton_line("workspace-review-placeholder-hunk", px(120.), cx))
-                        .child(div().h(px(1.)).w_full().bg(colors.border.opacity(0.7)))
                         .child(skeleton_line("workspace-review-placeholder-line-1", px(320.), cx))
                         .child(skeleton_line("workspace-review-placeholder-line-2", px(248.), cx))
                         .child(skeleton_line("workspace-review-placeholder-line-3", px(286.), cx))

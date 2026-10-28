@@ -510,7 +510,6 @@ impl DesktopView {
                             .child(rust_i18n::t!("app.workspace.no_recent_workspaces").to_string()),
                     );
                 } else {
-                    content = content.child(div().mx_2().my_1().h(px(1.)).bg(colors.border.opacity(0.7)));
                     for path in &recent {
                         let label = Path::new(path)
                             .file_name()
