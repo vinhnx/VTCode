@@ -11,10 +11,22 @@ use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
+/// Permission mode explicitly selected for the lifetime of one session.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SessionPermissionMode {
+    #[default]
+    Configured,
+    FullAccess,
+}
+
 /// Sandbox configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SandboxConfig {
+    /// Explicit session-only opt-in to unrestricted execution and automatic approval.
+    /// This is never loaded from or persisted to workspace configuration.
+    #[serde(skip)]
+    pub session_permission_mode: SessionPermissionMode,
     /// Enable sandboxing for command execution
     #[serde(default = "default_false")]
     pub enabled: bool,
@@ -47,6 +59,7 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
+            session_permission_mode: SessionPermissionMode::Configured,
             enabled: default_false(),
             default_policy: SandboxPolicy::default(),
             network: NetworkConfig::default(),
@@ -55,6 +68,17 @@ impl Default for SandboxConfig {
             seccomp: SeccompConfig::default(),
             external: ExternalSandboxConfig::default(),
         }
+    }
+}
+
+impl SandboxConfig {
+    /// Enable unrestricted execution for the current session only.
+    pub fn enable_full_access(&mut self) {
+        self.session_permission_mode = SessionPermissionMode::FullAccess;
+    }
+
+    pub fn is_full_access(&self) -> bool {
+        self.session_permission_mode == SessionPermissionMode::FullAccess
     }
 }
 
@@ -491,6 +515,19 @@ mod tests {
         let config = SandboxConfig::default();
         assert!(!config.enabled);
         assert_eq!(config.default_policy, SandboxPolicy::ReadOnly);
+    }
+
+    #[test]
+    fn full_access_is_explicit_and_not_deserialized() {
+        let mut config = SandboxConfig::default();
+        config.enable_full_access();
+        assert!(config.is_full_access());
+        assert!(!config.enabled);
+        assert_eq!(config.default_policy, SandboxPolicy::ReadOnly);
+        let encoded = toml::to_string(&config).expect("serialize config");
+        assert!(!encoded.contains("full_access = true"));
+        let decoded: SandboxConfig = toml::from_str(&encoded).expect("deserialize config");
+        assert!(!decoded.is_full_access());
     }
 
     #[test]

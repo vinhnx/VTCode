@@ -85,7 +85,9 @@ pub(super) fn build_shell_execution_plan(
         push_unique_reason(&mut approval_reasons, reason);
     }
 
-    if sandbox_permissions.requires_escalated_permissions() || !sandbox_config.enabled {
+    if sandbox_permissions.requires_escalated_permissions()
+        || (!sandbox_config.enabled && !sandbox_config.is_full_access())
+    {
         if requires_code_boundary_approval {
             push_unique_reason(
                 &mut approval_reasons,
@@ -98,7 +100,11 @@ pub(super) fn build_shell_execution_plan(
         });
     }
 
-    let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
+    let mut policy = if sandbox_config.is_full_access() {
+        SandboxPolicy::full_access()
+    } else {
+        sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?
+    };
     if matches!(policy, SandboxPolicy::ReadOnly { .. }) && command_likely_writes_workspace(requested_command) {
         push_unique_reason(
             &mut approval_reasons,

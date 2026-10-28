@@ -69,6 +69,33 @@ fn read_only_mutating_command_requires_approval_and_workspace_write() {
 }
 
 #[test]
+fn explicit_full_access_uses_unsandboxed_shell_without_changing_configured_policy() {
+    let mut config = vtcode_config::SandboxConfig {
+        enabled: true,
+        default_policy: vtcode_config::SandboxPolicy::ReadOnly,
+        ..Default::default()
+    };
+    let command = vec!["ls".to_owned()];
+    let plan = |config: &vtcode_config::SandboxConfig| {
+        build_shell_execution_plan(
+            config,
+            Path::new("/tmp/ws"),
+            Path::new("/tmp/ws"),
+            &command,
+            None,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .expect("shell plan")
+    };
+    assert!(matches!(plan(&config).sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
+    config.enable_full_access();
+    assert!(plan(&config).sandbox_policy.is_none());
+    config.session_permission_mode = vtcode_config::core::sandbox::SessionPermissionMode::Configured;
+    assert!(matches!(plan(&config).sandbox_policy, Some(SandboxPolicy::ReadOnly { .. })));
+}
+
+#[test]
 fn read_only_non_mutating_command_stays_read_only_without_prompt() {
     let config = vtcode_config::SandboxConfig {
         enabled: true,

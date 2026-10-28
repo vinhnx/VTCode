@@ -75,7 +75,7 @@ pub(super) fn merge(current: &mut SessionOptionsSelectParams, next: SessionOptio
 pub(super) fn skip_confirmations(params: &SessionOptionsSelectParams, startup: bool) -> bool {
     params
         .permission_mode
-        .map_or(startup, |mode| mode == PermissionMode::AutoApproveCommands)
+        .map_or(startup, |mode| matches!(mode, PermissionMode::AutoApproveCommands | PermissionMode::FullAccess))
 }
 
 pub(super) fn planning_source(
@@ -116,6 +116,11 @@ mod tests {
             fast_mode: None,
         };
         assert!(skip_confirmations(&options, false));
+        let full = SessionOptionsSelectParams {
+            permission_mode: Some(PermissionMode::FullAccess),
+            ..Default::default()
+        };
+        assert!(skip_confirmations(&full, false));
         assert_eq!(planning_source(&options, PlanningEntrySource::None), PlanningEntrySource::AgentSelection);
         merge(
             &mut options,

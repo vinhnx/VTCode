@@ -1751,6 +1751,20 @@ impl DesktopView {
         }));
     }
 
+    /// Refresh the cached session options after a session boundary while Full
+    /// access was active. The mode is session-only: the service restores the
+    /// prior mode, so the client re-discovers to stay in sync.
+    fn refresh_session_options_after_full_access(&self) {
+        if self
+            .configuration
+            .as_ref()
+            .and_then(|configuration| configuration.session_options.as_ref())
+            .is_some_and(|options| options.permission_mode == protocol::PermissionMode::FullAccess)
+        {
+            let _requested = self.request(protocol::method::CONFIG_DISCOVER, json!({}));
+        }
+    }
+
     /// Decode and prepare bounded historical content away from the UI thread.
     fn begin_session_load(&mut self, result: Value, cx: &mut Context<Self>) {
         if self.session_request != Some(protocol::method::SESSION_LOAD) {
@@ -2941,7 +2955,30 @@ impl DesktopView {
             }
             PaletteAction::EditConfigSetting(path) => self.open_cli_config_editor(path, window, cx),
             PaletteAction::SelectSessionOptions(options) => {
-                let _selected = self.select_session_options(options, cx);
+                if options.permission_mode == Some(protocol::PermissionMode::FullAccess)
+                    && !self.session_option_is_current(&options)
+                {
+                    let workspace = self.workspace.clone();
+                    let answer = window.prompt(
+                        gpui_kit::PromptLevel::Warning,
+                        "Enable Full access for this session?",
+                        Some("Shell commands can access files and the network without routine approval. Explicit denials and hard safety restrictions still apply."),
+                        &["Enable Full access", "Cancel"],
+                        cx,
+                    );
+                    cx.spawn(async move |view, cx| {
+                        if matches!(answer.await, Ok(0)) {
+                            let _updated = view.update(cx, |view, cx| {
+                                if view.workspace == workspace {
+                                    let _selected = view.select_session_options(options, cx);
+                                }
+                            });
+                        }
+                    })
+                    .detach();
+                } else {
+                    let _selected = self.select_session_options(options, cx);
+                }
             }
             PaletteAction::AttachFiles => self.attach_files(window, cx),
             PaletteAction::AttachFile(path) => self.attach_context_file(path, cx),
@@ -3905,6 +3942,7 @@ impl DesktopView {
                         }
                     }
                     protocol::method::SESSION_CLOSE => {
+                        self.refresh_session_options_after_full_access();
                         let pending_navigation = self.pending_navigation.take();
                         let new_thread = self.pending_new_thread;
                         let attachments =
@@ -3926,7 +3964,10 @@ impl DesktopView {
                         }
                         .to_string();
                     }
-                    protocol::method::SESSION_LOAD => self.begin_session_load(result, cx),
+                    protocol::method::SESSION_LOAD => {
+                        self.refresh_session_options_after_full_access();
+                        self.begin_session_load(result, cx);
+                    }
                     protocol::method::SESSION_HISTORY => self.begin_session_history_page(result, cx),
                     protocol::method::TURN_SUBMIT => {
                         let accepted =
@@ -7479,6 +7520,9 @@ impl DesktopView {
             Some(protocol::PermissionMode::AutoApproveCommands) => {
                 (rust_i18n::t!("app.composer.permission_auto").to_string(), "Auto".to_owned())
             }
+            Some(protocol::PermissionMode::FullAccess) => {
+                (rust_i18n::t!("app.composer.permission_full").to_string(), "Full access".to_owned())
+            }
             None => match self.configuration.as_ref().and_then(|config| config.sandbox.clone()) {
                 Some(policy) => (policy.clone(), policy),
                 None => (
@@ -9380,6 +9424,7 @@ fn palette_entry_element_id(action: &PaletteAction) -> String {
                 None => 0_u8,
                 Some(protocol::PermissionMode::Ask) => 1,
                 Some(protocol::PermissionMode::AutoApproveCommands) => 2,
+                Some(protocol::PermissionMode::FullAccess) => 3,
             }
             .hash(&mut hasher);
             options.mode.hash(&mut hasher);

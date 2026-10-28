@@ -115,6 +115,13 @@ fn apply_checkup_remediation_to_config(id: &str, cfg: &mut VTCodeConfig) -> Resu
 
 pub(crate) async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
+    let permission_mode = if ctx.vt_cfg.as_ref().is_some_and(|config| config.sandbox.is_full_access()) {
+        "Full access (session only)"
+    } else {
+        "Configured"
+    };
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Permission mode: {permission_mode}"))?;
     let active_instruction_directory = ctx
         .context_manager
         .active_instruction_directory_snapshot()

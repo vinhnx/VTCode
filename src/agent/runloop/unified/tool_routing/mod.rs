@@ -1100,6 +1100,9 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let policy_eval_name = policy_evaluation_name(tool_name, tool_args);
     let policy_decision = tool_registry.evaluate_tool_policy(policy_eval_name.as_ref()).await?;
     if policy_decision == ToolPermissionDecision::Deny {
+        if tool_registry.sandbox_config().is_full_access() {
+            return Ok(ToolPermissionFlow::Denied);
+        }
         if let Some(flow) = handle_policy_denied(
             tool_registry,
             tool_name,
@@ -1149,6 +1152,12 @@ pub(crate) async fn ensure_tool_permission_with_call_id<S: UiSession + ?Sized>(
     let full_auto_allowlist_active = tool_registry.current_full_auto_allowlist().await.is_some();
     if full_auto_allowlist_active && !tool_registry.is_allowed_in_full_auto(&normalized_tool_name).await {
         return Ok(ToolPermissionFlow::Denied);
+    }
+
+    // Full access is an explicit session opt-in. Keep explicit policy denies,
+    // hook denials, and the full-auto tool allowlist above authoritative.
+    if tool_registry.sandbox_config().is_full_access() && !full_auto_allowlist_active {
+        return Ok(approve_tool_permission_no_cache(tool_registry, tool_name, hook_rewritten_args).await);
     }
 
     // `request_user_input` is itself the user-facing HITL surface. In an

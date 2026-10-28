@@ -328,6 +328,15 @@ impl StartupContext {
         );
 
         let mut config = loaded.config;
+        if args.full_access {
+            if loaded.full_auto_requested {
+                bail!("--full-access cannot be combined with Full auto");
+            }
+            if matches!(args.command.as_ref(), Some(Commands::DesktopServer)) {
+                bail!("Select Full access in the desktop session instead of passing --full-access to desktop-server");
+            }
+            config.sandbox.enable_full_access();
+        }
         apply_codex_experimental_override(&mut config, args.codex_experimental_override());
         let uses_interactive_ui = startup_policy.runs_interactive_session();
 
@@ -474,7 +483,7 @@ impl StartupContext {
             build_runtime_agent_config(args, &config, loaded.workspace.clone(), selection, api_key, theme_selection);
         agent_config.openai_chatgpt_auth = openai_chatgpt_auth;
 
-        let skip_confirmations = args.dangerously_skip_permissions || args.skip_confirmations;
+        let skip_confirmations = args.full_access || args.dangerously_skip_permissions || args.skip_confirmations;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
         if agent_config.provider.eq_ignore_ascii_case("openai")

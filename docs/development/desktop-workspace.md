@@ -184,10 +184,12 @@ popup. File selection reuses workspace
 containment, UTF-8, 64 KiB, and five-file limits. Discovery uses shared CLI loaders on a blocking worker while
 idle, a three-second request deadline, bounded wire metadata, and the retained query state.
 
-The permission control (⌘⇧P) chooses **Ask before protected actions** or **Auto-approve commands**. It controls the
-CLI's command confirmation flag and preserves sandbox/tool authorization. This explicit choice is saved per recent
-workspace in Desktop preferences and restored after service initialization; other workspaces keep their CLI startup
-default. Ask is a confirmation policy, separate from the agent mode. **Mode** (⌘⇧B) lists the CLI-discovered primary
+The permission control (⌘⇧P) chooses **Ask before protected actions**, **Auto-approve commands**, or **Full access**. It controls the
+CLI's command confirmation flag. Ask and Auto are saved per recent workspace in Desktop preferences and restored
+after service initialization; Full access is session-only. Full access disables the process sandbox and approves
+promptable tool calls; configured denials and hard safety blocks still apply, and direct file tools can retain their
+workspace boundaries. The CLI equivalent is `vtcode --full-access`. Ask is a confirmation policy,
+separate from the agent mode. **Mode** (⌘⇧B) lists the CLI-discovered primary
 agents (Build, Plan, Auto, Duck, Coordinator, and custom primary agents) and uses the CLI's primary-agent configuration
 and planning entry point. Mode changes save `default_primary_agent` through the shared layered CLI config writer.
 Mode, effort, and permission changes

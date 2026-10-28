@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::hooks::SessionEndReason;
 use vtcode_core::llm::provider::MessageRole;
@@ -17,6 +18,9 @@ use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommand
 
 use super::apps::handle_configure_editor;
 use super::ui;
+use crate::agent::runloop::ui_list::{self, Tone};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use vtcode_ui::tui::app::{InlineListSelection, ListOverlayRequest, TransientRequest, TransientSubmission};
 
 pub(crate) async fn handle_notify(ctx: SlashCommandContext<'_>, message: String) -> Result<SlashCommandControl> {
     let app_name = vtcode_core::config::constants::app::DISPLAY_NAME;
@@ -42,7 +46,146 @@ pub(crate) async fn handle_show_settings_reset(ctx: SlashCommandContext<'_>) -> 
 
 pub(crate) async fn handle_show_permissions(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let mut ctx = ctx;
-    show_settings_at_path_from_context(&mut ctx, Some("permissions")).await
+    if !ui::ensure_selection_ui_available(&mut ctx, "changing permissions")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+    let active = ctx.vt_cfg.as_ref().is_some_and(|config| config.sandbox.is_full_access());
+    let request = permission_choices(active, false);
+    let choice = show_overlay_and_wait(
+        ctx.handle,
+        ctx.session,
+        request,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+        config_action_from_submission,
+    )
+    .await?;
+    ctx.handle.close_modal();
+    match choice {
+        OverlayWaitOutcome::Submitted(action) if action == "settings" => {
+            return show_settings_at_path_from_context(&mut ctx, Some("permissions")).await;
+        }
+        OverlayWaitOutcome::Submitted(action) if action == "configured" => {
+            if let Some(config) = ctx.vt_cfg.as_mut() {
+                config.sandbox.session_permission_mode =
+                    vtcode_config::core::sandbox::SessionPermissionMode::Configured;
+                ctx.tool_registry.apply_sandbox_config(&config.sandbox);
+            }
+            ctx.renderer.line(MessageStyle::Info, "Permission mode: configured")?;
+        }
+        OverlayWaitOutcome::Submitted(action) if action == "full" && !active => {
+            if ctx.full_auto {
+                ctx.renderer
+                    .line(MessageStyle::Warning, "Full access cannot be combined with Full auto.")?;
+                return Ok(SlashCommandControl::Continue);
+            }
+            let outcome = show_overlay_and_wait(
+                ctx.handle,
+                ctx.session,
+                permission_choices(active, true),
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+                config_action_from_submission,
+            )
+            .await?;
+            ctx.handle.close_modal();
+            if matches!(outcome, OverlayWaitOutcome::Submitted(ref action) if action == "confirm") {
+                let config = ctx.vt_cfg.get_or_insert_with(VTCodeConfig::default);
+                config.sandbox.enable_full_access();
+                ctx.tool_registry.apply_sandbox_config(&config.sandbox);
+                ctx.renderer
+                    .line(MessageStyle::Warning, "Permission mode: Full access (this session)")?;
+            } else if matches!(outcome, OverlayWaitOutcome::Exit) {
+                return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit));
+            }
+        }
+        OverlayWaitOutcome::Exit => return Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit)),
+        _ => {}
+    }
+    ctx.handle.force_redraw();
+    Ok(SlashCommandControl::Continue)
+}
+
+fn config_action_from_submission(submission: TransientSubmission) -> Option<String> {
+    if let TransientSubmission::Selection(InlineListSelection::ConfigAction(action)) = submission {
+        Some(action)
+    } else {
+        None
+    }
+}
+
+fn permission_choices(active: bool, confirm: bool) -> TransientRequest {
+    if confirm {
+        return TransientRequest::List(ListOverlayRequest {
+            title: "Enable Full access?".into(),
+            lines: vec![
+                "When VT Code runs with Full access, it can access any file on your computer and run commands with network access, without routine approval.".into(),
+                "Exercise caution: this significantly increases the risk of data loss, leaks, or unexpected behavior. Explicit denials and hard safety blocks remain active.".into(),
+            ],
+            footer_hint: Some("Esc cancels".into()),
+            items: vec![
+                ui_list::action(
+                    "Yes, continue anyway",
+                    "Apply Full access for this session",
+                    None,
+                    Tone::Warning,
+                    Some(InlineListSelection::ConfigAction("confirm".into())),
+                ),
+                ui_list::action(
+                    "Cancel",
+                    "Go back without enabling Full access",
+                    None,
+                    Tone::Accent,
+                    Some(InlineListSelection::ConfigAction("cancel".into())),
+                ),
+            ],
+            // The safe option stays pre-selected so an accidental Enter cancels.
+            selected: Some(InlineListSelection::ConfigAction("cancel".into())),
+            search: None,
+            hotkeys: Vec::new(),
+            status: None,
+        });
+    }
+    let current_badge = |is_current: bool| is_current.then_some("Current".to_string());
+    // The warning tone only renders alongside a badge, so the Full access row
+    // keeps a badge in both states: the warning affordance stays visible even
+    // when the mode is inactive.
+    let full_access_badge = Some(if active { "Current" } else { "Caution" }.to_string());
+    TransientRequest::List(ListOverlayRequest {
+        title: "Session permissions".into(),
+        lines: vec![format!(
+            "Current mode: {}",
+            if active { "Full access" } else { "Configured" }
+        )],
+        footer_hint: Some("Esc cancels".into()),
+        items: vec![
+            ui_list::action(
+                "Use configured permissions",
+                "Follow your configured rules and approval prompts",
+                current_badge(!active),
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction("configured".into())),
+            ),
+            ui_list::action(
+                "Full access",
+                "Unrestricted access to the internet and any file on your computer",
+                full_access_badge,
+                Tone::Warning,
+                Some(InlineListSelection::ConfigAction("full".into())),
+            ),
+            ui_list::action(
+                "Configure permission rules",
+                "Edit allow and deny rules",
+                None,
+                Tone::Accent,
+                Some(InlineListSelection::ConfigAction("settings".into())),
+            ),
+        ],
+        selected: Some(InlineListSelection::ConfigAction(if active { "full" } else { "configured" }.into())),
+        search: None,
+        hotkeys: Vec::new(),
+        status: None,
+    })
 }
 
 pub(crate) async fn handle_show_settings_at_path(
@@ -228,4 +371,100 @@ pub(crate) async fn handle_copy_latest_assistant_reply(ctx: SlashCommandContext<
 pub(crate) async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_commons::ui_protocol::InlineListItem;
+
+    fn list_request(active: bool, confirm: bool) -> ListOverlayRequest {
+        match permission_choices(active, confirm) {
+            TransientRequest::List(request) => request,
+            other => panic!("expected list overlay, got {other:?}"),
+        }
+    }
+
+    fn item_by_title<'a>(items: &'a [InlineListItem], title: &str) -> &'a InlineListItem {
+        items
+            .iter()
+            .find(|item| item.title == title)
+            .unwrap_or_else(|| panic!("missing row {title:?}"))
+    }
+
+    fn selected_action(selected: &Option<InlineListSelection>) -> &str {
+        match selected {
+            Some(InlineListSelection::ConfigAction(action)) => action,
+            other => panic!("expected config action selection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn permission_mode_list_warns_on_full_access_and_marks_current() {
+        for active in [false, true] {
+            let request = list_request(active, false);
+            assert_eq!(request.title, "Session permissions");
+            assert_eq!(request.items.len(), 3);
+
+            let full = item_by_title(&request.items, "Full access");
+            assert_eq!(full.badge_tone, Tone::Warning);
+            assert_eq!(
+                full.subtitle.as_deref(),
+                Some("Unrestricted access to the internet and any file on your computer")
+            );
+            assert_eq!(full.badge.as_deref(), Some(if active { "Current" } else { "Caution" }));
+
+            let configured = item_by_title(&request.items, "Use configured permissions");
+            assert_eq!(configured.badge.as_deref(), (!active).then_some("Current"));
+
+            assert_eq!(selected_action(&request.selected), if active { "full" } else { "configured" });
+            assert!(
+                request
+                    .lines
+                    .iter()
+                    .any(|line| line.contains(if active { "Full access" } else { "Configured" })),
+                "header must name the current mode"
+            );
+        }
+    }
+
+    #[test]
+    fn permission_mode_list_subtitles_never_leak_action_ids() {
+        let request = list_request(false, false);
+        for item in &request.items {
+            let subtitle = item.subtitle.as_deref().unwrap_or_default();
+            assert!(!["configured", "full", "settings"].contains(&subtitle));
+            assert!(!subtitle.is_empty());
+        }
+    }
+
+    #[test]
+    fn config_action_mapper_only_accepts_config_actions() {
+        assert_eq!(
+            config_action_from_submission(TransientSubmission::Selection(InlineListSelection::ConfigAction(
+                "full".into()
+            ))),
+            Some("full".to_string())
+        );
+        assert_eq!(config_action_from_submission(TransientSubmission::DiffApply), None);
+    }
+
+    #[test]
+    fn permission_confirm_defaults_to_cancel_with_caution_copy() {
+        let request = list_request(false, true);
+        assert_eq!(request.title, "Enable Full access?");
+        assert_eq!(request.items.len(), 2);
+        assert_eq!(selected_action(&request.selected), "cancel");
+
+        let confirm = item_by_title(&request.items, "Yes, continue anyway");
+        assert_eq!(confirm.badge_tone, Tone::Warning);
+        assert_eq!(confirm.subtitle.as_deref(), Some("Apply Full access for this session"));
+        assert!(request.lines.iter().any(|line| line.contains("data loss")));
+        assert!(
+            request
+                .lines
+                .iter()
+                .any(|line| line.contains("Explicit denials and hard safety blocks remain active"))
+        );
+    }
 }

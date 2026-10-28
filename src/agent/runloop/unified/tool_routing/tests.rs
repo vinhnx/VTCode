@@ -1808,6 +1808,73 @@ async fn auto_permission_interactive_fallback_notice_is_emitted_once() {
 }
 
 #[tokio::test]
+async fn full_access_approves_promptable_commands_but_preserves_explicit_denials() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    isolate_workspace_config(temp_dir.path());
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let mut sandbox = vtcode_config::SandboxConfig::default();
+    sandbox.enable_full_access();
+    registry.apply_sandbox_config(&sandbox);
+    let mut session = create_headless_session();
+    let handle = session.clone_inline_handle();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let permissions = PermissionsConfig {
+        deny: vec!["Write(/docs/**)".into()],
+        ..Default::default()
+    };
+    let agent_permissions = AgentPermissionsConfig::new(PermissionDefault::Ask);
+    registry
+        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Prompt)
+        .await
+        .expect("tool policy");
+    let flow = ensure_tool_permission(
+        PermissionsContextBuilder::new(&registry, &mut renderer, &handle, &mut session, &ctrl_c_state, &ctrl_c_notify)
+            .with_permissions_config(&permissions)
+            .with_active_agent_permissions(&agent_permissions)
+            .with_approval_policy(reject_all_approvals())
+            .with_safety_approval_justification(Some("requires approval".into()))
+            .build(),
+        tools::UNIFIED_EXEC,
+        Some(&json!({"action": "run", "command": "echo hello"})),
+    )
+    .await
+    .expect("permission flow");
+    assert_eq!(flow, ToolPermissionFlow::Approved { updated_args: None });
+    let flow = ensure_tool_permission(
+        PermissionsContextBuilder::new(&registry, &mut renderer, &handle, &mut session, &ctrl_c_state, &ctrl_c_notify)
+            .with_permissions_config(&permissions)
+            .with_active_agent_permissions(&agent_permissions)
+            .build(),
+        tools::UNIFIED_FILE,
+        Some(&json!({"action": "write", "path": "docs/guide.md", "content": "hello"})),
+    )
+    .await
+    .expect("permission flow");
+    assert_eq!(flow, ToolPermissionFlow::Denied);
+
+    // A tool-policy Deny stays denied without offering the interactive
+    // "Enable" upgrade, even with routine approvals skipped.
+    registry
+        .set_tool_policy(tools::UNIFIED_EXEC, ToolPolicy::Deny)
+        .await
+        .expect("tool policy");
+    let flow = ensure_tool_permission(
+        PermissionsContextBuilder::new(&registry, &mut renderer, &handle, &mut session, &ctrl_c_state, &ctrl_c_notify)
+            .with_permissions_config(&permissions)
+            .with_active_agent_permissions(&agent_permissions)
+            .with_approval_policy(reject_all_approvals())
+            .build(),
+        tools::UNIFIED_EXEC,
+        Some(&json!({"action": "run", "command": "echo hello"})),
+    )
+    .await
+    .expect("permission flow");
+    assert_eq!(flow, ToolPermissionFlow::Denied);
+}
+
+#[tokio::test]
 async fn skip_confirmations_does_not_bypass_safety_gateway_needs_approval() {
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     isolate_workspace_config(temp_dir.path());

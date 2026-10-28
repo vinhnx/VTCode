@@ -270,6 +270,10 @@ Full-auto does not override explicit denies or grant tools outside `[automation.
     )]
     pub dangerously_skip_permissions: bool,
 
+    /// Disable the process sandbox and automatically approve promptable actions for this session.
+    #[arg(long, global = true, conflicts_with_all = ["full_auto", "skip_confirmations", "dangerously_skip_permissions"])]
+    pub full_access: bool,
+
     /// Explicitly connect to IDE on startup (auto-detects available IDEs)
     #[arg(long, global = true)]
     pub ide: bool,
@@ -908,6 +912,7 @@ impl Default for Cli {
             allowed_tools: Vec::new(),
             disallowed_tools: Vec::new(),
             dangerously_skip_permissions: false,
+            full_access: false,
             ide: false,
             chrome: false,
             no_chrome: false,
@@ -1087,6 +1092,15 @@ mod tests {
 
         let disabled = Cli::parse_from(["vtcode", "--no-codex-experimental"]);
         assert_eq!(disabled.codex_experimental_override(), Some(false));
+    }
+
+    #[test]
+    fn full_access_is_opt_in_and_conflicts_with_other_permission_flags() {
+        assert!(!Cli::parse_from(["vtcode"]).full_access);
+        assert!(Cli::parse_from(["vtcode", "--full-access"]).full_access);
+        for flag in ["--full-auto", "--skip-confirmations", "--dangerously-skip-permissions"] {
+            assert!(Cli::try_parse_from(["vtcode", "--full-access", flag]).is_err(), "{flag}");
+        }
     }
 
     #[test]

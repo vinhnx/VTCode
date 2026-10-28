@@ -5249,6 +5249,8 @@ app:
 
       ru: "Автоматически подтверждать команды"
       id: "Setujui perintah secara otomatis"
+    permission_full:
+      en: "Full access"
     permissions_unavailable:
       en: "Permissions unavailable"
       sv: "Behörigheter otillgängliga"

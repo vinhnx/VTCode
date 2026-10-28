@@ -14,7 +14,7 @@ use vtcode_exec_events::VersionedThreadEvent;
 pub mod slash_command;
 
 /// Current protocol version supported by the desktop client and service.
-pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 17 };
+pub const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 18 };
 
 /// A turn was rejected before delivery because a startup interaction is pending.
 pub const STARTUP_INTERACTION_PENDING_ERROR: i32 = -32001;
@@ -223,7 +223,7 @@ impl ComposerResource {
     }
 }
 
-/// Command confirmation policy; this never bypasses sandbox authorization.
+/// Session execution and command confirmation policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
@@ -231,6 +231,8 @@ pub enum PermissionMode {
     Ask,
     /// Use the CLI's skip-confirmations behavior for commands.
     AutoApproveCommands,
+    /// Run without the process sandbox or interactive approval prompts.
+    FullAccess,
 }
 
 /// Runtime options exposed without credentials or complete configuration documents.

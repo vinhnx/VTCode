@@ -259,6 +259,7 @@ pub(super) fn permission_indicator(
                 colors.warning
             },
         ),
+        Some(protocol::PermissionMode::FullAccess) => (IconName::ShieldAlert, colors.danger),
         None => (IconName::Shield, colors.muted_foreground),
     };
     if mode.is_some() {
@@ -1091,6 +1092,9 @@ impl DesktopView {
     }
 
     pub(super) fn save_workspace_permission(&mut self, choice: protocol::PermissionMode) {
+        if choice == protocol::PermissionMode::FullAccess {
+            return;
+        }
         if let Some(workspace) = self.permission_workspace_key() {
             self.preferences.touch_workspace(&workspace);
             let _previous = self.preferences.workspace_permissions.insert(workspace, choice);
@@ -1120,6 +1124,14 @@ impl DesktopView {
     }
 
     pub(super) fn workspace_permission_ready(&self) -> bool {
+        if self
+            .configuration
+            .as_ref()
+            .and_then(|config| config.session_options.as_ref())
+            .is_some_and(|options| options.permission_mode == protocol::PermissionMode::FullAccess)
+        {
+            return true;
+        }
         self.permission_workspace_key()
             .and_then(|workspace| self.preferences.workspace_permissions.get(&workspace))
             .is_none_or(|saved| {
@@ -1159,6 +1171,11 @@ impl DesktopView {
                 protocol::PermissionMode::AutoApproveCommands,
                 "Auto-approve commands",
                 "Skip command confirmations. Sandbox and tool authorization still apply.",
+            ),
+            (
+                protocol::PermissionMode::FullAccess,
+                "Full access",
+                "Run without the process sandbox or approval prompts. Explicit denies still apply.",
             ),
         ]
         .into_iter()

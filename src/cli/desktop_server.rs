@@ -70,6 +70,7 @@ struct ServerState {
     /// `config/select`; the session restarts so the runtime rebuilds cleanly.
     model_override: Option<ModelSelectParams>,
     session_options: protocol::SessionOptionsSelectParams,
+    permission_before_full_access: Option<protocol::PermissionMode>,
     /// Recent Desktop changes layered over the process-start CLI config until restart.
     fast_mode_overrides: std::collections::HashMap<String, bool>,
     /// Canonical spool paths for the selected session's paged historical outputs.
@@ -422,6 +423,11 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
         method::CONFIG_OPTIONS => {
             let params: protocol::SessionOptionsSelectParams = parse_params(&request.params)?;
             ensure_no_active_turn(context).await?;
+            if params.permission_mode == Some(protocol::PermissionMode::FullAccess)
+                && context.startup.full_auto_requested
+            {
+                bail!("Full access cannot be combined with Full auto");
+            }
             let agent = active_agent_config(context).await;
             let speed_supported =
                 crate::agent::runloop::unified::fast_mode::supports_fast_mode(&agent, &context.startup.config);
@@ -442,6 +448,21 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
                 state.session_id = None;
                 if let Some(enabled) = params.fast_mode {
                     state.fast_mode_overrides.insert(agent.provider.to_ascii_lowercase(), enabled);
+                }
+                if params.permission_mode == Some(protocol::PermissionMode::FullAccess)
+                    && state.session_options.permission_mode != Some(protocol::PermissionMode::FullAccess)
+                {
+                    state.permission_before_full_access = Some(state.session_options.permission_mode.unwrap_or(
+                        if context.startup.skip_confirmations {
+                            protocol::PermissionMode::AutoApproveCommands
+                        } else {
+                            protocol::PermissionMode::Ask
+                        },
+                    ));
+                } else if params.permission_mode.is_some()
+                    && params.permission_mode != Some(protocol::PermissionMode::FullAccess)
+                {
+                    state.permission_before_full_access = None;
                 }
                 session_options::merge(&mut state.session_options, params);
             }
@@ -484,7 +505,14 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             ensure_no_active_turn(context).await?;
             let create_started = Instant::now();
             let shutdown_started = Instant::now();
+            let had_session = context.state.lock().await.session_id.is_some();
             shutdown_current_session(context, false).await?;
+            if had_session {
+                let mut state = context.state.lock().await;
+                if state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
+                    state.session_options.permission_mode = state.permission_before_full_access.take();
+                }
+            }
             let shutdown_elapsed = shutdown_started.elapsed();
             let workspace_label = workspace_label(&context.workspace);
             let identifier_started = Instant::now();
@@ -533,7 +561,16 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             let resume = load_resume_session(&params.session_id, ArchivedSessionIntent::ResumeInPlace)
                 .await?
                 .ok_or_else(|| anyhow!("saved session could not be loaded"))?;
+            let previous_session_id = context.state.lock().await.session_id.clone();
             shutdown_current_session(context, false).await?;
+            {
+                let mut state = context.state.lock().await;
+                if previous_session_id.as_deref().is_some_and(|id| id != params.session_id)
+                    && state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess)
+                {
+                    state.session_options.permission_mode = state.permission_before_full_access.take();
+                }
+            }
             let workspace = context.workspace.clone();
             let history_session_id = params.session_id.clone();
             let inspector_history =
@@ -647,6 +684,9 @@ async fn handle_request_inner(context: &ServiceContext, request: &Request) -> Re
             {
                 let mut state = context.state.lock().await;
                 state.session_id = None;
+                if state.session_options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
+                    state.session_options.permission_mode = state.permission_before_full_access.take();
+                }
                 state.restored_output_spools.clear();
             }
             Ok((json!({ "closed": true }), false))
@@ -983,6 +1023,9 @@ async fn start_session(context: &ServiceContext, session_id: String, resume: Opt
     vt_config.agent.theme.clone_from(&config.theme);
     let options = context.state.lock().await.session_options.clone();
     let skip_confirmations = session_options::skip_confirmations(&options, context.startup.skip_confirmations);
+    if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
+        vt_config.sandbox.enable_full_access();
+    }
     if let Some(mode) = options.mode.as_ref() {
         vt_config.default_primary_agent.clone_from(mode);
     }
@@ -1937,7 +1980,9 @@ async fn configuration_snapshot(
     );
     Ok(ConfigurationSnapshot {
         session_options: Some(protocol::SessionOptionsSnapshot {
-            permission_mode: if skip_confirmations {
+            permission_mode: if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
+                protocol::PermissionMode::FullAccess
+            } else if skip_confirmations {
                 protocol::PermissionMode::AutoApproveCommands
             } else {
                 protocol::PermissionMode::Ask
@@ -1970,7 +2015,9 @@ async fn configuration_snapshot(
         authenticated: true,
         credential_setup_command: setup,
         sandbox: Some(
-            if skip_confirmations {
+            if options.permission_mode == Some(protocol::PermissionMode::FullAccess) {
+                "Full access"
+            } else if skip_confirmations {
                 "Auto-approved commands"
             } else {
                 "Ask before protected actions"
