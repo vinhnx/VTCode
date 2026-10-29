@@ -1,0 +1,786 @@
+use super::super::provider_config::{AnthropicProviderConfig, GeminiProviderConfig, OpenAIProviderConfig};
+use super::super::providers::OllamaProvider;
+use super::*;
+use std::collections::BTreeMap;
+use vtcode_config::core::CustomProviderConfig;
+use vtcode_config::core::{AnthropicConfig, CustomProviderApiFormat, CustomProviderProfileConfig, OpenAIConfig};
+
+#[test]
+fn blank_runtime_api_key_allows_command_auth() {
+    assert_eq!(resolve_custom_provider_api_key(Some("   ".to_string()), true, "MISSING_KEY"), None);
+    assert_eq!(
+        resolve_custom_provider_api_key(Some("explicit-key".to_string()), true, "MISSING_KEY"),
+        Some("explicit-key".to_string())
+    );
+}
+
+#[test]
+fn builtin_cgp_registration_exposes_expected_provider_keys() {
+    let factory = LLMFactory::new();
+    let mut providers = factory.list_providers();
+    providers.sort();
+
+    assert_eq!(
+        providers,
+        vec![
+            "anthropic",
+            "copilot",
+            "deepseek",
+            "evolink",
+            "gemini",
+            "huggingface",
+            "llamacpp",
+            "lmstudio",
+            "merge-gateway",
+            "meta",
+            "mimo",
+            "minimax",
+            "mistral",
+            "moonshot",
+            "nvidia",
+            "ollama",
+            "ollama-cloud",
+            "openai",
+            "opencode-go",
+            "opencode-zen",
+            "openresponses",
+            "openrouter",
+            "poolside",
+            "qwen",
+            "stepfun",
+            "vercel",
+            "xai",
+            "zai",
+        ]
+    );
+}
+
+#[test]
+fn standard_provider_builds_through_cgp_registration() {
+    let factory = LLMFactory::new();
+    let provider = factory
+        .create_provider(
+            <GeminiProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+            ProviderConfig {
+                api_key: Some("test-key".to_string()),
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some(vtcode_config::constants::models::google::GEMINI_3_FLASH_PREVIEW.to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: None,
+                anthropic: None,
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("built-in cgp registration should build");
+
+    assert_eq!(provider.name(), "gemini");
+}
+
+#[test]
+fn openai_build_preserves_provider_specific_config_path() {
+    let factory = LLMFactory::new();
+    let provider = factory
+        .create_provider(
+            <OpenAIProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+            ProviderConfig {
+                api_key: Some("test-key".to_string()),
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: Some(OpenAIConfig { websocket_mode: true, ..OpenAIConfig::default() }),
+                anthropic: Some(AnthropicConfig::default()),
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("openai cgp registration should build");
+
+    assert_eq!(provider.name(), "openai");
+}
+
+#[test]
+fn anthropic_build_preserves_provider_specific_config_path() {
+    let factory = LLMFactory::new();
+    let provider = factory
+        .create_provider(
+            <AnthropicProviderConfig as CanDescribeProvider>::PROVIDER_KEY,
+            ProviderConfig {
+                api_key: Some("test-key".to_string()),
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some(vtcode_config::constants::models::anthropic::DEFAULT_MODEL.to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: None,
+                anthropic: Some(AnthropicConfig {
+                    count_tokens_enabled: true,
+                    ..AnthropicConfig::default()
+                }),
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("anthropic cgp registration should build");
+
+    assert_eq!(provider.name(), "anthropic");
+}
+
+#[test]
+fn custom_provider_registration_still_coexists_with_cgp_builtins() {
+    let mut factory = LLMFactory::new();
+    factory.register_provider("custom-test", |_config| {
+        Box::new(OllamaProvider::from_config(
+            None,
+            Some("gpt-oss:20b".to_string()),
+            Some("http://localhost:11434".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ))
+    });
+
+    let custom = factory
+        .create_provider(
+            "custom-test",
+            ProviderConfig {
+                api_key: None,
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: None,
+                prompt_cache: None,
+                timeouts: None,
+                openai: None,
+                anthropic: None,
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("custom provider should still register");
+    let builtin = factory
+        .create_provider(
+            "openai",
+            ProviderConfig {
+                api_key: Some("test-key".to_string()),
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: None,
+                anthropic: None,
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("builtin provider should still build");
+
+    assert_eq!(custom.name(), "ollama");
+    assert_eq!(builtin.name(), "openai");
+}
+
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn custom_openai_compatible_provider_uses_configured_display_name() {
+    register_custom_providers(&[CustomProviderConfig {
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        max_tokens: None,
+        reasoning_effort: None,
+        name: "mycorp".to_string(),
+        display_name: "MyCorporateName".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_format: CustomProviderApiFormat::Auto,
+        context_window: None,
+        supports_tools: None,
+        supports_reasoning: None,
+        supports_reasoning_effort: None,
+        supports_vision: None,
+        supports_structured_output: None,
+        supports_parallel_tool_calls: None,
+        supports_context_caching: None,
+        supports_responses_compaction: None,
+        supports_prompt_cache_options: None,
+        supports_context_edits: None,
+        api_key_env: "MYCORP_API_KEY".to_string(),
+        auth: None,
+        model: "gpt-5-mini".to_string(),
+        models: Vec::new(),
+        profiles: BTreeMap::new(),
+    }]);
+
+    let provider = create_provider_with_config(
+        "mycorp",
+        ProviderConfig {
+            api_key: None,
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("gpt-5-mini".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: None,
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("custom provider should register");
+
+    assert_eq!(provider.name(), "mycorp");
+    assert_eq!(provider.supported_models(), vec!["gpt-5-mini".to_string()]);
+
+    register_custom_providers(&[]);
+}
+
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn custom_openai_compatible_provider_uses_configured_context_window() {
+    register_custom_providers(&[CustomProviderConfig {
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        max_tokens: None,
+        reasoning_effort: None,
+        name: "mycorp".to_string(),
+        display_name: "MyCorporateName".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_format: CustomProviderApiFormat::Auto,
+        context_window: Some(256_000),
+        supports_tools: None,
+        supports_reasoning: None,
+        supports_reasoning_effort: None,
+        supports_vision: None,
+        supports_structured_output: None,
+        supports_parallel_tool_calls: None,
+        supports_context_caching: None,
+        supports_responses_compaction: None,
+        supports_prompt_cache_options: None,
+        supports_context_edits: None,
+        api_key_env: "MYCORP_API_KEY".to_string(),
+        auth: None,
+        model: "gpt-5-mini".to_string(),
+        models: Vec::new(),
+        profiles: BTreeMap::new(),
+    }]);
+
+    let provider = create_provider_with_config(
+        "mycorp",
+        ProviderConfig {
+            api_key: None,
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("gpt-5-mini".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: None,
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("custom provider should register");
+
+    assert_eq!(provider.effective_context_size("gpt-5-mini"), 256_000);
+
+    register_custom_providers(&[]);
+}
+
+fn profile_config(
+    api_format: CustomProviderApiFormat,
+    context_window: Option<usize>,
+    supports_tools: Option<bool>,
+) -> CustomProviderProfileConfig {
+    CustomProviderProfileConfig {
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        max_tokens: None,
+        reasoning_effort: None,
+        api_format,
+        context_window,
+        supports_tools,
+        supports_reasoning: None,
+        supports_reasoning_effort: None,
+        supports_vision: None,
+        supports_structured_output: None,
+        supports_parallel_tool_calls: None,
+        supports_context_caching: None,
+        supports_responses_compaction: None,
+        supports_prompt_cache_options: None,
+        supports_context_edits: None,
+    }
+}
+
+fn mixed_profile_provider_config() -> CustomProviderConfig {
+    let mut profiles = BTreeMap::new();
+    profiles.insert(
+        "gpt-5-mini".to_string(),
+        profile_config(CustomProviderApiFormat::OpenAIChat, Some(256_000), Some(false)),
+    );
+    profiles.insert(
+        "claude-sonnet-5".to_string(),
+        profile_config(CustomProviderApiFormat::AnthropicMessages, Some(512_000), Some(true)),
+    );
+
+    CustomProviderConfig {
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        max_tokens: None,
+        reasoning_effort: None,
+        name: "mixed".to_string(),
+        display_name: "Mixed".to_string(),
+        base_url: "https://llm.corp.example/v1".to_string(),
+        api_format: CustomProviderApiFormat::Auto,
+        context_window: None,
+        supports_tools: None,
+        supports_reasoning: None,
+        supports_reasoning_effort: None,
+        supports_vision: None,
+        supports_structured_output: None,
+        supports_parallel_tool_calls: None,
+        supports_context_caching: None,
+        supports_responses_compaction: None,
+        supports_prompt_cache_options: None,
+        supports_context_edits: None,
+        api_key_env: "MIXED_API_KEY".to_string(),
+        auth: None,
+        model: "gpt-5-mini".to_string(),
+        models: vec!["gpt-5-mini".to_string(), "claude-sonnet-5".to_string()],
+        profiles,
+    }
+}
+
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn custom_provider_backend_kind_and_identity_follow_selected_default_model() {
+    register_custom_providers(&[mixed_profile_provider_config()]);
+
+    let provider = create_provider_with_config(
+        "mixed",
+        ProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("claude-sonnet-5".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: Some(AnthropicConfig::default()),
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("mixed provider should build");
+
+    assert_eq!(provider.name(), "mixed");
+    assert_eq!(provider.backend_kind(), vtcode_commons::llm::BackendKind::Anthropic);
+
+    register_custom_providers(&[]);
+}
+
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn custom_provider_profile_overrides_context_and_capabilities() {
+    register_custom_providers(&[mixed_profile_provider_config()]);
+
+    let provider = create_provider_with_config(
+        "mixed",
+        ProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("gpt-5-mini".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: Some(AnthropicConfig::default()),
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("mixed provider should build");
+
+    assert!(!provider.supports_tools("gpt-5-mini"));
+    assert_eq!(provider.effective_context_size("gpt-5-mini"), 256_000);
+    assert!(provider.supports_tools("claude-sonnet-5"));
+    assert_eq!(provider.effective_context_size("claude-sonnet-5"), 512_000);
+
+    register_custom_providers(&[]);
+}
+
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn custom_provider_validation_errors_use_custom_display_name() {
+    register_custom_providers(&[mixed_profile_provider_config()]);
+
+    let provider = create_provider_with_config(
+        "mixed",
+        ProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("gpt-5-mini".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: Some(AnthropicConfig::default()),
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("mixed provider should build");
+
+    let error = provider
+        .validate_request(&crate::llm::provider::LLMRequest {
+            messages: std::sync::Arc::new(Vec::new()),
+            model: "gpt-5-mini".to_string(),
+            ..Default::default()
+        })
+        .expect_err("empty request should be rejected");
+
+    assert!(format!("{error:?}").contains("Mixed"));
+
+    register_custom_providers(&[]);
+}
+
+/// Sample Atlas Cloud config used across custom-provider tests.
+/// Matches the snippet documented in `docs/providers/atlascloud.md` and
+/// `vtcode.toml.example`.
+fn atlas_cloud_provider_config() -> CustomProviderConfig {
+    CustomProviderConfig {
+        temperature: None,
+        top_p: None,
+        top_k: None,
+        presence_penalty: None,
+        frequency_penalty: None,
+        max_tokens: None,
+        reasoning_effort: None,
+        name: "atlascloud".to_string(),
+        display_name: "Atlas Cloud".to_string(),
+        base_url: "https://api.atlascloud.ai/v1".to_string(),
+        api_format: CustomProviderApiFormat::Auto,
+        context_window: None,
+        supports_tools: None,
+        supports_reasoning: None,
+        supports_reasoning_effort: None,
+        supports_vision: None,
+        supports_structured_output: None,
+        supports_parallel_tool_calls: None,
+        supports_context_caching: None,
+        supports_responses_compaction: None,
+        supports_prompt_cache_options: None,
+        supports_context_edits: None,
+        api_key_env: "ATLASCLOUD_API_KEY".to_string(),
+        auth: None,
+        model: "deepseek-ai/deepseek-flash".to_string(),
+        models: vec![
+            "deepseek-ai/deepseek-flash".to_string(),
+            "deepseek-ai/deepseek-v4-pro".to_string(),
+            "deepseek-ai/DeepSeek-V3-0324".to_string(),
+            "deepseek-ai/DeepSeek-V3.1".to_string(),
+            "deepseek-ai/deepseek-r1-0528".to_string(),
+            "deepseek-ai/deepseek-ocr".to_string(),
+            "qwen/qwen3.6-35b-a3b".to_string(),
+            "qwen/qwen3.6-plus".to_string(),
+            "qwen/qwen3.5-122b-a10b".to_string(),
+            "qwen/qwen3.5-35b-a3b".to_string(),
+            "qwen/qwen3-coder-next".to_string(),
+            "qwen/qwen3.5-397b-a17b".to_string(),
+            "qwen/qwen3-max-2026-01-23".to_string(),
+            "qwen/qwen3-235b-a22b-thinking-2507".to_string(),
+            "qwen/qwen3-30b-a3b-thinking-2507".to_string(),
+            "qwen/qwen3-next-80b-a3b-thinking".to_string(),
+            "qwen/qwen3-next-80b-a3b-instruct".to_string(),
+            "moonshotai/kimi-k2.7-code".to_string(),
+            "moonshotai/kimi-k2.6".to_string(),
+            "moonshotai/kimi-k2.5".to_string(),
+            "moonshotai/Kimi-K2-Thinking".to_string(),
+            "moonshotai/Kimi-K2-Instruct".to_string(),
+            "moonshotai/Kimi-K2-Instruct-0905".to_string(),
+            "zai-org/glm-5.2".to_string(),
+            "zai-org/glm-5.1".to_string(),
+            "zai-org/glm-5v-turbo".to_string(),
+            "zai-org/glm-5-turbo".to_string(),
+            "zai-org/glm-4.7".to_string(),
+            "minimaxai/minimax-m3".to_string(),
+            "minimaxai/minimax-m2.7".to_string(),
+            "minimaxai/minimax-m2.5".to_string(),
+            "minimaxai/minimax-m2.1".to_string(),
+            "kwaipilot/kat-coder-pro-v2".to_string(),
+            "Alibaba-NLP/Tongyi-DeepResearch-30B-A3B".to_string(),
+        ],
+        profiles: BTreeMap::new(),
+    }
+}
+
+/// Atlas Cloud is OpenAI-compatible and configured via `[[custom_providers]]`.
+/// This test mirrors what `src/cli/dispatch/commands.rs` does for non-interactive
+/// flows (`ask`, `review`, `benchmark`, …): register custom providers from
+/// config before resolving the provider, then resolve it through the same
+/// factory path the CLI uses, with `model: None` to exercise the
+/// `default_model` fallback.
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn atlas_cloud_registers_as_openai_compatible_custom_provider() {
+    register_custom_providers(&[atlas_cloud_provider_config()]);
+
+    let provider = create_provider_with_config(
+        "atlascloud",
+        ProviderConfig {
+            api_key: None,
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: None,
+            prompt_cache: None,
+            timeouts: None,
+            openai: Some(OpenAIConfig::default()),
+            anthropic: None,
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("atlas cloud should resolve as an OpenAI-compatible custom provider");
+
+    assert_eq!(provider.name(), "atlascloud");
+    assert_eq!(
+        provider.supported_models(),
+        vec![
+            "deepseek-ai/deepseek-flash".to_string(),
+            "deepseek-ai/deepseek-v4-pro".to_string(),
+            "deepseek-ai/DeepSeek-V3-0324".to_string(),
+            "deepseek-ai/DeepSeek-V3.1".to_string(),
+            "deepseek-ai/deepseek-r1-0528".to_string(),
+            "deepseek-ai/deepseek-ocr".to_string(),
+            "qwen/qwen3.6-35b-a3b".to_string(),
+            "qwen/qwen3.6-plus".to_string(),
+            "qwen/qwen3.5-122b-a10b".to_string(),
+            "qwen/qwen3.5-35b-a3b".to_string(),
+            "qwen/qwen3-coder-next".to_string(),
+            "qwen/qwen3.5-397b-a17b".to_string(),
+            "qwen/qwen3-max-2026-01-23".to_string(),
+            "qwen/qwen3-235b-a22b-thinking-2507".to_string(),
+            "qwen/qwen3-30b-a3b-thinking-2507".to_string(),
+            "qwen/qwen3-next-80b-a3b-thinking".to_string(),
+            "qwen/qwen3-next-80b-a3b-instruct".to_string(),
+            "moonshotai/kimi-k2.7-code".to_string(),
+            "moonshotai/kimi-k2.6".to_string(),
+            "moonshotai/kimi-k2.5".to_string(),
+            "moonshotai/Kimi-K2-Thinking".to_string(),
+            "moonshotai/Kimi-K2-Instruct".to_string(),
+            "moonshotai/Kimi-K2-Instruct-0905".to_string(),
+            "zai-org/glm-5.2".to_string(),
+            "zai-org/glm-5.1".to_string(),
+            "zai-org/glm-5v-turbo".to_string(),
+            "zai-org/glm-5-turbo".to_string(),
+            "zai-org/glm-4.7".to_string(),
+            "minimaxai/minimax-m3".to_string(),
+            "minimaxai/minimax-m2.7".to_string(),
+            "minimaxai/minimax-m2.5".to_string(),
+            "minimaxai/minimax-m2.1".to_string(),
+            "kwaipilot/kat-coder-pro-v2".to_string(),
+            "Alibaba-NLP/Tongyi-DeepResearch-30B-A3B".to_string(),
+        ]
+    );
+
+    register_custom_providers(&[]);
+}
+
+/// Calling `register_custom_providers(&[])` must clear any previously
+/// registered custom providers while leaving built-ins intact. This guards
+/// the sync/replace contract that the CLI dispatch path depends on (so a
+/// user removing Atlas Cloud from `vtcode.toml` does not leave a stale
+/// registration in the global factory).
+#[test]
+#[serial_test::serial(global_llm_factory)]
+fn register_custom_providers_with_empty_input_clears_custom_but_keeps_builtins() {
+    register_custom_providers(&[atlas_cloud_provider_config()]);
+
+    {
+        let factory = get_factory().lock().expect("factory lock");
+        assert!(
+            factory.list_providers().iter().any(|k| k == "atlascloud"),
+            "custom provider should be registered before clearing"
+        );
+    }
+
+    register_custom_providers(&[]);
+
+    let factory = get_factory().lock().expect("factory lock");
+    let providers = factory.list_providers();
+    assert!(
+        !providers.iter().any(|k| k == "atlascloud"),
+        "custom provider should be unregistered after sync with empty input"
+    );
+    for builtin in BUILTIN_PROVIDER_KEYS {
+        assert!(
+            providers.iter().any(|k| k == builtin),
+            "built-in provider {builtin} must survive custom-provider sync"
+        );
+    }
+}
+
+#[test]
+fn create_provider_for_bare_minimax_model_uses_minimax_provider() {
+    let provider = create_provider_for_model("MiniMax-M3", "test-key".to_string(), None, None)
+        .expect("bare minimax model should resolve to minimax provider");
+
+    assert_eq!(provider.name(), "minimax");
+}
+
+#[test]
+fn create_provider_for_mistral_model_uses_mistral_provider() {
+    let provider = create_provider_for_model("mistral-large-2512", "test-key".to_string(), None, None)
+        .expect("mistral models should resolve through mistral provider");
+
+    assert_eq!(provider.name(), "mistral");
+}
+
+#[test]
+fn create_provider_for_nvidia_model_uses_nvidia_provider() {
+    let provider = create_provider_for_model("nvidia/nemotron-3-ultra-550b-a55b", "test-key".to_string(), None, None)
+        .expect("NVIDIA model should resolve to NVIDIA provider");
+
+    assert_eq!(provider.name(), "nvidia");
+}
+
+#[test]
+fn create_provider_with_config_registers_merge_gateway() {
+    let provider = create_provider_with_config(
+        "merge-gateway",
+        ProviderConfig {
+            api_key: Some("test-key".to_string()),
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: Some("deepseek/deepseek-v4-pro".to_string()),
+            prompt_cache: None,
+            timeouts: None,
+            openai: None,
+            anthropic: None,
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+    )
+    .expect("Merge Gateway should be registered in the factory");
+
+    assert_eq!(provider.name(), "merge-gateway");
+    assert_eq!(provider.backend_kind(), vtcode_commons::llm::BackendKind::MergeGateway);
+}
+
+#[test]
+fn create_provider_for_openai_repo_id_uses_openrouter_provider() {
+    let provider = create_provider_for_model("openai/gpt-oss-20b", "test-key".to_string(), None, None)
+        .expect("repo identifiers should preserve openrouter routing");
+
+    assert_eq!(provider.name(), "openrouter");
+}
+
+#[test]
+fn create_provider_for_unknown_model_returns_error() {
+    match create_provider_for_model("totally-unknown-model", "test-key".to_string(), None, None) {
+        Err(LLMError::InvalidRequest { .. }) => {}
+        Err(error) => panic!("expected invalid request error, got {error:?}"),
+        Ok(_) => panic!("unknown models should remain rejected"),
+    }
+}
+
+#[test]
+fn unknown_provider_error_lists_available_providers() {
+    let factory = LLMFactory::new();
+    let error = match factory.create_provider(
+        "merge-api",
+        ProviderConfig {
+            api_key: None,
+            openai_chatgpt_auth: None,
+            copilot_auth: None,
+            base_url: None,
+            model: None,
+            prompt_cache: None,
+            timeouts: None,
+            openai: None,
+            anthropic: None,
+            openrouter: None,
+            model_behavior: None,
+            workspace_root: None,
+        },
+        &[],
+    ) {
+        Err(error) => error,
+        Ok(_) => panic!("unknown provider should be rejected"),
+    };
+
+    let message = format!("{error:?}");
+    assert!(message.contains("Unknown provider: merge-api"), "{message}");
+    assert!(message.contains("Available providers:"), "{message}");
+    assert!(message.contains("merge-gateway"), "{message}");
+}
+
+#[test]
+fn provider_lookup_is_case_insensitive() {
+    let factory = LLMFactory::new();
+    let provider = factory
+        .create_provider(
+            "OpenAI",
+            ProviderConfig {
+                api_key: Some("test-key".to_string()),
+                openai_chatgpt_auth: None,
+                copilot_auth: None,
+                base_url: None,
+                model: Some(vtcode_config::constants::models::openai::DEFAULT_MODEL.to_string()),
+                prompt_cache: None,
+                timeouts: None,
+                openai: None,
+                anthropic: None,
+                openrouter: None,
+                model_behavior: None,
+                workspace_root: None,
+            },
+            &[],
+        )
+        .expect("provider lookup should be case-insensitive");
+
+    assert_eq!(provider.name(), "openai");
+}

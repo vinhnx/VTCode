@@ -107,5 +107,5 @@ mod metadata_compat_tests {
 }
 
 #[cfg(test)]
-#[path = "session_archive_tests.rs"]
+#[path = "session_archive_tests/mod.rs"]
 mod tests;

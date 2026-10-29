@@ -1,0 +1,758 @@
+use super::FileOpsTool;
+use super::is_image_path;
+use super::path_policy::PathSuggestionKind;
+mod legacy;
+mod logging;
+mod segments;
+use crate::config::constants::tools;
+use crate::telemetry::perf::PerfSpan;
+use crate::tools::builder::ToolResponseBuilder;
+use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
+use crate::tools::continuation::{DEFAULT_NEXT_READ_LIMIT, ReadChunkContinuationArgs};
+use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler, ReadFileOutcome};
+use crate::tools::traits::FileTool;
+use crate::tools::types::{Input, PathArgs};
+use anyhow::{Context, Result, anyhow};
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::path::Path;
+use std::time::UNIX_EPOCH;
+
+pub(crate) const PATCH_READ_CACHE_NONCE: &str = "__vtcode_patch_read_nonce";
+
+const SPOOL_CHUNK_DEFAULT_LIMIT_LINES: usize = DEFAULT_NEXT_READ_LIMIT;
+const SPOOL_CHUNK_MAX_LIMIT_LINES: usize = 50;
+const SPOOL_CHUNK_SENTINEL_MAX_TOKENS: usize = 4096;
+
+#[derive(Clone, Copy, Debug)]
+struct SpoolChunkPlan {
+    offset: usize,
+    limit: usize,
+}
+
+fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
+    if is_image {
+        return true;
+    }
+
+    if let Some(obj) = args.as_object() {
+        obj.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "offset_lines"
+                    | "page_size_lines"
+                    | "max_bytes"
+                    | "max_lines"
+                    | "chunk_lines"
+                    | "encoding"
+                    | "max_tokens"
+            )
+        })
+    } else {
+        false
+    }
+}
+
+fn is_new_read_request(args: &Value) -> bool {
+    let new_keys = [
+        "mode",
+        "indentation",
+        "offset",
+        "limit",
+        "o",
+        "l",
+        "offset_bytes",
+        "page_size_bytes",
+        "length",
+    ];
+    new_keys.iter().any(|key| args.get(*key).is_some())
+}
+
+fn looks_like_patch_payload(args: &Value) -> bool {
+    use crate::tools::editing::looks_like_vte_patch;
+
+    args.get("patch").and_then(Value::as_str).is_some_and(looks_like_vte_patch)
+        || args.get("input").and_then(Value::as_str).is_some_and(looks_like_vte_patch)
+        || args.as_str().is_some_and(looks_like_vte_patch)
+}
+
+fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
+    let mut handler_args_json = args.clone();
+    if let Some(obj) = handler_args_json.as_object_mut() {
+        for alias in ["path", "filepath", "target_path", "file"] {
+            obj.remove(alias);
+        }
+        obj.insert("file_path".to_string(), json!(canonical_path.to_string_lossy()));
+
+        if let Some(mode_value) = obj.get("mode").cloned() {
+            let normalized_mode = match mode_value {
+                Value::Null => None,
+                Value::String(raw) => {
+                    let trimmed = raw.trim();
+                    if trimmed.eq_ignore_ascii_case("indentation") {
+                        Some("indentation".to_string())
+                    } else {
+                        Some("slice".to_string())
+                    }
+                }
+                _ => Some("slice".to_string()),
+            };
+
+            if let Some(mode) = normalized_mode {
+                obj.insert("mode".to_string(), json!(mode));
+            } else {
+                obj.remove("mode");
+            }
+        }
+
+        if let Some(indentation_value) = obj.get("indentation").cloned() {
+            match indentation_value {
+                Value::Bool(true) => {
+                    obj.insert("mode".to_string(), json!("indentation"));
+                    obj.insert("indentation".to_string(), json!({}));
+                }
+                Value::Bool(false) | Value::Null => {
+                    obj.remove("indentation");
+                    if obj
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .is_some_and(|mode| mode.eq_ignore_ascii_case("indentation"))
+                    {
+                        obj.insert("mode".to_string(), json!("slice"));
+                    }
+                }
+                Value::String(text) if text.eq_ignore_ascii_case("true") => {
+                    obj.insert("mode".to_string(), json!("indentation"));
+                    obj.insert("indentation".to_string(), json!({}));
+                }
+                Value::String(text) if text.eq_ignore_ascii_case("false") => {
+                    obj.remove("indentation");
+                    if obj
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .is_some_and(|mode| mode.eq_ignore_ascii_case("indentation"))
+                    {
+                        obj.insert("mode".to_string(), json!("slice"));
+                    }
+                }
+                Value::Object(_) => {
+                    obj.insert("mode".to_string(), json!("indentation"));
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(src) = obj.get("offset_lines").or_else(|| obj.get("o")).cloned() {
+            obj.entry("offset".to_string()).or_insert(src);
+        }
+        if let Some(src) = obj.get("page_size_lines").or_else(|| obj.get("l")).cloned() {
+            obj.entry("limit".to_string()).or_insert(src);
+        }
+
+        // Map `length` alias to `page_size_bytes` for byte-range reads
+        if let Some(src) = obj.get("length").cloned() {
+            obj.entry("page_size_bytes".to_string()).or_insert(src);
+        }
+
+        // Map start_line/end_line to offset/limit when offset is not already set.
+        if let Some(start) = obj.get("start_line").and_then(parse_usize_value) {
+            obj.entry("offset".to_string()).or_insert(json!(start));
+            if let Some(end) = obj.get("end_line").and_then(parse_usize_value)
+                && end >= start
+                && !obj.contains_key("limit")
+            {
+                obj.insert("limit".to_string(), json!(end - start + 1));
+            }
+        }
+
+        if obj.get("offset").and_then(parse_usize_value) == Some(0) {
+            obj.insert("offset".to_string(), json!(1));
+        }
+        if obj.get("limit").and_then(parse_usize_value) == Some(0) {
+            obj.remove("limit");
+        }
+    }
+
+    handler_args_json
+}
+
+/// Locate a verbatim line slice using the selected reader's coordinate system.
+pub(crate) fn source_line_offset(args: &Value) -> Option<usize> {
+    if !is_new_read_request(args) && is_legacy_read_request(args, false) {
+        // Legacy line paging is zero-based; modern slice offsets are one-based.
+        let input: Input = serde_json::from_value(args.clone()).ok()?;
+        return Some(input.offset_lines.unwrap_or(0));
+    }
+    let normalized = build_read_handler_args(args, Path::new("source"));
+    let read: ReadFileArgs = serde_json::from_value(normalized).ok()?;
+    if read.offset_bytes.is_some()
+        || read.page_size_bytes.is_some()
+        || !matches!(read.mode, crate::tools::handlers::read_file::ReadMode::Slice)
+    {
+        return None;
+    }
+    read.offset.checked_sub(1)
+}
+
+/// Admit recovery only for an explicit line range the selected reader honors.
+pub(crate) fn bounded_line_read_path(args: &Value, max_lines: usize) -> Option<String> {
+    let path_args: PathArgs = serde_json::from_value(args.clone()).ok()?;
+    let path = Path::new(&path_args.path);
+    if is_image_path(path) {
+        return None;
+    }
+    if is_new_read_request(args) || !is_legacy_read_request(args, false) {
+        let normalized = build_read_handler_args(args, path);
+        // A missing/zero bound uses the handler default, not a targeted range.
+        normalized.get("limit").and_then(parse_usize_value)?;
+        let read: ReadFileArgs = serde_json::from_value(normalized).ok()?;
+        if !(1..=max_lines).contains(&read.limit)
+            || read.effective_line_limit() > max_lines
+            || read.offset == 0
+            || read.offset_bytes.is_some()
+            || read.page_size_bytes.is_some()
+            || !matches!(read.mode, crate::tools::handlers::read_file::ReadMode::Slice)
+        {
+            return None;
+        }
+    } else {
+        let read: Input = serde_json::from_value(args.clone()).ok()?;
+        let limit = read.page_size_lines?;
+        if !(1..=max_lines).contains(&limit) || read.offset_bytes.is_some() || read.page_size_bytes.is_some() {
+            return None;
+        }
+    }
+    Some(path_args.path)
+}
+
+fn parse_usize_value(value: &Value) -> Option<usize> {
+    value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+}
+
+fn has_explicit_limit(args: &Value) -> bool {
+    ["limit", "l", "page_size_lines", "max_lines", "chunk_lines", "end_line"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn has_explicit_offset(args: &Value) -> bool {
+    ["offset", "o", "offset_lines", "offset_bytes", "start_line"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn is_full_text_read(args: &Value, is_spool_output: bool) -> bool {
+    !is_spool_output && !has_explicit_offset(args) && !has_explicit_limit(args)
+}
+
+use super::restore_exact_text_content;
+
+fn response_size_bytes(response: &Value) -> Option<u64> {
+    response
+        .get("metadata")
+        .and_then(|metadata| metadata.get("data"))
+        .and_then(|data| data.get("size_bytes"))
+        .and_then(Value::as_u64)
+}
+
+fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -> SpoolChunkPlan {
+    let mut offset = 1usize;
+    let mut limit = SPOOL_CHUNK_DEFAULT_LIMIT_LINES;
+
+    if let Some(obj) = handler_args_json.as_object_mut() {
+        offset = obj.get("offset").and_then(parse_usize_value).unwrap_or(1).max(1);
+
+        let requested_limit = if has_explicit_limit(raw_args) {
+            raw_args
+                .get("limit")
+                .or_else(|| raw_args.get("l"))
+                .or_else(|| raw_args.get("page_size_lines"))
+                .or_else(|| raw_args.get("max_lines"))
+                .or_else(|| raw_args.get("chunk_lines"))
+                .and_then(parse_usize_value)
+                .unwrap_or(SPOOL_CHUNK_DEFAULT_LIMIT_LINES)
+        } else {
+            SPOOL_CHUNK_DEFAULT_LIMIT_LINES
+        };
+
+        limit = requested_limit.clamp(1, SPOOL_CHUNK_MAX_LIMIT_LINES);
+
+        obj.insert("offset".to_string(), json!(offset));
+        obj.insert("limit".to_string(), json!(limit));
+        // Preserve narrow chunking behavior by bypassing MIN_BATCH_LIMIT expansion
+        // in ReadFileHandler::handle (which only applies when max_tokens is absent).
+        obj.entry("max_tokens".to_string())
+            .or_insert_with(|| json!(SPOOL_CHUNK_SENTINEL_MAX_TOKENS));
+    }
+
+    SpoolChunkPlan { offset, limit }
+}
+
+fn path_contains_components(path: &Path, needle: &[&str]) -> bool {
+    // Fail closed on empty needle: vacuous-true would mark every path as
+    // privileged, and `windows(0)` would panic without this guard.
+    if needle.is_empty() {
+        return false;
+    }
+    use std::ffi::OsStr;
+    let components: Vec<&OsStr> = path.components().map(|c| c.as_os_str()).collect();
+    components
+        .windows(needle.len())
+        .any(|window| window.iter().zip(needle.iter()).all(|(hay, ndl)| *hay == OsStr::new(ndl)))
+}
+
+fn is_history_jsonl(path: &Path) -> bool {
+    // Fast path: avoid component iteration if extension doesn't match
+    if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+        return false;
+    }
+
+    path_contains_components(path, &[".vtcode", "history"])
+}
+
+fn is_tool_output_spool_path(path: &Path) -> bool {
+    crate::tools::SpooledOutputReference::recognizes_path(path)
+}
+
+fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_str()?;
+    let session_file = file_name.strip_suffix(".txt")?;
+    let session_id = session_file.strip_prefix("write_stdin_").unwrap_or(session_file);
+    if session_id.starts_with("run-")
+        && session_id.len() > "run-".len()
+        && session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        Some(session_id.to_string())
+    } else {
+        None
+    }
+}
+
+fn build_history_cache_key(path: &Path, metadata: &std::fs::Metadata, args: &Value) -> Option<String> {
+    let modified = metadata.modified().ok()?;
+    let mtime = modified.duration_since(UNIX_EPOCH).ok()?.as_millis();
+    let size = metadata.len();
+
+    let mode = args.get("mode").and_then(Value::as_str).unwrap_or("legacy");
+    let indentation = args.get("indentation").and_then(Value::as_str).unwrap_or("");
+    let offset = args
+        .get("offset")
+        .or_else(|| args.get("o"))
+        .or_else(|| args.get("offset_lines"))
+        .or_else(|| args.get("offset_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let limit = args
+        .get("limit")
+        .or_else(|| args.get("l"))
+        .or_else(|| args.get("page_size_lines"))
+        .or_else(|| args.get("page_size_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let max_bytes = args.get("max_bytes").and_then(Value::as_u64).unwrap_or(0);
+    let max_tokens = args.get("max_tokens").and_then(Value::as_u64).unwrap_or(0);
+    let encoding = args.get("encoding").and_then(Value::as_str).unwrap_or("");
+
+    Some(format!(
+        "read_file:history:{}:{}:{}:mode={mode}|indent={indentation}|offset={offset}|limit={limit}|max_bytes={max_bytes}|max_tokens={max_tokens}|encoding={encoding}",
+        path.display(),
+        size,
+        mtime
+    ))
+}
+
+impl FileOpsTool {
+    async fn track_read_snapshot(&self, path: &Path) {
+        if let Err(err) = self.edited_file_monitor.track_read(path).await {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "Failed to record edited-file read snapshot"
+            );
+        }
+    }
+
+    fn track_read_text_snapshot(&self, path: &Path, content: &str) {
+        if let Err(err) = self.edited_file_monitor.record_read_text(path, content) {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "Failed to record edited-file read snapshot"
+            );
+        }
+    }
+
+    async fn track_exact_text_snapshot(&self, path: &Path, content: &str, size_bytes: u64) {
+        if let Some(exact_content) = restore_exact_text_content(content, size_bytes) {
+            self.track_read_text_snapshot(path, &exact_content);
+        } else {
+            self.track_read_snapshot(path).await;
+        }
+    }
+
+    async fn track_cached_read_snapshot(&self, path: &Path, args: &Value, response: &Value) {
+        if is_full_text_read(args, false)
+            && let Some(content) = response.get("content").and_then(Value::as_str)
+            && let Some(size_bytes) = response_size_bytes(response)
+        {
+            self.track_exact_text_snapshot(path, content, size_bytes).await;
+            return;
+        }
+
+        self.track_read_snapshot(path).await;
+    }
+
+    pub async fn read_file(&self, args: Value) -> Result<Value> {
+        let use_cache = args.get(PATCH_READ_CACHE_NONCE).is_none();
+        self.read_file_with_cache(args, use_cache).await
+    }
+
+    async fn read_file_with_cache(&self, args: Value, use_cache: bool) -> Result<Value> {
+        let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
+
+        let path_args: PathArgs = PathArgs::deserialize(&args).map_err(|_e| {
+            if looks_like_patch_payload(&args) {
+                return anyhow!(
+                    "Error: Patch content was sent to read_file.\n\
+                    Use apply_patch with {{\"patch\":\"...\"}} \
+                    (or {{\"input\":\"...\"}}).\n\
+                    read_file requires a path parameter."
+                );
+            }
+            let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+            anyhow!(
+                "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
+                Received: {received}\n\
+                Expected: {{\"path\": \"file/path\"}} or {{\"file_path\": \"file/path\"}}\n\
+                Accepted path parameters: path, file_path, filepath, target_path, file, p\n\
+                Optional params: offset_lines, limit, max_bytes, max_tokens"
+            )
+        })?;
+
+        let path_str = &path_args.path;
+
+        // Try to resolve the file path
+        let potential_paths = self.resolve_file_path(path_str).await?;
+        let missing_spool_candidate = potential_paths
+            .iter()
+            .find(|candidate| is_tool_output_spool_path(candidate.as_path()))
+            .cloned();
+        let mut directory_candidate = None;
+
+        for candidate_path in &potential_paths {
+            if !tokio::fs::try_exists(candidate_path).await? {
+                continue;
+            }
+
+            let canonical = self.normalize_and_validate_candidate(candidate_path, path_str).await?;
+
+            if self.should_exclude(&canonical).await {
+                continue;
+            }
+
+            let metadata = tokio::fs::metadata(&canonical).await?;
+            if !metadata.is_file() {
+                if metadata.is_dir() && directory_candidate.is_none() {
+                    directory_candidate = Some(canonical);
+                }
+                continue;
+            }
+
+            let size_bytes = metadata.len();
+            let history_jsonl = is_history_jsonl(&canonical);
+            perf.tag("path_class", if history_jsonl { "history_jsonl" } else { "other" });
+            let is_image = is_image_path(&canonical);
+            let is_spool_output = is_tool_output_spool_path(&canonical);
+            let is_legacy_request = is_legacy_read_request(&args, is_image);
+            let is_new_request = is_new_read_request(&args);
+
+            let cache_config = file_read_cache_config();
+            let cache_key = if use_cache
+                && cache_config.enabled
+                && history_jsonl
+                && size_bytes >= cache_config.min_size_bytes as u64
+                && size_bytes <= cache_config.max_size_bytes as u64
+            {
+                build_history_cache_key(&canonical, &metadata, &args)
+            } else {
+                None
+            };
+
+            if let Some(key) = cache_key.as_ref()
+                && let Some(cached) = FILE_CACHE.get_file(key).await
+            {
+                perf.tag("cache", "hit");
+                self.track_cached_read_snapshot(&canonical, &args, &cached).await;
+                return Ok(cached);
+            }
+            perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
+
+            if !is_image && (is_new_request || !is_legacy_request) {
+                let mut handler_args_json = build_read_handler_args(&args, &canonical);
+                let spool_plan = if is_spool_output {
+                    Some(apply_spool_chunk_defaults(&mut handler_args_json, &args))
+                } else {
+                    None
+                };
+                match serde_json::from_value::<ReadFileArgs>(handler_args_json) {
+                    Ok(read_args) => {
+                        let requested_path = self.workspace_relative_display(&canonical);
+                        let handler = ReadFileHandler;
+                        let requested_offset = read_args.offset;
+                        let ReadFileOutcome {
+                            content,
+                            lines_read: lines_returned,
+                            has_more,
+                            line_truncated,
+                            capped_by_limit,
+                            applied_limit,
+                        } = handler.handle_detailed(read_args).await?;
+                        let full_text_read = is_full_text_read(&args, is_spool_output);
+                        let response_content = if full_text_read {
+                            restore_exact_text_content(&content, size_bytes).unwrap_or_else(|| content.clone())
+                        } else {
+                            content.clone()
+                        };
+
+                        let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
+                            .success()
+                            .message(format!("Successfully read file {requested_path}"))
+                            .content(&response_content)
+                            .field("path", json!(requested_path.clone()))
+                            .field("no_spool", json!(true))
+                            .field("content_kind", json!("text"))
+                            .field("encoding", json!("utf8"))
+                            .data("size_bytes", json!(size_bytes))
+                            .data("content_kind", json!("text"))
+                            .data("encoding", json!("utf8"));
+
+                        if line_truncated {
+                            builder = builder
+                                .field("line_truncated", json!(true))
+                                .field("truncated", json!(true))
+                                .field("truncation_reason", json!("oversized_line"));
+                        }
+
+                        if let Some(plan) = spool_plan {
+                            let next_offset = plan.offset.saturating_add(lines_returned);
+
+                            builder = builder
+                                .field("spool_chunked", json!(true))
+                                .field("lines_returned", json!(lines_returned));
+                            if has_more {
+                                builder = builder.field("has_more", json!(true));
+                                builder = builder.field(
+                                    "next_read_args",
+                                    ReadChunkContinuationArgs::new(requested_path.clone(), next_offset, plan.limit)
+                                        .to_value(),
+                                );
+                                builder = builder.field(
+                                    "next_action",
+                                    json!(
+                                        "Call file read again with the `next_read_args` object above verbatim as arguments to get the next chunk, or narrow with `exec_command.cmd` using `rg` and a specific pattern. Re-reading the same offset returns nothing new and counts toward the per-turn spool chunk cap, which blocks further reads."
+                                    ),
+                                );
+                            }
+                        }
+                        // Absolute-cap continuation. Surface a structured way to
+                        // keep reading after the per-call ceiling was reached.
+                        //
+                        // The condition is `has_more && applied_limit == cap` rather
+                        // than `capped_by_limit && has_more`: on the first (clamped)
+                        // page `applied_limit` equals the cap and `capped_by_limit`
+                        // is true, but on every follow-up page the agent passes back
+                        // `applied_limit` as its `limit`, so `effective_limit` is no
+                        // longer *greater* than the cap and `capped_by_limit` becomes
+                        // false. Using `applied_limit == cap` keeps the pagination
+                        // chain alive on every page that actually hit the ceiling,
+                        // instead of dying after a single hop.
+                        // Byte-range reads set `applied_limit` to 0, so they are
+                        // correctly excluded and use their own `offset_bytes`/
+                        // `page_size_bytes` continuation path.
+                        else if has_more && applied_limit == crate::tools::read_limits::absolute_line_cap() {
+                            let next_offset = requested_offset.saturating_add(lines_returned);
+                            let next_action = if capped_by_limit {
+                                "Read clamped to max_read_lines. \
+                                 Call file read again with `next_read_args` verbatim to get subsequent chunks; \
+                                 do not re-read the same range."
+                            } else {
+                                "Call file read again with `next_read_args` verbatim to get subsequent chunks; \
+                                 do not re-read the same range."
+                            };
+                            builder = builder
+                                .field("has_more", json!(true))
+                                .field("capped_by_limit", json!(capped_by_limit))
+                                .field(
+                                    "next_read_args",
+                                    ReadChunkContinuationArgs::new(requested_path.clone(), next_offset, applied_limit)
+                                        .to_value(),
+                                )
+                                .field("next_action", json!(next_action));
+                        }
+
+                        let response = builder.build_json();
+
+                        if full_text_read {
+                            self.track_exact_text_snapshot(&canonical, &response_content, size_bytes).await;
+                        } else {
+                            self.track_read_snapshot(&canonical).await;
+                        }
+                        if let Some(key) = cache_key.as_ref() {
+                            FILE_CACHE.put_file(key.clone(), response.clone()).await;
+                        }
+
+                        return Ok(response);
+                    }
+                    Err(e) => {
+                        if is_new_request {
+                            return Err(anyhow!(
+                                "Failed to parse arguments for read_file handler: {e}. Args: {args:?}"
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Legacy path
+            let input: Input = serde_json::from_value(args.clone())
+                .context("Error: Invalid 'read_file' arguments for legacy handler.")?;
+
+            // Check if paging/offset is requested
+            let use_paging = input.offset_bytes.is_some()
+                || input.page_size_bytes.is_some()
+                || input.offset_lines.is_some()
+                || input.page_size_lines.is_some();
+
+            let (content, metadata, truncated, line_truncated) = if use_paging {
+                self.read_file_paged(&canonical, &input).await?
+            } else {
+                let (content, metadata, truncated) = self.read_file_legacy(&canonical, &input).await?;
+                let line_truncated = metadata.get("line_truncated").and_then(Value::as_bool).unwrap_or(false);
+                (content, metadata, truncated, line_truncated)
+            };
+
+            let mut builder = ToolResponseBuilder::new(tools::READ_FILE)
+                .success()
+                .message(format!(
+                    "Successfully read {} bytes from {}",
+                    size_bytes,
+                    self.workspace_relative_display(&canonical)
+                ))
+                .content(&content)
+                .field("path", json!(self.workspace_relative_display(&canonical)))
+                .field("no_spool", json!(true));
+
+            // Merge legacy metadata - extract actual data fields, not wrapper structure
+            if let Some(obj) = metadata.as_object() {
+                for (k, v) in obj {
+                    builder = builder.data(k.clone(), v.clone());
+                }
+            }
+
+            // Special legacy fields at top level
+            if let Some(is_truncated) = metadata.get("is_truncated").and_then(Value::as_bool) {
+                builder = builder.field("is_truncated", json!(is_truncated));
+            }
+            if line_truncated {
+                builder = builder.field("line_truncated", json!(true));
+            }
+            if let Some(encoding) = metadata.get("encoding").and_then(Value::as_str) {
+                builder = builder.field("encoding", json!(encoding));
+            }
+            if let Some(content_kind) = metadata.get("content_kind").and_then(Value::as_str) {
+                builder = builder.field("content_kind", json!(content_kind));
+                if matches!(content_kind, "binary" | "image") {
+                    builder = builder.field("binary", json!(true));
+                }
+            }
+            if let Some(mime_type) = metadata.get("mime_type").and_then(Value::as_str) {
+                builder = builder.field("mime_type", json!(mime_type));
+            }
+
+            // Add paging information
+            if use_paging {
+                if let Some(offset_bytes) = input.offset_bytes {
+                    builder = builder.field("offset_bytes", json!(offset_bytes));
+                }
+                if let Some(page_size_bytes) = input.page_size_bytes {
+                    builder = builder.field("page_size_bytes", json!(page_size_bytes));
+                }
+                if let Some(offset_lines) = input.offset_lines {
+                    builder = builder.field("offset_lines", json!(offset_lines));
+                }
+                if let Some(page_size_lines) = input.page_size_lines {
+                    builder = builder.field("page_size_lines", json!(page_size_lines));
+                }
+                if truncated {
+                    builder = builder.field("truncated", json!(true));
+                    builder = builder.field(
+                        "truncation_reason",
+                        json!(if line_truncated {
+                            "oversized_line"
+                        } else {
+                            "reached_end_of_file"
+                        }),
+                    );
+                }
+            }
+
+            let content_kind = metadata.get("content_kind").and_then(Value::as_str).unwrap_or("text");
+            let full_legacy_text_read = !use_paging && !truncated && content_kind == "text";
+            let response = builder.build_json();
+            if full_legacy_text_read {
+                self.track_exact_text_snapshot(&canonical, &content, size_bytes).await;
+            } else {
+                self.track_read_snapshot(&canonical).await;
+            }
+            if let Some(key) = cache_key.as_ref() {
+                FILE_CACHE.put_file(key.clone(), response.clone()).await;
+            }
+
+            return Ok(response);
+        }
+
+        if let Some(spool_path) = missing_spool_candidate {
+            if let Some(session_id) = pty_session_id_from_tool_output_path(&spool_path) {
+                return Err(anyhow!(
+                    "Error: Session output file not found: {}. This looks like command session output. Use write_stdin with session_id=\"{}\" to poll or continue the active session.",
+                    self.workspace_relative_display(&spool_path),
+                    session_id,
+                ));
+            }
+            return Err(anyhow!(
+                "Error: Spool file not found (possibly expired): {}. Re-run the original tool command to regenerate this output.",
+                self.workspace_relative_display(&spool_path),
+            ));
+        }
+
+        if let Some(directory_path) = directory_candidate {
+            let display_path = self.workspace_relative_display(&directory_path);
+            return Err(anyhow!(
+                "Error: Path '{display_path}' is a directory, not a file. Use `exec_command.cmd` with `find` or `ls` to inspect it.",
+            ));
+        }
+
+        let parent_dir = Path::new(path_str)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| ".".to_string());
+        let suggestion = self.missing_path_suggestion_suffix(path_str, PathSuggestionKind::File).await;
+        Err(anyhow!(
+            "Error: File not found: {}. Tried paths: {}.{} Use `exec_command.cmd` with `find {}` to discover available files.",
+            path_str,
+            potential_paths
+                .iter()
+                .map(|p| self.workspace_relative_display(p))
+                .collect::<Vec<_>>()
+                .join(", "),
+            suggestion,
+            parent_dir
+        ))
+    }
+}
+
+#[cfg(test)]
+mod read_tests;
