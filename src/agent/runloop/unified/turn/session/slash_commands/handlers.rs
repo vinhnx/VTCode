@@ -24,7 +24,7 @@ mod local_server;
 mod log_viewer;
 #[path = "mcp.rs"]
 mod mcp;
-#[path = "oauth.rs"]
+#[path = "oauth/mod.rs"]
 mod oauth;
 #[path = "planning.rs"]
 mod planning;
@@ -34,7 +34,7 @@ mod plugins;
 mod rewind;
 #[path = "share_log.rs"]
 mod share_log;
-#[path = "skills.rs"]
+#[path = "skills/mod.rs"]
 mod skills;
 #[path = "ui.rs"]
 pub mod ui;

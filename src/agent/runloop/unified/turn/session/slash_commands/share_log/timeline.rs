@@ -15,6 +15,8 @@ use vtcode_core::core::threads::ThreadEventRecord;
 use vtcode_core::exec::events::{PatchChangeKind, ThreadEvent, ThreadItemDetails};
 use vtcode_core::llm::provider as uni;
 
+#[path = "timeline/formatting.rs"]
+mod formatting;
 #[path = "timeline/presentation.rs"]
 mod presentation;
 
@@ -128,7 +130,7 @@ pub(super) fn render_session_timeline_html(export: &TimelineExport, session_log_
 }
 
 pub(super) fn redact_timeline_export(export: &TimelineExport) -> TimelineExport {
-    presentation::redact_timeline_export(export)
+    formatting::redact_timeline_export(export)
 }
 
 fn build_session_overview(

@@ -22,5 +22,5 @@ pub(crate) use models::{
 };
 
 #[cfg(test)]
-#[path = "slash_commands/tests.rs"]
+#[path = "slash_commands/tests/mod.rs"]
 mod tests;
