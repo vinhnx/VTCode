@@ -1,7 +1,3 @@
-desktop extract common UI layouts and components for reuse. follow gpui-kit patterns. and keep them consistent. maybe add to design system. then update existing screens. and check for consistency. note this for future updates.
-
----
-
 DRY and refactor and extract desktop monolith components for reuse. also check for repeated patterns in existing screens. check view.rs
 
 Refactor VT Code desktop module for KISS, DRY, lower token use, and fewer failures.
@@ -81,13 +77,3 @@ check and reference codex/chatgpt app typography design, it looks cleaner and mo
 ---
 
 implement desktop notifications for updates and alerts. when new updates are available or important events occur. configure them in settings.
-
----
-
-The 4 (recorded in .vtcode/memory/decisions.md, each a single cohesive
-1150–2420-line runloop fn with no verbatim seam — splitting needs a context-struct
-refactor, which violates the surgical-move policy):
-• session_iteration.rs (2499), turn_loop.rs (1767), runner/execute/mod.rs (1647),
-execution_facade/mod.rs (1210)
-
-Revisit only with an explicit runloop-refactor mandate.
