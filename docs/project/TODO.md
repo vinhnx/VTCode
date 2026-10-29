@@ -1100,19 +1100,33 @@ T1 and D0/D1 are independent and can land in either order once the spine exists.
 
 ---
 
-implement Full access mode for VT Code. check OpenAI codex implementation. Read the provided references and apply relevant insights to improve VT Code. Use appropriate skills, inspect existing architecture, identify practical improvements, and implement them with focused verification. Prioritize simplicity, performance, and reliability, DRY and KISS
-
----
-
-desktop implement: trackpad swipe support for navigation
-
----
-
 desktop extract common UI layouts and components for reuse. follow gpui-kit patterns. and keep them consistent. maybe add to design system. then update existing screens. and check for consistency. note this for future updates.
 
 ---
 
-check crates/codegen/vtcode-desktop/ and make sure all strings are reused and make constants/enum/struct where possible.
+DRY and refactor and extract desktop monolith components for reuse. also check for repeated patterns in existing screens. check view.rs
+
+Refactor VT Code desktop module for KISS, DRY, lower token use, and fewer failures.
+
+Follow `AGENTS.md` and existing VT Code architecture. Prefer small surgical changes, reuse existing helpers, remove duplication, and avoid new abstractions unless they clearly simplify the code.
+
+Audit agent loop, tools, prompts, and safety paths. Find the top 5 refactors with concrete `file:line` evidence, then implement the highest-value low-risk one.
+
+Focus on:
+
+- duplicated logic or prompt rules
+- repeated capability checks
+- unnecessary allocations/scans
+- dead or redundant paths
+- overly complex control flow
+- prompt text that can be shortened safely
+
+Preserve behavior, tool permissions, sandbox/approval semantics, and `vtcode-exec-events::ThreadEvent`.
+
+Output:
+`problem | evidence | fix | benefit | verify`
+
+Then implement #1, run the minimum relevant checks with `cargo nextest`, `cargo check --locked` + `RUSTFLAGS="-D warnings"`, and `./scripts/check-dev.sh` when needed. Inspect the final diff and fix regressions before finishing.
 
 ---
 
@@ -1120,19 +1134,15 @@ https://gpui-kit.com/component/chart/
 
 ---
 
-sync and port all themes from CLI to Desktop.
+sync and port all themes from CLI to Desktop. use gpui skills kit for guidance.
 
 ---
 
-check Settings' tab appearence not showing correctly for selected tab and highlight tabs
+check Settings' tab appearence not showing correctly for selected tab and highlight tabs. use gpui skills kit for guidance.
 
 ---
 
-add more languages support
-
----
-
-check and improve desktop app panel layout, currently looks cramped and cluttered. ensure spacing and alignment are consistent. and adjust margins where needed. make sure panels are not too tight. and components have enough room.
+check and improve desktop app panel layout, currently looks cramped and cluttered. ensure spacing and alignment are consistent. and adjust margins where needed. make sure panels are not too tight. and components have enough room. use gpui skills kit for guidance.
 
 ---
 
@@ -1142,19 +1152,15 @@ desktop check zen mode layout being shifted when toggled -> fix
 
 ---
 
-desktop: change and update main cursor color base on theme's accent color
+desktop: change and update main cursor color base on theme's accent color. use gpui skills kit for guidance.
 
 ---
 
-improve typography, text color in desktop app, especially headings and labels. reference codex: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-27 at 8.32.59 PM.png'. currently headings, labels are too faint. and not smooth enough.
+improve typography, text color in desktop app, especially headings and labels. reference codex: '/Users/vinhnguyenxuan/Documents/vtcode-resources/Screenshot 2026-10-27 at 8.32.59 PM.png'. currently headings, labels are too faint. and not smooth enough. use gpui skills kit for guidance.
 
 ---
 
-check all desktop app icons position and alignment. it seems the variant of icons placement are not synchronized.
-
----
-
-update the day greeting based on time of day when desktop app is opened active or resumed.
+check all desktop app icons position and alignment. use gpui skills kit for guidance. it seems the variant of icons placement are not synchronized.
 
 ---
 
@@ -1168,16 +1174,22 @@ https://claude.com/resources/articles/building-agents-when-to-fold-subagents-int
 
 ---
 
-change desktop chat text input placeholder text to sync with CLI
+also revise chat input styling to match CLI. or at least make it simple and minimal, distinct look. that should not feel familiar to the other desktop apps. have similar feels to CLI. follow its clean and minimal design yet still functional for a coding harness desktop class. keep spacing and alignment consistent.. use gpui skills kit for guidance.
 
 ---
 
-also revise chat input styling to match CLI.
+check and reference codex/chatgpt app typography design, it looks cleaner and more readable. /Users/vinhnguyenxuan/Documents/vtcode-resources/typography -> apply to improve desktop app text. use gpui skills kit for guidance.
 
 ---
 
-launch the desktop app in full size window (maximize), and remember this state next time.
+implement desktop notifications for updates and alerts. when new updates are available or important events occur. configure them in settings.
 
 ---
 
-check and reference codex/chatgpt app typography design, it looks cleaner and more readable. /Users/vinhnguyenxuan/Documents/vtcode-resources/typography -> apply to improve desktop app text.
+The 4 (recorded in .vtcode/memory/decisions.md, each a single cohesive
+1150–2420-line runloop fn with no verbatim seam — splitting needs a context-struct
+refactor, which violates the surgical-move policy):
+• session_iteration.rs (2499), turn_loop.rs (1767), runner/execute/mod.rs (1647),
+execution_facade/mod.rs (1210)
+
+Revisit only with an explicit runloop-refactor mandate.
