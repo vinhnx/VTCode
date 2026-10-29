@@ -25,7 +25,7 @@ available.
 
 Whitelist entries may be a built-in provider key or a `name` from `[[custom_providers]]`. Matching is case-insensitive.
 
-See the [Configuration guide](../config/config.md#provider-whitelisting) for full details.
+See the [Configuration guide](../config/models.md#provider-whitelisting) for full details.
 
 ## Custom providers
 
@@ -154,7 +154,7 @@ vtcode ask "Summarize this repository"
 ```
 
 Worked examples: [Atlas Cloud](./atlascloud.md) and [OmniRoute](./omniroute.md). See the
-[Configuration guide](../config/config.md#custom_providers) for the complete field reference and precedence rules.
+[Configuration guide](../config/models.md#custom_providers) for the complete field reference and precedence rules.
 
 ## Collapsed tool-result disclosure
 
