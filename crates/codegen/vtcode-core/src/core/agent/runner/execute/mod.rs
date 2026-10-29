@@ -1,31 +1,22 @@
 use super::AgentRunner;
-use super::completion::AssessmentResolution;
-use super::continuation::CompletionAssessment;
-use super::escalation::{EscalationDecision, EscalationGate};
+#[cfg(test)]
+use super::execute_helpers::record_terminal_turn_event;
 use super::execute_helpers::{
-    discard_refused_assistant_message, emit_blocked_handoff_events, prepare_responses_request_messages,
-    record_terminal_turn_event, stop_reason_from_finish_reason,
+    discard_refused_assistant_message, prepare_responses_request_messages, stop_reason_from_finish_reason,
 };
 use super::headless_planning;
-use super::helpers::detect_textual_exec_tool_call;
 use crate::config::constants::tools;
-use crate::config::models::{ModelId, Provider as ModelProvider};
+use crate::config::models::Provider as ModelProvider;
 use crate::config::tool_loop_limit_reached;
-use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
+use crate::config::types::ReasoningEffortLevel;
 use crate::config::{build_session_affinity_prompt_cache_key, session_affinity_key_enabled};
-use crate::core::agent::blocked_handoff::{BlockedHandoffResume, write_blocked_handoff_with_resume};
-use crate::core::agent::completion::{check_completion_candidate, check_for_response_loop};
-use crate::core::agent::harness_artifacts::existing_harness_artifact_paths;
 use crate::core::agent::harness_kernel::{HarnessRequestPlanInput, build_harness_request_plan};
 use crate::core::agent::refusal;
 use crate::core::agent::runtime::RuntimeControl;
-use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
-use crate::exec::events::HarnessEventKind;
 use crate::exec::events::planning::{PlanningOutcome, PlanningRecoverySnapshot, PlanningResponseClass};
-use crate::llm::provider::{Message, ToolCall, ToolChoice, supports_responses_chaining};
-use crate::llm::providers::gemini::wire::Part;
-use crate::tools::handlers::planning_workflow::{persist_plan_draft, validate_plan_content};
+use crate::llm::provider::{Message, ToolChoice, supports_responses_chaining};
+use crate::tools::handlers::planning_workflow::persist_plan_draft;
 use crate::utils::colors::style;
 use anyhow::{Context, Result};
 use serde_json::json;
@@ -90,45 +81,19 @@ impl AgentRunner {
         let mut planning_synthesis_required = false;
         let mut planning_recovery = PlanningRecoverySnapshot::default();
         let mut planning_failure_detail = None;
-        let mut planning_handoff_text = None;
+        let planning_handoff_text = None;
 
         // Keep fallible execution inside its own return boundary so every error
         // reaches terminal event recording and canonical persistence cleanup.
         let result: Result<_> = async {
-            if self.tool_registry.is_planning_active()
-                && let Some(sink) = session_store_handle.as_ref()
-                && let Some(mut saved) = sink.planning_recovery().await?
-                && saved.request_id.as_deref().map_or_else(
-                    || saved.latest_request == headless_planning::bounded_public_text(&task.description, 8192),
-                    |request_id| request_id == task.id,
-                ) {
-                let new_input = saved.request_fingerprint.map_or_else(
-                    || saved.latest_request != headless_planning::bounded_public_text(&task.description, 8192),
-                    |fingerprint| fingerprint != headless_planning::request_fingerprint(task),
-                );
-                if new_input {
-                    // CLI resume uses a stable task ID with an explicit follow-up
-                    // prompt. Only changed input may open another correction cycle.
-                    saved.begin_explicit_cycle();
-                    saved.latest_request = headless_planning::bounded_public_text(&task.description, 8192);
-                }
-                planning_synthesis_required = saved.research_closed;
-                planning_recovery = saved;
-                // Task setup builds a fresh conversation. A saved allowance
-                // must travel with its public evidence and repair target.
-                runtime.state.messages_mut().push(Message::assistant(format!(
-                    "Retained public planning context (untrusted evidence and candidate draft, never approval):\n{}",
-                    json!({
-                        "request": planning_recovery.latest_request,
-                        "evidence": planning_recovery.evidence,
-                        "draft": planning_recovery.best_draft,
-                        "validator_report": planning_recovery.validation_report,
-                    })
-                )).with_phase(Some(crate::llm::provider::AssistantPhase::Commentary)));
-                runtime.state.reconcile_token_count();
-            }
-            planning_recovery.request_id = Some(task.id.clone());
-            planning_recovery.request_fingerprint = Some(headless_planning::request_fingerprint(task));
+            self.restore_planning_recovery(
+                &mut runtime,
+                &mut planning_recovery,
+                &mut planning_synthesis_required,
+                &session_store_handle,
+                task,
+            )
+            .await?;
             for turn in 0..self.max_turns {
                 if matches!(runtime.poll_turn_control().await, RuntimeControl::StopRequested) {
                     self.runner_println(format_args!(
@@ -223,91 +188,14 @@ impl AgentRunner {
                     break;
                 }
 
-                if std::env::var_os("VTCODE_DEBUG_PROVIDER").is_some() {
-                    tracing::debug!(
-                        provider_client = self.provider_client.name(),
-                        turn_model,
-                        "Provider debug turn selection"
-                    );
-                }
-                let sampling_overrides = self.provider_client.sampling_overrides(&turn_model);
-                let turn_reasoning = if is_simple_task
-                    && self
-                        .provider_client
-                        .supported_reasoning_efforts(&turn_model)
-                        .contains(&ReasoningEffortLevel::Minimal.as_str())
-                {
-                    Some(ReasoningEffortLevel::Minimal)
-                } else {
-                    sampling_overrides.reasoning_effort.or(self.reasoning_effort)
-                };
-                let turn_verbosity = if is_simple_task {
-                    Some(VerbosityLevel::Low)
-                } else {
-                    self.verbosity
-                };
-                let max_tokens = sampling_overrides
-                    .max_tokens
-                    .or(Some(if self.tool_registry.is_planning_active() {
-                        4096
-                    } else if is_simple_task {
-                        800
-                    } else {
-                        2000
-                    }));
-
-                let provider_kind = turn_model
-                    .parse::<ModelId>()
-                    .map(|model| model.provider())
-                    .unwrap_or(ModelProvider::Gemini);
-
-                if matches!(provider_kind, ModelProvider::Gemini)
-                    && runtime.state.conversation.len() > runtime.state.last_processed_message_idx
-                {
-                    // Collect new messages first to avoid borrow conflict:
-                    // conversation is immutably borrowed in the loop, but
-                    // adjust_token_count/push need &mut state.
-                    // Previous assistant turns are replayed as `model`. Every
-                    // other entry is either harness steering or a duplicate of
-                    // a user message already recorded in `state.messages`, so
-                    // tag the replay synthetic; reverse history keeps the
-                    // original user-typed copy.
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|duration| duration.as_secs())
-                        .unwrap_or(0);
-                    let new_messages: Vec<Message> = runtime.state.conversation
-                        [runtime.state.last_processed_message_idx..]
-                        .iter()
-                        .map(|content| {
-                            let mut text = String::new();
-                            for part in &content.parts {
-                                if let Part::Text { text: part_text, .. } = part {
-                                    if !text.is_empty() {
-                                        text.push('\n');
-                                    }
-                                    text.push_str(part_text);
-                                }
-                            }
-                            match content.role.as_str() {
-                                "model" => Message::assistant(text),
-                                _ => {
-                                    let tokens = text.len().saturating_div(4);
-                                    Message::user(text).with_metadata(
-                                        crate::core::message_metadata::MessageMetadata::harness_notice(now, tokens),
-                                    )
-                                }
-                            }
-                        })
-                        .collect();
-                    let batch_tokens: usize = new_messages.iter().map(|m| m.estimate_tokens()).sum();
-                    runtime.state.adjust_token_count(batch_tokens as isize);
-                    runtime.state.messages_mut().extend(new_messages);
-                    runtime.state.last_processed_message_idx = runtime.state.conversation.len();
-                }
-
-                let planning_synthesis_turn = self.tool_registry.is_planning_active()
-                    && (planning_synthesis_required || turn + 1 == self.max_turns);
+                let turn_inputs =
+                    self.derive_turn_request_inputs(&mut runtime, &turn_model, turn, is_simple_task, planning_synthesis_required);
+                let sampling_overrides = turn_inputs.sampling_overrides;
+                let turn_reasoning = turn_inputs.turn_reasoning;
+                let turn_verbosity = turn_inputs.turn_verbosity;
+                let max_tokens = turn_inputs.max_tokens;
+                let provider_kind = turn_inputs.provider_kind;
+                let planning_synthesis_turn = turn_inputs.planning_synthesis_turn;
                 if planning_synthesis_turn {
                     if !planning_recovery.admit_request() {
                         planning_failure_detail = Some("The saved planning recovery allowance is exhausted.".to_owned());
@@ -771,84 +659,26 @@ impl AgentRunner {
                 let mut effective_tool_calls = response.tool_calls.clone();
                 let mut forced_continuation = false;
 
-                if effective_tool_calls.is_none()
-                    && (planning_synthesis_turn || response.content_text().len() < 150)
-                    && let Some(args_value) = detect_textual_exec_tool_call(response.content_text())
+                match self
+                    .handle_planning_response(PlanningResponse {
+                        runtime: &mut runtime,
+                        response: &response,
+                        effective_tool_calls: &mut effective_tool_calls,
+                        planning_recovery: &mut planning_recovery,
+                        planning_failure_detail: &mut planning_failure_detail,
+                        planning_synthesis_required: &mut planning_synthesis_required,
+                        planning_synthesis_turn,
+                        session_store_handle: &session_store_handle,
+                        task,
+                        provider_name: &provider_name,
+                        turn_model: &turn_model,
+                        turn,
+                    })
+                    .await?
                 {
-                    effective_tool_calls = Some(vec![ToolCall::function(
-                        format!("call_text_{turn}"),
-                        tools::EXEC_COMMAND.to_string(),
-                        args_value.to_string(),
-                    )]);
-                }
-
-                if self.tool_registry.is_planning_active() {
-                    planning_recovery.provider = provider_name.clone();
-                    planning_recovery.model = turn_model.clone();
-                    planning_recovery.response_class = Some(headless_planning::classify_response(
-                        &response, effective_tool_calls.as_ref().is_some_and(|calls| !calls.is_empty())));
-                    headless_planning::retain_draft(&mut planning_recovery, response.content_text());
-                }
-
-                // All correctable response shapes share the persisted allowance.
-                // The outer loop still enforces turn, time, token, and cost budgets.
-                let planning_text_only = effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty());
-                if self.tool_registry.is_planning_active()
-                    && (planning_synthesis_turn || planning_text_only)
-                {
-                    let report = validate_plan_content(response.content_text());
-                    let failure = if !planning_text_only {
-                        Some("The tool-free planning synthesis returned forbidden tool calls.")
-                    } else if response.finish_reason == crate::llm::provider::FinishReason::Length {
-                        Some("Planning response exceeded the output token limit during synthesis.")
-                    } else if !report.is_ready() {
-                        Some("The response did not contain a complete validated plan.")
-                    } else {
-                        None
-                    };
-                    if let Some(detail) = failure {
-                        planning_failure_detail = Some(detail.to_owned());
-                        planning_synthesis_required = true;
-                        runtime.state.is_completed = false;
-                        headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
-                            &task.description, &provider_name, &turn_model);
-                        if planning_recovery.best_draft.is_none() {
-                            planning_recovery.validation_report = Some(headless_planning::bounded_public_text(
-                                &report.repair_feedback(), 4096));
-                        }
-                        headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
-                            &self.session_id, turn + 1).await?;
-                        if planning_recovery.requests_used < PlanningRecoverySnapshot::MAX_REQUESTS
-                            && turn + 1 < self.max_turns
-                        {
-                            runtime.state.add_synthetic_user_message(format!(
-                                "Correct the planning response using retained evidence only. {detail} Validator feedback: {}. Make no tool calls.",
-                                planning_recovery.validation_report.as_deref().unwrap_or("Return a complete validated plan")
-                            ));
-                            continue;
-                        }
-                        runtime.state.outcome = if turn + 1 >= self.max_turns {
-                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1)
-                        } else {
-                            TaskOutcome::failed(detail.to_owned(), vec![], None, None)
-                        };
-                        break;
-                    }
-                    match persist_plan_draft(&self.tool_registry.planning_workflow_state(), response.content_text()).await {
-                        Ok(_) => {
-                            headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
-                                &task.description, &provider_name, &turn_model);
-                            planning_recovery.outcome = PlanningOutcome::AwaitingApproval;
-                            headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
-                                &self.session_id, turn + 1).await?;
-                        }
-                        Err(error) => {
-                            planning_failure_detail = Some(format!("The validated plan could not be persisted: {error:#}"));
-                            runtime.state.is_completed = false;
-                            runtime.state.outcome = TaskOutcome::failed("Planning needs your input; the plan could not be saved.".to_owned(), vec![], None, None);
-                            break;
-                        }
-                    }
+                    PlanningResponseFlow::FallThrough => {}
+                    PlanningResponseFlow::ContinueLoop => continue,
+                    PlanningResponseFlow::BreakLoop => break,
                 }
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
@@ -859,405 +689,60 @@ impl AgentRunner {
                 // results.  (Steps 1–2 already exist at the tool-exec level:
                 // auto-retry and alternative-tool fallback are handled in
                 // tool_exec.rs and execution_facade.rs.)
-                #[allow(
-                    unused_assignments,
-                    reason = "Intentional compatibility, platform, or test-only suppression."
-                )] // compiler keeps flags but this is clear
-                if self.config().agent.harness.confidence_escalation.enabled
-                    && !runtime.state.is_completed
-                    && let Some(tool_calls) = effective_tool_calls.as_ref()
-                    && !tool_calls.is_empty()
+                if self
+                    .run_escalation_gate(
+                        &mut runtime,
+                        &mut effective_tool_calls,
+                        &mut event_recorder,
+                        orchestration_enabled,
+                        &provider_name,
+                        &turn_model,
+                        turn,
+                        &mut should_write_blocked_handoff,
+                        &mut forced_continuation,
+                    )?
+                    .is_break()
                 {
-                    let escalation_config = &self.config().agent.harness.confidence_escalation;
-                    let orchestration_mode = if orchestration_enabled {
-                        "plan_build_evaluate"
-                    } else {
-                        "single"
-                    };
-
-                    // Reuse the per-turn cost estimate from the budget check above.
-                    let cost_estimate = runtime.state.total_cost_usd;
-
-                    let result = EscalationGate::decide(
-                        tool_calls,
-                        escalation_config,
-                        &runtime.state.error_recovery.lock(),
-                        cost_estimate,
-                        orchestration_mode,
-                    );
-
-                    if result.any_escalated {
-                        let reasons: Vec<String> = result
-                            .decisions
-                            .iter()
-                            .filter_map(|d| match d {
-                                EscalationDecision::Escalate { reason, .. } => Some(reason.clone()),
-                                EscalationDecision::Proceed => None,
-                            })
-                            .collect();
-                        let summary = reasons.join("; ");
-
-                        self.record_diagnostic(&mut event_recorder, &Diagnostic {
-                            severity: DiagnosticSeverity::Warning, code: "policy.escalation".into(),
-                            summary: "A safety check blocked tool calls. Recovery or guidance is required.".into(),
-                            agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1,
-                                "reasons": reasons, "attempt": runtime.state.consecutive_escalations + 1,
-                                "max_replan_attempts": escalation_config.max_replan_attempts,
-                                "max_total_escalations": escalation_config.max_total_escalations}).to_string(),
-                            correlation_id: format!("agent:{}:confidence-escalation", self.session_id), actions: vec![],
-                        });
-
-                        event_recorder.harness_event(
-                            HarnessEventKind::EscalationTriggered,
-                            Some(summary.clone()),
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        );
-
-                        let esc_count = runtime.state.consecutive_escalations;
-
-                        // --- Step 3: Re-plan via conversation injection ---
-                        if esc_count < escalation_config.max_replan_attempts {
-                            runtime.state.consecutive_escalations += 1;
-                            let replan_msg = format!(
-                                "The following tool calls were blocked by the safety \
-                                 escalation gate:\n\n{summary}\n\n\
-                                 Please try a different approach. You can use alternative \
-                                 tools, break the task into smaller steps, or provide a \
-                                 direct answer based on what you have already learned."
-                            );
-                            runtime.state.add_synthetic_user_message(replan_msg);
-                            // Skip dispatching blocked tool calls — let the LLM re-plan
-                            effective_tool_calls = None;
-                            forced_continuation = true;
-                        }
-                        // --- Step 4: Prompt user for guidance ---
-                        else if esc_count < escalation_config.max_total_escalations
-                            && escalation_config.prompt_user_on_exhaust
-                        {
-                            runtime.state.consecutive_escalations += 1;
-                            let user_msg = format!(
-                                "I've tried multiple approaches but the safety escalation \
-                                 gate keeps blocking my tool calls:\n\n{summary}\n\n\
-                                 Could you provide guidance on how to proceed? \
-                                 What approach should I use instead?"
-                            );
-                            runtime.state.add_synthetic_user_message(user_msg);
-                            should_write_blocked_handoff = true;
-                            runtime.state.outcome = TaskOutcome::escalated(summary, "multi_tool".to_string());
-                            break;
-                        }
-                        // --- Step 5: Abort with partial results ---
-                        else {
-                            runtime.state.consecutive_escalations += 1;
-                            should_write_blocked_handoff = true;
-                            runtime.state.outcome = TaskOutcome::failed(
-                                format!("Escalation chain exhausted: {summary}"),
-                                Vec::new(),
-                                Some(
-                                    "The safety escalation gate repeatedly blocked tool calls. \
-                                     Consider disabling the gate or adjusting the confidence \
-                                     threshold if this action should be permitted."
-                                        .into(),
-                                ),
-                                None,
-                            );
-                            break;
-                        }
-                    } else {
-                        // Tool calls passed escalation gate — reset chain counter
-                        runtime.state.consecutive_escalations = 0;
-
-                        event_recorder.harness_event(
-                            HarnessEventKind::EscalationBypassed,
-                            Some("All tool calls passed escalation gate".into()),
-                            None,
-                            None,
-                            None,
-                            None,
-                            None,
-                        );
-                    }
+                    break;
                 }
 
                 if self
-                    .active_primary_agent
-                    .as_ref()
-                    .is_some_and(|agent| agent.identity.name == "coordinator")
-                    && effective_tool_calls.as_ref().is_none_or(|calls| calls.is_empty())
-                    && let Some(controller) = self.tool_registry.subagent_controller()
-                    && let Some(snapshot) = controller.matrix_snapshot().await
+                    .settle_coordinator_matrix(
+                        &mut runtime,
+                        &effective_tool_calls,
+                        &mut forced_continuation,
+                        &mut should_write_blocked_handoff,
+                    )
+                    .await?
+                    .is_break()
                 {
-                    use crate::exec::events::matrix::MatrixLifecycle;
-                    match snapshot.lifecycle {
-                        MatrixLifecycle::Running | MatrixLifecycle::Verifying => {
-                            let settled = controller
-                                .wait_matrix_idle()
-                                .await
-                                .context("matrix disappeared before completion")?;
-                            anyhow::ensure!(
-                                !matches!(settled.lifecycle, MatrixLifecycle::Running | MatrixLifecycle::Verifying),
-                                "matrix stopped without a durable result; reconcile owned cleanup before continuation"
-                            );
-                            runtime.state.is_completed = false;
-                            runtime.state.add_synthetic_user_message(format!(
-                                "Durable matrix results: {}. Report outcomes from this snapshot; matrix success requires Succeeded. Other states require a coordinator decision.",
-                                serde_json::to_string(&settled)?
-                            ));
-                            forced_continuation = true;
-                        }
-                        MatrixLifecycle::Succeeded => {
-                            runtime.state.is_completed = true;
-                            runtime.state.outcome = TaskOutcome::Success;
-                            break;
-                        }
-                        MatrixLifecycle::Cancelled => {
-                            runtime.state.outcome = TaskOutcome::Cancelled;
-                            break;
-                        }
-                        MatrixLifecycle::Blocked => {
-                            runtime.state.outcome = TaskOutcome::Failed {
-                                reason: "matrix requires a coordinator decision or confirmed owned cleanup".into(),
-                                accomplished: vec![],
-                                recovery_suggestion: Some(format!(
-                                    "Resume session and inspect matrix {} status",
-                                    snapshot.spec.id
-                                )),
-                                checkpoint_path: None,
-                            };
-                            should_write_blocked_handoff = true;
-                            break;
-                        }
-                        MatrixLifecycle::Created | MatrixLifecycle::Paused => {}
-                    }
+                    break;
                 }
 
-                if !forced_continuation
-                    && !runtime.state.is_completed
-                    && effective_tool_calls.as_ref().is_none_or(|tool_calls| tool_calls.is_empty())
-                    && !response.content_text().trim().is_empty()
+                match self
+                    .assess_completion_gate(CompletionGate {
+                        runtime: &mut runtime,
+                        event_recorder: &mut event_recorder,
+                        response: &response,
+                        effective_tool_calls: &effective_tool_calls,
+                        planning_recovery: &planning_recovery,
+                        provider_name: &provider_name,
+                        turn_model: &turn_model,
+                        turn,
+                        effective_task: &effective_task,
+                        continuation_controller: &mut continuation_controller,
+                        verification_recovery_used: &mut verification_recovery_used,
+                        orchestration_enabled,
+                        revision_rounds_used: &mut revision_rounds_used,
+                        max_revision_rounds,
+                        should_write_blocked_handoff: &mut should_write_blocked_handoff,
+                        forced_continuation: &mut forced_continuation,
+                    })
+                    .await?
                 {
-                    // A validated persisted plan may repeat a previously truncated draft.
-                    // Its successful repair is progress, even when the public text matches.
-                    if planning_recovery.outcome != PlanningOutcome::AwaitingApproval
-                        && check_for_response_loop(response.content_text(), &mut runtime.state) {
-                        self.record_diagnostic(&mut event_recorder, &Diagnostic {
-                            severity: DiagnosticSeverity::Warning, code: "agent.response_loop".into(),
-                            summary: "Repeated assistant responses stopped this task.".into(),
-                            agent_details: json!({"provider": provider_name, "model": turn_model, "turn": turn + 1,
-                                "outcome": "loop_detected"}).to_string(),
-                            correlation_id: format!("agent:{}:response-loop", self.session_id), actions: vec![],
-                        });
-                        runtime.state.outcome = TaskOutcome::LoopDetected;
-                        break;
-                    }
-
-                    if (self.tool_registry.is_planning_active()
-                        && matches!(response.finish_reason, crate::llm::provider::FinishReason::Stop))
-                        || check_completion_candidate(response.content_text())
-                        || self.tool_registry.completion_verification_pending()
-                    {
-                        self.runner_println(format_args!(
-                            "[{}] {}",
-                            self.agent_type,
-                            style("Completion candidate detected; checking tracker and verification state.")
-                                .green()
-                                .bold()
-                        ));
-                        let mut assessment = continuation_controller
-                            .assess_completion(
-                                &effective_task,
-                                &runtime.state,
-                                self.tool_registry.tracker_adopted_for_request(),
-                            )
-                            .await?;
-
-                        if self.tool_registry.completion_verification_pending()
-                            && !matches!(assessment, CompletionAssessment::Continue { .. })
-                        {
-                            let mut commands = match &assessment {
-                                CompletionAssessment::Verify { commands } => commands.clone(),
-                                _ => Vec::new(),
-                            };
-                            if commands.is_empty() {
-                                commands = self.tool_registry.missing_required_completion_verifiers();
-                            }
-                            if commands.is_empty() {
-                                let override_command =
-                                    self.config().agent.harness.verification.default_verifier_override.as_deref();
-                                commands = override_command
-                                    .filter(|command| {
-                                        crate::tools::tool_intent::classify_shell_activity(
-                                            tools::EXEC_COMMAND,
-                                            &json!({"cmd":command}),
-                                        ) == crate::tools::tool_intent::ShellActivity::Verification
-                                    })
-                                    .map(str::to_owned)
-                                    .or_else(|| {
-                                        crate::tools::tool_intent::default_verifier_for_workspace(&self._workspace)
-                                    })
-                                    .into_iter()
-                                    .collect();
-                            }
-                            if commands.is_empty() {
-                                runtime.state.outcome = TaskOutcome::failed(
-                                    self.tool_registry.unverified_completion_reason(),
-                                    vec![],
-                                    None,
-                                    None,
-                                );
-                                should_write_blocked_handoff = true;
-                                break;
-                            }
-                            assessment = CompletionAssessment::Verify { commands };
-                        }
-
-                        // Verify requires running verification commands before
-                        // re-dispatching the after_verification result through the
-                        // same helper. All other variants are resolved directly.
-                        if let CompletionAssessment::Verify { commands } = &assessment {
-                            event_recorder.harness_event(
-                                HarnessEventKind::VerificationStarted,
-                                Some(format!("Running verification: {}", commands.join(", "))),
-                                commands.first().cloned(),
-                                None,
-                                None,
-                                None,
-                                None,
-                            );
-                            let verification_results = self
-                                .run_verification_commands(commands, &mut event_recorder, &mut runtime)
-                                .await?;
-                            self.emit_verification_outcome(&mut event_recorder, commands, &verification_results);
-                            if matches!(runtime.state.outcome, TaskOutcome::Cancelled) {
-                                break;
-                            }
-
-                            let post_verification =
-                                continuation_controller.after_verification(&verification_results).await?;
-                            if let CompletionAssessment::Continue { reason, .. } = &post_verification {
-                                let policy = &self.config().agent.harness.verification;
-                                if verification_recovery_used
-                                    || !policy.auto_execute
-                                    || policy.in_turn_attempts == 0
-                                    || policy.cross_turn_turns == 0
-                                    || policy.max_consecutive_failures <= 1
-                                {
-                                    let evidence = verification_results
-                                        .iter()
-                                        .find(|result| !result.success || result.exit_code != Some(0))
-                                        .map(super::continuation::build_verification_failure_payload)
-                                        .unwrap_or_else(|| reason.clone());
-                                    let evidence = vtcode_commons::formatting::truncate_byte_budget(
-                                        &evidence,
-                                        2000,
-                                        "\n[verification evidence truncated]",
-                                    );
-                                    runtime.state.outcome = TaskOutcome::failed(
-                                        format!("Unverified: completion verification did not pass. {evidence}"),
-                                        vec![],
-                                        None,
-                                        None,
-                                    );
-                                    should_write_blocked_handoff = true;
-                                    break;
-                                }
-                                verification_recovery_used = true;
-                            }
-                            match self
-                                .resolve_completion_assessment(
-                                    post_verification,
-                                    &verification_results,
-                                    &effective_task,
-                                    &mut runtime,
-                                    &mut event_recorder,
-                                    orchestration_enabled,
-                                    &mut revision_rounds_used,
-                                    max_revision_rounds,
-                                    &mut should_write_blocked_handoff,
-                                )
-                                .await?
-                            {
-                                AssessmentResolution::Break => break,
-                                AssessmentResolution::ForceContinue => {
-                                    forced_continuation = true;
-                                }
-                                // `after_verification` never yields `Verify`.
-                                AssessmentResolution::VerifyNotHandled => {}
-                            }
-                        } else {
-                            match self
-                                .resolve_completion_assessment(
-                                    assessment,
-                                    &[],
-                                    &effective_task,
-                                    &mut runtime,
-                                    &mut event_recorder,
-                                    orchestration_enabled,
-                                    &mut revision_rounds_used,
-                                    max_revision_rounds,
-                                    &mut should_write_blocked_handoff,
-                                )
-                                .await?
-                            {
-                                AssessmentResolution::Break => break,
-                                AssessmentResolution::ForceContinue => {
-                                    forced_continuation = true;
-                                }
-                                AssessmentResolution::VerifyNotHandled => {
-                                    // Verify is handled in the if-branch above;
-                                    // the helper only returns this for Verify.
-                                    return Err(anyhow::anyhow!("unexpected VerifyNotHandled from assess_completion"));
-                                }
-                            }
-                        }
-                    } else {
-                        // Tracker-aware status continuation: text-only responses
-                        // that are not completion candidates still must not end
-                        // the run while the task tracker has incomplete steps.
-                        //
-                        // Use a read-only tracker probe — never `assess_completion`
-                        // — so status text cannot create/complete the internal
-                        // scaffold or invent a pending verify step under
-                        // ContinuationPolicy::All.
-                        let tracker_auto_continue = self.config().agent.harness.continuation.auto_continue_tracker;
-                        let idle_limit = self.config().agent.idle_turn_limit;
-                        let idle_limit_hit = runtime.state.consecutive_idle_turns >= idle_limit;
-                        let asks_user = response.content_text().contains('?');
-                        if tracker_auto_continue && !idle_limit_hit && !asks_user {
-                            let status_text = response.content_text();
-                            let safety_handoff =
-                                crate::core::agent::completion::tracker_final_text_is_safety_handoff(status_text);
-                            if !safety_handoff {
-                                let incomplete = continuation_controller
-                                    .incomplete_tracker_labels(self.tool_registry.tracker_adopted_for_request())
-                                    .await?;
-                                if !incomplete.is_empty() {
-                                    let joined = incomplete.join(", ");
-                                    let reason = format!("Task tracker is incomplete: {joined}.");
-                                    if super::continuation::tracker_status_force_continue_eligible(
-                                        tracker_auto_continue,
-                                        idle_limit_hit,
-                                        asks_user,
-                                        &reason,
-                                    ) {
-                                        let prompt = super::continuation::tracker_incomplete_continue_prompt(&joined);
-                                        self.runner_println(format_args!(
-                                            "[{}] {}: {}",
-                                            self.agent_type,
-                                            style("[TRACKER CONTINUE]").yellow().bold(),
-                                            reason
-                                        ));
-                                        runtime.state.add_synthetic_user_message(prompt);
-                                        forced_continuation = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    CompletionGateFlow::FallThrough => {}
+                    CompletionGateFlow::Break => break,
+                    CompletionGateFlow::ReturnErr(err) => return Err(err),
                 }
 
                 if let Some(tool_calls) = effective_tool_calls
@@ -1433,177 +918,23 @@ impl AgentRunner {
                 }
             }
 
-            runtime.state.finalize_outcome(self.max_turns);
-            if self.tool_registry.is_planning_active()
-                && !matches!(runtime.state.outcome, TaskOutcome::Cancelled | TaskOutcome::Refused { .. })
-                && planning_recovery.outcome != PlanningOutcome::AwaitingApproval
-            {
-                let detail = planning_failure_detail.take().unwrap_or_else(|| runtime.state.outcome.description());
-                headless_planning::retain_progress(&mut planning_recovery, &runtime.state.messages,
-                    &task.description, self.provider_client.name(), &self.get_selected_model());
-                let already_shown = planning_recovery.input_prompt_shown;
-                planning_recovery.outcome = PlanningOutcome::AwaitingInput;
-                planning_recovery.input_prompt_shown = true;
-                runtime.state.is_completed = false;
-                if runtime.state.outcome.is_success() || runtime.state.outcome == TaskOutcome::Unknown {
-                    runtime.state.outcome = TaskOutcome::failed("Planning needs your input.".to_owned(), vec![], None, None);
-                }
-                headless_planning::persist_checkpoint(session_store_handle.as_ref(), &planning_recovery,
-                    &self.session_id, runtime.state.stats.turns_executed).await?;
-                let diagnostic = headless_planning::awaiting_input_diagnostic(&planning_recovery, &self.session_id, &detail);
-                planning_handoff_text = Some(diagnostic.text());
-                if !already_shown {
-                    self.record_diagnostic(&mut event_recorder, &diagnostic);
-                }
-                should_write_blocked_handoff = true;
-            }
-            if runtime.state.outcome.is_success() && self.tool_registry.completion_verification_pending() {
-                runtime.state.is_completed = false;
-                runtime.state.outcome =
-                    TaskOutcome::failed(self.tool_registry.unverified_completion_reason(), vec![], None, None);
-                should_write_blocked_handoff = true;
-            }
-
-            if self.tool_registry.completion_verification_pending() && !runtime.state.outcome.is_success() {
-                runtime.state.warnings.push(format!(
-                    "{} Blocker: {}",
-                    self.tool_registry.unverified_completion_reason(),
-                    runtime.state.outcome.description()
-                ));
-            }
-            let total_duration_ms = run_started_at.elapsed().as_millis();
-
-            // Agent execution completed
-            self.runner_println(format_args!("{agent_prefix} Done"));
-
-            // Generate meaningful summary based on agent actions
-            let average_turn_duration_ms = if runtime.state.turn_count > 0 {
-                Some(runtime.state.turn_total_ms as f64 / runtime.state.turn_count as f64)
-            } else {
-                None
-            };
-
-            let max_turn_duration_ms = if runtime.state.turn_count > 0 {
-                Some(runtime.state.turn_max_ms)
-            } else {
-                None
-            };
-
-            let outcome = runtime.state.outcome.clone();
-            self.thread_handle.replace_messages((*runtime.state.messages).clone());
-            let summary = planning_handoff_text.unwrap_or_else(|| self.generate_task_summary(
-                &effective_task,
-                &runtime.state.modified_files,
-                &runtime.state.executed_commands,
-                &runtime.state.warnings,
-                &runtime.state.messages,
-                runtime.state.stats.turns_executed,
-                runtime.state.max_tool_loop_streak,
+            self.finalize_task_execution(TaskFinalization {
+                runtime: &mut runtime,
+                event_recorder: &mut event_recorder,
+                planning_recovery: &mut planning_recovery,
+                planning_failure_detail: &mut planning_failure_detail,
+                planning_handoff_text,
+                should_write_blocked_handoff: &mut should_write_blocked_handoff,
+                session_store_handle: &session_store_handle,
+                task,
+                run_started_at,
+                agent_prefix: &agent_prefix,
+                effective_task: &effective_task,
                 max_tool_loops,
-                outcome,
-                total_duration_ms,
-                average_turn_duration_ms,
-                max_turn_duration_ms,
-                &runtime.state.stats.total_usage,
-            ));
-
-            // A completed read-only task must return the actual plan, rather
-            // than replacing it with operational task-summary bookkeeping.
-            let planning_response =
-                if self.tool_registry.is_planning_active() && matches!(runtime.state.outcome, TaskOutcome::Success) {
-                    runtime
-                        .state
-                        .messages
-                        .iter()
-                        .rev()
-                        .find(|message| {
-                            message.role == crate::llm::provider::MessageRole::Assistant
-                                && !message.content.as_text().trim().is_empty()
-                        })
-                        .map(|message| message.content.as_text().into_owned())
-                } else {
-                    None
-                };
-            if !summary.trim().is_empty() {
-                // Preserve the user-facing result in the event stream.
-                event_recorder.agent_message(planning_response.as_deref().unwrap_or(&summary));
-                // Also display summary prominently for immediate visibility in TUI transcript
-                self.runner_println(format_args!(
-                    "\n{} Agent Task Summary\n{}",
-                    style("[Task]").cyan().bold(),
-                    summary
-                ));
-            }
-
-            let runtime_agent_config = self.core_agent_config();
-            if let Err(err) = crate::persistent_memory::finalize_persistent_memory(
-                &runtime_agent_config,
-                Some(self.config()),
-                &runtime.state.messages,
-                &self.session_id,
-            )
+                max_context_tokens,
+                session_costs: &session_costs,
+            })
             .await
-            {
-                warn!(
-                    error = %err,
-                    session_id = %self.session_id,
-                    "Failed to update persistent memory"
-                );
-            }
-
-            if runtime.state.outcome.is_hard_block() || should_write_blocked_handoff {
-                let relevant_paths = existing_harness_artifact_paths(&self._workspace);
-                match write_blocked_handoff_with_resume(
-                    &self._workspace,
-                    &self.session_id,
-                    runtime.state.outcome.code(),
-                    &runtime.state.outcome.description(),
-                    &relevant_paths,
-                    BlockedHandoffResume::Unavailable(
-                        "Resume unavailable because the legacy agent runner does not create a session archive.",
-                    ),
-                    self.tool_registry.is_planning_active(),
-                ) {
-                    Ok(artifacts) => emit_blocked_handoff_events(
-                        &mut event_recorder,
-                        &runtime.state.outcome.description(),
-                        &artifacts.current_path,
-                        &artifacts.archive_path,
-                    ),
-                    Err(err) => warn!(
-                        error = %err,
-                        session_id = %self.session_id,
-                        "Failed to persist blocked handoff"
-                    ),
-                }
-            }
-
-            let total_usage = runtime.state.stats.total_usage.clone();
-            record_terminal_turn_event(&mut event_recorder, &runtime.state.outcome, total_usage.clone());
-            event_recorder.thread_completed(
-                &self.session_id,
-                runtime.state.outcome.thread_completion_subtype(),
-                runtime.state.outcome.code(),
-                runtime
-                    .state
-                    .outcome
-                    .is_success()
-                    .then_some(planning_response.as_deref().unwrap_or(&summary)),
-                runtime.state.stop_reason.as_deref(),
-                total_usage,
-                session_costs
-                    .total()
-                    .and_then(|cost| serde_json::Number::from_f64(cost.effective_usd)),
-                runtime.state.stats.turns_executed,
-            );
-            let thread_events = event_recorder.take_events();
-            let steering_receiver = runtime.take_steering_receiver();
-            let state = std::mem::replace(
-                &mut runtime.state,
-                AgentSessionState::new(self.session_id.clone(), self.max_turns, max_tool_loops, max_context_tokens),
-            );
-
-            Ok((state.into_results(summary, thread_events, total_duration_ms), steering_receiver))
         }
         .await;
 
@@ -1642,6 +973,15 @@ impl AgentRunner {
         }
     }
 }
+
+mod assessment;
+mod dispatch_gates;
+mod planning;
+use planning::{PlanningResponse, PlanningResponseFlow};
+mod finalize;
+use assessment::{CompletionGate, CompletionGateFlow};
+mod pre_request;
+use finalize::TaskFinalization;
 
 #[cfg(test)]
 mod tests;
