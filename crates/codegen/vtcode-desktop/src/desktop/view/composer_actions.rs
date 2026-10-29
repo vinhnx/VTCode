@@ -128,7 +128,11 @@ impl DesktopView {
             }
             DesktopSlashAction::Theme(theme) => {
                 if let Some(theme) = theme {
-                    if themes::find(&theme).is_none() {
+                    // Theme ids are lowercase; the CLI lowercases before lookup
+                    // (`handle_theme_command`), so mirror that instead of
+                    // rejecting a capitalized id the CLI would accept.
+                    let canonical = theme.to_ascii_lowercase();
+                    if themes::find(&canonical).is_none() {
                         self.clear_submitted_command(window, cx);
                         self.error =
                             Some(format!("Theme '{theme}' is not available. Choose a theme from Appearance settings."));
@@ -136,7 +140,7 @@ impl DesktopView {
                         return true;
                     }
                     self.clear_submitted_command(window, cx);
-                    self.apply_theme(theme, window, cx);
+                    self.apply_theme(canonical, window, cx);
                     self.sync_theme_to_cli(cx);
                 } else {
                     self.settings_tab = settings::SettingsTab::Appearance;

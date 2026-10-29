@@ -62,7 +62,14 @@ enum WebmcpCommand {
 
 fn parse_command(input: &str) -> Option<Result<WebmcpCommand, &'static str>> {
     let input = input.trim();
-    let rest = input.strip_prefix("/webmcp")?;
+    // The CLI dispatcher lowercases the command token, so `/WebMCP` must take
+    // the same native path as `/webmcp`; otherwise pairing bypasses the
+    // desktop panel refresh. `split_at_checked` keeps the byte split
+    // panic-free on non-boundary input.
+    let rest = input
+        .split_at_checked("/webmcp".len())
+        .filter(|(prefix, _)| prefix.eq_ignore_ascii_case("/webmcp"))
+        .map(|(_, rest)| rest)?;
     if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
         return None;
     }
@@ -594,5 +601,24 @@ mod tests {
                 .is_err()
         );
         assert!(parse_command("/webmcp-never").is_none());
+    }
+
+    #[test]
+    fn webmcp_command_prefix_matches_cli_case_insensitivity() {
+        assert_eq!(parse_command("/WebMCP").unwrap().unwrap(), WebmcpCommand::Status);
+        assert_eq!(parse_command("/WEBMCP status").unwrap().unwrap(), WebmcpCommand::Status);
+        assert_eq!(
+            parse_command("/Webmcp pair https://example.test").unwrap().unwrap(),
+            WebmcpCommand::Pair {
+                origin: "https://example.test".into(),
+                replace: false
+            }
+        );
+        // Short, over-long, and non-boundary prefixes still miss without panicking.
+        assert!(parse_command("/webmc").is_none());
+        assert!(parse_command("/webmcp-never").is_none());
+        assert!(parse_command("/webmcpé").is_none());
+        assert!(parse_command("é/webmcp").is_none());
+        assert!(parse_command("abcdefé").is_none());
     }
 }

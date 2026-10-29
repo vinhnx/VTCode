@@ -58,17 +58,30 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
     let body = input.trim().strip_prefix('/')?;
     let (name, args) = body.split_once(char::is_whitespace).unwrap_or((body, ""));
     let args = args.trim();
-    match name {
-        "new" if args.is_empty() => Some(DesktopSlashAction::NewSession),
-        "exit" if args.is_empty() => Some(DesktopSlashAction::CloseSession),
-        "stop" if args.is_empty() => Some(DesktopSlashAction::StopTurn),
-        "model" | "models" if args.is_empty() => Some(DesktopSlashAction::ModelPicker),
+    // The CLI dispatcher lowercases the command token (see
+    // `src/agent/runloop/slash_commands/dispatch.rs`); mirror that so a
+    // capitalized native command cannot fall through to the headless service.
+    // `new`, `exit`, `stop`, and `model` also ignore arguments in the CLI
+    // (`builtins.rs` takes no args for them), so they route natively
+    // regardless of trailing text: `/NEW foo` would otherwise tear down the
+    // service-side session while this client keeps showing it as selected,
+    // `/exit foo` the same, `/stop foo` would be silently dropped by the idle
+    // gate mid-run, and `/model foo` would park the text-driven picker and
+    // swallow later turns. Every remaining fallthrough below is headless-safe
+    // (pure text, usage errors, or text-driven selection).
+    let command = name.to_ascii_lowercase();
+    let keyword = args.to_ascii_lowercase();
+    match command.as_str() {
+        "new" => Some(DesktopSlashAction::NewSession),
+        "exit" => Some(DesktopSlashAction::CloseSession),
+        "stop" => Some(DesktopSlashAction::StopTurn),
+        "model" | "models" => Some(DesktopSlashAction::ModelPicker),
         "history" if args.is_empty() => Some(DesktopSlashAction::History),
         "splash" if args.is_empty() => Some(DesktopSlashAction::Splash),
         "help" if args.is_empty() => Some(DesktopSlashAction::Help),
         "mode" if args.is_empty() => Some(DesktopSlashAction::Modes),
         "files" => Some(DesktopSlashAction::Files(args.to_string())),
-        "fast" => match args {
+        "fast" => match keyword.as_str() {
             "" => Some(DesktopSlashAction::FastMode(None)),
             "on" => Some(DesktopSlashAction::FastMode(Some(true))),
             "off" => Some(DesktopSlashAction::FastMode(Some(false))),
@@ -110,20 +123,20 @@ pub(super) fn desktop_slash_action(input: &str) -> Option<DesktopSlashAction> {
             {
                 return None;
             }
-            if let Some(tab) = settings_tab_for_name(args) {
+            if let Some(tab) = settings_tab_for_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
-            match args {
+            match keyword.as_str() {
                 "model" | "models" => Some(DesktopSlashAction::ModelPicker),
                 "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
                 _ => Some(DesktopSlashAction::Configuration(Some(args.to_string()))),
             }
         }
         "settings" => {
-            if let Some(tab) = settings_tab_for_name(args) {
+            if let Some(tab) = settings_tab_for_name(&keyword) {
                 return Some(DesktopSlashAction::Settings(Some(tab)));
             }
-            match args {
+            match keyword.as_str() {
                 "model" | "models" => Some(DesktopSlashAction::ModelPicker),
                 "permissions" | "permission" => Some(DesktopSlashAction::Permissions),
                 _ => None,
@@ -740,7 +753,6 @@ mod tests {
         assert_eq!(desktop_slash_action("/theme"), Some(DesktopSlashAction::Theme(None)));
 
         for input in [
-            "/new please",
             "/fast maybe",
             "/config reset",
             "/config reset --global",
@@ -763,6 +775,66 @@ mod tests {
             "/settings agent.default_model",
             "/splash now",
             "/files\nother",
+        ] {
+            assert_eq!(desktop_slash_action(input), None, "{input:?} stays with the CLI runtime");
+        }
+    }
+
+    #[test]
+    fn desktop_slash_actions_match_cli_case_insensitivity() {
+        // The CLI lowercases the command token before dispatch; a capitalized
+        // native command must route natively instead of falling through to the
+        // headless service (where `/NEW` would end the service-side session
+        // while this client keeps showing it as selected).
+        for (input, expected) in [
+            ("/NEW", DesktopSlashAction::NewSession),
+            ("/New", DesktopSlashAction::NewSession),
+            ("/EXIT", DesktopSlashAction::CloseSession),
+            ("/Stop", DesktopSlashAction::StopTurn),
+            ("/MODEL", DesktopSlashAction::ModelPicker),
+            ("/Models", DesktopSlashAction::ModelPicker),
+            ("/HISTORY", DesktopSlashAction::History),
+            ("/Splash", DesktopSlashAction::Splash),
+            ("/HELP", DesktopSlashAction::Help),
+            ("/Mode", DesktopSlashAction::Modes),
+        ] {
+            assert_eq!(desktop_slash_action(input), Some(expected), "{input:?} routes natively");
+        }
+        // Keyword arguments follow the CLI's case-insensitive matching, while
+        // free-form values keep their original case for downstream resolvers.
+        assert_eq!(desktop_slash_action("/FAST ON"), Some(DesktopSlashAction::FastMode(Some(true))));
+        assert_eq!(desktop_slash_action("/Fast Off"), Some(DesktopSlashAction::FastMode(Some(false))));
+        assert_eq!(desktop_slash_action("/CONFIG PERMISSIONS"), Some(DesktopSlashAction::Permissions));
+        assert_eq!(
+            desktop_slash_action("/Config Appearance"),
+            Some(DesktopSlashAction::Settings(Some(SettingsTab::Appearance,)))
+        );
+        assert_eq!(desktop_slash_action("/SETTINGS Model"), Some(DesktopSlashAction::ModelPicker));
+        assert_eq!(desktop_slash_action("/THEME Ciapre"), Some(DesktopSlashAction::Theme(Some("Ciapre".into()))));
+        assert_eq!(desktop_slash_action("/FILES SRC/UI"), Some(DesktopSlashAction::Files("SRC/UI".into())));
+        // Commands whose CLI backend ignores arguments route natively regardless
+        // of trailing text, in any case: falling through would hit
+        // headless-unsafe handlers (session teardown, picker parking).
+        for (input, expected) in [
+            ("/new please", DesktopSlashAction::NewSession),
+            ("/NEW please", DesktopSlashAction::NewSession),
+            ("/exit now", DesktopSlashAction::CloseSession),
+            ("/EXIT now", DesktopSlashAction::CloseSession),
+            ("/stop now", DesktopSlashAction::StopTurn),
+            ("/STOP now", DesktopSlashAction::StopTurn),
+            ("/model foo", DesktopSlashAction::ModelPicker),
+            ("/MODEL foo bar", DesktopSlashAction::ModelPicker),
+        ] {
+            assert_eq!(desktop_slash_action(input), Some(expected), "{input:?} routes natively");
+        }
+        // Guards still apply to capitalized input: unknown commands and
+        // runtime-owned `/config` sections stay with the CLI.
+        for input in [
+            "/NEWS",
+            "/FAST maybe",
+            "/CONFIG RESET",
+            "/Settings reset",
+            "/history please",
         ] {
             assert_eq!(desktop_slash_action(input), None, "{input:?} stays with the CLI runtime");
         }

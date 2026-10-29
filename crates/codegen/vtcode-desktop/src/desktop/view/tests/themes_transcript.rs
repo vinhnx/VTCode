@@ -770,3 +770,35 @@ fn transcript_remeasures_wrapped_markdown_when_window_narrows(cx: &mut TestAppCo
     })
     .unwrap();
 }
+
+#[gpui_kit::test]
+fn slash_theme_accepts_capitalized_ids_like_the_cli(cx: &mut TestAppContext) {
+    let (window, view) = open_desktop(cx);
+    let (commands, _requests) = tokio::sync::mpsc::channel(4);
+    view.update(cx, |view, _| {
+        view.backend = Some(BackendHandle { commands });
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |input, cx| input.set_value("/theme CIAPRE-DARK", window, cx));
+            view.submit_prompt(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "ciapre-dark");
+        assert!(view.read(cx).error.is_none());
+
+        view.update(cx, |view, cx| {
+            view.composer
+                .update(cx, |input, cx| input.set_value("/theme NoSuchTheme", window, cx));
+            view.submit_prompt(window, cx);
+        });
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).theme_id, "ciapre-dark", "unknown ids keep the active theme");
+        assert_eq!(
+            view.read(cx).error.as_deref(),
+            Some("Theme 'NoSuchTheme' is not available. Choose a theme from Appearance settings.")
+        );
+    })
+    .unwrap();
+}
