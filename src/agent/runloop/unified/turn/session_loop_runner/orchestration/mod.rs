@@ -1,11 +1,9 @@
-use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
-use tokio_util::sync::CancellationToken;
 use vtcode_commons::ui_protocol::ActivityState;
 use vtcode_config::loader::SimpleConfigWatcher;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -20,31 +18,20 @@ use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::session::SessionId;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
-use vtcode_core::utils::session_archive::SessionMessage;
 use vtcode_ui::tui::app::ArchivedPromptEntry;
 use vtcode_ui::tui::app::InlineSession;
 
 use super::super::{CancelGuard, TerminalCleanupGuard};
 use super::archive::refresh_runtime_debug_context_for_next_session;
-use super::blocked_handoff::write_blocked_handoff_after_checkpoint;
-use super::handoff::{
-    append_approved_plan_execution_input, apply_primary_agent_tool_policy_overrides,
-    build_approved_plan_execution_prompt, report_plan_approval_selection_failure, select_approved_plan_execution_agent,
-};
+use super::handoff::append_approved_plan_execution_input;
 use super::metrics::{capture_code_change_snapshot, estimate_history_bytes};
-use super::plan_seed::load_active_plan_seed;
 use super::support::{
-    ExecutionSummaryStatus, RefusedTurnRollback, approved_plan_execution_summary, build_unrelated_dirty_worktree_note,
-    build_withdrawn_turn_changes_note, checkpoint_session_archive_start, checkpoint_unavailable_notice,
-    force_reload_workspace_config_for_execution, format_workspace_relative_paths, latest_assistant_result_text,
-    prepare_transient_turn_notes, prompt_startup_planning_workflow, remove_transient_system_notes,
+    ExecutionSummaryStatus, checkpoint_session_archive_start, latest_assistant_result_text,
+    prompt_startup_planning_workflow,
 };
 use super::turn_tail::{TurnPersistenceTail, complete_turn_persistence_tail};
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::git::{compute_session_code_change_delta, normalize_workspace_path};
-use crate::agent::runloop::model_picker::ModelPickerState;
-use crate::agent::runloop::unified::inline_events::harness::harness_event;
-use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::git::compute_session_code_change_delta;
 use crate::agent::runloop::unified::planning_workflow_state::{
     render_planning_workflow_next_step_hint, transition_to_planning_workflow,
 };
@@ -58,13 +45,9 @@ use crate::agent::runloop::unified::status_line::InputStatusState;
 use crate::agent::runloop::unified::turn::background_completion::PendingBackgroundCompletions;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult as RunLoopTurnLoopResult;
 use crate::agent::runloop::unified::turn::finalization::finalize_session;
-use crate::agent::runloop::unified::turn::primary_agent_runtime::{
-    PrimaryAgentRuntimeSyncContext, sync_primary_agent_permissions, sync_primary_agent_runtime,
-};
-use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
+
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     effective_max_tool_calls_for_approved_plan_execution, effective_max_tool_calls_for_turn,
-    resolve_safety_tool_call_limits,
 };
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::updater::{InlineUpdateOutcome, display_update_notice, run_inline_update_prompt};
@@ -79,7 +62,7 @@ pub(crate) use session_bootstrap::BACKGROUND_COMPLETION_CONTINUATION_PROMPT_PREF
 pub(super) use session_bootstrap::resolve_thread_completion_status;
 use session_bootstrap::{
     apply_startup_plan_agent_selection, background_completion_continuation_prompt, load_archived_prompts_for_history,
-    persist_primary_agent, record_plan_selection_failure_tail,
+    persist_primary_agent,
 };
 
 #[cfg_attr(feature = "profiling", hotpath::measure)]

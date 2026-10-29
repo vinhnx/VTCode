@@ -7,6 +7,7 @@
 //! - Verify: `cargo nextest run --locked -p vtcode -E 'test(turn_loop)'`
 
 use std::collections::BTreeSet;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -37,18 +38,24 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_loop_helpers::{
     ToolLoopLimitAction, extract_turn_config, handle_steering_messages, initial_tool_loop_limit,
-    is_stale_approved_plan_pause_response, maybe_handle_planning_enter_trigger, maybe_handle_tool_loop_limit,
-    resolve_safety_tool_call_limits,
+    maybe_handle_planning_enter_trigger, maybe_handle_tool_loop_limit, resolve_safety_tool_call_limits,
 };
 
 #[path = "turn_loop/compaction.rs"]
 mod compaction;
 #[path = "turn_loop/context.rs"]
 mod context;
+#[path = "turn_loop/error_arms.rs"]
+mod error_arms;
 #[path = "turn_loop/finalization.rs"]
 mod finalization;
+#[path = "turn_loop/loop_guards.rs"]
+mod loop_guards;
 pub(crate) use context::{ActiveSettingsContext, TurnLoopContext, TurnLoopOutcome, effective_vt_cfg};
-use finalization::finalize_turn;
+use error_arms::{handle_llm_request_error, handle_response_parse_error, handle_result_handler_error};
+use finalization::{convert_fallback_completion, finalize_turn, normalize_recovery_break};
+use loop_guards::handle_stale_approved_plan_pause;
+use settings::{apply_mid_turn_mode_switch, apply_mid_turn_settings};
 #[path = "turn_loop/notifications.rs"]
 mod notifications;
 #[path = "turn_loop/post_tool_recovery/mod.rs"]
@@ -61,27 +68,27 @@ mod responses;
 // Response-text surface extracted to `turn_loop/responses.rs`; re-exported so
 // `result_handler`, timeline views, orchestration, `post_tool_recovery`, and
 // `turn_loop/tests` keep their existing paths.
-use responses::{
-    APPROVED_PLAN_STALE_PAUSE_RECOVERY_DIRECTIVE, COMPLETED_TURN_NO_RESPONSE_REASON,
-    MAX_APPROVED_PLAN_STALE_PAUSE_RETRIES, PLAN_RECOVERY_EXHAUSTED_REASON, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE,
-    STALE_APPROVED_PLAN_PAUSE_BLOCK_REASON, completed_recovery_fallback_reason, completed_turn_requires_final_response,
-    ensure_blocked_turn_response, ensure_completed_turn_response, is_primary_agent_handoff,
-    promote_latest_commentary_to_final, provider_stop_outcome,
-};
 pub(crate) use responses::{
-    ASSISTANT_TEXT_RESPONSE_CAP_REASON, MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN, PENDING_VERIFICATION_BLOCK_REASON,
-    POST_TOOL_RECOVERY_REASON, POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE,
-    POST_TOOL_TOOL_ENABLED_RETRY_DIRECTIVE, RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE,
+    ASSISTANT_TEXT_RESPONSE_CAP_REASON, PENDING_VERIFICATION_BLOCK_REASON, POST_TOOL_RECOVERY_REASON,
+    POST_TOOL_RECOVERY_REASON_PLAN_MODE, POST_TOOL_RESUME_DIRECTIVE, POST_TOOL_TOOL_ENABLED_RETRY_DIRECTIVE,
     UNDISPATCHED_TOOL_CALL_CLOSURE_TEXT, budget_recovery_final_response, is_plan_entry_handoff,
 };
 /// Test-only response surface for `turn_loop/tests` (unused in normal builds).
 #[cfg(test)]
 pub(crate) use responses::{
-    COMPLETED_TURN_FALLBACK_RESPONSE, PLANNING_COMPLETED_FALLBACK_RESPONSE, blocked_turn_final_response,
-    completed_fallback_reason, format_blocked_turn_final_response,
+    COMPLETED_TURN_FALLBACK_RESPONSE, PLANNING_COMPLETED_FALLBACK_RESPONSE,
+    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE, blocked_turn_final_response, completed_fallback_reason,
+    format_blocked_turn_final_response,
+};
+use responses::{
+    RECOVERY_TOOL_CALL_RETRY_DIRECTIVE, completed_turn_requires_final_response, ensure_blocked_turn_response,
+    ensure_completed_turn_response, is_primary_agent_handoff,
 };
 #[path = "turn_loop/settings.rs"]
 mod settings;
+#[path = "turn_loop/text_cap.rs"]
+mod text_cap;
+use text_cap::enforce_text_response_cap;
 #[path = "turn_loop/usage_accounting.rs"]
 mod usage_accounting;
 
@@ -89,7 +96,6 @@ mod usage_accounting;
 
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{ANTI_BLIND_EDITING_DIRECTIVE, LoopTracker};
-use crate::agent::runloop::unified::turn::turn_helpers::{display_error, error_message_for_user};
 #[cfg(test)]
 use post_tool_recovery::POST_TOOL_CONTEXT_COMPACTION_FAILED_REASON;
 #[cfg(test)]
@@ -98,18 +104,14 @@ use post_tool_recovery::PostToolFailureRecovery;
 use post_tool_recovery::maybe_recover_after_post_tool_llm_failure;
 #[cfg(test)]
 use post_tool_recovery::normalize_tool_free_recovery_break_outcome;
-use post_tool_recovery::{
-    PlanRecoveryEventContext, PostToolFailureAction, PostToolRecoveryContext, dispatch_post_tool_failure,
-    normalize_tool_free_recovery_break_outcome_with_events,
-};
 #[cfg(test)]
 use recovery_compaction::current_turn_preserve_index;
-use settings::apply_pending_session_settings;
+#[cfg(test)]
+use usage_accounting::accumulate_turn_usage;
 #[cfg(test)]
 use usage_accounting::has_turn_usage;
-use usage_accounting::{accumulate_turn_usage, estimate_session_costs, stop_reason_from_finish_reason};
+use usage_accounting::{enforce_response_budget, record_response_usage};
 use vtcode_core::config::types::AgentConfig;
-use vtcode_core::core::agent::error_recovery::ErrorType;
 use vtcode_core::primary_agent::ActivePrimaryAgentState;
 
 /// Max completion tokens for the tool-free recovery synthesis pass.
@@ -127,7 +129,7 @@ const RECOVERY_SYNTHESIS_MAX_TOKENS: u32 = 4096;
 /// LLM stream timeout on a large context) no longer terminates the turn and
 /// forces the user to nudge "continue". The extra pass only fires when the
 /// model keeps emitting tool calls during a tool-free recovery window.
-const MAX_RECOVERY_RETRIES: u8 = 3;
+pub(super) const MAX_RECOVERY_RETRIES: u8 = 3;
 /// Hard cap on consecutive assistant text-only responses. Without this, the
 /// recovery / continuation logic can loop forever when the model has already
 /// produced a substantive final answer but the system keeps re-prompting it
@@ -155,9 +157,8 @@ pub(crate) async fn run_turn_loop(
     use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingResult};
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
-        HandleTurnProcessingResultParams, PendingVerificationTextOutcome, execute_harness_auto_verification,
-        execute_llm_request, handle_turn_processing_result, maybe_force_planning_workflow_interview,
-        process_llm_response, resolve_effective_request_model,
+        HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
+        maybe_force_planning_workflow_interview, process_llm_response, resolve_effective_request_model,
     };
 
     // Approval starts implementation with usable validation state, including
@@ -262,36 +263,8 @@ pub(crate) async fn run_turn_loop(
             result = stop;
             break;
         }
-        // Mid-turn model/effort switches must land BEFORE fresh steering input.
-        // Model-switch compaction summarizes history, so a prompt steered
-        // before compaction would be summarized away and the new model would
-        // never see it verbatim (the TUI "Steered..." echo would then lie).
-        // Applying settings first guarantees fresh input is appended after
-        // compaction plus the resume note and reaches the next request verbatim.
-        let history_len_before_settings = working_history.len();
-        let settings_applied = apply_pending_session_settings(&mut ctx, working_history).await?;
-        if settings_applied {
-            // A model or effort switch changes provider capabilities, context
-            // budget, and prompt shaping for the request about to be built.
-            // Re-derive the cached turn config so the next request uses the
-            // effective settings; the in-flight request already finished with
-            // its original settings.
-            turn_config = extract_turn_config(
-                effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
-                ctx.is_planning_active(),
-                ctx.renderer.supports_inline_ui(),
-            );
-            // Compaction may have shrunk history and injected a resume note;
-            // rebase the turn baseline so later slicing (final response,
-            // verification, TUI) cannot index into compacted-away messages.
-            turn_history_start_len = turn_history_start_len.min(working_history.len());
-            tracing::info!(
-                history_before = history_len_before_settings,
-                history_after = working_history.len(),
-                turn_history_start_len,
-                "Rebased turn baseline after mid-turn settings/model switch"
-            );
-        }
+        let settings_applied =
+            apply_mid_turn_settings(&mut ctx, working_history, &mut turn_config, &mut turn_history_start_len).await?;
         if handle_steering_messages(&mut ctx, working_history, &mut result).await? {
             break;
         }
@@ -325,47 +298,14 @@ pub(crate) async fn run_turn_loop(
             break;
         }
 
-        // Build↔Plan auto-switch mid-turn: re-derive turn config and grant a
-        // full *remaining* mode floor so the new phase is not starved by the
-        // prior phase's consumption (checkpoint turn_804 + user Build→Plan
-        // tool-call-limit report).
-        let planning_now = ctx.is_planning_active();
-        if planning_now != last_planning_active {
-            last_planning_active = planning_now;
-            if planning_now {
-                ctx.plan_session.start_turn();
-                // Planning just became active inside a running turn: promote to
-                // the stage and show the researching row once, since work is live.
-                crate::agent::runloop::unified::planning_workflow_state::mark_planning_turn_started(
-                    ctx.renderer,
-                    ctx.handle,
-                );
-            }
-            turn_config = extract_turn_config(
-                effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
-                planning_now,
-                ctx.renderer.supports_inline_ui(),
-            );
-            if ctx.plan_session.is_interview_denied() {
-                turn_config.request_user_input_enabled = false;
-            }
-            super::turn_loop_helpers::apply_mode_switch_remaining_tool_call_floor(
-                &mut ctx.harness_state.max_tool_calls,
-                ctx.harness_state.tool_calls,
-                planning_now,
-            );
-            super::turn_loop_helpers::apply_mode_switch_remaining_tool_loop_floor(
-                &mut current_max_tool_loops,
-                step_count,
-                planning_now,
-            );
-            let (max_per_turn, max_per_session) = resolve_safety_tool_call_limits(
-                ctx.harness_state.max_tool_calls,
-                turn_config.max_session_turns,
-                planning_now,
-            );
-            ctx.safety_validator.set_limits(max_per_turn, max_per_session);
-        }
+        // Build<->Plan auto-switch mid-turn (see `settings` for the starvation report).
+        apply_mid_turn_mode_switch(
+            &mut ctx,
+            &mut last_planning_active,
+            &mut turn_config,
+            &mut current_max_tool_loops,
+            step_count,
+        );
 
         // The settings application and Build↔Plan mode switch above are the
         // only points that can change the request identity mid-iteration:
@@ -460,67 +400,11 @@ pub(crate) async fn run_turn_loop(
         // Clone validation cache arc to avoid borrow conflict
         let validation_cache = ctx.session_stats.validation_cache.clone();
 
-        // Anti-runaway guard: if the model has already emitted
-        // MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN consecutive text-only
-        // responses without admitted tool progress, the recovery / continuation
-        // loop is regenerating the same answer. Conclude the turn with the
-        // last response stored in working_history and emit a warning so users
-        // can see what happened. See MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN for
-        // the observed failure mode (checkpoint turn_594: 4 identical
-        // 6500-token outline responses, ~90s of wasted context).
-        // Harness state is authoritative. History cannot represent Copilot's
-        // inline VTCode tool calls, while compaction does not discard this
-        // turn-scoped counter.
-        let text_response_streak = ctx.harness_state.consecutive_assistant_text_responses;
-        // A pending bounded planning retry (validation repair, denied-interview
-        // synthesis, pseudo-tool-call reprompt) is a deliberate extra candidate,
-        // so allow the next request through the generic text-response cap. This
-        // allowance is queued independently of the response count because a
-        // retry can be scheduled after an ordinary planning response has
-        // already used that budget.
-        let bounded_planning_follow_up = ctx.is_planning_active()
-            && (ctx.plan_session.bounded_planning_follow_up_allowed() || ctx.plan_session.recovery.research_closed);
-        if text_response_streak >= MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN && !bounded_planning_follow_up {
-            tracing::warn!(
-                text_response_streak,
-                cap = MAX_ASSISTANT_TEXT_RESPONSES_PER_TURN,
-                "Assistant text-response cap reached; ending turn to prevent runaway regeneration loop"
-            );
-            let _ = ctx.renderer.line(
-                MessageStyle::Warning,
-                "Recovery loop detected: capping repeated assistant responses to avoid wasted context.",
-            );
-            let promoted_final = promote_latest_commentary_to_final(working_history, turn_history_start_len);
-            if promoted_final {
-                // Commentary has already crossed the renderer surface. Avoid
-                // rendering it a second time while still allowing the normal
-                // blocked-turn finalizer to publish the canonical event.
-                ctx.harness_state.mark_final_response_rendered();
-                if ctx.harness_state.streamed_response_event_emitted() {
-                    // The streaming lifecycle already emitted the assistant
-                    // item; publishing another AgentMessage would duplicate it.
-                    ctx.harness_state.mark_final_response_event_emitted();
-                }
-            }
-            // A preserved final answer with a clear verification gate is a
-            // completed turn: the model concluded and the loop merely
-            // re-prompted past its answer. Blocked/handoff semantics stay
-            // reserved for unverified work (checkpoint session-vtcode-20260912
-            // T083718Z: a verified recap was continued into the cap and the
-            // finished turn was published as Blocked).
-            let cap_ends_completed =
-                promoted_final && !ctx.tool_registry.completion_verification_pending() && !ctx.is_planning_active();
-            if cap_ends_completed {
-                result = TurnLoopResult::Completed { plan_approved_execution_pending: false };
-            } else {
-                result = TurnLoopResult::Blocked {
-                    reason: Some(ASSISTANT_TEXT_RESPONSE_CAP_REASON.to_string()),
-                };
-            }
+        // Anti-runaway guard: cap consecutive text-only responses without
+        // admitted tool progress (see `text_cap` for the observed failure mode).
+        if let Some(capped) = enforce_text_response_cap(&mut ctx, &mut *working_history, turn_history_start_len) {
+            result = capped;
             break;
-        }
-        if bounded_planning_follow_up {
-            ctx.plan_session.consume_bounded_planning_follow_up();
         }
 
         // Prepare turn processing context
@@ -633,126 +517,23 @@ pub(crate) async fn run_turn_loop(
         let (response, response_streamed) = match request_result {
             Ok(val) => val,
             Err(err) => {
-                if let Some(stop) = provider_stop_outcome(turn_processing_ctx.ctrl_c_state, &err) {
-                    turn_processing_ctx.restore_input_status(restore_status_left, restore_status_right);
-                    result = stop;
-                    break;
-                }
-                if err
-                    .downcast_ref::<vtcode_core::llm::reasoning_effort::ReasoningEffortUnsupported>()
-                    .is_some()
-                {
-                    turn_processing_ctx.restore_input_status(restore_status_left.clone(), restore_status_right.clone());
-                    result = TurnLoopResult::Blocked { reason: Some(err.to_string()) };
-                    break;
-                }
-                // Record the error in the recovery state for diagnostics
-                turn_processing_ctx
-                    .record_recovery_error("llm_request", &err, ErrorType::Other)
-                    .await;
-
-                // execute_llm_request already performs retry/backoff for retryable provider errors.
-                // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
-                // Restore input status on request failure to clear loading/shimmer state.
-                turn_processing_ctx.restore_input_status(restore_status_left.clone(), restore_status_right.clone());
-
-                let planning = turn_processing_ctx.is_planning_active();
-                if planning && turn_processing_ctx.plan_session.recovery.research_closed {
-                    turn_processing_ctx.plan_session.recovery.response_class =
-                        Some(vtcode_core::exec::events::planning::PlanningResponseClass::ProviderFailure);
-                    turn_processing_ctx.persist_planning_recovery().await?;
-                    match turn_processing_ctx
-                        .recover_planning_failure(&error_message_for_user(&err), None)
-                        .await?
-                    {
-                        TurnHandlerOutcome::Continue => continue,
-                        TurnHandlerOutcome::Break(outcome) => {
-                            result = outcome;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                match dispatch_post_tool_failure(PostToolRecoveryContext {
-                    renderer: &mut *turn_processing_ctx.renderer,
-                    working_history: &mut *turn_processing_ctx.working_history,
-                    harness_state: &mut *turn_processing_ctx.harness_state,
-                    harness_emitter: turn_processing_ctx.harness_emitter,
-                    plan_session: planning.then_some(&mut *turn_processing_ctx.plan_session),
-                    plan_state: planning.then_some(&turn_processing_ctx.tool_registry.planning_workflow_state()),
-                    err: &err,
+                match handle_llm_request_error(
+                    &mut turn_processing_ctx,
+                    &err,
                     step_count,
                     turn_history_start_len,
-                    stage: "execute_llm_request",
+                    restore_status_left.clone(),
+                    restore_status_right.clone(),
                     tool_free_recovery,
-                })
+                )
                 .await?
                 {
-                    PostToolFailureAction::Continue => continue,
-                    PostToolFailureAction::Break(r) => {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(r) => {
                         result = r;
                         break;
                     }
-                    PostToolFailureAction::Fallthrough => {}
                 }
-
-                display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
-                // Show recovery hints derived from the canonical error category
-                {
-                    let err_cat = vtcode_commons::classify_anyhow_error(&err);
-                    if matches!(err_cat, vtcode_commons::ErrorCategory::Authentication) {
-                        // For auth errors, show actionable provider-specific guidance
-                        // that distinguishes "no key stored" from "stored key rejected".
-                        let (provider_label, provider_key, is_managed_auth, has_stored_credential) =
-                            turn_processing_ctx
-                                .config
-                                .provider
-                                .parse::<vtcode_core::config::models::Provider>()
-                                .map(|p| {
-                                    let storage_mode = turn_processing_ctx
-                                        .vt_cfg
-                                        .map(|cfg| cfg.agent.credential_storage_mode)
-                                        .unwrap_or_default();
-                                    let has =
-                                        vtcode_config::api_keys::provider_credential_detail_with_mode(p, storage_mode)
-                                            .is_some();
-                                    (p.label().to_string(), p.as_ref().to_string(), p.uses_managed_auth(), has)
-                                })
-                                .unwrap_or_else(|_| {
-                                    (
-                                        turn_processing_ctx.config.provider.clone(),
-                                        turn_processing_ctx.config.provider.clone(),
-                                        false,
-                                        false,
-                                    )
-                                });
-                        let guidance = err_cat.auth_recovery_guidance(
-                            &provider_label,
-                            &provider_key,
-                            is_managed_auth,
-                            has_stored_credential,
-                        );
-                        for line in &guidance {
-                            turn_processing_ctx.renderer.line(MessageStyle::Info, line)?;
-                        }
-                    } else {
-                        let suggestions = err_cat.recovery_suggestions();
-                        if !suggestions.is_empty() {
-                            let hint = suggestions.join("; ");
-                            turn_processing_ctx
-                                .renderer
-                                .line(MessageStyle::Info, &format!("Hint: {hint}"))?;
-                        }
-                    }
-                }
-                // Log error via tracing instead of polluting conversation history
-                // Adding error messages as assistant content can poison future turns
-                let error_message = error_message_for_user(&err);
-                tracing::error!(error = %error_message, step = step_count, "LLM request failed");
-                // Do NOT add error message to working_history - this prevents the model
-                // from learning spurious error patterns and keeps the conversation clean
-                result = TurnLoopResult::Aborted;
-                break;
             }
         };
 
@@ -764,116 +545,19 @@ pub(crate) async fn run_turn_loop(
         // that will serve the request. Configuration may contain an alias or
         // an inferred route, while the provider trait is authoritative. The
         // per-iteration `provider_name` binding is that provider's identity.
-        accumulate_turn_usage(&provider_name, &mut turn_usage, response_usage.as_ref());
-        turn_processing_ctx
-            .session_stats
-            .record_usage(&provider_name, response_usage.as_ref());
-        // Record prompt pressure immediately so mid-turn readers (e.g. the
-        // plan-approval modal's `Context: N% used` subtitle) see the current
-        // response's prompt tokens instead of the previous turn's stale value.
-        // The later `update_token_usage` before continue/break is idempotent.
-        turn_processing_ctx.context_manager.update_token_usage(response_usage.as_ref());
-        // SEV-style prompt-cache health: a sustained hit-rate collapse warns
-        // once per session instead of silently re-paying full input cost.
-        if let Some(message) = turn_processing_ctx
-            .session_stats
-            .record_cache_turn_health(&provider_name, response_usage.as_ref())
+        record_response_usage(
+            &mut turn_processing_ctx,
+            &provider_name,
+            &mut turn_usage,
+            response_usage.as_ref(),
+            &response.finish_reason,
+        );
+        if let Some(blocked) =
+            enforce_response_budget(&mut turn_processing_ctx, &provider_name, &active_model, response_usage.as_ref())
+                .await
         {
-            tracing::warn!("{message}");
-            let _ = turn_processing_ctx.renderer.line(MessageStyle::Warning, &message);
-        }
-        turn_processing_ctx
-            .session_stats
-            .set_stop_reason(Some(stop_reason_from_finish_reason(&response.finish_reason)));
-        let max_budget_usd = turn_processing_ctx.vt_cfg.and_then(|cfg| cfg.agent.harness.max_budget_usd);
-        let turn_cost = response_usage.as_ref().and_then(|usage| {
-            let normalized = vtcode_core::llm::usage_cost::normalized_turn_usage(&provider_name, usage);
-            estimate_session_costs(&provider_name, &active_model, &normalized)
-        });
-        match turn_processing_ctx.session_stats.record_cost(turn_cost) {
-            Some(estimate) => {
-                // Keep the conservative raw figure for enforcement while the
-                // cache-aware effective figure is shown to users.
-                let threshold = turn_processing_ctx
-                    .vt_cfg
-                    .map(|cfg| cfg.agent.harness.budget_warning_threshold)
-                    .unwrap_or(vtcode_core::llm::usage_cost::DEFAULT_BUDGET_WARNING_RATIO);
-                match vtcode_core::llm::usage_cost::BudgetStatus::classify(estimate.raw_usd, max_budget_usd, threshold)
-                {
-                    vtcode_core::llm::usage_cost::BudgetStatus::Exceeded { max, .. } => {
-                        turn_processing_ctx
-                            .session_stats
-                            .mark_budget_limit_reached(max, estimate.raw_usd);
-                        turn_processing_ctx.context_manager.update_token_usage(response_usage.as_ref());
-                        #[cfg(debug_assertions)]
-                        turn_processing_ctx
-                            .context_manager
-                            .validate_token_tracking(response_usage.as_ref());
-                        // In planning mode, preserve the session and use the same
-                        // user-facing recovery fallback as post-tool failures.
-                        // Returning a model-only directive here would leave no
-                        // synthesis call to consume it and would dead-end the turn.
-                        if turn_processing_ctx.is_planning_active() {
-                            turn_processing_ctx.plan_session.mark_budget_exhausted();
-                            let plan_state = turn_processing_ctx.tool_registry.planning_workflow_state();
-                            let event_thread_id = turn_processing_ctx.harness_state.run_id.0.clone();
-                            let event_turn_id = turn_processing_ctx.harness_state.turn_id.0.clone();
-                            let event_context = PlanRecoveryEventContext {
-                                emitter: turn_processing_ctx.harness_emitter,
-                                thread_id: &event_thread_id,
-                                turn_id: &event_turn_id,
-                            };
-                            result = post_tool_recovery::complete_turn_after_failed_tool_free_recovery_with_events(
-                                turn_processing_ctx.working_history,
-                                "turn_loop.budget_limit_planning",
-                                None,
-                                None,
-                                Some(turn_processing_ctx.plan_session),
-                                Some(&plan_state),
-                                Some(event_context),
-                                Some(&mut *turn_processing_ctx.harness_state),
-                            )
-                            .await;
-                            let _ = turn_processing_ctx.renderer.line(
-                                MessageStyle::Warning,
-                                "Budget exhausted during planning workflow. The plan draft is preserved for approval or revision.",
-                            );
-                        } else {
-                            result = TurnLoopResult::Blocked {
-                                reason: Some(format!(
-                                    "Stopped after reaching budget limit (max: ${max:.4}, spent: ${:.4}, cache-adjusted: ${:.4}).",
-                                    estimate.raw_usd, estimate.effective_usd
-                                )),
-                            };
-                        }
-                        break;
-                    }
-                    vtcode_core::llm::usage_cost::BudgetStatus::Warning { max, .. }
-                        if !turn_processing_ctx.session_stats.budget_warning_emitted() =>
-                    {
-                        turn_processing_ctx.session_stats.mark_budget_warning_emitted();
-                        let _ = turn_processing_ctx.renderer.line(
-                            MessageStyle::Info,
-                            &format!(
-                                "Session cost ${:.4} has reached {:.0}% of the ${max:.2} budget. {}",
-                                estimate.raw_usd,
-                                threshold * 100.0,
-                                turn_processing_ctx.session_stats.total_usage().cache_summary(),
-                            ),
-                        );
-                    }
-                    _ => {}
-                }
-            }
-            None => {
-                if max_budget_usd.is_some() {
-                    let reason = format!(
-                        "Cannot enforce session USD budget for `{provider_name}/{active_model}`: complete valid pricing metadata is unavailable"
-                    );
-                    result = TurnLoopResult::Blocked { reason: Some(reason) };
-                    break;
-                }
-            }
+            result = blocked;
+            break;
         }
         if !response.tool_references.is_empty() {
             turn_processing_ctx
@@ -938,52 +622,22 @@ pub(crate) async fn run_turn_loop(
         let mut processing_result = match processing_result_outcome {
             Ok(result) => result,
             Err(err) => {
-                let err_cat = vtcode_commons::classify_anyhow_error(&err);
-                if err_cat.is_retryable() {
-                    tracing::warn!(
-                        error = %err,
-                        step = step_count,
-                        category = ?err_cat,
-                        "Response parse failed with transient error; skipping extra request retry"
-                    );
-                }
-
-                {
-                    let mut recovery = turn_processing_ctx.error_recovery.write().await;
-                    recovery.record_error("llm_response_parse", format!("{err:#}"), ErrorType::Other);
-                }
-                let tool_free_recovery =
-                    turn_processing_ctx.recovery_pass_used() && turn_processing_ctx.recovery_is_tool_free();
-                let planning = turn_processing_ctx.is_planning_active();
-
-                // Restore the input status/UI before dispatching recovery handling
-                // so the bottom-line is not left in a loading state if recovery
-                // ultimately ends the turn or returns an error.
-                turn_processing_ctx.restore_input_status(restore_status_left.clone(), restore_status_right.clone());
-
-                match dispatch_post_tool_failure(PostToolRecoveryContext {
-                    renderer: &mut *turn_processing_ctx.renderer,
-                    working_history: &mut *turn_processing_ctx.working_history,
-                    harness_state: &mut *turn_processing_ctx.harness_state,
-                    harness_emitter: turn_processing_ctx.harness_emitter,
-                    plan_session: planning.then_some(&mut *turn_processing_ctx.plan_session),
-                    plan_state: planning.then_some(&turn_processing_ctx.tool_registry.planning_workflow_state()),
-                    err: &err,
+                match handle_response_parse_error(
+                    &mut turn_processing_ctx,
+                    err,
                     step_count,
                     turn_history_start_len,
-                    stage: "process_llm_response",
-                    tool_free_recovery,
-                })
+                    restore_status_left.clone(),
+                    restore_status_right.clone(),
+                )
                 .await?
                 {
-                    PostToolFailureAction::Continue => continue,
-                    PostToolFailureAction::Break(r) => {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(r) => {
                         result = r;
                         break;
                     }
-                    PostToolFailureAction::Fallthrough => {}
                 }
-                return Err(err);
             }
         };
         // When in tool-free recovery and the model returns no text (e.g. producing
@@ -995,14 +649,11 @@ pub(crate) async fn run_turn_loop(
             && response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
             && turn_processing_ctx.recovery_retry_count() < MAX_RECOVERY_RETRIES
         {
-            let directive = if turn_processing_ctx.is_planning_active() {
-                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
-            } else {
-                RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
-            };
+            // The guard above requires `!is_planning_active()`, so the base
+            // directive always applies here (no plan-mode variant).
             turn_processing_ctx
                 .working_history
-                .push(uni::Message::system(directive.to_string()));
+                .push(uni::Message::system(RECOVERY_TOOL_CALL_RETRY_DIRECTIVE.to_string()));
             turn_processing_ctx.retry_recovery_pass();
             continue;
         }
@@ -1021,90 +672,24 @@ pub(crate) async fn run_turn_loop(
             );
         }
 
-        // A recovery directive from the planning turn can leak into the first
-        // approved-plan build request. If the model echoes that stale state as
-        // its answer, do not commit it to the transcript or end execution;
-        // give the fresh write-capable turn a bounded, explicit retry instead.
-        let stale_approved_plan_pause = matches!(
+        if let Some(flow) = handle_stale_approved_plan_pause(
+            &mut turn_processing_ctx,
+            &mut repeated_tool_attempts,
+            &mut turn_modified_files,
             &processing_result,
-            TurnProcessingResult::TextResponse { text, .. }
-                if turn_processing_ctx.is_approved_plan_execution()
-                    && is_stale_approved_plan_pause_response(text)
-        );
-        if stale_approved_plan_pause
-            && turn_processing_ctx.tool_registry.completion_verification_pending()
-            && !turn_processing_ctx.in_tool_free_recovery_synthesis()
+            step_count,
+            current_max_tool_loops,
+            turn_config.tool_repeat_limit,
+        )
+        .await?
         {
-            // The stale text was discarded (never committed), so no content
-            // is available for completion-claim detection; pass empty text.
-            match turn_processing_ctx.handle_pending_verification_text_response(&mut repeated_tool_attempts, "")? {
-                PendingVerificationTextOutcome::Block { reason } => {
-                    result = TurnLoopResult::Blocked { reason: Some(reason) };
+            match flow {
+                ControlFlow::Continue(()) => continue,
+                ControlFlow::Break(result_) => {
+                    result = result_;
                     break;
                 }
-                // The stale pause was discarded, so the normal text path never
-                // sees it: execute the verifier here rather than looping on
-                // another pause echo.
-                PendingVerificationTextOutcome::AutoVerify { command } => {
-                    match execute_harness_auto_verification(
-                        &mut turn_processing_ctx,
-                        &mut repeated_tool_attempts,
-                        &mut turn_modified_files,
-                        step_count,
-                        current_max_tool_loops,
-                        turn_config.tool_repeat_limit,
-                        command,
-                    )
-                    .await?
-                    {
-                        TurnHandlerOutcome::Continue => continue,
-                        TurnHandlerOutcome::Break(outcome_result) => {
-                            result = outcome_result;
-                            break;
-                        }
-                        // Agent-switch/policy outcomes have no producer for a lone
-                        // verifier execution today (`pending_primary_agent` is
-                        // never set by exec paths); keep the turn alive on
-                        // them, loudly, so a future producer surfaces in logs
-                        // instead of vanishing.
-                        TurnHandlerOutcome::SwitchPrimaryAgent(_)
-                        | TurnHandlerOutcome::SwitchPrimaryAgentWithPolicy { .. }
-                        | TurnHandlerOutcome::BreakWithPolicy { .. } => {
-                            tracing::warn!(
-                                "harness auto-verification produced an unexpected agent-switch/policy outcome; keeping the turn alive"
-                            );
-                            continue;
-                        }
-                    }
-                }
             }
-        }
-        if stale_approved_plan_pause {
-            // The stale pause text is discarded (never committed to history),
-            // so it must not consume the generic text-response budget; that
-            // budget is recorded exactly once when the replacement response
-            // is processed. Retries stay bounded by
-            // `MAX_APPROVED_PLAN_STALE_PAUSE_RETRIES`, and the generic cap at
-            // the top of the loop remains responsible for runaway prose.
-            // Once the retries are exhausted the turn ends Blocked without
-            // storing the stale text, so it can never become a successful
-            // final answer.
-            if turn_processing_ctx.harness_state.approved_plan_recovery_retries()
-                < MAX_APPROVED_PLAN_STALE_PAUSE_RETRIES
-            {
-                turn_processing_ctx.harness_state.record_approved_plan_recovery_retry();
-                turn_processing_ctx
-                    .working_history
-                    .push(uni::Message::system(APPROVED_PLAN_STALE_PAUSE_RECOVERY_DIRECTIVE.to_string()));
-                let _ = turn_processing_ctx
-                    .renderer
-                    .line(MessageStyle::Info, "Approved-plan execution resumed after clearing stale recovery state.");
-                continue;
-            }
-            result = TurnLoopResult::Blocked {
-                reason: Some(STALE_APPROVED_PLAN_PAUSE_BLOCK_REASON.to_string()),
-            };
-            break;
         }
 
         // Restore input status if there are no tool calls (turn is completing)
@@ -1135,48 +720,15 @@ pub(crate) async fn run_turn_loop(
         let turn_outcome = match turn_outcome_result {
             Ok(outcome) => outcome,
             Err(err) => {
-                // Record result-handler errors for diagnostics (mirrors llm_request recording)
-                ctx.error_recovery.write().await.record_error(
-                    "turn_result_handler",
-                    format!("{err:#}"),
-                    ErrorType::ToolExecution,
-                );
-                let tool_free_recovery =
-                    ctx.harness_state.recovery_pass_used() && ctx.harness_state.recovery_is_tool_free();
-                let planning = ctx.is_planning_active();
-
-                // Ensure the inline input and status line are not left showing a
-                // loading or shimmer state when the result handler fails and the
-                // turn may exit early. Keep the terminal state synchronized.
-                crate::agent::runloop::unified::display::reset_inline_input(
-                    ctx.handle,
-                    ctx.default_placeholder.clone(),
-                );
-                crate::agent::runloop::unified::status_line::clear_input_status(ctx.handle, ctx.input_status_state);
-
-                match dispatch_post_tool_failure(PostToolRecoveryContext {
-                    renderer: &mut *ctx.renderer,
-                    working_history: &mut *working_history,
-                    harness_state: &mut *ctx.harness_state,
-                    harness_emitter: ctx.harness_emitter,
-                    plan_session: planning.then_some(&mut *ctx.plan_session),
-                    plan_state: planning.then_some(&ctx.tool_registry.planning_workflow_state()),
-                    err: &err,
-                    step_count,
-                    turn_history_start_len,
-                    stage: "handle_turn_processing_result",
-                    tool_free_recovery,
-                })
-                .await?
+                match handle_result_handler_error(&mut ctx, working_history, err, step_count, turn_history_start_len)
+                    .await?
                 {
-                    PostToolFailureAction::Continue => continue,
-                    PostToolFailureAction::Break(r) => {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(r) => {
                         result = r;
                         break;
                     }
-                    PostToolFailureAction::Fallthrough => {}
                 }
-                return Err(err);
             }
         };
         // Record token usage before continuing or breaking
@@ -1206,74 +758,13 @@ pub(crate) async fn run_turn_loop(
                 break;
             }
             TurnHandlerOutcome::Break(outcome_result) => {
-                // When the model violates the tool-free recovery contract
-                // (emits tool calls or textual tool-call markup instead of a
-                // final answer), retry the synthesis pass with a corrective
-                // directive instead of immediately concluding with the
-                // deterministic fallback answer. Mirrors the Empty+tool_calls
-                // retry path above. Observed in checkpoint turn_621: a single
-                // textual `<tool_call>` block in the recovery response
-                // terminated the turn and discarded ~60 messages of gathered
-                // context.
-                let contract_violation = matches!(
-                    outcome_result,
-                    TurnLoopResult::Blocked {
-                        reason: Some(ref reason)
-                    } if reason == RECOVERY_CONTRACT_VIOLATION_REASON
-                );
-                if tool_free_recovery
-                    && !ctx.is_planning_active()
-                    && contract_violation
-                    && ctx.harness_state.recovery_retry_count() < MAX_RECOVERY_RETRIES
-                    && ctx.harness_state.retry_recovery_pass()
-                {
-                    tracing::warn!(
-                        retry = ctx.harness_state.recovery_retry_count(),
-                        max = MAX_RECOVERY_RETRIES,
-                        "Recovery contract violation; retrying tool-free synthesis pass"
-                    );
-                    let directive = if ctx.is_planning_active() {
-                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE_PLAN_MODE
-                    } else {
-                        RECOVERY_TOOL_CALL_RETRY_DIRECTIVE
-                    };
-                    working_history.push(uni::Message::system(directive.to_string()));
-                    continue;
+                match normalize_recovery_break(&mut ctx, working_history, outcome_result, tool_free_recovery).await {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(r) => {
+                        result = r;
+                        break;
+                    }
                 }
-                // Wall-clock-exhausted planning turns must finalize instead of
-                // re-forcing the interview (see `dispatch_post_tool_failure`).
-                if tool_free_recovery
-                    && (ctx.harness_state.wall_clock_exhausted_emitted
-                        || ctx.harness_state.wall_clock_exhausted()
-                        || ctx.harness_state.tool_budget_exhausted_emitted)
-                    && ctx.is_planning_active()
-                {
-                    ctx.plan_session.mark_recovery_exhausted();
-                }
-                let salvaged = ctx.harness_state.take_recovery_rejected_synthesis();
-                let planning = ctx.is_planning_active();
-                let plan_session_opt = planning.then_some(&mut *ctx.plan_session);
-                let plan_state = ctx.tool_registry.planning_workflow_state();
-                let plan_state_opt = planning.then_some(&plan_state);
-                let event_thread_id = ctx.harness_state.run_id.0.clone();
-                let event_turn_id = ctx.harness_state.turn_id.0.clone();
-                let event_context = PlanRecoveryEventContext {
-                    emitter: ctx.harness_emitter,
-                    thread_id: &event_thread_id,
-                    turn_id: &event_turn_id,
-                };
-                result = normalize_tool_free_recovery_break_outcome_with_events(
-                    working_history,
-                    outcome_result,
-                    tool_free_recovery,
-                    salvaged,
-                    plan_session_opt,
-                    plan_state_opt,
-                    Some(event_context),
-                    Some(&mut *ctx.harness_state),
-                )
-                .await;
-                break;
             }
         }
     }
@@ -1337,40 +828,14 @@ pub(crate) async fn run_turn_loop(
     } else {
         ctx.harness_state.final_response_was_fallback()
     };
-    if completed_turn_requires_final_response(&result, primary_agent_handoff) {
-        if final_response_was_fallback {
-            let reason = completed_recovery_fallback_reason(ctx.is_planning_active(), ctx.harness_state);
-            // Diagnostic for false-Blocked reports (e.g. simple requests ending
-            // with COMPLETED_TURN_FALLBACK_REASON despite a visible answer):
-            // records whether a final was present in this turn's slice and on
-            // which surfaces it was published, so the next recurrence is
-            // triaged from logs instead of checkpoint archaeology.
-            tracing::warn!(
-                turn_history_start_len,
-                working_history_len = working_history.len(),
-                rendered = ctx.harness_state.final_response_rendered(),
-                event_emitted = ctx.harness_state.final_response_event_emitted(),
-                planning_active = ctx.is_planning_active(),
-                "Completed turn had fallback final response; converting to Blocked"
-            );
-            result = TurnLoopResult::Blocked { reason: Some(reason.to_string()) };
-        } else if !ctx.harness_state.final_response_rendered() || !ctx.harness_state.final_response_event_emitted() {
-            tracing::warn!(
-                turn_history_start_len,
-                working_history_len = working_history.len(),
-                rendered = ctx.harness_state.final_response_rendered(),
-                event_emitted = ctx.harness_state.final_response_event_emitted(),
-                "Completed turn lacked a published final response; converting to Blocked"
-            );
-            result = TurnLoopResult::Blocked {
-                reason: Some(COMPLETED_TURN_NO_RESPONSE_REASON.to_string()),
-            };
-        } else if ctx.plan_session.is_recovery_exhausted() {
-            result = TurnLoopResult::Blocked {
-                reason: Some(PLAN_RECOVERY_EXHAUSTED_REASON.to_string()),
-            };
-        }
-    }
+    convert_fallback_completion(
+        &ctx,
+        &mut result,
+        primary_agent_handoff,
+        final_response_was_fallback,
+        working_history,
+        turn_history_start_len,
+    );
 
     // Apply the deferred plan-entry agent switch at this turn boundary unless
     // a stronger handoff (approved-plan policy target / explicit switch) owns

@@ -3,8 +3,13 @@ use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::MessageStyle;
 
 use super::TurnLoopContext;
+use super::context::effective_vt_cfg;
 use crate::agent::runloop::unified::model_selection::{ModelSwitchCompactionTargets, finalize_model_selection};
 use crate::agent::runloop::unified::session_settings::SessionSettingsControl;
+use crate::agent::runloop::unified::turn::turn_loop_helpers::{
+    PrecomputedTurnConfig, apply_mode_switch_remaining_tool_call_floor, apply_mode_switch_remaining_tool_loop_floor,
+    extract_turn_config, resolve_safety_tool_call_limits,
+};
 
 /// Consume completed selections just before the next model request is built.
 pub(super) async fn apply_pending_session_settings(
@@ -63,6 +68,102 @@ pub(super) async fn apply_pending_session_settings(
         }
     }
     Ok(applied)
+}
+
+/// Apply pending mid-turn model/effort switches, then re-derive the cached
+/// turn config so the next request uses the effective settings.
+///
+/// Switches must land before fresh steering input is appended: model-switch
+/// compaction summarizes history, so a prompt steered before compaction
+/// would be summarized away and never reach the new model verbatim.
+/// Returns whether any settings were applied (caller re-verifies prompt
+/// delivery after steering when true).
+pub(super) async fn apply_mid_turn_settings(
+    ctx: &mut TurnLoopContext<'_>,
+    working_history: &mut Vec<uni::Message>,
+    turn_config: &mut PrecomputedTurnConfig,
+    turn_history_start_len: &mut usize,
+) -> Result<bool> {
+    // Mid-turn model/effort switches must land BEFORE fresh steering input.
+    // Model-switch compaction summarizes history, so a prompt steered
+    // before compaction would be summarized away and the new model would
+    // never see it verbatim (the TUI "Steered..." echo would then lie).
+    // Applying settings first guarantees fresh input is appended after
+    // compaction plus the resume note and reaches the next request verbatim.
+    let history_len_before_settings = working_history.len();
+    let settings_applied = apply_pending_session_settings(ctx, working_history).await?;
+    if settings_applied {
+        // A model or effort switch changes provider capabilities, context
+        // budget, and prompt shaping for the request about to be built.
+        // Re-derive the cached turn config so the next request uses the
+        // effective settings; the in-flight request already finished with
+        // its original settings.
+        *turn_config = extract_turn_config(
+            effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
+            ctx.is_planning_active(),
+            ctx.renderer.supports_inline_ui(),
+        );
+        // Compaction may have shrunk history and injected a resume note;
+        // rebase the turn baseline so later slicing (final response,
+        // verification, TUI) cannot index into compacted-away messages.
+        *turn_history_start_len = (*turn_history_start_len).min(working_history.len());
+        tracing::info!(
+            history_before = history_len_before_settings,
+            history_after = working_history.len(),
+            turn_history_start_len = *turn_history_start_len,
+            "Rebased turn baseline after mid-turn settings/model switch"
+        );
+    }
+    Ok(settings_applied)
+}
+
+/// Re-derive turn config and grant a full *remaining* mode floor after a
+/// Build<->Plan auto-switch mid-turn, so the new phase is not starved by
+/// the prior phase's consumption.
+pub(super) fn apply_mid_turn_mode_switch(
+    ctx: &mut TurnLoopContext<'_>,
+    last_planning_active: &mut bool,
+    turn_config: &mut PrecomputedTurnConfig,
+    current_max_tool_loops: &mut usize,
+    step_count: usize,
+) {
+    // Build↔Plan auto-switch mid-turn: re-derive turn config and grant a
+    // full *remaining* mode floor so the new phase is not starved by the
+    // prior phase's consumption (checkpoint turn_804 + user Build→Plan
+    // tool-call-limit report).
+    let planning_now = ctx.is_planning_active();
+    if planning_now != *last_planning_active {
+        *last_planning_active = planning_now;
+        if planning_now {
+            ctx.plan_session.start_turn();
+            // Planning just became active inside a running turn: promote to
+            // the stage and show the researching row once, since work is live.
+            crate::agent::runloop::unified::planning_workflow_state::mark_planning_turn_started(
+                ctx.renderer,
+                ctx.handle,
+            );
+        }
+        *turn_config = extract_turn_config(
+            effective_vt_cfg(ctx.vt_cfg, &ctx.live_vt_cfg),
+            planning_now,
+            ctx.renderer.supports_inline_ui(),
+        );
+        if ctx.plan_session.is_interview_denied() {
+            turn_config.request_user_input_enabled = false;
+        }
+        apply_mode_switch_remaining_tool_call_floor(
+            &mut ctx.harness_state.max_tool_calls,
+            ctx.harness_state.tool_calls,
+            planning_now,
+        );
+        apply_mode_switch_remaining_tool_loop_floor(current_max_tool_loops, step_count, planning_now);
+        let (max_per_turn, max_per_session) = resolve_safety_tool_call_limits(
+            ctx.harness_state.max_tool_calls,
+            turn_config.max_session_turns,
+            planning_now,
+        );
+        ctx.safety_validator.set_limits(max_per_turn, max_per_session);
+    }
 }
 
 #[cfg(test)]
